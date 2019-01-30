@@ -31,7 +31,7 @@ from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
 from nems_lbhb.io import (baphy_parm_read, baphy_align_time, load_pupil_trace,
-                          get_rem, load_rem_options)
+                          get_rem, load_rem_options, set_default_pupil_options)
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -424,16 +424,20 @@ def baphy_load_data(parmfilepath, **options):
             raise ValueError("Error loading pupil data: " + pupilfilepath)
 
     if options['rem']:
-        rem_options = load_rem_options(pupilfilepath)
-        #rem_options['rasterfs'] = options['rasterfs']
-        is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
-                          exptevents=exptevents, **rem_options)
-        is_rem = is_rem.astype(float)
-        new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
-        is_rem = resample(is_rem, new_len)
-        is_rem[is_rem>0.01] = 1
-        is_rem[is_rem<=0.01] = 0
-        state_dict['rem'] = is_rem
+        try:
+            rem_options = load_rem_options(pupilfilepath)
+            rem_options['verbose'] = False
+            #rem_options['rasterfs'] = options['rasterfs']
+            is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
+                              exptevents=exptevents, **rem_options)
+            is_rem = is_rem.astype(float)
+            new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
+            is_rem = resample(is_rem, new_len)
+            is_rem[is_rem>0.01] = 1
+            is_rem[is_rem<=0.01] = 0
+            state_dict['rem'] = is_rem.astype(np.bool)
+        except:
+            log.info("no rem analysis found")
 
     return (exptevents, stim, spike_dict, state_dict,
             tags, stimparam, exptparams)
@@ -1265,18 +1269,14 @@ def fill_default_options(options):
     options['chancount'] = int(options.get('chancount', 18))
     options['pertrial'] = int(options.get('pertrial', False))
     options['includeprestim'] = options.get('includeprestim', 1)
-    options['pupil'] = int(options.get('pupil', False))
-    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
-    options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
-    options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 0.75)
-    options['pupil_median'] = options.get('pupil_median', 0.5)
-    options["pupil_offset"] = options.get('pupil_offset', 0.75)
-    options['rem'] = int(options.get('rem', False))
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['cellid'] = options.get('cellid', cellid)
     options['batch'] = int(batch)
     options['rawid'] = options.get('rawid', None)
+
+    # load default pupil options from nems_lbhb.io
+    options = set_default_pupil_options(options)
 
     if options['stimfmt'] in ['envelope', 'parm']:
         log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
@@ -1484,7 +1484,7 @@ def baphy_load_recording(**options):
             else:
                 pupil_speed = pupil_speed.concatenate_time([pupil_speed, t_pupil_s])
 
-        if options['rem']:
+        if (options['rem']) & ('rem' in state_dict.keys()):
 
             # create pupil signal if it exists
             rlen = int(t_resp.ntimes)
@@ -1502,7 +1502,7 @@ def baphy_load_recording(**options):
             # generate pupil signals
             t_rem = nems.signal.RasterizedSignal(
                     fs=options['rasterfs'],
-                    data=np.reshape(state_dict['rem'],[1,-1]),
+                    data=np.reshape(state_dict['rem'].astype(np.bool),[1,-1]),
                     name='rem', recording=rec_name, chans=['rem'],
                     epochs=event_times)
 
@@ -1574,7 +1574,7 @@ def baphy_load_recording(**options):
         signals['pupil'] = pupil
     if (options['pupil_eyespeed']) & ('pupil_eyespeed' in state_dict.keys()):
         signals['pupil_eyespeed'] = pupil_speed
-    if options['rem']:
+    if (options['rem']) & ('rem' in state_dict.keys()):
         signals['rem'] = rem
 
     if options['stim'] and options["runclass"] == "RDT":
