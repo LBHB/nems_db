@@ -1708,7 +1708,7 @@ def baphy_load_recording_uri(**options):
 
     # fill in default options
     options = fill_default_options(options)
-
+    
     recache = options.get('recache', 0)
     if 'recache' in options:
         del options['recache']

@@ -518,6 +518,18 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         pupil_diameter = pupildata['cnn']['a'] * 2
 
+        # missing frames/frames that couldn't be decoded were saved as nans
+        # pad them here
+        nan_args = np.argwhere(np.isnan(pupil_diameter))
+
+        for arg in nan_args:
+            arg = arg[0]
+            log.info("padding missing pupil frame {0} with adjacent ellipse params".format(arg))
+            try:
+                pupil_diameter[arg] = pupil_diameter[arg-1]
+            except:
+                pupil_diameter[arg] = pupil_diameter[arg-1]
+
         pupil_diameter = pupil_diameter[:-1, np.newaxis]
 
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
