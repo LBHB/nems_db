@@ -98,6 +98,7 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
         d=rec['resp'].as_continuous().copy()
         d -= np.mean(d, axis=1, keepdims=True)
         d /= np.std(d, axis=1, keepdims=True)
+        d -= np.min(d, axis=1, keepdims=True)
         rec['resp'] = rec['resp']._modified_copy(data=d)
 
     # preserve "actual" cellids for saving to database
