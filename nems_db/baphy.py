@@ -399,7 +399,7 @@ def baphy_load_data(parmfilepath, **options):
         raise ValueError('No matching cellid in baphy spike file')
 
     state_dict = {}
-    if options['pupil']:
+    if options.get('pupil', False):
         try:
             pupilfilepath = re.sub(r"\.m$", ".pup.mat", parmfilepath)
             options['verbose'] = False
@@ -1421,7 +1421,7 @@ def baphy_load_recording(**options):
             # concatenate onto end of main response signal
             resp = resp.append_time(t_resp)
 
-        if options['pupil']:
+        if options.get('pupil', False):
 
             # create pupil signal if it exists
             if i == 0:
