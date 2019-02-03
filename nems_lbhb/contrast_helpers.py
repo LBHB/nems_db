@@ -284,70 +284,6 @@ def add_onoff(rec, name='contrast', source='stim', isReload=False, **context):
     return {'rec': new_rec}
 
 
-def reset_single_recording(rec, est, val, IsReload=False, **context):
-    '''
-    Forces rec, est, and val to be a recording instead of a singleton
-    list after a fit.
-
-    Warning: This may mess up jackknifing!
-    '''
-    if not IsReload:
-        if isinstance(est, list):
-            est = est[0]
-        if isinstance(val, list):
-            val = val[0]
-    return {'est': est, 'val': val}
-
-
-def pass_nested_modelspec(modelspecs, IsReload=False, **context):
-    '''
-    Useful for stopping after initialization. Mimics return value
-    of fit_basic, but without any fitting.
-    '''
-    raise NotImplementedError
-    # TODO: Might not need this anymore.
-    if not IsReload:
-        if not isinstance(modelspecs, list):
-            modelspec = [modelspecs]
-
-    return {'modelspecs': modelspecs}
-
-
-def fixed_contrast_strf(modelspec=None, **kwargs):
-    if modelspec is None:
-        pass
-    else:
-        # WARNING: This modifies modelspec in-place mid-evaluation.
-        #          Really not sure this is the right way to do this.
-        wc_idx = find_module('weight_channels', modelspec)
-        if 'g' not in modelspec[wc_idx]['id']:
-            _, ctwc_idx = find_module('weight_channels', modelspec,
-                                      find_all_matches=True)
-            fir_idx, ctfir_idx = find_module('fir', modelspec,
-                                             find_all_matches=True)
-
-            modelspec[ctwc_idx]['fn_kwargs'].update(copy.deepcopy(
-                                                modelspec[wc_idx]['phi']
-                                                ))
-            modelspec[ctfir_idx]['fn_kwargs'].update(copy.deepcopy(
-                                                modelspec[fir_idx]['phi']
-                                                ))
-
-            modelspec[ctwc_idx]['phi'] = {}
-            modelspec[ctfir_idx]['phi'] = {}
-
-            for k, v in modelspec[ctwc_idx]['phi']:
-                p = np.abs(v)
-                modelspec[ctwc_idx]['phi'][k] = p
-
-            for k, v in modelspec[ctfir_idx]['phi']:
-                p = np.abs(v)
-                modelspec[ctfir_idx]['phi'][k] = p
-
-
-    return False
-
-
 def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     base_mod=0, amplitude_mod=0, shift_mod=0,
                     kappa_mod=0, eq='logsig'):
@@ -389,35 +325,6 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
     return [rec[i].transform(fn, o)]
 
 
-def add_gc_signal(rec, modelspec, name='GC'):
-
-    modelspec = copy.deepcopy(modelspec)
-    rec = copy.deepcopy(rec)
-
-    dsig_idx = find_module('dynamic_sigmoid', modelspec)
-#    if dsig_idx is None:
-#        log.warning("No dsig module was found, can't add GC signal.")
-#        return rec
-
-    phi = modelspec[dsig_idx]['phi']
-    phi.update(modelspec[dsig_idx]['fn_kwargs'])
-    pred = rec['pred'].as_continuous()
-    b = phi['base'] + (phi['base_mod']-phi['base'])*pred
-    a = phi['amplitude'] + (phi['amplitude_mod']-phi['amplitude'])*pred
-    s = phi['shift'] + (phi['shift_mod']-phi['shift'])*pred
-    k = phi['kappa'] + (phi['kappa_mod']-phi['kappa'])*pred
-    array = np.squeeze(np.stack([b, a, s, k], axis=0))
-
-
-    fs = rec['stim'].fs
-    signal = nems.signal.RasterizedSignal(
-            fs, array, name, rec['stim'].recording,
-            chans=['B', 'A', 'S', 'K'], epochs=rec['stim'].epochs)
-    rec[name] = signal
-
-    return rec
-
-
 def init_dsig(rec, modelspec):
     '''
     Initialization of priors for logistic_sigmoid,
@@ -438,39 +345,6 @@ def init_dsig(rec, modelspec):
     else:
         modelspec = _init_logistic_sigmoid(rec, modelspec, dsig_idx)
 
-    return modelspec
-
-
-def freeze_dsig_statics(modelspec):
-    modelspec = copy.deepcopy(modelspec)
-    dsig_idx = find_module('dynamic_sigmoid', modelspec)
-    if dsig_idx is None:
-        log.warning("No dsig module was found, can't initialize.")
-        return modelspec
-
-    p = modelspec[dsig_idx]['phi']
-    frozen_bounds = {k: (v, v) for k, v in p.items()}
-    modelspec[dsig_idx]['bounds'].update(frozen_bounds)
-
-    return modelspec
-
-
-def remove_dsig_bounds(modelspec):
-    dsig_idx = find_module('dynamic_sigmoid', modelspec)
-    if dsig_idx is None:
-        log.warning("No dsig module was found, can't initialize.")
-        return modelspec
-    modelspec = copy.deepcopy(modelspec)
-    modelspec[dsig_idx]['bounds'].update({
-            'base': (1e-15, None),
-            'amplitude': (1e-15, None),
-            'shift': (None, None),
-            'kappa': (1e-15, None),
-            'amplitude_mod': (None, None),
-            'base_mod': (None, None),
-            'kappa_mod': (None, None),
-            'shift_mod': (None, None)
-            })
     return modelspec
 
 

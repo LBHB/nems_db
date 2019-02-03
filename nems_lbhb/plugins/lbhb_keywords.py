@@ -203,26 +203,6 @@ def gclvl(kw):
     return template
 
 
-def ctfixed(kw):
-    '''
-    Forces ctwc and ctfir to have the same phi as
-    their non-ct counterparts on every eval.
-    TODO: Include levelshift as well?
-
-    Corresponding module never has any parameters, so it's not really
-    a transformation like the other ones. Just has to happen mid-model
-    so it has to be defined as part of the module list.
-    '''
-    template = {
-            'fn': 'nems_lbhb.contrast_helpers.fixed_contrast_strf',
-            'fn_kwargs': {'i': 'pred',
-                          'o': 'pred'},
-            'phi': {},
-            'prior': {}
-            }
-    return template
-
-
 def dsig(kw):
     '''
     Note: these priors will typically be overwritten during initialization
@@ -306,16 +286,6 @@ def dsig(kw):
     return template
 
 
-def _aliased_keyword(fn, kw):
-    '''Forces the keyword fn to use the given kw. Used for implementing
-    backwards compatibility with old keywords that did not follow the
-    <kw_head>.<option1>.<option2> paradigm.
-    '''
-    def ignorant_keyword(ignored_key):
-        return fn(kw)
-    return ignorant_keyword
-
-
 def _one_zz(zerocount=1):
     """ vector of 1 followed by zerocount 0s """
     return np.concatenate((np.ones(1), np.zeros(zerocount)))
@@ -393,6 +363,16 @@ def sdexp(kw):
         }
 
     return template
+
+
+def _aliased_keyword(fn, kw):
+    '''Forces the keyword fn to use the given kw. Used for implementing
+    backwards compatibility with old keywords that did not follow the
+    <kw_head>.<option1>.<option2> paradigm.
+    '''
+    def ignorant_keyword(ignored_key):
+        return fn(kw)
+    return ignorant_keyword
 
 
 # Old keywords that are identical except for the period

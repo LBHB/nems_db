@@ -22,16 +22,8 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
-def srec(fitkey):
-    return [['nems_lbhb.contrast_helpers.reset_single_recording', {}]]
-
-
 def strfc(fitkey):
     return [['nems_lbhb.contrast_helpers.strf_to_contrast', {}]]
-
-
-def passthrough(fitkey):
-    return [['nems_lbhb.contrast_helpers.pass_nested_modelspec', {}]]
 
 
 def _aliased_fitter(fn, fitkey):
