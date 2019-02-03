@@ -1,4 +1,5 @@
 import copy
+import os
 
 import numpy as np
 import pandas as pd
@@ -12,9 +13,9 @@ import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatch
 
 import nems.db as nd
-from nems_lbhb.xform_wrappers import load_model_baphy_xform
 from nems.db import get_batch_cells, Tables, Session
 import nems.xforms as xf
+import nems.xform_helper as xhelp
 from nems.utils import find_module
 import nems.modelspec as ms
 from nems_db.params import fitted_params_per_batch
@@ -94,6 +95,7 @@ gc_stp_both_win = 'TAR010c-21-4'
 ln_win = 'TAR010c-15-4'
 gc_sharp_onset = 'bbl104h-10-2'
 gc_beat_stp = 'TAR009d-28-1'
+weird = 'TAR009d-22-1'
 
 # Interesting example cells to look at in more detail:
 
@@ -181,13 +183,15 @@ def run_all(model1=gc_cont_full, model2=stp_model, model3=ln_model,
         plt.close('all')
 
 def example_cells(model1=gc_cont_full, model2=stp_model, model3=ln_model,
-                  model4=gc_stp):
+                  model4=gc_stp, run_id=0):
     example_cells = ['bbl104h-33-1', 'BRT026c-16-2', 'TAR009d-22-1',
                      'TAR010c-13-1', 'TAR010c-20-1', 'TAR010c-58-2',
                      'TAR017b-04-1', 'TAR017b-22-1', 'gus018b-a2',
                      'gus019c-a2', 'TAR009d-15-1']
     save_directory = ("/auto/users/jacob/notes/gc_figures/matplot_figs/"
-                      "example_cells/run2/")
+                      "example_cells/run%d/" % run_id)
+    if not os.path.exists(save_directory):
+        os.makedirs(save_directory)
 
     for c in example_cells:
         f = contrast_vs_stp_comparison(cellid=c, model1=model1, model2=model2,
@@ -463,13 +467,13 @@ def equivalence_histogram(batch=289, model1=gc_cont_full, model2=stp_model,
 
     rs = []
     for c in cellids[:test_limit]:
-        xf1, ctx1 = load_model_baphy_xform(c, batch, model1)
-        xf2, ctx2 = load_model_baphy_xform(c, batch, model2)
-        xf3, ctx3 = load_model_baphy_xform(c, batch, model3)
+        xf1, ctx1 = xhelp.load_model_xform(c, batch, model1)
+        xf2, ctx2 = xhelp.load_model_xform(c, batch, model2)
+        xf3, ctx3 = xhelp.load_model_xform(c, batch, model3)
 
-        gc = ctx1['val'][0].apply_mask()['pred'].as_continuous()
-        stp = ctx2['val'][0].apply_mask()['pred'].as_continuous()
-        ln = ctx3['val'][0].apply_mask()['pred'].as_continuous()
+        gc = ctx1['val'].apply_mask()['pred'].as_continuous()
+        stp = ctx2['val'].apply_mask()['pred'].as_continuous()
+        ln = ctx3['val'].apply_mask()['pred'].as_continuous()
 
         ff = np.isfinite(gc) & np.isfinite(stp) & np.isfinite(ln)
         rs.append(np.corrcoef(gc[ff]-ln[ff], stp[ff]-ln[ff])[0, 1])
@@ -477,10 +481,10 @@ def equivalence_histogram(batch=289, model1=gc_cont_full, model2=stp_model,
     rs = np.array(rs)
     md = np.nanmedian(rs)
 
-    onetwo = np.percentile(rs, 20)
+#    onetwo = np.percentile(rs, 20)
 #    twothree = np.percentile(rs, 40)
 #    threefour = np.percentile(rs, 60)
-    fourfive = np.percentile(rs, 80)
+#    fourfive = np.percentile(rs, 80)
 #    first = rs <= onetwo
 #    second = rs <= twothree
 #    third = rs <= threefour
@@ -503,10 +507,10 @@ def equivalence_histogram(batch=289, model1=gc_cont_full, model2=stp_model,
 #             color=['#113842'])
 
     plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--')
-    plt.plot(np.array([onetwo, onetwo]), np.array(fig.axes[0].get_ylim()),
-             'g--')
-    plt.plot(np.array([fourfive, fourfive]), np.array(fig.axes[0].get_ylim()),
-             'g--')
+#    plt.plot(np.array([onetwo, onetwo]), np.array(fig.axes[0].get_ylim()),
+#             'g--')
+#    plt.plot(np.array([fourfive, fourfive]), np.array(fig.axes[0].get_ylim()),
+#             'g--')
     plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
              ha='left', va='top', transform=fig.axes[0].transAxes)
     plt.xlabel('CC, GC-LN vs STP-LN')
@@ -770,10 +774,10 @@ def significance(model1=gc_cont_full, model2=stp_model, model3=ln_model,
 def contrast_breakdown(cellid=gc_beat_stp, model1=gc_cont_full,
                        model2=stp_model, model3=ln_model, sample_every=5):
 
-    xfspec, ctx = load_model_baphy_xform(cellid, batch, model1)
-    val = copy.deepcopy(ctx['val'][0])
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, model1)
+    val = copy.deepcopy(ctx['val'])
     fs = val['resp'].fs
-    mspec = ctx['modelspecs'][0]
+    mspec = ctx['modelspec']
     dsig_idx = find_module('dynamic_sigmoid', mspec)
 
     before = ms.evaluate(val, mspec, start=None, stop=dsig_idx)
@@ -800,9 +804,9 @@ def contrast_breakdown(cellid=gc_beat_stp, model1=gc_cont_full,
     b = (base + (base_mod - base)*ctpred).flatten()
     a = (amplitude + (amplitude_mod - amplitude)*ctpred).flatten()
 
-    xfspec2, ctx2 = load_model_baphy_xform(cellid, batch, model3)
-    val2 = copy.deepcopy(ctx2['val'][0])
-    mspec2 = ctx2['modelspecs'][0]
+    xfspec2, ctx2 = xhelp.load_model_xform(cellid, batch, model3)
+    val2 = copy.deepcopy(ctx2['val'])
+    mspec2 = ctx2['modelspec']
     logsig_idx = find_module('logistic_sigmoid', mspec2)
     dexp_idx = find_module('double_exponential', mspec2)
     nl_idx = logsig_idx if logsig_idx is not None else dexp_idx
@@ -816,16 +820,16 @@ def contrast_breakdown(cellid=gc_beat_stp, model1=gc_cont_full,
     else:
         nonlin_fn = _double_exponential
 
-    mspec2 = ctx2['modelspecs'][0]
+    mspec2 = ctx2['modelspec']
     ln_phi = mspec2[nl_idx]['phi']
     ln_k = ln_phi['kappa']
     ln_s = ln_phi['shift']
     ln_b = ln_phi['base']
     ln_a = ln_phi['amplitude']
 
-    xfspec3, ctx3 = load_model_baphy_xform(cellid, batch, model2)
-    val3 = copy.deepcopy(ctx3['val'][0])
-    mspec3 = ctx3['modelspecs'][0]
+    xfspec3, ctx3 = xhelp.load_model_xform(cellid, batch, model2)
+    val3 = copy.deepcopy(ctx3['val'])
+    mspec3 = ctx3['modelspec']
     logsig_idx = find_module('logistic_sigmoid', mspec2)
     dexp_idx = find_module('double_exponential', mspec2)
     nl_idx = logsig_idx if logsig_idx is not None else dexp_idx
@@ -866,12 +870,12 @@ def contrast_breakdown(cellid=gc_beat_stp, model1=gc_cont_full,
     gs2 = gridspec.GridSpec(12, 3)
 
     plt.subplot(gs2[0:3, 0])
-    val = ctx['val'][0].apply_mask()
+    val = ctx['val'].apply_mask()
     plt.imshow(val['stim'].as_continuous(), origin='lower', aspect='auto')
     plt.title('Stimulus')
 
 
-    modelspec = ctx['modelspecs'][0]
+    modelspec = ctx['modelspec']
 
     plt.subplot(gs2[3:6, 0])
     wcc = _get_wc_coefficients(modelspec, idx=0)
@@ -1122,10 +1126,10 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
                                model2=stp_model, model3=ln_model,
                                model4=gc_stp):
 
-    xfspec, ctx = load_model_baphy_xform(cellid, batch, model1)
-    val = copy.deepcopy(ctx['val'][0])
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, model1)
+    val = copy.deepcopy(ctx['val'])
     fs = val['resp'].fs
-    mspec = ctx['modelspecs'][0]
+    mspec = ctx['modelspec']
     gc_r_test = mspec[0]['meta']['r_test']
     dsig_idx = find_module('dynamic_sigmoid', mspec)
     before = ms.evaluate(val, mspec, start=None, stop=dsig_idx)
@@ -1149,9 +1153,9 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
     b = (base + (base_mod - base)*ctpred).flatten()
     a = (amplitude + (amplitude_mod - amplitude)*ctpred).flatten()
 
-    xfspec2, ctx2 = load_model_baphy_xform(cellid, batch, model3)
-    val2 = copy.deepcopy(ctx2['val'][0])
-    mspec2 = ctx2['modelspecs'][0]
+    xfspec2, ctx2 = xhelp.load_model_xform(cellid, batch, model3)
+    val2 = copy.deepcopy(ctx2['val'])
+    mspec2 = ctx2['modelspec']
     ln_r_test = mspec2[0]['meta']['r_test']
     logsig_idx = find_module('logistic_sigmoid', mspec2)
     dexp_idx = find_module('double_exponential', mspec2)
@@ -1166,16 +1170,16 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
     else:
         nonlin_fn = _double_exponential
 
-    mspec2 = ctx2['modelspecs'][0]
+    mspec2 = ctx2['modelspec']
     ln_phi = mspec2[nl_idx]['phi']
     ln_k = ln_phi['kappa']
     ln_s = ln_phi['shift']
     ln_b = ln_phi['base']
     ln_a = ln_phi['amplitude']
 
-    xfspec3, ctx3 = load_model_baphy_xform(cellid, batch, model2)
-    val3 = copy.deepcopy(ctx3['val'][0])
-    mspec3 = ctx3['modelspecs'][0]
+    xfspec3, ctx3 = xhelp.load_model_xform(cellid, batch, model2)
+    val3 = copy.deepcopy(ctx3['val'])
+    mspec3 = ctx3['modelspec']
     stp_r_test = mspec3[0]['meta']['r_test']
     logsig_idx = find_module('logistic_sigmoid', mspec3)
     dexp_idx = find_module('double_exponential', mspec3)
@@ -1185,16 +1189,16 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
     after3 = ms.evaluate(before3.copy(), mspec3, start=nl_idx, stop=nl_idx+1)
     pred_after_stp = after3['pred'].as_continuous()[0, :].T
 
-    mspec3 = ctx3['modelspecs'][0]
+    mspec3 = ctx3['modelspec']
     stp_phi = mspec3[nl_idx]['phi']
     stp_k = stp_phi['kappa']
     stp_s = stp_phi['shift']
     stp_b = stp_phi['base']
     stp_a = stp_phi['amplitude']
 
-    xfspec4, ctx4 = load_model_baphy_xform(cellid, batch, model4)
-    val4 = copy.deepcopy(ctx4['val'][0])
-    mspec4 = ctx4['modelspecs'][0]
+    xfspec4, ctx4 = xhelp.load_model_xform(cellid, batch, model4)
+    val4 = copy.deepcopy(ctx4['val'])
+    mspec4 = ctx4['modelspec']
     gc_stp_r_test = mspec4[0]['meta']['r_test']
     dsig_idx = find_module('dynamic_sigmoid', mspec4)
     before4 = ms.evaluate(val4, mspec4, start=None, stop=dsig_idx)
@@ -2049,9 +2053,9 @@ def gc_vs_stp_strengths(batch=289, model1=gc_cont_full, model2=stp_model,
     gcs = []
     stps = []
     for c in cellids:
-        xfspec1, ctx1 = load_model_baphy_xform(c, batch, model1,
+        xfspec1, ctx1 = xhelp.load_model_xform(c, batch, model1,
                                                eval_model=False)
-        mspec1 = ctx1['modelspecs'][0]
+        mspec1 = ctx1['modelspec']
         dsig_idx = find_module('dynamic_sigmoid', mspec1)
         phi1 = mspec1[dsig_idx]['phi']
         k = phi1['kappa']
@@ -2066,9 +2070,9 @@ def gc_vs_stp_strengths(batch=289, model1=gc_cont_full, model2=stp_model,
         gc = gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m)
         gcs.append(gc)
 
-        xfspec2, ctx2 = load_model_baphy_xform(c, batch, model2,
+        xfspec2, ctx2 = xhelp.load_model_xform(c, batch, model2,
                                                eval_model=False)
-        mspec2 = ctx2['modelspecs'][0]
+        mspec2 = ctx2['modelspec']
         stp_idx = find_module('stp', mspec2)
         phi2 = mspec2[stp_idx]['phi']
         tau = phi2['tau']
@@ -2109,8 +2113,8 @@ def gc_vs_stp_strengths(batch=289, model1=gc_cont_full, model2=stp_model,
 # Overlay of prediction from STP versus prediction from GC for sample cell(s)
 def example_pred_overlay(cellid=good_cell, model1=gc_cont_full,
                          model2=stp_model):
-    xfspec1, ctx1 = load_model_baphy_xform(cellid, batch, model1)
-    xfspec2, ctx2 = load_model_baphy_xform(cellid, batch, model2)
+    xfspec1, ctx1 = xhelp.load_model_xform(cellid, batch, model1)
+    xfspec2, ctx2 = xhelp.load_model_xform(cellid, batch, model2)
     plt.figure()
     #xf.plot_timeseries(ctx1, 'resp', cutoff=500)
     xf.plot_timeseries(ctx1, 'pred', cutoff=(200, 500))
@@ -2135,12 +2139,12 @@ def average_r(model1=gc_cont_full, model2=stp_model):
     rs = []
     for i, cellid in enumerate(cellids):
         print("\n\n Starting cell # %d (out of %d)" % (i, len(cellids)))
-        xfspec1, ctx1 = load_model_baphy_xform(cellid, batch, model1)
-        xfspec2, ctx2 = load_model_baphy_xform(cellid, batch, model2)
+        xfspec1, ctx1 = xhelp.load_model_xform(cellid, batch, model1)
+        xfspec2, ctx2 = xhelp.load_model_xform(cellid, batch, model2)
 
     # 3. Compute the correlation for that cell
-        pred1 = ctx1['val'][0]['pred'].as_continuous()
-        pred2 = ctx2['val'][0]['pred'].as_continuous()
+        pred1 = ctx1['val']['pred'].as_continuous()
+        pred2 = ctx2['val']['pred'].as_continuous()
 
         ff = np.isfinite(pred1) & np.isfinite(pred2)
         a = (np.sum(ff) == 0)
@@ -2162,8 +2166,8 @@ def average_r(model1=gc_cont_full, model2=stp_model):
 
 # Plot of a couple example spectrogram -> contrast transformations
 def contrast_examples():
-    xfspec1, ctx1 = load_model_baphy_xform(good_cell, batch, gc_model)
-    xfspec2, ctx2 = load_model_baphy_xform(bad_cell, batch, gc_model)
+    xfspec1, ctx1 = xhelp.load_model_xform(good_cell, batch, gc_model)
+    xfspec2, ctx2 = xhelp.load_model_xform(bad_cell, batch, gc_model)
 
     plt.figure()
     plt.subplot(221)
@@ -2325,8 +2329,8 @@ def continuous_contrast_improvements():
 
 def gd_ratio(cellid=good_cell, modelname=gc_cont_full):
 
-    xfspec, ctx = load_model_baphy_xform(cellid, batch, modelname)
-    mspec = ctx['modelspecs'][0]
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+    mspec = ctx['modelspec']
     dsig_idx = find_module('dynamic_sigmoid', mspec)
     phi = mspec[dsig_idx]['phi']
 
