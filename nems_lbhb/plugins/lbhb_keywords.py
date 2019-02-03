@@ -259,29 +259,21 @@ def dsig(kw):
         template['prior']['amplitude_mod'] = copy.deepcopy(
                 template['prior']['amplitude']
                 )
-    else:
-        template['fn_kwargs']['amplitude_mod'] = np.nan
 
     if base:
         template['prior']['base_mod'] = copy.deepcopy(
                 template['prior']['base']
                 )
-    else:
-        template['fn_kwargs']['base_mod'] = np.nan
 
     if kappa:
         template['prior']['kappa_mod'] = copy.deepcopy(
                 template['prior']['kappa']
                 )
-    else:
-        template['fn_kwargs']['kappa_mod'] = np.nan
 
     if shift:
         template['prior']['shift_mod'] = copy.deepcopy(
                 template['prior']['shift']
                 )
-    else:
-        template['fn_kwargs']['shift_mod'] = np.nan
 
     return template
 

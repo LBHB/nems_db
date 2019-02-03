@@ -25,34 +25,39 @@ from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
 
 def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
-                    base_mod=0, amplitude_mod=0, shift_mod=0,
-                    kappa_mod=0, eq='logsig'):
+                    base_mod=np.nan, amplitude_mod=np.nan, shift_mod=np.nan,
+                    kappa_mod=np.nan, eq='logsig'):
 
-    if not rec[c]:
-        # If there's no ctpred yet (like during initialization),
-        base_mod = np.nan
-        amplitude_mod = np.nan
-        shift_mod = np.nan
-        kappa_mod = np.nan
-        contrast = np.zeros_like(rec['resp'].as_continuous())
-    else:
+    static = False
+    if np.all(np.isnan([base_mod, amplitude_mod, shift_mod, kappa_mod])):
+        static = True
+
+    if not static and rec[c]:
         contrast = rec[c].as_continuous()
 
-    if np.isnan(base_mod):
-        base_mod = base
-    b = base + (base_mod - base)*contrast
+        if np.isnan(base_mod):
+            base_mod = base
+        b = base + (base_mod - base)*contrast
 
-    if np.isnan(amplitude_mod):
-        amplitude_mod = amplitude
-    a = amplitude + (amplitude_mod - amplitude)*contrast
+        if np.isnan(amplitude_mod):
+            amplitude_mod = amplitude
+        a = amplitude + (amplitude_mod - amplitude)*contrast
 
-    if np.isnan(shift_mod):
-        shift_mod = shift
-    s = shift + (shift_mod - shift)*contrast
+        if np.isnan(shift_mod):
+            shift_mod = shift
+        s = shift + (shift_mod - shift)*contrast
 
-    if np.isnan(kappa_mod):
-        kappa_mod = kappa
-    k = kappa + (kappa_mod - kappa)*contrast
+        if np.isnan(kappa_mod):
+            kappa_mod = kappa
+        k = kappa + (kappa_mod - kappa)*contrast
+    else:
+        # If there's no ctpred yet (like during initialization),
+        # or if mods are all nan, no need to do anything with contrast,
+        # so just pass through base, amplitude, shift and kappa as-is.
+        b = base
+        a = amplitude
+        s = shift
+        k = kappa
 
     if eq.lower() in ['logsig', 'logistic_sigmoid', 'l']:
         fn = lambda x: _logistic_sigmoid(x, b, a, s, k)
