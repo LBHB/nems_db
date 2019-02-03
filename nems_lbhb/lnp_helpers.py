@@ -19,14 +19,10 @@ log = logging.getLogger(__name__)
 
 # TODO: need to change init for levelshift to log of mean firing rate instead?
 
-# TODO: normalize error range for easier tolerance
-
 # TODO: figure out a way to use both relative and absolute precision?
 
-# Note on combining the channels for fir filter:
-# they do just get added together to get the single vector afterward.
 
-def lnp_basic(modelspecs, est, max_iter=1000, tolerance=1e-7,
+def lnp_basic(modelspec, est, max_iter=1000, tolerance=1e-7,
               metric='nmse', IsReload=False, fitter='scipy_minimize',
               cost_function=None, **context):
 
@@ -35,15 +31,17 @@ def lnp_basic(modelspecs, est, max_iter=1000, tolerance=1e-7,
         fitter_fn = getattr(nems.fitters.api, fitter)
         fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
-        modelspecs = [
-                nems.analysis.api.fit_basic(est, modelspec,
-                                            fit_kwargs=fit_kwargs,
-                                            metric=_lnp_metric,
-                                            fitter=fitter_fn)[0]
-                for modelspec in modelspecs
-                ]
+        #modelspec = some_initial_conditions_function()
 
-    return {'modelspecs': modelspecs}
+        # Note for Noah:
+        # If you want to make a separate metric function at some point,
+        # just change the 'metric=...' argument below to match.
+        modelspec = nems.analysis.api.fit_basic(est, modelspec,
+                                                fit_kwargs=fit_kwargs,
+                                                metric=_lnp_metric,
+                                                fitter=fitter_fn)
+
+    return {'modelspec': modelspec}
 
 
 def _lnp_metric(data, pred_name='pred', resp_name='resp'):
@@ -78,28 +76,6 @@ def _lnp_metric(data, pred_name='pred', resp_name='resp'):
     # recovery the model. (SVD was talking about this for GC model as well).
 
     return error
-
-
-def _stack_reps(spike_train, ep='^STIM_'):
-    stim_dict = {}
-    epochs = spike_train.epochs
-
-    for name in sorted(set(nems.epoch.epoch_names_matching(epochs, ep))):
-
-        rows = epochs[epochs.name == name]
-        reps = zip(
-                rows['name'].values.tolist(),
-                rows['start'].values.tolist(),
-                rows['end'].values.tolist()
-                )
-
-        for name, start, stop in reps:
-            if name in stim_dict:
-                stim_dict[name].append((start, stop))
-            else:
-                stim_dict[name] = [(start, stop)]
-
-    return stim_dict
 
 
 # TODO: Need to come up with some way to verify that this is
