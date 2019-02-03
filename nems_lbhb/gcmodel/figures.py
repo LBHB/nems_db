@@ -19,8 +19,9 @@ import nems.xform_helper as xhelp
 from nems.utils import find_module
 import nems.modelspec as ms
 from nems_db.params import fitted_params_per_batch
-from nems_lbhb.contrast_helpers import (make_contrast_signal, rec_from_DRC,
-                                        gc_magnitude)
+from nems_lbhb.gcmodel.contrast import make_contrast_signal
+from nems_lbhb.gcmodel.magnitude import gc_magnitude
+from nems_lbhb.gcmodel.drc import rec_from_DRC
 from nems.metrics.stp import stp_magnitude
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients

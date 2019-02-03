@@ -1,4 +1,4 @@
-"""
+o"""
 initializer keywords specific to LBHB models
 should occur intermingled with fitter keywords
 """
@@ -18,7 +18,7 @@ def init(kw):
     xfspec = nems_init(kw)
     ops = kw.split('.')[1:]
     if 'c' in ops:
-        xfspec[0][0] = 'nems_lbhb.contrast_helpers.init_contrast_model'
+        xfspec[0][0] = 'nems_lbhb.gcmodel.initializers.init_contrast_model'
         if 'strfc' in ops:
             xfspec[0][1]['copy_strf'] = True
     elif 'lnp' in ops:

@@ -231,11 +231,11 @@ def contrast(loadkey):
         elif op.startswith('b'):
             kwargs['bands'] = int(op[1:])
 
-    return [['nems_lbhb.contrast_helpers.add_contrast', kwargs]]
+    return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
 
 
 def onoff(loadkey):
-    return [['nems_lbhb.contrast_helpers.add_onoff', {}]]
+    return [['nems_lbhb.gcmodel.contrast.add_onoff', {}]]
 
 
 def hrc(load_key):
@@ -269,7 +269,7 @@ def nat(load_ley):
 def subset(load_key):
     """
     Create a mask so that model is fit only using a subset of the data.
-    Subset is defined by epoh name. 
+    Subset is defined by epoh name.
     Used to mask stimuli of different categories (coherent, incoherent, or single)
     LAS
     """

@@ -33,7 +33,7 @@ def gcwc(kw):
                          "as the first option after 'wc', e.g.: 'wc.2x15'"
                          "\nkeyword given: %s" % kw)
 
-    fn = 'nems_lbhb.contrast_helpers.weight_channels'
+    fn = 'nems_lbhb.gcmodel.modules.weight_channels'
 
     # Generate evenly-spaced filter centers for the starting points
     fn_kwargs = {'i': 'pred', 'o': 'pred', 'n_chan_in': n_inputs,
@@ -153,7 +153,7 @@ def gcfir(kw):
     p_coefficients['mean'][:, 0] = 1
 
     template = {
-        'fn': 'nems_lbhb.contrast_helpers.fir',
+        'fn': 'nems_lbhb.gcmodel.modules.fir',
         'fn_kwargs': {'i': 'pred', 'o': 'pred', 'ci': 'ctpred',
                       'co': 'ctpred'},
         'prior': {
@@ -193,7 +193,7 @@ def gclvl(kw):
                          "keyword given: %s" % kw)
 
     template = {
-        'fn': 'nems_lbhb.contrast_helpers.levelshift',
+        'fn': 'nems_lbhb.gcmodel.modules.levelshift',
         'fn_kwargs': {'i': 'pred', 'o': 'pred', 'ci': 'ctpred',
                       'co': 'ctpred'},
         'prior': {'level': ('Normal', {'mean': np.zeros([n_shifts, 1]),
@@ -237,7 +237,7 @@ def dsig(kw):
         amp = True; base = True; kappa = True; shift = True
 
     template = {
-        'fn': 'nems_lbhb.contrast_helpers.dynamic_sigmoid',
+        'fn': 'nems_lbhb.gcmodel.modules.dynamic_sigmoid',
         'fn_kwargs': {'i': 'pred',
                       'o': 'pred',
                       'c': c,
