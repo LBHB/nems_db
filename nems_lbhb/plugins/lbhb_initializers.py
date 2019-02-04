@@ -1,4 +1,4 @@
-o"""
+"""
 initializer keywords specific to LBHB models
 should occur intermingled with fitter keywords
 """
