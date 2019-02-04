@@ -92,7 +92,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     #########################################
     # 1: Freeze the GC portion of the model #
     #########################################
-    log.info('\nFreezing dynamic portion of dsig...')
+    log.info('Freezing dynamic portion of dsig...\n')
     frozen_phi = {}
     frozen_priors = {}
     for k in ['amplitude_mod', 'base_mod', 'shift_mod', 'kappa_mod']:
@@ -106,7 +106,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # 2: Prefit the LN portion of the model (might also include STP) #
     ##################################################################
 
-    log.info('\nInitializing linear model and performing rough fit ...')
+    log.info('Initializing linear model and performing rough fit ...\n')
     # fit without STP module first (if there is one)
     modelspec = nems.initializers.prefit_to_target(
             est, modelspec, fit_basic, target_module='levelshift',
@@ -122,9 +122,9 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             break
 
     # now prefit static dsig
-    log.info("\nInitializing priors and bounds for dsig ...")
+    log.info("Initializing priors and bounds for dsig ...")
     modelspec = init_dsig(est, modelspec)
-    log.info('Performing rough fit of static nonlinearity ...')
+    log.info('Performing rough fit of static nonlinearity ...\n')
     modelspec = prefit_mod_subset(est, modelspec, fit_basic,
                                   fit_set=['dynamic_sigmoid'], fitter=fitter_fn,
                                   metric=metric_fn, fit_kwargs=prefit_kwargs)
@@ -134,24 +134,30 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # 3: Finish fitting the LN portion of the model (might also include STP) #
     ##########################################################################
 
-    log.info('\nFinishing fit for full LN model ...')
+    log.info('Finishing fit for full LN model ...\n')
     modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                           metric=metric_fn, metaname='fit_gc',
                           fit_kwargs=fit_kwargs)
 
     # 3b (OPTIONAL): Freeze LN parameters before continuing
+    # TODO: Should this be done? This is the approach Rab et al group took,
+    #       but it seems like we would still want STRF to be able to change.
+    #       Otherwise, adding on GC can't help cases where LN did a poor job
+    #       of fitting the STRF.
+
 
     ######################################
     # 4: Fit the GC portion of the model #
     ######################################
 
-    log.info('\nUnfreezing dynamic portion of dsig ...')
+    log.info('Unfreezing dynamic portion of dsig ...\n')
     # make dynamic_sigmoid dynamic again
     for k, v in frozen_phi.items():
         modelspec[dsig_idx]['phi'][k] = v
     for k, v in frozen_priors.items():
         modelspec[dsig_idx]['prior'][k] = v
 
+    log.info('Finishing fit for full GC model ...\n')
     modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                           metric=metric_fn, metaname='fit_gc',
                           fit_kwargs=fit_kwargs)
