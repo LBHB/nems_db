@@ -74,6 +74,9 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # Start with a new copy of modelspec, and figure out where
     # dynamic_sigmoid is.
     modelspec = copy.deepcopy(modelspec)
+    wc_idx = nems.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems.utils.find_module('fir', modelspec)
+    lvl_idx = nems.utils.find_module('levelshift', modelspec)
     dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
@@ -92,7 +95,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     #########################################
     # 1: Freeze the GC portion of the model #
     #########################################
-    log.info('Freezing dynamic portion of dsig...\n')
+    log.info('Freezing dynamic portion of dsig and STRF modules...\n')
     frozen_phi = {}
     frozen_priors = {}
     for k in ['amplitude_mod', 'base_mod', 'shift_mod', 'kappa_mod']:
@@ -100,6 +103,10 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             frozen_phi[k] = modelspec[dsig_idx]['phi'].pop(k)
         if k in modelspec[dsig_idx]['prior']:
             frozen_priors[k] = modelspec[dsig_idx]['prior'].pop(k)
+    modelspec[wc_idx]['fn_kwargs']['compute_contrast'] = False
+    modelspec[fir_idx]['fn_kwargs']['compute_contrast'] = False
+    modelspec[lvl_idx]['fn_kwargs']['compute_contrast'] = False
+
 
 
     ##################################################################
@@ -156,6 +163,9 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         modelspec[dsig_idx]['phi'][k] = v
     for k, v in frozen_priors.items():
         modelspec[dsig_idx]['prior'][k] = v
+    modelspec[wc_idx]['fn_kwargs']['compute_contrast'] = True
+    modelspec[fir_idx]['fn_kwargs']['compute_contrast'] = True
+    modelspec[lvl_idx]['fn_kwargs']['compute_contrast'] = True
 
     log.info('Finishing fit for full GC model ...\n')
     modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,

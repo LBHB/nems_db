@@ -70,7 +70,8 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
     return [rec[i].transform(fn, o)]
 
 
-def weight_channels(rec, i, o, ci, co, n_chan_in, mean, sd, **kwargs):
+def weight_channels(rec, i, o, ci, co, n_chan_in, mean, sd,
+                    compute_contrast=True, **kwargs):
     '''
     Parameters
     ----------
@@ -80,43 +81,83 @@ def weight_channels(rec, i, o, ci, co, n_chan_in, mean, sd, **kwargs):
         Name of input signal
     o : string
         Name of output signal
+    ci : string
+        Name of input signal for contrast portion
+    co : string
+        Name of output signal for contrast portion
+    compute_contrast : boolean
+        Skip contrast portion if False
     mean : array-like (between 0 and 1)
         Centers of Gaussian channel weights
     sd : array-like
         Standard deviation of Gaussian channel weights
+
     '''
     coefficients = gaussian_coefficients(mean, sd, n_chan_in)
     fn = lambda x: coefficients @ x
-    gc_fn = lambda x: np.abs(coefficients) @ x
-    return [rec[i].transform(fn, o), rec[ci].transform(gc_fn, co)]
+    new_signals = [rec[i].transform(fn, o)]
+    if compute_contrast:
+        gc_fn = lambda x: np.abs(coefficients) @ x
+        new_signals.append(rec[ci].transform(gc_fn, co))
+
+    return new_signals
 
 
-def fir(rec, i, o, ci, co, coefficients=[]):
+def fir(rec, i, o, ci, co, coefficients=[], compute_contrast=True):
     """
     apply fir filters of the same size in parallel. convolve in time, then
     sum across channels
 
+    Parameters
+    ----------
+    rec : recording
+        Recording to transform
+    i : string
+        Name of input signal
+    o : string
+        Name of output signal
+    ci : string
+        Name of input signal for contrast portion
+    co : string
+        Name of output signal for contrast portion
     coefficients : 2d array
         all coefficients matrix shape=channel X time lag, for which
         .shape[0] matched to the channel count of the input
+    compute_contrast : boolean
+        Skip contrast portion if False
 
-    input :
-        nems signal named in 'i'. must have dimensionality matched to size
-        of coefficients matrix.
-    output :
-        nems signal in 'o' will be 1 x time singal (single channel)
     """
     fn = lambda x: per_channel(x, coefficients)
-    gc_fn = lambda x: per_channel(x, np.abs(coefficients))
-    return [rec[i].transform(fn, o), rec[ci].transform(gc_fn, co)]
+    new_signals = [rec[i].transform(fn, o)]
+    if compute_contrast:
+        gc_fn = lambda x: per_channel(x, np.abs(coefficients))
+        new_signals.append(rec[ci].transform(gc_fn, co))
+
+    return new_signals
 
 
-def levelshift(rec, i, o, ci, co, level):
+def levelshift(rec, i, o, ci, co, level, compute_contrast=True):
     '''
     Parameters
     ----------
+    rec : recording
+        Recording to transform
+    i : string
+        Name of input signal
+    o : string
+        Name of output signal
+    ci : string
+        Name of input signal for contrast portion
+    co : string
+        Name of output signal for contrast portion
     level : a scalar to add to every element of the input signal.
+    compute_contrast : boolean
+        Skip contrast portion if False
+
     '''
     fn = lambda x: x + level
-    gc_fn = lambda x: x + np.abs(level)
-    return [rec[i].transform(fn, o), rec[ci].transform(gc_fn, co)]
+    new_signals = [rec[i].transform(fn, o)]
+    if compute_contrast:
+        gc_fn = lambda x: x + np.abs(level)
+        rec[ci].transform(gc_fn, co)
+    return new_signals
