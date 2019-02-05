@@ -22,7 +22,6 @@ def init(kw):
         if 'strfc' in ops:
             xfspec[0][1]['copy_strf'] = True
     elif 'lnp' in ops:
-        xfspec[0][1]['metric'] = lambda data: _lnp_metric(data, 'pred', 'resp')
-        #xfspec[0][1]['metric'] = 'likelihood_poisson'
+        xfspec[0][0] = 'nems_lbhb.lnp_helpers.init_lnp_model'
 
     return xfspec
