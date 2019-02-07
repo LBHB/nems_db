@@ -53,6 +53,14 @@ def mask_tor(rec):
     return full_rec
 
 
+def mask_runclass(rec, runclass="NAT"):
+    full_rec = rec.copy()
+    eps = [ep for ep in full_rec.epochs.name if ep.endswith(runclass) & ('FILE' in ep)]
+    full_rec = full_rec.and_mask(eps)
+
+    return full_rec
+
+
 def mask_nat(rec):
     full_rec = rec.copy()
     eps = [ep for ep in full_rec.epochs.name if ('NAT' in ep) & ('FILE' in ep)]

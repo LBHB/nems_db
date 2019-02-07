@@ -424,16 +424,19 @@ def baphy_load_data(parmfilepath, **options):
             raise ValueError("Error loading pupil data: " + pupilfilepath)
 
     if options['rem']:
-        rem_options = load_rem_options(pupilfilepath)
-        #rem_options['rasterfs'] = options['rasterfs']
-        is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
-                          exptevents=exptevents, **rem_options)
-        is_rem = is_rem.astype(float)
-        new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
-        is_rem = resample(is_rem, new_len)
-        is_rem[is_rem>0.01] = 1
-        is_rem[is_rem<=0.01] = 0
-        state_dict['rem'] = is_rem
+        try:
+            rem_options = load_rem_options(pupilfilepath)
+            #rem_options['rasterfs'] = options['rasterfs']
+            is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
+                              exptevents=exptevents, **rem_options)
+            is_rem = is_rem.astype(float)
+            new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
+            is_rem = resample(is_rem, new_len)
+            is_rem[is_rem>0.01] = 1
+            is_rem[is_rem<=0.01] = 0
+            state_dict['rem'] = is_rem
+        except:
+            log.info("REM load failed. Skipping.")
 
     return (exptevents, stim, spike_dict, state_dict,
             tags, stimparam, exptparams)
@@ -1484,7 +1487,7 @@ def baphy_load_recording(**options):
             else:
                 pupil_speed = pupil_speed.concatenate_time([pupil_speed, t_pupil_s])
 
-        if options['rem']:
+        if options['rem'] and (state_dict.get('rem') is not None):
 
             # create pupil signal if it exists
             rlen = int(t_resp.ntimes)
@@ -1511,6 +1514,8 @@ def baphy_load_recording(**options):
             else:
                 rem = rem.concatenate_time([rem, t_rem])
             print(np.nansum(rem.as_continuous()))
+        else:
+            options['rem'] = 0
 
         if options['stim'] and options["runclass"] == "RDT":
             log.info("concatenating RDT stim")
