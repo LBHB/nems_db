@@ -192,6 +192,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     options["batch"] = batch
     options["cellid"] = cellid
+
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
     else:
