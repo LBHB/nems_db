@@ -23,7 +23,7 @@ from flask import jsonify, request
 from flask_login import login_required
 
 from nems_web.nems_analysis import app
-from nems_db.db import enqueue_models
+from nems.db import enqueue_models
 from nems_web.account_management.views import get_current_user
 
 log = logging.getLogger(__name__)

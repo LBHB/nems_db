@@ -4,7 +4,8 @@ import numpy as np
 from scipy import integrate
 
 import nems
-import nems.metrics.api as metrics
+from nems.analysis.api import fit_basic
+from nems.fitters.api import scipy_minimize
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +77,24 @@ def _lnp_metric(data, pred_name='pred', resp_name='resp'):
     # recovery the model. (SVD was talking about this for GC model as well).
 
     return error
+
+
+def init_lnp_model(est, modelspec, analysis_function=fit_basic,
+                   fitter=scipy_minimize, metric=_lnp_metric, norm_fir=False,
+                   tolerance=10**-5.5, max_iter=700, nl_kw={},
+                   IsReload=False, **context):
+    '''
+    Just returns the output of prefit_LN, but uses _lnp_metric.
+    '''
+    if IsReload:
+        return {}
+    else:
+        modelspec = nems.initializers.prefit_LN(
+                est, modelspec, analysis_function, fitter, metric, norm_fir,
+                tolerance, max_iter, nl_kw
+                )
+
+        return {'modelspec': modelspec}
 
 
 # TODO: Need to come up with some way to verify that this is

@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
            prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
-           cost_function=None,  IsReload=False, **context):
+           cost_function=None,  fixed_strf=False, IsReload=False, **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
 
@@ -146,11 +146,15 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                           metric=metric_fn, metaname='fit_gc',
                           fit_kwargs=fit_kwargs)
 
-    # 3b (OPTIONAL): Freeze LN parameters before continuing
-    # TODO: Should this be done? This is the approach Rab et al group took,
-    #       but it seems like we would still want STRF to be able to change.
-    #       Otherwise, adding on GC can't help cases where LN did a poor job
-    #       of fitting the STRF.
+    # 3b (OPTIONAL): Freeze STRF parameters before continuing.
+    log.info('Freezing STRF parameters ...\n')
+    if fixed_strf:
+        modelspec[wc_idx]['fn_kwargs']['mean'] = \
+                modelspec[wc_idx]['phi'].pop('mean')
+        modelspec[wc_idx]['fn_kwargs']['sd'] = \
+                modelspec[wc_idx]['phi'].pop('sd')
+        modelspec[fir_idx]['fn_kwargs']['coefficients'] = \
+                modelspec[fir_idx]['phi'].pop('coefficients')
 
 
     ######################################
@@ -174,5 +178,15 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                           metric=metric_fn, metaname='fit_gc',
                           fit_kwargs=fit_kwargs)
+
+    # 4b (OPTIONAL): If STRF was frozen, unfreeze it.
+    log.info('Unfreezing STRF parameters ...\n')
+    if fixed_strf:
+        modelspec[wc_idx]['phi']['mean'] = \
+                modelspec[wc_idx]['fn_kwargs'].pop('mean')
+        modelspec[wc_idx]['phi']['sd'] = \
+                modelspec[wc_idx]['fn_kwargs'].pop('sd')
+        modelspec[fir_idx]['phi']['coefficients'] = \
+                modelspec[fir_idx]['fn_kwargs'].pop('coefficients')
 
     return {'modelspec': modelspec}

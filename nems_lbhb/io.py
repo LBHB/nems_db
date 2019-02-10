@@ -1031,6 +1031,7 @@ def load_rem_options(pupilfilepath, cachepath=None, **options):
     else:
         raise ValueError("REM options file not found.")
 
+
 def baphy_pupil_uri(pupilfilepath, **options):
     """
     return uri to pupil signal file

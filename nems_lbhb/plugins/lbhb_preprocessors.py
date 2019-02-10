@@ -248,6 +248,19 @@ def hrc(load_key):
 
     return xfspec
 
+def rc(load_key):
+    """
+    Mask only data from a specified runclass
+    """
+    runclass="NAT"
+    options=load_key.split(".")
+    if len(options)>1:
+        runclass=options[1]
+    xfspec = [['nems_lbhb.preprocessing.mask_runclass',
+               {'runclass': runclass}, ['rec'], ['rec']]]
+
+    return xfspec
+
 def tor(load_ley):
     """
     Mask only TORC data
