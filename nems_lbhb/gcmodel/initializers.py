@@ -280,15 +280,19 @@ def _init_double_exponential(rec, modelspec, target_i):
         predrange = 2 / (np.max(pred) - np.min(pred) + 1)
         kappa[i, 0] = np.log(predrange)
 
-    amp = ('Normal', {'mean': amp, 'sd': 1.0})
-    base = ('Normal', {'mean': base, 'sd': 1.0})
-    kappa = ('Normal', {'mean': kappa, 'sd': 1.0})
-    shift = ('Normal', {'mean': shift, 'sd': 1.0})
-
-    modelspec[target_i]['prior'].update({
-            'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa,
+    modelspec[target_i]['phi'].update({
+            'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa
             })
 
+    amp_prior = ('Normal', {'mean': amp, 'sd': 1.0})
+    base_prior = ('Normal', {'mean': base, 'sd': 1.0})
+    kappa_prior = ('Normal', {'mean': kappa, 'sd': 1.0})
+    shift_prior = ('Normal', {'mean': shift, 'sd': 1.0})
+
+    modelspec[target_i]['prior'].update({
+            'base': base_prior, 'amplitude': amp_prior, 'shift': shift_prior,
+            'kappa': kappa_prior,
+            })
 
     return modelspec
 

@@ -29,7 +29,8 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     kappa_mod=np.nan, eq='logsig'):
 
     static = False
-    if np.all(np.isnan([base_mod, amplitude_mod, shift_mod, kappa_mod])):
+    if np.all(np.isnan(np.array([base_mod, amplitude_mod,
+                                 shift_mod, kappa_mod]))):
         static = True
 
     if not static and rec[c]:

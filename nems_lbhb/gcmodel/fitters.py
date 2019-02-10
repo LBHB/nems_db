@@ -160,7 +160,10 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     log.info('Unfreezing dynamic portion of dsig ...\n')
     # make dynamic_sigmoid dynamic again
     for k, v in frozen_phi.items():
-        modelspec[dsig_idx]['phi'][k] = v
+        # Initialize _mod values equal to their counterparts
+        # e.g. amplitude_mod[:4] = amplitude
+        modelspec[dsig_idx]['phi'][k] = \
+            modelspec[dsig_idx]['phi'][k[:-4]].copy()
     for k, v in frozen_priors.items():
         modelspec[dsig_idx]['prior'][k] = v
     modelspec[wc_idx]['fn_kwargs']['compute_contrast'] = True
