@@ -125,7 +125,7 @@ def init_contrast_model(est, modelspec, IsReload=False,
     return {'modelspec': modelspec}
 
 
-def init_dsig(rec, modelspec):
+def init_dsig(rec, modelspec, nl_mode=2):
     '''
     Initialization of priors for logistic_sigmoid,
     based on process described in methods of Rabinowitz et al. 2014.
@@ -136,12 +136,10 @@ def init_dsig(rec, modelspec):
         log.warning("No dsig module was found, can't initialize.")
         return modelspec
 
-    modelspec = copy.deepcopy(modelspec)
-    rec = copy.deepcopy(rec)
-
     if modelspec[dsig_idx]['fn_kwargs'].get('eq', '') in \
             ['dexp', 'd', 'double_exponential']:
-        modelspec = _init_double_exponential(rec, modelspec, dsig_idx)
+        modelspec = _init_double_exponential(rec, modelspec, dsig_idx,
+                                             nl_mode=nl_mode)
     else:
         modelspec = _init_logistic_sigmoid(rec, modelspec, dsig_idx)
 
@@ -224,7 +222,7 @@ def _init_logistic_sigmoid(rec, modelspec, dsig_idx):
     return modelspec
 
 
-def _init_double_exponential(rec, modelspec, target_i):
+def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
 
     if target_i == len(modelspec):
         fit_portion = modelspec.modules
@@ -233,12 +231,13 @@ def _init_double_exponential(rec, modelspec, target_i):
 
     # generate prediction from modules preceeding dsig
 
-    # HACK
+    # ensures all previous modules have their phi initialized
+    # choose prior mean if not found
     for i, m in enumerate(fit_portion):
-        if not m.get('phi', None):
-            old = m.get('prior', {})
-            m = priors.set_mean_phi([m])[0]
-            m['prior'] = old
+        if ('phi' not in m.keys()) and ('prior' in m.keys()):
+            log.debug('Phi not found for module, using mean of prior: %s',
+                      m)
+            m = priors.set_mean_phi([m])[0]  # Inits phi for 1 module
             fit_portion[i] = m
 
     ms.fit_mode_on(fit_portion)
@@ -272,12 +271,28 @@ def _init_double_exponential(rec, modelspec, target_i):
         # base = meanr - stdr * 3
 
         # amp = np.max(resp) - np.min(resp)
-        amp[i, 0] = stdr * 3
+        if nl_mode == 1:
+            amp[i, 0] = stdr * 3
+            predrange = 2 / (np.max(pred) - np.min(pred) + 1)
+        elif nl_mode == 2:
+            mask=np.zeros_like(pred,dtype=bool)
+            pct=91
+            while sum(mask)<.01*pred.shape[0]:
+                pct-=1
+                mask=pred>np.percentile(pred,pct)
+            if pct !=90:
+                log.warning('Init dexp: Default for init mode 2 is to find mean '
+                         'of responses for times where pred>pctile(pred,90). '
+                         '\nNo times were found so this was lowered to '
+                         'pred>pctile(pred,%d).', pct)
+            amp[i, 0] = resp[mask].mean()
+            predrange = 2 / (np.std(pred)*3)
+        else:
+            raise ValueError('nl mode = {} not valid'.format(nl_mode))
 
         shift[i, 0] = np.mean(pred)
         # shift = (np.max(pred) + np.min(pred)) / 2
 
-        predrange = 2 / (np.max(pred) - np.min(pred) + 1)
         kappa[i, 0] = np.log(predrange)
 
     modelspec[target_i]['phi'].update({
@@ -293,6 +308,8 @@ def _init_double_exponential(rec, modelspec, target_i):
             'base': base_prior, 'amplitude': amp_prior, 'shift': shift_prior,
             'kappa': kappa_prior,
             })
+
+    log.info("Init dexp: %s", modelspec[target_i]['phi'])
 
     return modelspec
 

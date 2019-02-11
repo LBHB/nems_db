@@ -42,6 +42,8 @@ def gc(fitkey):
             kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
         elif op == 'fx':
             kwargs['fixed_strf'] = True
+        elif op.startswith('nl'):
+            kwargs['nl_mode'] = int(op[2:])
 
     return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
 

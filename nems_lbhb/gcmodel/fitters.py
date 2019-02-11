@@ -13,6 +13,33 @@ from nems.initializers import prefit_mod_subset
 
 log = logging.getLogger(__name__)
 
+# Just for testing, if i forget to remove this
+# DELETE ME!!!
+#from numpy import array
+#ln_init = [{},
+# {'mean': array([-0.04993495]), 'sd': array([0.23719508])},
+# {'coefficients': array([[-0.04052677,  0.20475534,  0.19113359, -0.05688392, -0.04267145,
+#          -0.06804032, -0.01711087, -0.02206419, -0.01143896, -0.02013604,
+#          -0.00032373, -0.01117255, -0.01035168,  0.0068924 , -0.02859245]])},
+# {'level': array([[0.11396495]])},
+# {'amplitude': array([[2.49914281]]),
+#  'base': array([[0.10286309]]),
+#  'kappa': array([[0.95646226]]),
+#  'shift': array([[0.7321147]])}]
+## Just for testing, if i forget to remove this
+## DELETE ME!!!
+#modelspec = ctx['modelspec']
+#est = ctx['est']
+#max_iter = 1000
+#prefit_max_iter = 700
+#tolerance = 1e-7
+#prefit_tolerance=10**-5.5
+#metric = 'nmse'
+#fitter = 'scipy_minimize'
+#cost_function = None
+#fixed_strf = True
+#IsReload = False
+
 
 def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
            prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
@@ -71,9 +98,13 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
     '''
 
+    if IsReload:
+        return {}
+
     # Start with a new copy of modelspec, and figure out where
     # dynamic_sigmoid is.
     modelspec = copy.deepcopy(modelspec)
+    est = copy.deepcopy(est)
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)
     lvl_idx = nems.utils.find_module('levelshift', modelspec)
@@ -133,8 +164,10 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     modelspec = init_dsig(est, modelspec)
     log.info('Performing rough fit of static nonlinearity ...\n')
     modelspec = prefit_mod_subset(est, modelspec, fit_basic,
-                                  fit_set=['dynamic_sigmoid'], fitter=fitter_fn,
-                                  metric=metric_fn, fit_kwargs=prefit_kwargs)
+                                  fit_set=['dynamic_sigmoid'],
+                                  fitter=fitter_fn,
+                                  metric=metric_fn,
+                                  fit_kwargs=prefit_kwargs)
 
 
     ##########################################################################
