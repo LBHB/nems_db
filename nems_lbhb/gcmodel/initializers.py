@@ -6,7 +6,7 @@ import numpy as np
 import nems.epoch
 import nems.modelspec as ms
 from nems.utils import find_module
-from nems.initializers import prefit_to_target, prefit_mod_subset
+from nems.initializers import prefit_to_target, prefit_mod_subset, init_dexp
 from nems.analysis.api import fit_basic
 import nems.fitters.api
 import nems.metrics.api as metrics
@@ -223,81 +223,15 @@ def _init_logistic_sigmoid(rec, modelspec, dsig_idx):
 
 
 def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
+    # Call existing init_dexp
+    modelspec = init_dexp(rec, modelspec, nl_mode=2, override_target_i=target_i)
 
-    if target_i == len(modelspec):
-        fit_portion = modelspec.modules
-    else:
-        fit_portion = modelspec.modules[:target_i]
-
-    # generate prediction from modules preceeding dsig
-
-    # ensures all previous modules have their phi initialized
-    # choose prior mean if not found
-    for i, m in enumerate(fit_portion):
-        if ('phi' not in m.keys()) and ('prior' in m.keys()):
-            log.debug('Phi not found for module, using mean of prior: %s',
-                      m)
-            m = priors.set_mean_phi([m])[0]  # Inits phi for 1 module
-            fit_portion[i] = m
-
-    ms.fit_mode_on(fit_portion)
-    rec = ms.evaluate(rec, fit_portion)
-    ms.fit_mode_off(fit_portion)
-
-    in_signal = modelspec[target_i]['fn_kwargs']['i']
-    pchans = rec[in_signal].shape[0]
-    amp = np.zeros([pchans, 1])
-    base = np.zeros([pchans, 1])
-    kappa = np.zeros([pchans, 1])
-    shift = np.zeros([pchans, 1])
-
-    for i in range(pchans):
-        resp = rec['resp'].as_continuous()
-        pred = rec[in_signal].as_continuous()[i:(i+1), :]
-        if resp.shape[0] == pchans:
-            resp = resp[i:(i+1), :]
-
-        keepidx = np.isfinite(resp) * np.isfinite(pred)
-        resp = resp[keepidx]
-        pred = pred[keepidx]
-
-        # choose phi s.t. dexp starts as almost a straight line
-        # phi=[max_out min_out slope mean_in]
-        # meanr = np.nanmean(resp)
-        stdr = np.nanstd(resp)
-
-        # base = np.max(np.array([meanr - stdr * 4, 0]))
-        base[i, 0] = np.min(resp)
-        # base = meanr - stdr * 3
-
-        # amp = np.max(resp) - np.min(resp)
-        if nl_mode == 1:
-            amp[i, 0] = stdr * 3
-            predrange = 2 / (np.max(pred) - np.min(pred) + 1)
-        elif nl_mode == 2:
-            mask=np.zeros_like(pred,dtype=bool)
-            pct=91
-            while sum(mask)<.01*pred.shape[0]:
-                pct-=1
-                mask=pred>np.percentile(pred,pct)
-            if pct !=90:
-                log.warning('Init dexp: Default for init mode 2 is to find mean '
-                         'of responses for times where pred>pctile(pred,90). '
-                         '\nNo times were found so this was lowered to '
-                         'pred>pctile(pred,%d).', pct)
-            amp[i, 0] = resp[mask].mean()
-            predrange = 2 / (np.std(pred)*3)
-        else:
-            raise ValueError('nl mode = {} not valid'.format(nl_mode))
-
-        shift[i, 0] = np.mean(pred)
-        # shift = (np.max(pred) + np.min(pred)) / 2
-
-        kappa[i, 0] = np.log(predrange)
-
-    modelspec[target_i]['phi'].update({
-            'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa
-            })
+    # Package initiailzation results into priors so that we can use those
+    # to sample for some reasonable random fits if desired.
+    amp = modelspec.phi[-1]['amplitude']
+    base = modelspec.phi[-1]['base']
+    kappa = modelspec.phi[-1]['kappa']
+    shift = modelspec.phi[-1]['shift']
 
     amp_prior = ('Normal', {'mean': amp, 'sd': 1.0})
     base_prior = ('Normal', {'mean': base, 'sd': 1.0})
@@ -305,11 +239,9 @@ def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
     shift_prior = ('Normal', {'mean': shift, 'sd': 1.0})
 
     modelspec[target_i]['prior'].update({
-            'base': base_prior, 'amplitude': amp_prior, 'shift': shift_prior,
-            'kappa': kappa_prior,
+            'amplitude': amp_prior, 'base': base_prior, 'kappa': kappa_prior,
+            'shift': shift_prior,
             })
-
-    log.info("Init dexp: %s", modelspec[target_i]['phi'])
 
     return modelspec
 
