@@ -40,7 +40,6 @@ from nems_lbhb.io import (baphy_parm_read, baphy_align_time, load_pupil_trace,
 stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
-# TODO: Replace print() statements with log.info()?
 log = logging.getLogger(__name__)
 
 

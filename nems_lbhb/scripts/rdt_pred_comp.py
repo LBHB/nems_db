@@ -24,16 +24,19 @@ plt.rcParams.update(params)
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 
-loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf.rep-rdtsev-rdtfmt',
-           'rdtld-rdtshf.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf-rdtsev-rdtfmt']
-label0 = ['{}_RS', '{}_R', '{}_S', '{}']
+# removing the rep-shuffled model, since it's weird and unhelpful to plot
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
+           # 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
+
+label0 = ['{}_RS', '{}_S', '{}']   # '{}_R',
+
 sxticks = ['rep+str', 'rep', 'str', 'noshuff']
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
 

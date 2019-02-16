@@ -1,4 +1,6 @@
 import os
+
+from nems_lbhb.stateplots import beta_comp
 import matplotlib.pyplot as plt
 from nems import xforms
 import nems_lbhb.xform_wrappers as nw
@@ -8,41 +10,29 @@ import nems.modelspec as ms
 from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_batch_modelspecs
 import pandas as pd
 import numpy as np
-from nems_lbhb.stateplots import beta_comp
-
-font_size=8
-params = {'legend.fontsize': font_size-2,
-          'figure.figsize': (8, 6),
-          'axes.labelsize': font_size,
-          'axes.titlesize': font_size,
-          'xtick.labelsize': font_size,
-          'ytick.labelsize': font_size,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-plt.rcParams.update(params)
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 
-loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf.rep-rdtsev-rdtfmt',
-           'rdtld-rdtshf.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf-rdtsev-rdtfmt']
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
 label0 = ['{}_RS', '{}_R', '{}_S', '{}']
 sxticks = ['rep+str', 'rep', 'str', 'noshuff']
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
 
 batches = [269, 273]
 batstring = ['A1','PEG']
-batches = [269]
-batstring = ['A1']
 batches = [273]
 batstring = ['PEG']
+batches = [269]
+batstring = ['A1']
 
 modelname = modelnames[-1]
 
