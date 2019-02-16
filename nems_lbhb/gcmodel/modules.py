@@ -62,7 +62,7 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
 
     if eq.lower() in ['logsig', 'logistic_sigmoid', 'l']:
         fn = lambda x: _logistic_sigmoid(x, b, a, s, k)
-    elif eq.lower() == ['dexp', 'double_exponential', 'd']:
+    elif eq.lower() in ['dexp', 'double_exponential', 'd']:
         fn = lambda x: _double_exponential(x, b, a, s, k)
     else:
         # Not a recognized equation, do logistic_sigmoid by default.
