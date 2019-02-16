@@ -165,6 +165,8 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 modelspec[wc_idx]['phi'].pop('sd')
         modelspec[fir_idx]['fn_kwargs']['coefficients'] = \
                 modelspec[fir_idx]['phi'].pop('coefficients')
+        modelspec[lvl_idx]['fn_kwargs']['level'] = \
+                modelspec[lvl_idx]['phi'].pop('level')
 
 
     ######################################
@@ -198,5 +200,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 modelspec[wc_idx]['fn_kwargs'].pop('sd')
         modelspec[fir_idx]['phi']['coefficients'] = \
                 modelspec[fir_idx]['fn_kwargs'].pop('coefficients')
+        modelspec[lvl_idx]['phi']['level'] = \
+                modelspec[lvl_idx]['fn_kwargs'].pop('level')
 
     return {'modelspec': modelspec}
