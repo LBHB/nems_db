@@ -13,33 +13,6 @@ from nems.initializers import prefit_mod_subset
 
 log = logging.getLogger(__name__)
 
-# Just for testing, if i forget to remove this
-# DELETE ME!!!
-#from numpy import array
-#ln_init = [{},
-# {'mean': array([-0.04993495]), 'sd': array([0.23719508])},
-# {'coefficients': array([[-0.04052677,  0.20475534,  0.19113359, -0.05688392, -0.04267145,
-#          -0.06804032, -0.01711087, -0.02206419, -0.01143896, -0.02013604,
-#          -0.00032373, -0.01117255, -0.01035168,  0.0068924 , -0.02859245]])},
-# {'level': array([[0.11396495]])},
-# {'amplitude': array([[2.49914281]]),
-#  'base': array([[0.10286309]]),
-#  'kappa': array([[0.95646226]]),
-#  'shift': array([[0.7321147]])}]
-## Just for testing, if i forget to remove this
-## DELETE ME!!!
-#modelspec = ctx['modelspec']
-#est = ctx['est']
-#max_iter = 1000
-#prefit_max_iter = 700
-#tolerance = 1e-7
-#prefit_tolerance=10**-5.5
-#metric = 'nmse'
-#fitter = 'scipy_minimize'
-#cost_function = None
-#fixed_strf = True
-#IsReload = False
-
 
 def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
            prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
@@ -115,7 +88,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
-    fit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': max_iter}
+    fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
     fitter_fn = getattr(nems.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
@@ -175,9 +148,13 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     ##########################################################################
 
     log.info('Finishing fit for full LN model ...\n')
-    modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
-                          metric=metric_fn, metaname='fit_gc',
-                          fit_kwargs=fit_kwargs)
+    # Can't use metric=None directly to fit_basic or it will have a fit,
+    # so split up arguments here and only add metric if we gave one.
+    fb_args = [est, modelspec, fitter_fn, cost_function]
+    fb_kwargs = {'metaname': 'fit_gc', 'fit_kwargs': fit_kwargs}
+    if metric_fn is not None:
+        fb_kwargs['metric'] = metric_fn
+    modelspec = fit_basic(*fb_args, **fb_kwargs)
 
     # 3b (OPTIONAL): Freeze STRF parameters before continuing.
     log.info('Freezing STRF parameters ...\n')
@@ -188,6 +165,8 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 modelspec[wc_idx]['phi'].pop('sd')
         modelspec[fir_idx]['fn_kwargs']['coefficients'] = \
                 modelspec[fir_idx]['phi'].pop('coefficients')
+        modelspec[lvl_idx]['fn_kwargs']['level'] = \
+                modelspec[lvl_idx]['phi'].pop('level')
 
 
     ######################################
@@ -221,5 +200,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 modelspec[wc_idx]['fn_kwargs'].pop('sd')
         modelspec[fir_idx]['phi']['coefficients'] = \
                 modelspec[fir_idx]['fn_kwargs'].pop('coefficients')
+        modelspec[lvl_idx]['phi']['level'] = \
+                modelspec[lvl_idx]['fn_kwargs'].pop('level')
 
     return {'modelspec': modelspec}
