@@ -127,9 +127,10 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # then initialize the STP module (if there is one)
     for i, m in enumerate(modelspec.modules):
         if 'stp' in m['fn']:
-            log.info('Initializing STP module ...')
-            m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
-            modelspec[i] = m
+            if not m.get('phi'):
+                log.info('Initializing STP module ...')
+                m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                modelspec[i] = m
             break
 
     # now prefit static dsig

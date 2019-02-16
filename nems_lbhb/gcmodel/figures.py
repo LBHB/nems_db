@@ -27,15 +27,30 @@ from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 
 
+###############################################################################
+######################     CURRENT MODELS     #################################
+###############################################################################
+gc_av = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+         "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1-dsig.d_gc.fx")
+
+gc_av_stp = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+             "dlog.f-gcwc.18x1.g-stp.2-gcfir.1x15-gclvl.1-dsig.d_gc.fx")
+
+stp_dexp =  ("ozgf.fs100.ch18-ld-sev_"
+             "dlog.f-wc.18x1.g-stp.2-fir.1x15-lvl.1-dexp.1_"
+             "init-basic")
+
+ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
+           "dlog.f-wc.18x1.g-fir.1x15-lvl.1-dexp.1_"
+           "init-basic")
+###############################################################################
+###############################################################################
+
+
 gc_cont_full = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
                 "dlog.f-wc.18x2.g-fir.2x15-lvl.1-"
                 "ctwc.18x1.g-ctfir.1x15-ctlvl.1-dsig.l_"
                 "init.c-basic")
-
-gc_cont_reduced = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
-                   "dlog.f-wc.18x2.g-fir.2x15-lvl.1-"
-                   "ctwc.18x1.g-ctfir.1x15-ctlvl.1-dsig.l.k.s_"
-                   "init.c-basic")
 
 gc_cont_dexp = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
                 "dlog.f-wc.18x2.g-fir.2x15-lvl.1-"
@@ -57,28 +72,18 @@ gc_stp_dexp = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
                "ctwc.18x1.g-ctfir.1x15-ctlvl.1-dsig.d_"
                "init.c-basic")
 
-gc_cont_merged = ('ozgf.fs100.ch18-ld-contrast.ms100.cont.n-sev_'
-                  'dlog.f-gcwc.18x1-gcfir.1x15-gclvl.1-dsig.l_'
-                  'init.c-basic')
-
 stp_model = ("ozgf.fs100.ch18-ld-sev_"
              "dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-logsig_"
-             "init-basic")
-
-stp_dexp =  ("ozgf.fs100.ch18-ld-sev_"
-             "dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-dexp.1_"
              "init-basic")
 
 ln_model = ("ozgf.fs100.ch18-ld-sev_"
             "dlog.f-wc.18x2.g-fir.2x15-lvl.1-logsig_"
             "init-basic")
 
-ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
-           "dlog.f-wc.18x2.g-fir.2x15-lvl.1-dexp.1_"
-           "init-basic")
 
-dexp_kwargs = {'model1': gc_cont_dexp, 'model2': stp_dexp, 'model3': ln_dexp,
-               'model4': gc_stp_dexp}
+
+dexp_kwargs = {'model1': gc_av, 'model2': stp_dexp, 'model3': ln_dexp,
+               'model4': gc_av_stp}
 
 batch = 289
 
