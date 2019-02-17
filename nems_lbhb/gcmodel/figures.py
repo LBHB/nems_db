@@ -36,13 +36,14 @@ gc_av = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
 gc_av_stp = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
              "dlog.f-gcwc.18x1.g-stp.2-gcfir.1x15-gclvl.1-dsig.d_gc.fx")
 
-stp_dexp =  ("ozgf.fs100.ch18-ld-sev_"
-             "dlog.f-wc.18x1.g-stp.2-fir.1x15-lvl.1-dexp.1_"
-             "init-basic")
+stp_dexp = ("ozgf.fs100.ch18-ld-sev_"
+            "dlog.f-wc.18x1.g-stp.2-fir.1x15-lvl.1-dexp.1_"
+            "init-basic")
 
 ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
            "dlog.f-wc.18x1.g-fir.1x15-lvl.1-dexp.1_"
            "init-basic")
+
 ###############################################################################
 ###############################################################################
 
@@ -971,10 +972,15 @@ def contrast_breakdown(cellid=gc_beat_stp, model1=gc_cont_full,
 
     plt.subplot(gs2[3:6, 1])
 
-    wcc = _get_wc_coefficients(modelspec, idx=1)
-    firc = _get_fir_coefficients(modelspec, idx=1)
-    wc_coefs = np.array(wcc).T
-    fir_coefs = np.array(firc)
+    if 'gcwc' not in model1:
+        wcc = _get_wc_coefficients(modelspec, idx=1)
+        firc = _get_fir_coefficients(modelspec, idx=1)
+        wc_coefs = np.array(wcc).T
+        fir_coefs = np.array(firc)
+    else:
+        wc_coefs = np.abs(wc_coefs)
+        fir_coefs = np.abs(fir_coefs)
+
     if wc_coefs.shape[1] == fir_coefs.shape[0]:
         strf = wc_coefs @ fir_coefs
         show_factorized = True
@@ -1440,10 +1446,15 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
 
     plt.subplot(gs[3, 2])
     # GC STRF
-    wcc = _get_wc_coefficients(modelspec, idx=1)
-    firc = _get_fir_coefficients(modelspec, idx=1)
-    wc_coefs = np.array(wcc).T
-    fir_coefs = np.array(firc)
+    if 'gcwc' not in model1:
+        wcc = _get_wc_coefficients(modelspec, idx=1)
+        firc = _get_fir_coefficients(modelspec, idx=1)
+        wc_coefs = np.array(wcc).T
+        fir_coefs = np.array(firc)
+    else:
+        wc_coefs = np.abs(wc_coefs)
+        fir_coefs = np.abs(fir_coefs)
+
     if wc_coefs.shape[1] == fir_coefs.shape[0]:
         strf = wc_coefs @ fir_coefs
         show_factorized = True
@@ -1786,10 +1797,15 @@ def contrast_vs_stp_comparison(cellid=good_cell, model1=gc_cont_full,
 
     plt.subplot(gs[3, 4])
     # GC STRF
-    wcc = _get_wc_coefficients(modelspec, idx=1)
-    firc = _get_fir_coefficients(modelspec, idx=1)
-    wc_coefs = np.array(wcc).T
-    fir_coefs = np.array(firc)
+    if 'gcwc' not in model1:
+        wcc = _get_wc_coefficients(modelspec, idx=1)
+        firc = _get_fir_coefficients(modelspec, idx=1)
+        wc_coefs = np.array(wcc).T
+        fir_coefs = np.array(firc)
+    else:
+        wc_coefs = np.abs(wc_coefs)
+        fir_coefs = np.abs(fir_coefs)
+
     if wc_coefs.shape[1] == fir_coefs.shape[0]:
         strf = wc_coefs @ fir_coefs
         show_factorized = True
