@@ -24,8 +24,6 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
                low_hw=5.0, mean=40.0, n_tones=23, f_low=0.5, f_high=22.6):
     '''
     Generate a random contrast dynamic random chord (RC-DRC) stimulus.
-    '''
-
 
     See rec_from_DRC to convert the array into a NEMS recording.
 
