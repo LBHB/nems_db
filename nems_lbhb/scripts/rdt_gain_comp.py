@@ -19,12 +19,13 @@ keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 
+# 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
+
 loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
-           'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
-label0 = ['{}_RS', '{}_R', '{}_S', '{}']
-sxticks = ['rep+str', 'rep', 'str', 'noshuff']
+label0 = ['{}_RS', '{}_S', '{}']   #, '{}_R'
+sxticks = ['rep+str', 'rep', 'noshuff'] # 'str',
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
 
 batches = [269, 273]
