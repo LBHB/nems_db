@@ -71,6 +71,14 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
     return [rec[i].transform(fn, o)]
 
 
+# Compatibility function for a plot routine in nems.plots.scatter
+# TODO: Better solution for this?
+def _dynamic_sigmoid(x, base, amplitude, shift, kappa, base_mod, amplitude_mod,
+                     shift_mod, kappa_mod):
+
+    return _double_exponential(x, base, amplitude, shift, kappa)
+
+
 def weight_channels(rec, i, o, ci, co, n_chan_in, mean, sd,
                     compute_contrast=True, **kwargs):
     '''
