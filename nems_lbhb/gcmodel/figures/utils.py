@@ -26,6 +26,12 @@ def adjustFigAspect(fig, aspect=1):
                         top=.5+ylim)
 
 
+def forceAspect(ax, aspect=1):
+    im = ax.get_images()
+    extent = im[0].get_extent()
+    ax.set_aspect(abs((extent[1]-extent[0])/(extent[3]-extent[2]))/aspect)
+
+
 def get_valid_improvements(batch, model1, model2, threshold = 2.5):
     # TODO: threshold 2.5 works for removing outliers in correlation scatter
     #       and maximizes r, but need an unbiased way to pick this number.

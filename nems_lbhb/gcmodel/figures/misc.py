@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -6,7 +8,7 @@ import nems.db as nd
 import nems.xform_helper as xhelp
 import nems.xforms as xf
 from nems_db.params import fitted_params_per_batch
-from nems_lbhb.gcmodel.figures.utils import adjustFigAspect
+from nems_lbhb.gcmodel.figures.utils import adjustFigAspect, forceAspect
 from nems.utils import find_module
 
 
@@ -84,7 +86,30 @@ def gd_ratio(cellid, batch, modelname):
     return phi['kappa_mod']/phi['kappa']
 
 
-def gd_scatter(batch, model1, model2):
+def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=1.1):
+
+    df_r = nd.batch_comp(batch, [model1, model2],
+                         stat='r_ceiling')
+    df_e = nd.batch_comp(batch, [model1, model2],
+                         stat='se_test')
+    # Remove any cellids that have NaN for 1 or more models
+    df_r.dropna(axis=0, how='any', inplace=True)
+    df_e.dropna(axis=0, how='any', inplace=True)
+
+    cellids = df_r.index.values.tolist()
+
+    gc_test = df_r[model1]
+    gc_se = df_e[model1]
+    ln_test = df_r[model2]
+    ln_se = df_e[model2]
+
+
+    if se_filter:
+        # Remove if performance not significant at all
+        good_cells = ((gc_test > gc_se*2) & (ln_test > ln_se*2))
+    else:
+        # Set to series w/ all True, so none are skipped
+        good_cells = (gc_test != np.nan)
 
     df1 = fitted_params_per_batch(batch, model1, stats_keys=[])
     df2 = fitted_params_per_batch(batch, model2, stats_keys=[])
@@ -92,6 +117,7 @@ def gd_scatter(batch, model1, model2):
     # fill in missing cellids w/ nan
     celldata = nd.get_batch_cells(batch=batch)
     cellids = celldata['cellid'].tolist()
+    cellids = [c for c in cellids if c in good_cells]
     nrows = len(df1.index.values.tolist())
 
     df1_cells = df1.loc['meta--r_test'].index.values.tolist()[5:]
@@ -115,46 +141,62 @@ def gd_scatter(batch, model1, model2):
     # Force same cellid order now that missing cols are filled in
     df1 = df1[cellids]; df2 = df2[cellids];
 
-    gc_vs_ln = df1.loc['meta--r_test'].values - df2.loc['meta--r_test'].values
+    gc_vs_ln = df1.loc['meta--r_test'].values / df2.loc['meta--r_test'].values
     gc_vs_ln = gc_vs_ln.astype('float32')
 
     kappa_mod = df1[df1.index.str.contains('kappa_mod')]
     kappa = df1[df1.index.str.contains('kappa$')]
-    gd_ratio = (kappa_mod.values / kappa.values).astype('float32').flatten()
-
-
-    # For testing: Some times kappa is so small that the ratio ends up
-    # throwing the scale off so far that the plot is worthless.
-    # But majority of the time the ratio is less than 5ish, so try rectifying:
-    gd_ratio[gd_ratio > 5] = 5
-    gd_ratio[gd_ratio < -5] = -5
-    # Then normalize to -1 to 1 scale for easier comparison to r value
-    gd_ratio /= 5
-
+    gd_ratio = (np.abs(kappa_mod.values / kappa.values)).astype('float32').flatten()
 
     ff = np.isfinite(gc_vs_ln) & np.isfinite(gd_ratio)
     gc_vs_ln = gc_vs_ln[ff]
     gd_ratio = gd_ratio[ff]
 
+    # drop cells with excessively large/small gd_ratio or gc_vs_ln
+    gcd_big = gd_ratio > 10
+    gc_vs_ln_big = gc_vs_ln > 10
+    gc_vs_ln_small = gc_vs_ln < 0.1
+    keep = ~gcd_big & ~gc_vs_ln_big & ~gc_vs_ln_small
+    gd_ratio = gd_ratio[keep]
+    gc_vs_ln = gc_vs_ln[keep]
+
     r = np.corrcoef(gc_vs_ln, gd_ratio)[0, 1]
     n = gc_vs_ln.size
 
-    y_max = np.max(gd_ratio)
-    y_min = np.min(gd_ratio)
-    x_max = np.max(gc_vs_ln)
-    x_min = np.min(gc_vs_ln)
 
-    abs_max = max(np.abs(y_max), np.abs(x_max), np.abs(y_min), np.abs(x_min))
-    abs_max *= 1.15
+    # Separately do the same comparison but only with cells that had a
+    # Gd ratio at least a little greater than 1 (i.e. had *some* GC effect)
+    gd_ratio2 = copy.deepcopy(gd_ratio)
+    gc_vs_ln2 = copy.deepcopy(gc_vs_ln)
+    above_threshold = gd_ratio2 > gd_threshold
+    gd_ratio2 = gd_ratio2[above_threshold]
+    gc_vs_ln2 = gc_vs_ln2[above_threshold]
 
-    fig = plt.figure(figsize=(6, 6))
-    plt.scatter(gc_vs_ln, gd_ratio)
-    plt.xlabel("GC - LN model")
-    plt.ylabel("Gd ratio")
-    plt.title("r: %.02f, n: %d" % (r, n))
-    gca = plt.gca()
-    gca.axes.axhline(0, color='black', linewidth=1, linestyle='dashed')
-    gca.axes.axvline(0, color='black', linewidth=1, linestyle='dashed')
-    plt.ylim(ymin=(-1)*abs_max, ymax=abs_max)
-    plt.xlim(xmin=(-1)*abs_max, xmax=abs_max)
-    adjustFigAspect(fig, aspect=1)
+    r2 = np.corrcoef(gc_vs_ln2, gd_ratio2)[0, 1]
+    n2 = gc_vs_ln2.size
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 8))
+
+    ax1.scatter(gd_ratio, gc_vs_ln, c='black', s=1)
+    ax1.set_ylabel("GC/LN R")
+    ax1.set_xlabel("Gd ratio")
+    ax1.set_title("Performance Improvement vs Gd ratio\nr: %.02f, n: %d"
+                  % (r, n))
+
+    ax2.hist(gd_ratio, bins=30, histtype='bar', color=['gray'])
+    ax2.set_title('Gd ratio distribution')
+    ax2.set_xlabel('Gd ratio')
+    ax2.set_ylabel('Count')
+
+    ax3.scatter(gd_ratio2, gc_vs_ln2, c='black', s=1)
+    ax3.set_ylabel("GC/LN R")
+    ax3.set_xlabel("Gd ratio")
+    ax3.set_title("Same, only cells w/ Gd > %.02f\nr: %.02f, n: %d"
+                  % (gd_threshold, r2, n2))
+
+    ax4.hist(gd_ratio2, bins=30, histtype='bar', color=['gray'])
+    ax4.set_title('Gd ratio distribution, only Gd > %.02f' % gd_threshold)
+    ax4.set_xlabel('Gd ratio')
+    ax4.set_ylabel('Count')
+
+    fig.tight_layout()
