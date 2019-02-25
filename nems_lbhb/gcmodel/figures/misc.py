@@ -1,9 +1,13 @@
 import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 
+import nems.db as nd
 import nems.xform_helper as xhelp
 import nems.xforms as xf
 from nems_db.params import fitted_params_per_batch
-from .utils import adjustFigAspect
+from nems_lbhb.gcmodel.figures.utils import adjustFigAspect
+from nems.utils import find_module
 
 
 # TODO: Need to clean these up, some can probably be deleted.
@@ -11,7 +15,7 @@ from .utils import adjustFigAspect
 
 
 # Overlay of prediction from STP versus prediction from GC for sample cell(s)
-def example_pred_overlay(cellid=good_cell, batch, model1, model2):
+def example_pred_overlay(cellid, batch, model1, model2):
     '''
     model1: GC
     model2: STP
@@ -31,7 +35,7 @@ def example_pred_overlay(cellid=good_cell, batch, model1, model2):
 # Average values for fitted contrast parameters, to compare to paper
 # -- use param extraction functions
 # Scatter of full model versus ".k.s" model
-def mean_contrast_variables(modelname):
+def mean_contrast_variables(batch, modelname):
 
     df1 = fitted_params_per_batch(batch, modelname, mod_key='fn')
 
@@ -69,115 +73,10 @@ def mean_contrast_variables(modelname):
             avg_kappa/max_kappa, avg_shift/max_shift))
 
 
-def continuous_contrast_improvements():
-    df_full = fitted_params_per_batch(batch, gc_model_full, stats_keys=[])
-    df_cont = fitted_params_per_batch(batch, gc_model_cont, stats_keys=[])
-    df_stp = fitted_params_per_batch(batch, stp_model, stats_keys=[])
-    df_ln = fitted_params_per_batch(batch, ln_model, stats_keys=[])
+def gd_ratio(cellid, batch, modelname):
 
-    # fill in missing cellids w/ nan
-    celldata = get_batch_cells(batch=batch)
-    cellids = celldata['cellid'].tolist()
-    nrows = len(df_full.index.values.tolist())
-
-    df1_cells = df_full.loc['meta--r_test'].index.values.tolist()[5:]
-    df2_cells = df_cont.loc['meta--r_test'].index.values.tolist()[5:]
-    df3_cells = df_ln.loc['meta--r_test'].index.values.tolist()[5:]
-    df4_cells = df_stp.loc['meta--r_test'].index.values.tolist()[5:]
-
-    nan_series = pd.Series(np.full((nrows), np.nan))
-
-    df1_nans = 0
-    df2_nans = 0
-    df3_nans = 0
-    df4_nans = 0
-
-    for c in cellids:
-        if c not in df1_cells:
-            df_full[c] = nan_series
-            df1_nans += 1
-        if c not in df2_cells:
-            df_cont[c] = nan_series
-            df2_nans += 1
-        if c not in df3_cells:
-            df_ln[c] = nan_series
-            df3_nans += 1
-        if c not in df4_cells:
-            df_stp[c] = nan_series
-            df4_nans += 1
-
-    print("# missing cells: %d, %d, %d, %d" % (df1_nans, df2_nans, df3_nans,
-                                               df4_nans))
-
-    # Force same cellid order now that cols are filled in
-    df_full = df_full[cellids]
-    df_cont = df_cont[cellids]
-    df_ln = df_ln[cellids]
-    df_stp = df_stp[cellids]
-
-    # Only look at cells that did better than linear for binary model
-    full_vs_ln = df_full.loc['meta--r_test'].values - \
-            df_ln.loc['meta--r_test'].values
-    cont_vs_ln = df_cont.loc['meta--r_test'].values - \
-            df_ln.loc['meta--r_test'].values
-    full_vs_ln = full_vs_ln.astype('float32')
-    cont_vs_ln = cont_vs_ln.astype('float32')
-
-    better = full_vs_ln > 0
-    #full_vs_ln = full_vs_ln[better]
-    #cont_vs_ln = cont_vs_ln[better]
-
-    # which cells got further improvement by keeping contrast continuous?
-    cont_improve = (cont_vs_ln - full_vs_ln) > 0
-    cont_vs_full = cont_vs_ln[cont_improve]
-
-    # Keep indices so can extract cellid names
-    cont_improve = (cont_vs_ln - full_vs_ln) > 0
-    cont_better = np.logical_and(better, cont_improve)
-
-    cont_cells = celldata['cellid'][cont_better].tolist()
-    full_cells = celldata['cellid'][np.logical_not(cont_better)].tolist()
-
-    df_full = df_full[full_cells]
-    df_cont = df_cont[cont_cells]
-    df_stp_full = df_stp[full_cells]
-    df_stp_cont = df_stp[cont_cells]
-    df_ln_full = df_ln[full_cells]
-    df_ln_cont = df_ln[cont_cells]
-
-    df_full_r = (df_full.loc['meta--r_test'].values
-                 - df_ln_full.loc['meta--r_test']).astype('float32')
-    df_cont_r = (df_cont.loc['meta--r_test'].values
-                 - df_ln_cont.loc['meta--r_test']).astype('float32')
-    df_stp_full_r = (df_stp_full.loc['meta--r_test'].values
-                     - df_ln_full.loc['meta--r_test']).astype('float32')
-    df_stp_cont_r = (df_stp_cont.loc['meta--r_test'].values
-                     - df_ln_cont.loc['meta--r_test']).astype('float32')
-
-    ff = np.isfinite(df_full_r) & np.isfinite(df_stp_full_r)
-    df_full_r = df_full_r[ff]
-    df_stp_full_r = df_stp_full_r[ff]
-    ff = np.isfinite(df_cont_r) & np.isfinite(df_stp_cont_r)
-    df_cont_r = df_cont_r[ff]
-    df_stp_cont_r = df_stp_cont_r[ff]
-
-    r1 = np.corrcoef(df_full_r, df_stp_full_r)[0, 1]
-    r2 = np.corrcoef(df_cont_r, df_stp_cont_r)[0, 1]
-
-    fig = plt.figure()
-    plt.scatter(df_full_r, df_stp_full_r)
-    plt.title('full, r: %.04f'%r1)
-    adjustFigAspect(fig, aspect=1)
-
-    fig = plt.figure()
-    plt.scatter(df_cont_r, df_stp_cont_r)
-    plt.title('cont, r: %.04f'%r2)
-    adjustFigAspect(fig, aspect=1)
-
-
-def gd_ratio(cellid=good_cell, modelname=gc_cont_full):
-
-    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname,
+                                         eval_model=False)
     mspec = ctx['modelspec']
     dsig_idx = find_module('dynamic_sigmoid', mspec)
     phi = mspec[dsig_idx]['phi']
@@ -185,13 +84,13 @@ def gd_ratio(cellid=good_cell, modelname=gc_cont_full):
     return phi['kappa_mod']/phi['kappa']
 
 
-def gd_scatter(batch=289, model1=gc_cont_full, model2=ln_model):
+def gd_scatter(batch, model1, model2):
 
     df1 = fitted_params_per_batch(batch, model1, stats_keys=[])
     df2 = fitted_params_per_batch(batch, model2, stats_keys=[])
 
     # fill in missing cellids w/ nan
-    celldata = get_batch_cells(batch=batch)
+    celldata = nd.get_batch_cells(batch=batch)
     cellids = celldata['cellid'].tolist()
     nrows = len(df1.index.values.tolist())
 
