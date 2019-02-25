@@ -1,8 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+import nems.xform_helper as xhelp
 import nems.db as nd
-from .utils import get_valid_improvements, adjustFigAspect
+from nems_lbhb.gcmodel.figures.utils import (get_valid_improvements,
+                                             adjustFigAspect)
+from nems.utils import find_module
+from nems.metrics.stp import stp_magnitude
+from nems_lbhb.gcmodel.magnitude import gc_magnitude
+from nems_db.params import fitted_params_per_batch
 
 
 def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
@@ -22,7 +28,6 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     df_e.dropna(axis=0, how='any', inplace=True)
 
     cellids = df_r.index.values.tolist()
-
 
     gc_test = df_r[model1]
     gc_se = df_e[model1]
@@ -118,7 +123,6 @@ def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
 
     cellids = df_r.index.values.tolist()
 
-
     gc_test = df_r[model1]
     gc_se = df_e[model1]
     stp_test = df_r[model2]
@@ -126,7 +130,7 @@ def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
     ln_test = df_r[model3]
     ln_se = df_e[model3]
 
-    if ln_filter:
+    if se_filter:
         # Remove is performance not significant at all
         good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
                      (ln_test > ln_se*2))
@@ -134,7 +138,7 @@ def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
         # Set to series w/ all True, so none are skipped
         good_cells = (gc_test != np.nan)
 
-    if se_filter:
+    if ln_filter:
         # Remove if performance significantly worse than LN
         bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
                      (stp_test+stp_se < ln_test-ln_se))
@@ -174,7 +178,7 @@ def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
 
 
 def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
-                        ln_filter=False):
+                        ln_filter=False, test_limit=None):
     '''
     model1: GC
     model2: STP
@@ -190,79 +194,64 @@ def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
 
     cellids = df_r.index.values.tolist()
 
-    if se_filter:
-        gc_test = df_r[model1]
-        gc_se = df_e[model1]
-        stp_test = df_r[model2]
-        stp_se = df_e[model2]
-        ln_test = df_r[model3]
-        ln_se = df_e[model3]
+    gc_test = df_r[model1]
+    gc_se = df_e[model1]
+    stp_test = df_r[model2]
+    stp_se = df_e[model2]
+    ln_test = df_r[model3]
+    ln_se = df_e[model3]
 
-        # Also remove is performance not significant at all
+    if se_filter:
+        # Remove is performance not significant at all
         good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
                      (ln_test > ln_se*2))
+    else:
+        # Set to series w/ all True, so none are skipped
+        good_cells = (gc_test != np.nan)
 
+    if ln_filter:
         # Remove if performance significantly worse than LN
         bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
                      (stp_test+stp_se < ln_test-ln_se))
+    else:
+        # Set to series w/ all False, so none are skipped
+        bad_cells = (gc_test == np.nan)
 
-        keep = good_cells & ~bad_cells
-
-        cellids = df_r[keep].index.values.tolist()
+    keep = good_cells & ~bad_cells
+    cellids = df_r[keep].index.values.tolist()[:test_limit]
 
     gc_test = gc_test[cellids]
     stp_test = stp_test[cellids]
     ln_test = ln_test[cellids]
 
+    df1 = fitted_params_per_batch(batch, model1, stats_keys=[])
+    kappa_mod_df = df1[df1.index.str.contains('kappa_mod$')]
+    kappa_df = df1[df1.index.str.contains('kappa$')]
+    df2 = fitted_params_per_batch(batch, model2, stats_keys=[])
+    tau_df = df2[df2.index.str.contains('tau$')]
+    u_df = df2[df2.index.str.contains('-u$')]
+
     gcs = []
     stps = []
     for c in cellids:
-        xfspec1, ctx1 = xhelp.load_model_xform(c, batch, model1,
-                                               eval_model=False)
-        mspec1 = ctx1['modelspec']
-        dsig_idx = find_module('dynamic_sigmoid', mspec1)
-        phi1 = mspec1[dsig_idx]['phi']
-        k = phi1['kappa']
-        s = phi1['shift']
-        k_m = phi1['kappa_mod']
-        s_m = phi1['shift_mod']
-        b = phi1['base']
-        a = phi1['amplitude']
-        b_m = phi1['base_mod']
-        a_m = phi1['amplitude_mod']
-
-        gc = gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m)
+        k = kappa_df[c].values[0]
+        k_m = kappa_mod_df[c].values[0]
+        gc = abs(k_m / k)
         gcs.append(gc)
 
-        xfspec2, ctx2 = xhelp.load_model_xform(c, batch, model2,
-                                               eval_model=False)
-        mspec2 = ctx2['modelspec']
-        stp_idx = find_module('stp', mspec2)
-        phi2 = mspec2[stp_idx]['phi']
-        tau = phi2['tau']
-        u = phi2['u']
-
-        stp = stp_magnitude(tau, u)[0]
+        tau = tau_df[c].values[0]
+        u = u_df[c].values[0]
+        stp = abs(stp_magnitude(tau, u)[0])
         stps.append(stp)
 
     stps_arr = np.mean(np.array(stps), axis=1)
     gcs_arr = np.array(gcs)
-#    stps_arr /= np.abs(stps_arr.max())
-#    gcs_arr /= np.abs(gcs_arr.max())
-    r_diff = np.abs(gc_test - stp_test)
+    # Normalize both to 0-1 so they're on the same scale
+    stps_arr /= np.abs(stps_arr.max())
+    gcs_arr /= np.abs(gcs_arr.max())
 
-    fig, axes = plt.subplots(3, 1)
-    axes[0].scatter(r_diff, stps_arr, c='green', s=1)
-    axes[0].scatter(r_diff, gcs_arr, c='black', s=1)
-    axes[0].set_xlabel('Difference in Performance')
-    axes[0].set_ylabel('GC, STP Magnitudes')
-
-    axes[1].scatter(gcs_arr, stps_arr, c='black', s=1)
-    axes[1].set_xlabel('GC Magnitude')
-    axes[1].set_ylabel('STP Magnitude')
-
-    axes[2].scatter(gcs_arr[gcs_arr < 0]*-1, stps_arr[gcs_arr < 0], c='black', s=1)
-    axes[2].set_xlabel('|GC Magnitude|, Negatives Only')
-    axes[2].set_ylabel('STP Magnitude')
-
+    fig = plt.figure(figsize=(4, 4))
+    plt.scatter(gcs_arr, stps_arr, c='black', s=1)
+    plt.xlabel('GC Magnitude')
+    plt.ylabel('STP Magnitude')
     fig.tight_layout()
