@@ -225,7 +225,7 @@ def loadpop(loadkey):
         elif op.startswith('bc'):
             cell_count = int(op[2:])
             best_cells=True
-
+ 
     xfspec = [['nems_lbhb.xform_wrappers.pop_selector',
               {'loadkey': loadkey,
                'rand_match': rand_match, 'cell_count': cell_count,

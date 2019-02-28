@@ -41,7 +41,6 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         all_cells = alt_cells_available
     else:
         all_cells = list(single_perf.index)
-
     cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
@@ -83,7 +82,6 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
                  whiten=True, **context):
 
     rec = load_recording(recording_uri_list[0])
-
     cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
         batch=batch, siteid=cellid, alt_cells_available=rec['resp'].chans,
         cell_count=cell_count, best_cells=best_cells)
@@ -103,8 +101,21 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
 
     # preserve "actual" cellids for saving to database
     rec.meta['cellid'] = cellid
-
+    
     return {'rec': rec}
+
+
+def split_pop_rec_by_mask(rec, **contex):
+    
+    emask = rec['mask_est']
+    emask.name = 'mask'
+    vmask = emask._modified_copy(1-emask._data)
+    est = rec.copy()
+    est.add_signal(emask)
+    val=rec.copy()
+    val.add_signal(vmask)
+    
+    return {'est': est, 'val': val}
 
 
 def pop_file(stimfmt='ozgf', batch=None,

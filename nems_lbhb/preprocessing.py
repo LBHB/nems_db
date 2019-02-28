@@ -104,7 +104,7 @@ def getPrePostSilence(sig):
     return PreStimSilence, PostStimSilence
 
 
-def normalizePrePostSilence(sig, PreStimSilence=0.5, PostStimSilence=0.5):
+def normalizePrePostSilence(rec, PreStimSilence=0.5, PostStimSilence=0.5):
     """
     Shorten pre- and post-stim silence to specified valeues
 
@@ -116,6 +116,7 @@ def normalizePrePostSilence(sig, PreStimSilence=0.5, PostStimSilence=0.5):
         sig : modified signal
 
     """
+    sig = rec.signals[list(rec.signals.keys())[0]]
     fs = sig.fs
     PreStimSilence0, PostStimSilence0 = getPrePostSilence(sig)
     epochs = sig.epochs.copy()
@@ -136,7 +137,11 @@ def normalizePrePostSilence(sig, PreStimSilence=0.5, PostStimSilence=0.5):
             ee = (epochs['end'] == e[0])
             epochs.loc[ee, 'end'] = epochs.loc[ee, 'end'] - PostStimSilence0 + PostStimSilence
 
-    return sig._modified_copy(sig._data, epochs=epochs)
+    new_rec = rec.copy()
+    for k in rec.signals.keys():
+        new_rec.signals[k].epochs = epochs
+
+    return new_rec
 
 
 def hi_lo_psth_jack(est=None, val=None, rec=None, **kwargs):
