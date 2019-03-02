@@ -86,7 +86,8 @@ def gd_ratio(cellid, batch, modelname):
     return phi['kappa_mod']/phi['kappa']
 
 
-def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=1.1):
+def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=0,
+               param='kappa', log_gd=False):
 
     df_r = nd.batch_comp(batch, [model1, model2],
                          stat='r_ceiling')
@@ -144,13 +145,15 @@ def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=1.1):
     gc_vs_ln = df1.loc['meta--r_test'].values / df2.loc['meta--r_test'].values
     gc_vs_ln = gc_vs_ln.astype('float32')
 
-    kappa_mod = df1[df1.index.str.contains('kappa_mod')]
-    kappa = df1[df1.index.str.contains('kappa$')]
+    kappa_mod = df1[df1.index.str.contains('%s_mod'%param)]
+    kappa = df1[df1.index.str.contains('%s$'%param)]
     gd_ratio = (np.abs(kappa_mod.values / kappa.values)).astype('float32').flatten()
 
     ff = np.isfinite(gc_vs_ln) & np.isfinite(gd_ratio)
     gc_vs_ln = gc_vs_ln[ff]
     gd_ratio = gd_ratio[ff]
+    if log_gd:
+        gd_ratio = np.log(gd_ratio)
 
     # drop cells with excessively large/small gd_ratio or gc_vs_ln
     gcd_big = gd_ratio > 10
@@ -168,14 +171,16 @@ def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=1.1):
     # Gd ratio at least a little greater than 1 (i.e. had *some* GC effect)
     gd_ratio2 = copy.deepcopy(gd_ratio)
     gc_vs_ln2 = copy.deepcopy(gc_vs_ln)
-    above_threshold = gd_ratio2 > gd_threshold
-    gd_ratio2 = gd_ratio2[above_threshold]
-    gc_vs_ln2 = gc_vs_ln2[above_threshold]
+    if log_gd:
+        gd_threshold = np.log(gd_threshold)
+    thresholded = (gd_ratio2 > gd_threshold)
+    gd_ratio2 = gd_ratio2[thresholded]
+    gc_vs_ln2 = gc_vs_ln2[thresholded]
 
     r2 = np.corrcoef(gc_vs_ln2, gd_ratio2)[0, 1]
     n2 = gc_vs_ln2.size
 
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 8))
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 9))
 
     ax1.scatter(gd_ratio, gc_vs_ln, c='black', s=1)
     ax1.set_ylabel("GC/LN R")
@@ -199,4 +204,5 @@ def gd_scatter(batch, model1, model2, se_filter=True, gd_threshold=1.1):
     ax4.set_xlabel('Gd ratio')
     ax4.set_ylabel('Count')
 
+    fig.suptitle('param: %s'%param)
     fig.tight_layout()

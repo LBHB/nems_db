@@ -225,8 +225,20 @@ def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
     ln_test = ln_test[cellids]
 
     df1 = fitted_params_per_batch(batch, model1, stats_keys=[])
+
+    base_mod_df = df1[df1.index.str.contains('base_mod$')]
+    base_df = df1[df1.index.str.contains('base$')]
+
+    amp_mod_df = df1[df1.index.str.contains('amplitude_mod$')]
+    amp_df = df1[df1.index.str.contains('amplitude$')]
+
+    shift_mod_df = df1[df1.index.str.contains('shift_mod$')]
+    shift_df = df1[df1.index.str.contains('shift$')]
+
     kappa_mod_df = df1[df1.index.str.contains('kappa_mod$')]
     kappa_df = df1[df1.index.str.contains('kappa$')]
+
+
     df2 = fitted_params_per_batch(batch, model2, stats_keys=[])
     tau_df = df2[df2.index.str.contains('tau$')]
     u_df = df2[df2.index.str.contains('-u$')]
@@ -234,9 +246,16 @@ def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
     gcs = []
     stps = []
     for c in cellids:
+        b = base_df[c].values[0]
+        b_m = base_mod_df[c].values[0]
+        a = amp_df[c].values[0]
+        a_m = amp_mod_df[c].values[0]
+        s = shift_df[c].values[0]
+        s_m = shift_mod_df[c].values[0]
         k = kappa_df[c].values[0]
         k_m = kappa_mod_df[c].values[0]
-        gc = abs(k_m / k)
+
+        gc = gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m)
         gcs.append(gc)
 
         tau = tau_df[c].values[0]

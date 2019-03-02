@@ -17,9 +17,8 @@ from nems.modules.nonlinearity import _logistic_sigmoid
 def gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m):
     '''
     Compute the magnitude of the gain control response for a given set of
-    dynamic_sigmoid parameters as the mean difference between the
-    sigmoid generated for high-contrast conditions vs for low-contrast
-    conditions.
+    dynamic_sigmoid parameters as the sum of the absolute differences
+    between the high contrast and low contrast values.
 
     Parameters
     ----------
@@ -46,15 +45,7 @@ def gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m):
     mag : float
 
     '''
-    x_low = np.linspace(s*-1, s*3, 1000)
-    x_high = np.linspace(s_m*-1, s_m*3, 1000)
-
-    # Assume that ctpred is all ones. That way, value of NL parameters,
-    # e.x. a + (a-a_m)*ctpred, just reduces to a_m
-    y_low = _logistic_sigmoid(x_low, b, a, s, k)
-    y_high = _logistic_sigmoid(x_high, b_m, a_m, s_m, k_m)
-
-    mag =  np.mean(y_high - y_low)
+    mag = np.abs(b_m - b) + np.abs(a_m - a) + np.abs(k_m - k) + np.abs(s_m - s)
     return mag
 
 
