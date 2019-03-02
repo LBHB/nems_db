@@ -98,6 +98,11 @@ def gcfir(kw):
     m = fir(kw[2:])
     m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
     m['fn'] = 'nems_lbhb.gcmodel.modules.fir'
+    if m.get('plot_fns'):
+        m['plot_fns'].append('nems_lbhb.gcmodel.guiplots.contrast_kernel_output')
+    else:
+        m['plot_fns'] = ['nems_lbhb.gcmodel.guiplots.contrast_kernel_output']
+
     return m
 
 
@@ -122,6 +127,11 @@ def gclvl(kw):
     m = lvl(kw[2:])
     m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
     m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
+    if m.get('plot_fns'):
+        m['plot_fns'].append('nems_lbhb.gcmodel.guiplots.contrast_kernel_output')
+    else:
+        m['plot_fns'] = ['nems_lbhb.gcmodel.guiplots.contrast_kernel_output']
+
     return m
 
 
