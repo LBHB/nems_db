@@ -7,7 +7,7 @@ def contrast_kernel_output(rec, modelspec, sig_name, ax=None, title=None,
                            **options):
 
     output = ms.evaluate(rec, modelspec, stop=idx+1)[sig_name]
-    nplt.timeseries_from_signals(output, channels=channels, xlabel=xlabel,
+    nplt.timeseries_from_signals([output], channels=channels, xlabel=xlabel,
                                  ylabel=ylabel, ax=ax, title=title)
 
     return ax

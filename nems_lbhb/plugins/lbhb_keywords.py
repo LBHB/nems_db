@@ -98,10 +98,11 @@ def gcfir(kw):
     m = fir(kw[2:])
     m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
     m['fn'] = 'nems_lbhb.gcmodel.modules.fir'
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_kernel_output'
     if m.get('plot_fns'):
-        m['plot_fns'].append('nems_lbhb.gcmodel.guiplots.contrast_kernel_output')
+        m['plot_fns'].append(plot)
     else:
-        m['plot_fns'] = ['nems_lbhb.gcmodel.guiplots.contrast_kernel_output']
+        m['plot_fns'] = [plot]
 
     return m
 
@@ -126,11 +127,14 @@ def ctlvl(kw):
 def gclvl(kw):
     m = lvl(kw[2:])
     m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
-    m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
+    if 'noCT' not in kw:
+        m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_kernel_output'
     if m.get('plot_fns'):
-        m['plot_fns'].append('nems_lbhb.gcmodel.guiplots.contrast_kernel_output')
+        m['plot_fns'].append(plot)
     else:
-        m['plot_fns'] = ['nems_lbhb.gcmodel.guiplots.contrast_kernel_output']
+        m['plot_fns'] = [plot]
+    m['plot_fn_idx'] = m['plot_fns'].index(plot)
 
     return m
 
