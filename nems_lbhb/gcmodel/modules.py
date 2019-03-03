@@ -145,7 +145,8 @@ def fir(rec, i, o, ci, co, coefficients=[], compute_contrast=True):
     return new_signals
 
 
-def levelshift(rec, i, o, ci, co, level, compute_contrast=True):
+def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
+               block_contrast=False):
     '''
     Parameters
     ----------
@@ -162,11 +163,16 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True):
     level : a scalar to add to every element of the input signal.
     compute_contrast : boolean
         Skip contrast portion if False
+    block_contrast : boolean
+        Skip contrast portion if True
+        Second control used to stop fitting process from turning this
+        computation on, i.e. only apply levelshift to pred for the
+        entire model.
 
     '''
     fn = lambda x: x + level
     new_signals = [rec[i].transform(fn, o)]
-    if compute_contrast:
+    if compute_contrast and not block_contrast:
         gc_fn = lambda x: x + np.abs(level)
         rec[ci].transform(gc_fn, co)
     return new_signals
