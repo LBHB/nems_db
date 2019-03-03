@@ -126,9 +126,10 @@ def ctlvl(kw):
 
 def gclvl(kw):
     m = lvl(kw[2:])
-    m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
     if 'noCT' not in kw:
         m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
+        m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
+
     plot = 'nems_lbhb.gcmodel.guiplots.contrast_kernel_output'
     if m.get('plot_fns'):
         m['plot_fns'].append(plot)
