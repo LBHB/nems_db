@@ -13,6 +13,93 @@ from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
 from nems.metrics.stp import stp_magnitude
 
 
+def pred_resp_parameters(cellid, batch, gc_model):
+
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, gc_model,
+                                         eval_model=True)
+    gc_ms = ctx['modelspec']
+    val = copy.deepcopy(ctx['val'])
+    gc_ms.recording = val
+    dsig_idx = find_module('dynamic_sigmoid', gc_ms)
+
+    # Normal pred from full gc and ln models
+    pred_gc = ms.evaluate(val, gc_ms)['pred'].as_continuous().T
+
+    # Remove effect of each %_mod and save corresponding prediction
+    pred_no_base = _reduced_param_pred(gc_ms, val, dsig_idx, 'base')
+    pred_no_amp = _reduced_param_pred(gc_ms, val, dsig_idx, 'amplitude')
+    pred_no_shift = _reduced_param_pred(gc_ms, val, dsig_idx, 'shift')
+    pred_no_kappa = _reduced_param_pred(gc_ms, val, dsig_idx, 'kappa')
+
+    fig, (ax2, ax3, ax4, ax5) = plt.subplots(4, 1, figsize=(12, 6))
+
+    ax2.plot(pred_no_base, color='black')
+    ax2.plot(pred_no_base - pred_gc, color='green')
+    ax2.set_title('-base')
+
+    ax3.plot(pred_no_amp, color='black')
+    ax3.plot(pred_no_amp - pred_gc, color='green')
+    ax3.set_title('-amplitude')
+
+    ax4.plot(pred_no_shift, color='black')
+    ax4.plot(pred_no_shift - pred_gc, color='green')
+    ax4.set_title('-shift')
+
+    ax5.plot(pred_no_kappa, color='black')
+    ax5.plot(pred_no_kappa - pred_gc, color='green')
+    ax5.set_title('-kappa')
+
+    fig.tight_layout()
+
+
+    phi = gc_ms.phi[-1]
+    b = phi['base']
+    b_m = phi['base_mod']
+    a = phi['amplitude']
+    a_m = phi['amplitude_mod']
+    s = phi['shift']
+    s_m = phi['shift_mod']
+    k = phi['kappa']
+    k_m = phi['kappa_mod']
+
+    fig2, ((ax1b, ax2b, ax5b), (ax3b, ax4b, ax6b)) = plt.subplots(2, 3, figsize=(8, 8))
+    scale = np.asscalar(max(s, s_m)*2)
+    x = np.linspace(scale*-1, scale*3, 10000)
+    y = _double_exponential(x, b, a, s, k).flatten()
+
+    ax1b.plot(x, y, color='black')
+    ax1b.plot(x, _double_exponential(x, b_m, a, s, k).flatten(), color='green')
+    ax1b.set_title('+base')
+
+    ax2b.plot(x, y, color='black')
+    ax2b.plot(x, _double_exponential(x, b, a_m, s, k).flatten(), color='green')
+    ax2b.set_title('+amplitude')
+
+    ax3b.plot(x, y, color='black')
+    ax3b.plot(x, _double_exponential(x, b, a, s_m, k).flatten(), color='green')
+    ax3b.set_title('+shift')
+
+    ax4b.plot(x, y, color='black')
+    ax4b.plot(x, _double_exponential(x, b, a, s, k_m).flatten(), color='green')
+    ax4b.set_title('+kappa')
+
+    ax5b.plot(x, y, color='black')
+    ax5b.plot(x, _double_exponential(x, b_m, a_m, s_m, k_m).flatten(),
+              color='green')
+    ax5b.set_title('+all')
+
+    fig2.tight_layout()
+
+
+def _reduced_param_pred(mspec, rec, idx, param):
+    gc_ms_no_param = mspec.copy()
+    gc_ms_no_param[idx]['phi']['%s_mod' % param] = \
+            gc_ms_no_param[idx]['phi']['%s' % param].copy()
+    pred_no_param = ms.evaluate(rec, gc_ms_no_param)['pred'].as_continuous().T
+
+    return pred_no_param
+
+
 def contrast_breakdown(cellid, batch, model1, model2, model3, sample_every=5):
     '''
     model1: GC
