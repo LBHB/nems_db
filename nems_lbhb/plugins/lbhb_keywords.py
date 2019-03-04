@@ -153,6 +153,7 @@ def dsig(kw):
     kappa = False
     shift = False
     c = 'ctpred'
+    bounded = False
 
     for op in ops:
         if op in ['logsig', 'l']:
@@ -169,6 +170,8 @@ def dsig(kw):
             shift = True
         elif op.startswith('C'):
             c = op[1:]
+        elif op == 'bnd':
+            bounded = True
 
     # Use all by default. Use none not an option (would just be static version)
     if (not amp) and (not base) and (not kappa) and (not shift):
@@ -188,8 +191,16 @@ def dsig(kw):
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Exponential', {'beta': [2.0]}),
                   'shift': ('Normal', {'mean': [1.0], 'sd': [1.0]}),
-                  'kappa': ('Exponential', {'beta': [0.1]})}
+                  'kappa': ('Exponential', {'beta': [0.1]})},
         }
+
+    if bounded:
+        template['bounds'] = {
+                'base': (1e-15, None), 'base_mod': (1e-15, None),
+                'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
+                'shift': (None, None), 'shift_mod': (None, None),
+                'kappa': (1e-15, None), 'kappa_mod': (1e-15, None),
+                }
 
     #zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
 
