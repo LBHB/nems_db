@@ -15,6 +15,9 @@ ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
            "init-basic")
 
 # Alternative fits
+gc_av_bnd = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+             "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1-dsig.d.bnd_gc.fx")
+
 gc_av_ks = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
             "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1-dsig.d.k.s_gc.fx")
 

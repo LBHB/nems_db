@@ -26,7 +26,7 @@ from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
 def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     base_mod=np.nan, amplitude_mod=np.nan, shift_mod=np.nan,
-                    kappa_mod=np.nan, eq='logsig'):
+                    kappa_mod=np.nan, eq='dexp', norm=False):
 
     static = False
     if np.all(np.isnan(np.array([base_mod, amplitude_mod,
@@ -35,6 +35,8 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
 
     if not static and rec[c]:
         contrast = rec[c].as_continuous()
+        if norm:
+            contrast = contrast/contrast.max()
 
         if np.isnan(base_mod):
             base_mod = base

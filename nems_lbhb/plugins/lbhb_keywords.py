@@ -23,6 +23,13 @@ def gcwc(kw):
     m = wc(kw[2:])
     m['fn_kwargs'].update({'ci': 'contrast', 'co': 'ctpred'})
     m['fn'] = 'nems_lbhb.gcmodel.modules.weight_channels'
+
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_spectrogram'
+    if m.get('plot_fns'):
+        m['plot_fns'].append(plot)
+    else:
+        m['plot_fns'] = [plot]
+
     return m
 
 
@@ -154,6 +161,7 @@ def dsig(kw):
     shift = False
     c = 'ctpred'
     bounded = False
+    norm = False
 
     for op in ops:
         if op in ['logsig', 'l']:
@@ -172,6 +180,8 @@ def dsig(kw):
             c = op[1:]
         elif op == 'bnd':
             bounded = True
+        elif op == 'n':
+            norm = True
 
     # Use all by default. Use none not an option (would just be static version)
     if (not amp) and (not base) and (not kappa) and (not shift):
@@ -182,7 +192,8 @@ def dsig(kw):
         'fn_kwargs': {'i': 'pred',
                       'o': 'pred',
                       'c': c,
-                      'eq': eq},
+                      'eq': eq,
+                      'norm': norm},
         'plot_fns': ['nems.plots.api.mod_output',
                      'nems.plots.api.pred_resp',
                      'nems.plots.api.before_and_after',

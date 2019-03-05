@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats as st
 import matplotlib.pyplot as plt
 
 import nems.xform_helper as xhelp
@@ -36,7 +37,7 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     ln_test = df_r[model3]
     ln_se = df_e[model3]
 
-    if ln_filter:
+    if se_filter:
         # Remove is performance not significant at all
         good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
                      (ln_test > ln_se*2))
@@ -44,7 +45,7 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
         # Set to series w/ all True, so none are skipped
         good_cells = (gc_test != np.nan)
 
-    if se_filter:
+    if ln_filter:
         # Remove if performance significantly worse than LN
         bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
                      (stp_test+stp_se < ln_test-ln_se))
@@ -80,7 +81,11 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln)
     gc_vs_ln = gc_vs_ln[ff]
     stp_vs_ln = stp_vs_ln[ff]
-    r = np.corrcoef(gc_vs_ln, stp_vs_ln)[0, 1]
+    #r = np.corrcoef(gc_vs_ln, stp_vs_ln)[0, 1]
+    r2, p = st.pearsonr(gc_vs_ln, stp_vs_ln)
+    # TODO: compute p manually? the scipy documentation isn't
+    #       very clear on how they calculate it, something to do with
+    #       a beta function
     n = gc_vs_ln.size
 
     y_max = np.max(stp_vs_ln)
@@ -95,7 +100,8 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     plt.scatter(gc_vs_ln, stp_vs_ln, c='black', s=1)
     plt.xlabel("GC - LN model")
     plt.ylabel("STP - LN model")
-    plt.title("Performance Improvements over LN\nr: %.02f, n: %d" % (r, n))
+    plt.title("Performance Improvements over LN\nr: %.02f, p: %2e, n: %d\n"
+              % (r2, p, n))
     gca = plt.gca()
     gca.axes.axhline(0, color='black', linewidth=1, linestyle='dashed')
     gca.axes.axvline(0, color='black', linewidth=1, linestyle='dashed')
