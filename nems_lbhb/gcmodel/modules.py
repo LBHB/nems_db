@@ -35,8 +35,9 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
 
     if not static and rec[c]:
         contrast = rec[c].as_continuous()
+
         if norm:
-            contrast = contrast/contrast.max()
+            contrast = contrast/np.nanmax(contrast)
 
         if np.isnan(base_mod):
             base_mod = base

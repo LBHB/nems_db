@@ -6,7 +6,7 @@ import numpy as np
 import scipy.stats as st
 
 import nems.db as nd
-from .utils import get_valid_improvements
+from nems_lbhb.gcmodel.figures.utils import get_valid_improvements
 
 
 gc_color = '#69657C'
