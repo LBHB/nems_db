@@ -16,7 +16,18 @@ ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
 
 # Alternative fits
 gc_av_bnd = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
-             "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1-dsig.d.bnd_gc.fx")
+             "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1.noCT-dsig.d.bnd_gc.fx")
+
+gc_av_bnd_n = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+               "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1.noCT-dsig.d.bnd.n_gc.fx")
+
+gc_av_bnd_n_ks = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+                  "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1.noCT-dsig.d.k.s.bnd.n_"
+                  "gc.fx")
+
+gc_av_stp_bnd_n = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
+                   "dlog.f-gcwc.18x1.g-stp.2-gcfir.1x15-gclvl.1.noCT-dsig.d.bnd.n_"
+                   "gc.fx")
 
 gc_av_ks = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
             "dlog.f-gcwc.18x1.g-gcfir.1x15-gclvl.1-dsig.d.k.s_gc.fx")
@@ -112,7 +123,15 @@ gc_stp_both_win = 'TAR010c-21-4'
 ln_win = 'TAR010c-15-4'
 gc_sharp_onset = 'bbl104h-10-2'
 gc_beat_stp = 'TAR009d-28-1'
+
+# New cells
 weird = 'TAR009d-22-1'
+bounds_hurt = 'AMT003c-26-1'   # w/o bounds, reduces to STP effect, also stp win
+new_stp_win = 'TAR017b-24-2'
+new_gc_win1 = 'bbl099g-06-1'
+new_gc_win2 = 'TAR010c-43-2'
+gc_better = 'TAR010c-59-1'
+stp_better = 'TAR010c-21-3'
 
 # Interesting example cells to look at in more detail:
 

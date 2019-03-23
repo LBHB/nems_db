@@ -120,13 +120,16 @@ def performance_scatters(batch, model1, model2, model3, model4,
     ax.set_title('GC vs LN')
     ax.set_xlabel('GC')
     ax.set_ylabel('LN')
-    ax.text(0.90, -0.10, 'all = %d' % (n_cells+n_under_chance+n_less_LN),
-            ha='right', va='bottom')
+    if ln_filter or se_filter:
+        ax.text(0.90, -0.10, 'all = %d' % (n_cells+n_under_chance+n_less_LN),
+                ha='right', va='bottom')
     ax.text(0.90, 0.00, 'n = %d' % n_cells, ha='right', va='bottom')
-    ax.text(0.90, 0.10, 'uc = %d' % n_under_chance, ha='right', va='bottom',
-            color='red')
-    ax.text(0.90, 0.20, '<ln = %d' % n_less_LN, ha='right', va='bottom',
-            color='blue')
+    if se_filter:
+        ax.text(0.90, 0.10, 'uc = %d' % n_under_chance, ha='right', va='bottom',
+                color='red')
+    if ln_filter:
+        ax.text(0.90, 0.20, '<ln = %d' % n_less_LN, ha='right', va='bottom',
+                color='blue')
 
     ax = axes[0][1]
     ax.scatter(stp_test, ln_test, c='black', s=1)
@@ -178,9 +181,16 @@ def performance_scatters(batch, model1, model2, model3, model4,
 
     return fig
 
+
+def gc_stp_scatter(batch, model1, model2, model3, model4,
+                   se_filter=True, ln_filter=False, ratio_filter=False,
+                   threshold=2.5, manual_cellids=None):
+    pass
+
+
 def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
                     ln_filter=False, ratio_filter=False, threshold=2.5,
-                    manual_cellids=None):
+                    manual_cellids=None, abbr_yaxis=False):
     '''
     model1: GC
     model2: STP
@@ -258,24 +268,35 @@ def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
     largest = max(gc, stp, ln, gc_stp)
 
     # TODO: double check that this is valid, to just take mean of errors
-    gc_sem = np.median(gc_se.values)
-    stp_sem = np.median(stp_se.values)
-    ln_sem = np.median(ln_se.values)
-    gc_stp_sem = np.median(gc_stp_se.values)
+#    gc_sem = np.median(gc_se.values)
+#    stp_sem = np.median(stp_se.values)
+#    ln_sem = np.median(ln_se.values)
+#    gc_stp_sem = np.median(gc_stp_se.values)
 
     fig = plt.figure()
     plt.bar([1, 2, 3, 4], [gc, stp, ln, gc_stp],
             #color=['purple', 'green', 'gray', 'blue'])
             color=[gc_color, stp_color, ln_color, gc_stp_color])
     plt.xticks([1, 2, 3, 4], ['GC', 'STP', 'LN', 'GC + STP'])
-    plt.ylim(ymax=largest*1.4)
-    plt.errorbar([1, 2, 3, 4], [gc, stp, ln, gc_stp], yerr=[gc_sem, stp_sem,
-                 ln_sem, gc_stp_sem], fmt='none', ecolor='black')
+    if abbr_yaxis:
+        lower = np.floor(10*min(gc, stp, ln, gc_stp))
+        lower = max(0, min(lower/10 + 0.05, gc, stp, ln, gc_stp))
+        upper = np.ceil(10*max(gc, stp, ln, gc_stp))
+        upper = min(1, max(upper/10 - 0.05, gc, stp, ln, gc_stp))
+        plt.ylim(ymin=lower, ymax=upper)
+    else:
+        plt.ylim(ymax=largest*1.4)
+#    plt.errorbar([1, 2, 3, 4], [gc, stp, ln, gc_stp], yerr=[gc_sem, stp_sem,
+#                 ln_sem, gc_stp_sem], fmt='none', ecolor='black')
     common_kwargs = {'color': 'white', 'horizontalalignment': 'center'}
-    plt.text(1, 0.2, "%0.04f" % gc, **common_kwargs)
-    plt.text(2, 0.2, "%0.04f" % stp, **common_kwargs)
-    plt.text(3, 0.2, "%0.04f" % ln, **common_kwargs)
-    plt.text(4, 0.2, "%0.04f" % gc_stp, **common_kwargs)
+    if abbr_yaxis:
+        y_text = 0.5*(lower + min(gc, stp, ln, gc_stp))
+    else:
+        y_text = 0.2
+    plt.text(1, y_text, "%0.04f" % gc, **common_kwargs)
+    plt.text(2, y_text, "%0.04f" % stp, **common_kwargs)
+    plt.text(3, y_text, "%0.04f" % ln, **common_kwargs)
+    plt.text(4, y_text, "%0.04f" % gc_stp, **common_kwargs)
     plt.title("Median Performance for GC, STP, LN, and GC + STP models,\n"
               "n: %d" % n_cells)
 

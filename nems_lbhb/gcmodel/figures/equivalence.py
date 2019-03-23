@@ -100,7 +100,7 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     plt.scatter(gc_vs_ln, stp_vs_ln, c='black', s=1)
     plt.xlabel("GC - LN model")
     plt.ylabel("STP - LN model")
-    plt.title("Performance Improvements over LN\nr: %.02f, p: %2e, n: %d\n"
+    plt.title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
               % (r2, p, n))
     gca = plt.gca()
     gca.axes.axhline(0, color='black', linewidth=1, linestyle='dashed')

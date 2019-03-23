@@ -1334,3 +1334,25 @@ def contrast_vs_stp_comparison(cellid, batch, model1, model2, model3, model4):
     # End pred comparison
 
     return fig1
+
+
+def pred_comparison(cellid, batch, models, subtract=None):
+    '''
+    Convention for model order: gc, stp, ln, gc+stp
+    subtract: None, or string modelname to subtract preds (like LN)
+    '''
+    if subtract is not None:
+        xf, ctx = xhelp.load_model_xform(cellid, batch, subtract)
+        subtract_pred = ctx['pred'].as_continuous().T
+
+    preds = []
+    for m in models:
+        xf, ctx = xhelp.load_model_xform(cellid, batch, m)
+        p = ctx['val']['pred'].as_continuous().T
+        if subtract is not None:
+            p = p - subtract_pred
+        preds.append(p)
+
+    for p in preds:
+        plt.plot(p)
+    plt.legend(*preds)
