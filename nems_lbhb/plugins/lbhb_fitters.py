@@ -22,7 +22,7 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
-def gc2(fitkey):
+def gc(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
     for op in ops:
@@ -46,6 +46,30 @@ def gc2(fitkey):
             kwargs['nl_mode'] = int(op[2:])
 
     return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
+
+
+def gc2(fitkey):
+    ops = fitkey.split('.')[1:]
+    kwargs = {}
+    for op in ops:
+        if op.startswith('t'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['tolerance'] = 10**tolpower
+        elif op.startswith('pt'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['prefit_tolerance'] = 10**tolpower
+        elif op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('pmi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('nl'):
+            kwargs['nl_mode'] = int(op[2:])
+
+    return [['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs]]
 
 
 def strfc(fitkey):
