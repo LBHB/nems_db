@@ -22,7 +22,7 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
-def gc(fitkey):
+def gc2(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
     for op in ops:

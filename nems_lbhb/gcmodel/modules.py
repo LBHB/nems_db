@@ -16,12 +16,16 @@ levelshift:      as normal levelshift, but shift is applied to the coefficients
                  of both the stim STRF and the contrast STRF.
 
 '''
+import logging
 
 import numpy as np
+import scipy.signal
 
 from nems.modules.fir import per_channel
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
+
+log = logging.getLogger(__name__)
 
 
 def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
@@ -179,3 +183,32 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
         gc_fn = lambda x: x + np.abs(level)
         rec[ci].transform(gc_fn, co)
     return new_signals
+
+
+# TODO: How to get coefficients to copy over when fitting STRF and
+#       GC together on combined model? Might just have to make a single
+#       combined module for that.
+def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
+                    compute_contrast=False):
+    if compute_contrast:
+        if (wc_coefficients is None) or (fir_coefficients is None):
+            raise ValueError("contrast_kernel module was called without "
+                             "wc or fir coefficients set.")
+
+        fn = lambda x: _contrast_kernel(x, wc_coefficients, fir_coefficients)
+        return [rec[i].transform(fn, o)]
+    else:
+        # pass through until contrast is ready to be computed
+        fn = lambda x: x
+        return [rec[i].transform(fn, o)]
+
+
+def _contrast_kernel(x, wc_coefficients, fir_coefficients):
+    kernel = np.abs(wc_coefficients.T @ fir_coefficients)
+    #idx1 = wc_coefficients.shape[1] - 1
+    pad = fir_coefficients.shape[1] - 1
+    c = scipy.signal.convolve2d(x, kernel, mode='valid', boundary='fill',
+                                fillvalue=np.nan)
+    c = np.pad(c, ((0, 0), (pad, 0)), 'edge')
+
+    return c

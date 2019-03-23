@@ -148,6 +148,19 @@ def gclvl(kw):
     return m
 
 
+def ctk(kw):
+    template = {
+            'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
+            'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
+                          'wc_coefficients': None, 'fir_coefficients': None,
+                          'compute_contrast': False},
+            'phi': {},
+            'prior': {},
+            'bounds': {}
+            }
+    return template
+
+
 def dsig(kw):
     '''
     Note: these priors will typically be overwritten during initialization
