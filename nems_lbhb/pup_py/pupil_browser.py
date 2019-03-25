@@ -132,6 +132,15 @@ class PupilBrowser:
 
         predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, filename[:6])
 
+        if os.path.isdir(predictions_folder) != True:
+            folders = []
+            folders.append('/auto/data/daq/' + animal + '/training2019/sorted/')
+            folders.append('/auto/data/daq/' + animal + '/training2018/sorted/')
+
+        for f in folders:
+            if os.path.isdir(f) == True:
+                predictions_folder = f
+
         with open(predictions_folder + filename + '_pred.pickle', 'rb') as fp:
             self.parms = pickle.load(fp)
 
@@ -166,6 +175,15 @@ class PupilBrowser:
         animal = self.animal_name.get()
 
         predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, params_file[:6])
+
+        if os.path.isdir(predictions_folder) != True:
+            folders = []
+            folders.append('/auto/data/daq/' + animal + '/training2019/sorted/')
+            folders.append('/auto/data/daq/' + animal + '/training2018/sorted/')
+
+        for f in folders:
+            if os.path.isdir(f) == True:
+                predictions_folder = f
 
         params_file = predictions_folder + params_file + '_pred.pickle'
         with open(params_file, 'rb') as fp:

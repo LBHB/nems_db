@@ -58,6 +58,7 @@ if __name__ == '__main__':
             else:
                 raise ValueError("can't find pupil video")
 
+    save_path = path + 'sorted/'
     video = path + filename + '.mj2'
 
     # define empty lists to hold params (cnn)
@@ -131,12 +132,12 @@ if __name__ == '__main__':
         }
     }
 
-    save_dir = '/auto/data/daq/{0}/{1}/sorted/'
+    if os.path.isdir(save_path) != True:
+        os.system("mkdir {}".format(sorted_dir))
+        os.system("chmod a+w {}".format(sorted_dir))
+        print("created new directory {0}".format(sorted_dir))
 
-    if os.path.isdir(save_dir) != True:
-        os.mkdir(save_dir)
-
-    save_file = save_dir + filename + '_pred.pickle'
+    save_file = save_path + filename + '_pred.pickle'
 
     # write the results
     with open(save_file, 'wb') as fp:
