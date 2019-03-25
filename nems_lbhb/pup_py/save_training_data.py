@@ -14,7 +14,7 @@ n_frames = 50
 
 path = '/auto/data/daq/{0}/{1}/'.format(animal, site)
 
-saved_train_data = '/auto/data/nems_db/training_data/{0}'.format(vid_name[:-4])
+saved_train_data = '/auto/data/nems_db/pup_py/training_data/{0}'.format(vid_name[:-4])
 
 video = path + vid_name
 

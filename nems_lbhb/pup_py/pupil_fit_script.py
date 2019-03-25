@@ -39,7 +39,7 @@ if __name__ == '__main__':
     filename = sys.argv[2]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
-    model = keras.models.load_model('/auto/data/nems_db/default_trained_model.hdf5')
+    model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
 
     path = '/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
     if os.path.isdir(path):
