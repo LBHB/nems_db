@@ -133,9 +133,12 @@ if __name__ == '__main__':
     }
 
     if os.path.isdir(save_path) != True:
-        os.system("mkdir {}".format(sorted_dir))
-        os.system("chmod a+w {}".format(sorted_dir))
-        print("created new directory {0}".format(sorted_dir))
+        os.system("mkdir {}".format(save_path))
+        os.system("chmod a+w {}".format(save_path))
+        print("created new directory {0}".format(save_path))
+
+    # make sure the directory is writeable
+    os.system("chmod a+w {}".format(save_path))
 
     save_file = save_path + filename + '_pred.pickle'
 
