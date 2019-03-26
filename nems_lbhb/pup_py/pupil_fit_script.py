@@ -74,9 +74,9 @@ if __name__ == '__main__':
 
     for i, packet in enumerate(container.demux(video_stream)):
         if i % 1000 == 0:
-            print("frame: {0}...".format(i))
+            log.info("frame: {0}...".format(i))
         try:
-            frame = packet.decode_one()
+            frame = packet.decode()[0]
 
             frame_ = np.asarray(frame.to_image().convert('LA'))
             frame_ = frame_[:, :-10, :]
