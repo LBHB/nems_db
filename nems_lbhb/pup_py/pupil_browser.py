@@ -337,7 +337,7 @@ class PupilBrowser:
 
     def open_training_browser(self):
         os.system("/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6 \
-                  /auto/users/hellerc/code/projects/pupil_processing/browse_training_data.py {0} {1} {2} {3}".format(
+                /auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/browse_training_data.py {0} {1} {2} {3}".format(
             self.animal_name.get(), self.video_name.get(), 0, self.max_frame))
 
     def retrain(self):

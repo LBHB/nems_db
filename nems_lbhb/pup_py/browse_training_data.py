@@ -14,7 +14,7 @@ import pickle
 import sys
 
 train_data_path = '/auto/data/nems_db/pup_py/training_data/'
-tmp_save = '/auto/data_nems_db/pup_py/tmp/'
+tmp_save = '/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
@@ -325,7 +325,7 @@ class TrainingDataBrowser:
         new_params = current_params.copy()
         new_params['ellipse_zack'] = e_params
 
-        with open('training_data/data/{0}.pickle'.format(frame_file), 'wb') as fp:
+        with open(train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
             pickle.dump(new_params, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
         print("saved new ellipse parameters for {0}".format(frame_file))
