@@ -170,6 +170,14 @@ if __name__ == '__main__':
                         mod = f
 
         default_name = project_dir + 'default_trained_model.hdf5'
+        old_default = project_dir + 'default_trained_model_{0}.hdf5'.format(dt)
+        
+        # rename the old default model with the date on which it was replaced!
+        if os.path.isfile(default_name):
+            log.info("replacing old default model with new fit. Renaming previous default to {0}".format(old_default))
+            os.system("mv {0} {1}".format(default_name, old_default)
+        
+        # Now save the new current default model            
         os.system("cp {0} {1}".format("{0}old_model_fits/{1}/{2}".format(project_dir, dt, mod), default_name))
 
         if queueid:
