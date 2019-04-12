@@ -28,6 +28,15 @@ basemodel = "-ref-psthfr.s_sdexp.S"
 d = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 d.to_csv('d_fil_307.csv')
 
+# pup vs. active/passive with spont+baseline separated
+batch = 309  # IC SUA and MUA
+state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
+basemodel = "-ref.e-psthfr.s_stategain.S.s"
+d = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
+d.to_csv('d_sbg_309.csv')
+
+
+
 # fil only
 state_list = ['st.fil0','st.fil']
 basemodel = "-ref-psthfr.s_stategain.S"
@@ -125,7 +134,7 @@ def get_model_results_per_state_model(batch=307, state_list=None,
 
     d = pd.DataFrame(columns=['cellid', 'modelname', 'state_sig',
                               'state_chan', 'MI', 'isolation',
-                              'r', 'r_se', 'd', 'g', 'state_chan_alt'])
+                              'r', 'r_se', 'd', 'g', 'sp', 'state_chan_alt'])
 
     for mod_i, m in enumerate(modelnames):
         print('Loading modelname: ', m)
@@ -134,22 +143,24 @@ def get_model_results_per_state_model(batch=307, state_list=None,
         for modelspec in modelspecs:
             meta = ms.get_modelspec_metadata(modelspec)
             c = meta['cellid']
-            iso=isolation[cellids.index(c)]
+            iso = isolation[cellids.index(c)]
             state_mod = meta['state_mod']
             state_mod_se = meta['se_state_mod']
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
-            if dc.ndim>1:
-                dc=dc[0,:]
-                gain=gain[0,:]
-            a_count=0
-            p_count=0
+            sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
+            if dc.ndim > 1:
+                dc = dc[0, :]
+                gain = gain[0, :]
+                sp = sp[0, :]
+            a_count = 0
+            p_count = 0
             for j, sc in enumerate(state_chans):
                 r = {'cellid': c, 'state_chan': sc, 'modelname': m,
                      'isolation': iso,
                      'state_sig': state_list[mod_i],
-                     'g': gain[j], 'd': dc[j],
+                     'g': gain[j], 'd': dc[j], 'sp': sp[j],
                      'MI': state_mod[j],
                      'r': meta['r_test'][0], 'r_se': meta['se_test'][0]}
                 d = d.append(r, ignore_index=True)
