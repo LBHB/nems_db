@@ -9,10 +9,15 @@ import nems.db as nd
 from nems_lbhb.gcmodel.figures.utils import get_valid_improvements
 
 
-gc_color = '#69657C'
-stp_color = '#394B5E'
-ln_color = '#62838C'
-gc_stp_color = '#215454'
+#gc_color = '#69657C'
+#stp_color = '#394B5E'
+#ln_color = '#62838C'
+#gc_stp_color = '#215454'
+
+gc_color = wsu_gray
+stp_color = wsu_gray
+ln_color = wsu_gray_light
+gc_stp_color = wsu_crimson
 
 
 # Scatter comparisons of overall model performance (similar to web ui)
@@ -20,6 +25,17 @@ gc_stp_color = '#215454'
 # LN versus GC     GC_STP vs GC
 # LN versus STP    GC_STP vs STP
 # GC versus STP    GC_STP vs LN
+
+
+params = {
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+        'axes.linewidth': 1,
+        'font.weight': 'bold',
+        'font.size': 16,
+        }
+plt.rcParams.update(params)
+
 def performance_scatters(batch, model1, model2, model3, model4,
                          se_filter=True, ln_filter=False, ratio_filter=False,
                          threshold=2.5, manual_cellids=None):
@@ -185,7 +201,99 @@ def performance_scatters(batch, model1, model2, model3, model4,
 def gc_stp_scatter(batch, model1, model2, model3, model4,
                    se_filter=True, ln_filter=False, ratio_filter=False,
                    threshold=2.5, manual_cellids=None):
-    pass
+
+    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='r_ceiling')
+    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='se_test')
+    # Remove any cellids that have NaN for 1 or more models
+    df_r.dropna(axis=0, how='any', inplace=True)
+    df_e.dropna(axis=0, how='any', inplace=True)
+
+    cellids = df_r.index.values.tolist()
+
+    gc_test = df_r[model1]
+    gc_se = df_e[model1]
+    stp_test = df_r[model2]
+    stp_se = df_e[model2]
+    ln_test = df_r[model3]
+    ln_se = df_e[model3]
+    gc_stp_test = df_r[model4]
+    gc_stp_se = df_e[model4]
+
+    if se_filter:
+        # Remove is performance not significant at all
+        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
+                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
+    else:
+        # Set to series w/ all True, so none are skipped
+        good_cells = (gc_test != np.nan)
+
+    if ln_filter:
+        # Remove if performance significantly worse than LN
+        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
+                     (stp_test+stp_se < ln_test-ln_se) |
+                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
+    else:
+        # Set to series w/ all False, so none are skipped
+        bad_cells = (gc_test == np.nan)
+
+    keep = good_cells & ~bad_cells
+    cellids = df_r[keep].index.values.tolist()
+    under_chance = df_r[~good_cells].index.values.tolist()
+    less_LN = df_r[bad_cells].index.values.tolist()
+
+    if ratio_filter:
+        # Ex: for threshold = 2.5
+        # Only use cellids where performance for gc/stp was within 2.5x
+        # of LN performance (or where LN within 2.5x of gc/stp) to filter
+        # outliers.
+        c1 = get_valid_improvements(model1=model1, threshold=threshold)
+        c2 = get_valid_improvements(model1=model2, threshold=threshold)
+        cellids = list(set(c1) & set(c2) & set(cellids))
+
+    if manual_cellids is not None:
+        # WARNING: Will override se and ratio filters even if they are set
+        cellids = manual_cellids
+
+    if not se_filter:
+        under_chance = np.array([True]*len(df_r[model1]))
+        less_LN = copy.deepcopy(under_chance)
+
+    n_cells = len(cellids)
+    n_under_chance = len(under_chance) if under_chance != cellids else 0
+    n_less_LN = len(less_LN) if less_LN != cellids else 0
+
+    gc_test = df_r[model1][cellids]
+    gc_test_under_chance = df_r[model1][under_chance]
+    gc_test_less_LN = df_r[model1][less_LN]
+
+    stp_test = df_r[model2][cellids]
+    stp_test_under_chance = df_r[model2][under_chance]
+    stp_test_less_LN = df_r[model2][less_LN]
+
+    ln_test = df_r[model3][cellids]
+    ln_test_under_chance = df_r[model3][under_chance]
+    ln_test_less_LN = df_r[model3][less_LN]
+
+    gc_stp_test = df_r[model4][cellids]
+    gc_stp_test_under_chance = df_r[model4][under_chance]
+    gc_stp_test_less_LN = df_r[model4][less_LN]
+
+    fig = plt.figure(figsize=(12, 12))
+    plt.scatter(gc_test, stp_test, c=wsu_gray, s=20)
+    ax = fig.axes[0]
+    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=wsu_crimson, s=20)
+    plt.title('GC vs STP')
+    plt.xlabel('GC')
+    plt.ylabel('STP')
+    if se_filter:
+        plt.text(0.90, -0.05, 'all = %d' % (n_cells+n_under_chance+n_less_LN),
+                ha='right', va='bottom')
+        plt.text(0.90, 0.00, 'n = %d' % n_cells, ha='right', va='bottom')
+        plt.text(0.90, 0.05, 'uc = %d' % n_under_chance, ha='right', va='bottom',
+                color=wsu_crimson)
 
 
 def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
@@ -273,16 +381,14 @@ def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
 #    ln_sem = np.median(ln_se.values)
 #    gc_stp_sem = np.median(gc_stp_se.values)
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12, 12))
     plt.bar([1, 2, 3, 4], [gc, stp, ln, gc_stp],
             #color=['purple', 'green', 'gray', 'blue'])
             color=[gc_color, stp_color, ln_color, gc_stp_color])
     plt.xticks([1, 2, 3, 4], ['GC', 'STP', 'LN', 'GC + STP'])
     if abbr_yaxis:
-        lower = np.floor(10*min(gc, stp, ln, gc_stp))
-        lower = max(0, min(lower/10 + 0.05, gc, stp, ln, gc_stp))
-        upper = np.ceil(10*max(gc, stp, ln, gc_stp))
-        upper = min(1, max(upper/10 - 0.05, gc, stp, ln, gc_stp))
+        lower = np.floor(10*min(gc, stp, ln, gc_stp))/10
+        upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10
         plt.ylim(ymin=lower, ymax=upper)
     else:
         plt.ylim(ymax=largest*1.4)

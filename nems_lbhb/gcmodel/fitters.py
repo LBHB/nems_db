@@ -7,7 +7,7 @@ import logging
 import nems
 import nems.utils
 import nems.metrics.api as metrics
-from nems.analysis.api import fit_basic
+from nems.analysis.api import fit_basic, basic_with_copy
 from nems_lbhb.gcmodel.initializers import init_dsig
 from nems.initializers import prefit_mod_subset
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
@@ -209,7 +209,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
-            cost_function=None, IsReload=False, **context):
+            cost_function=None, IsReload=False, post_fit=False, **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
 
@@ -398,5 +398,23 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             modelspec[fir_idx]['fn_kwargs'].pop('coefficients')
     modelspec[lvl_idx]['phi']['level'] = \
             modelspec[lvl_idx]['fn_kwargs'].pop('level')
+
+
+
+    ######################################
+    # 5: Fit all modules together        #
+    ######################################
+    if post_fit:
+
+        def cost(*args, **kwargs):
+            copy = [(wc_idx, ctk_idx), (fir_idx, ctk_idx)]
+            return basic_with_copy(*args, **kwargs, copy_phi=copy)
+
+        log.info('Fitting all modules together ...\n')
+        modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = True
+        modelspec = fit_basic(est, modelspec, fitter_fn,
+                              cost_function=cost,
+                              metric=metric_fn, metaname='fit_gc',
+                              fit_kwargs=fit_kwargs)
 
     return {'modelspec': modelspec}

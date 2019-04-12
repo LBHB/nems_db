@@ -11,8 +11,17 @@ from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
 
+params = {
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+        'axes.linewidth': 1,
+        'font.weight': 'bold',
+        'font.size': 16,
+        }
+plt.rcParams.update(params)
 
-def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
+
+def equivalence_scatter(batch, model1, model2, model3, model4, se_filter=True,
                         ln_filter=False, ratio_filter=False,
                         threshold=2.5, manual_cellids=None):
     '''
@@ -22,8 +31,10 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
 
     '''
 
-    df_r = nd.batch_comp(batch, [model1, model2, model3], stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3], stat='se_test')
+    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='r_ceiling')
+    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='se_test')
     # Remove any cellids that have NaN for 1 or more models
     df_r.dropna(axis=0, how='any', inplace=True)
     df_e.dropna(axis=0, how='any', inplace=True)
@@ -36,11 +47,13 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     stp_se = df_e[model2]
     ln_test = df_r[model3]
     ln_se = df_e[model3]
+    gc_stp_test = df_r[model4]
+    gc_stp_se = df_e[model4]
 
     if se_filter:
         # Remove is performance not significant at all
         good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2))
+                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
     else:
         # Set to series w/ all True, so none are skipped
         good_cells = (gc_test != np.nan)
@@ -48,13 +61,16 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     if ln_filter:
         # Remove if performance significantly worse than LN
         bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se))
+                     (stp_test+stp_se < ln_test-ln_se) |
+                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
     else:
         # Set to series w/ all False, so none are skipped
         bad_cells = (gc_test == np.nan)
 
     keep = good_cells & ~bad_cells
     cellids = df_r[keep].index.values.tolist()
+    under_chance = df_r[~good_cells].index.values.tolist()
+    less_LN = df_r[bad_cells].index.values.tolist()
 
     if ratio_filter:
         # Ex: for threshold = 2.5
@@ -96,8 +112,8 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     abs_max = max(np.abs(y_max), np.abs(x_max), np.abs(y_min), np.abs(x_min))
     abs_max *= 1.15
 
-    fig = plt.figure(figsize=(6, 6))
-    plt.scatter(gc_vs_ln, stp_vs_ln, c='black', s=1)
+    fig = plt.figure(figsize=(12, 12))
+    plt.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
     plt.xlabel("GC - LN model")
     plt.ylabel("STP - LN model")
     plt.title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
@@ -112,8 +128,9 @@ def equivalence_scatter(batch, model1, model2, model3, se_filter=True,
     return fig
 
 
-def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
-                          ln_filter=False, test_limit=None):
+def equivalence_histogram(batch, model1, model2, model3, model4, se_filter=True,
+                          ln_filter=False, test_limit=None, alpha=0.05,
+                          save_path=None, load_path=None):
     '''
     model1: GC
     model2: STP
@@ -121,66 +138,106 @@ def equivalence_histogram(batch, model1, model2, model3, se_filter=True,
 
     '''
 
-    df_r = nd.batch_comp(batch, [model1, model2, model3], stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3], stat='se_test')
-    # Remove any cellids that have NaN for 1 or more models
-    df_r.dropna(axis=0, how='any', inplace=True)
-    df_e.dropna(axis=0, how='any', inplace=True)
+    if load_path is None:
+        df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
+                             stat='r_ceiling')
+        df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
+                             stat='se_test')
+        # Remove any cellids that have NaN for 1 or more models
+        df_r.dropna(axis=0, how='any', inplace=True)
+        df_e.dropna(axis=0, how='any', inplace=True)
 
-    cellids = df_r.index.values.tolist()
+        cellids = df_r.index.values.tolist()
 
-    gc_test = df_r[model1]
-    gc_se = df_e[model1]
-    stp_test = df_r[model2]
-    stp_se = df_e[model2]
-    ln_test = df_r[model3]
-    ln_se = df_e[model3]
+        gc_test = df_r[model1]
+        gc_se = df_e[model1]
+        stp_test = df_r[model2]
+        stp_se = df_e[model2]
+        ln_test = df_r[model3]
+        ln_se = df_e[model3]
+        gc_stp_test = df_r[model4]
+        gc_stp_se = df_e[model4]
 
-    if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2))
+        if se_filter:
+            # Remove is performance not significant at all
+            good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
+                         (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
+        else:
+            # Set to series w/ all True, so none are skipped
+            good_cells = (gc_test != np.nan)
+
+        if ln_filter:
+            # Remove if performance significantly worse than LN
+            bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
+                         (stp_test+stp_se < ln_test-ln_se) |
+                         (gc_stp_test+gc_stp_se < ln_test-ln_se))
+        else:
+            # Set to series w/ all False, so none are skipped
+            bad_cells = (gc_test == np.nan)
+
+        keep = good_cells & ~bad_cells
+        cellids = df_r[keep].index.values.tolist()
+        under_chance = df_r[~good_cells].index.values.tolist()
+        less_LN = df_r[bad_cells].index.values.tolist()
+
+        rs = []
+        #ks = []
+        for c in cellids[:test_limit]:
+            xf1, ctx1 = xhelp.load_model_xform(c, batch, model1)
+            xf2, ctx2 = xhelp.load_model_xform(c, batch, model2)
+            xf3, ctx3 = xhelp.load_model_xform(c, batch, model3)
+
+            gc = ctx1['val'].apply_mask()['pred'].as_continuous()
+            stp = ctx2['val'].apply_mask()['pred'].as_continuous()
+            ln = ctx3['val'].apply_mask()['pred'].as_continuous()
+
+            ff = np.isfinite(gc) & np.isfinite(stp) & np.isfinite(ln)
+            gcff = gc[ff]
+            stpff = stp[ff]
+            lnff = ln[ff]
+            rs.append(np.corrcoef(gcff-lnff, stpff-lnff)[0, 1])
+            #p = st.ks_2samp(gcff-lnff, stpff-lnff)[1]
+            #ks.append(D)
+    #        if p == 0:
+    #            ks.append(1e-5)
+    #        else:
+    #            ks.append(p)
+
+        rs = np.array(rs)
+        if save_path is not None:
+            np.save(save_path, rs)
     else:
-        # Set to series w/ all True, so none are skipped
-        good_cells = (gc_test != np.nan)
+        rs = np.load(load_path)
 
-    if ln_filter:
-        # Remove if performance significantly worse than LN
-        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se))
-    else:
-        # Set to series w/ all False, so none are skipped
-        bad_cells = (gc_test == np.nan)
-
-    keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-
-    rs = []
-    for c in cellids[:test_limit]:
-        xf1, ctx1 = xhelp.load_model_xform(c, batch, model1)
-        xf2, ctx2 = xhelp.load_model_xform(c, batch, model2)
-        xf3, ctx3 = xhelp.load_model_xform(c, batch, model3)
-
-        gc = ctx1['val'].apply_mask()['pred'].as_continuous()
-        stp = ctx2['val'].apply_mask()['pred'].as_continuous()
-        ln = ctx3['val'].apply_mask()['pred'].as_continuous()
-
-        ff = np.isfinite(gc) & np.isfinite(stp) & np.isfinite(ln)
-        rs.append(np.corrcoef(gc[ff]-ln[ff], stp[ff]-ln[ff])[0, 1])
-
-    rs = np.array(rs)
     md = np.nanmedian(rs)
+    #mks = np.nanmedian(ks)
+    #logks = -1*np.log10(ks)
 
-    n_cells = len(cellids)
-    fig = plt.figure(figsize=(6, 6))
-    plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=['gray'])
+    #n_samps = gcff.shape[-1]
+    #d_threshold = (np.sqrt(-0.5*np.log(alpha)))*np.sqrt((2*n_samps)/n_samps**2)
+    n_cells = rs.shape[0]
+    fig = plt.figure(figsize=(12, 12))
+    plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light])
     plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--')
     plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
              ha='left', va='top', transform=fig.axes[0].transAxes)
     plt.xlabel('CC, GC-LN vs STP-LN')
     plt.title('Equivalence of Change in Prediction Relative to LN Model')
 
-    return fig
+    # TODO: maybe not working as intended? or maybe it is and the p values
+    #       are just tiny, but end up with all < 0.00001
+    #       Ask SVD about continuing with this.
+#    fig2 = plt.figure(figsize=(12, 12))
+#    plt.hist(logks, bins=30, range=[0, 5], histtype='bar',
+#                                    color=['gray'])
+#    plt.plot(np.array([-np.log10(0.05), -np.log10(0.05)]),
+#             np.array(fig.axes[0].get_ylim()), 'k--')
+#    plt.text(0.05, 0.95, 'n = %d' % n_cells,
+#             ha='left', va='top', transform=fig.axes[0].transAxes)
+#    plt.xlabel('-log p')
+#    plt.title('Kolmolgorov-Smirnov Test\nBetween Prediction Changes Relative to LN Model')
+
+    return fig#, fig2
 
 
 def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
