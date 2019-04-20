@@ -32,11 +32,16 @@ gc_av_stp2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.
 #dexp_kwargs = {'model1': gc_av2b, 'model2': stp_dexp2, 'model3': ln_dexp2,
 #               'model4': gc_av_stp2b}
 
+#### MOST CURRENT ####
+# with bounds and normalization and k.s. reduction and post-fit
+gc_av2bks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.k.s.bnd.n_gc2.PF"
+gc_av_stp2bks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.k.s.bnd.n_gc2.PF"
+
 batch = 289
 
 # Current example cells
 gc_better1 = 'TAR010c-59-1'
-gc_better2 = 'TAR010c-21-3'  # much better job of bumping up FR on last epoch
+gc_better2 = 'TAR010c-21-3'  # much better job of bumping up FR
 gc_better3 = 'TAR010c-02-1'  # does seem to track the peaks and troughs better, but very noisy
 gc_better4 = 'TAR010c-38-2'  # hard to tell on this one
 gc_better5 = 'TAR010c-43-2'  # seems like gc is winning for the wrong reasons maybe?
