@@ -17,6 +17,7 @@ test_DRC: generate a DRC stimulus and then plot it using plt.imshow
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.io.wavfile import write
 
 import nems
 
@@ -111,6 +112,24 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
     stim = np.concatenate(stim_segments, axis=1)
     contrast = np.concatenate(contrast_segments, axis=1)
     return (stim, contrast, frequencies)
+
+
+def DRC_to_wav(drc, freqs, segment_duration, n_segments, save=None):
+    duration = segment_duration*n_segments/1000
+    bins = drc.shape[1]
+    sampling = int(bins/duration)
+    sines = []
+    for i, f in enumerate(freqs):
+        x = np.linspace(0, 2*np.pi*((segment_duration/1000)*n_segments), drc.shape[1])
+        sines.append(drc[i, :] * np.sin(f*x))
+    sum = np.sum(sines, axis=0)
+    # Scale to 16-bit integer range for common wav format
+    scaled = np.int16(sum/np.max(np.abs(sum))*32767)
+
+    if save is not None:
+        write(save, sampling, scaled)
+
+    return scaled
 
 
 def rec_from_DRC(fs=100, n_segments=120, rec_name='DRC Test',
