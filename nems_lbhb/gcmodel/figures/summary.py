@@ -296,6 +296,73 @@ def gc_stp_scatter(batch, model1, model2, model3, model4,
                 color=wsu_crimson)
 
 
+def combined_vs_max(batch, model1, model2, model3, model4, se_filter=True,
+                    ln_filter=False):
+
+    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='r_ceiling')
+    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
+                         stat='se_test')
+    # Remove any cellids that have NaN for 1 or more models
+    df_r.dropna(axis=0, how='any', inplace=True)
+    df_e.dropna(axis=0, how='any', inplace=True)
+
+    cellids = df_r.index.values.tolist()
+
+    gc_test = df_r[model1]
+    gc_se = df_e[model1]
+    stp_test = df_r[model2]
+    stp_se = df_e[model2]
+    ln_test = df_r[model3]
+    ln_se = df_e[model3]
+    gc_stp_test = df_r[model4]
+    gc_stp_se = df_e[model4]
+
+    if se_filter:
+        # Remove is performance not significant at all
+        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
+                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
+    else:
+        # Set to series w/ all True, so none are skipped
+        good_cells = (gc_test != np.nan)
+
+    if ln_filter:
+        # Remove if performance significantly worse than LN
+        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
+                     (stp_test+stp_se < ln_test-ln_se) |
+                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
+    else:
+        # Set to series w/ all False, so none are skipped
+        bad_cells = (gc_test == np.nan)
+
+    keep = good_cells & ~bad_cells
+    cellids = df_r[keep].index.values.tolist()
+
+    gc_test = df_r[model1][cellids]
+    stp_test = df_r[model2][cellids]
+    ln_test = df_r[model3][cellids]
+    gc_stp_test = df_r[model4][cellids]
+    max_test = np.maximum(gc_test, stp_test)
+    gc_stp_test_rel = gc_stp_test - ln_test
+    max_test_rel = np.maximum(gc_test, stp_test) - ln_test
+
+    fig1 = plt.figure(figsize=(12, 12))
+    plt.scatter(max_test, gc_stp_test, c=wsu_gray, s=20)
+    ax = fig1.axes[0]
+    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.title('Absolute')
+    plt.xlabel('Max GC or STP')
+    plt.ylabel('GC+STP')
+
+    fig2 = plt.figure(figsize=(12, 12))
+    plt.scatter(max_test_rel, gc_stp_test_rel, c=wsu_gray, s=20)
+    ax = fig2.axes[0]
+    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.title('Relative')
+    plt.xlabel('Max GC or STP')
+    plt.ylabel('GC+STP')
+
+
 def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
                     ln_filter=False, ratio_filter=False, threshold=2.5,
                     manual_cellids=None, abbr_yaxis=False):
