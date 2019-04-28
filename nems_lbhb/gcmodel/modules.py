@@ -33,8 +33,12 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     kappa_mod=np.nan, eq='dexp', norm=False):
 
     static = False
-    if np.all(np.isnan(np.array([base_mod, amplitude_mod,
-                                 shift_mod, kappa_mod]))):
+    for p in [base_mod, amplitude_mod, shift_mod, kappa_mod]:
+        try:
+            if not np.isnan(p):
+                break
+        except TypeError:
+            break
         static = True
 
     if not static and rec[c]:
