@@ -349,7 +349,7 @@ def combined_vs_max(batch, model1, model2, model3, model4, se_filter=True,
     fig1 = plt.figure(figsize=(12, 12))
     plt.scatter(max_test, gc_stp_test, c=wsu_gray, s=20)
     ax = fig1.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1)
     plt.title('Absolute')
     plt.xlabel('Max GC or STP')
     plt.ylabel('GC+STP')
@@ -357,7 +357,7 @@ def combined_vs_max(batch, model1, model2, model3, model4, se_filter=True,
     fig2 = plt.figure(figsize=(12, 12))
     plt.scatter(max_test_rel, gc_stp_test_rel, c=wsu_gray, s=20)
     ax = fig2.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1)
     plt.title('Relative')
     plt.xlabel('Max GC or STP')
     plt.ylabel('GC+STP')
