@@ -15,8 +15,13 @@ from nems_lbhb.gcmodel.figures.definitions import *
 
 
 # Plot appearance settings
-params = {'pdf.fonttype': 42,
-         'ps.fonttype': 42}
+params = {
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+        'axes.linewidth': 1,
+        #'font.weight': 'bold',
+        'font.size': 16,
+        }
 plt.rcParams.update(params)
 
 

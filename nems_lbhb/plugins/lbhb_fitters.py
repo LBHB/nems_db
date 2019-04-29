@@ -68,6 +68,8 @@ def gc2(fitkey):
             kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
         elif op.startswith('nl'):
             kwargs['nl_mode'] = int(op[2:])
+        elif op == 'PF':
+            kwargs['post_fit'] = True
 
     return [['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs]]
 

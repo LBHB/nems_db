@@ -153,7 +153,8 @@ def ctk(kw):
             'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
             'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
                           'wc_coefficients': None, 'fir_coefficients': None,
-                          'compute_contrast': False},
+                          'mean': None, 'sd': None, 'coefficients': None,
+                          'auto_copy': False, 'compute_contrast': False},
             'phi': {},
             'prior': {},
             'bounds': {}

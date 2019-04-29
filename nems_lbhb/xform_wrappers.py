@@ -195,7 +195,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     if (options['stimfmt']=='ozgf') and (options['chancount'] <= 0):
         raise ValueError('Stim format ozgf requires chancount>0 (.chNN) in loader='+loader)
 
-    if int(batch) == 294:
+    if int(batch) in [263,294]:
         options["runclass"] = "VOC"
 
     if siteid is not None:

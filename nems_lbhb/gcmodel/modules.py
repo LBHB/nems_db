@@ -33,8 +33,12 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     kappa_mod=np.nan, eq='dexp', norm=False):
 
     static = False
-    if np.all(np.isnan(np.array([base_mod, amplitude_mod,
-                                 shift_mod, kappa_mod]))):
+    for p in [base_mod, amplitude_mod, shift_mod, kappa_mod]:
+        try:
+            if not np.isnan(p):
+                break
+        except TypeError:
+            break
         static = True
 
     if not static and rec[c]:
@@ -185,16 +189,26 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
     return new_signals
 
 
-# TODO: How to get coefficients to copy over when fitting STRF and
-#       GC together on combined model? Might just have to make a single
-#       combined module for that.
+# TODO: currently hard-coded to use gaussian coeffs for the auto_copy portion,
+#       need to be smarter about that.
+#       the problem: non-gaussian wc and fir both use 'coefficients' as the
+#       phi name, so they would overwrite eachother using the current
+#       basic_with_copy implementation.
 def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
+                    mean=None, sd=None, coefficients=None, auto_copy=False,
                     compute_contrast=False):
     if compute_contrast:
-        if (wc_coefficients is None) or (fir_coefficients is None):
-            raise ValueError("contrast_kernel module was called without "
-                             "wc or fir coefficients set.")
-
+        if auto_copy:
+            if (mean is None) or (sd is None) or (coefficients is None):
+                raise ValueError("contrast_kernel module was called using "
+                                 "auto_copy=True without setting "
+                                 "mean, sd, or coefficients")
+            wc_coefficients = gaussian_coefficients(mean, sd, 18)
+            fir_coefficients = coefficients
+        else:
+            if (wc_coefficients is None) or (fir_coefficients is None):
+                raise ValueError("contrast_kernel module was called without "
+                                 "wc or fir coefficients set.")
         fn = lambda x: _contrast_kernel(x, wc_coefficients, fir_coefficients)
         return [rec[i].transform(fn, o)]
     else:

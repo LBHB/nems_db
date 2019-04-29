@@ -17,11 +17,13 @@ test_DRC: generate a DRC stimulus and then plot it using plt.imshow
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.io.wavfile import write
 
 import nems
 
-def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
-               low_hw=5.0, mean=40.0, n_tones=23, f_low=0.5, f_high=22.6):
+def sample_DRC(fs=100, segment_duration=3000, n_segments=120, n_chords=120,
+               high_hw=15.0, low_hw=5.0, mean=40.0, n_tones=23, f_low=0.5,
+               f_high=22.6):
     '''
     Generate a random contrast dynamic random chord (RC-DRC) stimulus.
 
@@ -31,6 +33,7 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
     ----------
     fs : int
         Sampling frequency in hertz to imitate.
+        (44100 recommended when subsequently generating a .wav file)
     segment_duration : int
         Duration of each tone sampling segment in milliseconds.
     n_segments : int
@@ -83,8 +86,8 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
     # the stimuli, but maybe useful later.
     frequencies = np.logspace(np.log(f_low), np.log(f_high), num=n_tones,
                               base=np.e)
-    segment_length = round(fs*segment_duration/1000)
-    segment_shape = (n_tones, segment_length)
+    bins_per_chord = int(fs/40)  # fs/1000 * 25ms
+    segment_shape = (n_tones, 120*bins_per_chord)
 
     stim_segments = []
     contrast_segments = []
@@ -97,9 +100,12 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
         low_bands = np.where(high_low < 1)[0]
 
         high_sample = np.random.uniform(low=(mean-high_hw), high=(mean+high_hw),
-                                 size=(high_bands.shape[0], segment_length))
+                                 size=(high_bands.shape[0], 120))
+        high_sample = np.repeat(high_sample, repeats=bins_per_chord, axis=1)
+
         low_sample = np.random.uniform(low=(mean-low_hw), high=(mean+low_hw),
-                                size=(low_bands.shape[0], segment_length))
+                                size=(low_bands.shape[0], 120))
+        low_sample = np.repeat(low_sample, repeats=bins_per_chord, axis=1)
 
         stim_segment[high_bands] = high_sample
         stim_segment[low_bands] = low_sample
@@ -110,7 +116,25 @@ def sample_DRC(fs=100, segment_duration=3000, n_segments=120, high_hw=15.0,
 
     stim = np.concatenate(stim_segments, axis=1)
     contrast = np.concatenate(contrast_segments, axis=1)
+
+
     return (stim, contrast, frequencies)
+
+
+def DRC_to_wav(drc, freqs, fs, save=None):
+    duration = int(drc.shape[1]/fs)  # get length in seconds
+    sines = []
+    for i, f in enumerate(freqs):
+        x = np.linspace(0, 2*np.pi*duration, drc.shape[1])
+        sines.append(drc[i, :] * np.sin(f*1000*x))
+    sum = np.sum(sines, axis=0)
+    # Scale to 16-bit integer range for common wav format
+    scaled = np.int16(sum/np.max(np.abs(sum))*32767)
+
+    if save is not None:
+        write(save, fs, scaled)
+
+    return scaled
 
 
 def rec_from_DRC(fs=100, n_segments=120, rec_name='DRC Test',

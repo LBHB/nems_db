@@ -306,7 +306,7 @@ def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
     return sortinfo, spikefs
 
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
 
     # number of channels in recording (not all necessarily contain spikes)
     chancount = len(sortinfo)
@@ -399,6 +399,119 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                                          + Offset_spikefs[np.int(trialidx-1)])
                     if (comment != []):
                         if (comment == 'PC-cluster sorted by mespca.m'):
+                            # remove last spike, which is stray
+                            this_spike_events = this_spike_events[:-1]
+                    unit_spike_events = np.concatenate(
+                            (unit_spike_events, this_spike_events), axis=0
+                            )
+                    # print("   trial {0} first spike bin {1}"
+                    #       .format(trialidx,st[1,ff]))
+
+                totalunits += 1
+                if chancount <= 8:
+                    unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                else:
+                    unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                spiketimes.append(unit_spike_events / spikefs)
+
+    return exptevents, spiketimes, unit_names
+
+
+def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+
+    # number of channels in recording (not all necessarily contain spikes)
+    chancount = len(sortinfo)
+    while chancount>1 and sortinfo[chancount-1].size == 0:
+        chancount -= 1
+    # figure out how long each trial is by the time of the last spike count.
+    # this method is a hack!
+    # but since recordings are longer than the "official"
+    # trial end time reported by baphy, this method preserves extra spikes
+    TrialCount = np.max(exptevents['Trial'])
+    TrialLen_sec = np.array(
+            exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
+            )
+    TrialLen_spikefs = np.concatenate(
+            (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis]*spikefs), axis=0
+            )
+
+    for ch in range(0, chancount):
+        if len(sortinfo[ch]) and sortinfo[ch][0].size:
+            s = sortinfo[ch][0][0]['unitSpikes']
+            s = np.reshape(s, (-1, 1))
+            unitcount = s.shape[0]
+            for u in range(0, unitcount):
+                st = s[u, 0]
+
+                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
+                for trialidx in range(1, TrialCount+1):
+                    ff = (st[0, :] == trialidx)
+                    if np.sum(ff):
+                        utrial_spikefs = np.max(st[1, ff])
+                        TrialLen_spikefs[trialidx, 0] = np.max(
+                                [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
+                                )
+
+    # using the trial lengths, figure out adjustments to trial event times.
+    if finalfs:
+        print('rounding Trial offset spike times'
+              ' to even number of rasterfs bins')
+        # print(TrialLen_spikefs)
+        TrialLen_spikefs = (
+                np.ceil(TrialLen_spikefs / spikefs*finalfs) / finalfs*spikefs
+                )
+        #TrialLen_spikefs = (
+        #        np.ceil(TrialLen_spikefs / spikefs*finalfs + 1) / finalfs*spikefs
+        #        )
+        # print(TrialLen_spikefs)
+
+    Offset_spikefs = np.cumsum(TrialLen_spikefs)
+    Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
+    # adjust times in exptevents to approximate time since experiment started
+    # rather than time since trial started (native format)
+    for Trialidx in range(1, TrialCount+1):
+        # print("Adjusting trial {0} by {1} sec"
+        #       .format(Trialidx,Offset_sec[Trialidx-1]))
+        ff = (exptevents['Trial'] == Trialidx)
+        exptevents.loc[ff, ['start', 'end']] = (
+                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
+                )
+
+        # ff = ((exptevents['Trial'] == Trialidx)
+        #       & (exptevents['end'] > Offset_sec[Trialidx]))
+        # badevents, = np.where(ff)
+        # print("{0} events past end of trial?".format(len(badevents)))
+        # exptevents.drop(badevents)
+
+    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+
+    # convert spike times from samples since trial started to
+    # (approximate) seconds since experiment started (matched to exptevents)
+    totalunits = 0
+    spiketimes = []  # list of spike event times for each unit in recording
+    unit_names = []  # string suffix for each unit (CC-U)
+    chan_names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    for c in range(0, chancount):
+        if len(sortinfo[c]) and sortinfo[c][0].size:
+            s = sortinfo[c][0][0]['unitSpikes']
+            comment = sortinfo[c][0][0][0][0][2][0]
+            log.debug('Comment: %s', comment)
+
+            s = np.reshape(s, (-1, 1))
+            unitcount = s.shape[0]
+            for u in range(0, unitcount):
+                st = s[u, 0]
+                uniquetrials = np.unique(st[0, :])
+                # print('chan {0} unit {1}: {2} spikes {3} trials'
+                #       .format(c, u, st.shape[1], len(uniquetrials)))
+
+                unit_spike_events = np.array([])
+                for trialidx in uniquetrials:
+                    ff = (st[0, :] == trialidx)
+                    this_spike_events = (st[1, ff]
+                                         + Offset_spikefs[np.int(trialidx-1)])
+                    if len(comment) > 0:
+                        if comment == 'PC-cluster sorted by mespca.m':
                             # remove last spike, which is stray
                             this_spike_events = this_spike_events[:-1]
                     unit_spike_events = np.concatenate(

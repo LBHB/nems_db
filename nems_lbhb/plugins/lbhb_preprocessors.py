@@ -27,15 +27,19 @@ def ref(kw):
 
     balance_rep_count = False
     include_incorrect = False
+    generate_evoked_mask = False
     for op in ops:
         if op.startswith('b'):
             balance_rep_count = True
         if op.startswith('a'):
             include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
 
     return [['nems.xforms.mask_all_but_correct_references',
              {'balance_rep_count': balance_rep_count,
-              'include_incorrect': include_incorrect}]]
+              'include_incorrect': include_incorrect,
+              'generate_evoked_mask': generate_evoked_mask}]]
 
 
 def evs(loadkey):
