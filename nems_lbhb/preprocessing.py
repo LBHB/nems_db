@@ -260,4 +260,3 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
         newrec.add_signal(resp)
 
     return {'rec': newrec}
-

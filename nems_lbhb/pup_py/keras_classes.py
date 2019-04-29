@@ -5,7 +5,7 @@ import keras
 import utils as ut
 
 # define global variables for data
-path = '/auto/users/hellerc/code/projects/pupil_processing/training_data/data/'
+path = '/auto/data/nems_db/pup_py/training_data/'
 data_frames = os.listdir(path)
 
 
@@ -61,6 +61,8 @@ class DataGenerator(keras.utils.Sequence):
 
             im = keras.applications.densenet.preprocess_input(im)
 
+            # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others
+            '''
             # normalize the params to live between 0 and 1
             y[i, 0] = y[i, 0] / self.image_dim[1]
             y[i, 1] = y[i, 1] / self.image_dim[1]
@@ -71,6 +73,7 @@ class DataGenerator(keras.utils.Sequence):
             y[i, 4] = (y[i, 4] / (np.pi * 2)) + 0.4
 
             y[i, :] = y[i, :] * 100
+            '''
 
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])
 
