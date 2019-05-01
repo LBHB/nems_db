@@ -19,7 +19,7 @@ OTHER_REQUIRES = [
         'flask', 'flask_restful', 'pandas','pymysql', 'sqlalchemy',
         'numpy', 'scipy', 'matplotlib', 'mpld3', 'boto3', 'bokeh',
         'flask-socketio', 'eventlet', 'bcrypt', 'flask-WTF', 'flask-login',
-        'flask-bcrypt', 'flask-assets', 'gevent', 'pillow'
+        'flask-bcrypt', 'flask-assets', 'gevent', 'pillow', 'mplcursors'
         ]
 
 setup(

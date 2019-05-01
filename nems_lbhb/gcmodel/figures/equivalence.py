@@ -1,12 +1,12 @@
 import numpy as np
 import scipy.stats as st
 import matplotlib.pyplot as plt
+import mplcursors
 
 import nems.xform_helper as xhelp
 import nems.db as nd
 from nems_lbhb.gcmodel.figures.utils import (get_valid_improvements,
                                              adjustFigAspect)
-from nems.utils import find_module
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
@@ -22,8 +22,8 @@ plt.rcParams.update(params)
 
 
 def equivalence_scatter(batch, model1, model2, model3, model4, se_filter=True,
-                        ln_filter=False, ratio_filter=False,
-                        threshold=2.5, manual_cellids=None):
+                        ln_filter=False, ratio_filter=False, threshold=2.5,
+                        manual_cellids=None, enable_hover=False):
     '''
     model1: GC
     model2: STP
@@ -113,17 +113,22 @@ def equivalence_scatter(batch, model1, model2, model3, model4, se_filter=True,
     abs_max *= 1.15
 
     fig = plt.figure(figsize=(12, 12))
-    plt.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
-    plt.xlabel("GC - LN model")
-    plt.ylabel("STP - LN model")
-    plt.title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
+    ax = plt.gca()
+    scatter = ax.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
+    ax.set_xlabel("GC - LN model")
+    ax.set_ylabel("STP - LN model")
+    ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
               % (r2, p, n))
-    gca = plt.gca()
-    gca.axes.axhline(0, color='black', linewidth=1, linestyle='dashed')
-    gca.axes.axvline(0, color='black', linewidth=1, linestyle='dashed')
-    plt.ylim(ymin=(-1)*abs_max, ymax=abs_max)
-    plt.xlim(xmin=(-1)*abs_max, xmax=abs_max)
+    ax.axes.axhline(0, color='black', linewidth=1, linestyle='dashed')
+    ax.axes.axvline(0, color='black', linewidth=1, linestyle='dashed')
+    ax.set_ylim(ymin=(-1)*abs_max, ymax=abs_max)
+    ax.set_xlim(xmin=(-1)*abs_max, xmax=abs_max)
     adjustFigAspect(fig, aspect=1)
+    if enable_hover:
+        mplcursors.cursor(ax, hover=True).connect(
+                "add",
+                lambda sel: sel.annotation.set_text(cellids[sel.target.index])
+                )
 
     return fig
 

@@ -344,7 +344,7 @@ class PupilBrowser:
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
         py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
-        script_path = '/auto/users/hellerc/code/projects/pupil_processing/training_script.py'
+        script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/training_script.py'
         username = getpass.getuser()
 
         # add job to queue
