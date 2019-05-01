@@ -501,14 +501,13 @@ def baphy_load_dataset(parmfilepath, **options):
 
         ff_pre_all = exptevents['name'] == ""
         ff_post_all = ff_pre_all.copy()
-        
+
+        snr_suff=""
         if 'SNR' in exptparams['TrialObject'][1]['ReferenceHandle'][1].keys():
             SNR = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR']
             if SNR<100:
                 log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
                 snr_suff="_{}dB".format(SNR)
-            else:
-                snr_suff=""
 
         for eventidx in range(0, len(tags)):
 
