@@ -1043,9 +1043,8 @@ def psth_per_file(rec):
     plt.tight_layout()
 
 
-def quick_pop_state_plot(ctx, **context):
+def quick_pop_state_plot(modelspec=None, **ctx):
     
-    modelspec = ctx['modelspec']
     modelname = modelspec.meta['modelname']
     cellid = modelspec.meta['cellid']
     rec = ctx['val'].apply_mask()
@@ -1064,15 +1063,15 @@ def quick_pop_state_plot(ctx, **context):
     hi1idx=s[1,:]>s_med[1]
     hi2idx=s[2,:]>s_med[2]
     
-    gm=g.copy()
-    gm[:,0] = (g[:,0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, loidx])) * w
-    gm[:,1] = (g[:,0] + g[:, 1] * np.mean(s[1, hi1idx]) + g[:, 2] * np.mean(s[2, loidx])) * w
-    gm[:,2] = (g[:,0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, hi2idx])) * w
-
     dm=d.copy()
-    dm[:,0] = (d[:,0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, loidx])) * w
-    dm[:,1] = (d[:,0] + d[:, 1] * np.mean(s[1, hi1idx]) + d[:, 2] * np.mean(s[2, loidx])) * w
-    dm[:,2] = (d[:,0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, hi2idx])) * w
+    dm[:,0] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,1] = (d[:, 0] + d[:, 1] * np.mean(s[1, hi1idx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,2] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    gm=g.copy()
+    gm[:,0] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,1] = (g[:, 0] + g[:, 1] * np.mean(s[1, hi1idx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,2] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, hi2idx])) * w
 
     fh = plt.figure()
     ax = plt.subplot(3, 1, 1)
@@ -1082,8 +1081,12 @@ def quick_pop_state_plot(ctx, **context):
     ax = plt.subplot(3, 1, 2)
     ax.plot(dm)
     plt.title('offset')
-    plt.legend(('base','pup','act'))
+    plt.legend(('base','d_pup','d_act'))
 
     ax = plt.subplot(3, 1, 3)
     ax.plot(gm)
     plt.title('gain')
+    ax.set_xticks(np.arange(len(rec['stim'].chans)))
+    ax.set_xticklabels(rec['stim'].chans)
+
+    return {}
