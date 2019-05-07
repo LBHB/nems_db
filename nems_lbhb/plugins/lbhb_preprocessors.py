@@ -141,6 +141,12 @@ def st(loadkey):
             this_sig = ['prw']
         elif l.startswith('pxprw'):
             this_sig = ['pup_x_prw']
+        elif l.startswith("pop"):
+            this_sig = ["population"]
+        elif l.startswith("pxp"):
+            this_sig = ["pupil_x_population"]
+        elif l.startswith("bxp"):
+            this_sig = ["active_x_population"]
         else:
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
@@ -301,16 +307,25 @@ def subset(load_key):
 
 def psthfr(load_key):
     """
-    Generate psth from resp
+    Generate psth signal from resp psth.opt1.opt2 etc. By default, set model input_name to
+    'psth' (unless ni option specified!).
+
+    options:
+    s : smooth
+    hilo : call hi_lo_psth
+    j : call generate_psth_from_est_for_both_est_and_val_nfold
+    ni : don't set input_name to 'psth'.
     """
     options = load_key.split('.')[1:]
     smooth = ('s' in options)
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
+    use_as_input = ('ni' not in options)
     if 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
+
     if hilo:
         if jackknife:
              xfspec=[['nems_lbhb.preprocessing.hi_lo_psth_jack',
@@ -324,7 +339,7 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
-                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
     return xfspec
 
 

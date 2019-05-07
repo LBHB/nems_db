@@ -18,6 +18,7 @@ import nems.modelspec as ms
 import nems.epoch as ep
 import nems.preprocessing as preproc
 from nems.metrics.state import state_mod_index
+from nems.utils import find_module
 import nems_lbhb.plots as lplt
 
 font_size=8
@@ -1040,3 +1041,52 @@ def psth_per_file(rec):
                           ylabel='spk/s')
 
     plt.tight_layout()
+
+
+def quick_pop_state_plot(modelspec=None, **ctx):
+    
+    modelname = modelspec.meta['modelname']
+    cellid = modelspec.meta['cellid']
+    rec = ctx['val'].apply_mask()
+    stateidx = find_module('state', modelspec)
+    wcidx = find_module('weight_channels', modelspec)
+
+    g = modelspec.phi[stateidx]['g']
+    d = modelspec.phi[stateidx]['d']
+    w = modelspec.phi[wcidx]['coefficients'][0,:]
+    s = rec['state'].as_continuous()
+    s_med = np.median(s, axis=1)
+    s_med[s_med==0] = 0.5
+    s_med[s_med==1] = 0.5
+    
+    loidx = (s[1,:]<=s_med[1]) & (s[2,:]<=s_med[2])
+    hi1idx=s[1,:]>s_med[1]
+    hi2idx=s[2,:]>s_med[2]
+    
+    dm=d.copy()
+    dm[:,0] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,1] = (d[:, 0] + d[:, 1] * np.mean(s[1, hi1idx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,2] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    gm=g.copy()
+    gm[:,0] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,1] = (g[:, 0] + g[:, 1] * np.mean(s[1, hi1idx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,2] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    fh = plt.figure()
+    ax = plt.subplot(3, 1, 1)
+    nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+    ax.set_title('{} {}'.format(cellid, modelname))
+    
+    ax = plt.subplot(3, 1, 2)
+    ax.plot(dm)
+    plt.title('offset')
+    plt.legend(('base','d_pup','d_act'))
+
+    ax = plt.subplot(3, 1, 3)
+    ax.plot(gm)
+    plt.title('gain')
+    ax.set_xticks(np.arange(len(rec['stim'].chans)))
+    ax.set_xticklabels(rec['stim'].chans)
+
+    return {}
