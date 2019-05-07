@@ -260,3 +260,15 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
         newrec.add_signal(resp)
 
     return {'rec': newrec}
+
+
+def transform_stim_envelope(rec):
+    '''
+    Collapse over frequency channels
+    '''
+    newrec = rec.copy()
+    stimSig = newrec['stim'].rasterize()
+    stim = np.sum(stimSig.as_continuous(), 0)
+    newrec['stim'] = stimSig._modified_copy(stim[np.newaxis, :])
+
+    return newrec
