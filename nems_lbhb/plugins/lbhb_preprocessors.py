@@ -392,3 +392,7 @@ def rscsw(load_key, cellid, batch):
 def stSPO(load_key):
     #add SPO state signal
     return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{}]]
+
+def stimenv(load_key):
+    return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
+            ['rec'], ['rec']]]
