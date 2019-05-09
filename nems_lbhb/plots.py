@@ -401,8 +401,8 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     return fh
 
 
-def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset'):
+def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
+                     overlap_method='offset', ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -411,7 +411,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     where there are more than one unit on a given electrode, additional units will
     be "offset" from the array geometry as additional electrodes.
     '''
-
 
     if type(cellids) is not np.ndarray:
         cellids = np.array(cellids)
@@ -439,20 +438,25 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     ch_nums = np.hstack((left_ch_nums, center_ch_nums, right_ch_nums))
     sort_inds = np.argsort(ch_nums)
 
-
-
     l_col = np.vstack((np.ones(21)*-0.2,lr_col))
     r_col = np.vstack((np.ones(21)*0.2,lr_col))
     c_col = np.vstack((np.zeros(22),center_col))
     locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
-    #plt.figure()
+    if ax is not None:
+        plt.sca(ax)
+    else:
+        plt.figure()
     plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=50)
 
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
 
     for i in range(0, len(cellids)):
-        electrodes[i] = int(cellids[i][-4:-2])
+        electrodes[i] = int(cellids[i].split("-")[-2])
+    if highlight_cellid is not None:
+        h_electrode = int(highlight_cellid.split("-")[-2])
+    else:
+        h_electrode = None
 
     # Add locations for cases where two or greater units on an electrode
     electrodes=list(electrodes-1)  # cellids labeled 1-64, python counts 0-63
@@ -533,7 +537,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     mask = np.ones(len(h),np.bool)
     mask[indexes]=0
 
-
     # plot the unique ones
     import matplotlib
     norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
@@ -554,6 +557,11 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     colors = mappable.to_rgba(h_dupes)
     plt.scatter(dup_locations[0,:],dup_locations[1,:],
                           c=colors,vmin=vmin,vmax=vmax,s=50,edgecolor='none')
+    if h_electrode is not None:
+        print("h_electrode={}".format(h_electrode))
+        plt.scatter(locations[0, h_electrode], locations[1, h_electrode],
+                    facecolor='none', s=60, lw=2, edgecolor='red')
+
     if cbar is True:
         plt.colorbar(mappable)
 
@@ -778,6 +786,38 @@ def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, t
     plt.ylabel('Mean weight')
 
     plt.tight_layout()
+
+
+def pop_weights(modelspec, rec=None, idx=None, sig="state", variable="g", prefix="",
+                ax=None, title=None, **options):
+    """
+    :param modelspec: modelspec object
+    :param rec: recording object
+    :param idx: index into modelspec
+    :param ax: axes to use for plot. if None, plot in new figure
+    :return: axes where plotted
+    """
+
+    chans = rec[sig].chans
+    if prefix == "":
+        chan_match = [i for i in range(len(chans)) if (len(chans[i].split("-"))==3) and (chans[i][1]!='x')]
+    else:
+        chan_match = [i for i in range(len(chans)) if chans[i].startswith(prefix)]
+
+    phi_mean = modelspec.phi_mean[idx][variable]
+    phi_sem = modelspec.phi_sem[idx][variable]
+    phi_z = phi_mean / phi_sem
+    weights = [phi_z[0,i] for i in chan_match]
+    cellids = [chans[i] for i in chan_match]
+    print(cellids)
+
+    if ax is None:
+        plt.figure()
+        ax=plt.subplot(111)
+    highlight_cellid = modelspec.meta['cellid']
+    plot_weights_64D(h=weights, cellids=cellids, highlight_cellid=highlight_cellid, ax=ax)
+
+    return ax
 
 
 def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
