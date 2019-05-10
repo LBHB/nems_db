@@ -3,8 +3,13 @@
 """
 Created on Wed Jun 14 09:33:47 2017
 @author: svd, changes added by njs
+
+THIS FILE IS DEPRECATED. REPLACED BY nems_lbhb.baphy !
+
+THIS directory is being phased out and/or merged with nems_web
 """
 
+raise Warning("THIS LIBRARY IS DEPRECATED. USE nems_lbhb.baphy")
 import logging
 import re
 import os

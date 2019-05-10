@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
 # wrapper code for fitting models
+"""
+Created on Wed Jun 14 09:33:47 2017
+@author: svd
+
+THIS FILE IS DEPRECATED. REPLACED BY nems_lbhb.xform_wrappers !
+
+THIS directory is being phased out and/or merged with nems_web
+"""
+
+raise Warning("THIS LIBRARY IS DEPRECATED. USE nems_lbhb.xform_wrappers")
 
 import os
 import random
