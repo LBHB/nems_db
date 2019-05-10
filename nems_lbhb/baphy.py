@@ -24,6 +24,7 @@ import copy
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import resample
+from nems import get_setting
 import nems.signal
 import nems.recording
 import nems.db as db
@@ -1112,6 +1113,7 @@ def fill_default_options(options):
 
     options = options.copy()
 
+    mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
     cell_list = options.get('cell_list', None)
@@ -1120,8 +1122,8 @@ def fill_default_options(options):
 
     if (cellid is None) and (cell_list is None) and (siteid is None):
         raise ValueError("must provide cellid, cell_list or siteid")
-    if batch is None:
-        raise ValueError("must provide batch")
+    if (batch is None) and (mfilename is None):
+        raise ValueError("must provide batch or mfilename")
 
     if type(cellid) is list:
         cell_list = cellid
@@ -1129,7 +1131,12 @@ def fill_default_options(options):
     # No matter what the cell_list is, always want to set cell_list to be all
     # stable cells at the site/rawids. No point in caching different recs for
     # [cell1, cell2] and [cell3, cell4] if all four come from same recording
-    if cell_list is not None:
+    if mfilename is not None:
+        # simple, db-free case
+        pass
+        if batch is None:
+            batch=0
+    elif cell_list is not None:
         cellid = cell_list[0]
         siteid = cellid.split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
@@ -1222,7 +1229,7 @@ def baphy_load_recording(**options):
     """
     options = fill_default_options(options)
     meta = options
-
+    mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
     cell_list = options.get('cell_list', None)
@@ -1255,13 +1262,18 @@ def baphy_load_recording(**options):
         else:
             rec_name = cellid
 
-    # query database to find all baphy files that belong to this cell/batch
-    d = db.get_batch_cell_data(batch=batch, cellid=cellid, label='parm',
-                               rawid=options['rawid'])
-    dni = d.reset_index()
-    files = list(set(list(d['parm'])))
-    files.sort()
-    goodtrials = np.array([], dtype=bool)
+    if mfilename is None:
+        # query database to find all baphy files that belong to this cell/batch
+        d = db.get_batch_cell_data(batch=batch, cellid=cellid, label='parm',
+                                   rawid=options['rawid'])
+        dni = d.reset_index()
+        files = list(set(list(d['parm'])))
+        files.sort()
+        goodtrials = np.array([], dtype=bool)
+    else:
+        files=[mfilename]
+        goodtrials = np.array([], dtype=bool)
+        dni = None
 
     if len(files) == 0:
        raise ValueError('NarfData not found for cell {0}/batch {1}'.format(
@@ -1288,20 +1300,26 @@ def baphy_load_recording(**options):
 
         tt = event_times[event_times['name'].str.startswith('TRIAL')]
         trialcount = len(tt)
-        s_goodtrials = dni.loc[dni['parm'] ==
-                               parmfilepath, 'goodtrials'].values[0]
 
-        if (s_goodtrials is not None) and len(s_goodtrials):
-            log.info("goodtrials not empty: %s", s_goodtrials)
-            s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
-            g = s_goodtrials.split(" ")
-            _goodtrials = np.zeros(trialcount, dtype=bool)
-            for b in g:
-                b1 = b.split(":")
-                if len(b1) == 1:
-                    # single trial in list, simulate colon syntax
-                    b1 = b1 + b1
-                _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+        # if loading from database, check to see if goodtrials are specified
+        # so that bad trials can be masked out
+        if dni is not None:
+            s_goodtrials = dni.loc[dni['parm'] ==
+                                   parmfilepath, 'goodtrials'].values[0]
+
+            if (s_goodtrials is not None) and len(s_goodtrials):
+                log.info("goodtrials not empty: %s", s_goodtrials)
+                s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                g = s_goodtrials.split(" ")
+                _goodtrials = np.zeros(trialcount, dtype=bool)
+                for b in g:
+                    b1 = b.split(":")
+                    if len(b1) == 1:
+                        # single trial in list, simulate colon syntax
+                        b1 = b1 + b1
+                    _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+                else:
+                    _goodtrials = np.ones(trialcount, dtype=bool)
         else:
             _goodtrials = np.ones(trialcount, dtype=bool)
 
@@ -1538,13 +1556,13 @@ def baphy_data_path(**options):
     siteid = options.get('siteid', cellid.split("-")[0])
 
     # TODO : base filename on siteid/cellid plus hash from JSON-ized options
-    #data_path = ("/auto/data/nems_db/recordings/{0}/{1}{2}_fs{3}/"
+    #data_path = (get_setting('NEMS_RECORDINGS_DIR') + "/{0}/{1}{2}_fs{3}/"
     #             .format(options["batch"], options['stimfmt'],
     #                     options["chancount"], options["rasterfs"]))
     #data_file = data_path + cellid + '.tgz'
 
     data_file = recording_filename_hash(
-            siteid, options, uri_path="/auto/data/nems_db/recordings/")
+            siteid, options, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
 
     #log.info(data_file)
     #log.info(options)
@@ -1593,6 +1611,7 @@ def baphy_load_recording_uri(**options):
     (CRH - 9/21/2018)
     """
 
+    mfilename = options.get('mfilename', None)
     batch = options.get('batch', None)
     siteid = options.get('siteid', None)
     cellid = options.get('cellid', None)
@@ -1603,8 +1622,8 @@ def baphy_load_recording_uri(**options):
         elif type(cellid) == str:
             siteid = cellid.split('-')[0]
 
-    if batch is None or siteid is None:
-        raise ValueError("options dict must include siteid and batch")
+    if (batch is None or siteid is None) and (mfilename is None):
+        raise ValueError("options dict must include (siteid, batch) or mfilename")
 
     # fill in default options
     options = fill_default_options(options)
@@ -1614,7 +1633,7 @@ def baphy_load_recording_uri(**options):
         del options['recache']
 
     data_file = recording_filename_hash(siteid, options,
-                                    uri_path='/auto/data/nems_db/recordings/')
+                                    uri_path=get_setting('NEMS_RECORDINGS_DIR'))
     #log.info(data_file)
     #log.info(options)
 
@@ -1629,6 +1648,16 @@ def baphy_load_recording_uri(**options):
         log.info('Cached recording found: %s', data_file)
 
     return data_file
+
+
+def baphy_load_recording_file(**options):
+    """
+    very simply, load a recording
+    if necessary create a cache file first
+    """
+    uri = baphy_load_recording_uri(**options)
+
+    return load_recording(uri)
 
 
 def get_kilosort_template(batch=None, cellid=None):

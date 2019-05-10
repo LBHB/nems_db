@@ -4,6 +4,9 @@
 Created on Tue Sep 18 16:47:56 2018
 
 @author: svd
+
+A bunch of routines for loading data from baphy/matlab
+
 """
 
 import logging
