@@ -161,6 +161,27 @@ def st(loadkey):
     return xfspec
 
 
+def inp(loadkey):
+    """
+    inp = 'input signal'
+    add the following signal as new channel(s) in the input signal
+    """
+    pattern = re.compile(r'^inp\.([a-zA-Z0-9\.]*)$')
+    parsed = re.match(pattern, loadkey)
+    loader = parsed.group(1)
+
+    input_signals = []
+
+    loadset = loader.split(".")
+    for l in loadset:
+        if l.startswith("pup"):
+            this_sig = ["pupil"]
+        input_signals.extend(this_sig)
+    xfspec = [['nems.xforms.concatenate_input_channels',
+               {'input_signals': input_signals}]]
+
+    return xfspec
+
 def mod(loadkey):
     """
     Make a signal called "mod". Basically the residual resp (resp - psth) offset

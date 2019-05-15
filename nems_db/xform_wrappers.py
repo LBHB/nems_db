@@ -170,11 +170,12 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
     # check for special pop signal code
-    cc=cellid.split("_")
-    pc_idx = None
-    if (len(cc) > 1) and (cc[1][0]=="P"):
-        pc_idx=[int(cc[1][1:])]
-        cellid=cc[0]
+    if type(cellid) is str:
+        cc=cellid.split("_")
+        pc_idx = None
+        if (len(cc) > 1) and (cc[1][0]=="P"):
+            pc_idx=[int(cc[1][1:])]
+            cellid=cc[0]
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
