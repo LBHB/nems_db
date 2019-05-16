@@ -6,7 +6,7 @@ import av
 import pickle
 import sys
 import os
-#import nems
+import nems
 #import nems.db as nd
 
 import logging
