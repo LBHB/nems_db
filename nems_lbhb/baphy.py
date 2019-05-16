@@ -1303,6 +1303,7 @@ def baphy_load_recording(**options):
 
         # if loading from database, check to see if goodtrials are specified
         # so that bad trials can be masked out
+        _goodtrials = np.ones(trialcount, dtype=bool)
         if dni is not None:
             s_goodtrials = dni.loc[dni['parm'] ==
                                    parmfilepath, 'goodtrials'].values[0]
@@ -1318,10 +1319,6 @@ def baphy_load_recording(**options):
                         # single trial in list, simulate colon syntax
                         b1 = b1 + b1
                     _goodtrials[(int(b1[0])-1):int(b1[1])] = True
-                else:
-                    _goodtrials = np.ones(trialcount, dtype=bool)
-        else:
-            _goodtrials = np.ones(trialcount, dtype=bool)
 
         goodtrials = np.concatenate((goodtrials, _goodtrials))
 
