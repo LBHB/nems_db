@@ -3,7 +3,7 @@ import scipy.signal as ss
 import numpy as np
 import scipy.ndimage.filters as sf
 import os
-import keras_classes as kc
+import nems_lbhb.pup_py.keras_classes as kc
 import skimage
 import warnings
 

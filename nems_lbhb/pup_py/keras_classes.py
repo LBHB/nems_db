@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pickle
 import keras
-import utils as ut
+import nems_lbhb.pup_py.utils as ut
 
 # define global variables for data
 path = '/auto/data/nems_db/pup_py/training_data/'
@@ -10,7 +10,7 @@ data_frames = os.listdir(path)
 
 
 class DataGenerator(keras.utils.Sequence):
-        
+
     def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=5, n_channels=3, shuffle=True,
                  augment_minibatches=False):
         self.batch_size = batch_size
@@ -92,7 +92,3 @@ class DataGenerator(keras.utils.Sequence):
         X, y = self.__data_generation(list_IDs_temp)
 
         return X, y
-
-
-
-
