@@ -161,6 +161,27 @@ def st(loadkey):
     return xfspec
 
 
+def inp(loadkey):
+    """
+    inp = 'input signal'
+    add the following signal as new channel(s) in the input signal
+    """
+    pattern = re.compile(r'^inp\.([a-zA-Z0-9\.]*)$')
+    parsed = re.match(pattern, loadkey)
+    loader = parsed.group(1)
+
+    input_signals = []
+
+    loadset = loader.split(".")
+    for l in loadset:
+        if l.startswith("pup"):
+            this_sig = ["pupil"]
+        input_signals.extend(this_sig)
+    xfspec = [['nems.xforms.concatenate_input_channels',
+               {'input_signals': input_signals}]]
+
+    return xfspec
+
 def mod(loadkey):
     """
     Make a signal called "mod". Basically the residual resp (resp - psth) offset
@@ -340,6 +361,28 @@ def psthfr(load_key):
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
                      {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
+    return xfspec
+
+def sm(load_key):
+    """
+    Smooth a signal using preproc.smooth_epoch_segments
+    options:
+    pop : smooth population signal (default??)
+    
+    """
+    options = load_key.split('.')[1:]
+
+    if 'pop' in options:
+        smooth_signal = 'population'
+    else:
+        smooth_signal = 'resp'
+    if 'stimtar' not in options:
+        epoch_regex = '^STIM_'
+    else:
+        epoch_regex = ['^STIM_', '^TAR_']
+    
+    xfspec=[['nems.preprocessing.smooth_signal_epochs',
+            {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
 

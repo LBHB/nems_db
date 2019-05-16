@@ -281,7 +281,8 @@ def baphy_load_data(parmfilepath, **options):
             spike_dict[x] = spiketimes[i]
         elif (x.lower() in cellids):
             spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
-
+    #import pdb
+    #pdb.set_trace()
     if not spike_dict:
         raise ValueError('No matching cellid in baphy spike file')
 

@@ -258,7 +258,7 @@ def load_recording(batch=None, cellid=None, reformat=True, by_sequence=True, rec
     if by_sequence:
         rec = average_away_epoch_occurrences(rec, '^SEQUENCE')
 
-    return {'rec': rec}
+    return {'rec': rec, 'input_name': 'fg+bg', 'output_name': 'resp'}
 
 
 def remove_nan(rec):

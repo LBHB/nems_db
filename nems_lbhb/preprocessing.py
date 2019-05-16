@@ -269,6 +269,7 @@ def transform_stim_envelope(rec):
     newrec = rec.copy()
     stimSig = newrec['stim'].rasterize()
     stim = np.sum(stimSig.as_continuous(), 0)
+    #stim = stim ** 2
     newrec['stim'] = stimSig._modified_copy(stim[np.newaxis, :])
 
     return newrec
