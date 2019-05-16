@@ -4,6 +4,26 @@ wsu_gray = '#262b2d'
 wsu_gray_light = '#586469'
 wsu_crimson = '#981e32'
 
+ohsu_navy = '#0e4d8f'
+
+#params = {  # big version for posters
+#        'pdf.fonttype': 42,
+#        'ps.fonttype': 42,
+#        'axes.linewidth': 1,
+#        'font.weight': 'bold',
+#        'font.size': 22,
+#        #'font.family': 'Arial'
+#        }
+
+params = {  # small version for screens
+        'pdf.fonttype': 42,
+        'ps.fonttype': 42,
+        'font.size': 12
+        }
+
+figsize = (12,12)
+dash_spacing = (10,20)
+
 
 ###############################################################################
 ######################     CURRENT MODELS     #################################
@@ -23,12 +43,13 @@ ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
 # second implementation (D=2 STRF and gc2 fitter)
 gc_av2 = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d_gc2"
 # with bounds and normalization:
-gc_av2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.bnd.n_gc2"
+gc_av2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.bnd.n_gc2.PF"
 ln_dexp2 = "ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-dexp.1_init-basic"
 stp_dexp2 = "ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-dexp.1_init-basic"
+
 # combined:
 gc_av_stp2 = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d_gc2"
-gc_av_stp2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.bnd.n_gc2"
+gc_av_stp2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.bnd.n_gc2.PF"
 #dexp_kwargs = {'model1': gc_av2b, 'model2': stp_dexp2, 'model3': ln_dexp2,
 #               'model4': gc_av_stp2b}
 
@@ -47,12 +68,13 @@ gc_better4 = 'TAR010c-38-2'  # hard to tell on this one
 gc_better5 = 'TAR010c-43-2'  # seems like gc is winning for the wrong reasons maybe?
                              # first epoch, just keeps the firing rate high due to high contrast stim
                              # but loses the dynamics.
+gc_better6 = 'gus028f-c2'    # maybe? still neeed to check
 
 stp_better2 = 'AMT004b-26-1'  # yes, clear winner for STP
 stp_better3 = 'AMT005c-02-2'  # pretty noisy fit, but STP definitely does a better job at keeping FR high
 stp_better4 = 'bbl099g-28-1'  # good example where stp helps w/ repeated stim. but GC doesnt
 stp_better5 = 'bbl104h-44-1'  # mostly the same except last epoch, then STP wins
-
+stp_better6 = 'bbl104h-02-1'
 
 # Alternative fits
 #gc_av_bnd = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
