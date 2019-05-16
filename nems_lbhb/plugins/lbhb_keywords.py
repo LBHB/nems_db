@@ -293,15 +293,18 @@ def sdexp(kw):
                          "keyword given: %s" % kw)
     if n_chans > 1:
         raise ValueError("sdexp R>1 not supported")
-    zeros = np.zeros(n_vars)
-    ones = np.ones(n_vars)
-    g_mean = _one_zz(n_vars-1)
-    g_sd = ones
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+    g_mean = zeros.copy()
+    g_mean[:, 0] = 1
+    g_sd = ones.copy()
     d_mean = zeros
     d_sd = ones
+
     n_dims = 2 # one for gain, one for dc
-    base_mean = np.zeros([n_dims, 1]) if n_dims > 1 else np.array([0])
-    base_sd = np.ones([n_dims, 1]) if n_dims > 1 else np.array([1])
+    base_mean = np.zeros([n_dims, n_chans])
+    base_sd = np.ones([n_dims, n_chans])
     amp_mean = base_mean + 0.2
     amp_sd = base_mean + 0.1
     #shift_mean = base_mean

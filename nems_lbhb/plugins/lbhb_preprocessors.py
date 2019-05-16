@@ -363,6 +363,28 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
     return xfspec
 
+def sm(load_key):
+    """
+    Smooth a signal using preproc.smooth_epoch_segments
+    options:
+    pop : smooth population signal (default??)
+    
+    """
+    options = load_key.split('.')[1:]
+
+    if 'pop' in options:
+        smooth_signal = 'population'
+    else:
+        smooth_signal = 'resp'
+    if 'stimtar' not in options:
+        epoch_regex = '^STIM_'
+    else:
+        epoch_regex = ['^STIM_', '^TAR_']
+    
+    xfspec=[['nems.preprocessing.smooth_signal_epochs',
+            {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
+    return xfspec
+
 
 def rscsw(load_key, cellid, batch):
     """

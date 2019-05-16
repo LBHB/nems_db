@@ -169,6 +169,8 @@ def baphy_parm_read(filepath):
     else:
         exptevents = d
     # rename columns to NEMS standard epoch names
+    #import pdb
+    #pdb.set_trace()
     exptevents.columns = ['name', 'start', 'end', 'Trial']
     for i in range(len(exptevents)):
         if exptevents.loc[i, 'end'] == []:

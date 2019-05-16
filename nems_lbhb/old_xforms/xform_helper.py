@@ -1,4 +1,4 @@
-import nems_db.baphy as nb
+import nems_lbhb.baphy as nb
 
 
 def get_recording_file(cellid, batch, options={}):
