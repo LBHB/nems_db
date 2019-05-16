@@ -7,7 +7,7 @@ import numpy as np
 import scipy.stats as st
 import matplotlib.pyplot as plt
 
-from nems_db.xform_wrappers import load_batch_modelpaths
+from nems_lbhb.xform_wrappers import load_batch_modelpaths
 import nems.db as nd
 import nems.modelspec as ms
 from nems.uri import load_resource
