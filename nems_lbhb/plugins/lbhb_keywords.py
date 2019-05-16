@@ -334,6 +334,83 @@ def sdexp(kw):
     return template
 
 
+def stategainchan(kw):
+    """
+    Same as nems default keyword stategain, but allows you to only modulate
+    a select channels of the input
+
+    stategainchan.SxN.0,1 would do stategain operation with channels 0 and 1 of
+        the input signal
+    """
+    options = kw.split('.')
+    in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+
+    try:
+        parsed = re.match(in_out_pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            n_vars = int(options[1])
+            n_chans = 1
+
+        else:
+            n_vars = int(parsed.group(1))
+            if len(parsed.groups())>1:
+                n_chans = int(parsed.group(2))
+            else:
+                n_chans = 1
+    except TypeError:
+        raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "stategain.{n_variables} or stategain.{n_variables}x{n_chans} \n"
+                         "keyword given: %s" % kw)
+
+    n_mod_chans = [int(c) for c in options[2].split(',')]
+    if len(n_mod_chans) == 0:
+        n_mod_chans = None
+    else:
+        n_chans = n_chans - len(n_mod_chans)
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+    g_mean = zeros.copy()
+    g_mean[:, 0] = 1
+    g_sd = ones.copy()
+    d_mean = zeros
+    d_sd = ones
+
+    plot_fns = ['nems.plots.api.mod_output_all',
+                'nems.plots.api.mod_output',
+                'nems.plots.api.before_and_after',
+                'nems.plots.api.pred_resp',
+                'nems.plots.api.state_vars_timeseries',
+                'nems.plots.api.state_vars_psth_all']
+    if 'g' in options:
+        template = {
+            'fn': 'nems.modules.state.state_gain',
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': 'state',
+                          'c': n_mod_chans},
+            'plot_fns': plot_fns,
+            'plot_fn_idx': 4,
+            'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd})}
+            }
+    else:
+        template = {
+            'fn': 'nems.modules.state.state_dc_gain',
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': 'state',
+                          'c': n_mod_chans},
+            'plot_fns': plot_fns,
+            'plot_fn_idx': 4,
+            'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
+                      'd': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+            }
+
+    return template
+
+
 def _aliased_keyword(fn, kw):
     '''Forces the keyword fn to use the given kw. Used for implementing
     backwards compatibility with old keywords that did not follow the
