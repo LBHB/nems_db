@@ -70,7 +70,7 @@ def rdtmerge(kw):
 
     for op in ops:
         if op == 'stim':
-            i = 'fg+bg'
+            i = 'pred'  # will be overridden by rdt loader
         elif op == 'resp':
             i = 'fg_pred+bg_pred'
 

@@ -24,11 +24,11 @@ plt.rcParams.update(params)
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 
 # removing the rep-shuffled model, since it's weird and unhelpful to plot
 loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
@@ -41,7 +41,7 @@ loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
 
 label0 = ['{}_RS', '{}_S', '{}']   # '{}_R',
 
-sxticks = ['rep+str', 'rep', 'str', 'noshuff']
+sxticks = ['rep+str', 'str', 'noshuff']
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
 
 batches = [269, 273]
@@ -72,7 +72,7 @@ for b, batch in enumerate(batches):
     r['ns'] = ~r['sigdiffSR'] & r['sig']
 
     ax_mean.plot(r.loc[r['sig'],d.columns].mean().values, label=batstring[b])
-    ax_mean.plot(r.loc[r['sig'],d.columns].median().values,ls='--')
+    #ax_mean.plot(r.loc[r['sig'],d.columns].median().values,ls='--')
 
     slegend.append('{} (n={}/{})'.format(batstring[b], r['sig'].sum(), len(r['sig'])))
     print(slegend[-1])
