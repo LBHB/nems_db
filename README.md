@@ -67,4 +67,4 @@ In order to use the offline pupil analysis tools located in `nems_lbhb/pup_py/` 
 
 In order to install these dependencies (and any additional dependencies you might need), we recommend using the conda package manager and using a consistent conda channel (for example, `conda-forge`)
 
-`conda install -c conda-forge keras, Tkinter, scikit-image, av`
+`conda install -c conda-forge keras, tk, scikit-image, av`
