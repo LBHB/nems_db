@@ -6,7 +6,10 @@ import numpy as np
 import scipy.stats as st
 
 import nems.db as nd
-from nems_lbhb.gcmodel.figures.utils import get_valid_improvements
+from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
+                                             get_dataframes,
+                                             get_valid_improvements,
+                                             adjustFigAspect)
 
 
 #gc_color = '#69657C'
@@ -17,28 +20,13 @@ from nems_lbhb.gcmodel.figures.utils import get_valid_improvements
 gc_color = wsu_gray
 stp_color = wsu_gray
 ln_color = wsu_gray_light
-gc_stp_color = wsu_crimson
+gc_stp_color = ohsu_navy
 
+plt.rcParams.update(params) # loaded from definitions
 
-# Scatter comparisons of overall model performance (similar to web ui)
-# For:
-# LN versus GC     GC_STP vs GC
-# LN versus STP    GC_STP vs STP
-# GC versus STP    GC_STP vs LN
-
-
-params = {
-        'pdf.fonttype': 42,
-        'ps.fonttype': 42,
-        'axes.linewidth': 1,
-        'font.weight': 'bold',
-        'font.size': 16,
-        }
-plt.rcParams.update(params)
-
-def performance_scatters(batch, model1, model2, model3, model4,
-                         se_filter=True, ln_filter=False, ratio_filter=False,
-                         threshold=2.5, manual_cellids=None):
+def performance_scatters(batch, gc, stp, LN, combined,
+                         se_filter=True, LN_filter=False, manual_cellids=None,
+                         plot_stat='r_ceiling'):
     '''
     model1: GC
     model2: STP
@@ -46,244 +34,136 @@ def performance_scatters(batch, model1, model2, model3, model4,
     model4: GC+STP
 
     '''
-
-    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='se_test')
-    # Remove any cellids that have NaN for 1 or more models
-    df_r.dropna(axis=0, how='any', inplace=True)
-    df_e.dropna(axis=0, how='any', inplace=True)
-
-    cellids = df_r.index.values.tolist()
-
-    gc_test = df_r[model1]
-    gc_se = df_e[model1]
-    stp_test = df_r[model2]
-    stp_se = df_e[model2]
-    ln_test = df_r[model3]
-    ln_se = df_e[model3]
-    gc_stp_test = df_r[model4]
-    gc_stp_se = df_e[model4]
-
-    if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
-    else:
-        # Set to series w/ all True, so none are skipped
-        good_cells = (gc_test != np.nan)
-
-    if ln_filter:
-        # Remove if performance significantly worse than LN
-        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se) |
-                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
-    else:
-        # Set to series w/ all False, so none are skipped
-        bad_cells = (gc_test == np.nan)
-
-    keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-    under_chance = df_r[~good_cells].index.values.tolist()
-    less_LN = df_r[bad_cells].index.values.tolist()
-
-    if ratio_filter:
-        # Ex: for threshold = 2.5
-        # Only use cellids where performance for gc/stp was within 2.5x
-        # of LN performance (or where LN within 2.5x of gc/stp) to filter
-        # outliers.
-        c1 = get_valid_improvements(model1=model1, threshold=threshold)
-        c2 = get_valid_improvements(model1=model2, threshold=threshold)
-        cellids = list(set(c1) & set(c2) & set(cellids))
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
 
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
 
-    if not se_filter:
-        under_chance = np.array([True]*len(df_r[model1]))
-        less_LN = copy.deepcopy(under_chance)
 
-    n_cells = len(cellids)
-    n_under_chance = len(under_chance) if under_chance != cellids else 0
-    n_less_LN = len(less_LN) if less_LN != cellids else 0
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
+    else:
+        plot_df = df_r
 
-    gc_test = df_r[model1][cellids]
-    gc_test_under_chance = df_r[model1][under_chance]
-    gc_test_less_LN = df_r[model1][less_LN]
-
-    stp_test = df_r[model2][cellids]
-    stp_test_under_chance = df_r[model2][under_chance]
-    stp_test_less_LN = df_r[model2][less_LN]
-
-    ln_test = df_r[model3][cellids]
-    ln_test_under_chance = df_r[model3][under_chance]
-    ln_test_less_LN = df_r[model3][less_LN]
-
-    gc_stp_test = df_r[model4][cellids]
-    gc_stp_test_under_chance = df_r[model4][under_chance]
-    gc_stp_test_less_LN = df_r[model4][less_LN]
-
-    fig, axes = plt.subplots(2, 3)
+    gc_test = plot_df[gc][cellids]
+    gc_test_under_chance = plot_df[gc][under_chance]
+    stp_test = plot_df[stp][cellids]
+    stp_test_under_chance = plot_df[stp][under_chance]
+    ln_test = plot_df[LN][cellids]
+    ln_test_under_chance = plot_df[LN][under_chance]
+    gc_stp_test = plot_df[combined][cellids]
+    gc_stp_test_under_chance = plot_df[combined][under_chance]
 
     # Row 1 (vs LN)
-    ax = axes[0][0]
-    ax.scatter(gc_test, ln_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(gc_test_under_chance, ln_test_under_chance, c='red', s=1)
-    ax.scatter(gc_test_less_LN, ln_test_less_LN, c='blue', s=1)
-    ax.set_title('GC vs LN')
-    ax.set_xlabel('GC')
-    ax.set_ylabel('LN')
-    if ln_filter or se_filter:
-        ax.text(0.90, -0.10, 'all = %d' % (n_cells+n_under_chance+n_less_LN),
-                ha='right', va='bottom')
-    ax.text(0.90, 0.00, 'n = %d' % n_cells, ha='right', va='bottom')
-    if se_filter:
-        ax.text(0.90, 0.10, 'uc = %d' % n_under_chance, ha='right', va='bottom',
-                color='red')
-    if ln_filter:
-        ax.text(0.90, 0.20, '<ln = %d' % n_less_LN, ha='right', va='bottom',
-                color='blue')
+    fig, ax = plt.subplots(1,1, figsize=figsize)
+    ax.scatter(ln_test, gc_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(gc_test_under_chance, ln_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(gc_test_less_LN, ln_test_less_LN, c='blue', s=1)
+    ax.set_title('LN vs GC')
+    ax.set_ylabel('GC')
+    ax.set_xlabel('LN')
+#    if ln_filter or se_filter:
+#        ax.text(0.90, -0.10, 'all = %d' % (n_cells+n_under_chance+n_less_LN),
+#                ha='right', va='bottom')
+#    ax.text(0.90, 0.00, 'n = %d' % n_cells, ha='right', va='bottom')
+#    if se_filter:
+#        ax.text(0.90, 0.10, 'uc = %d' % n_under_chance, ha='right', va='bottom',
+#                color='red')
+#    if ln_filter:
+#        ax.text(0.90, 0.20, '<ln = %d' % n_less_LN, ha='right', va='bottom',
+#                color='blue')
 
-    ax = axes[0][1]
-    ax.scatter(stp_test, ln_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(stp_test_under_chance, ln_test_under_chance, c='red', s=1)
-    ax.scatter(stp_test_less_LN, ln_test_less_LN, c='blue', s=1)
-    ax.set_title('STP vs LN')
-    ax.set_xlabel('STP')
-    ax.set_ylabel('LN')
+    fig, ax = plt.subplots(1,1, figsize=figsize)
+    ax.scatter(ln_test, stp_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(stp_test_under_chance, ln_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(stp_test_less_LN, ln_test_less_LN, c='blue', s=1)
+    ax.set_title('LN vs STP')
+    ax.set_ylabel('STP')
+    ax.set_xlabel('LN')
 
-    ax = axes[0][2]
-    ax.scatter(gc_stp_test, ln_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(gc_stp_test_under_chance, ln_test_under_chance, c='red', s=1)
-    ax.scatter(gc_stp_test_less_LN, ln_test_less_LN, c='blue', s=1)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.scatter(gc_stp_test, ln_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(gc_stp_test_under_chance, ln_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(gc_stp_test_less_LN, ln_test_less_LN, c='blue', s=1)
     ax.set_title('GC + STP vs LN')
     ax.set_xlabel('GC + STP')
     ax.set_ylabel('LN')
 
     # Row 2 (head-to-head)
-    ax = axes[1][0]
-    ax.scatter(gc_test, stp_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(gc_test_under_chance, stp_test_under_chance, c='red', s=1)
-    ax.scatter(gc_test_less_LN, stp_test_less_LN, c='blue', s=1)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.scatter(gc_test, stp_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(gc_test_under_chance, stp_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(gc_test_less_LN, stp_test_less_LN, c='blue', s=20)
     ax.set_title('GC vs STP')
     ax.set_xlabel('GC')
     ax.set_ylabel('STP')
 
-    ax = axes[1][1]
-    ax.scatter(gc_test, gc_stp_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(gc_test_under_chance, gc_stp_test_under_chance, c='red', s=1)
-    ax.scatter(gc_test_less_LN, gc_stp_test_less_LN, c='blue', s=1)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.scatter(gc_test, gc_stp_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(gc_test_under_chance, gc_stp_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(gc_test_less_LN, gc_stp_test_less_LN, c='blue', s=20)
     ax.set_title('GC vs GC + STP')
     ax.set_xlabel('GC')
     ax.set_ylabel('GC + STP')
 
-    ax = axes[1][2]
-    ax.scatter(stp_test, gc_stp_test, c='black', s=1)
-    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=0.5)
-    ax.scatter(stp_test_under_chance, gc_stp_test_under_chance, c='red', s=1)
-    ax.scatter(stp_test_less_LN, gc_stp_test_less_LN, c='blue', s=1)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax.scatter(stp_test, gc_stp_test, c='black', s=20)
+    ax.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=2, dashes=dash_spacing)
+    ax.scatter(stp_test_under_chance, gc_stp_test_under_chance, c=wsu_crimson, s=20)
+    #ax.scatter(stp_test_less_LN, gc_stp_test_less_LN, c='blue', s=20)
     ax.set_title('STP vs GC + STP')
     ax.set_xlabel('STP')
     ax.set_ylabel('GC + STP')
 
-    plt.tight_layout()
+    #plt.tight_layout()
 
-    return fig
+    #return fig
 
 
-def gc_stp_scatter(batch, model1, model2, model3, model4,
-                   se_filter=True, ln_filter=False, ratio_filter=False,
-                   threshold=2.5, manual_cellids=None):
+def gc_stp_scatter(batch, gc, stp, LN, combined,
+                   se_filter=True, LN_filter=False, manual_cellids=None,
+                   plot_stat='r_ceiling'):
 
-    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='se_test')
-    # Remove any cellids that have NaN for 1 or more models
-    df_r.dropna(axis=0, how='any', inplace=True)
-    df_e.dropna(axis=0, how='any', inplace=True)
-
-    cellids = df_r.index.values.tolist()
-
-    gc_test = df_r[model1]
-    gc_se = df_e[model1]
-    stp_test = df_r[model2]
-    stp_se = df_e[model2]
-    ln_test = df_r[model3]
-    ln_se = df_e[model3]
-    gc_stp_test = df_r[model4]
-    gc_stp_se = df_e[model4]
-
-    if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
-    else:
-        # Set to series w/ all True, so none are skipped
-        good_cells = (gc_test != np.nan)
-
-    if ln_filter:
-        # Remove if performance significantly worse than LN
-        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se) |
-                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
-    else:
-        # Set to series w/ all False, so none are skipped
-        bad_cells = (gc_test == np.nan)
-
-    keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-    under_chance = df_r[~good_cells].index.values.tolist()
-    less_LN = df_r[bad_cells].index.values.tolist()
-
-    if ratio_filter:
-        # Ex: for threshold = 2.5
-        # Only use cellids where performance for gc/stp was within 2.5x
-        # of LN performance (or where LN within 2.5x of gc/stp) to filter
-        # outliers.
-        c1 = get_valid_improvements(model1=model1, threshold=threshold)
-        c2 = get_valid_improvements(model1=model2, threshold=threshold)
-        cellids = list(set(c1) & set(c2) & set(cellids))
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
 
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
 
-    if not se_filter:
-        under_chance = np.array([True]*len(df_r[model1]))
-        less_LN = copy.deepcopy(under_chance)
+
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
+    else:
+        plot_df = df_r
 
     n_cells = len(cellids)
     n_under_chance = len(under_chance) if under_chance != cellids else 0
     n_less_LN = len(less_LN) if less_LN != cellids else 0
 
-    gc_test = df_r[model1][cellids]
-    gc_test_under_chance = df_r[model1][under_chance]
-    gc_test_less_LN = df_r[model1][less_LN]
+    gc_test = plot_df[gc][cellids]
+    gc_test_under_chance = plot_df[gc][under_chance]
 
-    stp_test = df_r[model2][cellids]
-    stp_test_under_chance = df_r[model2][under_chance]
-    stp_test_less_LN = df_r[model2][less_LN]
+    stp_test = plot_df[stp][cellids]
+    stp_test_under_chance = plot_df[stp][under_chance]
 
-    ln_test = df_r[model3][cellids]
-    ln_test_under_chance = df_r[model3][under_chance]
-    ln_test_less_LN = df_r[model3][less_LN]
-
-    gc_stp_test = df_r[model4][cellids]
-    gc_stp_test_under_chance = df_r[model4][under_chance]
-    gc_stp_test_less_LN = df_r[model4][less_LN]
-
-    fig = plt.figure(figsize=(12, 12))
+    fig = plt.figure(figsize=figsize)
     plt.scatter(gc_test, stp_test, c=wsu_gray, s=20)
     ax = fig.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1)
+    plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--', linewidth=1, dashes=dash_spacing)
     plt.scatter(gc_test_under_chance, stp_test_under_chance, c=wsu_crimson, s=20)
     plt.title('GC vs STP')
     plt.xlabel('GC')
@@ -296,76 +176,53 @@ def gc_stp_scatter(batch, model1, model2, model3, model4,
                 color=wsu_crimson)
 
 
-def combined_vs_max(batch, model1, model2, model3, model4, se_filter=True,
-                    ln_filter=False):
+def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
+                    LN_filter=False, plot_stat='r_ceiling'):
 
-    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='se_test')
-    # Remove any cellids that have NaN for 1 or more models
-    df_r.dropna(axis=0, how='any', inplace=True)
-    df_e.dropna(axis=0, how='any', inplace=True)
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
 
-    cellids = df_r.index.values.tolist()
 
-    gc_test = df_r[model1]
-    gc_se = df_e[model1]
-    stp_test = df_r[model2]
-    stp_se = df_e[model2]
-    ln_test = df_r[model3]
-    ln_se = df_e[model3]
-    gc_stp_test = df_r[model4]
-    gc_stp_se = df_e[model4]
-
-    if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
     else:
-        # Set to series w/ all True, so none are skipped
-        good_cells = (gc_test != np.nan)
+        plot_df = df_r
 
-    if ln_filter:
-        # Remove if performance significantly worse than LN
-        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se) |
-                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
-    else:
-        # Set to series w/ all False, so none are skipped
-        bad_cells = (gc_test == np.nan)
-
-    keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-
-    gc_test = df_r[model1][cellids]
-    stp_test = df_r[model2][cellids]
-    ln_test = df_r[model3][cellids]
-    gc_stp_test = df_r[model4][cellids]
+    gc_test = plot_df[gc][cellids]
+    gc_test_under_chance = plot_df[gc][under_chance]
+    stp_test = plot_df[stp][cellids]
+    stp_test_under_chance = plot_df[stp][under_chance]
+    ln_test = plot_df[LN][cellids]
+    gc_stp_test = plot_df[combined][cellids]
     max_test = np.maximum(gc_test, stp_test)
     gc_stp_test_rel = gc_stp_test - ln_test
     max_test_rel = np.maximum(gc_test, stp_test) - ln_test
 
-    fig1 = plt.figure(figsize=(12, 12))
+    fig1 = plt.figure(figsize=figsize)
     plt.scatter(max_test, gc_stp_test, c=wsu_gray, s=20)
+    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=wsu_crimson, s=20)
     ax = fig1.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1)
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
     plt.title('Absolute')
-    plt.xlabel('Max GC or STP')
     plt.ylabel('GC+STP')
+    plt.xlabel('Max GC or STP')
 
-    fig2 = plt.figure(figsize=(12, 12))
+    fig2 = plt.figure(figsize=figsize)
     plt.scatter(max_test_rel, gc_stp_test_rel, c=wsu_gray, s=20)
+    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=wsu_crimson, s=20)
     ax = fig2.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1)
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
     plt.title('Relative')
-    plt.xlabel('Max GC or STP')
     plt.ylabel('GC+STP')
+    plt.xlabel('Max GC or STP')
 
 
-def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
-                    ln_filter=False, ratio_filter=False, threshold=2.5,
-                    manual_cellids=None, abbr_yaxis=False):
+def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
+                    LN_filter=False, manual_cellids=None, abbr_yaxis=False,
+                    plot_stat='r_ceiling', y_adjust=0.05):
     '''
     model1: GC
     model2: STP
@@ -374,73 +231,38 @@ def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
 
     '''
 
-    df_r = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='r_ceiling')
-    df_e = nd.batch_comp(batch, [model1, model2, model3, model4],
-                         stat='se_test')
-    # Remove any cellids that have NaN for 1 or more models
-    df_r.dropna(axis=0, how='any', inplace=True)
-    df_e.dropna(axis=0, how='any', inplace=True)
-
-    cellids = df_r.index.values.tolist()
-
-    gc_test = df_r[model1]
-    gc_se = df_e[model1]
-    stp_test = df_r[model2]
-    stp_se = df_e[model2]
-    ln_test = df_r[model3]
-    ln_se = df_e[model3]
-    gc_stp_test = df_r[model4]
-    gc_stp_se = df_e[model4]
-
-    if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
-    else:
-        # Set to series w/ all True, so none are skipped
-        good_cells = (gc_test != np.nan)
-
-    if ln_filter:
-        # Remove if performance significantly worse than LN
-        bad_cells = ((gc_test+gc_se < ln_test-ln_se) |
-                     (stp_test+stp_se < ln_test-ln_se) |
-                     (gc_stp_test+gc_stp_se < ln_test-ln_se))
-    else:
-        # Set to series w/ all False, so none are skipped
-        bad_cells = (gc_test == np.nan)
-
-    keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-
-    if ratio_filter:
-        # Ex: for threshold = 2.5
-        # Only use cellids where performance for gc/stp was within 2.5x
-        # of LN performance (or where LN within 2.5x of gc/stp) to filter
-        # outliers.
-        c1 = get_valid_improvements(model1=model1, threshold=threshold)
-        c2 = get_valid_improvements(model1=model2, threshold=threshold)
-        cellids = list(set(c1) & set(c2) & set(cellids))
-
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
 
+
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
+    else:
+        plot_df = df_r
+
     n_cells = len(cellids)
-    gc_test = df_r[model1][cellids]
-    gc_se = df_e[model1][cellids]
-    stp_test = df_r[model2][cellids]
-    stp_se = df_e[model2][cellids]
-    ln_test = df_r[model3][cellids]
-    ln_se = df_e[model3][cellids]
-    gc_stp_test = df_r[model4][cellids]
-    gc_stp_se = df_e[model4][cellids]
+    gc_test = plot_df[gc][cellids]
+    gc_se = df_e[gc][cellids]
+    stp_test = plot_df[stp][cellids]
+    stp_se = df_e[stp][cellids]
+    ln_test = plot_df[LN][cellids]
+    ln_se = df_e[LN][cellids]
+    gc_stp_test = plot_df[combined][cellids]
+    gc_stp_se = df_e[combined][cellids]
+    max_test = np.maximum(gc_test, stp_test)
 
     gc = np.median(gc_test.values)
     stp = np.median(stp_test.values)
     ln = np.median(ln_test.values)
     gc_stp = np.median(gc_stp_test.values)
-    largest = max(gc, stp, ln, gc_stp)
+    maximum = np.median(max_test)
+    largest = max(gc, stp, ln, gc_stp, maximum)
 
     # TODO: double check that this is valid, to just take mean of errors
 #    gc_sem = np.median(gc_se.values)
@@ -448,14 +270,15 @@ def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
 #    ln_sem = np.median(ln_se.values)
 #    gc_stp_sem = np.median(gc_stp_se.values)
 
-    fig = plt.figure(figsize=(12, 12))
-    plt.bar([1, 2, 3, 4], [gc, stp, ln, gc_stp],
+    fig = plt.figure(figsize=(15, 12))
+    plt.bar([1, 2, 3, 4, 5], [ln, gc, stp, gc_stp, maximum],
             #color=['purple', 'green', 'gray', 'blue'])
-            color=[gc_color, stp_color, ln_color, gc_stp_color])
-    plt.xticks([1, 2, 3, 4], ['GC', 'STP', 'LN', 'GC + STP'])
+            color=[ln_color, gc_color, stp_color, gc_stp_color, gc_stp_color],
+            edgecolor="black", linewidth=2)
+    plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GC+STP', 'Max(GC,STP)'])
     if abbr_yaxis:
         lower = np.floor(10*min(gc, stp, ln, gc_stp))/10
-        upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10
+        upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10 + y_adjust
         plt.ylim(ymin=lower, ymax=upper)
     else:
         plt.ylim(ymax=largest*1.4)
@@ -466,11 +289,12 @@ def performance_bar(batch, model1, model2, model3, model4, se_filter=True,
         y_text = 0.5*(lower + min(gc, stp, ln, gc_stp))
     else:
         y_text = 0.2
-    plt.text(1, y_text, "%0.04f" % gc, **common_kwargs)
-    plt.text(2, y_text, "%0.04f" % stp, **common_kwargs)
-    plt.text(3, y_text, "%0.04f" % ln, **common_kwargs)
+    plt.text(1, y_text, "%0.04f" % ln, **common_kwargs)
+    plt.text(2, y_text, "%0.04f" % gc, **common_kwargs)
+    plt.text(3, y_text, "%0.04f" % stp, **common_kwargs)
     plt.text(4, y_text, "%0.04f" % gc_stp, **common_kwargs)
-    plt.title("Median Performance for GC, STP, LN, and GC + STP models,\n"
+    plt.text(5, y_text, "%0.04f" % maximum, **common_kwargs)
+    plt.title("Median Performance for LN, GC, STP, GC+STP and Max(Gc,STP),\n"
               "n: %d" % n_cells)
 
     return fig
@@ -543,10 +367,11 @@ def significance(batch, model1, model2, model3, model4, se_filter=True,
     stp_test = df_r[model2][cellids]
     ln_test = df_r[model3][cellids]
     gc_stp_test = df_r[model4][cellids]
+    max_test = np.maximum(gc_test, stp_test)
 
-    modelnames = ['GC', 'STP', 'LN', 'GC + STP']
+    modelnames = ['GC', 'STP', 'LN', 'GC + STP', 'Max(GC,STP)']
     models = {'GC': gc_test, 'STP': stp_test, 'LN': ln_test,
-              'GC + STP': gc_stp_test}
+              'GC + STP': gc_stp_test, 'Max(GC,STP)': max_test}
     array = np.ndarray(shape=(len(modelnames), len(modelnames)), dtype=float)
 
     for i, m_one in enumerate(modelnames):
