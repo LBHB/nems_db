@@ -92,3 +92,39 @@ class DataGenerator(keras.utils.Sequence):
         X, y = self.__data_generation(list_IDs_temp)
 
         return X, y
+
+def train(model, epochs=1):
+
+    # data path
+    path = 'training_data/data/'
+    training_files = os.listdir(path)
+    n_training_files = len(training_files)
+
+    params = {
+        'batch_size': 16,
+        'image_dim': (224, 224),
+        'n_parms': 5,
+        'n_channels': 3,
+        'shuffle': True,
+    }
+
+    # define train indexes
+    train = [i[0] for i in np.argwhere([True if 'AMT004b' not in i else False for i in training_files])]
+
+    # define validation indexes
+    test = [i[0] for i in np.argwhere([True if 'AMT004b' in i else False for i in training_files])]
+
+    partition = {
+        'train': train,
+        'validation': test
+    }
+
+    training_generator = DataGenerator(partition['train'], **params)
+    validation_generator = DataGenerator(partition['validation'], **params)
+
+    model.fit_generator(generator=training_generator,
+                        validation_data=validation_generator,
+                        use_multiprocessing=True,
+                        workers=6, epochs=epochs)
+
+    return model

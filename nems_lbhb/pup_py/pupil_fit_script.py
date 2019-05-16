@@ -1,12 +1,13 @@
 import keras
+import nems.db as nd
 import nems_lbhb.pup_py.utils as ut
 import numpy as np
 import av
 import pickle
 import sys
 import os
-import nems
-import nems.db as nd
+#import nems
+#import nems.db as nd
 
 import logging
 log = logging.getLogger(__name__)

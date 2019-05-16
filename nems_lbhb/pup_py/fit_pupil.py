@@ -12,7 +12,7 @@ import sys
 import os
 import nems_db
 executable_path = sys.executable
-script_path = os.path.split(nems_db.__file__)[0]
+script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
 script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'pupil_fit_script.py')
 
 class queue_pupil_job:
