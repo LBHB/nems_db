@@ -40,19 +40,16 @@ class PupilBrowser:
         self.ax = fig.add_subplot(1,1,1)
         self.pupil_trace = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
         self.pupil_trace.draw()
-        self.pupil_trace.get_tk_widget().grid(row=10, column=0, rowspan=5, columnspan=8)
+        self.pupil_trace.get_tk_widget().grid(row=10, column=0, rowspan=5, columnspan=8, sticky='nwes')
         self.hline = None
         self.a_plot = None
         self.b_plot = None
 
+        master.grid_columnconfigure(3, weight=1)
+        master.grid_rowconfigure(10, weight=1)
+
         self.load_button = tk.Button(master, text="Load recording", command=self.load_file)
         self.load_button.grid(row=1, column=2)
-
-        self.video_n = tk.Label(master, text="video name")
-        self.video_n.grid(row=0, column=1, columnspan=1)
-        self.video_name = tk.Entry(master)
-        self.video_name.grid(row=1, column=1)
-        self.video_name.focus_set()
 
         self.animal_n = tk.Label(master, text="animal")
         self.animal_n.grid(row=0, column=0, columnspan=1)
@@ -60,11 +57,11 @@ class PupilBrowser:
         self.animal_name.grid(row=1, column=0)
         self.animal_name.focus_set()
 
-        self.next_frame = tk.Button(master, text="Next frame", command=self.get_next_frame)
-        self.next_frame.grid(row=3, column=1)
-
-        self.previous_frame = tk.Button(master, text="Previous frame", command=self.get_prev_frame)
-        self.previous_frame.grid(row=3, column=0)
+        self.video_n = tk.Label(master, text="video name")
+        self.video_n.grid(row=0, column=1, columnspan=1)
+        self.video_name = tk.Entry(master)
+        self.video_name.grid(row=1, column=1)
+        self.video_name.focus_set()
 
         # Jump to frame number
         self.frame_n = tk.Label(master, text="Frame number: ")
@@ -72,6 +69,12 @@ class PupilBrowser:
         self.frame_n_value = tk.Entry(master)
         self.frame_n_value.grid(row=2, column=1)
         self.frame_n_value.focus_set()
+
+        self.next_frame = tk.Button(master, text="Next frame", command=self.get_next_frame)
+        self.next_frame.grid(row=3, column=1)
+
+        self.previous_frame = tk.Button(master, text="Previous frame", command=self.get_prev_frame)
+        self.previous_frame.grid(row=3, column=0)
 
         self.frame_update = tk.Button(master, text="Jump to frame", command=self.get_frame)
         self.frame_update.grid(row=2, column=2)
@@ -207,6 +210,9 @@ class PupilBrowser:
 
         self.a_plot = self.ax.plot(a, 'r')
         self.b_plot = self.ax.plot(b, 'b', picker=5)
+        self.ax.set_ylim((np.nanmin([np.nanmin(a), np.nanmin(b)]),
+                         np.nanmax([np.nanmax(a), np.nanmax(b)])))
+        self.ax.set_xlim((0, len(a)))
 
         self.ax.legend(['minor axis', 'major axis'])
 
