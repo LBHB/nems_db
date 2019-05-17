@@ -38,9 +38,24 @@ if __name__ == '__main__':
     # perform pupil fit
     animal = sys.argv[1]
     filename = sys.argv[2]
+    modelname = sys.argv[3]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
-    model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
+    #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
+    project_dir = '/auto/data/nems_db/pup_py/'
+    if (modelname == 'current') | (modelname == 'Current'):
+        default_date = os.listdir(project_dir + 'default_trained_model/')[0]
+        name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
+        modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
+    else:
+        date = modelname
+        datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
+        modelname = [m for m in datefolder if 'weights' in m][0]
+        modelpath = project_dir + 'old_model_fits/{0}/{1}'.format(date, modelname)
+
+    import pdb; pdb.set_trace()
+
+    model = keras.models.load_model(modelpath)
 
     path = '/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
     if os.path.isdir(path):
@@ -130,7 +145,8 @@ if __name__ == '__main__':
             'x': np.array(x_cnn),
             'y': np.array(y_cnn),
             'phi': np.array(phi_cnn)
-        }
+        },
+        'cnn_modelpath': modelpath
     }
 
     if os.path.isdir(save_path) != True:

@@ -20,7 +20,7 @@ class queue_pupil_job:
     def __init__(self, master):
         self.master = master
         master.title("Queue pupil job")
-        master.geometry('300x100')
+        master.geometry('300x110')
 
         self.animal = tk.Label(master, text="Animal: ")
         self.animal.grid(row=0, column=0)
@@ -34,22 +34,29 @@ class queue_pupil_job:
         self.filename_value.grid(row=1, column=1, sticky='ew')
         self.filename_value.focus_set()
 
+        self.fitDate = tk.Label(master, text="CNN train date: ")
+        self.fitDate.grid(row=2, column=0)
+        self.fitDate_value = tk.Entry(master)
+        self.fitDate_value.grid(row=2, column=1, sticky='ew')
+        self.fitDate_value.focus_set()
+        self.fitDate_value.insert(0, "Current")
+
         self.executable_path = tk.Label(master, text="Python path: ")
-        self.executable_path.grid(row=2, column=0)
+        self.executable_path.grid(row=3, column=0)
         self.executable_path_value = tk.Entry(master)
-        self.executable_path_value.grid(row=2, column=1, sticky='ew')
+        self.executable_path_value.grid(row=3, column=1, sticky='ew')
         self.executable_path_value.focus_set()
         self.executable_path_value.insert(0, executable_path)
 
         self.script_path = tk.Label(master, text="Fit script: ")
-        self.script_path.grid(row=3, column=0)
+        self.script_path.grid(row=4, column=0)
         self.script_path_value = tk.Entry(master)
-        self.script_path_value.grid(row=3, column=1, sticky='ew')
+        self.script_path_value.grid(row=4, column=1, sticky='ew')
         self.script_path_value.focus_set()
         self.script_path_value.insert(0, script_path)
 
         self.fit_button = tk.Button(master, text="Start fit", command=self.start_fit)
-        self.fit_button.grid(row=4, column=0)
+        self.fit_button.grid(row=5, column=0)
 
         master.grid_columnconfigure(1, weight=1)
 
@@ -57,6 +64,7 @@ class queue_pupil_job:
     def start_fit(self):
         animal = self.animal_value.get()
         filename = self.filename_value.get()
+        modeldate = self.fitDate_value.get()
         py_path = self.executable_path_value.get()
         script_path = self.script_path_value.get()
         #py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
@@ -65,8 +73,9 @@ class queue_pupil_job:
         username = getpass.getuser()
 
         # add job to queue
-        nd.add_job_to_queue([animal, filename], note="Pupil Job: {}".format(filename), 			executable_path=py_path,
-                            user=username, force_rerun=True, script_path=script_path, GPU_job=1)
+        nd.add_job_to_queue([animal, filename, modeldate], note="Pupil Job: {}".format(filename),
+        			        executable_path=py_path, user=username,
+                            force_rerun=True, script_path=script_path, GPU_job=1)
         print("added job to queue")
 
 root = tk.Tk()
