@@ -178,7 +178,7 @@ class PupilBrowser:
 
         return photo
 
-    def plot_trace(self, params_file):
+    def plot_trace(self, params_file, exclude=False):
 
         animal = self.animal_name.get()
 
@@ -199,6 +199,12 @@ class PupilBrowser:
 
         a = ellipse_preds['cnn']['a']
         b = ellipse_preds['cnn']['b']
+
+        if exclude:
+            # exclude frames marked as bad
+            for s, e in zip(self.exclude_starts, self.exclude_ends):
+                a[s:e] = np.nan
+                b[s:e] = np.nan
 
         self.max_frame = len(a)
 
@@ -289,6 +295,8 @@ class PupilBrowser:
                 # and self.exclude_ends
                 self.exclude_starts.append(self.start_val)
                 self.exclude_ends.append(self.end_val)
+
+                self.plot_trace(self.video_name.get(), exclude=True)
             else:
                 pass
 
