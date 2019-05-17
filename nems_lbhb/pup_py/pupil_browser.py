@@ -88,6 +88,9 @@ class PupilBrowser:
         self.retrain = tk.Button(master, text="Re-train network", command=self.retrain)
         self.retrain.grid(row=4, column=2)
 
+        self.shift_is_held = False
+        self.exclude_starts = []
+        self.exclude_ends = []
 
     def get_frame(self):
         animal = self.animal_name.get()
@@ -209,16 +212,94 @@ class PupilBrowser:
                 pass
 
         self.a_plot = self.ax.plot(a, 'r')
-        self.b_plot = self.ax.plot(b, 'b', picker=5)
+        self.b_plot = self.ax.plot(b, color='b', picker=5)
         self.ax.set_ylim((np.nanmin([np.nanmin(a), np.nanmin(b)]),
                          np.nanmax([np.nanmax(a), np.nanmax(b)])))
         self.ax.set_xlim((0, len(a)))
 
         self.ax.legend(['minor axis', 'major axis'])
 
+        canvas.get_tk_widget().focus_force()
+        canvas.mpl_connect('key_press_event', self.on_key)
         canvas.mpl_connect('pick_event', self.get_coords)
-
+        canvas.mpl_connect('key_release_event', self.off_key)
         canvas.draw()
+
+    def get_coords(self, event):
+        self.frame_n_value.delete(0, 'end')
+        self.frame_n_value.insert(0, str(int(event.mouseevent.xdata)))
+
+        if self.shift_is_held == False:
+            if hasattr(self, 'hline'):
+                try:
+                    self.hline.remove()
+                except:
+                    pass
+            self.hline = self.ax.axvline(event.ind[0], color='k')
+            self.pupil_trace.draw()
+
+            self.get_frame()
+
+        elif self.shift_is_held == True:
+            if event.mouseevent.button == 1:
+                if hasattr(self, 'hline_start'):
+                    self.hline_start.remove()
+                    del self.start_val
+
+                self.hline_start = self.ax.axvline(int(event.mouseevent.xdata),
+                                             color='red')
+                self.start_val = int(event.mouseevent.xdata)
+                self.pupil_trace.draw()
+
+            elif event.mouseevent.button == 3:
+                if hasattr(self, 'hline_end'):
+                    self.hline_end.remove()
+                    self.hline_fill.remove()
+                    del self.end_val
+
+                if hasattr(self, 'hline_start') == False:
+                    print("First specify start using shift+left-click!")
+                else:
+                    self.hline_end = self.ax.axvline(int(event.mouseevent.xdata),
+                                                 color='red')
+                    mi, ma = self.ax.get_ylim()
+                    mi = int(mi)
+                    ma = int(ma)+1
+                    self.end_val = int(event.mouseevent.xdata)
+                    self.hline_fill = self.ax.fill_betweenx(range(mi, ma),
+                                                self.end_val,
+                                                self.start_val, color='grey',
+                                                alpha=0.5)
+                    self.pupil_trace.draw()
+
+    def on_key(self, event):
+        if event.key=='shift':
+            self.shift_is_held=True
+        elif event.key=='enter':
+            # check if exclusion thing exists and delete it on the plot
+            if hasattr(self, 'hline_start') & hasattr(self, 'hline_end'):
+                self.hline_start.remove()
+                del self.hline_start
+                self.hline_end.remove()
+                del self.hline_end
+                self.hline_fill.remove()
+                del self.hline_fill
+                self.pupil_trace.draw()
+                # save the currently stored start/end values to self.exclude_starts
+                # and self.exclude_ends
+                self.exclude_starts.append(self.start_val)
+                self.exclude_ends.append(self.end_val)
+            else:
+                pass
+
+        else:
+            pass
+
+    def off_key(self, event):
+        if event.key=='shift':
+            self.shift_is_held=False
+        else:
+            pass
 
     def load_file(self):
         """
@@ -277,21 +358,6 @@ class PupilBrowser:
 
         self.get_frame()
 
-    def get_coords(self, event):
-        self.frame_n_value.delete(0, 'end')
-        self.frame_n_value.insert(0, str(event.ind[0]))
-
-        if hasattr(self, 'hline'):
-            try:
-                self.hline.remove()
-            except:
-                pass
-
-        self.hline = self.ax.axvline(event.ind[0], color='k')
-        self.pupil_trace.draw()
-
-        self.get_frame()
-
     def save_analysis(self):
         video_name = self.video_name.get()
         animal = self.animal_name.get()
@@ -327,6 +393,13 @@ class PupilBrowser:
             pass
 
         save_dict = self.parms
+
+        # add excluded frames to the save dictionary
+        excluded_frames = np.concatenate((np.array(self.exclude_starts)[np.newaxis, :],
+                                        np.array(self.exclude_ends)[np.newaxis, :]),
+                                        axis=0)
+        save_dict['cnn']['excluded_frames'] = excluded_frames.T
+
 
         print("computing eyespeed")
         x_diff = np.diff(save_dict['cnn']['x'])
