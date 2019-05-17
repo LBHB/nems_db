@@ -9,6 +9,7 @@ except:
 import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
+import sys
 import matplotlib as mpl
 import numpy as np
 from matplotlib.patches import Ellipse
@@ -16,6 +17,7 @@ import matplotlib.image as mpimg
 import getpass
 import nems.db as nd
 import scipy.io
+import nems_db
 
 tmp_frame_folder = '/auto/data/nems_db/pup_py/tmp/'
 video_folder = '/auto/data/daq/'
@@ -343,8 +345,10 @@ class PupilBrowser:
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
-        py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
-        script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/training_script.py'
+        py_path = sys.executable #'/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
+        #script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/training_script.py'
+        script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
+        script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()
 
         # add job to queue
