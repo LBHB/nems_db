@@ -53,8 +53,6 @@ if __name__ == '__main__':
         modelname = [m for m in datefolder if 'weights' in m][0]
         modelpath = project_dir + 'old_model_fits/{0}/{1}'.format(date, modelname)
 
-    import pdb; pdb.set_trace()
-
     model = keras.models.load_model(modelpath)
 
     path = '/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
