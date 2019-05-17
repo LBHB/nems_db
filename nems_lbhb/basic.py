@@ -13,6 +13,7 @@ from matplotlib import cm
 from nems_lbhb.baphy import baphy_load_recording_file, baphy_load_recording
 from nems_lbhb.io import baphy_parm_read
 import nems.epoch as ep
+import matplotlib
 
 def raster_plot(mfilename, ax=None, epoch_regex="REFERENCE", signal="resp",
                 cellid=None, fs=1000, **options):
@@ -133,7 +134,8 @@ def plot_topo_map(pendata, vmax=None):
         vmax=24000
     f, ax = plt.subplots(1, 1)
     im = ax.scatter(xy['x'].values, xy['y'].values, c=xy['bf'].values,
-                     vmin=0, vmax=vmax, cmap=cmap, s=500, edgecolors='white')
+                     vmin=0.1, vmax=vmax, cmap=cmap, s=500, edgecolors='white',
+                     norm=matplotlib.colors.LogNorm())
     for r in range(xy.shape[0]):
         ax.annotate(xy.index[r], (xy['x'].values[r], xy['y'].values[r]))
     ax.invert_yaxis()
