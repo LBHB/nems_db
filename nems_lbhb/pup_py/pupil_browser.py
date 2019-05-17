@@ -322,6 +322,10 @@ class PupilBrowser:
 
         self.frame_n_value.insert(0, str(0))
 
+        # reset exclusion frames
+        self.exclude_starts = []
+        self.exclude_ends = []
+
         # save first ten frames and display the first
         video = video_folder + animal + '/' + params_file[:6] + '/' + params_file + '.mj2'
 
