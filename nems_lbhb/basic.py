@@ -100,7 +100,7 @@ ax = raster_plot(mfilename, cellid=cellid, epoch_regex=epoch_regex)
 
 #rec=baphy.baphy_load_recording(mfilename=mfilename, cellid=cellid, stim=False)
 
-def plot_topo_map(pendata, vmax=None):
+def plot_topo_map(pendata, vmin=None, vmax=None):
     """
     Given a dict of cellids and bfs, plot a topographical map of tuning.
     Depends on penetrations having been marked in celldb/with baphy
@@ -132,9 +132,17 @@ def plot_topo_map(pendata, vmax=None):
     # Force range between 0 Hz and 24 kHz
     if vmax is None:
         vmax=24000
+    if vmin is None:
+        vmin = 0.1
     f, ax = plt.subplots(1, 1)
-    im = ax.scatter(xy['x'].values, xy['y'].values, c=xy['bf'].values,
-                     vmin=0.1, vmax=vmax, cmap=cmap, s=500, edgecolors='white',
+    # only plot color for non-nan sites:
+    bf = xy['bf'].values
+    inds = np.argwhere(~np.isnan(bf)).squeeze()
+    bf = bf[inds]
+    x_val = xy['x'].values[inds]
+    y_val = xy['y'].values[inds]
+    im = ax.scatter(x_val, y_val, c=bf,
+                     vmin=vmin, vmax=vmax, cmap=cmap, s=500, edgecolors='white',
                      norm=matplotlib.colors.LogNorm())
     for r in range(xy.shape[0]):
         ax.annotate(xy.index[r], (xy['x'].values[r], xy['y'].values[r]))
