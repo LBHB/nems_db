@@ -63,8 +63,14 @@ To activate the environment:
 Note that once you've activated the environment, your path has been updated so that you no longer need to use the cconda and ccactivate aliases. Once the environment is deactivated, you will have to use the cconda and ccactivate aliases again.
 
 ## Offline pupil analysis
-In order to use the offline pupil analysis tools located in `nems_lbhb/pup_py/` you must make sure you have the following dependencies installed in your environment `Tkinter`, `keras`, `scikit-image`, `PyAV`
+In order to use the offline pupil analysis tools located in `nems_lbhb/pup_py/` you must make sure you have the following dependencies installed in your environment. In order to install these dependencies (and any additional dependencies you might need), we recommend using the conda package manager.
 
-In order to install these dependencies (and any additional dependencies you might need), we recommend using the conda package manager and using a consistent conda channel (for example, `conda-forge`)
+For example, this protocol for creating an environment seems stable (for LBHB workstation):
 
-`conda install -c conda-forge keras tk scikit-image av`
+```
+conda create --name my_pupil_env python=3.7 tensorflow-gpu keras-gpu
+conda install cudatoolkit==9.0
+pip install -e <path/to/nems_db>
+pip install -e <path/to/NEMS>
+conda install -c conda-forge av scikit-image
+```
