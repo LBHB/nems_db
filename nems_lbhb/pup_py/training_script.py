@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
         np.save('{0}old_model_fits/{1}/val_loss'.format(project_dir, dt), np.array(history.history['val_loss']))
         np.save('{0}old_model_fits/{1}/train_loss'.format(project_dir, dt), np.array(history.history['loss']))
-        print('finished fit')
+        log.info('finished fit')
 
         # find the new "best fit" and save this as the default trained model
         files = os.listdir("{0}old_model_fits/{1}/".format(project_dir, dt))
@@ -167,6 +167,7 @@ if __name__ == '__main__':
                     mod = f
                 else:
                     if np.float(f.split('-')[-1].split('.')[0]) < val:
+                        val = np.float(f.split('-')[-1].split('.')[0])
                         mod = f
 
         old_date = os.listdir(project_dir + 'default_trained_model/')[0]
@@ -178,18 +179,20 @@ if __name__ == '__main__':
         # the training data from that date
         if os.path.isfile(default_name):
             log.info("replacing old default model with new fit...")
-            os.system("rm -r {0}".format(old_date))
+            os.system("rm -r {0}".format(project_dir + 'default_trained_model/' + old_date))
 
         # Now save the new best model as the current default model
         backup_loc = "{0}old_model_fits/{1}/{2}".format(project_dir, dt, mod)
         default_loc = "{0}default_trained_model/{1}/{2} ".format(project_dir, dt, mod)
+        dir = "{0}default_trained_model/{1}/".format(project_dir, dt)
+        os.system("mkdir {}".format(dir))
         os.system("cp {0} {1}".format(backup_loc, default_loc))
 
         # purge all non-saved model weights
         log.info("Purging all other 'non-optimal' model fits...")
         for i, f in enumerate(files):
             if f != mod:
-                os.system("rm {0}old_model_fits/{1}".format(project_dir, f))
+                os.system("rm {0}old_model_fits/{1}/{2}".format(project_dir, dt, f))
 
         # Finally, copy the current training data into this directory as well
         log.info("Copying training data into model fit folder...")
