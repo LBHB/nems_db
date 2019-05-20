@@ -89,6 +89,7 @@ if __name__ == '__main__':
     for i, packet in enumerate(container.demux(video_stream)):
         if i % 1000 == 0:
             log.info("frame: {0}...".format(i))
+            nd.update_job_tick()
         try:
             frame = packet.decode()[0]
 
@@ -128,7 +129,7 @@ if __name__ == '__main__':
             phi_cnn.append(ellipse_parms[4])
 
         except:
-            print("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
+            log.info("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
 
             y_cnn.append(np.nan)
             x_cnn.append(np.nan)
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     with open(save_file, 'wb') as fp:
                 pickle.dump(results, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-    print("finished fit")
+    log.info("finished fit")
 
     if queueid:
             nd.update_job_complete(queueid)
