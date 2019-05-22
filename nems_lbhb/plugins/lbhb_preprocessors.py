@@ -176,11 +176,14 @@ def inp(loadkey):
     for l in loadset:
         if l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("pbs"):
+            this_sig = ["pupil_bs"]
         input_signals.extend(this_sig)
     xfspec = [['nems.xforms.concatenate_input_channels',
                {'input_signals': input_signals}]]
 
     return xfspec
+
 
 def mod(loadkey):
     """
@@ -241,7 +244,6 @@ def pca(loadkey):
 
 def popev(loadkey):
     return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
-
 
 
 def contrast(loadkey):
@@ -368,7 +370,7 @@ def sm(load_key):
     Smooth a signal using preproc.smooth_epoch_segments
     options:
     pop : smooth population signal (default??)
-    
+
     """
     options = load_key.split('.')[1:]
 
@@ -380,7 +382,7 @@ def sm(load_key):
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
-    
+
     xfspec=[['nems.preprocessing.smooth_signal_epochs',
             {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
