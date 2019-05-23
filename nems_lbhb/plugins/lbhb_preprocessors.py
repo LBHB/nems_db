@@ -285,6 +285,32 @@ def hrc(load_key):
 
     return xfspec
 
+
+def pm(load_key):
+    """
+    pm = pupil mask
+    pm.b = mask only big pupil trials
+    pm.s = mask only small pupil trials
+
+    performs an AND mask (so will only create mask inside the existing current
+        mask. If mask is None, creates mask with: rec = rec.create_mask(True))
+    """
+    options = load_key.split('.')
+    if len(options)>1:
+        if options[1] == 'b':
+            condition='large'
+        elif options[1] == 's':
+            condition = 'small'
+        else:
+            log.info("unknown option passed to pupil mask...")
+    else:
+        condition = 'large'
+    xfspec = [['nems_lbhb.preprocessing.pupil_mask',
+            {'condition': condition}, ['est'], ['est']]]
+
+    return xfspec
+
+
 def rc(load_key):
     """
     Mask only data from a specified runclass
