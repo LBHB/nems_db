@@ -56,7 +56,7 @@ def pupil_mask(est, condition):
                          [1, pupil_data.shape[-1]])[:, np.newaxis, :]
     pup_median = np.median(pupil_data.flatten()[~np.isnan(pupil_data.flatten())])
 
-    if condition == 'big':
+    if condition == 'large':
         mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
     elif condition == 'small':
         mask = ((pupil_data <= pup_median) & (~np.isnan(pupil_data)))
