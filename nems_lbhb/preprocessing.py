@@ -29,7 +29,7 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'].chans = ['hard_trials']
 
 
-def mask_high_repetion_stims(rec,epoch_regex='^STIM_'):
+def mask_high_repetion_stims(rec, epoch_regex='^STIM_'):
     full_rec = rec.copy()
     stims = (full_rec.epochs['name'].value_counts() >= 8)
     stims = [stims.index[i] for i, s in enumerate(stims) if bool(re.search(epoch_regex, stims.index[i])) and s == True]
@@ -40,6 +40,34 @@ def mask_high_repetion_stims(rec,epoch_regex='^STIM_'):
     if 'mask' not in full_rec.signals.keys():
         full_rec = full_rec.create_mask(True)
     full_rec = full_rec.and_mask(stims)
+
+    return full_rec
+
+
+
+def pupil_mask(est, condition):
+    """
+    Create pupil mask by epoch (use REF by default) - so entire epoch is
+    classified as big or small
+    """
+    full_rec = est.copy()
+    pupil_data = full_rec['pupil'].extract_epoch('REFERENCE')
+    pupil_data = np.tile(np.nanmean(pupil_data, axis=-1),
+                         [1, pupil_data.shape[-1]])[:, np.newaxis, :]
+    pup_median = np.median(pupil_data.flatten()[~np.isnan(pupil_data.flatten())])
+
+    if condition == 'large':
+        mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
+    elif condition == 'small':
+        mask = ((pupil_data <= pup_median) & (~np.isnan(pupil_data)))
+
+    # perform AND mask with existing mask
+    if 'mask' in est.signals:
+        mask = (mask & full_rec['mask'].extract_epoch('REFERENCE'))
+    elif 'mask' not in est.signals:
+        pass
+
+    full_rec['mask'] = full_rec['mask'].replace_epochs({'REFERENCE': mask})
 
     return full_rec
 

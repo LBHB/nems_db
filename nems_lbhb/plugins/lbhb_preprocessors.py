@@ -176,11 +176,14 @@ def inp(loadkey):
     for l in loadset:
         if l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("pbs"):
+            this_sig = ["pupil_bs"]
         input_signals.extend(this_sig)
     xfspec = [['nems.xforms.concatenate_input_channels',
                {'input_signals': input_signals}]]
 
     return xfspec
+
 
 def mod(loadkey):
     """
@@ -243,7 +246,6 @@ def popev(loadkey):
     return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
 
 
-
 def contrast(loadkey):
     ops = loadkey.split('.')[1:]
     kwargs = {}
@@ -282,6 +284,32 @@ def hrc(load_key):
                {'epoch_regex':'^STIM_'}, ['rec'], ['rec']]]
 
     return xfspec
+
+
+def pm(load_key):
+    """
+    pm = pupil mask
+    pm.b = mask only big pupil trials
+    pm.s = mask only small pupil trials
+
+    performs an AND mask (so will only create mask inside the existing current
+        mask. If mask is None, creates mask with: rec = rec.create_mask(True))
+    """
+    options = load_key.split('.')
+    if len(options)>1:
+        if options[1] == 'b':
+            condition='large'
+        elif options[1] == 's':
+            condition = 'small'
+        else:
+            log.info("unknown option passed to pupil mask...")
+    else:
+        condition = 'large'
+    xfspec = [['nems_lbhb.preprocessing.pupil_mask',
+            {'condition': condition}, ['est'], ['est']]]
+
+    return xfspec
+
 
 def rc(load_key):
     """
@@ -368,7 +396,7 @@ def sm(load_key):
     Smooth a signal using preproc.smooth_epoch_segments
     options:
     pop : smooth population signal (default??)
-    
+
     """
     options = load_key.split('.')[1:]
 
@@ -380,7 +408,7 @@ def sm(load_key):
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
-    
+
     xfspec=[['nems.preprocessing.smooth_signal_epochs',
             {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
