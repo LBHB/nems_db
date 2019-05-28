@@ -39,6 +39,14 @@ if 1:
                 "env.fs100-ld-sev_dlog.f-wc.2x2.c.n-stp.2-fir.2x15-lvl.1-dexp.1_init-basic",
                 "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic",
                 "env.fs100-ld-sev_dlog.f-wc.2x4.c.n-stp.4-fir.4x15-lvl.1-dexp.1_init-basic"]
+    # new do models
+    modelnames=["env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+               ]
     # cleaner STP effects, predictions slightly worse
 #    modelnames=["env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic",
 #                "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-stp.1-dexp.1_init-basic",
@@ -53,8 +61,10 @@ if 1:
 #                "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3-fir.3x15-lvl.1-dexp.1_init-basic",
 #                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4-fir.4x15-lvl.1-dexp.1_init-basic"]
     fileprefix="fig5.SPN"
-    n1=modelnames[0]
+    n1=modelnames[1]
     n2=modelnames[-2]
+    label1 = "Rank-4 LN"
+    label2 = "Rank-4 STP"
 elif 1:
     batch = 289
     modelnames = ["ozgf.fs100.ch18-ld-sev_dlog-wc.18x3-fir.3x15-lvl.1-dexp.1_init-basic",
@@ -64,12 +74,15 @@ elif 1:
     n1=modelnames[0]
     n2=modelnames[1]
     fileprefix="fig9.NAT"
+    label1 = "Rank-2 LN"
+    label2 = "Rank-3 STP"
 
 xc_range = [-0.05, 1.1]
 
 df = nd.batch_comp(batch,modelnames,stat='r_ceiling')
 df_r = nd.batch_comp(batch,modelnames,stat='r_test')
 df_e = nd.batch_comp(batch,modelnames,stat='se_test')
+df_n = nd.batch_comp(batch,modelnames,stat='n_parms')
 
 cellcount = len(df)
 
@@ -90,7 +103,7 @@ improvedcells = (beta2_test-se2 > beta1_test+se1)
 goodcells = ((beta2_test > se2*3) | (beta1_test > se1*3))
 
 fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
-                           n1='LN STRF', n2='RW3 STP STRF',
+                           n1=label1, n2=label2,
                            hist_range=xc_range,
                            highlight=improvedcells[goodcells])
 #fh1 = stateplots.beta_comp(beta1, beta2,
@@ -98,25 +111,71 @@ fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
 #                           hist_range=xc_range,
 #                           highlight=improvedcells)
 
-fh2 = plt.figure(figsize=(3.5, 3))
-m = np.array(df.loc[goodcells].mean()[modelnames])
-plt.bar(np.arange(len(modelnames)), m, color='black')
-plt.plot(np.array([-1, len(modelnames)]), np.array([0, 0]), 'k--')
-plt.ylim((-.05, 0.8))
-plt.title("batch {}, n={}/{} good cells".format(
+fh2, ax = plt.subplots(1, 2, figsize=(7, 3))
+m = np.array((df.loc[goodcells]**2).mean()[modelnames])
+ax[0].bar(np.arange(len(modelnames)), m, color='black')
+ax[0].plot(np.array([-1, len(modelnames)]), np.array([0, 0]), 'k--')
+ax[0].set_ylim((-.05, 0.9))
+ax[0].set_title("batch {}, n={}/{} good cells".format(
         batch, np.sum(goodcells), len(goodcells)))
-plt.ylabel('median pred corr')
-plt.xlabel('model architecture')
-nplt.ax_remove_box()
+ax[0].set_ylabel('median pred corr')
+ax[0].set_xlabel('model architecture')
+nplt.ax_remove_box(ax[0])
+
 
 for i in range(len(modelnames)-1):
 
     d1 = np.array(df[modelnames[i]])
     d2 = np.array(df[modelnames[i+1]])
     s, p = ss.wilcoxon(d1, d2)
-    plt.text(i+0.5, m[i+1]+0.03, "{:.1e}".format(p), ha='center', fontsize=6)
+    ax[0].text(i+0.5, m[i+1]+0.03, "{:.1e}".format(p), ha='center', fontsize=6)
 
-plt.xticks(np.arange(len(m)),np.round(m,3))
+ax[0].set_xticks(np.arange(len(m)))
+ax[0].set_xticklabels(np.round(m,3))
+
+b_modelnames = [
+    "env.fs100-ld-sev_dlog-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-pz.2x15-lvl.1-dexp.1_init.r10-basic.b",
+
+    "env.fs100-ld-sev_dlog-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+
+    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.1.x.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+
+    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+
+    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+
+    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.q.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.q-fir.2x15-lvl.1-dexp.1_init.r10-basic.b"
+]
+
+b = nd.batch_comp(batch,b_modelnames, stat='r_ceiling')
+b_n = nd.batch_comp(batch,b_modelnames, stat='n_parms')
+b_m = np.array((b.loc[goodcells]**2).mean()[b_modelnames])
+b_stp = np.array([('stp' in m) and ('.x.' not in m) for m in b_modelnames])
+b_stp1 = np.array([('stp' in m) and ('.x.' in m) for m in b_modelnames])
+b_ln = ~(b_stp | b_stp1)
+n_parms=np.array([np.mean(b_n[m]) for m in b_modelnames])
+ax[1].plot(n_parms[b_ln], b_m[b_ln], 'k.')
+ax[1].plot(n_parms[b_stp1], b_m[b_stp1], 'b.')
+ax[1].plot(n_parms[b_stp], b_m[b_stp], 'r.')
+ax[1].set_xlabel('n_parms')
+ax[1].set_ylabel('median pred corr')
+ax[1].set_ylim((0.2, 0.9))
+
+
 
 if save_fig:
     batchstr = str(batch)
