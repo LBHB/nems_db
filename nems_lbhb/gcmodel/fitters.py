@@ -209,7 +209,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
-            cost_function=None, IsReload=False, post_fit=False,
+            cost_function=None, IsReload=False, post_fit=False, rand_count=0,
             **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
@@ -267,33 +267,67 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     if IsReload:
         return {}
 
+    wc_idx = nems.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems.utils.find_module('fir', modelspec)
+    lvl_idx = nems.utils.find_module('levelshift', modelspec)
+    ctk_idx = nems.utils.find_module('contrast_kernel', modelspec)
+    dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    if dsig_idx is None:
+        raise ValueError("fit_gc should only be used with modelspecs"
+                         "containing dynamic_sigmoid")
+    # TODO: Be able to handle this case somehow
+    if (('coefficients' in modelspec[wc_idx]['phi'])
+        and ('coefficients' in modelspec[fir_idx]['phi'])):
+           raise ValueError("both wc and fir are using nonparametric "
+                            "coefficients, will cause problems with ctkernel")
+
+    # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
+    prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
+    fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
+    fitter_fn = getattr(nems.fitters.api, fitter)
+    if metric is not None:
+        metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
+    else:
+        metric_fn = None
+
+    #############################
+    # 0: Initialize dsig priors #
+    #############################
+    # TODO: kind of wasteful to do this twice, but for 10+ random fits
+    #       it should be a pretty small % of the fit time anyway.
+    log.info("Performing rough linear fit to initialize dsig priors . . . ")
+    frozen_phi = {}
+    frozen_priors = {}
+    for k in ['amplitude_mod', 'base_mod', 'shift_mod', 'kappa_mod']:
+        if k in modelspec[dsig_idx]['phi']:
+            frozen_phi[k] = modelspec[dsig_idx]['phi'].pop(k)
+        if k in modelspec[dsig_idx]['prior']:
+            frozen_priors[k] = modelspec[dsig_idx]['prior'].pop(k)
+    modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = False
+
+    modelspec = nems.initializers.prefit_to_target(
+            est, modelspec, fit_basic, target_module='levelshift',
+            extra_exclude=['stp'], fitter=fitter_fn, metric=metric_fn,
+            fit_kwargs=prefit_kwargs)
+
+    # then initialize the STP module (if there is one)
+    for i, m in enumerate(modelspec.modules):
+        if 'stp' in m['fn']:
+            if not m.get('phi'):
+                m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                modelspec[i] = m
+            break
+
+    modelspec = init_dsig(est, modelspec)
+    if rand_count > 0:
+        modelspec = nems.initializers.rand_phi(modelspec, rand_count=rand_count,
+                                               **context)['modelspec']
+
+
+    # Iterate through fit indices
     for ii in range(modelspec.fit_count):
         log.info("Fit idx:  %d", ii)
         modelspec.set_fit(ii)
-
-        wc_idx = nems.utils.find_module('weight_channels', modelspec)
-        fir_idx = nems.utils.find_module('fir', modelspec)
-        lvl_idx = nems.utils.find_module('levelshift', modelspec)
-        ctk_idx = nems.utils.find_module('contrast_kernel', modelspec)
-        dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
-        if dsig_idx is None:
-            raise ValueError("fit_gc should only be used with modelspecs"
-                             "containing dynamic_sigmoid")
-        # TODO: Be able to handle this case somehow
-        if (('coefficients' in modelspec[wc_idx]['phi'])
-            and ('coefficients' in modelspec[fir_idx]['phi'])):
-               raise ValueError("both wc and fir are using nonparametric "
-                                "coefficients, will cause problems with ctkernel")
-
-        # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
-        prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
-        fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-        fitter_fn = getattr(nems.fitters.api, fitter)
-        if metric is not None:
-            metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
-        else:
-            metric_fn = None
-
 
         #########################################
         # 1: Freeze the GC portion of the model #
