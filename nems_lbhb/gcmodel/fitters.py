@@ -209,7 +209,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
-            cost_function=None, IsReload=False, post_fit=False, rand_count=0,
+            cost_function=None, IsReload=False, post_fit=False,
             **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
@@ -290,39 +290,6 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     else:
         metric_fn = None
 
-    #############################
-    # 0: Initialize dsig priors #
-    #############################
-    # TODO: kind of wasteful to do this twice, but for 10+ random fits
-    #       it should be a pretty small % of the fit time anyway.
-    log.info("Performing rough linear fit to initialize dsig priors . . . ")
-    frozen_phi = {}
-    frozen_priors = {}
-    for k in ['amplitude_mod', 'base_mod', 'shift_mod', 'kappa_mod']:
-        if k in modelspec[dsig_idx]['phi']:
-            frozen_phi[k] = modelspec[dsig_idx]['phi'].pop(k)
-        if k in modelspec[dsig_idx]['prior']:
-            frozen_priors[k] = modelspec[dsig_idx]['prior'].pop(k)
-    modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = False
-
-    modelspec = nems.initializers.prefit_to_target(
-            est, modelspec, fit_basic, target_module='levelshift',
-            extra_exclude=['stp'], fitter=fitter_fn, metric=metric_fn,
-            fit_kwargs=prefit_kwargs)
-
-    # then initialize the STP module (if there is one)
-    for i, m in enumerate(modelspec.modules):
-        if 'stp' in m['fn']:
-            if not m.get('phi'):
-                m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
-                modelspec[i] = m
-            break
-
-    modelspec = init_dsig(est, modelspec)
-    if rand_count > 0:
-        modelspec = nems.initializers.rand_phi(modelspec, rand_count=rand_count,
-                                               **context)['modelspec']
-
 
     # Iterate through fit indices
     for ii in range(modelspec.fit_count):
@@ -367,6 +334,8 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         # now prefit static dsig
         log.info("Initializing priors and bounds for dsig ...")
         modelspec = init_dsig(est, modelspec)
+        import pdb
+        pdb.set_trace()
         log.info('Performing rough fit of static nonlinearity ...\n')
         modelspec = prefit_mod_subset(est, modelspec, fit_basic,
                                       fit_set=['dynamic_sigmoid'],

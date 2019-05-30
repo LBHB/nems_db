@@ -51,6 +51,7 @@ def gc(fitkey):
 def gc2(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
+    xfspec = []
     for op in ops:
         if op.startswith('t'):
             num = op.replace('d', '.').replace('\\', '')
@@ -71,9 +72,11 @@ def gc2(fitkey):
         elif op == 'PF':
             kwargs['post_fit'] = True
         elif op.startswith('r'):
-            kwargs['rand_count'] = int(op[1:])
+            rc = int(op[1:])
+            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
-    return [['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs]]
+    xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
+    return xfspec
 
 
 def strfc(fitkey):
