@@ -334,8 +334,6 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         # now prefit static dsig
         log.info("Initializing priors and bounds for dsig ...")
         modelspec = init_dsig(est, modelspec)
-        import pdb
-        pdb.set_trace()
         log.info('Performing rough fit of static nonlinearity ...\n')
         modelspec = prefit_mod_subset(est, modelspec, fit_basic,
                                       fit_set=['dynamic_sigmoid'],
