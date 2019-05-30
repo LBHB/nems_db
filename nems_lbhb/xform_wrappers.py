@@ -154,7 +154,10 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     """
 
     # remove any preprocessing keywords in the loader string.
-    loader = nems.utils.escaped_split(loadkey, '-')[0]
+    if '-' in loadkey:
+        loader = nems.utils.escaped_split(loadkey, '-')[0]
+    else:
+        loader = loadkey
     log.info('loader=%s',loader)
 
     ops = loader.split(".")
