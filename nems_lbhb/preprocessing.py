@@ -44,32 +44,65 @@ def mask_high_repetion_stims(rec, epoch_regex='^STIM_'):
     return full_rec
 
 
-
-def pupil_mask(est, condition):
+def pupil_mask(est, val, condition, balance):
     """
     Create pupil mask by epoch (use REF by default) - so entire epoch is
-    classified as big or small
+    classified as big or small. Perform the mask on both est and val sets
+    separately. This is so that both test metrics and fit metrics are
+    evaluated on the same class of data (big or small pupil)
     """
-    full_rec = est.copy()
-    pupil_data = full_rec['pupil'].extract_epoch('REFERENCE')
-    pupil_data = np.tile(np.nanmean(pupil_data, axis=-1),
-                         [1, pupil_data.shape[-1]])[:, np.newaxis, :]
-    pup_median = np.median(pupil_data.flatten()[~np.isnan(pupil_data.flatten())])
+    full_est = est.copy()
+    full_val = val.copy()
+    new_est_val = []
+    for i, r in enumerate([full_est, full_val]):
+        pupil_data = r['pupil'].extract_epoch('REFERENCE')
+        pupil_data = np.tile(np.nanmean(pupil_data, axis=-1),
+                             [1, pupil_data.shape[-1]])[:, np.newaxis, :]
+        pup_median = np.median(pupil_data.flatten()[~np.isnan(pupil_data.flatten())])
 
-    if condition == 'large':
-        mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
-    elif condition == 'small':
-        mask = ((pupil_data <= pup_median) & (~np.isnan(pupil_data)))
+        if condition == 'large':
+            mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
+            op_mask = ((pupil_data <= pup_median) & (~np.isnan(pupil_data)))
+        elif condition == 'small':
+            mask = ((pupil_data <= pup_median) & (~np.isnan(pupil_data)))
+            op_mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
 
-    # perform AND mask with existing mask
-    if 'mask' in est.signals:
-        mask = (mask & full_rec['mask'].extract_epoch('REFERENCE'))
-    elif 'mask' not in est.signals:
-        pass
+        # perform AND mask with existing mask
+        if 'mask' in est.signals:
+            mask = (mask & r['mask'].extract_epoch('REFERENCE'))
+        elif 'mask' not in est.signals:
+            pass
 
-    full_rec['mask'] = full_rec['mask'].replace_epochs({'REFERENCE': mask})
+        r['mask'] = r['mask'].replace_epochs({'REFERENCE': mask})
 
-    return full_rec
+        if (i == 1) & (balance == True):
+            # balance epochs between big / small pupil conditions for the val
+            # set in order to make sure r_test for big / small pupil fits is
+            # comparable
+            log.info("balancing REF epochs between big and small pupil in val")
+            s1 = r.copy()
+            s2 = r.copy()
+            s1 = s1.apply_mask(reset_epochs=True)
+            s2['mask'] = s2['mask'].replace_epochs({'REFERENCE': op_mask})
+            s2 = s2.apply_mask(reset_epochs=True)
+
+            val = val.apply_mask(reset_epochs=True)
+            stims = np.unique([ep for ep in val.epochs.name if 'STIM' in ep])
+            ntot = len(stims)
+            balanced_stims = []
+            for stim in stims:
+                big_reps = np.sum([str(ep) == stim for ep in s1.epochs.name])
+                small_reps = np.sum([str(ep) == stim for ep in s2.epochs.name])
+                if abs(big_reps - small_reps) <= 2:
+                    balanced_stims.append(stim)
+            balanced_stims = [str(ep) for ep in balanced_stims]
+            log.info("keeping {0}/{1} val epochs".format(len(balanced_stims), ntot))
+
+            r = r.and_mask(balanced_stims)
+
+        new_est_val.append(r)
+
+    return (new_est_val[0], new_est_val[1])
 
 
 def mask_tor(rec):
@@ -290,7 +323,7 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
     return {'rec': newrec}
 
 
-def transform_stim_envelope(rec):
+def transform_stim_envelope(rec=None):
     '''
     Collapse over frequency channels
     '''

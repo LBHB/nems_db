@@ -291,7 +291,8 @@ def pm(load_key):
     pm = pupil mask
     pm.b = mask only big pupil trials
     pm.s = mask only small pupil trials
-
+    pm.s.bv = mask small pupil and balance big/small ref epochs for val set
+            (bv is important for the nems.metrics that get calculated at the end)
     performs an AND mask (so will only create mask inside the existing current
         mask. If mask is None, creates mask with: rec = rec.create_mask(True))
     """
@@ -303,10 +304,15 @@ def pm(load_key):
             condition = 'small'
         else:
             log.info("unknown option passed to pupil mask...")
-    else:
-        condition = 'large'
+
+    balance = False
+    if len(options)>2:
+        if options[2] == 'bv':
+            balance = True
+
     xfspec = [['nems_lbhb.preprocessing.pupil_mask',
-            {'condition': condition}, ['est'], ['est']]]
+            {'condition': condition, 'balance': balance},
+            ['est', 'val'], ['est', 'val']]]
 
     return xfspec
 

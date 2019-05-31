@@ -32,7 +32,7 @@ def SPOpf(loadkey):
     xfspec.append(['nems.xforms.plot_summary', {}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_all_vals_',{}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_linear_and_weighted_psths_model', {}])
-    
+
     return xfspec
 
 def popsum(loadkey):
@@ -41,4 +41,3 @@ def popsum(loadkey):
             ['nems.xforms.add_summary_statistics', {}],
             ['nems.xforms.plot_summary', {}],
             ['nems_lbhb.stateplots.quick_pop_state_plot', {}]]
-
