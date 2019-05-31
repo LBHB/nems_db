@@ -233,10 +233,10 @@ def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
     kappa = modelspec.phi[-1]['kappa']
     shift = modelspec.phi[-1]['shift']
 
-    amp_prior = ('Normal', {'mean': amp, 'sd': 1.0})
-    base_prior = ('Normal', {'mean': base, 'sd': 1.0})
-    kappa_prior = ('Normal', {'mean': kappa, 'sd': 1.0})
-    shift_prior = ('Normal', {'mean': shift, 'sd': 1.0})
+    amp_prior = ('Exponential', {'beta': amp})
+    base_prior = ('Exponential', {'beta': base})
+    kappa_prior = ('Exponential', {'beta': kappa})
+    shift_prior = ('Normal', {'mean': shift, 'sd': shift/2})
 
     modelspec[target_i]['prior'].update({
             'amplitude': amp_prior, 'base': base_prior, 'kappa': kappa_prior,
@@ -263,21 +263,17 @@ def dsig_phi_to_prior(modelspec):
 
     '''
 
-    modelspec = copy.deepcopy(modelspec)
     dsig_idx = find_module('dynamic_sigmoid', modelspec)
-    dsig = modelspec[dsig_idx]
-
-    phi = dsig['phi']
+    phi = modelspec[dsig_idx]['phi']
     b = phi['base']
     a = phi['amplitude']
     k = phi['kappa']
     s = phi['shift']
 
-    p = dsig['prior']
-    p['base'][1]['beta'] = b
-    p['amplitude'][1]['beta'] = a
-    p['shift'][1]['mean'] = s  # Do anything to scale sd?
-    p['kappa'][1]['beta'] = k
+    modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
+    modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
+    modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s  # Do anything to scale sd?
+    modelspec[dsig_idx]['prior']['kappa'][1]['beta'] = k
 
     return modelspec
 

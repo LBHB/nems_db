@@ -21,7 +21,7 @@ import logging
 import numpy as np
 import scipy.signal
 
-from nems.modules.fir import per_channel
+from nems.modules.fir import per_channel, da_coefficients
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
@@ -195,16 +195,18 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
 #       phi name, so they would overwrite eachother using the current
 #       basic_with_copy implementation.
 def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
-                    mean=None, sd=None, coefficients=None, auto_copy=False,
-                    compute_contrast=False):
+                    mean=None, sd=None, coefficients=None, f1s=None, taus=None,
+                    delays=None, gains=None, auto_copy=False,
+                    compute_contrast=False, n_coefs=18):
     if compute_contrast:
         if auto_copy:
-            if (mean is None) or (sd is None) or (coefficients is None):
-                raise ValueError("contrast_kernel module was called using "
-                                 "auto_copy=True without setting "
-                                 "mean, sd, or coefficients")
-            wc_coefficients = gaussian_coefficients(mean, sd, 18)
-            fir_coefficients = coefficients
+            wc_coefficients = gaussian_coefficients(mean, sd, n_coefs)
+            if coefficients is None:
+                fir_coefficients = da_coefficients(f1s=f1s, taus=taus,
+                                                   delays=delays,
+                                                   gains=gains, n_coefs=n_coefs)
+            else:
+                fir_coefficients = coefficients
         else:
             if (wc_coefficients is None) or (fir_coefficients is None):
                 raise ValueError("contrast_kernel module was called without "
@@ -212,8 +214,8 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
         fn = lambda x: _contrast_kernel(x, wc_coefficients, fir_coefficients)
         return [rec[i].transform(fn, o)]
     else:
-        # pass through until contrast is ready to be computed
-        fn = lambda x: x
+        # pass through vector of 0's until contrast is ready to be computed
+        fn = lambda x: np.zeros((1, x.shape[-1]))
         return [rec[i].transform(fn, o)]
 
 
