@@ -222,6 +222,9 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
         if (len(cc) > 1) and (cc[1][0]=="P"):
             pc_idx=[int(cc[1][1:])]
             cellid=cc[0]
+        elif (len(cellid.split('+')) > 1):
+            # list of cellids (specified in model queue by separating with '_')
+            cellid = cellid.split('+')
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
