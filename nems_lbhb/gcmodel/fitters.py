@@ -209,7 +209,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
-            cost_function=None, IsReload=False, post_fit=False,
+            cost_function=None, IsReload=False, post_fit=False, post_copy=True,
             **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
@@ -314,7 +314,6 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         ##################################################################
         # 2: Prefit the LN portion of the model (might also include STP) #
         ##################################################################
-
         log.info('Initializing linear model and performing rough fit ...\n')
         # fit without STP module first (if there is one)
         modelspec = nems.initializers.prefit_to_target(
@@ -342,10 +341,10 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                                       fit_kwargs=prefit_kwargs)
 
 
+
         ##########################################################################
         # 3: Finish fitting the LN portion of the model (might also include STP) #
         ##########################################################################
-
         log.info('Finishing fit for full LN model ...\n')
         # Can't use metric=None directly to fit_basic or it will have a fit,
         # so split up arguments here and only add metric if we gave one.
@@ -377,10 +376,10 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         modelspec[lvl_idx]['phi'] = {}
 
 
+
         ######################################
         # 4: Fit the GC portion of the model #
         ######################################
-
         log.info('Unfreezing dynamic portion of dsig ...\n')
         # make dynamic_sigmoid dynamic again
         for k, v in frozen_phi.items():
@@ -409,21 +408,36 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 
 
-        ######################################
-        # 5: Fit all modules together        #
-        ######################################
+        ###############################
+        # 5: Fit all modules together #
+        ###############################
         if post_fit:
 
-            def cost(*args, **kwargs):
-                copy = [(wc_idx, ctk_idx), (fir_idx, ctk_idx)]
-                return basic_with_copy(*args, **kwargs, copy_phi=copy)
+            if post_copy:
+                # Set up cost function to automatically copy new
+                # wc and fir phi over to ctkernel during fitting
+                def cost(*args, **kwargs):
+                    copy = [(wc_idx, ctk_idx), (fir_idx, ctk_idx)]
+                    return basic_with_copy(*args, **kwargs, copy_phi=copy)
 
-            log.info('Fitting all modules together ...\n')
-            modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = True
-            modelspec = fit_basic(est, modelspec, fitter_fn,
-                                  cost_function=cost,
-                                  metric=metric_fn, metaname='fit_gc',
-                                  fit_kwargs=fit_kwargs)
+                log.info('Fitting all modules together, copying STRF...\n')
+                modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = True
+                modelspec = fit_basic(est, modelspec, fitter_fn,
+                                      cost_function=cost,
+                                      metric=metric_fn, metaname='fit_gc',
+                                      fit_kwargs=fit_kwargs)
+
+            else:
+                # Let ctkernel phi be fitted independent of wc and fir
+                log.info('Fitting all modules together, ctkernel separate ...\n')
+                modelspec[ctk_idx]['phi'].update(modelspec[wc_idx]['phi'])
+                modelspec[wc_idx]['phi'].update(modelspec[fir_idx]['phi'])
+                modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = False
+                modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                                      metric=metric_fn, metaname='fit_gc',
+                                      fit_kwargs=fit_kwargs)
+
+
 
     modelspec.set_fit(0)
     return pick_best_phi(modelspec, est=est, **context)

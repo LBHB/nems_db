@@ -71,6 +71,8 @@ def gc2(fitkey):
             kwargs['nl_mode'] = int(op[2:])
         elif op == 'PF':
             kwargs['post_fit'] = True
+        elif op == 'NC':
+            kwargs['post_copy'] = False
         elif op.startswith('r'):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
