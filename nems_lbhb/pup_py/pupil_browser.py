@@ -18,6 +18,11 @@ import getpass
 import nems.db as nd
 import scipy.io
 import nems_db
+import sys
+
+executable_path = sys.executable
+script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
+training_browser_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'browse_training_data.py')
 
 tmp_frame_folder = '/auto/data/nems_db/pup_py/tmp/'
 video_folder = '/auto/data/daq/'
@@ -429,8 +434,8 @@ class PupilBrowser:
         print("saved analysis successfully")
 
     def open_training_browser(self):
-        os.system("/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6 \
-                /auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/browse_training_data.py {0} {1} {2} {3}".format(
+        os.system("{0} \
+                {1} {2} {3} {4} {5}".format(executable_path, training_browser_path,
             self.animal_name.get(), self.video_name.get(), 0, self.max_frame))
 
     def retrain(self):
