@@ -128,6 +128,8 @@ $(document).ready(function(){
             this.script_path = '';
             this.extra_models = '';
             this.extra_analyses = '';
+            this.kamiakFunction = '';
+            this.kamiakPath = '';
         }
     }
 
@@ -223,6 +225,8 @@ $(document).ready(function(){
 
         $("#scriptPath").val(saved_selections.script_path).change();
         $("#execPath").val(saved_selections.exec_path).change();
+        $("#kamiakFunction").val(saved_selections.kamiakFunction).change();
+        $("#kamiakPath").val(saved_selections.kamiakPath).change();
     }
 
 
@@ -273,6 +277,14 @@ $(document).ready(function(){
 
     $("#execPath").change(function(){
         saved_selections.exec_path = $(this).val();
+    });
+
+    $("#kamiakFunction").change(function(){
+        saved_selections.kamiakFunction = $(this).val();
+    });
+
+    $("#kamiakPath").change(function(){
+        saved_selections.kamiakPath = $(this).val();
     });
 
     $("[name='extraModels']").change(function(){
