@@ -44,11 +44,11 @@ def enqueue_models_view():
     mSelected = request.args.getlist('mSelected[]')
     codeHash = request.args.get('codeHash')
     execPath = request.args.get('execPath')
-    scriptPath = request.args.get('scriptPath')
-    useKamiak = bool(request.args.get('useKamiak'))
+    scriptPath = request.args.get('scriptPath', type=int)
+    useKamiak = request.args.get('useKamiak', type=int)
     kamiakFunction = request.args.get('kamiakFunction')  # fn to generate scripts
     kamiakPath = request.args.get('kamiakPath')  # path to store output in
-    loadKamiak = bool(request.args.get('loadKamiak'))  # check to load results
+    loadKamiak = request.args.get('loadKamiak')  # check to load results
     kamiakResults = request.args.get('kamiakResults')  # path to results
 
     if loadKamiak:
