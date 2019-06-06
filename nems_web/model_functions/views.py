@@ -54,7 +54,7 @@ def enqueue_models_view():
         # and a directory where the output should be stored,
         # Ex: kamiakScript = 'nems_lbhb.utils.my_kamiak_function'
         try:
-            kamiak_script = _lookup_fn_at(kamiakFunction)
+            kamiak_script = _lookup_fn_at(kamiakFunction, ignore_table=True)
             kamiak_script(cSelected, bSelected, mSelected, kamiakPath)
             return jsonify(data=True)
         except AttributeError:
