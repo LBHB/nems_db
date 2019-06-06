@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import scipy.stats as st
 import matplotlib.pyplot as plt
@@ -13,9 +15,12 @@ from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
 
+log = logging.getLogger(__name__)
+
 plt.rcParams.update(params)  # loaded from definitions
 _ALPHA = 0.3
 _BINS = 30
+
 
 def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
                       good_LN=0):
@@ -132,3 +137,62 @@ def _df_to_array(df, dims):
     array = np.array([np.array([vals[j][k] for j, v in enumerate(vals)])
                       for k in range(dims)])
     return array
+
+
+def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
+             truncate=False):
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter)
+    cellids = df_r[LN] > good_LN
+    gc_cells = (df_r[LN] > good_LN) & (df_r[gc] > df_r[LN])
+    gc_params = fitted_params_per_batch(289, gc, stats_keys=[])
+
+    # index keys are formatted like "4--dsig.d--kappa"
+    mod_keys = gc.split('_')[1]
+    for i, k in enumerate(mod_keys.split('-')):
+        if 'dsig' in k:
+            break
+    k_key = f'{i}--{k}--kappa'
+    ka_key = k_key + '_mod'
+    r_test_key = 'meta--r_test'
+    all_keys = [k_key, ka_key, r_test_key]
+    phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
+               for k in all_keys]
+    sep_dfs = [df.values.flatten().astype(np.float64) for df in phi_dfs]
+    gc_dfs = [gc_params[gc_params.index==k].transpose()[gc_cells].transpose()
+               for k in all_keys]
+    gc_sep_dfs = [df.values.flatten().astype(np.float64) for df in gc_dfs]
+    low, high, r_test = sep_dfs
+    gc_low, gc_high, gc_r = gc_sep_dfs
+
+    if truncate:
+        log.warning('This option should only be used when dealing with old '
+                    'fits where kappa had a lower bound of 0.')
+        high[high < 0.1] = 0.1
+        gc_high[gc_high < 0.1] = 0.1
+
+    ratio = low/high
+    gc_ratio = gc_low/gc_high
+
+    if truncate:
+        ratio[ratio > 10] = 10
+        gc_ratio[gc_ratio > 10] = 10
+
+
+    fig1 = plt.figure(figsize=figsize)
+    plt.hist(ratio, bins=bins)
+    plt.title('1/Gd')
+
+    fig2 = plt.figure(figsize=figsize)
+    plt.hist(gc_ratio, bins=bins)
+    plt.title('1/Gd, gc improvements only')
+
+    fig3 = plt.figure(figsize=figsize)
+    plt.scatter(ratio, r_test)
+    plt.title('1/Gd vs r_test')
+
+    fig4 = plt.figure(figsize=figsize)
+    plt.scatter(gc_ratio, gc_r)
+    plt.title('1/Gd vs r_test, gc improvements only')
