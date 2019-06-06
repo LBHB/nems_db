@@ -44,16 +44,17 @@ def enqueue_models_view():
     mSelected = request.args.getlist('mSelected[]')
     codeHash = request.args.get('codeHash')
     execPath = request.args.get('execPath')
-    scriptPath = request.args.get('scriptPath', type=int)
+    scriptPath = request.args.get('scriptPath')
     useKamiak = request.args.get('useKamiak', type=int)
     kamiakFunction = request.args.get('kamiakFunction')  # fn to generate scripts
     kamiakPath = request.args.get('kamiakPath')  # path to store output in
-    loadKamiak = request.args.get('loadKamiak')  # check to load results
+    loadKamiak = request.args.get('loadKamiak', type=int)  # check to load results
     kamiakResults = request.args.get('kamiakResults')  # path to results
 
     if loadKamiak:
         kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults)
         return jsonify(data=True)
+
     elif useKamiak:
         # kamiakFunction should be a stringified pointer to a function
         # that takes a list of cellids, a batch, a list of modelnames,
