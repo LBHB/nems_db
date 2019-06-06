@@ -1053,10 +1053,17 @@ $(document).ready(function(){
         var codeHash = $("#codeHash").val();
         var execPath = $("#execPath").val();
         var scriptPath = $("#scriptPath").val();
+        var kamiakFunction = $("#kamiakFunction").val();
+        var kamiakPath = $("#kamiakPath").val();
         var forceRerun = 0;
+        var useKamiak = 0;
 
         if (document.getElementById('forceRerun').checked){
             forceRerun = 1;
+        }
+
+        if (document.getElementById('useKamiak').checked){
+            useKamiak = 1;
         }
 
         if ((bSelected === null) || (bSelected === undefined) ||
@@ -1089,7 +1096,9 @@ $(document).ready(function(){
             url: $SCRIPT_ROOT + '/enqueue_models',
             data: { bSelected:bSelected, cSelected:cSelected,
                    mSelected:mSelected, forceRerun, codeHash:codeHash,
-                   execPath:execPath, scriptPath:scriptPath },
+                   execPath:execPath, scriptPath:scriptPath,
+                   useKamiak:useKamiak, kamiakFunction:kamiakFunction,
+                   kamiakPath:kamiakPath },
             // TODO: should POST be used in this case?
             type: 'GET',
             success: function(result){
