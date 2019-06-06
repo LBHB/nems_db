@@ -130,6 +130,7 @@ $(document).ready(function(){
             this.extra_analyses = '';
             this.kamiakFunction = '';
             this.kamiakPath = '';
+            this.kamiakResults = '';
         }
     }
 
@@ -227,6 +228,7 @@ $(document).ready(function(){
         $("#execPath").val(saved_selections.exec_path).change();
         $("#kamiakFunction").val(saved_selections.kamiakFunction).change();
         $("#kamiakPath").val(saved_selections.kamiakPath).change();
+        $("#kamiakResults").val(saved_selections.kamiakResults).change();
     }
 
 
@@ -285,6 +287,10 @@ $(document).ready(function(){
 
     $("#kamiakPath").change(function(){
         saved_selections.kamiakPath = $(this).val();
+    });
+
+    $("#kamiakResults").change(function(){
+        saved_selections.kamiakResults = $(this).val();
     });
 
     $("[name='extraModels']").change(function(){
@@ -1067,8 +1073,10 @@ $(document).ready(function(){
         var scriptPath = $("#scriptPath").val();
         var kamiakFunction = $("#kamiakFunction").val();
         var kamiakPath = $("#kamiakPath").val();
+        var kamiakResults = $("#kamiakResults").val();
         var forceRerun = 0;
         var useKamiak = 0;
+        var loadKamiak = 0;
 
         if (document.getElementById('forceRerun').checked){
             forceRerun = 1;
@@ -1076,6 +1084,10 @@ $(document).ready(function(){
 
         if (document.getElementById('useKamiak').checked){
             useKamiak = 1;
+        }
+
+        if (document.getElementById('loadKamiak').checked){
+            loadKamiak = 1;
         }
 
         if ((bSelected === null) || (bSelected === undefined) ||
@@ -1110,7 +1122,8 @@ $(document).ready(function(){
                    mSelected:mSelected, forceRerun, codeHash:codeHash,
                    execPath:execPath, scriptPath:scriptPath,
                    useKamiak:useKamiak, kamiakFunction:kamiakFunction,
-                   kamiakPath:kamiakPath },
+                   kamiakPath:kamiakPath, loadKamiak:loadKamiak,
+                   kamiakResults:kamiakResults},
             // TODO: should POST be used in this case?
             type: 'GET',
             success: function(result){

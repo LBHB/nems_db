@@ -1,8 +1,13 @@
 import os
 import datetime
 import stat
+import logging
 
 import nems_lbhb.baphy as nb
+import nems.db as nd
+import nems.xforms as xforms
+
+log = logging.getLogger(__name__)
 
 
 def kamiak_batch(cellids, batch, modelnames, output_path):
@@ -30,7 +35,7 @@ def kamiak_batch(cellids, batch, modelnames, output_path):
         recording_uri = nb.baphy_load_recording_uri(**options)
         if recording_uri not in recording_entries:
             recording_entries.append(recording_uri)
-            local_rec = f'{recordings}/{recording_uri.split("/")[-1]}'
+            remote_rec = f'{recordings}/{recording_uri.split("/")[-1]}'
 
         for i, m in enumerate(modelnames):
             name = f'{m}__{batch}__{c}'
@@ -47,7 +52,7 @@ def kamiak_batch(cellids, batch, modelnames, output_path):
                         "#SBATCH --nodes=1\n"
                         "#SBATCH --ntasks-per-node=1\n"
                         "python3 /home/jacob.pennington/nems_scripts/fit_xforms.py "
-                        f"'{c}' '{batch}' '{m}' '{local_rec}'")
+                        f"'{c}' '{batch}' '{m}' '{remote_rec}' '{recording_uri}'")
 
             with open(full_path, 'w+') as script:
                 script.write(contents)
@@ -71,24 +76,22 @@ def kamiak_batch(cellids, batch, modelnames, output_path):
     os.chmod(manifest_path, st.st_mode | stat.S_IEXEC)  # make it executable
 
 
-# load results
-
-# (Assuming files have already been copied back from kamiak)
-
-# Need: directory containing the files
-#       batch
-
-# 1: Get list of cellids for batch
-
-# 2: For cellid in cellids:
-#     If directory/c/ doesn't exist:
-#         skip
-#     else:
-#         xfspec, ctx = xforms.load_analysis(directory/cellid/)
-#         modelspec = ctx['modelspec']
-#         modelspec.meta['modelpath'] = destination
-#         modelspec.meta['figurefile'] = destination+'figure.0000.png'
-#         nd.update_results_table(modelspec)
-#         destination = '/auto/data/nems_db/results/{0}/{1}/{2}/'.format(
-#                        batch, cellid, ms.get_modelspec_longname(modelspec))
-#w
+def kamiak_to_database(cellids, batch, modelnames, source_path):
+# Assumes files have already been copied back from kamiak and
+# stored in source_path
+    for cellid in cellids:
+        for modelname in modelnames:
+            path = os.path.join(source_path, batch, cellid, modelname)
+            if not os.path.exists(path):
+                log.warning("missing fit for: \n%s\n%s\n%s\n"
+                            "using path: %s\n",
+                            batch, cellid, modelname, path)
+            else:
+                 xfspec, ctx = xforms.load_analysis(path)
+                 modelspec = ctx['modelspec']
+                 preview = modelspec.meta.get('figurefile', None)
+                 nd.update_results_table(modelspec, preview=preview)
+                 if 'log' not in ctx:
+                     ctx['log'] = 'missing log'
+                 xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
+                                      ctx['figures'], ctx['log'])

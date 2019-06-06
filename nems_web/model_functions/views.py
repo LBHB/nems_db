@@ -26,6 +26,7 @@ from nems_web.nems_analysis import app
 from nems.db import enqueue_models
 from nems.modelspec import _lookup_fn_at
 from nems_web.account_management.views import get_current_user
+from nems_lbhb.kamiak import kamiak_to_database
 
 log = logging.getLogger(__name__)
 
@@ -45,10 +46,15 @@ def enqueue_models_view():
     execPath = request.args.get('execPath')
     scriptPath = request.args.get('scriptPath')
     useKamiak = bool(request.args.get('useKamiak'))
-    kamiakFunction = request.args.get('kamiakFunction')
-    kamiakPath = request.args.get('kamiakPath')
+    kamiakFunction = request.args.get('kamiakFunction')  # fn to generate scripts
+    kamiakPath = request.args.get('kamiakPath')  # path to store output in
+    loadKamiak = bool(request.args.get('loadKamiak'))  # check to load results
+    kamiakResults = request.args.get('kamiakResults')  # path to results
 
-    if useKamiak:
+    if loadKamiak:
+        kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults)
+        return jsonify(data=True)
+    elif useKamiak:
         # kamiakFunction should be a stringified pointer to a function
         # that takes a list of cellids, a batch, a list of modelnames,
         # and a directory where the output should be stored,
