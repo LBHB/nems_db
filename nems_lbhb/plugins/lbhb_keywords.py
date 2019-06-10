@@ -224,7 +224,7 @@ def dsig(kw):
                 'base': (1e-15, None), 'base_mod': (1e-15, None),
                 'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
                 'shift': (None, None), 'shift_mod': (None, None),
-                'kappa': (1e-15, None), 'kappa_mod': (1e-15, None),
+                'kappa': (None, None), 'kappa_mod': (None, None),
                 }
 
     #zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
