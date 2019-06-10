@@ -161,19 +161,19 @@ b_modelnames = [
     "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.q-fir.2x15-lvl.1-dexp.1_init.r10-basic.b"
 ]
 
-b = nd.batch_comp(batch,b_modelnames, stat='r_ceiling')
-b_n = nd.batch_comp(batch,b_modelnames, stat='n_parms')
-b_m = np.array((b.loc[goodcells]**2).mean()[b_modelnames])
+
+
 b_stp = np.array([('stp' in m) and ('.x.' not in m) for m in b_modelnames])
 b_stp1 = np.array([('stp' in m) and ('.x.' in m) for m in b_modelnames])
 b_ln = ~(b_stp | b_stp1)
-n_parms=np.array([np.mean(b_n[m]) for m in b_modelnames])
-ax[1].plot(n_parms[b_ln], b_m[b_ln], 'k.')
-ax[1].plot(n_parms[b_stp1], b_m[b_stp1], 'b.')
-ax[1].plot(n_parms[b_stp], b_m[b_stp], 'r.')
-ax[1].set_xlabel('n_parms')
-ax[1].set_ylabel('median pred corr')
-ax[1].set_ylim((0.2, 0.9))
+
+modelgroups=np.zeros(len(b_modelnames))
+modelgroups[b_stp1] = 1
+modelgroups[b_stp] = 2
+lplt.model_comp_pareto(b_modelnames, batch, modelgroups=modelgroups,
+                       goodcells=goodcells, ax=ax[1])
+
+
 
 
 

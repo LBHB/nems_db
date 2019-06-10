@@ -59,6 +59,14 @@ if 1:
     # no shrinkage, wc normed
     # modelname0 = "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic"
     # modelname = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
+
+    modelname0 = "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic"
+    modelname = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
+
     fileprefix="fig6.SPN"
 
 elif 1:
@@ -92,32 +100,48 @@ df_e = nd.batch_comp(batch, [modelname0, modelname], stat='se_test')
 u_bounds = np.array([-0.6, 2.1])
 tau_bounds = np.array([-0.1, 1.5])
 str_bounds = np.array([-0.25, 0.55])
-amp_bounds = np.array([-1, 1.5])
-amp0_bounds = np.array([-0.5, 0.75])
+amp_bounds = np.array([-10, 10])
+amp0_bounds = np.array([-7.5, 7.5])
 
 indices = list(d.index)
 
+fir_index=None
+do_index=None
 for ind in indices:
     if '--u' in ind:
         u_index = ind
-    elif '--tau' in ind:
+    elif ('--stp' in ind) and ('--tau' in ind):
         tau_index = ind
     elif '--fir' in ind:
         fir_index = ind
+    elif ('--do' in ind) and ('gains' in ind):
+        do_index = ind
 
 u = d.loc[u_index]
 tau = d.loc[tau_index]
-fir = d.loc[fir_index]
+if fir_index:
+    fir = d.loc[fir_index]
+elif do_index:
+    fir = d.loc[do_index]
+else:
+    raise ValueError('FIR/do index not found')
+
 r_test = d.loc['meta--r_test']
 se_test = d.loc['meta--se_test']
 r_ceiling = d.loc['meta--r_ceiling']
 
 if modelname0 is not None:
     indices0 = list(d0.index)
+    fir0_index = None
     for ind in indices0:
         if '--fir' in ind:
             fir0_index = ind
-    fir0 = d0.loc[fir0_index]
+        if ('--do' in ind) and ('gains' in ind):
+            do0_index = ind
+    if fir0_index:
+        fir0 = d0.loc[fir0_index]
+    else:
+        fir0 = d0.loc[do0_index]
     r0_test = d0.loc['meta--r_test']
     se0_test = d0.loc['meta--se_test']
     r_ceiling0 = d0.loc['meta--r_ceiling']
@@ -156,10 +180,13 @@ for cellid in u.index:
 
     print("{} ln std: {:.3f} stp std: {:.3f}".format(
             cellid, np.std(fir0[cellid]), np.std(fir[cellid])))
+    if fir_index:
+        fir[cellid] = fir[cellid] / np.std(fir[cellid])
+        t_fir = fir[cellid]
+        x = np.mean(t_fir, axis=1) # / np.std(t_fir)
+    else:
+        x = fir[cellid][:, 0]
 
-    fir[cellid] = fir[cellid] / np.std(fir[cellid])
-    t_fir = fir[cellid]
-    x = np.mean(t_fir, axis=1) # / np.std(t_fir)
     mn, = np.where(x == np.min(x))
     mx, = np.where(x == np.max(x))
     xidx = np.array([mx[0], mn[0]])
@@ -169,10 +196,13 @@ for cellid in u.index:
     tau_mtx[i, :] = np.abs(tau[cellid][xidx])
     str_mtx[i, :] = nmet.stp_magnitude(tau_mtx[i, :], u_mtx[i, :], fs=100)[0]
 
-    fir0[cellid] = fir0[cellid] / np.std(fir0[cellid])
-    t_fir0 = fir0[cellid]
-    x = np.mean(t_fir0[:, :-3], axis=1) / np.std(t_fir0[:, :-3])
-    #x = np.mean(t_fir0[:, :-3], axis=1) #  / np.std(t_fir0[:, :-3])
+    if fir0_index:
+        fir0[cellid] = fir0[cellid] / np.std(fir0[cellid])
+        t_fir0 = fir0[cellid]
+        x = np.mean(t_fir0[:, :-3], axis=1) / np.std(t_fir0[:, :-3])
+        #x = np.mean(t_fir0[:, :-3], axis=1) #  / np.std(t_fir0[:, :-3])
+    else:
+        x = fir0[cellid][:, 0]
     if np.max(x) < 0:
         x = -x
     mn, = np.where(x == np.min(x))

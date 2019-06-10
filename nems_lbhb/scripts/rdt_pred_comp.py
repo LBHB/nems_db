@@ -1,5 +1,5 @@
 import os
-from scipy.stats import wilcoxon
+from scipy.stats import wilcoxon, ttest_ind
 import matplotlib.pyplot as plt
 from nems import xforms
 import nems_lbhb.xform_wrappers as nw
@@ -51,12 +51,14 @@ fig = plt.figure(figsize=(10,5))
 ax_mean = plt.subplot(1,3,1)
 slegend = []
 
+save_dpred_S = {}
+save_dpred_RS = {}
 for b, batch in enumerate(batches):
     d=nd.batch_comp(batch=batch, modelnames=modelnames, stat='r_test')
+
     d.columns = [l0.format('r_test') for l0 in label0]
     dse=nd.batch_comp(batch=batch, modelnames=modelnames, stat='se_test')
     dse.columns = [l0.format('se_test') for l0 in label0]
-
     r = pd.concat([d,dse], sort=True, axis=1)
 
     r['sig'] = (((r['r_test']) > (2 * r['se_test'])) | ((r['r_test_RS']) > (2 * r['se_test_RS']))
@@ -70,6 +72,9 @@ for b, batch in enumerate(batches):
     r['nsR'] = ~r['sigdiffR'] & r['sig']
     r['nsS'] = ~r['sigdiffS'] & r['sig']
     r['ns'] = ~r['sigdiffSR'] & r['sig']
+
+    save_dpred_S[batch] = r.loc[r['sig'],'r_test'] - r.loc[r['sig'], 'r_test_S']
+    save_dpred_RS[batch] = r.loc[r['sig'],'r_test_S'] - r.loc[r['sig'], 'r_test_RS']
 
     ax_mean.plot(r.loc[r['sig'],d.columns].mean().values, label=batstring[b])
     #ax_mean.plot(r.loc[r['sig'],d.columns].median().values,ls='--')
