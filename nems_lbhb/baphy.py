@@ -1271,7 +1271,10 @@ def baphy_load_recording(**options):
         files.sort()
         goodtrials = np.array([], dtype=bool)
     else:
-        files=[mfilename]
+        if type(mfilename) is list:
+            files = mfilename
+        else:
+            files=[mfilename]
         goodtrials = np.array([], dtype=bool)
         dni = None
 
