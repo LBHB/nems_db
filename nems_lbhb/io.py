@@ -106,6 +106,12 @@ class BAPHYExperiment:
 
     @property
     @lru_cache(maxsize=128)
+    def openephys_tarfile(self):
+        path = self.folder / 'raw' / self.experiment
+        return path.with_suffix('.tgz')
+
+    @property
+    @lru_cache(maxsize=128)
     def pupilfile(self):
         return self.parmfile.with_suffix('.pup.mat')
 
