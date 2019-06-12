@@ -6,9 +6,10 @@ Created on Tue Sep 18 16:47:56 2018
 @author: svd
 """
 
+from functools import lru_cache
+from pathlib import Path
 import logging
 import re
-import os
 import os.path
 import scipy.io
 import scipy.io as spio
@@ -24,6 +25,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
+from . import OpenEphys as oe
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -39,6 +41,146 @@ stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
 
+###############################################################################
+# Main entry-point for BAPHY experiments
+###############################################################################
+class BAPHYExperiment:
+    '''
+    Facilitates managing the various files and datasets associated with a
+    single BAPHY experiment:
+
+        >>> parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+        >>> manager = BAPHYExperiment(parmfile)
+        >>> print(manager.pupilfile)
+        /auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.pup.mat
+        >>> print(manager.spikefile)
+        /auto/data/daq/Nameko/NMK004/sorted/NMK004e06_p_NON.spk.mat
+        >>> manager.get_trial_starts()
+        array([ 31.87386667,  44.28406667,  56.64683333,  68.99676667,
+                81.3689    , 102.33266667, 114.70163333, 127.0711    ,
+               139.4586    , 151.82203333, 167.28496667, 179.64786667,
+               192.05813333, 204.47266667, 216.8878    , 230.98546667,
+               243.3703    , 255.7584    , 268.1709    , 280.60616667])
+    '''
+    @classmethod
+    def from_spikefile(cls, spikefile):
+        '''
+        Initialize class from a spike filename.
+
+        Useful if you are debugging code so that you don't have to manually
+        edit the filename to arrive at the parmfilename.
+        '''
+        spikefile = Path(spikefile)
+        folder = spikefile.parent.parent
+        parmfile = folder / spikefile.name.rsplit('.', 2)[0]
+        parmfile = parmfile.with_suffix('.m')
+        return cls(parmfile)
+
+    @classmethod
+    def from_pupilfile(cls, pupilfile):
+        parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
+        parmfile = parmfile.with_suffix('.m')
+        return cls(parmfile)
+
+    def __init__(self, parmfile):
+        # Make sure that the '.m' suffix is present! In baphy_load data I see
+        # that there's care to make sure it's present so I assume not all
+        # functions are careful about the suffix.
+        self.parmfile = Path(parmfile).with_suffix('.m')
+        if not self.parmfile.exists():
+            raise IOError(f'{self.parmfmile} not found')
+        self.folder = self.parmfile.parent
+        self.experiment = self.parmfile.name.split('_', 1)[0]
+        self.experiment_with_runclass = self.parmfile.stem
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_folder(self):
+        path = self.folder / 'raw' / self.experiment
+        candidates = list(path.glob(self.experiment_with_runclass + '*'))
+        if len(candidates) > 1:
+            raise ValueError('More than one candidate found')
+        if len(candidates) == 0:
+            raise ValueError('No candidates found')
+        return candidates[0]
+
+    @property
+    @lru_cache(maxsize=128)
+    def pupilfile(self):
+        return self.parmfile.with_suffix('.pup.mat')
+
+    @property
+    @lru_cache(maxsize=128)
+    def spikefile(self):
+        filename = self.folder / 'sorted' / self.experiment_with_runclass
+        return filename.with_suffix('.spk.mat')
+
+    @lru_cache(maxsize=128)
+    def get_trial_starts(self, method='openephys'):
+        if method == 'openephys':
+            return load_trial_starts_openephys(self.openephys_folder)
+        raise ValueError(f'Method "{method}" not supported')
+
+    @lru_cache(maxsize=128)
+    def get_baphy_events(self, correction_method='openephys'):
+        baphy_events = self._get_baphy_parameters()[-1]
+        if correction_method is None:
+            return baphy_events
+        if correction_method == 'openephys':
+            trial_starts = self.get_trial_starts('openephys')
+            return baphy_align_time_openephys(baphy_events, trial_starts)
+        if correction_method == 'spikes':
+            pass
+        mesg = 'Unsupported correction method "{correction_method}"'
+        raise ValueError(mesg)
+
+    # Methods below this line just pass through to the functions for now.
+    def _get_baphy_parameters(self):
+        # Returns tuple of global, expt and events
+        return baphy_parm_read(self.parmfile)
+
+    def _get_spikes(self):
+        return baphy_load_spike_data_raw(self.spikefile)
+
+
+def baphy_align_time_openephys(events, timestamps):
+    n_baphy = events['Trial'].max()
+    n_oe = len(timestamps)
+    if n_baphy != n_oe:
+        mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
+                'OpenEphys ({n_oe}) do not match'
+        raise ValueError(mesg)
+
+    events = events.copy()
+    for i, timestamp in enumerate(timestamps) :
+        m = events['Trial'] == i+1
+        events.loc[m, ['start', 'end']] += timestamp
+    return events
+
+
+###############################################################################
+# Openephys utility functions
+###############################################################################
+def load_trial_starts_openephys(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = Path(openephys_folder) / 'all_channels.events'
+    data = oe.load(str(event_file))
+    header = data.pop('header')
+    df = pd.DataFrame(data)
+    ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+    return ts['timestamps'].values / float(header['sampleRate'])
+
+
+###############################################################################
+# Unsorted functions
+###############################################################################
 def loadmat(filename):
     '''
     this function should be called instead of direct spio.loadmat
