@@ -128,17 +128,22 @@ class BAPHYExperiment:
         raise ValueError(f'Method "{method}" not supported')
 
     @lru_cache(maxsize=128)
-    def get_baphy_events(self, correction_method='openephys'):
+    def get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self._get_baphy_parameters()[-1]
         if correction_method is None:
             return baphy_events
         if correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
-            return baphy_align_time_openephys(baphy_events, trial_starts)
+            return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
         if correction_method == 'spikes':
-            pass
+            spikes, fs = self._get_spikes()
+            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
+            return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
+
+    def get_pupil_trace(self, *args, **kwargs):
+        return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
 
     # Methods below this line just pass through to the functions for now.
     def _get_baphy_parameters(self):
@@ -146,16 +151,32 @@ class BAPHYExperiment:
         return baphy_parm_read(self.parmfile)
 
     def _get_spikes(self):
-        return baphy_load_spike_data_raw(self.spikefile)
+        return baphy_load_spike_data_raw(str(self.spikefile))
 
 
-def baphy_align_time_openephys(events, timestamps):
+def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
+    '''
+    Parameters
+    ----------
+    events : DataFrame
+        Events stored in BAPHY parmfile
+    timestamps : array
+        Array of timestamps (in seconds) as read in from openephys
+    baphy_legacy_format : bool
+        If True, assume that all data before the onset of the first trial are
+        discarded (i.e., as is the case when aligning times using the spike
+        times file. This results in the first trial having a start timestamp of
+        0.
+    '''
     n_baphy = events['Trial'].max()
     n_oe = len(timestamps)
     if n_baphy != n_oe:
         mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
                 'OpenEphys ({n_oe}) do not match'
         raise ValueError(mesg)
+
+    if baphy_legacy_format:
+        timestamps = timestamps - timestamps[0]
 
     events = events.copy()
     for i, timestamp in enumerate(timestamps) :
@@ -504,18 +525,10 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     # adjust times in exptevents to approximate time since experiment started
     # rather than time since trial started (native format)
     for Trialidx in range(1, TrialCount+1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
         ff = (exptevents['Trial'] == Trialidx)
         exptevents.loc[ff, ['start', 'end']] = (
                 exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
                 )
-
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -536,8 +549,6 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
                 uniquetrials = np.unique(st[0, :])
-                # print('chan {0} unit {1}: {2} spikes {3} trials'
-                #       .format(c, u, st.shape[1], len(uniquetrials)))
 
                 unit_spike_events = np.array([])
                 for trialidx in uniquetrials:
@@ -551,8 +562,6 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     unit_spike_events = np.concatenate(
                             (unit_spike_events, this_spike_events), axis=0
                             )
-                    # print("   trial {0} first spike bin {1}"
-                    #       .format(trialidx,st[1,ff]))
 
                 totalunits += 1
                 if chancount <= 8:
@@ -631,17 +640,21 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         raise ValueError('pupil_derivative not implemented.')
 
     if exptevents is None:
-        parmfilepath = pupilfilepath.replace(".pup.mat",".m")
-        globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-        pp, bb = os.path.split(parmfilepath)
-        spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
-        log.info("Spike file: {0}".format(spkfilepath))
-        # load spike times
-        sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
-        # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = baphy_align_time(
-                exptevents, sortinfo, spikefs, rasterfs
-                )
+        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
+        trial_starts = experiment.get_trial_starts()
+        exptevents = experiment.get_baphy_events()
+
+        #parmfilepath = pupilfilepath.replace(".pup.mat",".m")
+        #globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
+        #pp, bb = os.path.split(parmfilepath)
+        #spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
+        #log.info("Spike file: {0}".format(spkfilepath))
+        ## load spike times
+        #sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+        ## adjust spike and event times to be in seconds since experiment started
+        #exptevents, spiketimes, unit_names = baphy_align_time(
+        #        exptevents, sortinfo, spikefs, rasterfs
+        #        )
 
     matdata = scipy.io.loadmat(pupilfilepath)
 
