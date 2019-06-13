@@ -222,7 +222,7 @@ def dsig(kw):
     if bounded:
         template['bounds'] = {
                 'base': (1e-15, None), 'base_mod': (1e-15, None),
-                'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
+                'amplitude': (None, None), 'amplitude_mod': (None, None),
                 'shift': (None, None), 'shift_mod': (None, None),
                 'kappa': (None, None), 'kappa_mod': (None, None),
                 }
