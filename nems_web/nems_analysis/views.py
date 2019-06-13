@@ -244,6 +244,7 @@ def update_batch():
     return jsonify(batch=batch, blank=blank)
 
 
+_previous_update_models = ('', '', '', [])
 @app.route('/update_models')
 def update_models():
     """Update the list of modelnames in the model selector after an
@@ -257,41 +258,57 @@ def update_models():
     aSelected = request.args.get('aSelected', type=str)
     extraModels = request.args.get('extraModels', type=str)
     extraAnalyses = request.args.get('extraAnalyses', type=str)
+    search = request.args.get('modelSearch', type=str)
 
     extraModels = [s.strip() for s in extraModels.split(',')]
     extraAnalyses = [s.strip() for s in extraAnalyses.split(',')]
 
-    modeltree = (
-            session.query(NarfAnalysis.modeltree)
-            .filter(NarfAnalysis.name == aSelected)
-            .first()
-            )
-    # Pass modeltree string from NarfAnalysis to a ModelFinder constructor,
-    # which will use a series of internal methods to convert the tree string
-    # to a list of model names.
-    # Then add any additional models specified in extraModels, and add
-    # model_lists from extraAnalyses.
-    if modeltree and modeltree[0]:
-        model_list = _get_models(modeltree[0])
-        extraModels = [m for m in extraModels if
-                       (m not in model_list and m.strip() != '')]
-        model_list.extend(extraModels)
-        if extraAnalyses:
-            analyses = (
-                    session.query(NarfAnalysis.modeltree)
-                    .filter(NarfAnalysis.name.in_(extraAnalyses))
-                    .all()
-                    )
-            for t in [a.modeltree for a in analyses]:
-                extras = [m for m in _get_models(t) if m not in model_list]
-                model_list.extend(extras)
-
+    global _previous_update_models
+    pA, xM, xA, pM = _previous_update_models
+    if (aSelected == pA) and (extraModels == xM) and (extraAnalyses == xA):
+        model_list = pM
     else:
-        return jsonify(modellist="Model tree not found.")
+        modeltree = (
+                session.query(NarfAnalysis.modeltree)
+                .filter(NarfAnalysis.name == aSelected)
+                .first()
+                )
+        # Pass modeltree string from NarfAnalysis to a ModelFinder constructor,
+        # which will use a series of internal methods to convert the tree string
+        # to a list of model names.
+        # Then add any additional models specified in extraModels, and add
+        # model_lists from extraAnalyses.
+        if modeltree and modeltree[0]:
+            model_list = _get_models(modeltree[0])
+            extraModels = [m for m in extraModels if
+                           (m not in model_list and m.strip() != '')]
+            model_list.extend(extraModels)
+            if extraAnalyses:
+                analyses = (
+                        session.query(NarfAnalysis.modeltree)
+                        .filter(NarfAnalysis.name.in_(extraAnalyses))
+                        .all()
+                        )
+                for t in [a.modeltree for a in analyses]:
+                    extras = [m for m in _get_models(t) if m not in model_list]
+                    model_list.extend(extras)
+            _previous_update_models = (aSelected, extraModels,
+                                       extraAnalyses, model_list)
+
+        else:
+            _previous_update_models = ('', '', '', [])
+            return jsonify(modellist="Model tree not found.")
 
     session.close()
 
-    return jsonify(modellist=model_list)
+    filtered_models = []
+    for m in model_list:
+        if (search not in m) and (m not in search):
+            pass
+        else:
+            filtered_models.append(m)
+
+    return jsonify(modellist=filtered_models)
 
 
 def _get_models(modeltree):
@@ -310,6 +327,7 @@ def _get_models(modeltree):
     return model_list
 
 
+_previous_update_cells = ('', [])
 @app.route('/update_cells')
 def update_cells():
     """Update the list of cells in the cell selector after a batch
@@ -328,13 +346,20 @@ def update_cells():
     # Only get the numerals for the selected batch, not the description.
     bSelected = request.args.get('bSelected')
     aSelected = request.args.get('aSelected')
+    search = request.args.get('cellSearch')
 
-    celllist = [
-            i[0] for i in
-            session.query(NarfBatches.cellid)
-            .filter(NarfBatches.batch == bSelected[:3])
-            .all()
-            ]
+    global _previous_update_cells
+    previous_batch, previous_celllist = _previous_update_cells
+    if bSelected == previous_batch:
+        celllist = previous_celllist
+    else:
+        celllist = [
+                i[0] for i in
+                session.query(NarfBatches.cellid)
+                .filter(NarfBatches.batch == bSelected[:3])
+                .all()
+                ]
+        _previous_update_cells = (bSelected, celllist)
 
     batchname = (
             session.query(sBatch)
@@ -365,12 +390,17 @@ def update_cells():
         # also filter out siteids
         elif '-' not in c:
             pass
+        # only keep cells containing search string
+        # or that are contained within the search string
+        elif (search not in c) and (c not in search):
+            pass
         else:
             filtered_cellids.append(c)
 
     return jsonify(celllist=filtered_cellids)
 
 
+_previous_update_results = ('', [], [], [], '')
 @app.route('/update_results')
 def update_results():
     """Update the results table after a batch, cell or model selection
@@ -394,55 +424,66 @@ def update_results():
     # If no batch, cell or model is selected, display an error message.
     if (len(bSelected) == 0) or (not cSelected) or (not mSelected):
         return jsonify(resultstable=nullselection)
-    # Only get numerals for selected batch.
-    bSelected = bSelected[:3]
-    # Use default value of 500 if no row limit is specified.
-    rowlimit = request.args.get('rowLimit', 500)
-    ordSelected = request.args.get('ordSelected')
-    # Parse string into appropriate sqlalchemy method
-    if ordSelected == 'asc':
-        ordSelected = asc
-    elif ordSelected == 'desc':
-        ordSelected = desc
-    sortSelected = request.args.get('sortSelected', 'cellid')
 
-    # Always add cellid and modelname to column lists,
-    # since they are required for selection behavior.
-    cols = [
-            getattr(NarfResults, 'cellid'),
-            getattr(NarfResults, 'modelname'),
-            ]
-    cols += [
-            getattr(NarfResults, c) for c in colSelected
-            if hasattr(NarfResults, c)
-            ]
+    global _previous_update_results
+    pB, pCe, pM, pCo, pR = _previous_update_results
+    if ((pB == bSelected) and (pCe == cSelected) and (pM == mSelected)
+         and (pCo == colSelected)):
+        resultstable = pR
+    else:
 
-    # Package query results into a DataFrame
-    results = psql.read_sql_query(
-            Query(cols, session)
-            .filter(NarfResults.batch == bSelected)
-            .filter(NarfResults.cellid.in_(cSelected))
-            .filter(NarfResults.modelname.in_(mSelected))
-            .filter(or_(
-                    int(user.sec_lvl) == 9,
-                    NarfResults.public == '1',
-                    NarfResults.labgroup.ilike('%{0}%'.format(user.labgroup)),
-                    NarfResults.username == user.username,
-                    ))
-            .order_by(ordSelected(getattr(NarfResults, sortSelected)))
-            .limit(rowlimit).statement,
-            session.bind
-            )
-    with pd.option_context('display.max_colwidth', -1):
-        resultstable = results.to_html(
-                index=False, classes="table-hover table-condensed",
+        # Only get numerals for selected batch.
+        bSelected = bSelected[:3]
+        # Use default value of 500 if no row limit is specified.
+        rowlimit = request.args.get('rowLimit', 500)
+        ordSelected = request.args.get('ordSelected')
+        # Parse string into appropriate sqlalchemy method
+        if ordSelected == 'asc':
+            ordSelected = asc
+        elif ordSelected == 'desc':
+            ordSelected = desc
+        sortSelected = request.args.get('sortSelected', 'cellid')
+
+        # Always add cellid and modelname to column lists,
+        # since they are required for selection behavior.
+        cols = [
+                getattr(NarfResults, 'cellid'),
+                getattr(NarfResults, 'modelname'),
+                ]
+        cols += [
+                getattr(NarfResults, c) for c in colSelected
+                if hasattr(NarfResults, c)
+                ]
+
+        # Package query results into a DataFrame
+        results = psql.read_sql_query(
+                Query(cols, session)
+                .filter(NarfResults.batch == bSelected)
+                .filter(NarfResults.cellid.in_(cSelected))
+                .filter(NarfResults.modelname.in_(mSelected))
+                .filter(or_(
+                        int(user.sec_lvl) == 9,
+                        NarfResults.public == '1',
+                        NarfResults.labgroup.ilike('%{0}%'.format(user.labgroup)),
+                        NarfResults.username == user.username,
+                        ))
+                .order_by(ordSelected(getattr(NarfResults, sortSelected)))
+                .limit(rowlimit).statement,
+                session.bind
                 )
+        with pd.option_context('display.max_colwidth', -1):
+            resultstable = results.to_html(
+                    index=False, classes="table-hover table-condensed",
+                    )
+        _previous_update_results = (bSelected, cSelected, mSelected, colSelected,
+                                    resultstable)
 
     session.close()
 
     return jsonify(resultstable=resultstable)
 
 
+_previous_update_analysis = ([], [], [], [])
 @app.route('/update_analysis')
 def update_analysis():
     """Update list of analyses after a tag and/or filter selection changes."""
@@ -453,41 +494,48 @@ def update_analysis():
 
     tagSelected = request.args.getlist('tagSelected[]')
     statSelected = request.args.getlist('statSelected[]')
-    # If special '__any' value is passed, set tag and status to match any
-    # string in ilike query.
-    if '__any' in tagSelected:
-        tagStrings = [NarfAnalysis.tags.ilike('%%')]
+
+    global _previous_update_analysis
+    previous_tags, previous_stats, previous_analyses, previous_ids = _previous_update_analysis
+    if (previous_tags == tagSelected) and (previous_stats == statSelected):
+        analysislist = previous_analyses
+        analysis_ids = previous_ids
     else:
-        tagStrings = [
-                NarfAnalysis.tags.ilike('%{0}%'.format(tag))
-                for tag in tagSelected
+        # If special '__any' value is passed, set tag and status to match any
+        # string in ilike query.
+        if '__any' in tagSelected:
+            tagStrings = [NarfAnalysis.tags.ilike('%%')]
+        else:
+            tagStrings = [
+                    NarfAnalysis.tags.ilike('%{0}%'.format(tag))
+                    for tag in tagSelected
+                    ]
+        if '__any' in statSelected:
+            statStrings = [NarfAnalysis.status.ilike('%%')]
+        else:
+            statStrings = [
+                    NarfAnalysis.status.ilike('%{0}%'.format(stat))
+                    for stat in statSelected
+                    ]
+        analyses = (
+                session.query(NarfAnalysis)
+                .filter(or_(*tagStrings))
+                .filter(or_(*statStrings))
+                .filter(or_(
+                        int(user.sec_lvl) == 9,
+                        NarfAnalysis.public == '1',
+                        NarfAnalysis.labgroup.ilike('%{0}%'.format(user.labgroup)),
+                        NarfAnalysis.username == user.username,
+                        ))
+                .order_by(asc(NarfAnalysis.id))
+                .all()
+                )
+        analysislist = [
+                a.name for a in analyses
                 ]
-    if '__any' in statSelected:
-        statStrings = [NarfAnalysis.status.ilike('%%')]
-    else:
-        statStrings = [
-                NarfAnalysis.status.ilike('%{0}%'.format(stat))
-                for stat in statSelected
+        analysis_ids = [
+                a.id for a in analyses
                 ]
-    analyses = (
-            session.query(NarfAnalysis)
-            .filter(or_(*tagStrings))
-            .filter(or_(*statStrings))
-            .filter(or_(
-                    int(user.sec_lvl) == 9,
-                    NarfAnalysis.public == '1',
-                    NarfAnalysis.labgroup.ilike('%{0}%'.format(user.labgroup)),
-                    NarfAnalysis.username == user.username,
-                    ))
-            .order_by(asc(NarfAnalysis.id))
-            .all()
-            )
-    analysislist = [
-            a.name for a in analyses
-            ]
-    analysis_ids = [
-            a.id for a in analyses
-            ]
 
     session.close()
 

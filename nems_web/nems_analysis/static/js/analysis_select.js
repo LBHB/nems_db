@@ -364,12 +364,14 @@ $(document).ready(function(){
     $("#analysisSelector").change(updateBatchModel);
     $("[name='extraModels']").change(updateBatchModel);
     $("[name='extraAnalyses']").change(updateBatchModel);
+    $("#modelSearch").change(updateBatchModel);
 
     function updateBatchModel(){
         // if analysis selection changes, get the value selected
         var aSelected = $("#analysisSelector").val();
         var extraModels = $("[name='extraModels']").val();
         var extraAnalyses = $("[name='extraAnalyses']").val();
+        var modelSearch = $("#modelSearch").val();
 
         // pass the value to '/update_batch' in nemsweb.py
         // get back associated batchnum and change batch selector to match
@@ -393,7 +395,7 @@ $(document).ready(function(){
         $.ajax({
             url: $SCRIPT_ROOT + '/update_models',
             data: { aSelected:aSelected, extraModels:extraModels,
-                    extraAnalyses:extraAnalyses},
+                    extraAnalyses:extraAnalyses, modelSearch:modelSearch},
             type: 'GET',
             success: function(data){
                 if (data.modellist.length === 0){
@@ -420,6 +422,7 @@ $(document).ready(function(){
     };
 
     $("#batchSelector").change(updateCells);
+    $("#cellSearch").change(updateCells);
 
     function updateCells(){
         // TODO: update cell list when batch changes
@@ -427,10 +430,12 @@ $(document).ready(function(){
         // if batch selection changes, get the value of the new selection
         var bSelected = $("#batchSelector").val();
         var aSelected = $("#analysisSelector").val();
+        var cellSearch = $("#cellSearch").val();
 
         $.ajax({
             url: $SCRIPT_ROOT + '/update_cells',
-            data: { bSelected:bSelected, aSelected:aSelected },
+            data: { bSelected:bSelected, aSelected:aSelected,
+                    cellSearch:cellSearch },
             type: 'GET',
             success: function(data) {
                 cells = $("#cellSelector");
