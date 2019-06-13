@@ -69,6 +69,7 @@ For example, this protocol for creating an environment seems stable (for LBHB wo
 
 ```
 conda create --name my_pupil_env python=3.7 tensorflow-gpu keras-gpu
+conda activate my_pupil_env
 conda install cudatoolkit==9.0
 pip install -e <path/to/nems_db>
 pip install -e <path/to/NEMS>
