@@ -10,8 +10,10 @@ Usage:
     import OpenEphys
     data = OpenEphys.load(pathToFile) # returns a dict with data, timestamps, etc.
 
+Modified by Brad Buran June 2019
 """
 
+import io
 import os
 import numpy as np
 import scipy.signal
@@ -100,18 +102,20 @@ def loadFolderToArray(folderpath, channels = 'all', chprefix = 'CH',
 
     return data_array
 
-def loadContinuous(filepath, dtype = float):
-
+def loadContinuous(fh, dtype=float):
     assert dtype in (float, np.int16), \
       'Invalid data type specified for loadContinous, valid types are float and np.int16'
 
-
-    ch = { }
+    ch = {}
 
     #read in the data
-    f = open(filepath,'rb')
+    if not isinstance(fh, io.IOBase):
+        fh = open(fh,'rb')
+        do_close = True
+    else:
+        do_close = False
 
-    fileLength = os.fstat(f.fileno()).st_size
+    fileLength = os.fstat(fh.fileno()).st_size
 
     # calculate number of samples
     recordBytes = fileLength - NUM_HEADER_BYTES
@@ -125,34 +129,37 @@ def loadContinuous(filepath, dtype = float):
     recordingNumbers = np.zeros(nrec)
     indices = np.arange(0, nsamp + 1, SAMPLES_PER_RECORD, np.dtype(np.int64))
 
-    header = readHeader(f)
+    header = readHeader(fh)
 
     recIndices = np.arange(0, nrec)
 
     for recordNumber in recIndices:
 
-        timestamps[recordNumber] = np.fromfile(f,np.dtype('<i8'),1) # little-endian 64-bit signed integer
-        N = np.fromfile(f,np.dtype('<u2'),1)[0] # little-endian 16-bit unsigned integer
+        timestamps[recordNumber] = np.fromfile(fh,np.dtype('<i8'),1) # little-endian 64-bit signed integer
+        N = np.fromfile(fh,np.dtype('<u2'),1)[0] # little-endian 16-bit unsigned integer
 
         if N != SAMPLES_PER_RECORD:
             raise Exception('Found corrupted record in block ' + str(recordNumber))
 
-        recordingNumbers[recordNumber] = (np.fromfile(f,np.dtype('>u2'),1)) # big-endian 16-bit unsigned integer
+        recordingNumbers[recordNumber] = (np.fromfile(fh,np.dtype('>u2'),1)) # big-endian 16-bit unsigned integer
 
         if dtype == float: # Convert data to float array and convert bits to voltage.
-            data = np.fromfile(f,np.dtype('>i2'),N) * float(header['bitVolts']) # big-endian 16-bit signed integer, multiplied by bitVolts
+            data = np.fromfile(fh,np.dtype('>i2'),N) * float(header['bitVolts']) # big-endian 16-bit signed integer, multiplied by bitVolts
         else:  # Keep data in signed 16 bit integer format.
-            data = np.fromfile(f,np.dtype('>i2'),N)  # big-endian 16-bit signed integer
+            data = np.fromfile(fh,np.dtype('>i2'),N)  # big-endian 16-bit signed integer
         samples[indices[recordNumber]:indices[recordNumber+1]] = data
 
-        marker = f.read(10) # dump
+        marker = fh.read(10) # dump
 
 
     ch['header'] = header
     ch['timestamps'] = timestamps
     ch['data'] = samples  # OR use downsample(samples,1), to save space
     ch['recordingNumber'] = recordingNumbers
-    f.close()
+
+    if do_close:
+        fh.close()
+
     return ch
 
 def loadSpikes(filepath):

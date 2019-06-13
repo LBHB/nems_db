@@ -18,6 +18,7 @@ import scipy.signal
 import numpy as np
 import json
 import sys
+import tarfile
 import io
 import datetime
 import glob
@@ -107,8 +108,26 @@ class BAPHYExperiment:
     @property
     @lru_cache(maxsize=128)
     def openephys_tarfile(self):
+        '''
+        Return path to OpenEphys tarfile containing recordings
+        '''
         path = self.folder / 'raw' / self.experiment
         return path.with_suffix('.tgz')
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_tarfile_relpath(self):
+        '''
+        Return relative path in OpenEphys tarfile that represents the "parent"
+        of all files (e.g., *.continuous) stored within, e.g.:
+
+            filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+            import tarfile
+            with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
+                fh.open(filename)
+        '''
+        parent = self.openephys_tarfile.parent
+        return self.openephys_folder.relative_to(parent)
 
     @property
     @lru_cache(maxsize=128)
@@ -152,6 +171,16 @@ class BAPHYExperiment:
 
     def _get_spikes(self):
         return baphy_load_spike_data_raw(str(self.spikefile))
+
+    def get_continuous_data(self, filename):
+        '''
+        WARNING: This is a beta method. The interface and return value may
+        change.
+        '''
+        full_filename = self.openephys_tarfile_relpath / filename
+        with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+            with tar_fh.extractfile(str(full_filename)) as fh:
+                return load_continuous_openephys(fh)
 
 
 def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
@@ -203,6 +232,86 @@ def load_trial_starts_openephys(openephys_folder):
     df = pd.DataFrame(data)
     ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
     return ts['timestamps'].values / float(header['sampleRate'])
+
+
+def load_continuous_openephys(fh):
+    '''
+    Read continous OpenEphys dataset
+
+    Parameters
+    ----------
+    fh : {str, file-like object, buffer}
+        If a file-like object or buffer, will read directly from it. If a
+        string, will open the file first (and close upon exiting).
+
+    Unlike the version provided by OpenEphys, this one can handle reading from
+    buffered streams (e.g., such as that provided by a tarfile) or existing
+    files.
+
+    Example
+    -------
+    import tarfile
+
+    parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+    manager = io.BAPHYExperiment(parmfile)
+    filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+    tar_fh = tarfile.open(manager.openephys_tarfile, 'r:gz')
+    fh = tar_fh.extractfile(str(filename))
+    ch_data = load_continous_openephys(fh)
+    '''
+    if not isinstance(fh, io.IOBase):
+        fh = open(fh, 'rb')
+        do_close = True
+    else:
+        do_close = False
+
+    header = oe.readHeader(fh)
+    scale = float(header['bitVolts'])
+    ts_dtype = np.dtype('<i8')
+    n_dtype = np.dtype('<u2')
+    record_number_dtype = np.dtype('>u2')
+    data_dtype = np.dtype('>i2')
+
+    timestamps = []
+    record_number = []
+    data = []
+
+    SAMPLES_PER_RECORD = 1024
+
+    while True:
+        try:
+            b = fh.read(ts_dtype.itemsize)
+            ts = np.frombuffer(b, ts_dtype, 1)[0]
+            b = fh.read(n_dtype.itemsize)
+            n = np.frombuffer(b, n_dtype, 1)[0]
+            if n != SAMPLES_PER_RECORD:
+                raise IOError('Found corrupt record')
+            b = fh.read(record_number_dtype.itemsize)
+            rn = np.frombuffer(b, record_number_dtype, 1)[0]
+            b = fh.read(data_dtype.itemsize * n)
+            d = np.frombuffer(b, data_dtype, n) * scale
+            _ = fh.read(10)
+
+            timestamps.append(ts)
+            record_number.append(rn)
+            data.append(d)
+        except ValueError:
+            # We have reached end of file?
+            break
+
+    timestamps = np.array(timestamps)
+    record_number = np.array(record_number)
+    data = np.concatenate(data)
+
+    if do_close:
+        fh.close()
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'record_number': record_number,
+    }
 
 
 ###############################################################################
