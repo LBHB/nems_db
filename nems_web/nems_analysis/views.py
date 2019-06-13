@@ -357,7 +357,18 @@ def update_cells():
     session.commit()
     session.close()
 
-    return jsonify(celllist=celllist)
+    filtered_cellids = []
+    for c in celllist:
+        # filter out pairwise cellids
+        if '+' in c:
+            pass
+        # also filter out siteids
+        elif '-' not in c:
+            pass
+        else:
+            filtered_cellids.append(c)
+
+    return jsonify(celllist=filtered_cellids)
 
 
 @app.route('/update_results')
