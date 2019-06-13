@@ -96,6 +96,7 @@ def kamiak_array(cellids, batch, modelnames, output_path):
     remote_scripts = f"{remote_host}:{scripts}"
     logs = "/home/jacob.pennington/nems_logs/"
     jobs = f"{scripts}/{subdirectory}/jobs.txt"
+    failed_jobs = jobs[:-4] + '_failed.txt'
 
     for j, c in enumerate(cellids):
         # TODO: Don't hardcode the loader options, parse from modelname
@@ -125,15 +126,23 @@ def kamiak_array(cellids, batch, modelnames, output_path):
               "\n"
               f"job=$(sed \"${{SLURM_ARRAY_TASK_ID}}q;d\" {jobs})\n"
               "args=($job)\n"
+              "\n"
+              "# Call cleanup function on cancelled jobs\n"
+              "function clean_up {\n"
+              "    echo \"${args[0]} ${args[1]} ${args[2]}"
+              f"    ${{args[3]}} ${{args[4]}}\" >> {failed_jobs}\n"
+              "}\n"
+              "# trap termination signals\n"
+              "trap 'clean_up' SIGINT SIGTERM\n"
               "python3 /home/jacob.pennington/nems_scripts/fit_xforms.py "
-              f"${{args[0]}} ${{args[1]}} ${{args[2]}} ${{args[3]}} ${{args[4]}}"
+              "${args[0]} ${args[1]} ${args[2]} ${args[3]} ${args[4]}"
               )
 
     # Write recording_uri list to manifest
 
     # Copy recording files in separate scp commands since
     # a full batch might become very large for a single copy
-    manifest_lines = [f'scp {e} {remote_recordings}/{e.split("/")[-1]}'
+    manifest_lines = [f'rsync -avx --ignore-existing {e} {remote_recordings}/{e.split("/")[-1]}'
                       for e in recording_entries]
     # But all scripts can be copied over in one command
     manifest_lines.append(f'scp {args_path} {remote_scripts}/{subdirectory}/')
