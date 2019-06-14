@@ -303,10 +303,24 @@ def update_models():
 
     filtered_models = []
     for m in model_list:
-        if (search not in m) and (m not in search):
-            pass
-        else:
-            filtered_models.append(m)
+        for s in search.split(' '):
+            if '&' in s:
+                ands = s.split('&')
+                all_there = True
+                for a in ands:
+                    if (a in m) or (m in a):
+                        continue
+                    else:
+                        all_there = False
+                        break
+                if all_there:
+                    filtered_models.append(m)
+            else:
+                if (s in m) or (m in s):
+                    filtered_models.append(m)
+                    break
+                else:
+                    pass
 
     return jsonify(modellist=filtered_models)
 
@@ -386,16 +400,31 @@ def update_cells():
     for c in celllist:
         # filter out pairwise cellids
         if '+' in c:
-            pass
+            continue
         # also filter out siteids
         elif '-' not in c:
-            pass
+            continue
         # only keep cells containing search string
         # or that are contained within the search string
-        elif (search not in c) and (c not in search):
-            pass
         else:
-            filtered_cellids.append(c)
+            for s in search.split(' '):
+                if '&' in s:
+                    ands = s.split('&')
+                    all_there = True
+                    for a in ands:
+                        if (a in c) or (c in a):
+                            continue
+                        else:
+                            all_there = False
+                            break
+                    if all_there:
+                        filtered_cellids.append(c)
+                else:
+                    if (s in c) or (c in s):
+                        filtered_cellids.append(c)
+                        break
+                    else:
+                        pass
 
     return jsonify(celllist=filtered_cellids)
 
