@@ -25,9 +25,12 @@ class TrainingDataBrowser:
         # the training directory and then display the first of these frames.
 
         if (animal is None) and (video_name is None):
+            self.from_browser = False
             default_frame = os.listdir(train_data_path)[0].split('.')[0]
 
         else:
+            self.from_browser = True
+            self.video_name = video_name
             # where the prediction will be stored if this vid has already been
             # fit
             predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
@@ -89,6 +92,18 @@ class TrainingDataBrowser:
 
         self.load_button = tk.Button(master, text="Display current frame", command=self.browse_files)
         self.load_button.grid(row=0, column=1)
+
+        if self.from_browser:
+            self.frame_count = tk.Text(master, height=1, width=12)
+            all_frames = os.listdir(train_data_path)
+            all_frames = [f for f in all_frames if self.video_name in f]
+            self.frame_count.grid(row=0, column=2)
+            self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
+        else:
+            self.frame_count = tk.Text(master, height=1, width=12)
+            self.frame_count.grid(row=0, column=2)
+            all_frames = os.listdir(train_data_path)
+            self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
 
         self.frame_name = tk.Entry(master)
         self.frame_name.grid(row=0, column=0)
@@ -286,7 +301,13 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if f in self.video_name]
+            frame_numbers = [int(f[15:]) for f in all_frames]
+            inds = np.argsort(np.array(all_frames))
+        else:
+            inds = np.argsort(np.array(all_frames))
+
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
@@ -371,10 +392,9 @@ class TrainingDataBrowser:
         # Unfortunately, there's no accessor for the pointer to the native renderer
         tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
 
-        #self.master.mainloop()
+        # self.pupil_canvas = canvas
 
         return photo
-
 
     def plot_frame(self, frame_file):
         '''
@@ -384,9 +404,13 @@ class TrainingDataBrowser:
 
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
+            fp.close()
 
         canvas = self.pupil_canvas
         canvas.delete('all')  # prevent memory leak
+        #if 'AMT003c11_p_NAT10995' in frame_file:
+        #    import pdb; pdb.set_trace()
+
         loc = (0, 0)
 
         figure = mpl.figure.Figure(figsize=(4, 4))
@@ -418,6 +442,8 @@ class TrainingDataBrowser:
         # Unfortunately, there's no accessor for the pointer to the native renderer
         tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
 
+        # self.pupil_canvas = canvas
+
         return photo
 
 
@@ -440,11 +466,18 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if self.video_name in f]
+            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            inds = np.argsort(np.array(frame_numbers))
+        else:
+            inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index + 1
+        self.frame_count.delete('1.0', tk.END)
+        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         if new_index == len(all_frames):
             new_index = 0
         new_frame = all_frames[new_index]
@@ -463,11 +496,18 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if self.video_name in f]
+            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            inds = np.argsort(np.array(frame_numbers))
+        else:
+            inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index - 1
+        self.frame_count.delete('1.0', tk.END)
+        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
 
