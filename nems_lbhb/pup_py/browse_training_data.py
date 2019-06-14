@@ -7,6 +7,7 @@ import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Ellipse
 from PIL import Image
@@ -23,6 +24,8 @@ class TrainingDataBrowser:
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
         # the training directory and then display the first of these frames.
+
+        self.plot_calls = 0
 
         if (animal is None) and (video_name is None):
             self.from_browser = False
@@ -366,23 +369,31 @@ class TrainingDataBrowser:
         canvas.delete('all') # prevent memory leak
         loc = (0, 0)
 
-        figure = mpl.figure.Figure(figsize=(4, 4))
-        ax = figure.add_axes([0, 0, 1, 1])
-        ax.imshow(frame_data['frame'])
-
         X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
         Y0_in = np.float(self.x_pos_value.get())
         long_axis = np.float(self.long_axis_value.get())
         short_axis = np.float(self.short_axis_value.get())
         phi = np.float(self.phi_value.get()) / 180 * np.pi
 
-        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-        ax.add_patch(ellipse)
 
-        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
-        figure_canvas_agg.draw()
+        if self.plot_calls == 0:
+            self.plot_calls += 1
+            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.add_patch(ellipse)
 
-        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
+            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
+        else:
+            self.pupil_handle.set_data(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.patches[0].remove()
+            self.ax_handle.add_patch(ellipse)
+
+        self.figure_canvas_agg.draw()
+
+        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
         figure_w, figure_h = int(figure_w), int(figure_h)
         photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
 
@@ -390,7 +401,7 @@ class TrainingDataBrowser:
         canvas.create_image(loc[0] + figure_w / 2, loc[1] + figure_h / 2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
 
         # self.pupil_canvas = canvas
 
@@ -411,12 +422,6 @@ class TrainingDataBrowser:
         #if 'AMT003c11_p_NAT10995' in frame_file:
         #    import pdb; pdb.set_trace()
 
-        loc = (0, 0)
-
-        figure = mpl.figure.Figure(figsize=(4, 4))
-        ax = figure.add_axes([0, 0, 1, 1])
-        ax.imshow(frame_data['frame'])
-
         Y0_in = frame_data['ellipse_zack']['Y0_in']
         X0_in = frame_data['ellipse_zack']['X0_in']
         long_axis = frame_data['ellipse_zack']['b'] * 2
@@ -426,13 +431,25 @@ class TrainingDataBrowser:
         # update the ellipse params display to correspond to the current frame
         self.update_ellipse_params(frame_data['ellipse_zack'])
 
-        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-        ax.add_patch(ellipse)
+        loc = (0, 0)
 
-        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
-        figure_canvas_agg.draw()
+        if self.plot_calls == 0:
+            self.plot_calls += 1
+            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.add_patch(ellipse)
+            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
+        else:
+            self.pupil_handle.set_data(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.patches[0].remove()
+            self.ax_handle.add_patch(ellipse)
 
-        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
+        self.figure_canvas_agg.draw()
+
+        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
         figure_w, figure_h = int(figure_w), int(figure_h)
         photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
 
@@ -440,7 +457,7 @@ class TrainingDataBrowser:
         canvas.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
 
         # self.pupil_canvas = canvas
 
@@ -483,6 +500,10 @@ class TrainingDataBrowser:
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
 
+        # if the current/new frame aren't from the same video, reset the plot
+        if new_frame[:15] != current_frame[:15]:
+            self.plot_calls = 0
+
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
 
@@ -511,10 +532,14 @@ class TrainingDataBrowser:
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
 
+        if new_frame[:15] != current_frame[:15]:
+            self.plot_calls = 0
+
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_canvas.delete("all")
         self.pupil_plot = self.plot_frame(new_frame_root)
 
 root = tk.Tk()
