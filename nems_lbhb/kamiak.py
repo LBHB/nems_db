@@ -85,13 +85,16 @@ def kamiak_array(cellids, batch, modelnames, output_path):
 
     # Create a manifest of the recording names needed
     manifest_path = os.path.join(directory_path, 'manifest.sh')
+    reverse_manifest_path = os.path.join(directory_path, 'reverse_manifest.sh')
     args_path = os.path.join(directory_path, 'jobs.txt')
     script_path = os.path.join(directory_path, 'batch.srun')
     recording_entries = []
     args_entries = []
     remote_host = "jacob.pennington@kamiak.wsu.edu"
     recordings = "/home/jacob.pennington/nems/recordings/"
+    results = f"/home/jacob.pennington/nems/results/{batch}"
     remote_recordings = f"{remote_host}:{recordings}"
+    remote_results = f"{remote_host}:{results}"
     scripts = "/home/jacob.pennington/slurm_scripts/"
     remote_scripts = f"{remote_host}:{scripts}"
     logs = "/home/jacob.pennington/nems_logs/"
@@ -118,8 +121,8 @@ def kamiak_array(cellids, batch, modelnames, output_path):
               "#SBATCH --partition=kamiak\n"
               "#SBATCH --job-name=NEMS\n"
               f"#SBATCH --array=1-{len(args_entries)}\n"
-              f"#SBATCH --output={logs}/{subdirectory}/NEMS.out\n"
-              f"#SBATCH --error={logs}/{subdirectory}/NEMS.err\n"
+              f"#SBATCH --output={logs}/{subdirectory}/NEMS.%A_%a.out\n"
+              f"#SBATCH --error={logs}/{subdirectory}/NEMS.%A_%a.err\n"
               "#SBATCH --time=1-23:59:00\n"
               "#SBATCH --nodes=1\n"
               "#SBATCH --ntasks-per-node=1\n"
@@ -135,7 +138,8 @@ def kamiak_array(cellids, batch, modelnames, output_path):
               "# trap termination signals\n"
               "trap 'clean_up' SIGINT SIGTERM\n"
               "python3 /home/jacob.pennington/nems_scripts/fit_xforms.py "
-              "${args[0]} ${args[1]} ${args[2]} ${args[3]} ${args[4]}"
+              "${args[0]} ${args[1]} ${args[2]} ${args[3]} ${args[4]}\n"
+              "echo \"task ${SLURM_ARRAY_TASK_ID} complete\""
               )
 
     # Write recording_uri list to manifest
@@ -151,11 +155,25 @@ def kamiak_array(cellids, batch, modelnames, output_path):
     manifest_lines.insert(0, f'ssh {remote_host} "mkdir -p {logs}/{subdirectory}"')
     manifest_lines.insert(0, '#!/bin/bash')
     manifest_contents = '\n'.join([e for e in manifest_lines])
+
+    reverse_manifest_lines = [f'rsync -avx {remote_results} $1']
+    reverse_manifest_lines.insert(0, '#!/bin/bash')
+    reverse_manifest_contents = '\n'.join([r for r in reverse_manifest_lines])
+
     args_contents = '\n'.join([a for a in args_entries])
+
     with open(manifest_path, 'w+') as manifest:
         manifest.write(manifest_contents)
+    os.chmod(manifest_path, 0o777) # open up permissions for other users
     st = os.stat(manifest_path)
     os.chmod(manifest_path, st.st_mode | stat.S_IEXEC)  # make it executable
+
+    with open(reverse_manifest_path, 'w+') as reverse_manifest:
+        reverse_manifest.write(reverse_manifest_contents)
+    os.chmod(reverse_manifest_path, 0o777)
+    rst = os.stat(reverse_manifest_path)
+    os.chmod(reverse_manifest_path, rst.st_mode | stat.S_IEXEC)
+
     with open(args_path, 'w+') as args:
         args.write(args_contents)
     with open(script_path, 'w+') as script:
@@ -174,10 +192,9 @@ def kamiak_to_database(cellids, batch, modelnames, source_path):
                             batch, cellid, modelname, path)
             else:
                  xfspec, ctx = xforms.load_analysis(path)
-                 modelspec = ctx['modelspec']
-                 preview = modelspec.meta.get('figurefile', None)
-                 nd.update_results_table(modelspec, preview=preview)
+                 preview = ctx['modelspec'].meta.get('figurefile', None)
                  if 'log' not in ctx:
                      ctx['log'] = 'missing log'
                  xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
                                       ctx['figures'], ctx['log'])
+                 nd.update_results_table(ctx['modelspec'], preview=preview)
