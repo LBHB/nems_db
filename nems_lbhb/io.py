@@ -9,9 +9,10 @@ A bunch of routines for loading data from baphy/matlab
 
 """
 
+from functools import lru_cache
+from pathlib import Path
 import logging
 import re
-import os
 import os.path
 import pickle
 import scipy.io
@@ -21,6 +22,7 @@ import scipy.signal
 import numpy as np
 import json
 import sys
+import tarfile
 import io
 import datetime
 import glob
@@ -28,6 +30,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
+from . import OpenEphys as oe
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -43,6 +46,281 @@ stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
 
+###############################################################################
+# Main entry-point for BAPHY experiments
+###############################################################################
+class BAPHYExperiment:
+    '''
+    Facilitates managing the various files and datasets associated with a
+    single BAPHY experiment:
+
+        >>> parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+        >>> manager = BAPHYExperiment(parmfile)
+        >>> print(manager.pupilfile)
+        /auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.pup.mat
+        >>> print(manager.spikefile)
+        /auto/data/daq/Nameko/NMK004/sorted/NMK004e06_p_NON.spk.mat
+        >>> manager.get_trial_starts()
+        array([ 31.87386667,  44.28406667,  56.64683333,  68.99676667,
+                81.3689    , 102.33266667, 114.70163333, 127.0711    ,
+               139.4586    , 151.82203333, 167.28496667, 179.64786667,
+               192.05813333, 204.47266667, 216.8878    , 230.98546667,
+               243.3703    , 255.7584    , 268.1709    , 280.60616667])
+    '''
+    @classmethod
+    def from_spikefile(cls, spikefile):
+        '''
+        Initialize class from a spike filename.
+
+        Useful if you are debugging code so that you don't have to manually
+        edit the filename to arrive at the parmfilename.
+        '''
+        spikefile = Path(spikefile)
+        folder = spikefile.parent.parent
+        parmfile = folder / spikefile.name.rsplit('.', 2)[0]
+        parmfile = parmfile.with_suffix('.m')
+        return cls(parmfile)
+
+    @classmethod
+    def from_pupilfile(cls, pupilfile):
+        parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
+        parmfile = parmfile.with_suffix('.m')
+        return cls(parmfile)
+
+    def __init__(self, parmfile):
+        # Make sure that the '.m' suffix is present! In baphy_load data I see
+        # that there's care to make sure it's present so I assume not all
+        # functions are careful about the suffix.
+        self.parmfile = Path(parmfile).with_suffix('.m')
+        if not self.parmfile.exists():
+            raise IOError(f'{self.parmfmile} not found')
+        self.folder = self.parmfile.parent
+        self.experiment = self.parmfile.name.split('_', 1)[0]
+        self.experiment_with_runclass = self.parmfile.stem
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_folder(self):
+        path = self.folder / 'raw' / self.experiment
+        candidates = list(path.glob(self.experiment_with_runclass + '*'))
+        if len(candidates) > 1:
+            raise ValueError('More than one candidate found')
+        if len(candidates) == 0:
+            raise ValueError('No candidates found')
+        return candidates[0]
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_tarfile(self):
+        '''
+        Return path to OpenEphys tarfile containing recordings
+        '''
+        path = self.folder / 'raw' / self.experiment
+        return path.with_suffix('.tgz')
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_tarfile_relpath(self):
+        '''
+        Return relative path in OpenEphys tarfile that represents the "parent"
+        of all files (e.g., *.continuous) stored within, e.g.:
+
+            filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+            import tarfile
+            with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
+                fh.open(filename)
+        '''
+        parent = self.openephys_tarfile.parent
+        return self.openephys_folder.relative_to(parent)
+
+    @property
+    @lru_cache(maxsize=128)
+    def pupilfile(self):
+        return self.parmfile.with_suffix('.pup.mat')
+
+    @property
+    @lru_cache(maxsize=128)
+    def spikefile(self):
+        filename = self.folder / 'sorted' / self.experiment_with_runclass
+        return filename.with_suffix('.spk.mat')
+
+    @lru_cache(maxsize=128)
+    def get_trial_starts(self, method='openephys'):
+        if method == 'openephys':
+            return load_trial_starts_openephys(self.openephys_folder)
+        raise ValueError(f'Method "{method}" not supported')
+
+    @lru_cache(maxsize=128)
+    def get_baphy_events(self, correction_method='openephys', **kw):
+        baphy_events = self._get_baphy_parameters()[-1]
+        if correction_method is None:
+            return baphy_events
+        if correction_method == 'openephys':
+            trial_starts = self.get_trial_starts('openephys')
+            return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
+        if correction_method == 'spikes':
+            spikes, fs = self._get_spikes()
+            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
+            return exptevents
+        mesg = 'Unsupported correction method "{correction_method}"'
+        raise ValueError(mesg)
+
+    def get_pupil_trace(self, *args, **kwargs):
+        return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
+
+    # Methods below this line just pass through to the functions for now.
+    def _get_baphy_parameters(self):
+        # Returns tuple of global, expt and events
+        return baphy_parm_read(self.parmfile)
+
+    def _get_spikes(self):
+        return baphy_load_spike_data_raw(str(self.spikefile))
+
+    def get_continuous_data(self, filename):
+        '''
+        WARNING: This is a beta method. The interface and return value may
+        change.
+        '''
+        full_filename = self.openephys_tarfile_relpath / filename
+        with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+            with tar_fh.extractfile(str(full_filename)) as fh:
+                return load_continuous_openephys(fh)
+
+
+def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
+    '''
+    Parameters
+    ----------
+    events : DataFrame
+        Events stored in BAPHY parmfile
+    timestamps : array
+        Array of timestamps (in seconds) as read in from openephys
+    baphy_legacy_format : bool
+        If True, assume that all data before the onset of the first trial are
+        discarded (i.e., as is the case when aligning times using the spike
+        times file. This results in the first trial having a start timestamp of
+        0.
+    '''
+    n_baphy = events['Trial'].max()
+    n_oe = len(timestamps)
+    if n_baphy != n_oe:
+        mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
+                'OpenEphys ({n_oe}) do not match'
+        raise ValueError(mesg)
+
+    if baphy_legacy_format:
+        timestamps = timestamps - timestamps[0]
+
+    events = events.copy()
+    for i, timestamp in enumerate(timestamps) :
+        m = events['Trial'] == i+1
+        events.loc[m, ['start', 'end']] += timestamp
+    return events
+
+
+###############################################################################
+# Openephys utility functions
+###############################################################################
+def load_trial_starts_openephys(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = Path(openephys_folder) / 'all_channels.events'
+    data = oe.load(str(event_file))
+    header = data.pop('header')
+    df = pd.DataFrame(data)
+    ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+    return ts['timestamps'].values / float(header['sampleRate'])
+
+
+def load_continuous_openephys(fh):
+    '''
+    Read continous OpenEphys dataset
+
+    Parameters
+    ----------
+    fh : {str, file-like object, buffer}
+        If a file-like object or buffer, will read directly from it. If a
+        string, will open the file first (and close upon exiting).
+
+    Unlike the version provided by OpenEphys, this one can handle reading from
+    buffered streams (e.g., such as that provided by a tarfile) or existing
+    files.
+
+    Example
+    -------
+    import tarfile
+
+    parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+    manager = io.BAPHYExperiment(parmfile)
+    filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+    tar_fh = tarfile.open(manager.openephys_tarfile, 'r:gz')
+    fh = tar_fh.extractfile(str(filename))
+    ch_data = load_continous_openephys(fh)
+    '''
+    if not isinstance(fh, io.IOBase):
+        fh = open(fh, 'rb')
+        do_close = True
+    else:
+        do_close = False
+
+    header = oe.readHeader(fh)
+    scale = float(header['bitVolts'])
+    ts_dtype = np.dtype('<i8')
+    n_dtype = np.dtype('<u2')
+    record_number_dtype = np.dtype('>u2')
+    data_dtype = np.dtype('>i2')
+
+    timestamps = []
+    record_number = []
+    data = []
+
+    SAMPLES_PER_RECORD = 1024
+
+    while True:
+        try:
+            b = fh.read(ts_dtype.itemsize)
+            ts = np.frombuffer(b, ts_dtype, 1)[0]
+            b = fh.read(n_dtype.itemsize)
+            n = np.frombuffer(b, n_dtype, 1)[0]
+            if n != SAMPLES_PER_RECORD:
+                raise IOError('Found corrupt record')
+            b = fh.read(record_number_dtype.itemsize)
+            rn = np.frombuffer(b, record_number_dtype, 1)[0]
+            b = fh.read(data_dtype.itemsize * n)
+            d = np.frombuffer(b, data_dtype, n) * scale
+            _ = fh.read(10)
+
+            timestamps.append(ts)
+            record_number.append(rn)
+            data.append(d)
+        except ValueError:
+            # We have reached end of file?
+            break
+
+    timestamps = np.array(timestamps)
+    record_number = np.array(record_number)
+    data = np.concatenate(data)
+
+    if do_close:
+        fh.close()
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'record_number': record_number,
+    }
+
+
+###############################################################################
+# Unsorted functions
+###############################################################################
 def loadmat(filename):
     '''
     this function should be called instead of direct spio.loadmat
@@ -362,18 +640,10 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     # adjust times in exptevents to approximate time since experiment started
     # rather than time since trial started (native format)
     for Trialidx in range(1, TrialCount+1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
         ff = (exptevents['Trial'] == Trialidx)
         exptevents.loc[ff, ['start', 'end']] = (
                 exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
                 )
-
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -394,8 +664,6 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
                 uniquetrials = np.unique(st[0, :])
-                # print('chan {0} unit {1}: {2} spikes {3} trials'
-                #       .format(c, u, st.shape[1], len(uniquetrials)))
 
                 unit_spike_events = np.array([])
                 for trialidx in uniquetrials:
@@ -409,8 +677,6 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
                     unit_spike_events = np.concatenate(
                             (unit_spike_events, this_spike_events), axis=0
                             )
-                    # print("   trial {0} first spike bin {1}"
-                    #       .format(trialidx,st[1,ff]))
 
                 totalunits += 1
                 if chancount <= 8:
@@ -606,20 +872,21 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
     # these times are set based on openephys data, since baphy doesn't log exact trial start times
     if exptevents is None:
-        # if exptevents hasn't been loaded and corrected for spike data yet, do that so that we have accurate trial
-        # start times.
-        # key exptevents are exptevents['name'].str.startswith('TRIALSTART')
-        parmfilepath = pupilfilepath.replace(".pup.mat",".m")
-        globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-        pp, bb = os.path.split(parmfilepath)
-        spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
-        log.info("Spike file: {0}".format(spkfilepath))
-        # load spike times
-        sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
-        # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = baphy_align_time(
-                exptevents, sortinfo, spikefs, rasterfs
-                )
+        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
+        trial_starts = experiment.get_trial_starts()
+        exptevents = experiment.get_baphy_events()
+
+        #parmfilepath = pupilfilepath.replace(".pup.mat",".m")
+        #globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
+        #pp, bb = os.path.split(parmfilepath)
+        #spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
+        #log.info("Spike file: {0}".format(spkfilepath))
+        ## load spike times
+        #sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+        ## adjust spike and event times to be in seconds since experiment started
+        #exptevents, spiketimes, unit_names = baphy_align_time(
+        #        exptevents, sortinfo, spikefs, rasterfs
+        #        )
 
     try:
         basename = os.path.basename(pupilfilepath).split('.')[0]
