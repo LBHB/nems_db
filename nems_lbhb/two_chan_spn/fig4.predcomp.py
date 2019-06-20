@@ -28,7 +28,7 @@ save_fig = False
 if save_fig:
     plt.close('all')
 
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 
 if 1:
     batch = 259
@@ -39,7 +39,7 @@ if 1:
                 "env.fs100-ld-sev_dlog.f-wc.2x2.c.n-stp.2-fir.2x15-lvl.1-dexp.1_init-basic",
                 "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic",
                 "env.fs100-ld-sev_dlog.f-wc.2x4.c.n-stp.4-fir.4x15-lvl.1-dexp.1_init-basic"]
-    # new do models
+    # new DO models
     modelnames=["env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
                 "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
                 "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
@@ -79,10 +79,10 @@ elif 1:
 
 xc_range = [-0.05, 1.1]
 
-df = nd.batch_comp(batch,modelnames,stat='r_ceiling')
-df_r = nd.batch_comp(batch,modelnames,stat='r_test')
-df_e = nd.batch_comp(batch,modelnames,stat='se_test')
-df_n = nd.batch_comp(batch,modelnames,stat='n_parms')
+df = nd.batch_comp(batch, modelnames, stat='r_ceiling')
+df_r = nd.batch_comp(batch, modelnames, stat='r_test')
+df_e = nd.batch_comp(batch, modelnames, stat='se_test')
+df_n = nd.batch_comp(batch, modelnames, stat='n_parms')
 
 cellcount = len(df)
 
@@ -122,7 +122,6 @@ ax[0].set_ylabel('median pred corr')
 ax[0].set_xlabel('model architecture')
 nplt.ax_remove_box(ax[0])
 
-
 for i in range(len(modelnames)-1):
 
     d1 = np.array(df[modelnames[i]])
@@ -161,8 +160,6 @@ b_modelnames = [
     "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.q-fir.2x15-lvl.1-dexp.1_init.r10-basic.b"
 ]
 
-
-
 b_stp = np.array([('stp' in m) and ('.x.' not in m) for m in b_modelnames])
 b_stp1 = np.array([('stp' in m) and ('.x.' in m) for m in b_modelnames])
 b_ln = ~(b_stp | b_stp1)
@@ -172,10 +169,6 @@ modelgroups[b_stp1] = 1
 modelgroups[b_stp] = 2
 lplt.model_comp_pareto(b_modelnames, batch, modelgroups=modelgroups,
                        goodcells=goodcells, ax=ax[1])
-
-
-
-
 
 if save_fig:
     batchstr = str(batch)

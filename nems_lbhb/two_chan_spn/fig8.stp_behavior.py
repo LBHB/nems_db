@@ -28,13 +28,21 @@ def stp_v_beh():
 
     batch1 = 274
     batch2 = 275
-    modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic"]
+    modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b"
+                ]
+    #modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
+    #            "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic"]
     fileprefix="fig8.stp_v_beh"
     n1=modelnames[0]
     n2=modelnames[-3]
@@ -157,7 +165,7 @@ def stp_v_beh():
 
 # start main code
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps/"
-save_fig = True
+save_fig = False
 #if save_fig:
 plt.close('all')
 
@@ -168,6 +176,15 @@ batch2 = 275
 batch = batch1
 
 if 1:
+    modelnames=["env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b"]
+elif 1:
     # standard nMSE, tol 10e-7
     modelnames=["env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
              "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
@@ -291,13 +308,17 @@ amp_bounds = np.array([-0.1, 2.0])
 
 indices = list(d.index)
 
+fir_index=None
+do_index=None
 for ind in indices:
     if '--u' in ind:
         u_index = ind
-    elif '--tau' in ind:
+    elif ('--stp' in ind) and ('--tau' in ind):
         tau_index = ind
     elif '--fir' in ind:
         fir_index = ind
+    elif ('--do' in ind) and ('gains' in ind):
+        do_index = ind
 
 for ind in list(d_amp.index):
     if '--amplitude' in ind:
@@ -305,8 +326,14 @@ for ind in list(d_amp.index):
 
 u = d.loc[u_index]
 tau = d.loc[tau_index]
-fir = d.loc[fir_index]
 amp = d_amp.loc[amp_index]
+if fir_index:
+    fir = d.loc[fir_index]
+elif do_index:
+    fir = d.loc[do_index]
+else:
+    raise ValueError('FIR/do index not found')
+
 r_test = d.loc['meta--r_test']
 se_test = d.loc['meta--se_test']
 
@@ -342,11 +369,15 @@ for cellid in u.index:
         r0_test_mtx[i] = r0_test[match]
         se0_test_mtx[i] = se0_test[match]
 
-    t_fir = fir[match]
-    x = np.mean(t_fir, axis=1) / np.std(t_fir)
+    if fir_index:
+        fir[cellid] = fir[cellid] / np.std(fir[cellid])
+        t_fir = fir[cellid]
+        x = np.mean(t_fir, axis=1) # / np.std(t_fir)
+    else:
+        x = fir[cellid][:, 0]
 
     # REVERSE ORDER OF PARAMETERS to (PASSIVE, ACTIVE)
-    xidx=np.array([0, 1])
+    xidx = np.array([0, 1])
     m_fir[i, :] = x[xidx]
     u_mtx[i, :] = u[match][xidx]
     tau_mtx[i, :] = np.abs(tau[match][xidx])

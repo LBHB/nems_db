@@ -48,7 +48,7 @@ modelname1 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic
 modelname2 = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
 
 save_figs = False
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 #if save_figs:
 plt.close('all')
 
