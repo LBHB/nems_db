@@ -413,6 +413,8 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         ###############################
         if post_fit:
 
+            modelspec[ctk_idx]['fn_kwargs']['use_phi'] = True
+
             if post_copy:
                 # Set up cost function to automatically copy new
                 # wc and fir phi over to ctkernel during fitting
@@ -421,7 +423,6 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                     return basic_with_copy(*args, **kwargs, copy_phi=copy)
 
                 log.info('Fitting all modules together, copying STRF...\n')
-                modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = True
                 modelspec = fit_basic(est, modelspec, fitter_fn,
                                       cost_function=cost,
                                       metric=metric_fn, metaname='fit_gc',
@@ -432,7 +433,6 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 log.info('Fitting all modules together, ctkernel separate ...\n')
                 modelspec[ctk_idx]['phi'].update(modelspec[wc_idx]['phi'])
                 modelspec[ctk_idx]['phi'].update(modelspec[fir_idx]['phi'])
-                modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = False
                 modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                                       metric=metric_fn, metaname='fit_gc',
                                       fit_kwargs=fit_kwargs)

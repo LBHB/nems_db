@@ -196,22 +196,25 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
 #       basic_with_copy implementation.
 def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
                     mean=None, sd=None, coefficients=None, f1s=None, taus=None,
-                    delays=None, gains=None, auto_copy=False,
+                    delays=None, gains=None, use_phi=False,
                     compute_contrast=False, n_coefs=18):
     if compute_contrast:
-        if auto_copy:
-            wc_coefficients = gaussian_coefficients(mean, sd, n_coefs)
+        if use_phi:
+            wc_coeffs = gaussian_coefficients(mean, sd, n_coefs)
             if coefficients is None:
-                fir_coefficients = da_coefficients(f1s=f1s, taus=taus,
+                fir_coeffs = da_coefficients(f1s=f1s, taus=taus,
                                                    delays=delays,
                                                    gains=gains, n_coefs=n_coefs)
             else:
-                fir_coefficients = coefficients
+                fir_coeffs = coefficients
         else:
             if (wc_coefficients is None) or (fir_coefficients is None):
                 raise ValueError("contrast_kernel module was called without "
                                  "wc or fir coefficients set.")
-        fn = lambda x: _contrast_kernel(x, wc_coefficients, fir_coefficients)
+            wc_coeffs = wc_coefficients
+            fir_coeffs = fir_coefficients
+
+        fn = lambda x: _contrast_kernel(x, wc_coeffs, fir_coeffs)
         return [rec[i].transform(fn, o)]
     else:
         # pass through vector of 0's until contrast is ready to be computed
