@@ -1233,3 +1233,38 @@ def LN_pop_plot(ctx):
 #
 #    nplt.ax_remove_box(ax4)
     return fig
+
+
+def model_comp_pareto(modelnames, batch, modelgroups=None, goodcells=None, ax=None):
+
+    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    if ax is None:
+        ax = plt.gca()
+
+    b_ceiling = nd.batch_comp(batch, modelnames, stat='r_ceiling')
+    b_n = nd.batch_comp(batch, modelnames, stat='n_parms')
+
+    # find good cells
+    if goodcells is None:
+        b_test = nd.batch_comp(batch, modelnames, stat='r_test')
+        b_se = nd.batch_comp(batch, modelnames, stat='se_test')
+        b_goodcells = np.zeros_like(b_test)
+        for i, m in enumerate(modelnames):
+            td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
+            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+    b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+
+    if modelgroups is None:
+        modelgroups = np.zeros(len(modelnames))
+
+    u_modelgroups = np.unique(modelgroups)
+    for i, g in enumerate(u_modelgroups):
+        ax.plot(n_parms[modelgroups==g], b_m[modelgroups==g], '.', color=dot_colors[i])
+    ax.set_xlabel('n_parms')
+    ax.set_ylabel('Mean pred corr')
+    ax.set_ylim((0.2, 0.9))
+    nplt.ax_remove_box(ax)
+
+    return ax
