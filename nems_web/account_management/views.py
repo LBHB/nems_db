@@ -45,7 +45,7 @@ def load_user(user_id):
                 .first()
                 )
         if not sqla_user:
-            raise Exception()
+            sqla_user = BlankUser()
         # assign attrs from table object to active user instance
         user = User(
                 username=sqla_user.username,

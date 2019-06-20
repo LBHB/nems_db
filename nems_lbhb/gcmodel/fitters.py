@@ -431,7 +431,7 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
                 # Let ctkernel phi be fitted independent of wc and fir
                 log.info('Fitting all modules together, ctkernel separate ...\n')
                 modelspec[ctk_idx]['phi'].update(modelspec[wc_idx]['phi'])
-                modelspec[wc_idx]['phi'].update(modelspec[fir_idx]['phi'])
+                modelspec[ctk_idx]['phi'].update(modelspec[fir_idx]['phi'])
                 modelspec[ctk_idx]['fn_kwargs']['auto_copy'] = False
                 modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                                       metric=metric_fn, metaname='fit_gc',

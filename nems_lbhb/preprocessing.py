@@ -70,6 +70,7 @@ def pupil_mask(est, val, condition, balance):
         # perform AND mask with existing mask
         if 'mask' in est.signals:
             mask = (mask & r['mask'].extract_epoch('REFERENCE'))
+            op_mask = (op_mask & r['mask'].extract_epoch('REFERENCE'))
         elif 'mask' not in est.signals:
             pass
 
