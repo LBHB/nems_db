@@ -39,8 +39,16 @@ modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x3.c-stp.3-fir.3x15-lvl.1-dexp.1_init-
 #modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
 #modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x2.c.n-stp.2-fir.2x15-lvl.1-dexp.1_init-basic"
 
+# parametric temporal filter - 4 chan
+modelname1 = "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname2 = "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+
+# 3 chan
+modelname1 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname2 = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+
 save_figs = False
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 #if save_figs:
 plt.close('all')
 
