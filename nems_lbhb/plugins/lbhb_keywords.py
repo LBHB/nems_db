@@ -154,7 +154,7 @@ def ctk(kw):
             'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
-                          'auto_copy': False, 'compute_contrast': False},
+                          'use_phi': False, 'compute_contrast': False},
             'phi': {},
             'prior': {},
             'bounds': {}

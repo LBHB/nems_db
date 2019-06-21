@@ -60,33 +60,11 @@ def get_filtered_cells(cells, batch, snr=0.0, iso=0.0, snr_idx=0.0):
     db_criteria = psql.read_sql_query(
             session.query(NarfBatches)
             .filter(NarfBatches.cellid.in_(cells))
+            .filter(NarfBatches.min_snr_index >= snr_idx)
+            .filter(NarfBatches.min_isolation >= iso)
+            .filter(NarfBatches.est_snr >= snr)
+            .filter(NarfBatches.val_snr >= snr)
             .statement, session.bind
             )
 
-    if db_criteria.empty:
-        log.warning("No matching cells found in NarfBatches,"
-                    " no cellids were filtered.")
-        return cells
-    else:
-        def filter_cells(cell):
-            min_snr = min(cell.est_snr, cell.val_snr)
-            min_isolation = cell.min_isolation
-            min_snr_idx = cell.min_snr_index
-
-            a = (snr > min_snr)
-            b = (iso > min_isolation)
-            c = (snr_idx > min_snr_idx)
-
-            if a or b or c:
-                try:
-                    cells.remove(cell.cellid)
-                except ValueError:
-                    # cell already removed - necessary b/c pandas
-                    # tries function twice on first row, which causes
-                    # an error since our applied function has side-effects.
-                    pass
-            return
-
-        db_criteria.apply(filter_cells, axis=1)
-
-    return cells
+    return list(set(db_criteria['cellid'].values.tolist()))
