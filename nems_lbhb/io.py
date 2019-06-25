@@ -805,7 +805,7 @@ def set_default_pupil_options(options):
 
     options = options.copy()
     options["rasterfs"] = options.get('rasterfs', 100)
-    options['pupil'] = options.get('pupil', 0)
+    options['pupil'] = options.get('pupil', 1)
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', (1/3))
@@ -826,7 +826,7 @@ def set_default_pupil_options(options):
     options["rem_min_saccades_per_minute"] = options.get('rem_min_saccades_per_minute', 0.01)
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
-    options["verbose"] = options.get('verbose', True)
+    options["verbose"] = options.get('verbose', False)
 
     return options
 
