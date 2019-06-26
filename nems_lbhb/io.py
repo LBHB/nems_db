@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 import logging
 import re
+import os
 import os.path
 import pickle
 import scipy.io
@@ -176,15 +177,41 @@ class BAPHYExperiment:
     def _get_spikes(self):
         return baphy_load_spike_data_raw(str(self.spikefile))
 
-    def get_continuous_data(self, filename):
+    def get_continuous_data(self, chans):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
+        chans (list or numpy slice): which electrodes to load data from
         '''
-        full_filename = self.openephys_tarfile_relpath / filename
+        # get filenames (TODO: can this be sped up?)
         with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-            with tar_fh.extractfile(str(full_filename)) as fh:
-                return load_continuous_openephys(fh)
+            log.info("Finding filenames in tarfile...")
+            filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+            data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+
+        all_chans = np.arange(len(data_files))
+        idx = all_chans[chans]
+        selected_data = np.take(data_files, idx)
+        # TODO add channel remapping?
+
+        continuous_data = []
+        for filename in selected_data:
+            full_filename = self.openephys_folder / filename
+            if os.path.isfile(full_filename):
+                log.info('%s already extracted, load faster...', filename)
+                data = load_continuous_openephys(str(full_filename))
+                continuous_data.append(data['data'][np.newaxis, :])
+            else:
+                with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+                    log.info("Extracting / loading %s...", filename)
+                    full_filename = self.openephys_tarfile_relpath / filename
+                    with tar_fh.extractfile(str(full_filename)) as fh:
+                        data = load_continuous_openephys(fh)
+                        continuous_data.append(data['data'][np.newaxis, :])
+
+        continuous_data = np.concatenate(continuous_data, axis=0)
+
+        return continuous_data
 
 
 def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
