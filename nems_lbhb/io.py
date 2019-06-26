@@ -188,7 +188,6 @@ class BAPHYExperiment:
             log.info("Finding filenames in tarfile...")
             filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
             data_files = sorted([f for f in filenames if 'CH' in f], key=len)
-            tar_fh.close()
 
         all_chans = np.arange(len(data_files))
         idx = all_chans[chans]
@@ -199,22 +198,18 @@ class BAPHYExperiment:
         for filename in selected_data:
             full_filename = self.openephys_folder / filename
             if os.path.isfile(full_filename):
-                log.info('{} already extracted, load faster...'.format(filename))
+                log.info('%s already extracted, load faster...', filename)
                 data = load_continuous_openephys(str(full_filename))
                 continuous_data.append(data['data'][np.newaxis, :])
             else:
                 with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-                    log.info("Extracting / loading {}...".format(filename))
+                    log.info("Extracting / loading %s...", filename)
                     full_filename = self.openephys_tarfile_relpath / filename
                     with tar_fh.extractfile(str(full_filename)) as fh:
                         data = load_continuous_openephys(fh)
                         continuous_data.append(data['data'][np.newaxis, :])
-                        tar_fh.close()
-                        fh.close()
 
         continuous_data = np.concatenate(continuous_data, axis=0)
-
-        # TODO return timestamps and other meta data?
 
         return continuous_data
 
