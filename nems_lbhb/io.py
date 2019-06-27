@@ -32,6 +32,7 @@ import copy
 from itertools import groupby, repeat, chain, product
 
 from . import OpenEphys as oe
+from . import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -184,15 +185,31 @@ class BAPHYExperiment:
         chans (list or numpy slice): which electrodes to load data from
         '''
         # get filenames (TODO: can this be sped up?)
-        with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-            log.info("Finding filenames in tarfile...")
-            filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
-            data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+        #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+        #    log.info("Finding filenames in tarfile...")
+        #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+        #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
 
+        # Use xml settings instead of the tar file. Much faster. Also, takes care
+        # of channel mapping (I think)
+        recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
+        connector = [i for i in recChans.keys()][0]
+
+        # handle channel remapping
+        info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
+        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+        for k in mapping_keys:
+            ch_num = mapping[k].get('Number')
+            if ch_num in recChans[connector]:
+                recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
+
+        recChans = [recChans[connector][i]['name_mapped'] \
+                            for i in recChans[connector].keys()]
+        data_files = [connector + '_' + c + '.continuous' for c in recChans]
         all_chans = np.arange(len(data_files))
         idx = all_chans[chans]
         selected_data = np.take(data_files, idx)
-        # TODO add channel remapping?
 
         continuous_data = []
         for filename in selected_data:
