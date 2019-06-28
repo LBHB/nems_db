@@ -85,8 +85,16 @@ class BAPHYExperiment:
 
     @classmethod
     def from_pupilfile(cls, pupilfile):
-        parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
-        parmfile = parmfile.with_suffix('.m')
+        if 'sorted' in pupilfile:
+            # using new pupil analysis, which is save in sorted dir
+            pp, bb = os.path.split(pupilfile)
+            fn = bb.split('.')[0]
+            path = os.path.split(pp)[0]
+            parmfile = Path(os.path.join(path, fn)).with_suffix('.m')
+        else:
+            parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
+            parmfile = parmfile.with_suffix('.m')
+
         return cls(parmfile)
 
     def __init__(self, parmfile):
@@ -95,7 +103,7 @@ class BAPHYExperiment:
         # functions are careful about the suffix.
         self.parmfile = Path(parmfile).with_suffix('.m')
         if not self.parmfile.exists():
-            raise IOError(f'{self.parmfmile} not found')
+            raise IOError(f'{self.parmfile} not found')
         self.folder = self.parmfile.parent
         self.experiment = self.parmfile.name.split('_', 1)[0]
         self.experiment_with_runclass = self.parmfile.stem
@@ -882,6 +890,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     trial. need to make sure the big_rs vector aligns with the other signals
     """
 
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
     options = set_default_pupil_options(options)
 
     rasterfs = options["rasterfs"]
@@ -932,12 +942,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         #        exptevents, sortinfo, spikefs, rasterfs
         #        )
 
-    try:
-        basename = os.path.basename(pupilfilepath).split('.')[0]
-        abs_path = os.path.dirname(pupilfilepath)
-        pupildata_path = os.path.join(abs_path, "sorted", basename + '.pickle')
+    if '.pickle' in pupilfilepath:
 
-        with open(pupildata_path, 'rb') as fp:
+        with open(pupilfilepath, 'rb') as fp:
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
@@ -972,10 +979,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
 
-    except:
+    elif '.pup.mat' in pupilfilepath:
         matdata = scipy.io.loadmat(pupilfilepath)
-
-        log.info("Attempted to load pupil from CNN analysis, but file didn't exist. Loading from pup.mat")
 
         p = matdata['pupil_data']
         params = p['params']
@@ -1241,6 +1246,8 @@ def get_rem(pupilfilepath, exptevents=None, **options):
 
     ZPS 2018-09-24: Initial version.
     """
+    # find appropriate pupil file
+    pupilfilepath = get_pupil_file(pupilfilepath)
 
     #Set analysis parameters from defaults, if necessary.
     options = set_default_pupil_options(options)
@@ -1435,7 +1442,13 @@ def run_length_decode(a):
 
 def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat', '.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1447,7 +1460,12 @@ def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
 def load_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1459,6 +1477,46 @@ def load_rem_options(pupilfilepath, cachepath=None, **options):
         return options
     else:
         raise ValueError("REM options file not found.")
+
+
+def get_pupil_file(pupilfilepath):
+    """
+    For backwards compatibility in pupil/rem functions. Default is to load the
+    pupil fit from the CNN model fit. However, for some older recordings, this
+    may not exist and so you may still want to load the pup.mat file. This
+    is a helper function to find which pupil file to load
+    6-28-2019, CRH
+    """
+    if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
+        log.info("Loading CNN pupil fit from .pickle file")
+        return pupilfilepath
+
+    elif 'pup.mat' in pupilfilepath:
+
+        if not os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return pupilfilepath
+            else:
+                raise FileNotFoundError("Pupil analysis not found")
+
+        elif os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            CNN_pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(CNN_pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return CNN_pupilfilepath
+            else:
+                log.info("CNN pupil fit doesn't exist, \
+                            Loading pupil fit from .pup.mat file")
+                return pupilfilepath
+
+    else:
+        raise FileNotFoundError("Pupil analysis not found")
 
 
 def baphy_pupil_uri(pupilfilepath, **options):
