@@ -1444,6 +1444,7 @@ def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
     pupilfilepath = get_pupil_file(pupilfilepath)
 
+    options['verbose'] = False
     if '.pickle' in pupilfilepath:
         jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
     else:
