@@ -199,10 +199,10 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
                     delays=None, gains=None, use_phi=False,
                     compute_contrast=False, n_coefs=18, auto_copy=None):
     # auto_copy is no longer used directly, but is included in the keyword
-    # arguments as a mimic of use_phi in order to load old versions of the
-    # model that have not been re-run
+    # arguments in order to load old versions of the model that have
+    # not been re-run
     if auto_copy is not None:
-        use_phi = auto_copy
+        use_phi = True
 
     if compute_contrast:
         wc_coeffs, fir_coeffs = _get_ctk_coefficients(
@@ -219,7 +219,8 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
 
 def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None,
                          sd=None, coefficients=None, f1s=None, taus=None,
-                         delays=None, gains=None, use_phi=False, n_coefs=18):
+                         delays=None, gains=None, use_phi=False, n_coefs=18,
+                         **kwargs):
 
     if use_phi:
         wc_coeffs = gaussian_coefficients(mean, sd, n_coefs)

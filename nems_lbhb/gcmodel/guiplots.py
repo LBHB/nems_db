@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 
 import nems.modelspec as ms
@@ -19,23 +21,33 @@ def contrast_kernel_output(rec, modelspec, ax=None, title=None,
 
 
 def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
-                            idx=0, channels=0, xlabel='Time Lag',
-                            ylabel='Frequency', **options):
-    ctk_idx = nu.find_module('contrast_kernel', modelspec)
-    phi = modelspec[ctk_idx]['phi']
-    fn_kwargs = modelspec[ctk_idx]['fn_kwargs']
-    wc_coefficients = fn_kwargs['wc_coefficients']
-    fir_coefficients = fn_kwargs['fir_coefficients']
+                            idx=0, channels=0, xlabel='Lag (s)',
+                            ylabel='Channel In', **options):
 
-    wc_coefs, fir_coefs = _get_ctk_coefficients(wc_coefficients=wc_coefficients,
-                                                fir_coefficients=fir_coefficients,
-                                                **phi)
+    ctk_idx = nu.find_module('contrast_kernel', modelspec)
+    phi = copy.deepcopy(modelspec[ctk_idx]['phi'])
+    fn_kwargs = copy.deepcopy(modelspec[ctk_idx]['fn_kwargs'])
+    old = ('auto_copy' in fn_kwargs)
+    if old:
+        fn_kwargs['use_phi'] = True
+
+    # Remove duplicates from fn_kwargs (phi is more up to date)
+    # to avoid argument collisions
+    removals = []
+    for k in fn_kwargs:
+        if k in phi:
+            removals.append(k)
+    for k in removals:
+        fn_kwargs.pop(k)
+
+    wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi)
     wc_coefs = wc_coefs.T
     strf = np.abs(wc_coefs @ fir_coefs)
 
     # Show factorized coefficients on the edges to match up with
     # regular STRF
     cscale = np.nanmax(np.abs(strf.reshape(-1)))
+    clim = [-cscale, cscale]
     wc_max = np.nanmax(np.abs(wc_coefs[:]))
     fir_max = np.nanmax(np.abs(fir_coefs[:]))
     wc_coefs = wc_coefs * (cscale / wc_max)
@@ -52,7 +64,8 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
     everything = np.concatenate([top, bot], axis=0)
     skip = nchans + 1
 
-    plot_heatmap(everything, xlabel=xlabel, ylabel=ylabel, ax=ax, skip=skip)
+    plot_heatmap(everything, xlabel=xlabel, ylabel=ylabel, ax=ax, skip=skip,
+                 clim=clim)
 
     return ax
 
