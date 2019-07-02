@@ -65,7 +65,7 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
     skip = nchans + 1
 
     plot_heatmap(everything, xlabel=xlabel, ylabel=ylabel, ax=ax, skip=skip,
-                 clim=clim)
+                 clim=clim, title=title)
 
     return ax
 
