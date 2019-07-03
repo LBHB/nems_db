@@ -3,8 +3,9 @@ import copy
 import numpy as np
 
 import nems.modelspec as ms
-import nems.plots.api as nplt
 from nems.plots.heatmap import plot_heatmap
+from nems.plots.timeseries import timeseries_from_signals
+from nems.plots.specgram import plot_spectrogram
 from nems_lbhb.gcmodel.modules import _get_ctk_coefficients
 import nems.utils as nu
 
@@ -14,7 +15,7 @@ def contrast_kernel_output(rec, modelspec, ax=None, title=None,
                            **options):
 
     output = ms.evaluate(rec, modelspec, stop=idx+1)['ctpred']
-    nplt.timeseries_from_signals([output], channels=channels, xlabel=xlabel,
+    timeseries_from_signals([output], channels=channels, xlabel=xlabel,
                                  ylabel=ylabel, ax=ax, title=title)
 
     return ax
@@ -76,6 +77,6 @@ def contrast_spectrogram(rec, modelspec, ax=None, title=None,
 
     contrast = rec['contrast']
     array = contrast.as_continuous()
-    ax = nplt.plot_spectrogram(array, ax=ax, fs=contrast.fs, **options)
+    ax = plot_spectrogram(array, ax=ax, fs=contrast.fs, **options)
 
     return ax
