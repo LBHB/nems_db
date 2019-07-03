@@ -43,6 +43,18 @@ def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
     return results
 
 
+def scatter_soundstats(results):
+    means = []
+    sds = []
+    for k, (mean, sd) in results.items():
+        means.append(mean)
+        sds.append(sd)
+
+    plt.scatter(sds, means)
+    plt.ylabel('mean level')
+    plt.xlabel('std')
+
+
 def _silence_duration(epochs, prepost):
     start = epochs[epochs.name == prepost]['start']
     end = epochs[epochs.name == prepost]['end']
@@ -63,8 +75,10 @@ def relative_gain_by_batch(batch, loadkey='ozgf.fs100.ch18'):
     sigs = {c: stim_resp_per_epoch(r) for c, r in recs.items()}
 
     # calc. stim means and sds for all cells, stims
+    stim_m_sd = {c: spectrogram_mean_sd(s[0]) for c, s in sigs.items()}
 
     # pick set of reference stims (sd close to 9)
+
 
     # within each cell:
 

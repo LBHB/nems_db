@@ -53,10 +53,13 @@ gc_av_stp2b = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.
 #dexp_kwargs = {'model1': gc_av2b, 'model2': stp_dexp2, 'model3': ln_dexp2,
 #               'model4': gc_av_stp2b}
 
-#### MOST CURRENT ####
-# with bounds and normalization and k.s. reduction and post-fit
-gc_av2bks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.k.s.bnd.n_gc2.PF"
-gc_av_stp2bks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.k.s.bnd.n_gc2.PF"
+# MOST CURRENT
+gc_PF = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.n_gc2.PF"
+gc_PF_ks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.k.s.n_gc2.PF"
+gc_stp_PF = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.n_gc2.PF"
+# _ks only for gd ratio comparison (to avoid conflation with changes to amplitude)
+
+
 
 batch = 289
 
@@ -75,6 +78,8 @@ stp_better3 = 'AMT005c-02-2'  # pretty noisy fit, but STP definitely does a bett
 stp_better4 = 'bbl099g-28-1'  # good example where stp helps w/ repeated stim. but GC doesnt
 stp_better5 = 'bbl104h-44-1'  # mostly the same except last epoch, then STP wins
 stp_better6 = 'bbl104h-02-1'
+
+default_args = [289, gc_PF, stp_dexp2, ln_dexp2, gc_stp_PF]
 
 # Alternative fits
 #gc_av_bnd = ("ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_"
