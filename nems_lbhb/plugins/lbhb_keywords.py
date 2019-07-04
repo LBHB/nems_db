@@ -155,6 +155,7 @@ def ctk(kw):
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
                           'use_phi': False, 'compute_contrast': False},
+            'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
             'prior': {},
             'bounds': {}

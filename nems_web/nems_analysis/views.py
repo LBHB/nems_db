@@ -764,6 +764,12 @@ def edit_analysis():
     session.commit()
     session.close()
 
+    # Clear out cached analysis selection, otherwise the simple caching logic
+    # thinks the analysis selection didn't change so it will load previous
+    # modeltree
+    global _previous_update_models
+    _previous_update_models = ('', '', '', [])
+
     # After handling submissions, return user to main page so that it
     # refreshes with new analysis included in list
     return jsonify(success="Analysis %s saved successfully." % addedName)

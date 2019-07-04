@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 import logging
 import re
+import os
 import os.path
 import pickle
 import scipy.io
@@ -31,6 +32,7 @@ import copy
 from itertools import groupby, repeat, chain, product
 
 from . import OpenEphys as oe
+from . import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -83,8 +85,16 @@ class BAPHYExperiment:
 
     @classmethod
     def from_pupilfile(cls, pupilfile):
-        parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
-        parmfile = parmfile.with_suffix('.m')
+        if 'sorted' in pupilfile:
+            # using new pupil analysis, which is save in sorted dir
+            pp, bb = os.path.split(pupilfile)
+            fn = bb.split('.')[0]
+            path = os.path.split(pp)[0]
+            parmfile = Path(os.path.join(path, fn)).with_suffix('.m')
+        else:
+            parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
+            parmfile = parmfile.with_suffix('.m')
+
         return cls(parmfile)
 
     def __init__(self, parmfile):
@@ -93,7 +103,7 @@ class BAPHYExperiment:
         # functions are careful about the suffix.
         self.parmfile = Path(parmfile).with_suffix('.m')
         if not self.parmfile.exists():
-            raise IOError(f'{self.parmfmile} not found')
+            raise IOError(f'{self.parmfile} not found')
         self.folder = self.parmfile.parent
         self.experiment = self.parmfile.name.split('_', 1)[0]
         self.experiment_with_runclass = self.parmfile.stem
@@ -176,15 +186,57 @@ class BAPHYExperiment:
     def _get_spikes(self):
         return baphy_load_spike_data_raw(str(self.spikefile))
 
-    def get_continuous_data(self, filename):
+    def get_continuous_data(self, chans):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
+        chans (list or numpy slice): which electrodes to load data from
         '''
-        full_filename = self.openephys_tarfile_relpath / filename
-        with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-            with tar_fh.extractfile(str(full_filename)) as fh:
-                return load_continuous_openephys(fh)
+        # get filenames (TODO: can this be sped up?)
+        #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+        #    log.info("Finding filenames in tarfile...")
+        #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+        #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+
+        # Use xml settings instead of the tar file. Much faster. Also, takes care
+        # of channel mapping (I think)
+        recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
+        connector = [i for i in recChans.keys()][0]
+
+        # handle channel remapping
+        info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
+        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+        for k in mapping_keys:
+            ch_num = mapping[k].get('Number')
+            if ch_num in recChans[connector]:
+                recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
+
+        recChans = [recChans[connector][i]['name_mapped'] \
+                            for i in recChans[connector].keys()]
+        data_files = [connector + '_' + c + '.continuous' for c in recChans]
+        all_chans = np.arange(len(data_files))
+        idx = all_chans[chans]
+        selected_data = np.take(data_files, idx)
+
+        continuous_data = []
+        for filename in selected_data:
+            full_filename = self.openephys_folder / filename
+            if os.path.isfile(full_filename):
+                log.info('%s already extracted, load faster...', filename)
+                data = load_continuous_openephys(str(full_filename))
+                continuous_data.append(data['data'][np.newaxis, :])
+            else:
+                with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+                    log.info("Extracting / loading %s...", filename)
+                    full_filename = self.openephys_tarfile_relpath / filename
+                    with tar_fh.extractfile(str(full_filename)) as fh:
+                        data = load_continuous_openephys(fh)
+                        continuous_data.append(data['data'][np.newaxis, :])
+
+        continuous_data = np.concatenate(continuous_data, axis=0)
+
+        return continuous_data
 
 
 def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
@@ -805,7 +857,7 @@ def set_default_pupil_options(options):
 
     options = options.copy()
     options["rasterfs"] = options.get('rasterfs', 100)
-    options['pupil'] = options.get('pupil', 0)
+    options['pupil'] = options.get('pupil', 1)
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', (1/3))
@@ -826,7 +878,7 @@ def set_default_pupil_options(options):
     options["rem_min_saccades_per_minute"] = options.get('rem_min_saccades_per_minute', 0.01)
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
-    options["verbose"] = options.get('verbose', True)
+    options["verbose"] = options.get('verbose', False)
 
     return options
 
@@ -837,6 +889,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
+
+    pupilfilepath = get_pupil_file(pupilfilepath)
 
     options = set_default_pupil_options(options)
 
@@ -888,12 +942,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         #        exptevents, sortinfo, spikefs, rasterfs
         #        )
 
-    try:
-        basename = os.path.basename(pupilfilepath).split('.')[0]
-        abs_path = os.path.dirname(pupilfilepath)
-        pupildata_path = os.path.join(abs_path, "sorted", basename + '.pickle')
+    if '.pickle' in pupilfilepath:
 
-        with open(pupildata_path, 'rb') as fp:
+        with open(pupilfilepath, 'rb') as fp:
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
@@ -928,10 +979,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
 
-    except:
+    elif '.pup.mat' in pupilfilepath:
         matdata = scipy.io.loadmat(pupilfilepath)
-
-        log.info("Attempted to load pupil from CNN analysis, but file didn't exist. Loading from pup.mat")
 
         p = matdata['pupil_data']
         params = p['params']
@@ -1197,6 +1246,8 @@ def get_rem(pupilfilepath, exptevents=None, **options):
 
     ZPS 2018-09-24: Initial version.
     """
+    # find appropriate pupil file
+    pupilfilepath = get_pupil_file(pupilfilepath)
 
     #Set analysis parameters from defaults, if necessary.
     options = set_default_pupil_options(options)
@@ -1391,7 +1442,14 @@ def run_length_decode(a):
 
 def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat', '.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    options['verbose'] = False
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1403,7 +1461,12 @@ def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
 def load_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1415,6 +1478,46 @@ def load_rem_options(pupilfilepath, cachepath=None, **options):
         return options
     else:
         raise ValueError("REM options file not found.")
+
+
+def get_pupil_file(pupilfilepath):
+    """
+    For backwards compatibility in pupil/rem functions. Default is to load the
+    pupil fit from the CNN model fit. However, for some older recordings, this
+    may not exist and so you may still want to load the pup.mat file. This
+    is a helper function to find which pupil file to load
+    6-28-2019, CRH
+    """
+    if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
+        log.info("Loading CNN pupil fit from .pickle file")
+        return pupilfilepath
+
+    elif 'pup.mat' in pupilfilepath:
+
+        if not os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return pupilfilepath
+            else:
+                raise FileNotFoundError("Pupil analysis not found")
+
+        elif os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            CNN_pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(CNN_pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return CNN_pupilfilepath
+            else:
+                log.info("CNN pupil fit doesn't exist, \
+                            Loading pupil fit from .pup.mat file")
+                return pupilfilepath
+
+    else:
+        raise FileNotFoundError("Pupil analysis not found")
 
 
 def baphy_pupil_uri(pupilfilepath, **options):

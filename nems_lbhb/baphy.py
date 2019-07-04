@@ -314,6 +314,7 @@ def baphy_load_data(parmfilepath, **options):
     if options['rem']:
         try:
             rem_options = load_rem_options(pupilfilepath)
+            rem_options['verbose'] = False
             #rem_options['rasterfs'] = options['rasterfs']
             is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
                               exptevents=exptevents, **rem_options)
