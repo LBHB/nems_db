@@ -1235,7 +1235,15 @@ def LN_pop_plot(ctx):
     return fig
 
 
-def model_comp_pareto(modelnames, batch, modelgroups=None, goodcells=None, ax=None):
+def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None, ax=None):
+
+    if (modelnames is None) and (modelgroups is None):
+        raise ValueError("Must specify modelnames list or modelgroups dict")
+    elif modelgroups is None:
+        modelgroups={'ALL': modelnames}
+    modelnames=[]
+    for k, m in modelgroups.items():
+        modelnames.extend(m)
 
     dot_colors = ['k','b','r','g','purple','orange','lightblue']
     if ax is None:
@@ -1253,17 +1261,29 @@ def model_comp_pareto(modelnames, batch, modelgroups=None, goodcells=None, ax=No
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
             b_goodcells[:,i] = td[m] > 2*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
-    b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    b_m = np.array((b_ceiling.loc[goodcells]**2).median()[modelnames])
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
 
-    if modelgroups is None:
-        modelgroups = np.zeros(len(modelnames))
+    #u_modelgroups = np.unique(modelgroups)
+    #for i, g in enumerate(u_modelgroups):
+    i=0
+    for k, m in modelgroups.items():
+        jj = [m0 in m for m0 in modelnames]
+        modelset=[]
+        for jjj in jj:
+            if jjj:
+                modelset.append(modelnames[jjj])
+        print("{} : {}".format(k, modelset))
+        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
+        i+=1
 
-    u_modelgroups = np.unique(modelgroups)
-    for i, g in enumerate(u_modelgroups):
-        ax.plot(n_parms[modelgroups==g], b_m[modelgroups==g], '.', color=dot_colors[i])
+    handles, labels = ax.get_legend_handles_labels()
+    # reverse the order
+    ax.legend(handles, labels, loc='lower right')
+
     ax.set_xlabel('n_parms')
-    ax.set_ylabel('Mean pred corr')
+    ax.set_ylabel('Mean var explained (r2)')
     ax.set_ylim((0.2, 0.9))
     nplt.ax_remove_box(ax)
 
