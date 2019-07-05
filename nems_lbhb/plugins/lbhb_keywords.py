@@ -159,6 +159,9 @@ def ctk(kw):
             fixed = True
     # if fixed is false, offset will be converted into a fittable parameter
     # by gc2 fitter after LN portion of fit is complete.
+    # offset/1000 will be reversed in the contrast kernel module
+    # by int(offset*1000) -- temporary (crude) way to fudge an integer
+    # parameter through the optimizer
 
     template = {
             'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
@@ -166,11 +169,11 @@ def ctk(kw):
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
                           'use_phi': False, 'compute_contrast': False,
-                          'offset': np.array([offset]), 'fixed': fixed},
+                          'offset': np.array([offset/1000]), 'fixed': fixed},
             'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
             'prior': {},
-            'bounds': {}
+            'bounds': {'offset': (0, None)}
             }
 
     return template
