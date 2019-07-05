@@ -301,26 +301,7 @@ def update_models():
 
     session.close()
 
-    filtered_models = []
-    for m in model_list:
-        for s in search.split(' '):
-            if '&' in s:
-                ands = s.split('&')
-                all_there = True
-                for a in ands:
-                    if (a in m) or (m in a):
-                        continue
-                    else:
-                        all_there = False
-                        break
-                if all_there:
-                    filtered_models.append(m)
-            else:
-                if (s in m) or (m in s):
-                    filtered_models.append(m)
-                    break
-                else:
-                    pass
+    filtered_models = simple_search(search, model_list)
 
     return jsonify(modellist=filtered_models)
 
@@ -396,35 +377,12 @@ def update_cells():
     session.commit()
     session.close()
 
-    filtered_cellids = []
-    for c in celllist:
-        # filter out pairwise cellids
-        if '+' in c:
-            continue
-        # also filter out siteids
-        elif '-' not in c:
-            continue
-        # only keep cells containing search string
-        # or that are contained within the search string
-        else:
-            for s in search.split(' '):
-                if '&' in s:
-                    ands = s.split('&')
-                    all_there = True
-                    for a in ands:
-                        if (a in c) or (c in a):
-                            continue
-                        else:
-                            all_there = False
-                            break
-                    if all_there:
-                        filtered_cellids.append(c)
-                else:
-                    if (s in c) or (c in s):
-                        filtered_cellids.append(c)
-                        break
-                    else:
-                        pass
+    # remove pairs
+    filtered_cellids = [c for c in celllist if '+' not in c]
+    # remove siteids
+    filtered_cellids = [c for c in filtered_cellids if '-' in c]
+    # filter by search string
+    filtered_cellids = simple_search(search, filtered_cellids)
 
     return jsonify(celllist=filtered_cellids)
 
@@ -991,3 +949,77 @@ def set_saved_selections():
     session.close()
 
     return jsonify(response='selections saved', null=False)
+
+
+def simple_search(query, collection):
+    '''
+    Filter cellids or modelnames by simple space-separated search strings.
+
+    Parameters:
+    ----------
+    query : str
+        Search string, see syntax below.
+    collection : list
+        List of items to compare the search string against.
+        Ex: A list of cellids.
+
+    Returns:
+    -------
+    filtered_collection : list
+        Collection with all non-matched entries removed.
+
+    Syntax:
+    ------
+    space : OR
+    &     : AND
+    !     : NEGATE
+    (In that order of precedence)
+
+    Example:
+    collection = ['AMT001', BRT000', 'TAR002', 'TAR003']
+
+    search('AMT', collection)
+    >>  ['AMT001']
+
+    search('AMT TAR', collection)
+    >>  ['AMT001', 'TAR002', 'TAR003']
+
+    search ('AMT TAR&!003', collection)
+    >>  ['AMT001', 'TAR002']
+
+    search ('AMT&TAR', collection)
+    >> []
+
+
+    '''
+    filtered_collection = []
+    for c in collection:
+        for s in query.split(' '):
+            if ('&' in s) or ('!' in s):
+                ands = s.split('&')
+                all_there = True
+                for a in ands:
+                    negate = ('!' in a)
+                    b = a.replace('!', '')
+                    if (b in c) or (c in b):
+                        if negate:
+                            all_there = False
+                            break
+                        else:
+                            continue
+                    else:
+                        if negate:
+                            continue
+                        else:
+                            all_there = False
+                            break
+                if all_there:
+                    filtered_collection.append(c)
+            else:
+                if (s in c) or (c in s):
+                    filtered_collection.append(c)
+                    break
+                else:
+                    pass
+
+    return filtered_collection
