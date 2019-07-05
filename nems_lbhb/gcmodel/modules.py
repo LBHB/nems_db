@@ -240,7 +240,7 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
 
     coeffs = np.abs(wc_coeffs.T @ fir_coeffs)
     if offset is not None:
-        offset = int(offset*1000)
+        offset = int(offset)
         coeffs = np.concatenate((np.zeros((coeffs.shape[0], offset)),
                                  coeffs[:, :-1*offset]), axis=1)
 
