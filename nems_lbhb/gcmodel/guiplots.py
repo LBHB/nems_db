@@ -41,9 +41,7 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
     for k in removals:
         fn_kwargs.pop(k)
 
-    wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi)
-    wc_coefs = wc_coefs.T
-    strf = np.abs(wc_coefs @ fir_coefs)
+    strf, wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi)
 
     # Show factorized coefficients on the edges to match up with
     # regular STRF

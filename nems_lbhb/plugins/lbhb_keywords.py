@@ -149,17 +149,30 @@ def gclvl(kw):
 
 
 def ctk(kw):
+    ops = kw.split('.')[1:]
+    offset = None
+    fixed = False
+    for op in ops:
+        if op.startswith('off'):
+            offset = int(op[3:])
+        elif op == 'f':
+            fixed = True
+    # if fixed is false, offset will be converted into a fittable parameter
+    # by gc2 fitter after LN portion of fit is complete.
+
     template = {
             'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
             'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
-                          'use_phi': False, 'compute_contrast': False},
+                          'use_phi': False, 'compute_contrast': False,
+                          'offset': np.array([offset]), 'fixed': fixed},
             'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
             'prior': {},
             'bounds': {}
             }
+
     return template
 
 

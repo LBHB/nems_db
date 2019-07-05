@@ -318,8 +318,8 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         # fit without STP module first (if there is one)
         modelspec = nems.initializers.prefit_to_target(
                 est, modelspec, fit_basic, target_module='levelshift',
-                extra_exclude=['stp'], fitter=fitter_fn, metric=metric_fn,
-                fit_kwargs=prefit_kwargs)
+                extra_exclude=['stp'], fitter=fitter_fn,
+                metric=metric_fn, fit_kwargs=prefit_kwargs)
 
         # then initialize the STP module (if there is one)
         for i, m in enumerate(modelspec.modules):
@@ -390,7 +390,10 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
         modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = True
-
+        if modelspec[ctk_idx]['fn_kwargs']['offset'] is not None:
+            if not modelspec[ctk_idx]['fn_kwargs']['fixed']:
+                offset = modelspec[ctk_idx]['fn_kwargs'].pop('offset')
+                modelspec[ctk_idx]['phi']['offset'] = offset
 
         log.info('Finishing fit for full GC model ...\n')
         modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,

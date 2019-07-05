@@ -196,8 +196,9 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
 #       basic_with_copy implementation.
 def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
                     mean=None, sd=None, coefficients=None, f1s=None, taus=None,
-                    delays=None, gains=None, use_phi=False,
-                    compute_contrast=False, n_coefs=18, auto_copy=None):
+                    delays=None, gains=None, use_phi=False, offset=None,
+                    compute_contrast=False, n_coefs=18, auto_copy=None,
+                    fixed=False):
     # auto_copy is no longer used directly, but is included in the keyword
     # arguments in order to load old versions of the model that have
     # not been re-run
@@ -205,11 +206,11 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
         use_phi = True
 
     if compute_contrast:
-        wc_coeffs, fir_coeffs = _get_ctk_coefficients(
+        coeffs, _, _ = _get_ctk_coefficients(
                 wc_coefficients, fir_coefficients, mean, sd, coefficients,
-                f1s, taus, delays, gains, use_phi, n_coefs
+                f1s, taus, delays, gains, use_phi, n_coefs, offset
                 )
-        fn = lambda x: _contrast_kernel(x, wc_coeffs, fir_coeffs)
+        fn = lambda x: per_channel(x, coeffs)
         return [rec[i].transform(fn, o)]
     else:
         # pass through vector of 0's until contrast is ready to be computed
@@ -220,7 +221,7 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
 def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None,
                          sd=None, coefficients=None, f1s=None, taus=None,
                          delays=None, gains=None, use_phi=False, n_coefs=18,
-                         **kwargs):
+                         offset=None, **kwargs):
 
     if use_phi:
         wc_coeffs = gaussian_coefficients(mean, sd, n_coefs)
@@ -237,15 +238,20 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
         wc_coeffs = wc_coefficients
         fir_coeffs = fir_coefficients
 
-    return wc_coeffs, fir_coeffs
+    coeffs = np.abs(wc_coeffs.T @ fir_coeffs)
+    if offset is not None:
+            coeffs = np.concatenate((np.zeros((coeffs.shape[0], 1)),
+                                     coeffs[:, :-1]), axis=1)
+
+    return coeffs, wc_coeffs.T, fir_coeffs
 
 
-def _contrast_kernel(x, wc_coefficients, fir_coefficients):
-    kernel = np.abs(wc_coefficients.T @ fir_coefficients)
-    #idx1 = wc_coefficients.shape[1] - 1
-    pad = fir_coefficients.shape[1] - 1
-    c = scipy.signal.convolve2d(x, kernel, mode='valid', boundary='fill',
-                                fillvalue=np.nan)
-    c = np.pad(c, ((0, 0), (pad, 0)), 'edge')
-
-    return c
+#def _contrast_kernel(x, coefficients):
+#
+#    idx1 = wc_coefficients.shape[1] - 1
+#    pad = fir_coefficients.shape[1] - 1
+#    c = scipy.signal.convolve2d(x, kernel, mode='valid', boundary='fill',
+#                                fillvalue=np.nan)
+#    c = np.pad(c, ((0, 0), (pad, 0)), 'edge')
+#
+#    return c
