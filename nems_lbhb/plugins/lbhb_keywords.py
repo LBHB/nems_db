@@ -152,16 +152,13 @@ def ctk(kw):
     ops = kw.split('.')[1:]
     offset = None
     fixed = False
-    upper_bound = 15
     for op in ops:
         if op.startswith('off'):
             offset = int(op[3:])
         elif op == 'f':
             fixed = True
-        elif op.startswith('ub'):
-            upper_bound = int(op[2:])
-    # if fixed is false, offset will be converted into a fittable parameter
-    # by gc2 fitter after LN portion of fit is complete.
+    if offset is not None:
+        offset = np.array([offset])
 
     template = {
             'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
@@ -169,11 +166,10 @@ def ctk(kw):
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
                           'use_phi': False, 'compute_contrast': False,
-                          'offset': np.array([offset]), 'fixed': fixed},
+                          'offset': offset, 'fixed': fixed},
             'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
             'prior': {},
-            'bounds': {'offset': (0, upper_bound)}
             }
 
     return template
