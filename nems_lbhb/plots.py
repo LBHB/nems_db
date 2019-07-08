@@ -1261,7 +1261,8 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
             b_goodcells[:,i] = td[m] > 2*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
-    b_m = np.array((b_ceiling.loc[goodcells]**2).median()[modelnames])
+    #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
 
     #u_modelgroups = np.unique(modelgroups)
@@ -1270,8 +1271,8 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     for k, m in modelgroups.items():
         jj = [m0 in m for m0 in modelnames]
         modelset=[]
-        for jjj in jj:
-            if jjj:
+        for jjj in range(len(jj)):
+            if jj[jjj]:
                 modelset.append(modelnames[jjj])
         print("{} : {}".format(k, modelset))
         ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
@@ -1287,4 +1288,4 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     ax.set_ylim((0.2, 0.9))
     nplt.ax_remove_box(ax)
 
-    return ax
+    return ax, b_ceiling

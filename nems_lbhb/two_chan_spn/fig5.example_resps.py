@@ -44,8 +44,8 @@ modelname1 = "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic"
 modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
 
 # parametric temporal filter
-modelname1 = "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
-modelname2 = "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname1 = "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname2 = "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
 #modelname2 = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
 
 modelnames = [modelname1, modelname2]
@@ -68,7 +68,7 @@ savefig = True
 #    fh = lplt.compare_model_preds(cellid,batch,modelname1,modelname2);
 #    #fh.savefig(outpath + "fig1_model_preds_" + cellid + ".pdf")
 
-m[np.cumsum(m)>4]=False
+#m[np.cumsum(m)>4]=False
 
 cellcount = np.sum(m)
 colcount = 3
@@ -204,6 +204,6 @@ for cellid, c in df[m].iterrows():
     fh.canvas.draw()
 
 if savefig:
-    fh.savefig(outpath + "fig2_example_psth_preds.pdf")
+    fh.savefig(outpath + "fig5_example_psth_preds.pdf")
 
 

@@ -40,13 +40,11 @@ if 1:
                 "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic",
                 "env.fs100-ld-sev_dlog.f-wc.2x4.c.n-stp.4-fir.4x15-lvl.1-dexp.1_init-basic"]
     # new DO models
-    modelnames=["env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-                "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-                "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-                "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
-               ]
+    modelnames=["env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x4.c-relu.4-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+                "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+                ]
     # cleaner STP effects, predictions slightly worse
 #    modelnames=["env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic",
 #                "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-stp.1-dexp.1_init-basic",
@@ -60,11 +58,11 @@ if 1:
 #                "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2-fir.2x15-lvl.1-dexp.1_init-basic",
 #                "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3-fir.3x15-lvl.1-dexp.1_init-basic",
 #                "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4-fir.4x15-lvl.1-dexp.1_init-basic"]
-    fileprefix="fig5.SPN"
-    n1=modelnames[1]
-    n2=modelnames[-2]
+    fileprefix="fig4.SPN"
+    n1=modelnames[0]
+    n2=modelnames[-1]
     label1 = "Rank-4 LN"
-    label2 = "Rank-4 STP"
+    label2 = "Rank-5 STP"
 elif 1:
     batch = 289
     modelnames = ["ozgf.fs100.ch18-ld-sev_dlog-wc.18x3-fir.3x15-lvl.1-dexp.1_init-basic",
@@ -74,8 +72,8 @@ elif 1:
     n1=modelnames[0]
     n2=modelnames[1]
     fileprefix="fig9.NAT"
-    label1 = "Rank-2 LN"
-    label2 = "Rank-3 STP"
+    label1 = "Rank-4 LN"
+    label2 = "Rank-4 STP"
 
 xc_range = [-0.05, 1.1]
 
@@ -112,7 +110,7 @@ fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
 #                           highlight=improvedcells)
 
 fh2, ax = plt.subplots(1, 2, figsize=(7, 3))
-m = np.array((df.loc[goodcells]**2).mean()[modelnames])
+m = np.array((df.loc[goodcells]).mean()[modelnames])
 ax[0].bar(np.arange(len(modelnames)), m, color='black')
 ax[0].plot(np.array([-1, len(modelnames)]), np.array([0, 0]), 'k--')
 ax[0].set_ylim((-.05, 0.9))
@@ -151,24 +149,34 @@ modelgroups['doLN'] = [
     "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
     ]
 modelgroups['relu-doLN'] = [
+    "env.fs100-ld-sev_dlog-wc.2x1.c-relu.1-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x2.c-relu.2-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x3.c-relu.3-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-relu.4-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+    "env.fs100-ld-sev_dlog-wc.2x4.c-relu.4-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-relu.5-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
     ]
 modelgroups['STPx-LN'] = [
+    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.1.x.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x3.c-stp.1.x.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.1.x.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
     ]
 modelgroups['doL-STP-N'] = [
+    "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b"
+    "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b"
     ]
 modelgroups['STP-LN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-fir.3x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-fir.4x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-fir.5x15-lvl.1-dexp.1_init.r10-basic.b"
     ]
 modelgroups['STP-doLN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
     "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
@@ -182,7 +190,7 @@ modelgroups['STP-doLN'] = [
 #modelgroups=np.zeros(len(b_modelnames))
 #modelgroups[b_stp1] = 1
 #modelgroups[b_stp] = 2
-lplt.model_comp_pareto(batch=batch, modelgroups=modelgroups,
+_, b_ceiling = lplt.model_comp_pareto(batch=batch, modelgroups=modelgroups,
                        goodcells=goodcells, ax=ax[1])
 ax[1].set_ylim(ax[0].get_ylim())
 

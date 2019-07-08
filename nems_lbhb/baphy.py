@@ -1585,7 +1585,7 @@ def baphy_data_path(**options):
     return data_file
 
 
-def baphy_load_recording_uri(**options):
+def baphy_load_recording_uri(recache=False, **options):
     """
     Meant to be a "universal loader" for baphy recordings.
     First figure out hash for options dictionary
@@ -1629,12 +1629,17 @@ def baphy_load_recording_uri(**options):
     # fill in default options
     options = fill_default_options(options)
 
-    recache = options.get('recache', 0)
-    if 'recache' in options:
-        del options['recache']
+    use_API = get_setting('USE_NEMS_BAPHY_API')
 
-    data_file = recording_filename_hash(siteid, options,
-                                    uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+    data_file = recording_filename_hash(
+        siteid, options, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+    if use_API:
+        p, f = os.path.split(data_file)
+        host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+        data_uri = host + '/recordings/' + str(batch) + '/' + f
+    else:
+        data_uri = data_file
+
     #log.info(data_file)
     #log.info(options)
 
@@ -1646,9 +1651,9 @@ def baphy_load_recording_uri(**options):
         rec.save(data_file)
 
     else:
-        log.info('Cached recording found: %s', data_file)
+        log.info('Cached recording found: %s', data_uri)
 
-    return data_file
+    return data_uri
 
 
 def baphy_load_recording_file(**options):

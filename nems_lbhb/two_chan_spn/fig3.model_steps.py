@@ -39,15 +39,20 @@ modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x3.c-stp.3-fir.3x15-lvl.1-dexp.1_init-
 #modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
 #modelname2 = "env.fs100-ld-sev_dlog.f-wc.2x2.c.n-stp.2-fir.2x15-lvl.1-dexp.1_init-basic"
 
-# parametric temporal filter - 4 chan
-modelname1 = "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
-modelname2 = "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
-
 # 3 chan
 modelname1 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
 modelname2 = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
 
-save_figs = False
+# parametric temporal filter - 4 chan
+modelname1 = "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname2 = "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+
+# 5 chan
+modelname1 = "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+modelname2 = "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+
+
+save_figs = True
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 #if save_figs:
 plt.close('all')
@@ -68,5 +73,5 @@ fh2 = nplt.diagnostic(ctx2, pre_dur=0.25, dur=1.5)
 
 if save_figs:
     print("saving figures...")
-    fh1.savefig(outpath + "fig1.detailed_response_" + cellid + ".pdf")
-    fh2.savefig(outpath + "fig4.model_steps_" + cellid + ".pdf")
+    fh1.savefig(outpath + "fig3.detailed_response_" + cellid + ".pdf")
+    fh2.savefig(outpath + "fig3.model_steps_" + cellid + ".pdf")

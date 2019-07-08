@@ -1,14 +1,20 @@
 import re
+import os
+import io
 
 from flask import abort, Response, request
 from flask_restful import Resource
 
 import nems_lbhb.baphy as baphy
+import nems
 
 # Define some regexes for sanitizing inputs
 RECORDING_REGEX = re.compile(r"[\-_a-zA-Z0-9]+\.tar\.gz$")
 CELLID_REGEX = re.compile(r"^[\-_a-zA-Z0-9]+$")
 BATCH_REGEX = re.compile(r"^\d+$")
+
+nems_recordings_dir = nems.get_setting('NEMS_RECORDINGS_DIR')
+nems_results_dir = nems.get_setting('NEMS_RESULTS_DIR')
 
 
 def valid_recording_filename(recording_filename):
@@ -89,4 +95,58 @@ class BaphyInterface(Resource):
         abort(400, 'Not yet implemented')
 
     def delete(self, batch, cellid):
+        abort(400, 'Not yet Implemented')
+
+class GetRecording(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    def __init__(self, **kwargs):
+        pass
+
+    def get(self, batch, file):
+        '''
+        Queries the MySQL database, finds the file, and returns
+        the corresponding data in a NEMS-friendly Recording object.
+        '''
+        filepath = os.path.join(nems_recordings_dir, batch, file)
+
+        try:
+            f = io.open(filepath, 'rb')
+            return Response(f, status=200, mimetype='application/gzip')
+        except:
+            abort(400, 'file not found')
+
+    def put(self, batch, file):
+        abort(400, 'Not yet implemented')
+
+    def delete(self, batch, file):
+        abort(400, 'Not yet Implemented')
+
+class UploadResults(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    ALLOWED_EXTENSIONS = set(['tgz'])
+
+    def __init__(self, **kwargs):
+        pass
+
+    def allowed_file(filename):
+        return '.' in filename and \
+               filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+    def get(self, batch, cellid, file):
+       abort(400, 'Not yet implemented')
+
+    def put(self, batch, cellid, file):
+        data = request.data
+        print('data received: len: {}'.format(len(data)))
+        filename = os.path.join(nems_results_dir, batch, cellid, file)
+        print('save to : ' + filename)
+        f = os.open(filename, os.O_RDWR|os.O_CREAT)
+        os.write(f, data)
+        os.close(f)
+
+    def delete(self, batch, file):
         abort(400, 'Not yet Implemented')

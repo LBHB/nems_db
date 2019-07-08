@@ -39,7 +39,7 @@ params = {'legend.fontsize': 6,
 plt.rcParams.update(params)
 
 # start main code
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 save_fig = True
 #if save_fig:
 plt.close('all')
