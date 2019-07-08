@@ -509,6 +509,8 @@ def baphy_load_dataset(parmfilepath, **options):
                 snr_suff="_{}dB".format(SNR)
             else:
                 snr_suff=""
+        else:
+            snr_suff = "" # MLE 2019-04-29 is there a reason why some exptparams do not have an SNR key/field??
 
         for eventidx in range(0, len(tags)):
 

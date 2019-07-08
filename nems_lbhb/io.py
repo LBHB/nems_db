@@ -79,6 +79,7 @@ def baphy_mat2py(s):
     s3 = re.sub(r';', r'', s.rstrip())
     s3 = re.sub(r'%', r'#', s3)
     s3 = re.sub(r'\\', r'/', s3)
+    s3 = re.sub(r'\.wav[-_]', r'-',s3) # MLE 2019 05 29 kludge to avoid .wav file sufix to be considered as matlab struct.field
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)\+", r"XX\g<1>+", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+) ,", r"XX\g<1> ,", s3)
