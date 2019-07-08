@@ -4,13 +4,16 @@ Functions and xforms wrappers for doing a full fit of the gain control model.
 import copy
 import logging
 
+import numpy as np
+
 import nems
 import nems.utils
 import nems.metrics.api as metrics
 from nems.analysis.api import fit_basic, basic_with_copy, pick_best_phi
 from nems_lbhb.gcmodel.initializers import init_dsig
-from nems.initializers import prefit_mod_subset, rand_phi
+from nems.initializers import prefit_mod_subset
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
+import nems.modelspec as ms
 
 log = logging.getLogger(__name__)
 
@@ -207,7 +210,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     return {'modelspec': modelspec}
 
 
-def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
+def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
             cost_function=None, IsReload=False, post_fit=False, post_copy=True,
             **context):
@@ -235,6 +238,9 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         Stores information about model architecture and parameter values.
     est : NEMS Recording
         A container for a related set of NEMS signals. In short, the data.
+    val : NEMS recording
+        As est, but never used for fitting. Only used (in this function) to
+        cache the minimum and maximum value of ctpred for post-fit visualizations.
     max_iter : int
         Max number of times that the fitter can be called during optimization.
     tolerance : float
@@ -443,4 +449,16 @@ def fit_gc2(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
 
     modelspec.set_fit(0)
-    return pick_best_phi(modelspec, est=est, **context)
+    # pick the best modelspec if there were multiple fits
+    best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
+    # cache the maximum and minimum value of ctpred (across est and val sets)
+    ct1 = ms.evaluate(est, best_ms).apply_mask()['ctpred'].as_continuous()
+    ct2 = ms.evaluate(val, best_ms).apply_mask()['ctpred'].as_continuous()
+    ctmax_est = np.nanmax(ct1)
+    ctmin_est = np.nanmin(ct1)
+    ctmax_val = np.nanmax(ct2)
+    ctmin_val = np.nanmin(ct2)
+    best_ms.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
+            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
+
+    return {'modelspec': best_ms}
