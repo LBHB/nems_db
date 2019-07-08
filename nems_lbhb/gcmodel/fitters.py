@@ -458,6 +458,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     ctmin_est = np.nanmin(ct1)
     ctmax_val = np.nanmax(ct2)
     ctmin_val = np.nanmin(ct2)
+    best_ms.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
+            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
 
-    return {'modelspec': best_ms, 'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
-            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val}
+    return {'modelspec': best_ms}
