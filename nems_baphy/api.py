@@ -139,11 +139,14 @@ class UploadResults(Resource):
     def get(self, batch, cellid, path, file):
        abort(400, 'Not yet implemented')
 
-    def put(self, batch, cellid, file):
+    def put(self, batch, cellid, path, file):
         data = request.data
         print('data received: len: {}'.format(len(data)))
-        filename = os.path.join(nems_results_dir, batch, cellid, file)
+        fullpath = os.path.join(nems_results_dir, batch, cellid, path)
+        filename = os.path.join(fullpath, file)
         print('save to : ' + filename)
+        if not os.path.exists(fullpath):
+           os.makedirs(fullpath, 0o777)
         f = os.open(filename, os.O_RDWR|os.O_CREAT)
         os.write(f, data)
         os.close(f)
