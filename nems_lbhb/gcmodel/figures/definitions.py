@@ -58,6 +58,12 @@ gc_PF = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-l
 gc_PF_ks = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk-dsig.d.k.s.n_gc2.PF"
 gc_stp_PF = "ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-stp.2-fir.2x15-lvl.1-ctk-dsig.d.n_gc2.PF"
 # _ks only for gd ratio comparison (to avoid conflation with changes to amplitude)
+gc_PF_o1 = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
+gc_PF_o1_ks = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x2.g-fir.2x15-lvl.1-ctk.off1.f-dsig.d.k.s_gc2.PF'
+
+stp_dexp3 = 'ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic'
+ln_dexp3 = 'ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic'
+
 
 
 

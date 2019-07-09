@@ -151,11 +151,12 @@ def _df_to_array(df, dims):
 
 
 def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
-             truncate=False):
+             use_exp=False):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids = df_r[LN] > good_LN
     gc_cells = (df_r[LN] > good_LN) & (df_r[gc] > df_r[LN])
-    gc_params = fitted_params_per_batch(289, gc, stats_keys=[])
+    meta = ['r_test', 'ctmax_val', 'ctmax_est', 'ctmin_val', 'ctmin_est']
+    gc_params = fitted_params_per_batch(289, gc, stats_keys=[], meta=meta)
     # drop cellids that haven't been fit for all models
     gc_params_cells = gc_params.transpose().index.values.tolist()
     for c in gc_params_cells:
@@ -171,64 +172,61 @@ def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
             break
     k_key = f'{i}--{k}--kappa'
     ka_key = k_key + '_mod'
-    r_test_key = 'meta--r_test'
-    all_keys = [k_key, ka_key, r_test_key]
+    meta_keys = ['meta--' + k for k in meta]
+    all_keys = [k_key, ka_key] + meta_keys
     phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
                for k in all_keys]
     sep_dfs = [df.values.flatten().astype(np.float64) for df in phi_dfs]
     gc_dfs = [gc_params[gc_params.index==k].transpose()[gc_cells].transpose()
                for k in all_keys]
     gc_sep_dfs = [df.values.flatten().astype(np.float64) for df in gc_dfs]
-    low, high, r_test = sep_dfs
-    gc_low, gc_high, gc_r = gc_sep_dfs
+    low, high, r_test, ctmax_val, ctmax_est, ctmin_val, ctmin_est = sep_dfs
+    gc_low, gc_high, gc_r, gc_ctmax_val, \
+        gc_ctmax_est, gc_ctmin_val, gc_ctmin_est = gc_sep_dfs
 
-    # need to fix the range for comparison to rabinowitz ratio -
-    # scale negative infinity for our kappa to 0
-    # and scale positive infinity to 2 just to make the range easy to work with.
-    # the raw values shouldn't really matter since we're taking a ratio
-#    abs_max_kappa = np.nanmax(np.abs(np.concatenate([low, high])))
-#    low = low / abs_max_kappa + 1
-#    high = high / abs_max_kappa + 1
+    ctmax = np.maximum(ctmax_val, ctmax_est)
+    gc_ctmax = np.maximum(gc_ctmax_val, gc_ctmax_est)
+    ctmin = np.minimum(ctmin_val, ctmin_est)
+    gc_ctmin = np.minimum(gc_ctmin_val, gc_ctmin_est)
+    k_low = np.exp(low + (high - low)*ctmin)
+    k_high = np.exp(low + (high - low)*ctmax)
+    gc_k_low = np.exp(gc_low + (gc_high - gc_low)*gc_ctmin)
+    gc_k_high = np.exp(gc_low + (gc_high - gc_low)*gc_ctmax)
+    if use_exp:
+        k_low = np.exp(k_low)
+        k_high = np.exp(k_high)
+        gc_k_low = np.exp(gc_k_low)
+        gc_k_high = np.exp(gc_k_high)
 
-    if truncate:
-        log.warning('This option should only be used when dealing with old '
-                    'fits where kappa had a lower bound of 0.')
-        high[high < 0.1] = 0.1
-        gc_high[gc_high < 0.1] = 0.1
+    ratio = k_low / k_high
+    gc_ratio = gc_k_low / gc_k_high
 
-    #ratio = low/high
-    ratio = np.exp(low - high)
-    #gc_ratio = gc_low/gc_high
-    gc_ratio = np.exp(low - high)
-
-    if truncate:
-        ratio[ratio > 10] = 10
-        gc_ratio[gc_ratio > 10] = 10
 
     fig1 = plt.figure(figsize=figsize)
     plt.hist(ratio, bins=bins)
-    plt.title('e^low/e^high')
+    plt.title('low/high')
 
     fig2 = plt.figure(figsize=figsize)
     plt.hist(gc_ratio, bins=bins)
-    plt.title('e^low/e^high, gc improvements only')
+    plt.title('low/high, gc improvements only')
 
     fig3 = plt.figure(figsize=figsize)
     plt.scatter(ratio, r_test)
-    plt.title('e^low/e^high vs r_test')
+    plt.title('low/high vs r_test')
 
     fig4 = plt.figure(figsize=figsize)
     plt.scatter(gc_ratio, gc_r)
-    plt.title('e^low/e^high vs r_test, gc improvements only')
+    plt.title('low/high vs r_test, gc improvements only')
 
 
 def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
-                            good_LN=0, bins=60, truncate=False):
+                            good_LN=0, bins=60):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids = df_r[LN] > good_LN
     gc_cells = (df_r[LN] > good_LN) & (df_r[gc] > df_r[LN])
-    gc_params = fitted_params_per_batch(289, gc, stats_keys=[])
+    meta = ['r_test', 'ctmax_val', 'ctmax_est', 'ctmin_val', 'ctmin_est']
+    gc_params = fitted_params_per_batch(289, gc, stats_keys=[], meta=meta)
     # drop cellids that haven't been fit for all models
     gc_params_cells = gc_params.transpose().index.values.tolist()
     for c in gc_params_cells:
@@ -244,25 +242,34 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
             break
     k_key = f'{i}--{k}--kappa'
     ka_key = k_key + '_mod'
-    r_test_key = 'meta--r_test'
-    all_keys = [k_key, ka_key, r_test_key]
+    meta_keys = ['meta--' + k for k in meta]
+    all_keys = [k_key, ka_key] + meta_keys
     phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
                for k in all_keys]
     sep_dfs = [df.values.flatten().astype(np.float64) for df in phi_dfs]
     gc_dfs = [gc_params[gc_params.index==k].transpose()[gc_cells].transpose()
                for k in all_keys]
     gc_sep_dfs = [df.values.flatten().astype(np.float64) for df in gc_dfs]
-    low, high, r_test = sep_dfs
-    gc_low, gc_high, gc_r = gc_sep_dfs
+    low, high, r_test, ctmax_val, ctmax_est, ctmin_val, ctmin_est = sep_dfs
+    gc_low, gc_high, gc_r, gc_ctmax_val, \
+        gc_ctmax_est, gc_ctmin_val, gc_ctmin_est = gc_sep_dfs
+
+    ctmax = np.maximum(ctmax_val, ctmax_est)
+    gc_ctmax = np.maximum(gc_ctmax_val, gc_ctmax_est)
+    ctmin = np.minimum(ctmin_val, ctmin_est)
+    gc_ctmin = np.minimum(gc_ctmin_val, gc_ctmin_est)
+    k_low = np.exp(low + (high - low)*ctmin)
+    k_high = np.exp(low + (high - low)*ctmax)
+    gc_k_low = np.exp(gc_low + (gc_high - gc_low)*gc_ctmin)
+    gc_k_high = np.exp(gc_low + (gc_high - gc_low)*gc_ctmax)
 
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].plot([np.zeros(low.shape), np.ones(high.shape)], [low, high],
-                 color='black', alpha=0.2)
+    axes[0].plot([ctmin, ctmax], [k_low, k_high], color='black', alpha=0.2)
     axes[1].hist(high-low, bins=60)
 
     fig1, axes1 = plt.subplots(1, 2, figsize=figsize)
-    axes1[0].plot([np.zeros(gc_low.shape), np.ones(gc_high.shape)],
-                  [gc_low, gc_high], color='black', alpha=0.2)
+    axes1[0].plot([gc_ctmin, gc_ctmax], [gc_k_low, gc_k_high], color='black',
+                  alpha=0.2)
     axes1[1].hist(gc_high-gc_low, bins=60)
     plt.title('gc only')
 
@@ -276,6 +283,20 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
 
 
 def dynamic_sigmoid_range(cellid, batch, modelname):
+
+     # For if I want to convert this to do all cells somehow
+     # (but then I wouldn't have pred to use as input)
+
+#    meta = ['ctmax_val', 'ctmax_est', 'ctmin_val', 'ctmin_est']
+#    gc_params = fitted_params_per_batch(289, modelname, stats_keys=[], meta=meta)
+#    meta_keys = ['meta--' + k for k in meta]
+#    phi_dfs = [gc_params[gc_params.index==k] for k in meta_keys]
+#    sep_dfs = [df.values.flatten().astype(np.float64) for df in phi_dfs]
+#    gc_dfs = [gc_params[gc_params.index==k] for k in meta_keys]
+#    gc_sep_dfs = [df.values.flatten().astype(np.float64) for df in gc_dfs]
+#    ctmax_val, ctmax_est, ctmin_val, ctmin_est = sep_dfs
+#    gc_ctmax_val, gc_ctmax_est, gc_ctmin_val, gc_ctmin_est = gc_sep_dfs
+
     xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
     modelspec = ctx['modelspec']
     val = ctx['val']
@@ -287,6 +308,21 @@ def dynamic_sigmoid_range(cellid, batch, modelname):
     for k in lows:
         if k not in highs:
             highs[k] = lows[k]
+
+    m = modelspec.meta
+    ctmax_val = m['ctmax_val']
+    #ctmax_est = m['ctmax_est']
+    ctmin_val = m['ctmin_val']
+    #ctmin_est = m['ctmin_est']
+    #all_max = max(ctmax_val, ctmax_est)
+    #all_min = max(ctmin_val, ctmin_est)
+
+    thetas = list(lows.values())
+    theta_mods = list(highs.values())
+    for t, t_m, k in zip(thetas, theta_mods, list(lows.keys())):
+        lows[k] = t + (t - t_m)*ctmin_val
+        highs[k] = t + (t - t_m)*ctmax_val
+
     val_before_dsig = ms.evaluate(val, modelspec, stop=-1)
     pred_before_dsig = val_before_dsig['pred'].as_continuous().T
     low_out = _double_exponential(pred_before_dsig, **lows)

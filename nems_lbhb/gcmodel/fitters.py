@@ -271,7 +271,8 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
 
     '''
     if IsReload:
-        return {}
+        _store_gain_info(modelspec, est, val)
+        return {'modelspec': modelspec}
 
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)
@@ -452,13 +453,22 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     # pick the best modelspec if there were multiple fits
     best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
     # cache the maximum and minimum value of ctpred (across est and val sets)
-    ct1 = ms.evaluate(est, best_ms).apply_mask()['ctpred'].as_continuous()
-    ct2 = ms.evaluate(val, best_ms).apply_mask()['ctpred'].as_continuous()
+    _store_gain_info(best_ms, est, val)
+
+    return {'modelspec': best_ms}
+
+
+def _store_gain_info(modelspec, est, val):
+    '''
+    Add ctmin and ctmax info to modelspec (IN-PLACE).
+    '''
+    ct1 = ms.evaluate(est, modelspec).apply_mask()['ctpred'].as_continuous()
+    ct2 = ms.evaluate(val, modelspec).apply_mask()['ctpred'].as_continuous()
     ctmax_est = np.nanmax(ct1)
     ctmin_est = np.nanmin(ct1)
     ctmax_val = np.nanmax(ct2)
     ctmin_val = np.nanmin(ct2)
-    best_ms.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
-            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
+    modelspec.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
+                           'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
 
-    return {'modelspec': best_ms}
+    return modelspec
