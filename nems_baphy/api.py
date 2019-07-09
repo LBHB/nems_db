@@ -136,7 +136,7 @@ class UploadResults(Resource):
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-    def get(self, batch, cellid, file):
+    def get(self, batch, cellid, path, file):
        abort(400, 'Not yet implemented')
 
     def put(self, batch, cellid, file):

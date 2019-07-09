@@ -24,7 +24,7 @@ import nems.db as nd
 import nems.plots.api as nplt
 from nems.utils import find_module
 
-save_fig = False
+save_fig = True
 if save_fig:
     plt.close('all')
 
@@ -110,10 +110,11 @@ fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
 #                           highlight=improvedcells)
 
 fh2, ax = plt.subplots(1, 2, figsize=(7, 3))
+offset = 0.5
 m = np.array((df.loc[goodcells]).mean()[modelnames])
-ax[0].bar(np.arange(len(modelnames)), m, color='black')
-ax[0].plot(np.array([-1, len(modelnames)]), np.array([0, 0]), 'k--')
-ax[0].set_ylim((-.05, 0.9))
+ax[0].bar(np.arange(len(modelnames)), m-offset, color='black', bottom=offset)
+ax[0].plot(np.array([-1, len(modelnames)]), np.array([offset, offset]), 'k--')
+ax[0].set_ylim((offset-0.05, 0.85))
 ax[0].set_title("batch {}, n={}/{} good cells".format(
         batch, np.sum(goodcells), len(goodcells)))
 ax[0].set_ylabel('Mean var explained (r2)')

@@ -37,7 +37,7 @@ api.add_resource(GetRecording,
                  resource_class_kwargs={})
 
 api.add_resource(UploadResults,
-                 '/upload/<string:batch>/<string:cellid>/<string:file>',
+                 '/results/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  resource_class_kwargs={})
 
 app.run(port=int(creds['NEMS_BAPHY_API_PORT']),
