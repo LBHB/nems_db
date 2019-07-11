@@ -235,10 +235,13 @@ def kamiak_to_database(cellids, batch, modelnames, source_path,
                         batch, c, m, path)
             continue
         else:
-             xfspec, ctx = xforms.load_analysis(path)
+             xfspec, ctx = xforms.load_analysis(path, eval_model=False)
              preview = ctx['modelspec'].meta.get('figurefile', None)
              if 'log' not in ctx:
                  ctx['log'] = 'missing log'
+             figures_to_load = ctx['figures_to_load']
+             figures = [xforms.load_resource(f) for f in figures_to_load]
+             ctx['figures'] = figures
              xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
                                   ctx['figures'], ctx['log'])
              nd.update_results_table(ctx['modelspec'], preview=preview)
