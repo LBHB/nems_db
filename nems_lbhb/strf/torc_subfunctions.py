@@ -212,10 +212,10 @@ def get_snr(spdata,stim,basep,mf,allrates):
     :param allrates: list of all rates used in TORCs
     :return: snr
     '''
-    ###
-    rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    spdata = rmat['r']
-    ###
+    # ###
+    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
+    # spdata = rmat['r']
+    # ###
     spdata[(np.isnan(spdata)).ravel().nonzero()] = 0                                   #get rid of not numbers
     [numdata,numsweeps,numrecs] = spdata.shape                                         #dims to vars
     [stimfreq,stimtime,numstims] = stim.shape                                          #dims to vars
@@ -561,8 +561,8 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     else:
         snr = 0
     ###
-    rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    rmat = rmat['r']
+    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
+    # rmat = rmat['r']
 
 
     if not jackN:                                                                      #normalize by the num of reps that were presented
@@ -577,8 +577,8 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
                 if thisrepcount == 0:
                     thisrepcount = 1
 
-                #spkdata = stacked[:,rep,rec]
-                spkdata = (rmat[:,rep,rec]).astype('float64')
+                spkdata = stacked[:,rep,rec]
+                # spkdata = (rmat[:,rep,rec]).astype('float64')
 
                 ###Probably not going to happen in this case
                 # if fs != 1000:                                                         #this might not be a great translation
@@ -619,8 +619,8 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     else:
         strfj = np.zeros([stimX,stimT,jackN])
 
-        #stackedj = stacked
-        stackedj = rmat.astype('float64')
+        stackedj = stacked
+        # stackedj = rmat.astype('float64')
         stackedj[:FirstStimTime,:,:] = np.nan
 
         mm = int(np.floor(stackedj.shape[0] / basep))

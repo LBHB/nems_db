@@ -66,13 +66,13 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
     [stimX,stimT,numrecs] = stim.shape
     basep = StimParams['basep']
 
-    ##
-    rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    rmat = rmat['r']
+    # ##
+    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
+    # rmat = rmat['r']
+    #
+    # ##
 
-    ##
-
-    stackeduse = rmat[FirstStimTime:,:,:]
+    stackeduse = stacked[FirstStimTime:,:,:]
     cyclesperrep = int(stackeduse.shape[0] / basep)
     totalreps = numreps * cyclesperrep
 
