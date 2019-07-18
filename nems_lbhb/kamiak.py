@@ -2,10 +2,12 @@ import os
 import datetime
 import stat
 import logging
+import itertools
 
 import nems_lbhb.baphy as nb
 import nems.db as nd
 import nems.xforms as xforms
+from nems import get_setting
 
 log = logging.getLogger(__name__)
 
@@ -180,21 +182,104 @@ def kamiak_array(cellids, batch, modelnames, output_path):
         script.write(script_contents)
 
 
-def kamiak_to_database(cellids, batch, modelnames, source_path):
-# Assumes files have already been copied back from kamiak and
-# stored in source_path
-    for cellid in cellids:
-        for modelname in modelnames:
-            path = os.path.join(source_path, batch, cellid, modelname)
-            if not os.path.exists(path):
-                log.warning("missing fit for: \n%s\n%s\n%s\n"
-                            "using path: %s\n",
-                            batch, cellid, modelname, path)
+def kamiak_to_database(cellids, batch, modelnames, source_path,
+                       executable_path=None, script_path=None):
+    # Assumes files have already been copied back from kamiak and
+    # stored in source_path
+#    missing = []
+#    for cellid in cellids:
+#        for modelname in modelnames:
+#            path = os.path.join(source_path, batch, cellid, modelname)
+#            if not os.path.exists(path):
+#                log.warning("missing fit for: \n%s\n%s\n%s\n"
+#                            "using path: %s\n",
+#                            batch, cellid, modelname, path)
+#                missing.append((batch, cellid, modelname))
+#            else:
+#                 xfspec, ctx = xforms.load_analysis(path)
+#                 preview = ctx['modelspec'].meta.get('figurefile', None)
+#                 if 'log' not in ctx:
+#                     ctx['log'] = 'missing log'
+#                 xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
+#                                      ctx['figures'], ctx['log'])
+#                 nd.update_results_table(ctx['modelspec'], preview=preview)
+
+    user = 'jacob'
+    linux_user = 'nems'
+    allowqueuemaster = 1
+    waitid = 0
+    parmstring = ''
+    rundataid = 0
+    priority = 1
+    reserve_gb = 0
+    codeHash = 'kamiak'
+
+    if executable_path in [None, 'None', 'NONE', '']:
+        executable_path = get_setting('DEFAULT_EXEC_PATH')
+    if script_path in [None, 'None', 'NONE', '']:
+        script_path = get_setting('DEFAULT_SCRIPT_PATH')
+
+    combined = [(c, b, m) for c, b, m in
+                itertools.product(cellids, [batch], modelnames)]
+    notes = ['%s/%s/%s' % (c, b, m) for c, b, m in combined]
+    commandPrompts = ["%s %s %s %s %s" % (executable_path, script_path,
+                                          c, b, m)
+                      for c, b, m in combined]
+
+    engine = nd.Engine()
+    for (c, b, m), note, commandPrompt in zip(combined, notes, commandPrompts):
+        path = os.path.join(source_path, batch, c, m)
+        if not os.path.exists(path):
+            log.warning("missing fit for: \n%s\n%s\n%s\n"
+                        "using path: %s\n",
+                        batch, c, m, path)
+            continue
+        else:
+             xfspec, ctx = xforms.load_analysis(path, eval_model=False)
+             preview = ctx['modelspec'].meta.get('figurefile', None)
+             if 'log' not in ctx:
+                 ctx['log'] = 'missing log'
+             figures_to_load = ctx['figures_to_load']
+             figures = [xforms.load_resource(f) for f in figures_to_load]
+             ctx['figures'] = figures
+             xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
+                                  ctx['figures'], ctx['log'])
+             nd.update_results_table(ctx['modelspec'], preview=preview)
+
+        conn = engine.connect()
+        sql = 'SELECT * FROM tQueue WHERE note="' + note +'"'
+        r = conn.execute(sql)
+        if r.rowcount>0:
+            # existing job, figure out what to do with it
+            x=r.fetchone()
+            queueid = x['id']
+            complete = x['complete']
+
+            if complete == 1:
+                # Do nothing - the queue already shows a complete job
+                pass
+
+            elif complete == 2:
+                # Change dead to complete
+                sql = "UPDATE tQueue SET complete=1, killnow=0 WHERE id={}".format(queueid)
+                r = conn.execute(sql)
+
             else:
-                 xfspec, ctx = xforms.load_analysis(path)
-                 preview = ctx['modelspec'].meta.get('figurefile', None)
-                 if 'log' not in ctx:
-                     ctx['log'] = 'missing log'
-                 xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
-                                      ctx['figures'], ctx['log'])
-                 nd.update_results_table(ctx['modelspec'], preview=preview)
+                # complete in [-1, 0] -- already running or queued
+                # Do nothing
+                pass
+
+        else:
+            # New job
+            sql = "INSERT INTO tQueue (rundataid,progname,priority," +\
+                   "reserve_gb,parmstring,allowqueuemaster,user," +\
+                   "linux_user,note,waitid,codehash,queuedate) VALUES"+\
+                   " ({},'{}',{}," +\
+                   "{},'{}',{},'{}'," +\
+                   "'{}','{}',{},'{}',NOW())"
+            sql = sql.format(rundataid, commandPrompt, priority, reserve_gb,
+                             parmstring, allowqueuemaster, user, linux_user,
+                             note, waitid, codeHash)
+            r = conn.execute(sql)
+
+        conn.close()

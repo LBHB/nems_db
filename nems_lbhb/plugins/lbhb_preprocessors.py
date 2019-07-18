@@ -267,6 +267,8 @@ def contrast(loadkey):
             kwargs['continuous'] = True
         elif op.startswith('b'):
             kwargs['bands'] = int(op[1:])
+        elif op.startswith('off'):
+            kwargs['offset'] = int(op[3:])
 
     return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
 

@@ -52,7 +52,8 @@ def enqueue_models_view():
     kamiakResults = request.args.get('kamiakResults')  # path to results
 
     if loadKamiak:
-        kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults)
+        kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults,
+                           execPath, scriptPath)
         return jsonify(data=True)
 
     elif useKamiak:

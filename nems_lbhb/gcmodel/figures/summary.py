@@ -302,7 +302,7 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
 
 def significance(batch, model1, model2, model3, model4, se_filter=True,
                  ln_filter=False, ratio_filter=False, threshold=2.5,
-                 manual_cellids=None):
+                 manual_cellids=None, plot_stat='r_ceiling'):
     '''
     model1: GC
     model2: STP
@@ -400,7 +400,7 @@ def significance(batch, model1, model2, model3, model4, se_filter=True,
     minor_xticks = np.arange(-0.5, len(modelnames), 1)
     minor_yticks = np.arange(-0.5, len(modelnames), 1)
 
-    fig = plt.figure(figsize=(len(modelnames),len(modelnames)))
+    fig = plt.figure(figsize=figsize)
     ax = plt.gca()
 
     # ripped from stackoverflow. adds text labels to the grid

@@ -11,7 +11,7 @@ import nems.utils
 import nems.metrics.api as metrics
 from nems.analysis.api import fit_basic, basic_with_copy, pick_best_phi
 from nems_lbhb.gcmodel.initializers import init_dsig
-from nems.initializers import prefit_mod_subset
+from nems.initializers import prefit_mod_subset, prefit_LN
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 import nems.modelspec as ms
 
@@ -271,13 +271,15 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
 
     '''
     if IsReload:
-        return {}
+        _store_gain_info(modelspec, est, val)
+        return {'modelspec': modelspec}
 
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)
     lvl_idx = nems.utils.find_module('levelshift', modelspec)
     ctk_idx = nems.utils.find_module('contrast_kernel', modelspec)
     dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    fs = val['stim'].fs
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
@@ -391,15 +393,28 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         for k, v in frozen_phi.items():
             # Initialize _mod values equal to their counterparts
             # e.g. amplitude_mod[:4] = amplitude
-            modelspec[dsig_idx]['phi'][k] = \
-                modelspec[dsig_idx]['phi'][k[:-4]].copy()
+            # or 0 for alternate formulation
+            if modelspec[dsig_idx]['fn_kwargs']['alternate']:
+                modelspec[dsig_idx]['phi'][k] = np.array([[np.float64(0)]])
+            else:
+                modelspec[dsig_idx]['phi'][k] = \
+                    modelspec[dsig_idx]['phi'][k[:-4]].copy()
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
         modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = True
-        if modelspec[ctk_idx]['fn_kwargs']['offset'] is not None:
+        if modelspec[ctk_idx]['fn_kwargs']['offsets'] is not None:
+            offsets = modelspec[ctk_idx]['fn_kwargs']['offsets']
+            fir_channels = modelspec[fir_idx]['fn_kwargs']['coefficients'].shape[0]
+            if type(offsets) is int:
+                # convert old integer bin offset to new
+                # per-channel ms offsets
+                offsets = np.full((fir_channels, 1), offsets*(1000/fs))
             if not modelspec[ctk_idx]['fn_kwargs']['fixed']:
-                offset = modelspec[ctk_idx]['fn_kwargs'].pop('offset')
-                modelspec[ctk_idx]['phi']['offset'] = offset
+                modelspec[ctk_idx]['fn_kwargs'].pop('offsets')
+                modelspec[ctk_idx]['phi']['offsets'] = offsets
+            else:
+                modelspec[ctk_idx]['fn_kwargs']['offsets'] = offsets
+
 
         log.info('Finishing fit for full GC model ...\n')
         modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
@@ -452,13 +467,108 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     # pick the best modelspec if there were multiple fits
     best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
     # cache the maximum and minimum value of ctpred (across est and val sets)
-    ct1 = ms.evaluate(est, best_ms).apply_mask()['ctpred'].as_continuous()
-    ct2 = ms.evaluate(val, best_ms).apply_mask()['ctpred'].as_continuous()
+    _store_gain_info(best_ms, est, val)
+
+    return {'modelspec': best_ms}
+
+
+def _store_gain_info(modelspec, est, val):
+    '''
+    Add ctmin and ctmax info to modelspec (IN-PLACE).
+    '''
+    ct1 = ms.evaluate(est, modelspec).apply_mask()['ctpred'].as_continuous()
+    ct2 = ms.evaluate(val, modelspec).apply_mask()['ctpred'].as_continuous()
     ctmax_est = np.nanmax(ct1)
     ctmin_est = np.nanmin(ct1)
     ctmax_val = np.nanmax(ct2)
     ctmin_val = np.nanmin(ct2)
-    best_ms.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
-            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
+    modelspec.meta.update({'ctmax_est': ctmax_est, 'ctmin_est': ctmin_est,
+                           'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
 
-    return {'modelspec': best_ms}
+    return modelspec
+
+
+
+def test_LN(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
+            prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
+            cost_function=None, IsReload=False, **context):
+
+    if IsReload:
+        return {}
+
+    wc_idx = nems.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems.utils.find_module('fir', modelspec)
+    lvl_idx = nems.utils.find_module('levelshift', modelspec)
+
+    # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
+    prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
+    fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
+    fitter_fn = getattr(nems.fitters.api, fitter)
+    if metric is not None:
+        metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
+    else:
+        metric_fn = None
+
+
+    ##################################################################
+    # 2: Prefit the LN portion of the model (might also include STP) #
+    ##################################################################
+    modelspec = prefit_LN(est, modelspec, **prefit_kwargs)
+
+
+    ##########################################################################
+    # 3: Finish fitting the LN portion of the model (might also include STP) #
+    ##########################################################################
+    log.info('Finishing fit for full LN model ...\n')
+    # Can't use metric=None directly to fit_basic or it will have a fit,
+    # so split up arguments here and only add metric if we gave one.
+    fb_args = [est, modelspec, fitter_fn, cost_function]
+    fb_kwargs = {'metaname': 'fit_gc', 'fit_kwargs': fit_kwargs}
+    if metric_fn is not None:
+        fb_kwargs['metric'] = metric_fn
+    modelspec = fit_basic(*fb_args, **fb_kwargs)
+
+    # 3b: Freeze STRF parameters before continuing
+    log.info('Freezing STRF parameters ...\n')
+    modelspec[wc_idx]['fn_kwargs'].update(modelspec[wc_idx]['phi'])
+    frozen_wc = modelspec[wc_idx]['phi'].keys()
+    modelspec[wc_idx]['phi'] = {}
+
+    modelspec[fir_idx]['fn_kwargs'].update(modelspec[fir_idx]['phi'])
+    frozen_fir = modelspec[fir_idx]['phi'].keys()
+    modelspec[fir_idx]['phi'] = {}
+
+    modelspec[lvl_idx]['fn_kwargs'].update(modelspec[lvl_idx]['phi'])
+    frozen_lvl = modelspec[lvl_idx]['phi'].keys()
+    modelspec[lvl_idx]['phi'] = {}
+
+
+
+    ######################################
+    # 4: Fit the GC portion of the model #
+    ######################################
+    log.info('Finishing fit for full GC model ...\n')
+    modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                          metric=metric_fn, metaname='fit_gc',
+                          fit_kwargs=fit_kwargs)
+
+    # 4b: Unfreeze STRF parameters.
+    log.info('Unfreezing STRF parameters ...\n')
+    for k in frozen_wc:
+        modelspec[wc_idx]['phi'][k] = modelspec[wc_idx]['fn_kwargs'].pop(k)
+    for k in frozen_fir:
+        modelspec[fir_idx]['phi'][k] = modelspec[fir_idx]['fn_kwargs'].pop(k)
+    for k in frozen_lvl:
+        modelspec[lvl_idx]['phi'][k] = modelspec[lvl_idx]['fn_kwargs'].pop(k)
+
+
+
+    ###############################
+    # 5: Fit all modules together #
+    ###############################
+    log.info('Fitting all modules together, copying STRF...\n')
+    modelspec = fit_basic(est, modelspec, fitter_fn,
+                          metric=metric_fn, metaname='fit_gc',
+                          fit_kwargs=fit_kwargs)
+
+    return {'modelspec': modelspec}
