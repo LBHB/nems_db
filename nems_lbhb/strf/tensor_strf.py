@@ -8,12 +8,12 @@ import numpy as np
 
 from nems_lbhb.strf.strf import tor_tuning
 from nems_lbhb.strf.torc_subfunctions import interpft, insteadofbin, makepsth, torcmaker, strfplot
-from nems_lbhb.strf.tensor.tensor_subfunctions import strf_plot_prepare,base_model,model_strf,stimulus_compiler,response_compiler,strf_input_gen
+from nems_lbhb.strf.tensor_subfunctions import strf_plot_prepare,base_model,model_strf,stimulus_compiler,response_compiler,strf_input_gen
 
 ####Sample Data- works as test#####
-mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
-cellid = 'AMT005c-12-1' #one being used in Matlab
-fs=1000
+# mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
+# cellid = 'AMT005c-12-1' #one being used in Matlab
+# fs=1000
 ###########################
 
 def strf_tensor(mfilename,cellid,fs=1000,linalg=False,real=False):
