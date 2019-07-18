@@ -279,6 +279,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     lvl_idx = nems.utils.find_module('levelshift', modelspec)
     ctk_idx = nems.utils.find_module('contrast_kernel', modelspec)
     dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    fs = val['stim'].fs
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
@@ -392,15 +393,28 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         for k, v in frozen_phi.items():
             # Initialize _mod values equal to their counterparts
             # e.g. amplitude_mod[:4] = amplitude
-            modelspec[dsig_idx]['phi'][k] = \
-                modelspec[dsig_idx]['phi'][k[:-4]].copy()
+            # or 0 for alternate formulation
+            if modelspec[dsig_idx]['fn_kwargs']['alternate']:
+                modelspec[dsig_idx]['phi'][k] = np.array([[np.float64(0)]])
+            else:
+                modelspec[dsig_idx]['phi'][k] = \
+                    modelspec[dsig_idx]['phi'][k[:-4]].copy()
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
         modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = True
-        if modelspec[ctk_idx]['fn_kwargs']['offset'] is not None:
+        if modelspec[ctk_idx]['fn_kwargs']['offsets'] is not None:
+            offsets = modelspec[ctk_idx]['fn_kwargs']['offsets']
+            fir_channels = modelspec[fir_idx]['fn_kwargs']['coefficients'].shape[0]
+            if type(offsets) is int:
+                # convert old integer bin offset to new
+                # per-channel ms offsets
+                offsets = np.full((fir_channels, 1), offsets*(1000/fs))
             if not modelspec[ctk_idx]['fn_kwargs']['fixed']:
-                offset = modelspec[ctk_idx]['fn_kwargs'].pop('offset')
-                modelspec[ctk_idx]['phi']['offset'] = offset
+                modelspec[ctk_idx]['fn_kwargs'].pop('offsets')
+                modelspec[ctk_idx]['phi']['offsets'] = offsets
+            else:
+                modelspec[ctk_idx]['fn_kwargs']['offsets'] = offsets
+
 
         log.info('Finishing fit for full GC model ...\n')
         modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,

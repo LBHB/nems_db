@@ -28,6 +28,7 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
     ctk_idx = nu.find_module('contrast_kernel', modelspec)
     phi = copy.deepcopy(modelspec[ctk_idx]['phi'])
     fn_kwargs = copy.deepcopy(modelspec[ctk_idx]['fn_kwargs'])
+    fs = rec['stim'].fs
     old = ('auto_copy' in fn_kwargs)
     if old:
         fn_kwargs['use_phi'] = True
@@ -41,7 +42,7 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
     for k in removals:
         fn_kwargs.pop(k)
 
-    strf, wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi)
+    strf, wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi, fs=fs)
 
     # Show factorized coefficients on the edges to match up with
     # regular STRF

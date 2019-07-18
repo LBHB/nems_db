@@ -150,15 +150,21 @@ def gclvl(kw):
 
 def ctk(kw):
     ops = kw.split('.')[1:]
-    offset = None
+    offsets = None
     fixed = False
     for op in ops:
         if op.startswith('off'):
-            offset = int(op[3:])
+            if 'x' in op:
+                channels, initial = op[3:].split('x')
+                offset_amount = int(initial)
+                n_chans = int(channels)
+                offsets = np.full((n_chans, 1), offset_amount)
+            else:
+                log.warning("integer offset for ctk module should only be used "
+                            "with 'fixed' option.")
+                offsets = int(op[3:])
         elif op == 'f':
             fixed = True
-    if offset is not None:
-        offset = np.array([offset])
 
     template = {
             'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
@@ -166,7 +172,7 @@ def ctk(kw):
                           'wc_coefficients': None, 'fir_coefficients': None,
                           'mean': None, 'sd': None, 'coefficients': None,
                           'use_phi': False, 'compute_contrast': False,
-                          'offset': offset, 'fixed': fixed},
+                          'offsets': offsets, 'fixed': fixed},
             'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
             'prior': {},
@@ -189,6 +195,7 @@ def dsig(kw):
     c = 'ctpred'
     bounded = False
     norm = False
+    alternate = False
 
     for op in ops:
         if op in ['logsig', 'l']:
@@ -209,6 +216,8 @@ def dsig(kw):
             bounded = True
         elif op == 'n':
             norm = True
+        elif op == 'alt':
+            alternate = True
 
     # Use all by default. Use none not an option (would just be static version)
     if (not amp) and (not base) and (not kappa) and (not shift):
@@ -220,7 +229,8 @@ def dsig(kw):
                       'o': 'pred',
                       'c': c,
                       'eq': eq,
-                      'norm': norm},
+                      'norm': norm,
+                      'alternate': alternate},
         'plot_fns': ['nems.plots.api.mod_output',
                      'nems.plots.api.pred_resp',
                      'nems.plots.api.before_and_after',
@@ -228,7 +238,7 @@ def dsig(kw):
         'plot_fn_idx': 2,
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Exponential', {'beta': [2.0]}),
-                  'shift': ('Normal', {'mean': [1.0], 'sd': [1.0]}),
+                  'shift': ('Normal', {'mean': [0.0], 'sd': [1.0]}),
                   'kappa': ('Exponential', {'beta': [0.1]})},
         }
 
@@ -240,27 +250,39 @@ def dsig(kw):
                 'kappa': (None, None), 'kappa_mod': (None, None),
                 }
 
-    #zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
+    zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
 
     if amp:
-        template['prior']['amplitude_mod'] = copy.deepcopy(
-                template['prior']['amplitude']
-                )
+        if alternate:
+            template['prior']['amplitude_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['amplitude_mod'] = copy.deepcopy(
+                    template['prior']['amplitude']
+                    )
 
     if base:
-        template['prior']['base_mod'] = copy.deepcopy(
-                template['prior']['base']
-                )
+        if alternate:
+            template['prior']['base_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['base_mod'] = copy.deepcopy(
+                    template['prior']['base']
+                    )
 
     if kappa:
-        template['prior']['kappa_mod'] = copy.deepcopy(
-                template['prior']['kappa']
-                )
+        if alternate:
+            template['prior']['kappa_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['kappa_mod'] = copy.deepcopy(
+                    template['prior']['kappa']
+                    )
 
     if shift:
-        template['prior']['shift_mod'] = copy.deepcopy(
-                template['prior']['shift']
-                )
+        if alternate:
+            template['prior']['shift_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['shift_mod'] = copy.deepcopy(
+                    template['prior']['shift']
+                    )
 
     return template
 

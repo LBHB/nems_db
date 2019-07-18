@@ -21,7 +21,7 @@ import logging
 import numpy as np
 import scipy.signal
 
-from nems.modules.fir import per_channel, da_coefficients
+from nems.modules.fir import per_channel, da_coefficients, _offset_coefficients
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
                     base_mod=np.nan, amplitude_mod=np.nan, shift_mod=np.nan,
-                    kappa_mod=np.nan, eq='dexp', norm=False):
+                    kappa_mod=np.nan, eq='dexp', norm=False, alternate=False):
 
     static = False
     for p in [base_mod, amplitude_mod, shift_mod, kappa_mod]:
@@ -49,19 +49,31 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
 
         if np.isnan(base_mod):
             base_mod = base
-        b = base + (base_mod - base)*contrast
+        if alternate:
+            b = base + base_mod*contrast
+        else:
+            b = base + (base_mod - base)*contrast
 
         if np.isnan(amplitude_mod):
             amplitude_mod = amplitude
-        a = amplitude + (amplitude_mod - amplitude)*contrast
+        if alternate:
+            a = amplitude + amplitude_mod*contrast
+        else:
+            a = amplitude + (amplitude_mod - amplitude)*contrast
 
         if np.isnan(shift_mod):
             shift_mod = shift
-        s = shift + (shift_mod - shift)*contrast
+        if alternate:
+            s = shift + shift_mod*contrast
+        else:
+            s = shift + (shift_mod - shift)*contrast
 
         if np.isnan(kappa_mod):
             kappa_mod = kappa
-        k = kappa + (kappa_mod - kappa)*contrast
+        if alternate:
+            k = kappa + kappa_mod*contrast
+        else:
+            k = kappa + (kappa_mod - kappa)*contrast
     else:
         # If there's no ctpred yet (like during initialization),
         # or if mods are all nan, no need to do anything with contrast,
@@ -196,9 +208,9 @@ def levelshift(rec, i, o, ci, co, level, compute_contrast=True,
 #       basic_with_copy implementation.
 def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
                     mean=None, sd=None, coefficients=None, f1s=None, taus=None,
-                    delays=None, gains=None, use_phi=False, offset=None,
+                    delays=None, gains=None, use_phi=False, offsets=None,
                     compute_contrast=False, n_coefs=18, auto_copy=None,
-                    fixed=False):
+                    fixed=False, offset=None):
     # auto_copy is no longer used directly, but is included in the keyword
     # arguments in order to load old versions of the model that have
     # not been re-run
@@ -206,9 +218,10 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
         use_phi = True
 
     if compute_contrast:
+        fs = rec[i].fs
         coeffs, _, _ = _get_ctk_coefficients(
                 wc_coefficients, fir_coefficients, mean, sd, coefficients,
-                f1s, taus, delays, gains, use_phi, n_coefs, offset
+                f1s, taus, delays, gains, use_phi, n_coefs, offsets, offset, fs
                 )
         fn = lambda x: per_channel(x, coeffs)
         return [rec[i].transform(fn, o)]
@@ -221,7 +234,7 @@ def contrast_kernel(rec, i, o, wc_coefficients=None, fir_coefficients=None,
 def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None,
                          sd=None, coefficients=None, f1s=None, taus=None,
                          delays=None, gains=None, use_phi=False, n_coefs=18,
-                         offset=None, **kwargs):
+                         offsets=None, offset=None, fs=None, **kwargs):
 
     if use_phi:
         wc_coeffs = gaussian_coefficients(mean, sd, n_coefs)
@@ -238,12 +251,15 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
         wc_coeffs = wc_coefficients
         fir_coeffs = fir_coefficients
 
-    coeffs = np.abs(wc_coeffs.T @ fir_coeffs)
-    if offset is not None:
+    if (offsets is not None) and (fs is not None):
+        fir_coeffs = _offset_coefficients(fir_coeffs, offsets, fs)
+    elif (offsets is None) and (offset is not None):
+        # old model
         offset = int(offset)
-        coeffs = np.concatenate((np.zeros((coeffs.shape[0], offset)),
-                                 coeffs[:, :-1*offset]), axis=1)
+        fir_coeffs = np.concatenate((np.zeros((fir_coeffs.shape[0], offset)),
+                                     fir_coeffs[:, :-1*offset]), axis=1)
 
+    coeffs = np.abs(wc_coeffs.T @ fir_coeffs)
     return coeffs, wc_coeffs.T, fir_coeffs
 
 
