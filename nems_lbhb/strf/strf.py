@@ -43,7 +43,6 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
     stacked = np.stack(all_arr, axis=2)       #rasters                                       #stack the #cell on to make like 'r' from MATLAB (time x sweeps x recordings)
 
     TorcObject = exptparams["TrialObject"][1]["ReferenceHandle"][1]                          #will be strf_core_est input
-    Events = exptevents
 
     PreStimbin = int(TorcObject['PreStimSilence']*fs)                                        #how many bins in prestimsilence
     PostStimbin = int(TorcObject['PostStimSilence']*fs)                                      #how many bins in poststimsilence
@@ -53,7 +52,6 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
     INC1stCYCLE = 0                                                                          #default 0
     [strf0,snr,stim,strfemp,StimParams] = strf_est_core(stacked, TorcObject, exptparams, fs, INC1stCYCLE, 16)
 
-    #Make strf torc prediction (it's own tiny function in matlab
     pred = strf_torc_pred(stim, strf0)
 
     if INC1stCYCLE:
@@ -66,19 +64,12 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
     [stimX,stimT,numrecs] = stim.shape
     basep = StimParams['basep']
 
-    # ##
-    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    # rmat = rmat['r']
-    #
-    # ##
-
     stackeduse = stacked[FirstStimTime:,:,:]
     cyclesperrep = int(stackeduse.shape[0] / basep)
     totalreps = numreps * cyclesperrep
 
     stackeduse = np.reshape(stackeduse, [int(basep),totalreps,numstims], order='F').copy()
 
-    ##not sure why I'm forcing jacks now, but I'll figure it out
     jackcount = 16
     jstrf = np.zeros((strf0.shape[0],strf0.shape[1],jackcount))
     jackstep = totalreps / jackcount
@@ -97,7 +88,6 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
 
         trval2 = np.zeros(pred.shape)
         for ii in range(trval.shape[1]):
-            #trval2[:,ii] = np.resample(trval[:,ii],[stimT,basep],order='F').copy()
             trval2[:,ii] = sgn.resample_poly(trval[:,ii],stimT,basep).copy()
         trvalravel = np.ravel(trval2,order='F').copy()
         jpredravel = np.ravel(jpred,order='F').copy()
@@ -105,12 +95,10 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
 
     linpred = np.mean(xc)
 
-
     maxoct = int(np.log2(StimParams['hfreq']/StimParams['lfreq']))
     stepsize2 = maxoct / strf0.shape[0]
 
     smooth = [100,strf0.shape[1]]
-    ##tstrf0 = ndi.filters.gaussian_filter(strf0,[0.5,0.001]) never called again in matlab, didn't work anyway
 
     strfsmooth = interpft(strf0, smooth[0], 0)
     strfempsmooth = interpft(strfemp, smooth[0], 0)
@@ -126,8 +114,6 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
         bfidx = 1
         bf = 0
         bfshiftbins = 0
-
-    bw = sum(mm >= np.max(mm) / 2) / len(mm) * (maxoct-1)
 
     mmneg = np.mean(strfsmooth[:,:7] * (1*(strfsmooth[:,:7] < 0)), 1)
     if sum(np.abs(mm)) > 0:
@@ -170,12 +156,11 @@ def tor_tuning(mfilename,cellid,fs=1000,plot=False):
         offlat = 0
         print('no significant onset latency\n')
 
-
     #####Time to plot#####
     if plot:
         fig,axs = plt.subplots(1,3)
 
-        [freqticks,strfdatasmooth] = strfplot(strf0, StimParams['lfreq'], StimParams['basep'], 1, StimParams['octaves'], axs=axs[0])
+        [freqticks,_] = strfplot(strf0, StimParams['lfreq'], StimParams['basep'], 1, StimParams['octaves'], axs=axs[0])
 
         aa = plt.axis()
 

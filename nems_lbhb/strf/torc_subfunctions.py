@@ -13,15 +13,6 @@ def interpft(x,ny,dim=0):                                                       
     :return: interpolated data
     '''
 
-    # if not dim:
-    #     x = np.expand_dims(x,axis=1)
-    #     if np.isscalar(x):
-    #         nshifts = 1
-    #     else:
-    #         nshifts = 0
-    # else:
-    #     x = np.swapaxes(x,0,dim)
-
     if dim >= 1:                                                                   #if interpolating along columns, dim = 1
         x = np.swapaxes(x,0,dim)                                                   #temporarily swap axes so calculations are universal regardless of dim
     if len(x.shape) == 1:
@@ -42,15 +33,8 @@ def interpft(x,ny,dim=0):                                                       
         b[nyqst+ny-m,:] = b[nyqst,:]                                               #somehow
 
     y = np.fft.irfft(b,b.shape[0],0)                                               #take inverse FT (real) using new dimension generated along dim 0 of b
-
-    #if all(np.isreal(x)):                                                         #checks to make sure everything is real
-    #    y = y.real                                                                #it is, don't know when this would come up
-
     y = y * ny / m                                                                 #necessary conversion...
-    #y = y[1:ny:incr,:]                                                            #
-
     y = np.reshape(y, [y.shape[0],siz[1]])                                         #should preserve shape
-
     y = np.squeeze(y)
 
     if dim >= 1:                                                                   #as above, if interpolating along columns
@@ -119,16 +103,6 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, siglev=5,axs=None):
             smooth = [100, 250]
         strfdata = interpft(interpft(strf0, smooth[0], 0), smooth[1], 1)
 
-        # supposedly python does colorbar scaling on its own, thanks
-        # if len(clim) != 0:
-        #     clim = clim
-        # elif np.max(np.max(np.abs(stdata))):
-        #     clim = [-1*np.max(np.max(np.abs(stdata))),1*np.max(np.max(np.abs(stdata)))]
-        # else:
-        #     clim = [-1,1]
-
-        #f = plt.gcf
-
         axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
 
         if lfreq:
@@ -176,9 +150,9 @@ def makepsth(dsum,fhist,startime,endtime,mf=1):
         fhist = 1000/(endtime-startime)
     dsum = dsum[:]
 
-    period = int(1000 * (1/fhist) * mf)                                            # in samples
-    startime = startime * mf                                                       #      "
-    endtime = endtime * mf                                                         #      "
+    period = int(1000 * (1/fhist) * mf)
+    startime = startime * mf
+    endtime = endtime * mf
 
     if endtime > len(dsum):
         endtime = len(dsum)
@@ -192,13 +166,10 @@ def makepsth(dsum,fhist,startime,endtime,mf=1):
     repcount = int(fillmax / period)
     dsum = np.reshape(dsum[:endtime],(period,repcount),order='F')
 
-    wrapdata = np.nansum(dsum,1)                                                  #get 250 list of how many 1s there were
-    cnorm =  np.sum(np.logical_not(np.isnan(dsum)),1)                             #get 250 list of how many 1s were possible
+    wrapdata = np.nansum(dsum,1)
+    cnorm =  np.sum(np.logical_not(np.isnan(dsum)),1)
 
     return wrapdata,cnorm
-
-    ##There's extra code that SVD 'hacked' to allow for includsion of the first TORC
-
 
 
 def get_snr(spdata,stim,basep,mf,allrates):
@@ -212,10 +183,7 @@ def get_snr(spdata,stim,basep,mf,allrates):
     :param allrates: list of all rates used in TORCs
     :return: snr
     '''
-    # ###
-    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    # spdata = rmat['r']
-    # ###
+
     spdata[(np.isnan(spdata)).ravel().nonzero()] = 0                                   #get rid of not numbers
     [numdata,numsweeps,numrecs] = spdata.shape                                         #dims to vars
     [stimfreq,stimtime,numstims] = stim.shape                                          #dims to vars
@@ -224,9 +192,6 @@ def get_snr(spdata,stim,basep,mf,allrates):
 
     if spdata.shape[2] != stim.shape[2]:                                               #just a check
         print('Number of records and stimuli are not equal')                           #doubt this'll happen
-
-    # for key, value in ScaledTorcs.items():                                             #pretty unnecessary
-    #     [stimfreq,stimtime] = value.shape                                              #a better way to get these I think
 
     #Response variability as a function of frequency per stimulus (-pair)#
     #-------------------------------------------------------------------#
@@ -240,52 +205,41 @@ def get_snr(spdata,stim,basep,mf,allrates):
 
     n = spdata2trim.shape[1]                                                                                   #new axis 1 defines this (2/3 of previous n)
 
-    # if not invlist.shape[0] < 2:
-    #     vrf = 1e6 * np.square(stimtime) / np.square(basep) / n * np.square(np.std(
-    #         np.fft.fft((spdata2trim[:, :, invlist[0, :]] - spdata2trim[:, :, invlist[1.:]]) / 2, spdata2trim.shape[0], 0),
-    #         ddof=1, axis=1))
-    # else:
-    vrf = 1e6 * np.square(stimtime) / np.square(basep) / n * np.square(                                        #
-        np.std(np.fft.fft(spdata2trim, spdata2trim.shape[0], 0), ddof=1, axis=1))                              #
+    vrf = 1e6 * np.square(stimtime) / np.square(basep) / n * np.square(
+        np.std(np.fft.fft(spdata2trim, spdata2trim.shape[0], 0), ddof=1, axis=1))
 
     ##############Response power as a function of frequency##############
-    #-------------------------------------------------------------------#
-    spikeperiod = np.squeeze(np.mean(spdata2trim,1))                                                           #
+    #--------------------------------------------------------------------
+    spikeperiod = np.squeeze(np.mean(spdata2trim,1))
 
     #"downsample spike histogram using insteadofbin()"#
-    if basep/stimtime != 1/mf:                                                                                 #
-        spikeperiod = insteadofbin(spikeperiod, basep / stimtime, mf)                                              #
+    if basep/stimtime != 1/mf:
+        spikeperiod = insteadofbin(spikeperiod, basep / stimtime, mf)
 
-    spikeperiod = spikeperiod * 1e3 / basep * stimtime                                                         #
+    spikeperiod = spikeperiod * 1e3 / basep * stimtime
 
-    # if not invlist.shape[0] < 2:
-    #     spikeperiod = (spikeperiod[:,invlist[0,:]] - spikeperiod[:,invlist[1,:]])/2
-
-    prf = np.square(np.abs(np.fft.fft(spikeperiod,spikeperiod.shape[0],0)))                                    #
+    prf = np.square(np.abs(np.fft.fft(spikeperiod,spikeperiod.shape[0],0)))
 
     ######Variability of the STRF estimate (for TORC stimuli)############
     #-------------------------------------------------------------------#
-    # if not invlist.shape[0] < 2:
-    #     stimpospolarity = invlist[0,:]
-    # else:
-    stimpospolarity = np.arange(0,stim.shape[2],1).astype(int)                                                 #
+    stimpospolarity = np.arange(0,stim.shape[2],1).astype(int)
 
-    stim2 = stim[:,:,stimpospolarity]                                                                          #
+    stim2 = stim[:,:,stimpospolarity]
 
-    freqindex = np.swapaxes(np.round(np.abs(allrates) * basep/1000),0,1)                                       #
-    freqindx = freqindex[:,stimpospolarity]                                                                    #
+    freqindex = np.swapaxes(np.round(np.abs(allrates) * basep/1000),0,1)
+    freqindx = freqindex[:,stimpospolarity]
 
     AA = 2 * sum(freqindx > 0 ) / np.mean(np.mean(np.square(stim2),axis=0),axis=0)                             #These are 1/a^2 for each stimulus
 
     #"Estimate of the total power (ps) and error power (pes) of the STRF"
     pt = 0                                                                                                     #start at zero cause we're going to be adding
-    pes = 0                                                                                                    #
+    pes = 0
 
-    for rec in range(stimpospolarity.shape[0]):                                                                #
+    for rec in range(stimpospolarity.shape[0]):
         pt = pt + 1 / np.square(stimtime) * AA[rec] * np.sum((2 * prf[freqindx[:,rec].astype(int),rec]))       #keep adding pt through each rep
         pes = pes + 1 / np.square(stimtime) * AA[rec] * np.sum((2 * vrf[freqindx[:,rec].astype(int),rec]))     #keep adding pes through each rep
 
-    snr = pt/pes - 1                                                                                           #calc snr
+    snr = pt/pes - 1
     return snr
 
 ###Function to return the TORC - option to plot each Torc###
@@ -468,40 +422,6 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     #     axsall[ttt].imshow(value)
     #######
 
-    ########checkmatlab######
-    # import scipy.io as sio                                             #
-    # StStims = sio.loadmat('/auto/users/hamersky/stims.mat')            #load Matlab file as dictionary
-    # ststims = StStims['ststims']                                       #pull out the data as variable
-    # [mlx,mlt,torcnum] = ststims.shape                                  #assign variables to the shapes
-    # renametorc = TorcNames                                             #call TorcNames for here
-    #
-    # MatlabTorcs = dict()                                               #open new dict to be comparable to TorcValues
-    # for iii in range(torcnum):                                         #go through in range of 'numstims'
-    #     whichtorc = ststims[:,:,iii]                                   #each iteration save that torc as variable
-    #     eee = renametorc[iii]                                          #get the corresponding torcname as num we're on
-    #     MatlabTorcs[eee] = whichtorc                                   #assign the key and the value, looks like TorcValues
-    #
-    # ststims = np.around(ststims[:,:,:],decimals=4)
-    #     for nn,(key,value) in enumerate(TorcValues.items()):
-    #         torccc = np.around(value,decimals=4)
-    #         if np.all(torccc == ststims[:,:,nn]):
-    #             print(f'{nn} True')
-    #         else:
-    #             print(f'{nn} False')
-    #
-    # for qwer in range(spdata2trimmat.shape[0]):
-    #     if np.all(spdata2trimmat[qwer, 17, 16] == spdata2trim[qwer, 17, 16]):
-    #         print(qwer, "True")
-    #     else:
-    #         print(qwer, "False")
-    #########################
-
-    ###Going into the stimscale#########################################################
-    #function stim = stimscale(stim,REGIME,OPTION1,OPTION2,tsiz,xsiz); -our data made moddep 0.9 [] 250 30
-    # 3)'moddep': Specified modulation depth;
-    #	OPTION1 is the modulation depth as a fraction of 1. The default is 0.9.
-    #	OPTION2 is not required.
-
     ModulationDepth = 0.9                                                              #default set in matlab program
     base1= 0                                                                           #hard coded in matlab
     numtorc = len(TorcValues.keys())                                                   #how many torcs there are, again
@@ -560,9 +480,6 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
         snr = get_snr(stacked, stim, basep, mf, allrates)
     else:
         snr = 0
-    ###
-    # rmat = sio.loadmat('/auto/users/hamersky/r.mat')
-    # rmat = rmat['r']
 
 
     if not jackN:                                                                      #normalize by the num of reps that were presented
