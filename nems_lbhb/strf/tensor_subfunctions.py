@@ -1,7 +1,7 @@
 import numpy as np
 from keras.models import Sequential
 from keras.layers import Dense
-
+from nems_lbhb.strf.torc_subfunctions import interpft, insteadofbin, makepsth, torcmaker
 
 def strf_plot_prepare(strf,Params):
     '''
