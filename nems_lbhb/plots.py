@@ -20,6 +20,8 @@ from nems.utils import (find_module)
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+from nems.modules.weight_channels import gaussian_coefficients
+from nems.modules.fir import da_coefficients
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -52,15 +54,24 @@ def get_model_preds(cellid, batch, modelname):
 
 
 def compare_model_preds(cellid, batch, modelname1, modelname2,
-                        max_pre=0.25, max_dur=1.0):
+                        max_pre=0.25, max_dur=1.0, stim_ids=None,
+                        ctx1=None, ctx2=None):
     """
     compare prediction accuracy of two models on validation stimuli
 
     borrows a lot of functionality from nplt.quickplot()
 
     """
-    xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
-    xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    if ctx1 is None:
+        xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
+    if ctx2 is None:
+        xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    colors = [[254/255, 15/255, 6/255],
+              [217/255, 217/255, 217/255],
+              [129/255, 201/255, 224/255],
+              [128/255, 128/255, 128/255],
+              [32/255, 32/255, 32/255]
+              ]
 
     rec = ctx1['rec']
     val1 = ctx1['val']
@@ -86,7 +97,11 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
     max_rep_id, = np.where(repcount == np.max(repcount))
 
     # keep a max of two stimuli
-    stim_ids = max_rep_id[:2]
+    if stim_ids is None:
+        stim_ids = max_rep_id[:2]
+    else:
+        stim_ids = np.array(stim_ids)
+
     stim_count = len(stim_ids)
     # print(max_rep_id)
 
@@ -134,21 +149,50 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
         fn1(ax=ax)
         nplt.ax_remove_box(ax)
 
+    # model 1 wc
+    wcidx = find_module('weight_channels', ms1)
+    if wcidx:
+        ax = plt.subplot(5, 4, 2)
+        try:
+            coefs = ms1[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms1[wcidx]['phi']['mean'],
+                                          ms1[wcidx]['phi']['sd'],
+                                          ms1[wcidx]['fn_kwargs']['n_chan_in'])
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
+        nplt.ax_remove_box(ax)
+
     # model 2 modules
     wcidx = find_module('weight_channels', ms2)
     if wcidx:
         ax = plt.subplot(5, 4, 4)
-        coefs = ms2[wcidx]['phi']['coefficients']
-        plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
-        plt.xlabel('in')
-        plt.ylabel('out')
-        plt.colorbar()
+        try:
+            coefs = ms2[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms2[wcidx]['phi']['mean'],
+                                          ms2[wcidx]['phi']['sd'],
+                                          ms2[wcidx]['fn_kwargs']['n_chan_in'])
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
         nplt.ax_remove_box(ax)
 
     if find_module('stp', ms2):
         ax = plt.subplot(5, 4, 7)
         nplt.before_and_after_stp(ms2, sig_name='pred', ax=ax, title='',
-                                  channels=0, xlabel='Time (s)', ylabel='STP',
+                                  channels=0, colors=colors, xlabel='Time (s)', ylabel='STP',
                                   fs=resp.fs)
         nplt.ax_remove_box(ax)
 
@@ -1235,7 +1279,8 @@ def LN_pop_plot(ctx):
     return fig
 
 
-def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None, ax=None):
+def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
+                      offset=0.5, max=0.85, ax=None):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
@@ -1249,8 +1294,12 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     if ax is None:
         ax = plt.gca()
 
-    b_ceiling = nd.batch_comp(batch, modelnames, stat='r_ceiling')
-    b_n = nd.batch_comp(batch, modelnames, stat='n_parms')
+    if goodcells is None:
+        cellids=None
+    else:
+        cellids=list(goodcells.index)
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
     if goodcells is None:
@@ -1283,9 +1332,9 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     # reverse the order
     ax.legend(handles, labels, loc='lower right')
 
-    ax.set_xlabel('n_parms')
-    ax.set_ylabel('Mean var explained (r2)')
-    ax.set_ylim((0.2, 0.9))
+    ax.set_xlabel('Free parameters')
+    ax.set_ylabel('Mean var explained')
+    ax.set_ylim((offset-0.05, max))
     nplt.ax_remove_box(ax)
 
     return ax, b_ceiling
