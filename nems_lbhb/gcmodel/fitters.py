@@ -11,7 +11,7 @@ import nems.utils
 import nems.metrics.api as metrics
 from nems.analysis.api import fit_basic, basic_with_copy, pick_best_phi
 from nems_lbhb.gcmodel.initializers import init_dsig
-from nems.initializers import prefit_mod_subset
+from nems.initializers import prefit_mod_subset, prefit_LN
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 import nems.modelspec as ms
 
@@ -486,3 +486,89 @@ def _store_gain_info(modelspec, est, val):
                            'ctmax_val': ctmax_val, 'ctmin_val': ctmin_val})
 
     return modelspec
+
+
+
+def test_LN(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
+            prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
+            cost_function=None, IsReload=False, **context):
+
+    if IsReload:
+        return {}
+
+    wc_idx = nems.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems.utils.find_module('fir', modelspec)
+    lvl_idx = nems.utils.find_module('levelshift', modelspec)
+
+    # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
+    prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
+    fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
+    fitter_fn = getattr(nems.fitters.api, fitter)
+    if metric is not None:
+        metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
+    else:
+        metric_fn = None
+
+
+    ##################################################################
+    # 2: Prefit the LN portion of the model (might also include STP) #
+    ##################################################################
+    modelspec = prefit_LN(est, modelspec, **prefit_kwargs)
+
+
+    ##########################################################################
+    # 3: Finish fitting the LN portion of the model (might also include STP) #
+    ##########################################################################
+    log.info('Finishing fit for full LN model ...\n')
+    # Can't use metric=None directly to fit_basic or it will have a fit,
+    # so split up arguments here and only add metric if we gave one.
+    fb_args = [est, modelspec, fitter_fn, cost_function]
+    fb_kwargs = {'metaname': 'fit_gc', 'fit_kwargs': fit_kwargs}
+    if metric_fn is not None:
+        fb_kwargs['metric'] = metric_fn
+    modelspec = fit_basic(*fb_args, **fb_kwargs)
+
+    # 3b: Freeze STRF parameters before continuing
+    log.info('Freezing STRF parameters ...\n')
+    modelspec[wc_idx]['fn_kwargs'].update(modelspec[wc_idx]['phi'])
+    frozen_wc = modelspec[wc_idx]['phi'].keys()
+    modelspec[wc_idx]['phi'] = {}
+
+    modelspec[fir_idx]['fn_kwargs'].update(modelspec[fir_idx]['phi'])
+    frozen_fir = modelspec[fir_idx]['phi'].keys()
+    modelspec[fir_idx]['phi'] = {}
+
+    modelspec[lvl_idx]['fn_kwargs'].update(modelspec[lvl_idx]['phi'])
+    frozen_lvl = modelspec[lvl_idx]['phi'].keys()
+    modelspec[lvl_idx]['phi'] = {}
+
+
+
+    ######################################
+    # 4: Fit the GC portion of the model #
+    ######################################
+    log.info('Finishing fit for full GC model ...\n')
+    modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                          metric=metric_fn, metaname='fit_gc',
+                          fit_kwargs=fit_kwargs)
+
+    # 4b: Unfreeze STRF parameters.
+    log.info('Unfreezing STRF parameters ...\n')
+    for k in frozen_wc:
+        modelspec[wc_idx]['phi'][k] = modelspec[wc_idx]['fn_kwargs'].pop(k)
+    for k in frozen_fir:
+        modelspec[fir_idx]['phi'][k] = modelspec[fir_idx]['fn_kwargs'].pop(k)
+    for k in frozen_lvl:
+        modelspec[lvl_idx]['phi'][k] = modelspec[lvl_idx]['fn_kwargs'].pop(k)
+
+
+
+    ###############################
+    # 5: Fit all modules together #
+    ###############################
+    log.info('Fitting all modules together, copying STRF...\n')
+    modelspec = fit_basic(est, modelspec, fitter_fn,
+                          metric=metric_fn, metaname='fit_gc',
+                          fit_kwargs=fit_kwargs)
+
+    return {'modelspec': modelspec}
