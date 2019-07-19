@@ -92,7 +92,6 @@ for cellid, c in df[m].iterrows():
         _, ctx1, ctx2 = lplt.quick_pred_comp(cellid,batch,modelname1, modelname2,
                                              ax=ax)
 
-
     if i < cellcount + 1:
         ax.get_xaxis().set_visible(False)
 

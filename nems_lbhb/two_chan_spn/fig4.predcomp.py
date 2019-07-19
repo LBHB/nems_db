@@ -30,7 +30,8 @@ if save_fig:
 
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 
-if 1:
+USE_SPN = False
+if USE_SPN:
     batch = 259
     # this was used in the original submission
     modelnames=["env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic",
@@ -69,6 +70,11 @@ elif 1:
                   "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"]
     #modelnames = ["ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic",
     #              "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"]
+
+    # DO
+    modelnames = ["ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-do.4x15-lvl.1-dexp.1_init.r10.b-basic",
+                "ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10.b-basic"]
+
     n1=modelnames[0]
     n2=modelnames[1]
     fileprefix="fig9.NAT"
@@ -97,7 +103,7 @@ beta2[beta2>1]=1
 # test for significant improvement
 improvedcells = (beta2_test-se2 > beta1_test+se1)
 
-# test for signficant prediction at all
+# test for significant prediction at all
 goodcells = ((beta2_test > se2*3) | (beta1_test > se1*3))
 
 fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
@@ -110,11 +116,16 @@ fh1 = stateplots.beta_comp(beta1[goodcells], beta2[goodcells],
 #                           highlight=improvedcells)
 
 fh2, ax = plt.subplots(1, 2, figsize=(7, 3))
-offset = 0.5
+if USE_SPN:
+    offset = 0.5
+    max = 0.85
+else:
+    offset = 0.4
+    max = 0.65
 m = np.array((df.loc[goodcells]).mean()[modelnames])
 ax[0].bar(np.arange(len(modelnames)), m-offset, color='black', bottom=offset)
 ax[0].plot(np.array([-1, len(modelnames)]), np.array([offset, offset]), 'k--')
-ax[0].set_ylim((offset-0.05, 0.85))
+ax[0].set_ylim((offset-0.05, max))
 ax[0].set_title("batch {}, n={}/{} good cells".format(
         batch, np.sum(goodcells), len(goodcells)))
 ax[0].set_ylabel('Mean var explained (r2)')
@@ -139,58 +150,74 @@ b_modelnames = [
 ]
 
 modelgroups={}
-modelgroups['LN'] = [
-    "env.fs100-ld-sev_dlog-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+if USE_SPN:
+    modelgroups['LN'] = [
+        "env.fs100-ld-sev_dlog-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        ]
+    modelgroups['doLN'] = [
+        "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+        ]
+    modelgroups['relu-doLN'] = [
+        "env.fs100-ld-sev_dlog-wc.2x1.c-relu.1-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x2.c-relu.2-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-relu.3-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-relu.4-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-relu.5-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+        ]
+    modelgroups['STPx-LN'] = [
+        "env.fs100-ld-sev_dlog-wc.2x2.c-stp.1.x.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-stp.1.x.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-stp.1.x.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+        ]
+    modelgroups['doL-STP-N'] = [
+        "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b"
+        ]
+    modelgroups['STP-LN'] = [
+        "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-fir.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-fir.4x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-fir.5x15-lvl.1-dexp.1_init.r10-basic.b"
+        ]
+    modelgroups['STP-doLN'] = [
+        "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
+        "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+        ]
+else:
+    modelgroups['LN'] = [
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x1.g-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init.r10-basic.b",
     ]
-modelgroups['doLN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelgroups['do-LN'] = [
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x1.g-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
     ]
-modelgroups['relu-doLN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-relu.1-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-relu.2-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-relu.3-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-relu.4-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-relu.5-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelgroups['STP'] = [
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x1.g-stp.1.s-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.s-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
     ]
-modelgroups['STPx-LN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.1.x.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.1.x.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.1.x.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.1.x.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
-    ]
-modelgroups['doL-STP-N'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-do.1x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-stp.1.s-dexp.1_init.r10-basic.b"
-    ]
-modelgroups['STP-LN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-fir.1x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-fir.2x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-fir.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-fir.4x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-fir.5x15-lvl.1-dexp.1_init.r10-basic.b"
-    ]
-modelgroups['STP-doLN'] = [
-    "env.fs100-ld-sev_dlog-wc.2x1.c-stp.1.s-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
-    "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b",
+    modelgroups['do-STP'] = [
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x1.g-stp.1.s-do.1x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b",
+        "ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b",
     ]
 
-#b_stp = np.array([('stp' in m) and ('.x.' not in m) for m in b_modelnames])
-#b_stp1 = np.array([('stp' in m) and ('.x.' in m) for m in b_modelnames])
-#b_ln = ~(b_stp | b_stp1)
-
-#modelgroups=np.zeros(len(b_modelnames))
-#modelgroups[b_stp1] = 1
-#modelgroups[b_stp] = 2
 _, b_ceiling = lplt.model_comp_pareto(batch=batch, modelgroups=modelgroups,
                        goodcells=goodcells, ax=ax[1])
 ax[1].set_ylim(ax[0].get_ylim())
