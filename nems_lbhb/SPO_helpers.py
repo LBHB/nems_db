@@ -41,15 +41,21 @@ def plot_all_vals_(modelspec, val, figures=None, IsReload=False, **context):
 
     return {'figures': figures}
 
-def add_coherence_as_state(rec,**context):
+def add_coherence_as_state(rec,permute=False,baseline=True,**context):
     coh = rec['resp'].epoch_to_signal('C')
     inc = rec['resp'].epoch_to_signal('I')
-    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state')
-    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state_raw')
-    rec = preproc.concatenate_state_channel(rec, inc, state_signal_name='state')
+    if permute:
+        coh = coh.shuffle_time(rand_seed=0,mask=rec['mask'])
+        inc = inc.shuffle_time(rand_seed=1,mask=rec['mask'])
+    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state',generate_baseline=baseline)
+    rec = preproc.concatenate_state_channel(rec, inc, state_signal_name='state')   
+    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state_raw',generate_baseline=baseline)
     rec = preproc.concatenate_state_channel(rec, inc, state_signal_name='state_raw')
-    rec.signals['state'].chans=['baseline','Coherent','Incoherent']
-    rec.signals['state_raw'].chans=['baseline','Coherent','Incoherent']
+    chans=['Coherent','Incoherent']
+    if baseline:
+        chans.insert(0,'baseline')
+    rec.signals['state'].chans=chans
+    rec.signals['state_raw'].chans=chans
     
     
     
@@ -69,24 +75,25 @@ def plot_all_vals(val,modelspec,signames=['resp','pred'],channels=[0,0,1],subset
     import matplotlib.pyplot as plt
     import numpy as np
     from cycler import cycler
+    signame_good_epochs='resp'
     if val[signames[0]].count_epoch('REFERENCE'):
         epochname = 'REFERENCE'
     else:
         epochname = 'TRIAL'
-    extracted = val[signames[0]].extract_epoch(epochname)
+    extracted = val[signame_good_epochs].extract_epoch(epochname)
     finite_trial = [np.sum(np.isfinite(x)) > 0 for x in extracted]
     occurrences, = np.where(finite_trial)
     
-    epochs=val[signames[0]].epochs
+    epochs=val[signame_good_epochs].epochs
     epochs=epochs[epochs['name'] ==  epochname].iloc[occurrences]
-    st_mask=val[signames[0]].epochs['name'].str.contains('ST')
+    st_mask=val[signame_good_epochs].epochs['name'].str.contains('ST')
     inds=[]
     for index, row in epochs.iterrows():
-        matchi = (val[signames[0]].epochs['start'] == row['start']) & (val[signames[0]].epochs['end'] == row['end'])
+        matchi = (val[signame_good_epochs].epochs['start'] == row['start']) & (val[signame_good_epochs].epochs['end'] == row['end'])
         matchi = matchi & st_mask
         inds.append(np.where(matchi)[0][0])
          
-    names=val[signames[0]].epochs['name'].iloc[inds].tolist()
+    names=val[signame_good_epochs].epochs['name'].iloc[inds].tolist()
     
     A=[];B=[];
     for name in names:
@@ -215,7 +222,10 @@ def plot_linear_and_weighted_psths_model(modelspec, val, rec, figures=None, IsRe
         phi = modelspec[1]['phi']
         if 'g' in phi:
             g=phi['g'].copy()
-            gn=g/g[:,:1] +1
+            if g.shape[1]==2:
+                gn=np.hstack((np.full((2,1),1),g))+1
+            else:
+                gn=g/g[:,:1] +1
             yl=fig.axes[0].get_ylim()
             th=fig.axes[0].text(fig.axes[0].get_xlim()[1], yl[1]+.2*np.diff(yl),
                 '     gain  \nA: {: .2f} \nB: {: .2f} \nA-B: {: .2f} '.format(

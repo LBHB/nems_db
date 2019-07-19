@@ -23,6 +23,7 @@ import nems.plots.api as nplt
 from nems.utils import find_module, ax_remove_box
 from nems.metrics.stp import stp_magnitude
 from nems.modules.weight_channels import gaussian_coefficients
+from nems.modules.fir import da_coefficients
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -54,6 +55,8 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
 
     indices = list(d.index)
 
+    fir_index = None
+    do_index = None
     for ind in indices:
         if '--u' in ind:
             u_index = ind
@@ -61,10 +64,27 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
             tau_index = ind
         elif '--fir' in ind:
             fir_index = ind
+        elif ('--do' in ind) and ('gains' in ind):
+            do_index = ind
 
     u = d.loc[u_index]
     tau = d.loc[tau_index]
-    fir = d.loc[fir_index]
+
+    if fir_index:
+        fir = d.loc[fir_index]
+    elif do_index:
+        fir = d.loc[do_index]
+        delay_index = do_index.replace('gains', 'delays')
+        f1s_index = do_index.replace('gains', 'f1s')
+        taus_index = do_index.replace('gains', 'taus')
+        for cellid in fir.index:
+            print(cellid)
+            c = da_coefficients(f1s=d.loc[f1s_index,cellid], taus=d.loc[taus_index,cellid],
+                                delays=d.loc[delay_index,cellid], gains=d.loc[do_index,cellid],
+                                n_coefs=10)
+            fir[cellid]=c
+    else:
+        raise ValueError('FIR/DO index not found')
     r_test = d.loc['meta--r_test']
     se_test = d.loc['meta--se_test']
     print(u)
@@ -145,7 +165,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
             np.sum(show_units), np.sum(good_pred)))
     plt.xlabel('exc channel gain')
     plt.ylabel('inh channel gain')
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     ax = plt.subplot(2, 3, 2)
     plt.plot(u_bounds, u_bounds, 'k--')
@@ -155,7 +175,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
     plt.xlabel('exc channel u')
     plt.ylabel('inh channel u')
     plt.ylim(u_bounds)
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     ax = plt.subplot(2, 3, 3)
     plt.plot(str_bounds, str_bounds, 'k--')
@@ -165,7 +185,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
     plt.xlabel('exc channel str')
     plt.ylabel('inh channel str')
     plt.ylim(str_bounds)
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     ax = plt.subplot(2, 3, 4)
     plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -182,7 +202,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
     plt.ylabel('u')
     plt.xlabel('{} {:.3f} - {} {:.3f} - rat {:.3f} - p={:.1e}'.format(
                 xstr, umean[0], ystr, umean[1], umean[1]/umean[0], p))
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     ax = plt.subplot(2, 3, 5)
     plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -196,7 +216,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
     plt.ylabel('sqrt(tau)')
     plt.xlabel('E {:.3f} - I {:.3f} - rat {:.3f} - p={:.1e}'.format(
             taumean[0], taumean[1], taumean[1]/taumean[0], p))
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     ax = plt.subplot(2, 3, 6)
     plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -210,7 +230,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
     plt.ylabel('STP str')
     plt.xlabel('E {:.3f} - I {:.3f} - rat {:.3f} - p={:.1e}'.format(
             strmean[0], strmean[1], strmean[1]/strmean[0], p))
-    lplt.ax_remove_box(ax)
+    ax_remove_box(ax)
 
     plt.tight_layout()
 
@@ -218,7 +238,7 @@ def stp_parameter_comp(batch, modelname, modelname0=None):
 
 
 # start main code
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 save_fig = True
 if save_fig:
     plt.close('all')
@@ -241,6 +261,10 @@ modelname="ozgf.fs100.ch18-ld-sev_dlog-wc.18x3-stp.3-fir.3x15-lvl.1-dexp.1_init-
 #modelname0 = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
 #modelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
 
+# DO models
+modelname0="ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-do.4x15-lvl.1-dexp.1_init.r10.b-basic"
+modelname="ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10.b-basic"
+
 fileprefix="fig9.NAT"
 
 #fh = stp_parameter_comp(batch, modelname, modelname0=modelname0)
@@ -256,6 +280,8 @@ amp_bounds = np.array([-1, 1.5])
 
 indices = list(d.index)
 
+fir_index = None
+do_index = None
 for ind in indices:
     if '--u' in ind:
         u_index = ind
@@ -273,11 +299,28 @@ for ind in indices:
         else:
             wc_sd_index=ind
             parm_wc = True
+    elif ('--do' in ind) and ('gains' in ind):
+        do_index = ind
 
 
 u = d.loc[u_index]
 tau = d.loc[tau_index]
-fir = d.loc[fir_index]
+if fir_index:
+    fir = d.loc[fir_index]
+elif do_index:
+    fir = d.loc[do_index]
+    delay_index = do_index.replace('gains','delays')
+    f1s_index = do_index.replace('gains','f1s')
+    taus_index = do_index.replace('gains','taus')
+    for cellid in fir.index:
+        print(cellid)
+        c = da_coefficients(f1s=d.loc[f1s_index,cellid], taus=d.loc[taus_index,cellid],
+                            delays=d.loc[delay_index,cellid], gains=d.loc[do_index,cellid],
+                            n_coefs=10)
+        fir[cellid]=c
+else:
+    raise ValueError('FIR/DO index not found')
+
 if parm_wc:
     wc_mean = d.loc[wc_mean_index]
     wc_sd = d.loc[wc_sd_index]
@@ -338,7 +381,7 @@ for cellid in u.index:
         EI_cc[i] = np.corrcoef(wc_c[0,:],wc_c[1,:])[0,1]
 
     u_mtx[i, :] = u[cellid][xidx]
-    tau_mtx[i, :] = np.abs(tau[cellid][xidx])
+    tau_mtx[i, :] = np.abs(tau[cellid][xidx,0])
     str_mtx[i, :] = stp_magnitude(tau_mtx[i,:], u_mtx[i,:], fs=100, A=1.0)[0]
 
     i += 1
@@ -379,7 +422,7 @@ plt.plot(mean_wc[good_pred,0],mean_wc[good_pred,1],'k.')
 plt.xlabel('E BF')
 plt.ylabel('I BF')
 ax.set_aspect('equal','box')
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 ax.set_title('batch {}'.format(batch))
 ax = plt.subplot(2, 3, 3)
 plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
