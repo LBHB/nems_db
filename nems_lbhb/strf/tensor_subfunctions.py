@@ -1,7 +1,7 @@
 import numpy as np
 from keras.models import Sequential
 from keras.layers import Dense
-from nems_lbhb.strf.torc_subfunctions import interpft, insteadofbin, makepsth, torcmaker
+
 
 def strf_plot_prepare(strf,Params):
     '''
@@ -127,22 +127,22 @@ def strf_input_gen(stacked,TorcObject,exptparams,fs=1000):
     '''
     TorcNames = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Names"]
     RefDuration = TorcObject['Duration']
-    mf = int(fs/1000)
+    mf = fs/1000
     stdur = int(RefDuration*1000)
 
     ###change nesting to TORCs(StimParam(...))
-    TorcParams = dict.fromkeys(TorcNames)                                                    #Create dict from TorcNames
-    all_freqs = list()                                                                       #Create empty list of freqs
-    all_velos = list()                                                                       #Create empty list of velos
+    TorcParams = dict.fromkeys(TorcNames)
+    all_freqs = list()
+    all_velos = list()
     all_hfreq = list()
     all_lfreq = list()
 
-    for tt, torc in enumerate(TorcNames):                                                    #Number them
-        TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]     #insert Params 1-30 to torcs 1-30 now TORCs(Params(...)) nested other way
-        freqs = TorcParams[torc]['Scales']                                                   #Add all TORCs' Scales value as var
-        velos = TorcParams[torc]['Rates']                                                    #Add all TORCs' Rates value as var
-        all_freqs.append(freqs)                                                              #
-        all_velos.append(velos)                                                              #
+    for tt, torc in enumerate(TorcNames):
+        TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]
+        freqs = TorcParams[torc]['Scales']
+        velos = TorcParams[torc]['Rates']
+        all_freqs.append(freqs)
+        all_velos.append(velos)
         highestfreqs = TorcParams[torc]['HighestFrequency']
         lowestfreqs = TorcParams[torc]['LowestFrequency']
         all_hfreq.append(highestfreqs)
@@ -160,20 +160,14 @@ def strf_input_gen(stacked,TorcObject,exptparams,fs=1000):
     Params['lfreq'] = LowestFrequency
     Params['hfreq'] = HighestFrequency
     Params['octaves'] = int(Octaves)
-    W = vels                                                                                 #array of ripple velocities
+    W = vels
     T = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))
     Params['T'] = T
 
-    Ompos = [x for x in frqs if x >= 0]                                                      #Get positive frequencies
-    Omnegzero = np.flip([x for x in frqs if x <= 0])                                         #just used for populating an array a few lines down
+    Ompos = [x for x in frqs if x >= 0]
+    Omnegzero = np.flip([x for x in frqs if x <= 0])
 
-    Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)                                     #Make an array for main output Omega
-
-    numvels = len(W)                                                                         #
-    numfrqs = np.size(Omega,0)                                                               #Used to make empty array to be populated by params
-    numstim = len(TorcNames)
-
-    waveParams = np.empty([2,numvels,numfrqs,2,numstim])
+    Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)
 
     ##This part in MATLAB makes T, octaves, maxv, maxf, saf, numcomp
     basep = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))
@@ -184,43 +178,34 @@ def strf_input_gen(stacked,TorcObject,exptparams,fs=1000):
     Params['numcomp'] = numcomp
     Params['basep'] = basep
 
-    ##function [ststims,freqs]=stimprofile(waveParams,W,Omega,lfreq,hfreq,numcomp,T,saf);
-    [ap,Ws,Omegas,lr,numstim] = waveParams.shape                               #wave params is 5D, define size of each dimension
-    [a,b] = Omega.shape                                                        #splitting ripple freqs to matrix nums
-    [d] = W.shape                                                              #splitting W into same
-
-    if a*b*d != Omegas*Ws*lr:
-        print('Omega and.or W do not match waveParams')
-
-    sffact = saf/1000                                                        #lower sample rate
-    leng = int(np.round(T*sffact))                                           #stim duration with lower sampling rounded
+    sffact = saf/1000
+    leng = int(np.round(T*sffact))
     Params['leng'] = leng
 
-    ###this part is important###
-    TorcValues = dict()                                                                #make new dict for function output
-    for key,value in TorcParams.items():                                               #cycle through with all the different TORC names and respective values
-        y_sum = torcmaker(value, Params)                                                #output of function (TORC) assigned to variable
-        TorcValues[key] = y_sum                                                        #update dict with the key you are on and the value the function just returned
+    TorcValues = dict()
+    for key,value in TorcParams.items():
+        y_sum = torcmaker(value, Params)
+        TorcValues[key] = y_sum
 
-    ModulationDepth = 0.9                                                              #default set in matlab program
-    xSize = int(np.round(10*numcomp/Octaves))                                          #new x sampling rate
-    tSize = int(10*saf*basep/1000)                                                     #new t sampling rate
-    ScaledTorcs = dict()                                                               #new dictionary for scaled torcs
-    for key,value in TorcValues.items():                                               #go through this with all torcs
-        [xsiz, tsiz] = value.shape                                                     #basic dims of torc
-        temp = value                                                                   #pull out numbers to usable variable
-        if xSize != xsiz & tSize != tsiz:                                              #when new sampling rate doesn't equal old vals
-            temp1 = interpft(interpft(temp, xSize, 0), tSize, 1)                           #add points, yielding bigger array
+    ModulationDepth = 0.9
+    xSize = int(np.round(10*numcomp/Octaves))
+    tSize = int(10*saf*basep/1000)
+    ScaledTorcs = dict()
+    for key,value in TorcValues.items():
+        [xsiz, tsiz] = value.shape
+        temp = value
+        if xSize != xsiz & tSize != tsiz:
+            temp1 = interpft(interpft(temp, xSize, 0), tSize, 1)
 
-            scl = np.max(np.abs([np.min(np.min(temp1)), np.max(np.max(temp1))]))       #largest |value| is scale factor
+            scl = np.max(np.abs([np.min(np.min(temp1)), np.max(np.max(temp1))]))
 
-            temp2 = temp*ModulationDepth/scl                                   #transform original torc values with moddep and calc'd scale
+            temp2 = temp*ModulationDepth/scl
         ScaledTorcs[key] = temp2
 
     # Create S* 375x25x30, stimulus data
     stimall = stimulus_compiler(ScaledTorcs)
 
-    [stimX,stimT] = temp.shape                                                                   #have var for dims of torc
+    [_,stimT] = temp.shape
     binsize = int(basep/stimT)
     Params['binsize'] = binsize
 

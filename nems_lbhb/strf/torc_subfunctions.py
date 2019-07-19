@@ -1,10 +1,9 @@
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
-from scipy import io as sio
 
 
-def interpft(x,ny,dim=0):                                                         #input torc array, new sampling, which dimension to interpolate on
+def interpft(x,ny,dim=0):
     '''
     Function to interpolate using FT method, based on matlab interpft()
     :param x: array for interpolation
@@ -13,68 +12,61 @@ def interpft(x,ny,dim=0):                                                       
     :return: interpolated data
     '''
 
-    if dim >= 1:                                                                   #if interpolating along columns, dim = 1
-        x = np.swapaxes(x,0,dim)                                                   #temporarily swap axes so calculations are universal regardless of dim
-    if len(x.shape) == 1:
+    if dim >= 1:                                         #if interpolating along columns, dim = 1
+        x = np.swapaxes(x,0,dim)                         #temporarily swap axes so calculations are universal regardless of dim
+    if len(x.shape) == 1:                                #interpolation should always happen along same axis ultimately
         x = np.expand_dims(x,axis=1)
 
-    siz = x.shape                                                                  #what is the torc size overall
-    [m, n] = x.shape                                                               #unique var for each torc dimension
+    siz = x.shape
+    [m, n] = x.shape
 
-    if ny > m:                                                                     #if you will be increasing samples (should be)
-        incr = 1                                                                   #assign this variable - not very useful but doesn't hurt, could be useful
+    a = np.fft.fft(x,m,0)
+    nyqst = int(np.ceil((m+1)/2))
+    b = np.concatenate((a[0:nyqst,:], np.zeros(shape=(ny-m,n)), a[nyqst:m, :]),0)
 
-    a = np.fft.fft(x,m,0)                                                          #do FT along rows, shape unaltered
-    nyqst = int(np.ceil((m+1)/2))                                                  #nyqst num calculated
-    b = np.concatenate((a[0:nyqst,:], np.zeros(shape=(ny-m,n)), a[nyqst:m, :]),0)  #insert a field of zeros to expand dim to new, using nyqst as break point
+    if np.remainder(m,2)==0:
+        b[nyqst,:] = b[nyqst,:]/2
+        b[nyqst+ny-m,:] = b[nyqst,:]
 
-    if np.remainder(m,2)==0:                                                       #this hasn't come up yet
-        b[nyqst,:] = b[nyqst,:]/2                                                  #presumably dealing with remainder
-        b[nyqst+ny-m,:] = b[nyqst,:]                                               #somehow
-
-    y = np.fft.irfft(b,b.shape[0],0)                                               #take inverse FT (real) using new dimension generated along dim 0 of b
-    y = y * ny / m                                                                 #necessary conversion...
-    y = np.reshape(y, [y.shape[0],siz[1]])                                         #should preserve shape
+    y = np.fft.irfft(b,b.shape[0],0)
+    y = y * ny / m
+    y = np.reshape(y, [y.shape[0],siz[1]])
     y = np.squeeze(y)
 
-    if dim >= 1:                                                                   #as above, if interpolating along columns
-        y = np.swapaxes(y,0,dim)                                                   #swap axes back and y will be correct
+    if dim >= 1:                                        #switches dimensions back here to get desired form
+        y = np.swapaxes(y,0,dim)
 
-    return y                                                                       #returned value
+    return y
 
 
 
 def insteadofbin(resp,binsize,mf=1):
     '''
-    ###SUBFUNCTION - insteadofbin()#####################################################
-    #Downsample spike histogram from resp (resolution mf) to resolution by binsize(ms)##
-    #"Does by sinc-filtering and downsampling instead of binning," whatever that means##
-    #function dsum = insteadofbin(resp,binsize,mf);                                   ##
-
+    Downsample spike histogram from resp (resolution mf) to resolution by binsize(ms)
     :param resp: response data (comes from spikeperiod
     :param binsize: calculated size of bins (basep/stimtime = binsize)
     :param mf: multiplication factor, default 1
     :return: returns downsampled spike histogram
     '''
 
-    if len(resp.shape) >= 2:                                                       #added in jackN phase ot account for Dsum input having one dimension in bython (250x1)
-        [spikes,records] = resp.shape                                              #break response into its dimensions
+    if len(resp.shape) >= 2:
+        [spikes,records] = resp.shape
     else:
         resp = np.expand_dims(resp, axis=1)
         [spikes,records] = resp.shape
 
-    outlen = int(spikes / binsize / mf)                                            #
+    outlen = int(spikes / binsize / mf)
 
-    if outlen - np.floor(outlen/1) * 1 > 1:                                        #basically what matlab fxn mod(x,y)
-        print('Non-integer # bins. Result may be distorted')                       #check probably for special circumstances
+    if outlen - np.floor(outlen/1) * 1 > 1:
+        print('Non-integer # bins. Result may be distorted')
 
-    outlen = np.round(outlen)                                                      #original comments say "round or ceil or floor?" oh well
-    dsum = np.zeros([outlen,records])                                              #empty an array to fill below, going to be output
+    outlen = np.round(outlen)
+    dsum = np.zeros([outlen,records])
 
-    for rec in range(records):                                                     #going through all records
-        temprec = np.fft.fft(resp[:,rec])                                          #fft for each
+    for rec in range(records):
+        temprec = np.fft.fft(resp[:,rec])             #fft for each
 
-        if outlen % 2 == 0:                                                        #if even length, create middle point
+        if outlen % 2 == 0:                           #if even length, create middle point
             temprec[np.ceil((outlen-1)/2)+1] = np.abs(temprec[np.ceil(outlen-1)/2]+1)
 
         dsum[:, rec] = np.fft.ifft(np.concatenate((temprec[0:int(np.ceil((outlen - 1) / 2) + 1)], np.conj(
@@ -84,7 +76,7 @@ def insteadofbin(resp,binsize,mf=1):
 
 
 
-def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, siglev=5,axs=None):
+def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
     '''
     Plots STRF using smoothing and interpolation
     :param strf0: strf data
@@ -117,6 +109,7 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, siglev=5,axs=None):
     return freqticks,strfdata
 
 
+
 def strf_torc_pred(stim, strfest):
     '''
     Small function to make a prediction of strf
@@ -134,6 +127,7 @@ def strf_torc_pred(stim, strfest):
             pred[:, rec] = pred[:, rec] + tr
 
     return pred
+
 
 
 def makepsth(dsum,fhist,startime,endtime,mf=1):
@@ -172,6 +166,7 @@ def makepsth(dsum,fhist,startime,endtime,mf=1):
     return wrapdata,cnorm
 
 
+
 def get_snr(spdata,stim,basep,mf,allrates):
     '''
     Gets snr using spike data given in spdata, spike data and stims should include all inverse-repeat pairs of TORCs
@@ -184,26 +179,24 @@ def get_snr(spdata,stim,basep,mf,allrates):
     :return: snr
     '''
 
-    spdata[(np.isnan(spdata)).ravel().nonzero()] = 0                                   #get rid of not numbers
-    [numdata,numsweeps,numrecs] = spdata.shape                                         #dims to vars
-    [stimfreq,stimtime,numstims] = stim.shape                                          #dims to vars
+    spdata[(np.isnan(spdata)).ravel().nonzero()] = 0
+    [numdata,numsweeps,numrecs] = spdata.shape
+    [_,stimtime,_] = stim.shape
 
-    invlist = []                                                                       #no clue what this is for actually, it's subsequent uses are commented out
-
-    if spdata.shape[2] != stim.shape[2]:                                               #just a check
-        print('Number of records and stimuli are not equal')                           #doubt this'll happen
+    if spdata.shape[2] != stim.shape[2]:
+        print('Number of records and stimuli are not equal')
 
     #Response variability as a function of frequency per stimulus (-pair)#
     #-------------------------------------------------------------------#
-    n = numsweeps * numdata / mf / basep                                                                       #
-    tmp = spdata[range(int(np.round(np.floor(n / numsweeps) * mf * basep))),:,:]                               #temp is the same as spdata
-    spdata2 = np.reshape(tmp, [int(basep * mf), int(numsweeps * np.floor(n / numsweeps)), numrecs], order='F') #moves dims from 0 axis to 1, new shape 250,30,30
-    n = numsweeps * np.floor(n / numsweeps)                                                                    #n should still be same as above
+    n = numsweeps * numdata / mf / basep
+    tmp = spdata[range(int(np.round(np.floor(n / numsweeps) * mf * basep))),:,:]
+    spdata2 = np.reshape(tmp, [int(basep * mf), int(numsweeps * np.floor(n / numsweeps)), numrecs], order='F')
+    n = numsweeps * np.floor(n / numsweeps)
 
-    if n/numsweeps > 1:                                                                                        #it will
-        spdata2trim = np.delete(spdata2, np.arange(0,n,n/numsweeps), axis=1)                                   #squish out a third of axis 1
+    if n/numsweeps > 1:
+        spdata2trim = np.delete(spdata2, np.arange(0,n,n/numsweeps), axis=1)
 
-    n = spdata2trim.shape[1]                                                                                   #new axis 1 defines this (2/3 of previous n)
+    n = spdata2trim.shape[1]
 
     vrf = 1e6 * np.square(stimtime) / np.square(basep) / n * np.square(
         np.std(np.fft.fft(spdata2trim, spdata2trim.shape[0], 0), ddof=1, axis=1))
@@ -229,10 +222,11 @@ def get_snr(spdata,stim,basep,mf,allrates):
     freqindex = np.swapaxes(np.round(np.abs(allrates) * basep/1000),0,1)
     freqindx = freqindex[:,stimpospolarity]
 
-    AA = 2 * sum(freqindx > 0 ) / np.mean(np.mean(np.square(stim2),axis=0),axis=0)                             #These are 1/a^2 for each stimulus
+    # These are 1/a^2 for each stimulus
+    AA = 2 * sum(freqindx > 0 ) / np.mean(np.mean(np.square(stim2),axis=0),axis=0)
 
     #"Estimate of the total power (ps) and error power (pes) of the STRF"
-    pt = 0                                                                                                     #start at zero cause we're going to be adding
+    pt = 0
     pes = 0
 
     for rec in range(stimpospolarity.shape[0]):
@@ -242,7 +236,8 @@ def get_snr(spdata,stim,basep,mf,allrates):
     snr = pt/pes - 1
     return snr
 
-###Function to return the TORC - option to plot each Torc###
+
+
 def torcmaker(TORC,Params):
     '''
     Returns the TORC - option to plot each torc commented out
@@ -282,10 +277,6 @@ def torcmaker(TORC,Params):
 
         stimHolder[s1,v1] = (amp/2)*np.exp(1j*(phs-90)*np.pi/180)
         stimHolder[s2,v2] = (amp/2)*np.exp(-1j*(phs-90)*np.pi/180)
-        #print("ripple {}: stimHolder[s1,v1]={}, stimholder[s2,v2]={}".format(i,stimHolder[s1,v1],stimHolder[s2,v2]))
-        #######if you want to look at your ripple at any point
-        #plt.figure()
-        #plt.imshow(np.abs(stimHolder))
 
     y_sum = (np.fft.ifft2(np.fft.ifftshift(stimHolder*(leng*numcomp)))).real
     return y_sum
@@ -306,35 +297,32 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
 
     referencecount = TorcObject['MaxIndex']
     TorcNames = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Names"]
-    TorcKeys = exptparams["TrialObject"][1]["ReferenceHandle"][1].keys()
     RefDuration = TorcObject['Duration']
 
     numrecs = referencecount
     mf = int(fs/1000)
     stdur = int(RefDuration*1000)
-    ddur = int(RefDuration*1000)
-    stonset = 0
 
-    ###change nesting to TORCs(StimParam(...))
-    TorcParams = dict.fromkeys(TorcNames)                                                    #Create dict from TorcNames
-    all_freqs = list()                                                                       #Create empty list of freqs
-    all_velos = list()                                                                       #Create empty list of velos
+    # change nesting to TORCs(StimParam(...))
+    TorcParams = dict.fromkeys(TorcNames)
+    all_freqs = list()
+    all_velos = list()
     all_hfreq = list()
     all_lfreq = list()
 
-    for tt, torc in enumerate(TorcNames):                                                    #Number them
+    for tt, torc in enumerate(TorcNames):
         TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]     #insert Params 1-30 to torcs 1-30 now TORCs(Params(...)) nested other way
-        freqs = TorcParams[torc]['Scales']                                                   #Add all TORCs' Scales value as var
-        velos = TorcParams[torc]['Rates']                                                    #Add all TORCs' Rates value as var
-        all_freqs.append(freqs)                                                              #
-        all_velos.append(velos)                                                              #
+        freqs = TorcParams[torc]['Scales']
+        velos = TorcParams[torc]['Rates']
+        all_freqs.append(freqs)
+        all_velos.append(velos)
         highestfreqs = TorcParams[torc]['HighestFrequency']
         lowestfreqs = TorcParams[torc]['LowestFrequency']
         all_hfreq.append(highestfreqs)
         all_lfreq.append(lowestfreqs)
 
-    frqs = np.unique(np.concatenate(all_freqs))                                              #Smoosh to one array and output unique elements
-    vels = np.unique(np.concatenate(all_velos))                                              #temporal spectra
+    frqs = np.unique(np.concatenate(all_freqs))
+    vels = np.unique(np.concatenate(all_velos))
     HighestFrequency = int(np.unique(all_hfreq))
     LowestFrequency = int(np.unique(all_lfreq))
     Octaves = np.log2(HighestFrequency/LowestFrequency)
@@ -345,19 +333,18 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     StimParams['octaves'] = int(Octaves)
 
     Params = dict()
-    N = np.size(frqs) * np.size(vels)        #aka nrips                                      #Seems more concise than MATLAB version --N = size(unique([cat(2,a1rv{:});cat(2,a1rf{:})]','rows'),1)
-    W = vels                                                                                 #array of ripple velocities
-    T = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))          #
+    N = np.size(frqs) * np.size(vels)        #aka nrips
+    W = vels                                 #array of ripple velocities
+    T = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))
     Params['T'] = T
 
-    Ompos = [x for x in frqs if x >= 0]                                                      #Get positive frequencies
-    Omneg = [x for x in frqs if x < 0]                                                       #Get negative frequencies
-    Omnegzero = np.flip([x for x in frqs if x <= 0])                                         #just used for populating an array a few lines down
+    Ompos = [x for x in frqs if x >= 0]
+    Omnegzero = np.flip([x for x in frqs if x <= 0])
 
-    Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)                                     #Make an array for main output Omega
+    Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)
 
-    numvels = len(W)                                                                         #
-    numfrqs = np.size(Omega,0)                                                               #Used to make empty array to be populated by params
+    numvels = len(W)
+    numfrqs = np.size(Omega,0)
     numstim = len(TorcNames)
 
     waveParams = np.empty([2,numvels,numfrqs,2,numstim])
@@ -372,37 +359,22 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     Params['numcomp'] = numcomp
 
     ##function [ststims,freqs]=stimprofile(waveParams,W,Omega,lfreq,hfreq,numcomp,T,saf);
-    [ap,Ws,Omegas,lr,numstim] = waveParams.shape                               #wave params is 5D, define size of each dimension
-    [a,b] = Omega.shape                                                        #splitting ripple freqs to matrix nums
-    [d] = W.shape                                                              #splitting W into same
+    [_,Ws,Omegas,lr,numstim] = waveParams.shape
+    [a,b] = Omega.shape
+    [d] = W.shape
 
     if a*b*d != Omegas*Ws*lr:
         print('Omega and.or W do not match waveParams')
 
-    #ln(num)/ln(2) = log2(num)
-    #numpy.logspace(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0)
-    ####vvv!!!!!not working right freqrange
-    freqrange = np.logspace(LowestFrequency, HighestFrequency, numcomp+1, endpoint=True, base=2.0)#make log2 scale from low to high freq binned by how many comps
     sffact = saf/1000                                                        #lower sample rate
-    leng = int(np.round(T*sffact))                                           #stim duration with lower sampling rounded
-    t = np.arange(leng)                                                      #make array for time that takes into account 0 is really first
+    leng = int(np.round(T*sffact))
     Params['leng'] = leng
 
-    w0 = 1000/T
-    W0 = 1/(np.log2(HighestFrequency/LowestFrequency))
-
-    k = np.round(W/w0)
-    l = np.round(Omega/W0)
-
-    ststims = np.zeros([numcomp, leng, numstim])                            #to be our output of TORCS
-
-    cnew = [np.floor(numcomp/2)+1, np.floor(leng/2)+1]
-
-    ###this part is important###
-    TorcValues = dict()                                                                #make new dict for function output
-    for key,value in TorcParams.items():                                               #cycle through with all the different TORC names and respective values
-        y_sum = torcmaker(value, Params)                                                #output of function (TORC) assigned to variable
-        TorcValues[key] = y_sum                                                        #update dict with the key you are on and the value the function just returned
+    # Create dictionary of TORCs
+    TorcValues = dict()
+    for key,value in TorcParams.items():
+        y_sum = torcmaker(value, Params)
+        TorcValues[key] = y_sum
 
     # ######plot all torcs in subplots -!!!eventually make this optional input?
     # row = int(np.ceil(math.sqrt(len(TorcValues.keys()))))
@@ -422,59 +394,54 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     #     axsall[ttt].imshow(value)
     #######
 
-    ModulationDepth = 0.9                                                              #default set in matlab program
-    base1= 0                                                                           #hard coded in matlab
-    numtorc = len(TorcValues.keys())                                                   #how many torcs there are, again
-    xSize = int(np.round(10*numcomp/Octaves))   #30                                    #new x sampling rate
-    tSize = int(10*saf*basep/1000)              #250                                   #new t sampling rate
-    ScaledTorcs = dict()                                                               #new dictionary for scaled torcs
+    # Scaling our stimulus (TORCs)
+    ModulationDepth = 0.9                                                  #default set in matlab program
+    base1= 0
+    xSize = int(np.round(10*numcomp/Octaves))
+    tSize = int(10*saf*basep/1000)
+    ScaledTorcs = dict()
 
-    for key,value in TorcValues.items():                                               #go through this with all torcs
-        [xsiz, tsiz] = value.shape                                                     #basic dims of torc
-        temp = value                                                                   #pull out numbers to usable variable
+    for key,value in TorcValues.items():
+        [xsiz, tsiz] = value.shape
+        temp = value
 
-        if xSize != xsiz & tSize != tsiz:                                              #when new sampling rate doesn't equal old vals
-            temp1 = interpft(interpft(temp, xSize, 0), tSize, 1)                           #add points, yielding bigger array
+        if xSize != xsiz & tSize != tsiz:
+            temp1 = interpft(interpft(temp, xSize, 0), tSize, 1)
 
-            scl = np.max(np.abs([np.min(np.min(temp1)), np.max(np.max(temp1))]))       #largest |value| is scale factor
+            scl = np.max(np.abs([np.min(np.min(temp1)), np.max(np.max(temp1))]))    #largest |value| is scale factor
 
-            temp2 = base1 + temp*ModulationDepth/scl                                   #transform original torc values with moddep and calc'd scale
+            temp2 = base1 + temp*ModulationDepth/scl
 
-        ScaledTorcs[key] = temp2                                                       #populate dictionary with new values
-    ####################################################################################
+        ScaledTorcs[key] = temp2
 
-    #Back to main strf_est_core function (matlab) - scaled and all good
-    [stimX,stimT] = temp.shape                                                                   #have var for dims of torc
-    binsize = int(basep/stimT)                                                                   #number of bins
+    [stimX,stimT] = temp.shape
+    binsize = int(basep/stimT)
 
-    strfest = np.zeros([stimX,stimT])                                                            #empty array same size as torc
+    strfest = np.zeros([stimX,stimT])
 
     ##only loop over real (nonNaN) reps, may be diff number of reps for diff torcs
-    #in my code, 'stacked' is matlab's 'r'
-    if stacked.shape[0] <= fs/4:                                                                     #multiple cycles
-        realrepcount = np.max(np.logical_not(np.isnan(stacked[1,:,1])).ravel().nonzero())+1            #
-    else:                                                                                        #go to here, all 10 are real and used
+    if stacked.shape[0] <= fs/4:
+        realrepcount = np.max(np.logical_not(np.isnan(stacked[1,:,1])).ravel().nonzero())+1
+    else:
         realrepcount = np.max(np.logical_not(np.isnan(stacked[int(np.round(fs/4))+1,:,1])).ravel().nonzero())+1
 
-    #[pp,bb]=fileparts(mfilename)                                           ##don't know what this is for...##
+    if INC1stCYCLE == 1:
+        if stacked.shape[0]>250:
+            print('Including 1st TORC Cycle')
+        FirstStimTime = 0
+    elif INC1stCYCLE > 0:
+        FirstStimTime = INC1stCYCLE
+    else:
+        FirstStimTime = basep
 
-    if INC1stCYCLE == 1:                                                               #Some maybe useless code, cause I defaulted var to 0
-        if stacked.shape[0]>250:                                                           #
-            print('Including 1st TORC Cycle')                                          #Stim starts on 0 cause not excluding
-        FirstStimTime = 0                                                              #
-    elif INC1stCYCLE > 0:                                                              #
-        FirstStimTime = INC1stCYCLE                                                    #
-    else:                                                                              #
-        FirstStimTime = basep                                                          #This is what will be happening
+    # Get things ready for snr inputs
+    stim = np.stack(list(ScaledTorcs.values()),axis=2)                  #take my lovely dictionary and smoosh it for now
 
-    #Get things ready for snr inputs#
-    stim = np.stack(list(ScaledTorcs.values()),axis=2)                                 #take my lovely dictionary and smoosh it for now
-
-    a1rv = []                                                                          #create empty list for all the Torcs' respective velocities
-    for key,values in TorcParams.items():                                              #iterate through dict
-        torcrate = values['Rates']                                                     #access the rate for each key,value combo
-        a1rv.append(torcrate)                                                          #add each time this iterates to a list of lists
-    allrates = np.asarray(a1rv)                                                        #transform list of list into an array
+    a1rv = []                                                           #create empty list for all the Torcs' respective velocities
+    for key,values in TorcParams.items():
+        torcrate = values['Rates']
+        a1rv.append(torcrate)
+    allrates = np.asarray(a1rv)
 
     if stacked.shape[1]>1:
         snr = get_snr(stacked, stim, basep, mf, allrates)
@@ -482,12 +449,12 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
         snr = 0
 
 
-    if not jackN:                                                                      #normalize by the num of reps that were presented
-        for rep in range(realrepcount):                                                #for this particular record (can be variable for DMS or
-            for rec in range(numstim):                                                 #any data set that was interrupted in mid of a rep
+    if not jackN:                            #normalize by the num of reps that were presented
+        for rep in range(realrepcount):
+            for rec in range(numstim):
 
-                if np.all(stacked[0] <= fs/4):                                                 #
-                    thisrepcount = sum(np.logical_not(np.isnan(stacked[0,:,rec])))     #this line is direct translation from matlab, wasn't used so can't test actual functionality with numbers, does exact same thing though
+                if np.all(stacked[0] <= fs/4):
+                    thisrepcount = sum(np.logical_not(np.isnan(stacked[0,:,rec])))
                 else:
                     thisrepcount = sum(sum(np.logical_not(np.isnan(stacked[int(np.round(fs/4)+1):,:,0]))) > 0).astype(int)
 
@@ -495,21 +462,16 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
                     thisrepcount = 1
 
                 spkdata = stacked[:,rep,rec]
-                # spkdata = (rmat[:,rep,rec]).astype('float64')
 
-                ###Probably not going to happen in this case
-                # if fs != 1000:                                                         #this might not be a great translation
-                #     spkdata = sp.signal.resample(stacked,1000)                         #probably not, couldn't find ==resample()
                 if fs != 1000:
                     spkdata = sp.signal.resample(stacked,1000)
 
                 if len(spkdata) < stdur:
                     spkdata = np.concatenate((spkdata,np.ones(stdur-len(spkdata))*np.nan),axis=None)
-                ###next part will
 
                 [Dsum,cnorm] = makepsth(spkdata.copy(), int(1000 / basep), int(FirstStimTime), stdur, mf)
 
-                #Time to normalize by #cycles. May be variable for TORCs, since they could be shorter than length in exptparams
+                #Time to normalize by number of cycles. May be variable for TORCs, since they could be shorter than length in exptparams
                 Dsum = Dsum / (cnorm + (cnorm == 0))
 
                 if binsize > 1/mf:
@@ -537,7 +499,6 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
         strfj = np.zeros([stimX,stimT,jackN])
 
         stackedj = stacked
-        # stackedj = rmat.astype('float64')
         stackedj[:FirstStimTime,:,:] = np.nan
 
         mm = int(np.floor(stackedj.shape[0] / basep))
@@ -549,7 +510,6 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
             for bb in range(jackN):
                 stackedt = stackedj[:,:,rec]
                 nnbins = np.squeeze(np.asarray(np.nonzero(np.ravel(np.logical_not(np.isnan(stackedt)),order='F'))))
-                #nnbins = np.squeeze(np.asarray(np.nonzero(np.ravel(np.logical_not(np.isnan(stackedt)).ravel().nonzero()))))
                 totalbins = len(nnbins)
                 bbexcl = np.asarray(list(range(int(np.ceil(bb * totalbins / jackN)),int(np.ceil((bb+1) * totalbins / jackN)))))
                 stackedravel = np.ravel(stackedt,order='F')
