@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import pandas.io.sql as psql
 
-from nems_db.db import Session, Tables
+from nems.db import Session, Tables
 
 
 def scan_for_scripts():

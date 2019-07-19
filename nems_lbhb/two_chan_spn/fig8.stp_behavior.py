@@ -23,18 +23,31 @@ import nems.db as nd
 import nems.plots.api as nplt
 from nems.utils import find_module, ax_remove_box
 from nems.metrics.stp import stp_magnitude
+from nems.modules.fir import da_coefficients
+
+TEMP_PARM = True
 
 def stp_v_beh():
 
     batch1 = 274
     batch2 = 275
-    modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
-                "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic"]
+    if TEMP_PARM:
+        modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c.n-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10.b-iter"
+                    ]
+    else:
+        modelnames=["env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic",
+                    "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-rep.2-stp.2-fir.1x15x2-lvl.2-dexp.2-mrg_jk.nf5-init.st-basic"]
     fileprefix="fig8.stp_v_beh"
     n1=modelnames[0]
     n2=modelnames[-3]
@@ -156,7 +169,7 @@ def stp_v_beh():
 
 
 # start main code
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 save_fig = True
 #if save_fig:
 plt.close('all')
@@ -167,7 +180,16 @@ batch1 = 274
 batch2 = 275
 batch = batch1
 
-if 1:
+if TEMP_PARM:
+    modelnames=["env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-dexp.1_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-do.1x15-lvl.1-rep.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-rep.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10-iter.b",
+             "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c.n-rep.2-stp.2-do.1x15x2-lvl.2-dexp.2-mrg_jk.nf10-init.st.r10.b-iter"]
+elif 1:
     # standard nMSE, tol 10e-7
     modelnames=["env.fs100-ld-st.beh0-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
              "env.fs100-ld-st.beh-ref_dlog.f-wc.2x1.c-stp.1-fir.1x15-lvl.1-dexp.1_jk.nf5-init.st-basic",
@@ -266,17 +288,21 @@ modelname = modelnames[-1]
 # modelname="env100beh_dlogn2_wcc2x1_rep2_stp2_fir2x1x15_lvl2_dexp2_mrg_state01-jk"
 
 d1 = nems_db.params.fitted_params_per_batch(batch1, modelname, stats_keys=[],
-                                           multi='first')
+                                            multi='first')
 d1_amp = nems_db.params.fitted_params_per_batch(batch1, modelname_amp,
-                                               stats_keys=[], multi='first')
+                                                stats_keys=[], multi='first')
 d2 = nems_db.params.fitted_params_per_batch(batch2, modelname, stats_keys=[],
-                                           multi='first')
+                                            multi='first')
 d2_amp = nems_db.params.fitted_params_per_batch(batch2, modelname_amp,
-                                               stats_keys=[], multi='first')
+                                                stats_keys=[], multi='first')
 #d = pd.concat((d1,d2), axis=1)
 #d_amp = pd.concat((d1_amp,d2_amp), axis=1)
-d=d1
-d_amp=d1
+if batch == batch1:
+    d=d1
+    d_amp=d1_amp
+else:
+    d=d2
+    d_amp=d2_amp
 
 fh1, stpcellid = stp_v_beh()
 stpgood = np.array([i in stpcellid for i in d.columns])
@@ -287,26 +313,48 @@ tau_bounds = np.array([-0.1, 1.5])
 str_bounds = np.array([-0.15, 0.5])
 #str_bounds = np.array([-0.25, 2])
 #amp_bounds = np.array([-0.1, 2.0])
-amp_bounds = np.array([-0.1, 2.0])
+amp_bounds = np.array([-0.1, 1.5])
 
 indices = list(d.index)
 
+fir_index=None
+do_index=None
 for ind in indices:
     if '--u' in ind:
         u_index = ind
-    elif '--tau' in ind:
+    elif ('--stp' in ind) and ('--tau' in ind):
         tau_index = ind
     elif '--fir' in ind:
         fir_index = ind
+    elif ('--do' in ind) and ('gains' in ind):
+        do_index = ind
 
 for ind in list(d_amp.index):
     if '--amplitude' in ind:
         amp_index = ind
+    #if '--shift' in ind:
+    #    amp_index = ind
 
-u = d.loc[u_index]
+u = np.abs(d.loc[u_index])
 tau = d.loc[tau_index]
-fir = d.loc[fir_index]
 amp = d_amp.loc[amp_index]
+if fir_index:
+    fir = d.loc[fir_index]
+elif do_index:
+    fir = d.loc[do_index]
+    delay_index = do_index.replace('gains', 'delays')
+    f1s_index = do_index.replace('gains', 'f1s')
+    taus_index = do_index.replace('gains', 'taus')
+    for cellid in fir.index:
+        print(cellid + ": u=" + str(d.loc[u_index, cellid]))
+        print("       amp=" + str(d_amp.loc[amp_index, cellid]))
+        c = da_coefficients(f1s=d.loc[f1s_index, cellid], taus=d.loc[taus_index, cellid],
+                            delays=d.loc[delay_index, cellid], gains=d.loc[do_index, cellid],
+                            n_coefs=10)
+        fir[cellid] = c
+else:
+    raise ValueError('FIR/do index not found')
+
 r_test = d.loc['meta--r_test']
 se_test = d.loc['meta--se_test']
 
@@ -317,7 +365,10 @@ if modelname0 is not None:
     d02 = d02[d2.columns]
 
     #d0 = pd.concat((d01,d02), axis=1)
-    d0 = d01
+    if batch == batch1:
+        d0 = d01
+    else:
+        d0 = d02
     r0_test = d0.loc['meta--r_test']
     se0_test = d0.loc['meta--se_test']
 
@@ -342,15 +393,16 @@ for cellid in u.index:
         r0_test_mtx[i] = r0_test[match]
         se0_test_mtx[i] = se0_test[match]
 
-    t_fir = fir[match]
-    x = np.mean(t_fir, axis=1) / np.std(t_fir)
+    fir[cellid] = fir[cellid] / np.std(fir[cellid])
+    t_fir = fir[cellid]
+    x = np.mean(t_fir, axis=1) # / np.std(t_fir)
 
     # REVERSE ORDER OF PARAMETERS to (PASSIVE, ACTIVE)
-    xidx=np.array([0, 1])
+    xidx = np.array([0, 1])
     m_fir[i, :] = x[xidx]
     u_mtx[i, :] = u[match][xidx]
     tau_mtx[i, :] = np.abs(tau[match][xidx])
-    str_mtx[i,:] = stp_magnitude(tau_mtx[i,:], u_mtx[i,:], fs=100)[0]
+    str_mtx[i, :] = stp_magnitude(tau_mtx[i,:], u_mtx[i,:], fs=100, A=1.0)[0]
 
     # dexp amplitude for passive, active
     amp_mtx[i, :] = np.absolute(amp[match].T[0][xidx])
@@ -370,7 +422,7 @@ non_suppressed_units=((amp_mtx[:,0]/10 < amp_mtx[:,1]) &
                       (r_test_mtx > 0.08))
 
 #show_units = good_pred & stpgood
-show_units = mod_units & stpgood
+show_units = mod_units & stpgood & good_pred
 #show_units = stpgood
 
 tau_mtx[tau_mtx > tau_bounds[1]] = tau_bounds[1]
@@ -413,7 +465,7 @@ plt.title('bat {} n={}/{} good units'.format(
 plt.xlabel(xstr+' gain')
 plt.ylabel(ystr+' gain')
 plt.axis('equal')
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 ax = plt.subplot(2, 3, 2)
 plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -426,7 +478,7 @@ plt.ylim(amp_bounds)
 plt.ylabel('STRF gain')
 plt.xlabel('{} {:.3f} - {} {:.3f} - rat {:.3f} - p<{:.5f}'.format(
         xstr, ampmean[0], ystr, ampmean[1], ampmean[1]/ampmean[0], p))
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 ax = plt.subplot(2, 3, 3)
 plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -443,7 +495,7 @@ plt.ylim(u_bounds)
 plt.ylabel('STP u')
 plt.xlabel('{} {:.3f} - {} {:.3f} - rat {:.3f} - p<{:.5f}'.format(
         xstr, umean[0], ystr, umean[1], umean[1]/umean[0], p))
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 ax = plt.subplot(2, 3, 4)
 plt.plot(str_bounds, str_bounds, 'k--')
@@ -453,7 +505,7 @@ plt.xlabel(xstr+' STP str')
 plt.ylabel(ystr+' STP str')
 plt.ylim(str_bounds)
 plt.axis('equal')
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 ax = plt.subplot(2, 3, 5)
 plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -466,7 +518,7 @@ plt.ylim(str_bounds)
 plt.ylabel('STP str')
 plt.xlabel('{} {:.3f} - {} {:.3f} - rat {:.3f} - p<{:.5f}'.format(
         xstr, strmean[0], ystr, strmean[1], strmean[1]/strmean[0], p))
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 ax = plt.subplot(2, 3, 6)
 plt.plot(np.array([-0.5, 1.5]), np.array([0, 0]), 'k--')
@@ -479,7 +531,7 @@ plt.ylim((-np.sqrt(np.abs(tau_bounds[0])), np.sqrt(tau_bounds[1])))
 plt.ylabel('sqrt(STP tau)')
 plt.xlabel('{} {:.3f} - {} {:.3f} - rat {:.3f} - p<{:.5f}'.format(
         xstr, taumean[0], ystr, taumean[1], taumean[1]/taumean[0], p))
-lplt.ax_remove_box(ax)
+ax_remove_box(ax)
 
 plt.tight_layout()
 

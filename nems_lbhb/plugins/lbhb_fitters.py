@@ -22,16 +22,92 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
-def srec(fitkey):
-    return [['nems_lbhb.contrast_helpers.reset_single_recording', {}]]
+def gc(fitkey):
+    ops = fitkey.split('.')[1:]
+    kwargs = {}
+    for op in ops:
+        if op.startswith('t'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['tolerance'] = 10**tolpower
+        elif op.startswith('pt'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['prefit_tolerance'] = 10**tolpower
+        elif op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('pmi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
+        elif op == 'fx':
+            kwargs['fixed_strf'] = True
+        elif op.startswith('nl'):
+            kwargs['nl_mode'] = int(op[2:])
 
+    return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
+
+
+def gc2(fitkey):
+    ops = fitkey.split('.')[1:]
+    kwargs = {}
+    xfspec = []
+    for op in ops:
+        if op.startswith('t'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['tolerance'] = 10**tolpower
+        elif op.startswith('pt'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['prefit_tolerance'] = 10**tolpower
+        elif op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('pmi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('nl'):
+            kwargs['nl_mode'] = int(op[2:])
+        elif op == 'PF':
+            kwargs['post_fit'] = True
+        elif op == 'NC':
+            kwargs['post_copy'] = False
+        elif op.startswith('r'):
+            rc = int(op[1:])
+            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+
+    xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
+    return xfspec
+
+
+def testLN(fitkey):
+    ops = fitkey.split('.')[1:]
+    kwargs = {}
+    xfspec = []
+    for op in ops:
+        if op.startswith('t'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['tolerance'] = 10**tolpower
+        elif op.startswith('pt'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['prefit_tolerance'] = 10**tolpower
+        elif op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('pmi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('r'):
+            rc = int(op[1:])
+            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+    xfspec.append(['nems_lbhb.gcmodel.fitters.test_LN', kwargs])
+    return xfspec
 
 def strfc(fitkey):
     return [['nems_lbhb.contrast_helpers.strf_to_contrast', {}]]
-
-
-def passthrough(fitkey):
-    return [['nems_lbhb.contrast_helpers.pass_nested_modelspec', {}]]
 
 
 def _aliased_fitter(fn, fitkey):

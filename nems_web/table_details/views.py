@@ -3,7 +3,7 @@ import pkgutil
 from flask import redirect, Response, url_for, render_template
 
 from nems_web.nems_analysis import app
-from nems_db.db import Session, Tables
+from nems.db import Session, Tables
 
 
 @app.route('/cell_details/<cellid>')

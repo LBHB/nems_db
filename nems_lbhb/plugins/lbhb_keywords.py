@@ -1,4 +1,4 @@
-from nems.plugins.default_keywords import wc, fir, lvl, stp, dlog
+from nems.plugins.default_keywords import wc, lvl, fir, firexp
 import re
 import logging
 import copy
@@ -20,49 +20,17 @@ def ctwc(kw):
 
 
 def gcwc(kw):
-    options = kw.split('.')
-    in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
-    try:
-        parsed = re.match(in_out_pattern, options[1])
-        n_inputs = int(parsed.group(1))
-        n_outputs = int(parsed.group(2))
-    except (TypeError, IndexError):
-        # n_inputs x n_outputs should always follow wc.
-        raise ValueError("Got TypeError or IndexError when attempting to parse "
-                         "wc keyword.\nMake sure <in>x<out> is provided "
-                         "as the first option after 'wc', e.g.: 'wc.2x15'"
-                         "\nkeyword given: %s" % kw)
+    m = wc(kw[2:])
+    m['fn_kwargs'].update({'ci': 'contrast', 'co': 'ctpred'})
+    m['fn'] = 'nems_lbhb.gcmodel.modules.weight_channels'
 
-    fn = 'nems_lbhb.contrast_helpers.weight_channels'
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_spectrogram'
+    if m.get('plot_fns'):
+        m['plot_fns'].append(plot)
+    else:
+        m['plot_fns'] = [plot]
 
-    # Generate evenly-spaced filter centers for the starting points
-    fn_kwargs = {'i': 'pred', 'o': 'pred', 'n_chan_in': n_inputs,
-                 'ci': 'contrast', 'co': 'ctpred', 'normalize_coefs': False}
-    coefs = 'nems.modules.weight_channels.gaussian_coefficients'
-    mean = np.arange(n_outputs+1)/(n_outputs*2+2) + 0.25
-    mean = mean[1:]
-    sd = np.full_like(mean, 0.5)
-
-    mean_prior_coefficients = {
-        'mean': mean,
-        'sd': np.ones_like(mean),
-    }
-
-    sd_prior_coefficients = {'sd': sd}
-    prior = {'mean': ('Normal', mean_prior_coefficients),
-             'sd': ('HalfNormal', sd_prior_coefficients)}
-
-    if 'n' in options:
-        fn_kwargs['normalize_coefs'] = True
-
-    template = {
-        'fn': fn,
-        'fn_kwargs': fn_kwargs,
-        'fn_coefficients': coefs,
-        'prior': prior
-    }
-
-    return template
+    return m
 
 
 def ctfir(kw):
@@ -111,6 +79,10 @@ def ctfir(kw):
                 'fn_kwargs': {'i': 'ctpred', 'o': 'ctpred'},
                 'prior': {
                     'coefficients': ('Normal', p_coefficients)},
+                'plot_fns': ['nems.plots.api.mod_output',
+                             'nems.plots.api.strf_heatmap',
+                             'nems.plots.api.strf_timeseries'],
+                'plot_fn_idx': 1,
                 }
 
 #    p_coefficients = {'beta': np.full((n_outputs * n_banks, n_coefs), 0.1)}
@@ -123,35 +95,23 @@ def ctfir(kw):
     return template
 
 
+def ctfirexp(kw):
+    m = firexp(kw[2:])
+    m['fn_kwargs'].update({'i': 'ctpred', 'o': 'ctpred'})
+    return m
+
+
 def gcfir(kw):
-    pattern = re.compile(r'^gcfir\.?(\d{1,})x(\d{1,})x?(\d{1,})?$')
-    parsed = re.match(pattern, kw)
-    try:
-        n_outputs = int(parsed.group(1))
-        n_coefs = int(parsed.group(2))
-    except TypeError:
-        raise ValueError("Got a TypeError when parsing fir keyword. Make sure "
-                         "keyword has the form: \n"
-                         "fir.{n_outputs}x{n_coefs}x{n_banks} (banks optional)"
-                         "\nkeyword given: %s" % kw)
+    m = fir(kw[2:])
+    m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
+    m['fn'] = 'nems_lbhb.gcmodel.modules.fir'
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_kernel_output'
+    if m.get('plot_fns'):
+        m['plot_fns'].append(plot)
+    else:
+        m['plot_fns'] = [plot]
 
-    p_coefficients = {
-        'mean': np.zeros((n_outputs, n_coefs)),
-        'sd': np.ones((n_outputs, n_coefs)),
-    }
-
-    p_coefficients['mean'][:, 0] = 1
-
-    template = {
-        'fn': 'nems_lbhb.contrast_helpers.fir',
-        'fn_kwargs': {'i': 'pred', 'o': 'pred', 'ci': 'ctpred',
-                      'co': 'ctpred'},
-        'prior': {
-            'coefficients': ('Normal', p_coefficients),
-        }
-    }
-
-    return template
+    return m
 
 
 def OOfir(kw):
@@ -172,44 +132,52 @@ def ctlvl(kw):
 
 
 def gclvl(kw):
-    pattern = re.compile(r'^gclvl\.?(\d{1,})$')
-    parsed = re.match(pattern, kw)
-    try:
-        n_shifts = int(parsed.group(1))
-    except TypeError:
-        raise ValueError("Got a TypeError when parsing lvl keyword, "
-                         "make sure keyword has the form: \n"
-                         "lvl.{n_shifts}.\n"
-                         "keyword given: %s" % kw)
+    m = lvl(kw[2:])
+    m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
+    m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
+    if 'noCT' in kw:
+        m['fn_kwargs'].update({'block_contrast': True})
+
+    plot = 'nems_lbhb.gcmodel.guiplots.contrast_kernel_output'
+    if m.get('plot_fns'):
+        m['plot_fns'].append(plot)
+    else:
+        m['plot_fns'] = [plot]
+    m['plot_fn_idx'] = m['plot_fns'].index(plot)
+
+    return m
+
+
+def ctk(kw):
+    ops = kw.split('.')[1:]
+    offsets = None
+    fixed = False
+    for op in ops:
+        if op.startswith('off'):
+            if 'x' in op:
+                channels, initial = op[3:].split('x')
+                offset_amount = int(initial)
+                n_chans = int(channels)
+                offsets = np.full((n_chans, 1), offset_amount)
+            else:
+                log.warning("integer offset for ctk module should only be used "
+                            "with 'fixed' option.")
+                offsets = int(op[3:])
+        elif op == 'f':
+            fixed = True
 
     template = {
-        'fn': 'nems_lbhb.contrast_helpers.levelshift',
-        'fn_kwargs': {'i': 'pred', 'o': 'pred', 'ci': 'ctpred',
-                      'co': 'ctpred'},
-        'prior': {'level': ('Normal', {'mean': np.zeros([n_shifts, 1]),
-                                       'sd': np.ones([n_shifts, 1])})}
-        }
-
-    return template
-
-
-def ctfixed(kw):
-    '''
-    Forces ctwc and ctfir to have the same phi as
-    their non-ct counterparts on every eval.
-    TODO: Include levelshift as well?
-
-    Corresponding module never has any parameters, so it's not really
-    a transformation like the other ones. Just has to happen mid-model
-    so it has to be defined as part of the module list.
-    '''
-    template = {
-            'fn': 'nems_lbhb.contrast_helpers.fixed_contrast_strf',
-            'fn_kwargs': {'i': 'pred',
-                          'o': 'pred'},
+            'fn': 'nems_lbhb.gcmodel.modules.contrast_kernel',
+            'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
+                          'wc_coefficients': None, 'fir_coefficients': None,
+                          'mean': None, 'sd': None, 'coefficients': None,
+                          'use_phi': False, 'compute_contrast': False,
+                          'offsets': offsets, 'fixed': fixed},
+            'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap'],
             'phi': {},
-            'prior': {}
+            'prior': {},
             }
+
     return template
 
 
@@ -225,6 +193,9 @@ def dsig(kw):
     kappa = False
     shift = False
     c = 'ctpred'
+    bounded = False
+    norm = False
+    alternate = False
 
     for op in ops:
         if op in ['logsig', 'l']:
@@ -241,17 +212,25 @@ def dsig(kw):
             shift = True
         elif op.startswith('C'):
             c = op[1:]
+        elif op == 'bnd':
+            bounded = True
+        elif op == 'n':
+            norm = True
+        elif op == 'alt':
+            alternate = True
 
     # Use all by default. Use none not an option (would just be static version)
     if (not amp) and (not base) and (not kappa) and (not shift):
         amp = True; base = True; kappa = True; shift = True
 
     template = {
-        'fn': 'nems_lbhb.contrast_helpers.dynamic_sigmoid',
+        'fn': 'nems_lbhb.gcmodel.modules.dynamic_sigmoid',
         'fn_kwargs': {'i': 'pred',
                       'o': 'pred',
                       'c': c,
-                      'eq': eq},
+                      'eq': eq,
+                      'norm': norm,
+                      'alternate': alternate},
         'plot_fns': ['nems.plots.api.mod_output',
                      'nems.plots.api.pred_resp',
                      'nems.plots.api.before_and_after',
@@ -259,51 +238,53 @@ def dsig(kw):
         'plot_fn_idx': 2,
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Exponential', {'beta': [2.0]}),
-                  'shift': ('Normal', {'mean': [1.0], 'sd': [1.0]}),
-                  'kappa': ('Exponential', {'beta': [0.1]})}
+                  'shift': ('Normal', {'mean': [0.0], 'sd': [1.0]}),
+                  'kappa': ('Exponential', {'beta': [0.1]})},
         }
 
-    #zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
+    if bounded:
+        template['bounds'] = {
+                'base': (1e-15, None), 'base_mod': (1e-15, None),
+                'amplitude': (None, None), 'amplitude_mod': (None, None),
+                'shift': (None, None), 'shift_mod': (None, None),
+                'kappa': (None, None), 'kappa_mod': (None, None),
+                }
+
+    zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
 
     if amp:
-        template['prior']['amplitude_mod'] = copy.deepcopy(
-                template['prior']['amplitude']
-                )
-    else:
-        template['fn_kwargs']['amplitude_mod'] = np.nan
+        if alternate:
+            template['prior']['amplitude_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['amplitude_mod'] = copy.deepcopy(
+                    template['prior']['amplitude']
+                    )
 
     if base:
-        template['prior']['base_mod'] = copy.deepcopy(
-                template['prior']['base']
-                )
-    else:
-        template['fn_kwargs']['base_mod'] = np.nan
+        if alternate:
+            template['prior']['base_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['base_mod'] = copy.deepcopy(
+                    template['prior']['base']
+                    )
 
     if kappa:
-        template['prior']['kappa_mod'] = copy.deepcopy(
-                template['prior']['kappa']
-                )
-    else:
-        template['fn_kwargs']['kappa_mod'] = np.nan
+        if alternate:
+            template['prior']['kappa_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['kappa_mod'] = copy.deepcopy(
+                    template['prior']['kappa']
+                    )
 
     if shift:
-        template['prior']['shift_mod'] = copy.deepcopy(
-                template['prior']['shift']
-                )
-    else:
-        template['fn_kwargs']['shift_mod'] = np.nan
+        if alternate:
+            template['prior']['shift_mod'] = copy.deepcopy(zero_norm)
+        else:
+            template['prior']['shift_mod'] = copy.deepcopy(
+                    template['prior']['shift']
+                    )
 
     return template
-
-
-def _aliased_keyword(fn, kw):
-    '''Forces the keyword fn to use the given kw. Used for implementing
-    backwards compatibility with old keywords that did not follow the
-    <kw_head>.<option1>.<option2> paradigm.
-    '''
-    def ignorant_keyword(ignored_key):
-        return fn(kw)
-    return ignorant_keyword
 
 
 def _one_zz(zerocount=1):
@@ -347,15 +328,18 @@ def sdexp(kw):
                          "keyword given: %s" % kw)
     if n_chans > 1:
         raise ValueError("sdexp R>1 not supported")
-    zeros = np.zeros(n_vars)
-    ones = np.ones(n_vars)
-    g_mean = _one_zz(n_vars-1)
-    g_sd = ones
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+    g_mean = zeros.copy()
+    g_mean[:, 0] = 1
+    g_sd = ones.copy()
     d_mean = zeros
     d_sd = ones
+
     n_dims = 2 # one for gain, one for dc
-    base_mean = np.zeros([n_dims, 1]) if n_dims > 1 else np.array([0])
-    base_sd = np.ones([n_dims, 1]) if n_dims > 1 else np.array([1])
+    base_mean = np.zeros([n_dims, n_chans])
+    base_sd = np.ones([n_dims, n_chans])
     amp_mean = base_mean + 0.2
     amp_sd = base_mean + 0.1
     #shift_mean = base_mean
@@ -383,6 +367,93 @@ def sdexp(kw):
         }
 
     return template
+
+
+def stategainchan(kw):
+    """
+    Same as nems default keyword stategain, but allows you to only modulate
+    a select channels of the input
+
+    stategainchan.SxN.0,1 would do stategain operation with channels 0 and 1 of
+        the input signal
+    """
+    options = kw.split('.')
+    in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+
+    try:
+        parsed = re.match(in_out_pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            n_vars = int(options[1])
+            n_chans = 1
+
+        else:
+            n_vars = int(parsed.group(1))
+            if len(parsed.groups())>1:
+                n_chans = int(parsed.group(2))
+            else:
+                n_chans = 1
+    except TypeError:
+        raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "stategain.{n_variables} or stategain.{n_variables}x{n_chans} \n"
+                         "keyword given: %s" % kw)
+
+    n_mod_chans = [int(c) for c in options[2].split(',')]
+    if len(n_mod_chans) == 0:
+        n_mod_chans = None
+    else:
+        n_chans = n_chans - len(n_mod_chans)
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+    g_mean = zeros.copy()
+    g_mean[:, 0] = 1
+    g_sd = ones.copy()
+    d_mean = zeros
+    d_sd = ones
+
+    plot_fns = ['nems.plots.api.mod_output_all',
+                'nems.plots.api.mod_output',
+                'nems.plots.api.before_and_after',
+                'nems.plots.api.pred_resp',
+                'nems.plots.api.state_vars_timeseries',
+                'nems.plots.api.state_vars_psth_all']
+    if 'g' in options:
+        template = {
+            'fn': 'nems.modules.state.state_gain',
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': 'state',
+                          'c': n_mod_chans},
+            'plot_fns': plot_fns,
+            'plot_fn_idx': 4,
+            'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd})}
+            }
+    else:
+        template = {
+            'fn': 'nems.modules.state.state_dc_gain',
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': 'state',
+                          'c': n_mod_chans},
+            'plot_fns': plot_fns,
+            'plot_fn_idx': 4,
+            'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
+                      'd': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+            }
+
+    return template
+
+
+def _aliased_keyword(fn, kw):
+    '''Forces the keyword fn to use the given kw. Used for implementing
+    backwards compatibility with old keywords that did not follow the
+    <kw_head>.<option1>.<option2> paradigm.
+    '''
+    def ignorant_keyword(ignored_key):
+        return fn(kw)
+    return ignorant_keyword
 
 
 # Old keywords that are identical except for the period

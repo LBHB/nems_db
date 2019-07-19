@@ -184,6 +184,8 @@
                                 Select a batch to populate cells.
                             </option>
                         </select>
+                        <input type="text" placeholder="search"
+                               id="cellSearch", style="width:100%;">
                     </div><!-- form-group-->
                 </div><!-- cell column -->
 
@@ -205,6 +207,8 @@
                                 Select an analysis to populate models.
                             </option>
                         </select>
+                        <input type="text" placeholder="search"
+                               id="modelSearch", style="width:100%;">
                     </div><!-- form-group -->
                 </div><!-- model column -->
             </div><!-- model and cell row -->
@@ -968,6 +972,43 @@
                                 <input type="checkbox"
                                        id="forceRerun"
                                        value="1">
+                        </div>
+                        <br>
+                        <span style="font-weight: bold; margin-bottom: 5px;">
+                            Kamiak Cluster
+                        </span>
+                        <div class="input-group">
+                                Use Kamiak
+                                <input type="checkbox"
+                                       id="useKamiak"
+                                       value="1">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Kamiak Function
+                                <input type="text"
+                                       id="kamiakFunction"
+                                       placeholder="ex: nems_lbhb.test.my_kamiak_fn">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Kamiak Path
+                                <input type="text"
+                                       id="kamiakPath"
+                                       placeholder="ex: /home/my_kamiak_batches/">
+                        </div>
+                        <div class="input-group">
+                                Load to DB
+                                <input type="checkbox"
+                                       id="loadKamiak"
+                                       value="1">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Results Path
+                                <input type="text"
+                                       id="kamiakResults"
+                                       placeholder="ex: /home/my_kamiak_results/">
                         </div>
                     </form>
                 </div><!-- body -->

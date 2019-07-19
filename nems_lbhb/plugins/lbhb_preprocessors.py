@@ -27,15 +27,19 @@ def ref(kw):
 
     balance_rep_count = False
     include_incorrect = False
+    generate_evoked_mask = False
     for op in ops:
         if op.startswith('b'):
             balance_rep_count = True
         if op.startswith('a'):
             include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
 
     return [['nems.xforms.mask_all_but_correct_references',
              {'balance_rep_count': balance_rep_count,
-              'include_incorrect': include_incorrect}]]
+              'include_incorrect': include_incorrect,
+              'generate_evoked_mask': generate_evoked_mask}]]
 
 
 def evs(loadkey):
@@ -137,6 +141,12 @@ def st(loadkey):
             this_sig = ['prw']
         elif l.startswith('pxprw'):
             this_sig = ['pup_x_prw']
+        elif l.startswith("pop"):
+            this_sig = ["population"]
+        elif l.startswith("pxp"):
+            this_sig = ["pupil_x_population"]
+        elif l.startswith("bxp"):
+            this_sig = ["active_x_population"]
         else:
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
@@ -148,6 +158,30 @@ def st(loadkey):
                {'state_signals': state_signals,
                 'permute_signals': permute_signals,
                 'new_signalname': 'state'}]]
+    return xfspec
+
+
+def inp(loadkey):
+    """
+    inp = 'input signal'
+    add the following signal as new channel(s) in the input signal
+    """
+    pattern = re.compile(r'^inp\.([a-zA-Z0-9\.]*)$')
+    parsed = re.match(pattern, loadkey)
+    loader = parsed.group(1)
+
+    input_signals = []
+
+    loadset = loader.split(".")
+    for l in loadset:
+        if l.startswith("pup"):
+            this_sig = ["pupil"]
+        elif l.startswith("pbs"):
+            this_sig = ["pupil_bs"]
+        input_signals.extend(this_sig)
+    xfspec = [['nems.xforms.concatenate_input_channels',
+               {'input_signals': input_signals}]]
+
     return xfspec
 
 
@@ -208,6 +242,9 @@ def pca(loadkey):
 
     return xfspec
 
+def popev(loadkey):
+    return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
+
 
 def contrast(loadkey):
     ops = loadkey.split('.')[1:]
@@ -230,12 +267,14 @@ def contrast(loadkey):
             kwargs['continuous'] = True
         elif op.startswith('b'):
             kwargs['bands'] = int(op[1:])
+        elif op.startswith('off'):
+            kwargs['offset'] = int(op[3:])
 
-    return [['nems_lbhb.contrast_helpers.add_contrast', kwargs]]
+    return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
 
 
 def onoff(loadkey):
-    return [['nems_lbhb.contrast_helpers.add_onoff', {}]]
+    return [['nems_lbhb.gcmodel.contrast.add_onoff', {}]]
 
 
 def hrc(load_key):
@@ -245,6 +284,51 @@ def hrc(load_key):
     """
     xfspec = [['nems_lbhb.preprocessing.mask_high_repetion_stims',
                {'epoch_regex':'^STIM_'}, ['rec'], ['rec']]]
+
+    return xfspec
+
+
+def pm(load_key):
+    """
+    pm = pupil mask
+    pm.b = mask only big pupil trials
+    pm.s = mask only small pupil trials
+    pm.s.bv = mask small pupil and balance big/small ref epochs for val set
+            (bv is important for the nems.metrics that get calculated at the end)
+    performs an AND mask (so will only create mask inside the existing current
+        mask. If mask is None, creates mask with: rec = rec.create_mask(True))
+    """
+    options = load_key.split('.')
+    if len(options)>1:
+        if options[1] == 'b':
+            condition='large'
+        elif options[1] == 's':
+            condition = 'small'
+        else:
+            log.info("unknown option passed to pupil mask...")
+
+    balance = False
+    if len(options)>2:
+        if options[2] == 'bv':
+            balance = True
+
+    xfspec = [['nems_lbhb.preprocessing.pupil_mask',
+            {'condition': condition, 'balance': balance},
+            ['est', 'val'], ['est', 'val']]]
+
+    return xfspec
+
+
+def rc(load_key):
+    """
+    Mask only data from a specified runclass
+    """
+    runclass="NAT"
+    options=load_key.split(".")
+    if len(options)>1:
+        runclass=options[1]
+    xfspec = [['nems_lbhb.preprocessing.mask_runclass',
+               {'runclass': runclass}, ['rec'], ['rec']]]
 
     return xfspec
 
@@ -269,7 +353,7 @@ def nat(load_ley):
 def subset(load_key):
     """
     Create a mask so that model is fit only using a subset of the data.
-    Subset is defined by epoh name. 
+    Subset is defined by epoh name.
     Used to mask stimuli of different categories (coherent, incoherent, or single)
     LAS
     """
@@ -280,16 +364,25 @@ def subset(load_key):
 
 def psthfr(load_key):
     """
-    Generate psth from resp
+    Generate psth signal from resp psth.opt1.opt2 etc. By default, set model input_name to
+    'psth' (unless ni option specified!).
+
+    options:
+    s : smooth
+    hilo : call hi_lo_psth
+    j : call generate_psth_from_est_for_both_est_and_val_nfold
+    ni : don't set input_name to 'psth'.
     """
     options = load_key.split('.')[1:]
     smooth = ('s' in options)
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
+    use_as_input = ('ni' not in options)
     if 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
+
     if hilo:
         if jackknife:
              xfspec=[['nems_lbhb.preprocessing.hi_lo_psth_jack',
@@ -303,7 +396,29 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
-                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
+    return xfspec
+
+def sm(load_key):
+    """
+    Smooth a signal using preproc.smooth_epoch_segments
+    options:
+    pop : smooth population signal (default??)
+
+    """
+    options = load_key.split('.')[1:]
+
+    if 'pop' in options:
+        smooth_signal = 'population'
+    else:
+        smooth_signal = 'resp'
+    if 'stimtar' not in options:
+        epoch_regex = '^STIM_'
+    else:
+        epoch_regex = ['^STIM_', '^TAR_']
+
+    xfspec=[['nems.preprocessing.smooth_signal_epochs',
+            {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
 
@@ -338,3 +453,7 @@ def stSPO(load_key):
     permute = ('0' in options)
     baseline = ('nb' not in options)
     return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{'permute':permute,'baseline':baseline}]]
+
+def stimenv(load_key):
+    return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
+            ['rec'], ['rec']]]

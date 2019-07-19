@@ -41,7 +41,6 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         all_cells = alt_cells_available
     else:
         all_cells = list(single_perf.index)
-
     cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
@@ -80,10 +79,9 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
 
 def pop_selector(recording_uri_list, batch=None, cellid=None,
                  rand_match=False, cell_count=20, best_cells=False,
-                 whiten=False, **context):
+                 whiten=True, **context):
 
     rec = load_recording(recording_uri_list[0])
-
     cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
         batch=batch, siteid=cellid, alt_cells_available=rec['resp'].chans,
         cell_count=cell_count, best_cells=best_cells)
@@ -98,12 +96,26 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
         d=rec['resp'].as_continuous().copy()
         d -= np.mean(d, axis=1, keepdims=True)
         d /= np.std(d, axis=1, keepdims=True)
+        d -= np.min(d, axis=1, keepdims=True)
         rec['resp'] = rec['resp']._modified_copy(data=d)
 
     # preserve "actual" cellids for saving to database
     rec.meta['cellid'] = cellid
 
     return {'rec': rec}
+
+
+def split_pop_rec_by_mask(rec, **contex):
+
+    emask = rec['mask_est']
+    emask.name = 'mask'
+    vmask = emask._modified_copy(1-emask._data)
+    est = rec.copy()
+    est.add_signal(emask)
+    val=rec.copy()
+    val.add_signal(vmask)
+
+    return {'est': est, 'val': val}
 
 
 def pop_file(stimfmt='ozgf', batch=None,
@@ -142,7 +154,10 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     """
 
     # remove any preprocessing keywords in the loader string.
-    loader = nems.utils.escaped_split(loadkey, '-')[0]
+    if '-' in loadkey:
+        loader = nems.utils.escaped_split(loadkey, '-')[0]
+    else:
+        loader = loadkey
     log.info('loader=%s',loader)
 
     ops = loader.split(".")
@@ -169,7 +184,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
         elif op=='pup':
             options.update({'pupil': True, 'pupil_deblink': True,
                             'pupil_deblink_dur': 1,
-                            'pupil_median': 0})
+                            'pupil_median': 0, 'rem': 1})
         elif op=='rem':
             options['rem'] = True
 
@@ -183,7 +198,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     if (options['stimfmt']=='ozgf') and (options['chancount'] <= 0):
         raise ValueError('Stim format ozgf requires chancount>0 (.chNN) in loader='+loader)
 
-    if int(batch) == 294:
+    if int(batch) in [263,294]:
         options["runclass"] = "VOC"
 
     if siteid is not None:
@@ -191,6 +206,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     options["batch"] = batch
     options["cellid"] = cellid
+
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
     else:
@@ -203,11 +219,15 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
     # check for special pop signal code
-    cc=cellid.split("_")
     pc_idx = None
-    if (len(cc) > 1) and (cc[1][0]=="P"):
-        pc_idx=[int(cc[1][1:])]
-        cellid=cc[0]
+    if type(cellid) is str:
+        cc=cellid.split("_")
+        if (len(cc) > 1) and (cc[1][0]=="P"):
+            pc_idx=[int(cc[1][1:])]
+            cellid=cc[0]
+        elif (len(cellid.split('+')) > 1):
+            # list of cellids (specified in model queue by separating with '_')
+            cellid = cellid.split('+')
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)

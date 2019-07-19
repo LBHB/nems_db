@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import io
+import pandas as pd
 
 #import nems.recording
 import nems.modelspec as ms
@@ -44,8 +45,15 @@ def ev_pupil(cellid, batch, presilence=0.35):
     print(recording_uri)
 
     rec = recording.load_recording(recording_uri)
-
     pupil = rec['pupil']
+    active = pupil.epoch_to_signal('ACTIVE_EXPERIMENT')
+    active.chans = ['active']
+
+    p = pupil.as_continuous()[0, :]
+    b = active.as_continuous()[0, :]
+    g = np.isfinite(p) & np.isfinite(b)
+    cc_pup_beh = np.corrcoef(p[g], b[g])[0, 1]
+
     pshift = np.int(pupil.fs * 0.75)
     #pupil = pupil._modified_copy(np.roll(pupil._data, (0, pshift)))
     d = pupil._data
@@ -149,7 +157,8 @@ def ev_pupil(cellid, batch, presilence=0.35):
         #print("{}: {} trials, {} bins".format(k,tev.shape[0],tev.shape[1]))
 
     return beh_lickrate, beh_lickrate_norm, beh_all, \
-           perf_lickrate, perf_lickrate_norm, perf_all
+           perf_lickrate, perf_lickrate_norm, perf_all, cc_pup_beh
+
 
 def ev_pupil_plot(ev_data_tuple_list, title=None, ax=None, fs=100,
                   prestimsilence=0.35, linecolors=None, fillcolors=None):
@@ -185,7 +194,10 @@ def ev_pupil_plot(ev_data_tuple_list, title=None, ax=None, fs=100,
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
 
+    return ax
 
+
+# being main script
 save_figures = False
 
 batch = 307
@@ -216,6 +228,7 @@ cellids = ucellids
 print(cellids)
 print(batches)
 
+siteids=[]
 active=[]
 passive=[]
 active_full=[]
@@ -233,10 +246,15 @@ presilence=0.35
 fs=20
 perf_all={}
 beh_all={}
+cc_pup_beh = []
 for cellid,batch in zip(cellids,batches):
+
     beh_lickrate, beh_lickrate_norm, tbeh_all, \
-    perf_lickrate, perf_lickrate_norm, tperf_all = \
+    perf_lickrate, perf_lickrate_norm, tperf_all, ccpb = \
          ev_pupil(cellid, batch, presilence=presilence)
+
+    siteids.append(cellid.split("-")[0])
+    cc_pup_beh.append(ccpb)
 
     cc=0
     pset=[]
@@ -421,3 +439,8 @@ plt.tight_layout()
 if save_figures:
     f.savefig('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil_sharpened.pdf')
     f.savefig('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil_sharpened.png')
+
+df=pd.DataFrame(data=np.vstack([passive_0, active_0, passive_d, active_d, cc_pup_beh]).T,
+                columns=['baseline_p','baseline_a','evoked_p','evoked_a', 'cc_pup_beh'],
+                index=siteids)
+df.to_csv('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil.per_site.csv')

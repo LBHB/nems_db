@@ -13,7 +13,7 @@ import pandas as pd
 from flask import request, render_template, jsonify
 
 from nems_web.nems_analysis import app, bokeh_version
-from nems_db.db import Session, Tables
+from nems.db import Session, Tables
 from nems_web.reports.reports import Performance_Report, Fit_Report
 
 log = logging.getLogger(__name__)

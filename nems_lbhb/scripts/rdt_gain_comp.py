@@ -1,48 +1,41 @@
 import os
+
+from nems_lbhb.stateplots import beta_comp
 import matplotlib.pyplot as plt
 from nems import xforms
 import nems_lbhb.xform_wrappers as nw
 from nems.gui.recording_browser import browse_recording, browse_context
 import nems.db as nd
 import nems.modelspec as ms
+import nems.xform_helper as xhelp
 from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_batch_modelspecs
 import pandas as pd
 import numpy as np
-from nems_lbhb.stateplots import beta_comp
-
-font_size=8
-params = {'legend.fontsize': font_size-2,
-          'figure.figsize': (8, 6),
-          'axes.labelsize': font_size,
-          'axes.titlesize': font_size,
-          'xtick.labelsize': font_size,
-          'ytick.labelsize': font_size,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-plt.rcParams.update(params)
+from scipy.stats import wilcoxon
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
-keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
 
-loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf.rep-rdtsev-rdtfmt',
-           'rdtld-rdtshf.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf-rdtsev-rdtfmt']
-label0 = ['{}_RS', '{}_R', '{}_S', '{}']
-sxticks = ['rep+str', 'rep', 'str', 'noshuff']
+# 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
+
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
+label0 = ['{}_RS', '{}_S', '{}']   #, '{}_R'
+sxticks = ['rep+str', 'rep', 'noshuff'] # 'str',
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
 
-batches = [269, 273]
-batstring = ['A1','PEG']
 batches = [269]
 batstring = ['A1']
 batches = [273]
 batstring = ['PEG']
+batches = [269, 273]
+batstring = ['A1','PEG']
 
 modelname = modelnames[-1]
 
@@ -54,7 +47,7 @@ stats_keys = ['mean', 'std', 'sem', 'max', 'min']
 
 for batch, bs in zip(batches, batstring):
     modelspecs = get_batch_modelspecs(batch, modelname, multi=multi, limit=None)
-    modelspecs_shf = get_batch_modelspecs(batch, modelnames[2], multi=multi, limit=None)
+    modelspecs_shf = get_batch_modelspecs(batch, modelnames[1], multi=multi, limit=None)
     stats = ms.summary_stats(modelspecs, mod_key=mod_key,
                              meta_include=meta, stats_keys=stats_keys)
     index = list(stats.keys())
@@ -64,6 +57,8 @@ for batch, bs in zip(batches, batstring):
     fields = ['bg_gain', 'fg_gain']
     b = np.array([])
     f = np.array([])
+    b_S = np.array([])
+    f_S = np.array([])
     c = np.array([])
     cid = []
     r_test = np.array([])
@@ -71,6 +66,12 @@ for batch, bs in zip(batches, batstring):
     r_test_S = np.array([])
     se_test_S = np.array([])
     for i, m in enumerate(modelspecs):
+        cellid=m.meta['cellid']
+        ishf=0
+        while modelspecs_shf[ishf].meta['cellid'] != cellid:
+            ishf+=1
+        mshf=modelspecs_shf[ishf]
+
         r=m.meta['r_test'][0]
         se=m.meta['se_test'][0]
         if r > se*2:
@@ -81,8 +82,12 @@ for batch, bs in zip(batches, batstring):
             cid.extend([m['meta']['cellid']]*len(s))
             r_test = np.append(r_test, s * r)
             se_test = np.append(se_test, s * se)
-            r_test_S = np.append(r_test_S, s * modelspecs_shf[i].meta['r_test'][0])
-            se_test_S = np.append(se_test_S, s * modelspecs_shf[i].meta['se_test'][0])
+
+            #
+            r_test_S = np.append(r_test_S, s * mshf.meta['r_test'][0])
+            se_test_S = np.append(se_test_S, s * mshf.meta['se_test'][0])
+            b_S = np.append(b_S, mshf.phi[midx]['bg_gain'][1:])
+            f_S = np.append(f_S, mshf.phi[midx]['fg_gain'][1:])
 
     si = (r_test-r_test_S) > (se_test + se_test_S)
 
@@ -93,10 +98,56 @@ for batch, bs in zip(batches, batstring):
                                                 modelname=modelname)
         ctx['modelspec'].quickplot(rec=ctx['val'])
 
-    #plt.figure()
-    #ax=plt.subplot(1,1,1)
-    fig = beta_comp(b, f, n1='bg', n2='fg', hist_range=[-0.75, 0.75], click_fun=_rdt_info,
-                    highlight=si, title=bs)
 
-    fig.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.png')
+    histbins = np.linspace(-0.5, 0.5, 21)
 
+    fig = plt.figure()
+    ax=plt.subplot(2,2,1)
+    bound = 1.0
+    beta_comp(b, f, n1='bg', n2='fg', hist_range=[-bound, bound],
+              ax=ax, click_fun=_rdt_info, highlight=si, title=bs)
+
+    ax = plt.subplot(2,2,2)
+
+    gdiff = f-b
+    stat, p = wilcoxon(f,b)
+    md = np.mean(f-b)
+    h0, x0 = np.histogram(gdiff[~si], bins=histbins)
+    h, x = np.histogram(gdiff[si], bins=histbins)
+    d=(x0[1]-x0[0])/2
+    plt.bar(x0[:-1]+d, h0, width=d*1.8)
+    plt.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
+    ylim = ax.get_ylim()
+    plt.plot([0, 0], ylim, 'k--')
+    tx = x0[0]+d
+    ty = ylim[1]*0.95
+    t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(si),si.shape[0], p, md)
+    plt.text(tx,ty, t, va='top')
+    plt.xlabel('FG-BG gain')
+
+
+    ax=plt.subplot(2,2,3)
+    beta_comp(b_S, f_S, n1='bg_S', n2='fg_S',
+              ax=ax, hist_range=[-bound, bound], highlight=si,
+              title=bs+" (shf)")
+
+
+    ax = plt.subplot(2,2,4)
+
+    gdiff = f_S-b_S
+    stat, p = wilcoxon(f_S,b_S)
+    md = np.mean(f_S-b_S)
+    h0, x0 = np.histogram(gdiff[~si], bins=histbins)
+    h, x = np.histogram(gdiff[si], bins=histbins)
+    d=(x0[1]-x0[0])/2
+    plt.bar(x0[:-1]+d, h0, width=d*1.8)
+    plt.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
+    ylim = ax.get_ylim()
+    plt.plot([0, 0], ylim, 'k--')
+    tx = x0[0]+d
+    ty = ylim[1]*0.95
+    t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(si),si.shape[0], p, md)
+    plt.text(tx,ty, t, va='top')
+    plt.xlabel('FG-BG gain')
+
+    fig.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')

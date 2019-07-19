@@ -10,10 +10,8 @@ Created on Mon Oct 22 09:13:33 2018
 
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 #from nems_lbhb.behavior_pupil_scripts.mod_per_state import get_model_results_per_state_model
-exec(open("/auto/users/svd/python/nems_db/nems_lbhb/pupil_behavior_scripts/mod_per_state.py").read())
 
-
-do_single_cell = False  # if False, do pop summary
+do_single_cell = True  # if False, do pop summary
 
 if do_single_cell:
     # SINGLE CELL EXAMPLES
@@ -24,7 +22,8 @@ if do_single_cell:
     basemodel = "-ref-psthfr_stategain.S"
 
     # alternative state / file breakdowns
-    state_list = ['st.pup0.hlf0','st.pup.hlf0','st.pup.hlf']
+    #state_list = ['st.pup0.hlf0','st.pup.hlf0','st.pup.hlf']
+    state_list = ['st.pup0.beh0','st.pup.beh0','st.pup0.beh','st.pup.beh']
     #state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 
     # individual cells - by default
@@ -39,11 +38,11 @@ if do_single_cell:
 
     cellid="BRT026c-05-2"
     cellid="TAR010c-19-1"  #
-    cellid="TAR010c-06-1"  # pupil cell
-    cellid="TAR010c-27-2"  # behavior
     cellid="bbl102d-01-1"  # maybe good hybrid cell?
     cellid="TAR010c-33-1"
     cellid="BRT026c-20-1"
+    cellid="TAR010c-06-1"  # pupil cell
+    cellid="TAR010c-27-2"  # behavior
 
     # problem A1 cells:
     #cellid="BRT037b-24-1" # fixed
@@ -55,6 +54,8 @@ if do_single_cell:
                            state_list=state_list)
 
 elif 0:
+    exec(open("/auto/users/svd/python/nems_db/nems_lbhb/pupil_behavior_scripts/mod_per_state.py").read())
+
     # POPULATION SUMMARY CELL EXAMPLES
     # use basemodel = "-ref-psthfr.s_sdexp.S" for better accuracy and
     # statistical power
@@ -81,6 +82,7 @@ elif 0:
     dMI, dMI0 = hlf_analysis(df, state_list, states=states)
 
 else:
+    exec(open("/auto/users/svd/python/nems_db/nems_lbhb/pupil_behavior_scripts/mod_per_state.py").read())
     basemodel = "-ref-psthfr.s_sdexp.S"
     #basemodel = "-ref.a-psthfr.s_sdexp.S"
     batch = 309

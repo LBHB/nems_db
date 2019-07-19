@@ -23,8 +23,10 @@ from flask import jsonify, request
 from flask_login import login_required
 
 from nems_web.nems_analysis import app
-from nems_db.db import enqueue_models
+from nems.db import enqueue_models
+from nems.modelspec import _lookup_fn_at
 from nems_web.account_management.views import get_current_user
+from nems_lbhb.kamiak import kamiak_to_database
 
 log = logging.getLogger(__name__)
 
@@ -43,24 +45,47 @@ def enqueue_models_view():
     codeHash = request.args.get('codeHash')
     execPath = request.args.get('execPath')
     scriptPath = request.args.get('scriptPath')
+    useKamiak = request.args.get('useKamiak', type=int)
+    kamiakFunction = request.args.get('kamiakFunction')  # fn to generate scripts
+    kamiakPath = request.args.get('kamiakPath')  # path to store output in
+    loadKamiak = request.args.get('loadKamiak', type=int)  # check to load results
+    kamiakResults = request.args.get('kamiakResults')  # path to results
 
-    if not codeHash:
-        codeHash = 'master'
-    if not execPath:
-        execPath = None
-    if not scriptPath:
-        scriptPath = None
+    if loadKamiak:
+        kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults,
+                           execPath, scriptPath)
+        return jsonify(data=True)
 
-    force_rerun = request.args.get('forceRerun', type=int)
+    elif useKamiak:
+        # kamiakFunction should be a stringified pointer to a function
+        # that takes a list of cellids, a batch, a list of modelnames,
+        # and a directory where the output should be stored,
+        # Ex: kamiakScript = 'nems_lbhb.utils.my_kamiak_function'
+        try:
+            kamiak_script = _lookup_fn_at(kamiakFunction, ignore_table=True)
+            kamiak_script(cSelected, bSelected, mSelected, kamiakPath)
+            return jsonify(data=True)
+        except AttributeError:
+            log.warning('kamiakFunction doesnt exist or is improperly defined')
+            return jsonify(data=False)
+    else:
+        if not codeHash:
+            codeHash = 'master'
+        if not execPath:
+            execPath = None
+        if not scriptPath:
+            scriptPath = None
 
-    enqueue_models(
-            cSelected, bSelected, mSelected,
-            force_rerun=bool(force_rerun), user=user.username,
-            codeHash=codeHash, executable_path=execPath,
-            script_path=scriptPath,
-            )
+        force_rerun = request.args.get('forceRerun', type=int)
 
-    return jsonify(data=True)
+        enqueue_models(
+                cSelected, bSelected, mSelected,
+                force_rerun=bool(force_rerun), user=user.username,
+                codeHash=codeHash, executable_path=execPath,
+                script_path=scriptPath,
+                )
+
+        return jsonify(data=True)
 
 
 @app.route('/add_jerb_kv')

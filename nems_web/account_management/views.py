@@ -15,7 +15,7 @@ from flask_login import (
 from flask_bcrypt import Bcrypt
 
 from nems_web.nems_analysis import app
-from nems_db.db import Session, Tables
+from nems.db import Session, Tables
 from nems_web.account_management.forms import LoginForm, RegistrationForm
 
 log = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ def load_user(user_id):
                 .first()
                 )
         if not sqla_user:
-            raise Exception()
+            sqla_user = BlankUser()
         # assign attrs from table object to active user instance
         user = User(
                 username=sqla_user.username,

@@ -11,14 +11,15 @@ import pandas as pd
 import matplotlib.image as mpimg
 from PIL import Image
 
-#import nems_lbhb.xform_wrappers as nw
 import nems.plots.api as nplt
 import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.modelspec as ms
 import nems.epoch as ep
-import nems_lbhb.plots as lplt
+import nems.preprocessing as preproc
 from nems.metrics.state import state_mod_index
+from nems.utils import find_module
+import nems_lbhb.plots as lplt
 
 font_size=8
 params = {'legend.fontsize': font_size-2,
@@ -515,7 +516,7 @@ def model_per_time_wrapper(cellid, batch=307,
                            loader= "psth.fs20.pup-ld-",
                            fitter = "_jk.nf20-basic",
                            basemodel = "-ref-psthfr_stategain.S",
-                           state_list=None,
+                           state_list=None, plot_halves=True,
                            colors=None):
     """
     batch = 307  # A1 SUA and MUA
@@ -548,18 +549,24 @@ def model_per_time_wrapper(cellid, batch=307,
                                          eval_model=False)
         ctx, l = xforms.evaluate(xf, ctx, start=0, stop=-2)
 
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_half'], new_signalname='state_f')
+
         contexts.append(ctx)
+        #import pdb;
+        #pdb.set_trace()
 
     plt.figure()
-    if ('hlf' in state_list[0]) or ('fil' in state_list[0]):
+    #if ('hlf' in state_list[0]) or ('fil' in state_list[0]):
+    if plot_halves:
         files_only=True
     else:
         files_only=False
         
     for i, ctx in enumerate(contexts):
 
-        rec = ctx['val'][0].apply_mask()
-        modelspec = ctx['modelspecs'][0]
+        rec = ctx['val'].apply_mask()
+        modelspec = ctx['modelspec']
         epoch="REFERENCE"
         rec = ms.evaluate(rec, modelspec)
         if i == len(contexts)-1:
@@ -569,7 +576,7 @@ def model_per_time_wrapper(cellid, batch=307,
 
         ax = plt.subplot(len(contexts)+1, 1, 2+i)
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
-                            psth_name2='pred', state_sig='state_raw',
+                            psth_name2='pred', state_sig='state_f',
                             colors=colors, channel=None, decimate_by=1,
                             ax=ax, files_only=files_only, modelspec=modelspec)
         ax.set_ylabel(state_list[i])
@@ -1034,3 +1041,52 @@ def psth_per_file(rec):
                           ylabel='spk/s')
 
     plt.tight_layout()
+
+
+def quick_pop_state_plot(modelspec=None, **ctx):
+    
+    modelname = modelspec.meta['modelname']
+    cellid = modelspec.meta['cellid']
+    rec = ctx['val'].apply_mask()
+    stateidx = find_module('state', modelspec)
+    wcidx = find_module('weight_channels', modelspec)
+
+    g = modelspec.phi[stateidx]['g']
+    d = modelspec.phi[stateidx]['d']
+    w = modelspec.phi[wcidx]['coefficients'][0,:]
+    s = rec['state'].as_continuous()
+    s_med = np.median(s, axis=1)
+    s_med[s_med==0] = 0.5
+    s_med[s_med==1] = 0.5
+    
+    loidx = (s[1,:]<=s_med[1]) & (s[2,:]<=s_med[2])
+    hi1idx=s[1,:]>s_med[1]
+    hi2idx=s[2,:]>s_med[2]
+    
+    dm=d.copy()
+    dm[:,0] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,1] = (d[:, 0] + d[:, 1] * np.mean(s[1, hi1idx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,2] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    gm=g.copy()
+    gm[:,0] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,1] = (g[:, 0] + g[:, 1] * np.mean(s[1, hi1idx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,2] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    fh = plt.figure()
+    ax = plt.subplot(3, 1, 1)
+    nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+    ax.set_title('{} {}'.format(cellid, modelname))
+    
+    ax = plt.subplot(3, 1, 2)
+    ax.plot(dm)
+    plt.title('offset')
+    plt.legend(('base','d_pup','d_act'))
+
+    ax = plt.subplot(3, 1, 3)
+    ax.plot(gm)
+    plt.title('gain')
+    ax.set_xticks(np.arange(len(rec['stim'].chans)))
+    ax.set_xticklabels(rec['stim'].chans)
+
+    return {}

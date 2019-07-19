@@ -20,6 +20,8 @@ from nems.utils import (find_module)
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+from nems.modules.weight_channels import gaussian_coefficients
+from nems.modules.fir import da_coefficients
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -52,15 +54,24 @@ def get_model_preds(cellid, batch, modelname):
 
 
 def compare_model_preds(cellid, batch, modelname1, modelname2,
-                        max_pre=0.25, max_dur=1.0):
+                        max_pre=0.25, max_dur=1.0, stim_ids=None,
+                        ctx1=None, ctx2=None):
     """
     compare prediction accuracy of two models on validation stimuli
 
     borrows a lot of functionality from nplt.quickplot()
 
     """
-    xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
-    xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    if ctx1 is None:
+        xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
+    if ctx2 is None:
+        xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    colors = [[254/255, 15/255, 6/255],
+              [217/255, 217/255, 217/255],
+              [129/255, 201/255, 224/255],
+              [128/255, 128/255, 128/255],
+              [32/255, 32/255, 32/255]
+              ]
 
     rec = ctx1['rec']
     val1 = ctx1['val']
@@ -86,7 +97,11 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
     max_rep_id, = np.where(repcount == np.max(repcount))
 
     # keep a max of two stimuli
-    stim_ids = max_rep_id[:2]
+    if stim_ids is None:
+        stim_ids = max_rep_id[:2]
+    else:
+        stim_ids = np.array(stim_ids)
+
     stim_count = len(stim_ids)
     # print(max_rep_id)
 
@@ -134,21 +149,50 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
         fn1(ax=ax)
         nplt.ax_remove_box(ax)
 
+    # model 1 wc
+    wcidx = find_module('weight_channels', ms1)
+    if wcidx:
+        ax = plt.subplot(5, 4, 2)
+        try:
+            coefs = ms1[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms1[wcidx]['phi']['mean'],
+                                          ms1[wcidx]['phi']['sd'],
+                                          ms1[wcidx]['fn_kwargs']['n_chan_in'])
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
+        nplt.ax_remove_box(ax)
+
     # model 2 modules
     wcidx = find_module('weight_channels', ms2)
     if wcidx:
         ax = plt.subplot(5, 4, 4)
-        coefs = ms2[wcidx]['phi']['coefficients']
-        plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
-        plt.xlabel('in')
-        plt.ylabel('out')
-        plt.colorbar()
+        try:
+            coefs = ms2[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms2[wcidx]['phi']['mean'],
+                                          ms2[wcidx]['phi']['sd'],
+                                          ms2[wcidx]['fn_kwargs']['n_chan_in'])
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
         nplt.ax_remove_box(ax)
 
     if find_module('stp', ms2):
         ax = plt.subplot(5, 4, 7)
         nplt.before_and_after_stp(ms2, sig_name='pred', ax=ax, title='',
-                                  channels=0, xlabel='Time (s)', ylabel='STP',
+                                  channels=0, colors=colors, xlabel='Time (s)', ylabel='STP',
                                   fs=resp.fs)
         nplt.ax_remove_box(ax)
 
@@ -401,8 +445,8 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     return fh
 
 
-def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset'):
+def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
+                     overlap_method='offset', ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -411,7 +455,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     where there are more than one unit on a given electrode, additional units will
     be "offset" from the array geometry as additional electrodes.
     '''
-
 
     if type(cellids) is not np.ndarray:
         cellids = np.array(cellids)
@@ -439,20 +482,25 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     ch_nums = np.hstack((left_ch_nums, center_ch_nums, right_ch_nums))
     sort_inds = np.argsort(ch_nums)
 
-
-
     l_col = np.vstack((np.ones(21)*-0.2,lr_col))
     r_col = np.vstack((np.ones(21)*0.2,lr_col))
     c_col = np.vstack((np.zeros(22),center_col))
     locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
-    #plt.figure()
+    if ax is not None:
+        plt.sca(ax)
+    else:
+        plt.figure()
     plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=50)
 
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
 
     for i in range(0, len(cellids)):
-        electrodes[i] = int(cellids[i][-4:-2])
+        electrodes[i] = int(cellids[i].split("-")[-2])
+    if highlight_cellid is not None:
+        h_electrode = int(highlight_cellid.split("-")[-2])
+    else:
+        h_electrode = None
 
     # Add locations for cases where two or greater units on an electrode
     electrodes=list(electrodes-1)  # cellids labeled 1-64, python counts 0-63
@@ -533,7 +581,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     mask = np.ones(len(h),np.bool)
     mask[indexes]=0
 
-
     # plot the unique ones
     import matplotlib
     norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
@@ -554,6 +601,11 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     colors = mappable.to_rgba(h_dupes)
     plt.scatter(dup_locations[0,:],dup_locations[1,:],
                           c=colors,vmin=vmin,vmax=vmax,s=50,edgecolor='none')
+    if h_electrode is not None:
+        print("h_electrode={}".format(h_electrode))
+        plt.scatter(locations[0, h_electrode], locations[1, h_electrode],
+                    facecolor='none', s=60, lw=2, edgecolor='red')
+
     if cbar is True:
         plt.colorbar(mappable)
 
@@ -778,6 +830,38 @@ def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, t
     plt.ylabel('Mean weight')
 
     plt.tight_layout()
+
+
+def pop_weights(modelspec, rec=None, idx=None, sig="state", variable="g", prefix="",
+                ax=None, title=None, **options):
+    """
+    :param modelspec: modelspec object
+    :param rec: recording object
+    :param idx: index into modelspec
+    :param ax: axes to use for plot. if None, plot in new figure
+    :return: axes where plotted
+    """
+
+    chans = rec[sig].chans
+    if prefix == "":
+        chan_match = [i for i in range(len(chans)) if (len(chans[i].split("-"))==3) and (chans[i][1]!='x')]
+    else:
+        chan_match = [i for i in range(len(chans)) if chans[i].startswith(prefix)]
+
+    phi_mean = modelspec.phi_mean[idx][variable]
+    phi_sem = modelspec.phi_sem[idx][variable]
+    phi_z = phi_mean / phi_sem
+    weights = [phi_z[0,i] for i in chan_match]
+    cellids = [chans[i] for i in chan_match]
+    print(cellids)
+
+    if ax is None:
+        plt.figure()
+        ax=plt.subplot(111)
+    highlight_cellid = modelspec.meta['cellid']
+    plot_weights_64D(h=weights, cellids=cellids, highlight_cellid=highlight_cellid, ax=ax)
+
+    return ax
 
 
 def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
@@ -1193,3 +1277,64 @@ def LN_pop_plot(ctx):
 #
 #    nplt.ax_remove_box(ax4)
     return fig
+
+
+def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
+                      offset=0.5, max=0.85, ax=None):
+
+    if (modelnames is None) and (modelgroups is None):
+        raise ValueError("Must specify modelnames list or modelgroups dict")
+    elif modelgroups is None:
+        modelgroups={'ALL': modelnames}
+    modelnames=[]
+    for k, m in modelgroups.items():
+        modelnames.extend(m)
+
+    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    if ax is None:
+        ax = plt.gca()
+
+    if goodcells is None:
+        cellids=None
+    else:
+        cellids=list(goodcells.index)
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
+
+    # find good cells
+    if goodcells is None:
+        b_test = nd.batch_comp(batch, modelnames, stat='r_test')
+        b_se = nd.batch_comp(batch, modelnames, stat='se_test')
+        b_goodcells = np.zeros_like(b_test)
+        for i, m in enumerate(modelnames):
+            td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
+            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+    #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
+    n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+
+    #u_modelgroups = np.unique(modelgroups)
+    #for i, g in enumerate(u_modelgroups):
+    i=0
+    for k, m in modelgroups.items():
+        jj = [m0 in m for m0 in modelnames]
+        modelset=[]
+        for jjj in range(len(jj)):
+            if jj[jjj]:
+                modelset.append(modelnames[jjj])
+        print("{} : {}".format(k, modelset))
+        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
+        i+=1
+
+    handles, labels = ax.get_legend_handles_labels()
+    # reverse the order
+    ax.legend(handles, labels, loc='lower right')
+
+    ax.set_xlabel('Free parameters')
+    ax.set_ylabel('Mean var explained')
+    ax.set_ylim((offset-0.05, max))
+    nplt.ax_remove_box(ax)
+
+    return ax, b_ceiling
