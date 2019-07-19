@@ -71,6 +71,6 @@ def strf_tensor(mfilename,cellid,plot=False,linalg=False,real=False):
         plt.title('%s - Control' % (os.path.basename(mfilename)), fontweight='bold')
 
     if real == True:
-        _ = tor_tuning(mfilename,cellid,fs,plot=True)
+        _ = tor_tuning(mfilename,cellid,plot=True)
 
     return fitH
