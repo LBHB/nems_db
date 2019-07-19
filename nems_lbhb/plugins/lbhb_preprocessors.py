@@ -333,4 +333,8 @@ def rscsw(load_key, cellid, batch):
 
 def stSPO(load_key):
     #add SPO state signal
-    return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{}]]
+    permute=False
+    options = load_key.split('.')[1:]
+    permute = ('0' in options)
+    baseline = ('nb' not in options)
+    return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{'permute':permute,'baseline':baseline}]]
