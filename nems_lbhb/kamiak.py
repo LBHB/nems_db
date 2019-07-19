@@ -184,25 +184,6 @@ def kamiak_array(cellids, batch, modelnames, output_path):
 
 def kamiak_to_database(cellids, batch, modelnames, source_path,
                        executable_path=None, script_path=None):
-    # Assumes files have already been copied back from kamiak and
-    # stored in source_path
-#    missing = []
-#    for cellid in cellids:
-#        for modelname in modelnames:
-#            path = os.path.join(source_path, batch, cellid, modelname)
-#            if not os.path.exists(path):
-#                log.warning("missing fit for: \n%s\n%s\n%s\n"
-#                            "using path: %s\n",
-#                            batch, cellid, modelname, path)
-#                missing.append((batch, cellid, modelname))
-#            else:
-#                 xfspec, ctx = xforms.load_analysis(path)
-#                 preview = ctx['modelspec'].meta.get('figurefile', None)
-#                 if 'log' not in ctx:
-#                     ctx['log'] = 'missing log'
-#                 xforms.save_analysis(None, None, ctx['modelspec'], xfspec,
-#                                      ctx['figures'], ctx['log'])
-#                 nd.update_results_table(ctx['modelspec'], preview=preview)
 
     user = 'jacob'
     linux_user = 'nems'
@@ -273,10 +254,11 @@ def kamiak_to_database(cellids, batch, modelnames, source_path,
             # New job
             sql = "INSERT INTO tQueue (rundataid,progname,priority," +\
                    "reserve_gb,parmstring,allowqueuemaster,user," +\
-                   "linux_user,note,waitid,codehash,queuedate) VALUES"+\
+                   "linux_user,note,waitid,codehash,queuedate,complete) VALUES"+\
                    " ({},'{}',{}," +\
                    "{},'{}',{},'{}'," +\
-                   "'{}','{}',{},'{}',NOW())"
+                   "'{}','{}',{},'{}',NOW(),1)"
+
             sql = sql.format(rundataid, commandPrompt, priority, reserve_gb,
                              parmstring, allowqueuemaster, user, linux_user,
                              note, waitid, codeHash)
