@@ -116,7 +116,7 @@ def response_compiler(stacked,Params):
     return avgResp
 
 
-def strf_input_gen(stacked,TorcObject,exptparams,fs=1000):
+def strf_input_gen(stacked,TorcObject,exptparams,fs):
     '''
     Generates the stimuli and response data that will be fed into our model
     :param stacked: Response data
@@ -127,7 +127,7 @@ def strf_input_gen(stacked,TorcObject,exptparams,fs=1000):
     '''
     TorcNames = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Names"]
     RefDuration = TorcObject['Duration']
-    mf = fs/1000
+    mf = int(fs/1000)
     stdur = int(RefDuration*1000)
 
     ###change nesting to TORCs(StimParam(...))
