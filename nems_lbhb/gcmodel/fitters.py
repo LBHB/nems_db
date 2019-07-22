@@ -692,7 +692,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         log.info('Initializing linear model and performing rough fit ...\n')
         # fit without STP module first (if there is one)
         modelspec = nems.initializers.prefit_to_target(
-                est, modelspec, fit_basic, target_module='levelshift',
+                est, modelspec, fit_basic, target_module='fir',
                 extra_exclude=['stp'], fitter=fitter_fn,
                 metric=metric_fn, fit_kwargs=prefit_kwargs)
 
@@ -704,11 +704,6 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
                     m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
                     modelspec[i] = m
                 break
-
-        # HACK: temporary fix b/c dlog['phi'] is being set to None somewhere
-        if 'dlog' in modelspec[0]['fn']:
-            if modelspec[0].get('phi', None) is None:
-                modelspec[0]['phi'] = {}
 
         # now prefit static dsig
         log.info("Initializing priors and bounds for dsig ...")
