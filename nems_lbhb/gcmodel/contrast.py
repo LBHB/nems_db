@@ -224,6 +224,9 @@ def contrast_calculation(array, history, bands, offset, mode):
         Generally, 'valid' to drop rows/columns that would require padding,
         'same' to pad those rows/columns with nans.
 
+    filt : 2d ndarray
+        Overrides the default filter construction.
+
     Returns
     -------
     contrast : 2d Ndarray
@@ -232,7 +235,9 @@ def contrast_calculation(array, history, bands, offset, mode):
     '''
     array = copy.deepcopy(array)
     filt = np.concatenate((np.zeros([bands, history + (offset*2 - 1)]),
-                           np.ones([bands, history])), axis=1)/(bands*history)
+                           np.ones([bands, history])), axis=1)
+    filt /= bands*history
+
     mn = convolve2d(array, filt, mode=mode, fillvalue=np.nan)
 
     var = convolve2d(array ** 2, filt, mode=mode, fillvalue=np.nan) - mn**2

@@ -7,6 +7,8 @@ from nems.plots.heatmap import plot_heatmap
 from nems.plots.timeseries import timeseries_from_signals
 from nems.plots.specgram import plot_spectrogram
 from nems_lbhb.gcmodel.modules import _get_ctk_coefficients
+from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
+from nems.modules.weight_channels import gaussian_coefficients
 import nems.utils as nu
 
 
@@ -43,9 +45,51 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
         fn_kwargs.pop(k)
 
     strf, wc_coefs, fir_coefs = _get_ctk_coefficients(**fn_kwargs, **phi, fs=fs)
+    _strf_heatmap(strf, wc_coefs, fir_coefs, xlabel=xlabel, ylabel=ylabel,
+                  ax=ax, title=title)
 
-    # Show factorized coefficients on the edges to match up with
-    # regular STRF
+    return ax
+
+
+def contrast_kernel_heatmap2(rec, modelspec, ax=None, title=None,
+                             idx=0, channels=0, xlabel='Lag (s)',
+                             ylabel='Channel In', **options):
+
+    ct_idx = nu.find_module('contrast', modelspec)
+    phi = copy.deepcopy(modelspec[ct_idx]['phi'])
+    fn_kwargs = copy.deepcopy(modelspec[ct_idx]['fn_kwargs'])
+    fs = rec['stim'].fs
+
+    wc_kwargs = {k: phi[k] for k in ['mean', 'sd']}
+    wc_kwargs['n_chan_in'] = fn_kwargs['n_channels']
+    fir_kwargs = {k: phi[k] for k in ['tau', 'a', 'b', 's']}
+    fir_kwargs['n_coefs'] = fn_kwargs['n_coefs']
+    wc_coefs = gaussian_coefficients(**wc_kwargs)
+    fir_coefs = fir_exp_coefficients(**fir_kwargs)
+    if 'offsets' in phi:
+        offsets = phi['offsets']
+    elif 'offsets' in fn_kwargs:
+        offsets = fn_kwargs['offsets']
+    else:
+        offsets = None
+    if offsets is not None:
+        fir_coefs = _offset_coefficients(fir_coefs, offsets, fs, pad_bins=True)
+
+    wc_coefs = np.abs(wc_coefs).T
+    fir_coefs = np.abs(fir_coefs)
+    strf = wc_coefs @ fir_coefs
+
+    # TODO: This isn't really doing the same operation as an STRF anymore
+    #       so it may be better not to plot it this way in the future.
+    _strf_heatmap(strf, wc_coefs, fir_coefs, xlabel=xlabel, ylabel=ylabel,
+                  ax=ax, title=title)
+
+    return ax
+
+
+def _strf_heatmap(strf, wc_coefs, fir_coefs, xlabel='Lag (s)', ylabel='Channel',
+                  ax=None, title=None):
+
     cscale = np.nanmax(np.abs(strf.reshape(-1)))
     clim = [-cscale, cscale]
     wc_max = np.nanmax(np.abs(wc_coefs[:]))
@@ -66,8 +110,6 @@ def contrast_kernel_heatmap(rec, modelspec, ax=None, title=None,
 
     plot_heatmap(everything, xlabel=xlabel, ylabel=ylabel, ax=ax, skip=skip,
                  clim=clim, title=title)
-
-    return ax
 
 
 def contrast_spectrogram(rec, modelspec, ax=None, title=None,

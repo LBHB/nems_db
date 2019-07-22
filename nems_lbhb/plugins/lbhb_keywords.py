@@ -181,6 +181,50 @@ def ctk(kw):
     return template
 
 
+def ctk2(kw):
+    all_groups = kw.split('.')
+    n_channels, n_coefs = [int(s) for s in all_groups[1].split('x')]
+    ops = all_groups[2:]
+    offsets = None
+    for op in ops:
+        if op.startswith('off'):
+            offset_amount = int(op[3:])
+            offsets = np.array([[offset_amount]])
+
+    tau = np.array([[1]])
+    a = np.array([[1]])
+    b = np.array([[0]])
+    s = np.array([[0]])
+    mean = np.array([0.5])
+    sd = np.array([0.4])
+    sd_one = np.array([[1]])
+
+    prior = {
+            'tau': ('Exponential', {'beta': tau}),
+            'a': ('Exponential', {'beta': a}),
+            'b': ('Normal', {'mean': b, 'sd': sd_one}),
+            's': ('Normal', {'mean': s, 'sd': sd_one}),
+            'mean': ('Normal', {'mean': mean, 'sd': sd}),
+            'sd': ('HalfNormal', {'sd': sd})
+            }
+
+    template = {
+            'fn': 'nems_lbhb.gcmodel.modules.contrast',
+            'fn_kwargs': {'i': 'stim', 'o': 'ctpred', 'n_channels': n_channels,
+                          'n_coefs': n_coefs},
+            'phi': {},
+            'prior': prior,
+            'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap2'],
+            'bounds': {'tau': (1e-15, None), 'a': (1e-15, None),
+                       'sd': (1e-15, None)}
+            }
+
+    if offsets is not None:
+        template['prior']['offsets'] = ('Exponential', {'beta': offsets})
+
+    return template
+
+
 def dsig(kw):
     '''
     Note: these priors will typically be overwritten during initialization
