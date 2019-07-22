@@ -104,7 +104,7 @@ def gc3(fitkey):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
-    xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
+    xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc3', kwargs])
     return xfspec
 
 
