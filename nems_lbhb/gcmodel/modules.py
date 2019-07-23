@@ -264,7 +264,9 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
     return coeffs, wc_coeffs.T, fir_coeffs
 
 
-def contrast(rec, tau, a, b, s, mean, sd, i='stim', o='ctpred',
+# TODO: May still want to cache the "contrast" signal somehow, even though
+#       it's not really pure contrast anymore?
+def contrast(rec, tau, a, b, s, mean, sd, i='stim', o='ctpred', c='contrast',
              offsets=0.0, n_channels=18, n_coefs=15, compute_contrast=False):
 
     if compute_contrast:
@@ -279,6 +281,7 @@ def contrast(rec, tau, a, b, s, mean, sd, i='stim', o='ctpred',
 
         def fn(x):
             weighted = wc_coeffs.T * x
+            weighted[np.isnan(weighted)] = 0
             width = wc_coeffs.shape[0]
             history = fir_coeffs.shape[-1]
             zero_pad = np.zeros([width, history-1])

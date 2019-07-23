@@ -5,6 +5,7 @@ import copy
 import logging
 
 import numpy as np
+from scipy.optimize import minimize
 
 import nems
 import nems.utils
@@ -14,6 +15,8 @@ from nems_lbhb.gcmodel.initializers import init_dsig
 from nems.initializers import prefit_mod_subset, prefit_LN
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 import nems.modelspec as ms
+from nems.modules.weight_channels import gaussian_coefficients
+from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
 
 log = logging.getLogger(__name__)
 
@@ -640,9 +643,10 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
 
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)
-    lvl_idx = nems.utils.find_module('levelshift', modelspec)
+    #lvl_idx = nems.utils.find_module('levelshift', modelspec)
     ct_idx = nems.utils.find_module('contrast', modelspec)
     dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    fs = est['stim'].fs
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
@@ -739,9 +743,9 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         frozen_fir = modelspec[fir_idx]['phi'].keys()
         modelspec[fir_idx]['phi'] = {}
 
-        modelspec[lvl_idx]['fn_kwargs'].update(modelspec[lvl_idx]['phi'])
-        frozen_lvl = modelspec[lvl_idx]['phi'].keys()
-        modelspec[lvl_idx]['phi'] = {}
+#        modelspec[lvl_idx]['fn_kwargs'].update(modelspec[lvl_idx]['phi'])
+#        frozen_lvl = modelspec[lvl_idx]['phi'].keys()
+#        modelspec[lvl_idx]['phi'] = {}
 
 
 
@@ -753,16 +757,36 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         for k, v in frozen_phi.items():
             # Initialize _mod values equal to their counterparts
             # e.g. amplitude_mod[:4] = amplitude
-            # or 0 for alternate formulation
+            # or 0 for alternate formulation,
+            # then add a little to get fitter away from pure LN
             if modelspec[dsig_idx]['fn_kwargs']['alternate']:
                 modelspec[dsig_idx]['phi'][k] = np.array([[np.float64(0)]])
             else:
                 modelspec[dsig_idx]['phi'][k] = \
-                    modelspec[dsig_idx]['phi'][k[:-4]].copy()
+                    modelspec[dsig_idx]['phi'][k[:-4]].copy()*0.75
+
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
         modelspec[ct_idx]['fn_kwargs']['compute_contrast'] = True
         modelspec[ct_idx]['phi'] = ct_phi
+
+
+        # Initialize contrast kernel parameters by fitting them to match
+        # the absolute value of the LN STRF, and then add 40ms to
+        # offset (to get it past stim onset and account for time
+        # to adapt)
+        wc_mean = modelspec[wc_idx]['fn_kwargs']['mean']
+        wc_sd = modelspec[wc_idx]['fn_kwargs']['sd']
+        n_chans = modelspec[wc_idx]['fn_kwargs']['n_chan_in']
+        wc_coefs = gaussian_coefficients(wc_mean, wc_sd, n_chans)
+        fir_coefs = modelspec[fir_idx]['fn_kwargs']['coefficients']
+        strf = wc_coefs.T @ fir_coefs
+        log.info('Matching contrast initialization to abs. val. of LN STRF')
+        kernel_phi = _match_to_strf(strf, **modelspec[ct_idx]['fn_kwargs'],
+                                    fs=fs)
+        kernel_phi['offsets'] += 40
+        modelspec[ct_idx]['phi'] = kernel_phi
+        # Then remove frozen phi keys from fn_kwargs
         for k in ct_phi:
             modelspec[ct_idx]['fn_kwargs'].pop(k)
 
@@ -778,8 +802,8 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             modelspec[wc_idx]['phi'][k] = modelspec[wc_idx]['fn_kwargs'].pop(k)
         for k in frozen_fir:
             modelspec[fir_idx]['phi'][k] = modelspec[fir_idx]['fn_kwargs'].pop(k)
-        for k in frozen_lvl:
-            modelspec[lvl_idx]['phi'][k] = modelspec[lvl_idx]['fn_kwargs'].pop(k)
+#        for k in frozen_lvl:
+#            modelspec[lvl_idx]['phi'][k] = modelspec[lvl_idx]['fn_kwargs'].pop(k)
 
 
 
@@ -798,3 +822,65 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
     _store_gain_info(best_ms, est, val)
 
     return {'modelspec': best_ms}
+
+
+def _match_to_strf(strf, tau, a, b, s, mean, sd, n_channels=18,
+                   n_coefs=15, fs=100, **kwargs):
+    # **kwargs unused, just for convenience of passing **modelspec['fn_kwargs']
+    # and disregarding 'i', 'o' etc.
+
+    strf1 = np.abs(strf)
+
+    def cost_fn(sigma):
+        tau1, a1, b1, s1, mean1, sd1, offsets1 = _unzip_sigma(sigma, tau, a, b,
+                                                              s, mean, sd)
+        strf2 = _pseudo_strf(tau1, a1, b1, s1, mean1, sd1, offsets1,
+                             n_channels, n_coefs, fs)
+
+        diff = strf1 - strf2
+        squared = diff ** 2
+        error = np.sum(squared)
+
+        return error
+
+    flat_phis = [p.flatten() for p in [tau, a, b, s, mean, sd]]
+    x0 = np.concatenate(flat_phis)
+    x0 = np.concatenate((x0, np.array([0.0])))
+    bounds = [(1e-15, None), (1e-15, None), (1e-15, None), (None, None),
+              (None, None), (1e-15, None), (0, None)]
+    options = {'ftol': 1e-9, 'maxiter': 1000}
+
+    x1 = minimize(cost_fn, x0, method='L-BFGS-B', bounds=bounds,
+                  options=options).x
+    #print('final error: %.08f' % cost_fn(x1))
+
+    tau, a, b, s, mean, sd, offsets = _unzip_sigma(x1, tau, a, b, s, mean, sd)
+    starting_phi = {'tau': tau, 'a': a, 'b': b, 's': s, 'mean': mean, 'sd': sd,
+                    'offsets': offsets}
+
+    return starting_phi
+
+
+def _unzip_sigma(sigma, tau, a, b, s, mean, sd):
+    tau1, a1, b1, s1, mean1, sd1, offsets1 = sigma
+
+    tau1 = np.full_like(tau, tau1)
+    a1 = np.full_like(a, a1)
+    b1 = np.full_like(b, b1)
+    s1 = np.full_like(s, s1)
+    mean1 = np.full_like(mean, mean1)
+    sd1 = np.full_like(sd, sd1)
+    offsets1 = np.full((1,1), offsets1)
+
+    return tau1, a1, b1, s1, mean1, sd1, offsets1
+
+
+def _pseudo_strf(tau, a, b, s, mean, sd, offsets=0.0, n_channels=18, n_coefs=15,
+                 fs=100):
+    wc = gaussian_coefficients(mean, sd, n_channels)
+    fir = fir_exp_coefficients(tau, a, b, s, n_coefs=15)
+    if not np.all(offsets == 0):
+        fir = _offset_coefficients(fir, offsets, fs)
+    strf = wc.T @ fir
+
+    return strf
