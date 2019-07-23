@@ -6,7 +6,8 @@ import numpy as np
 import nems.epoch
 import nems.modelspec as ms
 from nems.utils import find_module
-from nems.initializers import prefit_to_target, prefit_mod_subset, init_dexp
+from nems.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
+                               init_logsig)
 from nems.analysis.api import fit_basic
 import nems.fitters.api
 import nems.metrics.api as metrics
@@ -141,83 +142,7 @@ def init_dsig(rec, modelspec, nl_mode=2):
         modelspec = _init_double_exponential(rec, modelspec, dsig_idx,
                                              nl_mode=nl_mode)
     else:
-        modelspec = _init_logistic_sigmoid(rec, modelspec, dsig_idx)
-
-    return modelspec
-
-
-def _init_logistic_sigmoid(rec, modelspec, dsig_idx):
-
-    if dsig_idx == len(modelspec):
-        fit_portion = modelspec.modules
-    else:
-        fit_portion = modelspec.modules[:dsig_idx]
-
-    # generate prediction from module preceeding dexp
-
-    # HACK to get phi for ctwc, ctfir, ctlvl which have not been prefit yet
-    for i, m in enumerate(fit_portion):
-        if not m.get('phi', None):
-            if [k in m['id'] for k in ['ctwc', 'ctfir', 'ctlvl']]:
-                old = m.get('prior', {})
-                m = priors.set_mean_phi([m])[0]
-                m['prior'] = old
-                fit_portion[i] = m
-            else:
-                log.warning("unexpected module missing phi during init step\n:"
-                            "%s, #%d", m['id'], i)
-
-    ms.fit_mode_on(fit_portion)
-    rec = ms.evaluate(rec, fit_portion)
-    ms.fit_mode_off(fit_portion)
-
-    pred = rec['pred'].as_continuous()
-    resp = rec['resp'].as_continuous()
-
-    mean_pred = np.nanmean(pred)
-    min_pred = np.nanmean(pred) - np.nanstd(pred)*3
-    max_pred = np.nanmean(pred) + np.nanstd(pred)*3
-    if min_pred < 0:
-        min_pred = 0
-        mean_pred = (min_pred+max_pred)/2
-
-    pred_range = max_pred - min_pred
-    min_resp = max(np.nanmean(resp)-np.nanstd(resp)*3, 0)  # must be >= 0
-    max_resp = np.nanmean(resp)+np.nanstd(resp)*3
-    resp_range = max_resp - min_resp
-
-    # Rather than setting a hard value for initial phi,
-    # set the prior distributions and let the fitter/analysis
-    # decide how to use it.
-    base0 = min_resp + 0.05*(resp_range)
-    amplitude0 = resp_range
-    shift0 = mean_pred
-    kappa0 = pred_range
-    log.info("Initial   base,amplitude,shift,kappa=({}, {}, {}, {})"
-             .format(base0, amplitude0, shift0, kappa0))
-
-    base = ('Exponential', {'beta': base0})
-    amplitude = ('Exponential', {'beta': amplitude0})
-    shift = ('Normal', {'mean': shift0, 'sd': pred_range**2})
-    kappa = ('Exponential', {'beta': kappa0})
-
-    modelspec[dsig_idx]['prior'].update({
-            'base': base, 'amplitude': amplitude, 'shift': shift,
-            'kappa': kappa,
-            'base_mod': base, 'amplitude_mod':amplitude, 'shift_mod':shift,
-            'kappa_mod': kappa
-            })
-
-    for kw in modelspec[dsig_idx]['fn_kwargs']:
-        if kw in ['base_mod', 'amplitude_mod', 'shift_mod', 'kappa_mod']:
-            modelspec[dsig_idx]['prior'].pop(kw)
-
-    modelspec[dsig_idx]['bounds'] = {
-            'base': (1e-15, None),
-            'amplitude': (1e-15, None),
-            'shift': (None, None),
-            'kappa': (1e-15, None),
-            }
+        modelspec = init_logsig(rec, modelspec)
 
     return modelspec
 

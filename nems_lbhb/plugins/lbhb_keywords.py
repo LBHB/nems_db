@@ -184,12 +184,7 @@ def ctk(kw):
 def ctk2(kw):
     all_groups = kw.split('.')
     n_channels, n_coefs = [int(s) for s in all_groups[1].split('x')]
-    ops = all_groups[2:]
-    offsets = None
-    for op in ops:
-        if op.startswith('off'):
-            offset_amount = int(op[3:])
-            offsets = np.array([[offset_amount]])
+    #ops = all_groups[2:]
 
     tau = np.array([[1]])
     a = np.array([[1]])
@@ -211,16 +206,13 @@ def ctk2(kw):
     template = {
             'fn': 'nems_lbhb.gcmodel.modules.contrast',
             'fn_kwargs': {'i': 'stim', 'o': 'ctpred', 'n_channels': n_channels,
-                          'n_coefs': n_coefs},
+                          'n_coefs': n_coefs, 'c': 'contrast'},
             'phi': {},
             'prior': prior,
             'plot_fns': ['nems_lbhb.gcmodel.guiplots.contrast_kernel_heatmap2'],
             'bounds': {'tau': (1e-15, None), 'a': (1e-15, None),
                        'sd': (1e-15, None)}
             }
-
-    if offsets is not None:
-        template['prior']['offsets'] = ('Exponential', {'beta': offsets})
 
     return template
 
@@ -244,6 +236,7 @@ def dsig(kw):
     for op in ops:
         if op in ['logsig', 'l']:
             eq = 'logsig'
+            bounded = True
         elif op in ['dexp', 'd']:
             eq = 'dexp'
         elif op == 'a':
@@ -256,8 +249,6 @@ def dsig(kw):
             shift = True
         elif op.startswith('C'):
             c = op[1:]
-        elif op == 'bnd':
-            bounded = True
         elif op == 'n':
             norm = True
         elif op == 'alt':
@@ -279,7 +270,7 @@ def dsig(kw):
                      'nems.plots.api.pred_resp',
                      'nems.plots.api.before_and_after',
                      'nems.plots.api.nl_scatter'],
-        'plot_fn_idx': 2,
+        'plot_fn_idx': 1,
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Exponential', {'beta': [2.0]}),
                   'shift': ('Normal', {'mean': [0.0], 'sd': [1.0]}),
@@ -289,9 +280,9 @@ def dsig(kw):
     if bounded:
         template['bounds'] = {
                 'base': (1e-15, None), 'base_mod': (1e-15, None),
-                'amplitude': (None, None), 'amplitude_mod': (None, None),
+                'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
                 'shift': (None, None), 'shift_mod': (None, None),
-                'kappa': (None, None), 'kappa_mod': (None, None),
+                'kappa': (1e-15, None), 'kappa_mod': (1e-15, None),
                 }
 
     zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})
