@@ -236,6 +236,7 @@ def dsig(kw):
     for op in ops:
         if op in ['logsig', 'l']:
             eq = 'logsig'
+            bounded = True
         elif op in ['dexp', 'd']:
             eq = 'dexp'
         elif op == 'a':
@@ -248,8 +249,6 @@ def dsig(kw):
             shift = True
         elif op.startswith('C'):
             c = op[1:]
-        elif op == 'bnd':
-            bounded = True
         elif op == 'n':
             norm = True
         elif op == 'alt':
@@ -281,9 +280,9 @@ def dsig(kw):
     if bounded:
         template['bounds'] = {
                 'base': (1e-15, None), 'base_mod': (1e-15, None),
-                'amplitude': (None, None), 'amplitude_mod': (None, None),
+                'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
                 'shift': (None, None), 'shift_mod': (None, None),
-                'kappa': (None, None), 'kappa_mod': (None, None),
+                'kappa': (1e-15, None), 'kappa_mod': (1e-15, None),
                 }
 
     zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})

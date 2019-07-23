@@ -763,7 +763,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
                 modelspec[dsig_idx]['phi'][k] = np.array([[np.float64(0)]])
             else:
                 modelspec[dsig_idx]['phi'][k] = \
-                    modelspec[dsig_idx]['phi'][k[:-4]].copy()*0.75
+                    modelspec[dsig_idx]['phi'][k[:-4]].copy()
 
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
