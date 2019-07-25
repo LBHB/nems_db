@@ -792,6 +792,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             modelspec[ct_idx]['fn_kwargs'].pop(k)
 
 
+        random_conditions = []
         # don't use random initialization in addition to rand_phi
         if n_random and (ii == 0):
             dsig_phi_to_prior(modelspec)
@@ -808,18 +809,28 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
                     modelspec[dsig_idx] = priors._set_phi_in_module(modelspec[dsig_idx],
                                                                     prior_to_phi_fn)
                 log.info('trying random GC initialization #%d' % idx)
+                initial_phi = modelspec[dsig_idx]['phi'].copy()
                 modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                                       metric=metric_fn, metaname='fit_gc',
                                       fit_kwargs=fit_kwargs)
+                final_phi = modelspec[dsig_idx]['phi'].copy()
+                random_conditions.append((initial_phi, final_phi))
 
-            modelspec = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
+            best_result = pick_best_phi(modelspec, est=est, val=val, **context)
+            modelspec = best_result['modelspec']
+            mean_chosen = (best_result['best_random_idx'] == 0)
+            log.info('mean gc phi chosen?:  %s', mean_chosen)
             np.random.set_state(save_state)
 
         else:
+            mean_chosen = False
+            initial_phi = modelspec[dsig_idx]['phi'].copy()
             log.info('Finishing fit for full GC model ...\n')
             modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                                   metric=metric_fn, metaname='fit_gc',
                                   fit_kwargs=fit_kwargs)
+            final_phi = modelspec[dsig_idx]['phi'].copy()
+            random_conditions.append((initial_phi, final_phi))
 
         # 4b: Unfreeze STRF parameters.
         log.info('Unfreezing STRF parameters ...\n')
@@ -845,6 +856,8 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
     best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
     # cache the maximum and minimum value of ctpred (across est and val sets)
     _store_gain_info(best_ms, est, val)
+    modelspec.meta['mean_chosen'] = mean_chosen
+    modelspec.meta['random_conditions'] = random_conditions
 
     return {'modelspec': best_ms}
 
