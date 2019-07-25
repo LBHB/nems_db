@@ -11,12 +11,13 @@ import nems
 import nems.utils
 import nems.metrics.api as metrics
 from nems.analysis.api import fit_basic, basic_with_copy, pick_best_phi
-from nems_lbhb.gcmodel.initializers import init_dsig
+from nems_lbhb.gcmodel.initializers import init_dsig, dsig_phi_to_prior
 from nems.initializers import prefit_mod_subset, prefit_LN
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 import nems.modelspec as ms
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
+import nems.priors as priors
 
 log = logging.getLogger(__name__)
 
@@ -580,7 +581,7 @@ def test_LN(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             tolerance=1e-7, prefit_tolerance=10**-5.5, metric='nmse',
             fitter='scipy_minimize', cost_function=None, IsReload=False,
-            **context):
+            n_random=0, rand_seed=1234, **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
 
@@ -791,10 +792,34 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             modelspec[ct_idx]['fn_kwargs'].pop(k)
 
 
-        log.info('Finishing fit for full GC model ...\n')
-        modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
-                              metric=metric_fn, metaname='fit_gc',
-                              fit_kwargs=fit_kwargs)
+        # don't use random initialization in addition to rand_phi
+        if n_random and (ii == 0):
+            dsig_phi_to_prior(modelspec)
+            modelspec.tile_fits(n_random)
+            save_state = np.random.get_state()
+            np.random.seed(rand_seed)
+
+            for idx in range(n_random):
+                modelspec.set_fit(idx)
+                if idx == 0:
+                    pass  # leave phi as-is
+                else:
+                    prior_to_phi_fn = lambda prior: priors._to_phi(prior, 'sample')
+                    modelspec[dsig_idx] = priors._set_phi_in_module(modelspec[dsig_idx],
+                                                                    prior_to_phi_fn)
+                log.info('trying random GC initialization #%d' % idx)
+                modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                                      metric=metric_fn, metaname='fit_gc',
+                                      fit_kwargs=fit_kwargs)
+
+            modelspec = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
+            np.random.set_state(save_state)
+
+        else:
+            log.info('Finishing fit for full GC model ...\n')
+            modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                                  metric=metric_fn, metaname='fit_gc',
+                                  fit_kwargs=fit_kwargs)
 
         # 4b: Unfreeze STRF parameters.
         log.info('Unfreezing STRF parameters ...\n')

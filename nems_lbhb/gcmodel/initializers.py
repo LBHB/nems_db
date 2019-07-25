@@ -177,6 +177,8 @@ def dsig_phi_to_prior(modelspec):
     same module. Used for random-sample fits - all samples are initialized
     and pre-fit the same way, and then randomly sampled from the new priors.
 
+    Operates on modelspec IN-PLACE.
+
     Parameters
     ----------
     modelspec : list of dictionaries
@@ -194,13 +196,49 @@ def dsig_phi_to_prior(modelspec):
     a = phi['amplitude']
     k = phi['kappa']
     s = phi['shift']
+    b_m = 'base_mod' in phi
+    a_m = 'amplitude_mod' in phi
+    k_m = 'kappa_mod' in phi
+    s_m = 'shift_mod' in phi
 
-    modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
-    modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
-    modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s  # Do anything to scale sd?
-    modelspec[dsig_idx]['prior']['kappa'][1]['beta'] = k
-
-    return modelspec
+    try:
+        # still set as tuple like ('Exponential', {'beta': [[0]]})
+        modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
+        if b_m:
+            modelspec[dsig_idx]['prior']['base_mod'][1]['beta'] = b
+    except TypeError:
+        # has been converted to distribution object
+        modelspec[dsig_idx]['prior']['base']._beta = b
+        if b_m:
+            modelspec[dsig_idx]['prior']['base_mod']._beta = b
+    try:
+        modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
+        if a_m:
+            modelspec[dsig_idx]['prior']['amplitude_mod'][1]['beta'] = a
+    except TypeError:
+        modelspec[dsig_idx]['prior']['amplitude']._beta = a
+        if a_m:
+            modelspec[dsig_idx]['prior']['amplitude_mod']._beta = a
+    try:
+        modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s
+        modelspec[dsig_idx]['prior']['shift'][1]['sd'] = s*2
+        if s_m:
+            modelspec[dsig_idx]['prior']['shift_mod'][1]['mean'] = s
+            modelspec[dsig_idx]['prior']['shift_mod'][1]['sd'] = s*2
+    except TypeError:
+        modelspec[dsig_idx]['prior']['shift']._mean = s
+        modelspec[dsig_idx]['prior']['shift']._sd = s*2
+        if s_m:
+            modelspec[dsig_idx]['prior']['shift_mod']._mean = s
+            modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
+    try:
+        modelspec[dsig_idx]['prior']['kappa'][1]['beta'] = k
+        if k_m:
+            modelspec[dsig_idx]['prior']['kappa_mod'][1]['beta'] = k
+    except TypeError:
+        modelspec[dsig_idx]['prior']['kappa']._beta = k
+        if k_m:
+            modelspec[dsig_idx]['prior']['kappa_mod']._beta = k
 
 
 def _prefit_contrast_modules(est, modelspec, analysis_function,
