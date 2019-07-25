@@ -229,14 +229,18 @@ def dsig(kw):
     kappa = False
     shift = False
     c = 'ctpred'
-    bounded = False
+    logsig_bounds = False
+    relsat_bounds = False
     norm = False
     alternate = False
 
     for op in ops:
         if op in ['logsig', 'l']:
             eq = 'logsig'
-            bounded = True
+            logsig_bounds = True
+        elif op in ['relsat', 'rs', 'saturated_rectifier']:
+            eq = 'relsat'
+            relsat_bounds = True
         elif op in ['dexp', 'd']:
             eq = 'dexp'
         elif op == 'a':
@@ -277,12 +281,19 @@ def dsig(kw):
                   'kappa': ('Exponential', {'beta': [0.1]})},
         }
 
-    if bounded:
+    if logsig_bounds:
         template['bounds'] = {
                 'base': (1e-15, None), 'base_mod': (1e-15, None),
                 'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
                 'shift': (None, None), 'shift_mod': (None, None),
                 'kappa': (1e-15, None), 'kappa_mod': (1e-15, None),
+                }
+    elif relsat_bounds:
+        template['bounds'] = {
+                'base': (1e-15, None), 'base_mod': (1e-15, None),
+                'amplitude': (1e-15, None), 'amplitude_mod': (1e-15, None),
+                'shift': (None, None), 'shift_mod': (None, None),
+                'kappa': (1e-15, None), 'kappa_mod': (1e-15, None)
                 }
 
     zero_norm = ('Normal', {'mean': [0.0], 'sd': [1.0]})

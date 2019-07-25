@@ -823,6 +823,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             np.random.set_state(save_state)
 
         else:
+            best_result = {'best_random_idx': 0}
             mean_chosen = False
             initial_phi = modelspec[dsig_idx]['phi'].copy()
             log.info('Finishing fit for full GC model ...\n')
@@ -858,6 +859,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
     _store_gain_info(best_ms, est, val)
     modelspec.meta['mean_chosen'] = mean_chosen
     modelspec.meta['random_conditions'] = random_conditions
+    modelspec.meta['best_random_idx'] = best_result['best_random_idx']
 
     return {'modelspec': best_ms}
 

@@ -7,7 +7,7 @@ import nems.epoch
 import nems.modelspec as ms
 from nems.utils import find_module
 from nems.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
-                               init_logsig)
+                               init_logsig, init_relsat)
 from nems.analysis.api import fit_basic
 import nems.fitters.api
 import nems.metrics.api as metrics
@@ -141,6 +141,9 @@ def init_dsig(rec, modelspec, nl_mode=2):
             ['dexp', 'd', 'double_exponential']:
         modelspec = _init_double_exponential(rec, modelspec, dsig_idx,
                                              nl_mode=nl_mode)
+    elif modelspec[dsig_idx]['fn_kwargs'].get('eq', '') in \
+            ['relsat', 'rs', 'saturated_rectifier']:
+        modelspec = init_relsat(rec, modelspec)
     else:
         modelspec = init_logsig(rec, modelspec)
 
