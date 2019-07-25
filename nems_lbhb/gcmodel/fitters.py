@@ -217,7 +217,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
             cost_function=None, IsReload=False, post_fit=False, post_copy=True,
-            **context):
+            n_random=0, rand_seed=1234, **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
 
@@ -425,6 +425,45 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
                               metric=metric_fn, metaname='fit_gc',
                               fit_kwargs=fit_kwargs)
 
+        random_conditions = []
+        # don't use random initialization in addition to rand_phi
+        if n_random and (ii == 0):
+            dsig_phi_to_prior(modelspec)
+            modelspec.tile_fits(n_random)
+            save_state = np.random.get_state()
+            np.random.seed(rand_seed)
+
+            for idx in range(n_random):
+                modelspec.set_fit(idx)
+                if idx == 0:
+                    pass  # leave phi as-is
+                else:
+                    prior_to_phi_fn = lambda prior: priors._to_phi(prior, 'sample')
+                    modelspec[dsig_idx] = priors._set_phi_in_module(modelspec[dsig_idx],
+                                                                    prior_to_phi_fn)
+                log.info('trying random GC initialization #%d' % idx)
+                initial_phi = modelspec[dsig_idx]['phi'].copy()
+                modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                                      metric=metric_fn, metaname='fit_gc',
+                                      fit_kwargs=fit_kwargs)
+                final_phi = modelspec[dsig_idx]['phi'].copy()
+                random_conditions.append((initial_phi, final_phi))
+
+            best_result = pick_best_phi(modelspec, est=est, val=val, **context)
+            modelspec = best_result['modelspec']
+            np.random.set_state(save_state)
+
+        else:
+            best_result = {'best_random_idx': 0}
+            initial_phi = modelspec[dsig_idx]['phi'].copy()
+            log.info('Finishing fit for full GC model ...\n')
+            modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
+                                  metric=metric_fn, metaname='fit_gc',
+                                  fit_kwargs=fit_kwargs)
+            final_phi = modelspec[dsig_idx]['phi'].copy()
+            random_conditions.append((initial_phi, final_phi))
+
+
         # 4b: Unfreeze STRF parameters.
         log.info('Unfreezing STRF parameters ...\n')
         for k in frozen_wc:
@@ -472,6 +511,8 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
     # cache the maximum and minimum value of ctpred (across est and val sets)
     _store_gain_info(best_ms, est, val)
+    modelspec.meta['random_conditions'] = random_conditions
+    modelspec.meta['best_random_idx'] = best_result['best_random_idx']
 
     return {'modelspec': best_ms}
 
@@ -818,13 +859,10 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
 
             best_result = pick_best_phi(modelspec, est=est, val=val, **context)
             modelspec = best_result['modelspec']
-            mean_chosen = (best_result['best_random_idx'] == 0)
-            log.info('mean gc phi chosen?:  %s', mean_chosen)
             np.random.set_state(save_state)
 
         else:
             best_result = {'best_random_idx': 0}
-            mean_chosen = False
             initial_phi = modelspec[dsig_idx]['phi'].copy()
             log.info('Finishing fit for full GC model ...\n')
             modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
@@ -857,7 +895,6 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
     best_ms = pick_best_phi(modelspec, est=est, val=val, **context)['modelspec']
     # cache the maximum and minimum value of ctpred (across est and val sets)
     _store_gain_info(best_ms, est, val)
-    modelspec.meta['mean_chosen'] = mean_chosen
     modelspec.meta['random_conditions'] = random_conditions
     modelspec.meta['best_random_idx'] = best_result['best_random_idx']
 

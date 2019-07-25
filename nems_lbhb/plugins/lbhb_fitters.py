@@ -76,6 +76,9 @@ def gc2(fitkey):
         elif op.startswith('r'):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+        elif op.startswith('rgc'):
+            nr = int(op[3:])
+            kwargs['n_random'] = nr
 
     xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
     return xfspec
