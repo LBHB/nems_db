@@ -73,12 +73,12 @@ def gc2(fitkey):
             kwargs['post_fit'] = True
         elif op == 'NC':
             kwargs['post_copy'] = False
-        elif op.startswith('r'):
-            rc = int(op[1:])
-            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
         elif op.startswith('rgc'):
             nr = int(op[3:])
             kwargs['n_random'] = nr
+        elif op.startswith('r'):
+            rc = int(op[1:])
+            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
     xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
     return xfspec
@@ -103,12 +103,12 @@ def gc3(fitkey):
         elif op.startswith('pmi'):
             pattern = re.compile(r'^mi(\d{1,})')
             kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
-        elif op.startswith('r'):
-            rc = int(op[1:])
-            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
         elif op.startswith('rgc'):
             nr = int(op[3:])
             kwargs['n_random'] = nr
+        elif op.startswith('r'):
+            rc = int(op[1:])
+            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
     xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc3', kwargs])
     return xfspec
