@@ -76,7 +76,7 @@ def gc2(fitkey):
         elif op.startswith('rgc'):
             nr = int(op[3:])
             kwargs['n_random'] = nr
-        elif op.startswith('r'):
+        elif op.startswith('rp'):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
@@ -106,7 +106,7 @@ def gc3(fitkey):
         elif op.startswith('rgc'):
             nr = int(op[3:])
             kwargs['n_random'] = nr
-        elif op.startswith('r'):
+        elif op.startswith('rp'):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
 
