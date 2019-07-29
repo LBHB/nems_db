@@ -278,7 +278,7 @@ def dsig(kw):
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Exponential', {'beta': [2.0]}),
                   'shift': ('Normal', {'mean': [0.0], 'sd': [1.0]}),
-                  'kappa': ('Exponential', {'beta': [0.1]})},
+                  'kappa': ('Normal', {'mean': [0.3], 'sd': [1.0]})},
         }
 
     if logsig_bounds:

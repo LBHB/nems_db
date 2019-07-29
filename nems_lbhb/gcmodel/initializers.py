@@ -163,8 +163,8 @@ def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
 
     amp_prior = ('Exponential', {'beta': amp})
     base_prior = ('Exponential', {'beta': base})
-    kappa_prior = ('Exponential', {'beta': kappa})
-    shift_prior = ('Normal', {'mean': shift, 'sd': shift/2})
+    kappa_prior = ('Normal', {'mean': kappa, 'sd': kappa*2})
+    shift_prior = ('Normal', {'mean': shift, 'sd': shift*2})
 
     modelspec[target_i]['prior'].update({
             'amplitude': amp_prior, 'base': base_prior, 'kappa': kappa_prior,
@@ -235,13 +235,17 @@ def dsig_phi_to_prior(modelspec):
             modelspec[dsig_idx]['prior']['shift_mod']._mean = s
             modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
     try:
-        modelspec[dsig_idx]['prior']['kappa'][1]['beta'] = k
+        modelspec[dsig_idx]['prior']['kappa'][1]['mean'] = k
+        modelspec[dsig_idx]['prior']['kappa'][1]['sd'] = k*2
         if k_m:
-            modelspec[dsig_idx]['prior']['kappa_mod'][1]['beta'] = k
+            modelspec[dsig_idx]['prior']['kappa_mod'][1]['mean'] = k
+            modelspec[dsig_idx]['prior']['kappa_mod'][1]['sd'] = k*2
     except TypeError:
-        modelspec[dsig_idx]['prior']['kappa']._beta = k
+        modelspec[dsig_idx]['prior']['kappa']._mean = k
+        modelspec[dsig_idx]['prior']['kappa']._sd = k
         if k_m:
-            modelspec[dsig_idx]['prior']['kappa_mod']._beta = k
+            modelspec[dsig_idx]['prior']['kappa_mod']._mean = k
+            modelspec[dsig_idx]['prior']['kappa_mod']._sd = k
 
 
 def _prefit_contrast_modules(est, modelspec, analysis_function,
