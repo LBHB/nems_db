@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 import nems.xform_helper as xhelp
 import nems.db as nd
+import nems.epoch as ep
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
@@ -13,9 +14,10 @@ from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
 from nems_lbhb.gcmodel.figures.examples import improved_cells_to_list
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
+from nems_lbhb.gcmodel.figures.soundstats import _silence_duration
 from nems_db.params import fitted_params_per_batch
 import nems.modelspec as ms
-from nems.modules.nonlinearity import _double_exponential
+from nems.modules.nonlinearity import _double_exponential, _saturated_rectifier
 
 log = logging.getLogger(__name__)
 
@@ -578,3 +580,124 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
 
     plt.hist(ratios, bins=bins)
 
+
+def dynamic_sigmoid_pred_matched(cellid, batch, modelname, per_stim=False,
+                                 segment_length=500, test_limit=None,
+                                 nl_fn=_double_exponential):
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+    modelspec = ctx['modelspec']
+    modelspec.recording = ctx['val']
+    val = ctx['val'].apply_mask()
+    ctpred = val['ctpred'].as_continuous().flatten()
+    val_before_dsig = ms.evaluate(val, modelspec, stop=-1)
+    pred_before_dsig = val_before_dsig['pred'].as_continuous().flatten()
+    lows = {k: v for k, v in modelspec[-1]['phi'].items()
+            if '_mod' not in k}
+    highs = {k[:-4]: v for k, v in modelspec[-1]['phi'].items()
+             if '_mod' in k}
+    for k in lows:
+        if k not in highs:
+            highs[k] = lows[k]
+    # re-sort keys to make sure they're in the same order
+    lows = {k: lows[k] for k in sorted(lows)}
+    highs = {k: highs[k] for k in sorted(highs)}
+    thetas = list(lows.values())
+    theta_mods = list(highs.values())
+    keys = list(lows.keys())
+
+    if not per_stim:
+        median_ct = np.median(ctpred)
+
+        plt.figure(figsize=figsize)
+        for p, ct in zip(pred_before_dsig, ctpred):
+            kwargs = {}
+            for t, t_m, k in zip(thetas, theta_mods, keys):
+                kwargs[k] = t + (t - t_m)*ct
+                kwargs[k] = t + (t - t_m)*ct
+
+            out = nl_fn(p, **kwargs).flatten()
+            if ct >= median_ct:
+                plt.scatter(p, out, color='red', s=2, alpha=0.5)
+            else:
+                plt.scatter(p, out, color='blue', s=2, alpha=0.5)
+
+    else:
+        start = 0
+        end = segment_length
+        count = int(pred_before_dsig.size/segment_length)
+        # figure out a square layout for subplots
+        root = 1
+        while root**2 < count:
+            root += 1
+        fig, axs = plt.subplots(nrows=root, ncols=root, figsize=figsize,
+                                squeeze=0, sharex=True, sharey=True)
+
+        for i, ax in enumerate(axs.reshape(-1)):
+            this_ct = ctpred[start:end]
+            this_pred = pred_before_dsig[start:end]
+            # *1.25 is arbitrary bump to counteract 0-padding during silence
+            median_ct = np.median(this_ct)*1.25
+            for p, ct in zip(this_pred, this_ct):
+                kwargs = {}
+                for t, t_m, k in zip(thetas, theta_mods, keys):
+                    kwargs[k] = t + (t - t_m)*ct
+                    kwargs[k] = t + (t - t_m)*ct
+
+                out = nl_fn(p, **kwargs).flatten()
+                if ct >= median_ct:
+                    ax.scatter(p, out, color='red', s=2, alpha=0.5)
+                else:
+                    ax.scatter(p, out, color='blue', s=2, alpha=0.5)
+            start += segment_length
+            end += segment_length
+
+            if i % root == 0:
+                # leftmost column, keep y axis
+                pass
+            else:
+                ax.get_yaxis().set_visible(False)
+            if (count - i + 1) < root:
+                # bottom row, keep x axis
+                pass
+            else:
+                ax.get_xaxis().set_visible(False)
+
+
+def mean_prior_used(batch, modelname):
+    choices = []
+    cells = nd.get_batch_cells(batch, as_list=True)
+    for i, c in enumerate(cells[400:500]):
+        if 25 % (i+1) == 0:
+            print('cell %d/%d\n' % (i, len(cells)))
+        try:
+            xfspec, ctx = xhelp.load_model_xform(c, batch, modelname,
+                                                 eval_model=False)
+            modelspec = ctx['modelspec']
+            choices.append(modelspec.meta.get('best_random_idx', 0))
+        except ValueError:
+            # no result
+            continue
+
+    if choices:
+        choices = np.array(choices).flatten()
+        mean_count = np.sum(choices == 0)
+        proportion = mean_count / len(choices)
+        print('proportion mean prior used: %.4f' % proportion)
+    else:
+        print('no results found')
+
+
+def random_condition_convergence(cellid, batch, modelname):
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+    meta = ctx['modelspec'].meta
+    rcs = meta['random_conditions']
+    plt.figure(figsize=figsize)
+    keys = list(rcs[0][0].keys())
+    colors = [np.random.rand(3,) for k in keys]
+    for initial, final in rcs:
+        starts = list(initial.values())
+        ends = list(final.values())
+        for i, k in enumerate(keys):
+            plt.plot([0, 1], [np.asscalar(starts[i]), np.asscalar(ends[i])],
+                     c=colors[i])
+    plt.legend(keys)
