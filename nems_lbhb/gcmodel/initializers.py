@@ -204,10 +204,10 @@ def dsig_phi_to_prior(modelspec):
     k_m = 'kappa_mod' in phi
     s_m = 'shift_mod' in phi
 
-    amp_prior = ('Normal', {'mean': a, 'sd': a*2})
+    amp_prior = ('Normal', {'mean': a, 'sd': np.abs(a*2)})
     base_prior = ('Exponential', {'beta': b})
-    kappa_prior = ('Normal', {'mean': k, 'sd': k*2})
-    shift_prior = ('Normal', {'mean': s, 'sd': s*2})
+    kappa_prior = ('Normal', {'mean': k, 'sd': np.abs(k*2)})
+    shift_prior = ('Normal', {'mean': s, 'sd': np.abs(s*2)})
 
     priors = {'amplitude': amp_prior, 'base': base_prior,
               'kappa': kappa_prior, 'shift': shift_prior}
