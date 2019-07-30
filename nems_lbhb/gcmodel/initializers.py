@@ -161,7 +161,7 @@ def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
     kappa = modelspec.phi[-1]['kappa']
     shift = modelspec.phi[-1]['shift']
 
-    amp_prior = ('Exponential', {'beta': amp})
+    amp_prior = ('Normal', {'mean': amp, 'sd': amp*2})
     base_prior = ('Exponential', {'beta': base})
     kappa_prior = ('Normal', {'mean': kappa, 'sd': kappa*2})
     shift_prior = ('Normal', {'mean': shift, 'sd': shift*2})
@@ -204,48 +204,66 @@ def dsig_phi_to_prior(modelspec):
     k_m = 'kappa_mod' in phi
     s_m = 'shift_mod' in phi
 
-    try:
-        # still set as tuple like ('Exponential', {'beta': [[0]]})
-        modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
-        if b_m:
-            modelspec[dsig_idx]['prior']['base_mod'][1]['beta'] = b
-    except TypeError:
-        # has been converted to distribution object
-        modelspec[dsig_idx]['prior']['base']._beta = b
-        if b_m:
-            modelspec[dsig_idx]['prior']['base_mod']._beta = b
-    try:
-        modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
-        if a_m:
-            modelspec[dsig_idx]['prior']['amplitude_mod'][1]['beta'] = a
-    except TypeError:
-        modelspec[dsig_idx]['prior']['amplitude']._beta = a
-        if a_m:
-            modelspec[dsig_idx]['prior']['amplitude_mod']._beta = a
-    try:
-        modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s
-        modelspec[dsig_idx]['prior']['shift'][1]['sd'] = s*2
-        if s_m:
-            modelspec[dsig_idx]['prior']['shift_mod'][1]['mean'] = s
-            modelspec[dsig_idx]['prior']['shift_mod'][1]['sd'] = s*2
-    except TypeError:
-        modelspec[dsig_idx]['prior']['shift']._mean = s
-        modelspec[dsig_idx]['prior']['shift']._sd = s*2
-        if s_m:
-            modelspec[dsig_idx]['prior']['shift_mod']._mean = s
-            modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
-    try:
-        modelspec[dsig_idx]['prior']['kappa'][1]['mean'] = k
-        modelspec[dsig_idx]['prior']['kappa'][1]['sd'] = k*2
-        if k_m:
-            modelspec[dsig_idx]['prior']['kappa_mod'][1]['mean'] = k
-            modelspec[dsig_idx]['prior']['kappa_mod'][1]['sd'] = k*2
-    except TypeError:
-        modelspec[dsig_idx]['prior']['kappa']._mean = k
-        modelspec[dsig_idx]['prior']['kappa']._sd = k
-        if k_m:
-            modelspec[dsig_idx]['prior']['kappa_mod']._mean = k
-            modelspec[dsig_idx]['prior']['kappa_mod']._sd = k
+    amp_prior = ('Normal', {'mean': a, 'sd': a*2})
+    base_prior = ('Exponential', {'beta': b})
+    kappa_prior = ('Normal', {'mean': k, 'sd': k*2})
+    shift_prior = ('Normal', {'mean': s, 'sd': s*2})
+
+    priors = {'amplitude': amp_prior, 'base': base_prior,
+              'kappa': kappa_prior, 'shift': shift_prior}
+    if b_m:
+        priors['base_mod'] = base_prior
+    if a_m:
+        priors['amplitude_mod'] = amp_prior
+    if k_m:
+        priors['kappa_mod'] = kappa_prior
+    if s_m:
+        priors['shift_mod'] = shift_prior
+
+    modelspec[dsig_idx]['prior'] = priors
+
+#    try:
+#        # still set as tuple like ('Exponential', {'beta': [[0]]})
+#        modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
+#        if b_m:
+#            modelspec[dsig_idx]['prior']['base_mod'][1]['beta'] = b
+#    except TypeError:
+#        # has been converted to distribution object
+#        modelspec[dsig_idx]['prior']['base']._beta = b
+#        if b_m:
+#            modelspec[dsig_idx]['prior']['base_mod']._beta = b
+#    try:
+#        modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
+#        if a_m:
+#            modelspec[dsig_idx]['prior']['amplitude_mod'][1]['beta'] = a
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['amplitude']._beta = a
+#        if a_m:
+#            modelspec[dsig_idx]['prior']['amplitude_mod']._beta = a
+#    try:
+#        modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s
+#        modelspec[dsig_idx]['prior']['shift'][1]['sd'] = s*2
+#        if s_m:
+#            modelspec[dsig_idx]['prior']['shift_mod'][1]['mean'] = s
+#            modelspec[dsig_idx]['prior']['shift_mod'][1]['sd'] = s*2
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['shift']._mean = s
+#        modelspec[dsig_idx]['prior']['shift']._sd = s*2
+#        if s_m:
+#            modelspec[dsig_idx]['prior']['shift_mod']._mean = s
+#            modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
+#    try:
+#        modelspec[dsig_idx]['prior']['kappa'][1]['mean'] = k
+#        modelspec[dsig_idx]['prior']['kappa'][1]['sd'] = k*2
+#        if k_m:
+#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['mean'] = k
+#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['sd'] = k*2
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['kappa']._mean = k
+#        modelspec[dsig_idx]['prior']['kappa']._sd = k
+#        if k_m:
+#            modelspec[dsig_idx]['prior']['kappa_mod']._mean = k
+#            modelspec[dsig_idx]['prior']['kappa_mod']._sd = k
 
 
 def _prefit_contrast_modules(est, modelspec, analysis_function,

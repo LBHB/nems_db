@@ -276,9 +276,12 @@ def dsig(kw):
                      'nems.plots.api.nl_scatter'],
         'plot_fn_idx': 1,
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
-                  'amplitude': ('Exponential', {'beta': [2.0]}),
+                  'amplitude': ('Normal', {'mean': [2.0], 'sd': 1.0}),
                   'shift': ('Normal', {'mean': [0.0], 'sd': [1.0]}),
                   'kappa': ('Normal', {'mean': [0.3], 'sd': [1.0]})},
+        'bounds': {
+                'base': (1e-15, None), 'base_mod': (1e-15, None),
+                }
         }
 
     if logsig_bounds:
