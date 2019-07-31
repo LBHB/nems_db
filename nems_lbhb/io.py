@@ -1039,7 +1039,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 # print([i,x1,x2])
                 deblinked[x1:x2, 0] = np.linspace(
                         deblinked[x1], deblinked[x2-1], x2-x1
-                        )
+                        ).squeeze()
                 if pupil_eyespeed:
                     deblinked_eye_speed[x1:x2, 0] = np.nan
 
