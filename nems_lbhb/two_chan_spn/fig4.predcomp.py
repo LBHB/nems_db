@@ -24,13 +24,13 @@ import nems.db as nd
 import nems.plots.api as nplt
 from nems.utils import find_module
 
-save_fig = True
+save_fig = False
 if save_fig:
     plt.close('all')
 
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 
-USE_SPN = False
+USE_SPN = True
 if USE_SPN:
     batch = 259
     # this was used in the original submission
@@ -103,6 +103,12 @@ beta2[beta2>1]=1
 # test for significant improvement
 improvedcells = (beta2_test-se2 > beta1_test+se1)
 
+if USE_SPN:
+    ng = modelnames[-2]
+    betag_test = df_r[ng]
+    seg = df_e[ng]
+    improvedcellsg = (betag_test - seg > beta1_test + se1)
+
 # test for significant prediction at all
 goodcells = ((beta2_test > se2*3) | (beta1_test > se1*3))
 
@@ -123,6 +129,8 @@ else:
     offset = 0.4
     max = 0.65
 m = np.array((df.loc[goodcells]).mean()[modelnames])
+print('mean: ' + str(m))
+print('median: ' + str(np.array((df.loc[goodcells]).median()[modelnames])))
 ax[0].bar(np.arange(len(modelnames)), m-offset, color='black', bottom=offset)
 ax[0].plot(np.array([-1, len(modelnames)]), np.array([offset, offset]), 'k--')
 ax[0].set_ylim((offset-0.05, max))

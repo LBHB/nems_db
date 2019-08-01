@@ -163,6 +163,8 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
             coefs = gaussian_coefficients(ms1[wcidx]['phi']['mean'],
                                           ms1[wcidx]['phi']['sd'],
                                           ms1[wcidx]['fn_kwargs']['n_chan_in'])
+            coefs -= np.abs(np.min(coefs, axis=1, keepdims=True))
+            coefs /= np.abs(np.sum(coefs, axis=1, keepdims=True))
             ax.set_prop_cycle(color=colors)
             plt.plot(coefs.T)
             plt.xlabel('in')
@@ -183,6 +185,8 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
             coefs = gaussian_coefficients(ms2[wcidx]['phi']['mean'],
                                           ms2[wcidx]['phi']['sd'],
                                           ms2[wcidx]['fn_kwargs']['n_chan_in'])
+            coefs -= np.abs(np.min(coefs, axis=1, keepdims=True))
+            coefs /= np.abs(np.sum(coefs, axis=1, keepdims=True))
             ax.set_prop_cycle(color=colors)
             plt.plot(coefs.T)
             plt.xlabel('in')

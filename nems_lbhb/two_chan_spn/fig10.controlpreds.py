@@ -26,7 +26,7 @@ from nems.utils import find_module
 
 
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
-save_fig = False
+save_fig = True
 if save_fig:
     plt.close('all')
 
@@ -87,18 +87,20 @@ beta1_test = df_r[n1].copy()
 beta2_test = df_r[n2].copy()
 
 df_r[df_r==0] = np.nan
+df[df==0] = np.nan
 
 betalogsig_test = df_r[nlogsig]
 se1 = df_e[n1]
 se2 = df_e[n2]
 
-# test for signficant prediction at all
+# test for significant prediction at all
 goodcells = ((beta2_test > se2*3) | (beta1_test > se1*3))
 
 fh, ax = plt.subplots(2, 2, figsize=(9, 9))
 
 offset = 0.5
 m = np.array(np.nanmean(df.loc[goodcells], axis=0))
+
 ax[0, 0].bar(np.arange(modelcount), m-offset, color='black', bottom=offset)
 ax[0, 0].plot(np.array([-1, modelcount]), np.array([offset, offset]), 'k--')
 ax[0, 0].set_ylim((offset-0.05, 0.85))
@@ -132,7 +134,7 @@ modelgroups['STP'] = [m  for m in modelnames if 'stp' in m]
 lplt.model_comp_pareto(modelnames, batch, modelgroups=modelgroups,
                        goodcells=goodcells, ax=ax[0, 1])
 
-ax[0, 1].text(26,0.3, '\n'.join(modelnames), fontsize=5)
+ax[0, 1].text(26,0.55, '\n'.join(modelnames), fontsize=5)
 
 
 #fit/parameterization comparison
@@ -173,7 +175,7 @@ modelgroups['STP'] = [m  for m in modelnames_fitter if 'stp' in m]
 
 lplt.model_comp_pareto(modelnames_fitter, batch, modelgroups=modelgroups,
                        goodcells=goodcells, ax=ax[1,1])
-plt.text(25,0.3, '\n'.join(modelnames_fitter), fontsize=5)
+plt.text(25,0.55, '\n'.join(modelnames_fitter), fontsize=5)
 
 
 if save_fig:

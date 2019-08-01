@@ -577,7 +577,12 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
         return stim_cache_dir + dstr
 
     # otherwise use standard load stim from baphy format
-    if options['runclass'] is None:
+    if 'use_target' in options:
+        if options['use_target']:
+            RefObject = exptparams['TrialObject'][1]['TargetHandle'][1]
+        else:
+            RefObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    elif options['runclass'] is None:
         RefObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     elif 'runclass' in exptparams.keys():
         runclass = exptparams['runclass'].split("_")

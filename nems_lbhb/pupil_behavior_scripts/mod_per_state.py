@@ -51,6 +51,7 @@ psth.fs20-ld-st.fil-ref-psthfr.s_sdexp.S_jk.nf20-basic
 
 # beh only
 batch = 311  # A1 old (SVD) data -- on BF
+batch = 305  # IC PTD data (DS)
 state_list = ['st.beh0','st.beh']
 basemodel = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20-ld-"
@@ -533,6 +534,7 @@ def aud_vs_state_wrapper():
                                      state_list=state_list)
         ax2.set_ylim([0,.1])
         ax3.set_ylim([0,.1])
+        
 
 
 def beh_only_plot(batch=311):
