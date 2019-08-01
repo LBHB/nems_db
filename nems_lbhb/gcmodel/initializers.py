@@ -6,7 +6,8 @@ import numpy as np
 import nems.epoch
 import nems.modelspec as ms
 from nems.utils import find_module
-from nems.initializers import prefit_to_target, prefit_mod_subset, init_dexp
+from nems.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
+                               init_logsig, init_relsat)
 from nems.analysis.api import fit_basic
 import nems.fitters.api
 import nems.metrics.api as metrics
@@ -140,84 +141,11 @@ def init_dsig(rec, modelspec, nl_mode=2):
             ['dexp', 'd', 'double_exponential']:
         modelspec = _init_double_exponential(rec, modelspec, dsig_idx,
                                              nl_mode=nl_mode)
+    elif modelspec[dsig_idx]['fn_kwargs'].get('eq', '') in \
+            ['relsat', 'rs', 'saturated_rectifier']:
+        modelspec = init_relsat(rec, modelspec)
     else:
-        modelspec = _init_logistic_sigmoid(rec, modelspec, dsig_idx)
-
-    return modelspec
-
-
-def _init_logistic_sigmoid(rec, modelspec, dsig_idx):
-
-    if dsig_idx == len(modelspec):
-        fit_portion = modelspec.modules
-    else:
-        fit_portion = modelspec.modules[:dsig_idx]
-
-    # generate prediction from module preceeding dexp
-
-    # HACK to get phi for ctwc, ctfir, ctlvl which have not been prefit yet
-    for i, m in enumerate(fit_portion):
-        if not m.get('phi', None):
-            if [k in m['id'] for k in ['ctwc', 'ctfir', 'ctlvl']]:
-                old = m.get('prior', {})
-                m = priors.set_mean_phi([m])[0]
-                m['prior'] = old
-                fit_portion[i] = m
-            else:
-                log.warning("unexpected module missing phi during init step\n:"
-                            "%s, #%d", m['id'], i)
-
-    ms.fit_mode_on(fit_portion)
-    rec = ms.evaluate(rec, fit_portion)
-    ms.fit_mode_off(fit_portion)
-
-    pred = rec['pred'].as_continuous()
-    resp = rec['resp'].as_continuous()
-
-    mean_pred = np.nanmean(pred)
-    min_pred = np.nanmean(pred) - np.nanstd(pred)*3
-    max_pred = np.nanmean(pred) + np.nanstd(pred)*3
-    if min_pred < 0:
-        min_pred = 0
-        mean_pred = (min_pred+max_pred)/2
-
-    pred_range = max_pred - min_pred
-    min_resp = max(np.nanmean(resp)-np.nanstd(resp)*3, 0)  # must be >= 0
-    max_resp = np.nanmean(resp)+np.nanstd(resp)*3
-    resp_range = max_resp - min_resp
-
-    # Rather than setting a hard value for initial phi,
-    # set the prior distributions and let the fitter/analysis
-    # decide how to use it.
-    base0 = min_resp + 0.05*(resp_range)
-    amplitude0 = resp_range
-    shift0 = mean_pred
-    kappa0 = pred_range
-    log.info("Initial   base,amplitude,shift,kappa=({}, {}, {}, {})"
-             .format(base0, amplitude0, shift0, kappa0))
-
-    base = ('Exponential', {'beta': base0})
-    amplitude = ('Exponential', {'beta': amplitude0})
-    shift = ('Normal', {'mean': shift0, 'sd': pred_range**2})
-    kappa = ('Exponential', {'beta': kappa0})
-
-    modelspec[dsig_idx]['prior'].update({
-            'base': base, 'amplitude': amplitude, 'shift': shift,
-            'kappa': kappa,
-            'base_mod': base, 'amplitude_mod':amplitude, 'shift_mod':shift,
-            'kappa_mod': kappa
-            })
-
-    for kw in modelspec[dsig_idx]['fn_kwargs']:
-        if kw in ['base_mod', 'amplitude_mod', 'shift_mod', 'kappa_mod']:
-            modelspec[dsig_idx]['prior'].pop(kw)
-
-    modelspec[dsig_idx]['bounds'] = {
-            'base': (1e-15, None),
-            'amplitude': (1e-15, None),
-            'shift': (None, None),
-            'kappa': (1e-15, None),
-            }
+        modelspec = init_logsig(rec, modelspec)
 
     return modelspec
 
@@ -233,10 +161,10 @@ def _init_double_exponential(rec, modelspec, target_i, nl_mode=2):
     kappa = modelspec.phi[-1]['kappa']
     shift = modelspec.phi[-1]['shift']
 
-    amp_prior = ('Exponential', {'beta': amp})
+    amp_prior = ('Normal', {'mean': amp, 'sd': amp*2})
     base_prior = ('Exponential', {'beta': base})
-    kappa_prior = ('Exponential', {'beta': kappa})
-    shift_prior = ('Normal', {'mean': shift, 'sd': shift/2})
+    kappa_prior = ('Normal', {'mean': kappa, 'sd': kappa*2})
+    shift_prior = ('Normal', {'mean': shift, 'sd': shift*2})
 
     modelspec[target_i]['prior'].update({
             'amplitude': amp_prior, 'base': base_prior, 'kappa': kappa_prior,
@@ -251,6 +179,8 @@ def dsig_phi_to_prior(modelspec):
     Sets priors for dynamic_sigmoid equal to the current phi for the
     same module. Used for random-sample fits - all samples are initialized
     and pre-fit the same way, and then randomly sampled from the new priors.
+
+    Operates on modelspec IN-PLACE.
 
     Parameters
     ----------
@@ -269,13 +199,71 @@ def dsig_phi_to_prior(modelspec):
     a = phi['amplitude']
     k = phi['kappa']
     s = phi['shift']
+    b_m = 'base_mod' in phi
+    a_m = 'amplitude_mod' in phi
+    k_m = 'kappa_mod' in phi
+    s_m = 'shift_mod' in phi
 
-    modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
-    modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
-    modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s  # Do anything to scale sd?
-    modelspec[dsig_idx]['prior']['kappa'][1]['beta'] = k
+    amp_prior = ('Normal', {'mean': a, 'sd': np.abs(a*2)})
+    base_prior = ('Exponential', {'beta': b})
+    kappa_prior = ('Normal', {'mean': k, 'sd': np.abs(k*2)})
+    shift_prior = ('Normal', {'mean': s, 'sd': np.abs(s*2)})
 
-    return modelspec
+    priors = {'amplitude': amp_prior, 'base': base_prior,
+              'kappa': kappa_prior, 'shift': shift_prior}
+    if b_m:
+        priors['base_mod'] = base_prior
+    if a_m:
+        priors['amplitude_mod'] = amp_prior
+    if k_m:
+        priors['kappa_mod'] = kappa_prior
+    if s_m:
+        priors['shift_mod'] = shift_prior
+
+    modelspec[dsig_idx]['prior'] = priors
+
+#    try:
+#        # still set as tuple like ('Exponential', {'beta': [[0]]})
+#        modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
+#        if b_m:
+#            modelspec[dsig_idx]['prior']['base_mod'][1]['beta'] = b
+#    except TypeError:
+#        # has been converted to distribution object
+#        modelspec[dsig_idx]['prior']['base']._beta = b
+#        if b_m:
+#            modelspec[dsig_idx]['prior']['base_mod']._beta = b
+#    try:
+#        modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
+#        if a_m:
+#            modelspec[dsig_idx]['prior']['amplitude_mod'][1]['beta'] = a
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['amplitude']._beta = a
+#        if a_m:
+#            modelspec[dsig_idx]['prior']['amplitude_mod']._beta = a
+#    try:
+#        modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s
+#        modelspec[dsig_idx]['prior']['shift'][1]['sd'] = s*2
+#        if s_m:
+#            modelspec[dsig_idx]['prior']['shift_mod'][1]['mean'] = s
+#            modelspec[dsig_idx]['prior']['shift_mod'][1]['sd'] = s*2
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['shift']._mean = s
+#        modelspec[dsig_idx]['prior']['shift']._sd = s*2
+#        if s_m:
+#            modelspec[dsig_idx]['prior']['shift_mod']._mean = s
+#            modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
+#    try:
+#        modelspec[dsig_idx]['prior']['kappa'][1]['mean'] = k
+#        modelspec[dsig_idx]['prior']['kappa'][1]['sd'] = k*2
+#        if k_m:
+#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['mean'] = k
+#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['sd'] = k*2
+#    except TypeError:
+#        modelspec[dsig_idx]['prior']['kappa']._mean = k
+#        modelspec[dsig_idx]['prior']['kappa']._sd = k
+#        if k_m:
+#            modelspec[dsig_idx]['prior']['kappa_mod']._mean = k
+#            modelspec[dsig_idx]['prior']['kappa_mod']._sd = k
 
 
 def _prefit_contrast_modules(est, modelspec, analysis_function,

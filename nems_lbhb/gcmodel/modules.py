@@ -19,9 +19,10 @@ levelshift:      as normal levelshift, but shift is applied to the coefficients
 import logging
 
 import numpy as np
-import scipy.signal
+from scipy.signal import convolve2d
 
-from nems.modules.fir import per_channel, da_coefficients, _offset_coefficients
+from nems.modules.fir import (per_channel, da_coefficients, _offset_coefficients,
+                              fir_exp_coefficients)
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
@@ -263,12 +264,41 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
     return coeffs, wc_coeffs.T, fir_coeffs
 
 
-#def _contrast_kernel(x, coefficients):
-#
-#    idx1 = wc_coefficients.shape[1] - 1
-#    pad = fir_coefficients.shape[1] - 1
-#    c = scipy.signal.convolve2d(x, kernel, mode='valid', boundary='fill',
-#                                fillvalue=np.nan)
-#    c = np.pad(c, ((0, 0), (pad, 0)), 'edge')
-#
-#    return c
+# TODO: May still want to cache the "contrast" signal somehow, even though
+#       it's not really pure contrast anymore?
+def contrast(rec, tau, a, b, s, mean, sd, i='stim', o='ctpred', c='contrast',
+             offsets=0.0, n_channels=18, n_coefs=15, compute_contrast=False):
+
+    if compute_contrast:
+        wc_coeffs = gaussian_coefficients(mean, sd, n_channels)
+        fir_coeffs = fir_exp_coefficients(tau, a, b, s, n_coefs=15)
+        if not np.all(offsets == 0):
+            fs = rec[i].fs
+            fir_coeffs = _offset_coefficients(fir_coeffs, offsets, fs,
+                                              pad_bins=True)
+        wc_coeffs = np.abs(wc_coeffs)
+        fir_coeffs = np.abs(fir_coeffs)
+
+        def fn(x):
+            weighted = wc_coeffs.T * x
+            weighted[np.isnan(weighted)] = 0
+            width = wc_coeffs.shape[0]
+            history = fir_coeffs.shape[-1]
+            zero_pad = np.zeros([width, history-1])
+            filt = np.concatenate((zero_pad, fir_coeffs), axis=1)
+            filt /= np.sum(fir_coeffs)
+
+            mn = convolve2d(weighted, filt, mode='same', fillvalue=0)
+            var = convolve2d(weighted ** 2, filt, mode='same', fillvalue=0) - mn**2
+            ct = np.sqrt(var) / (mn*.99 + np.nanmax(mn)*0.01)
+            ctpred = np.sum(ct, axis=0)
+            ctpred = np.expand_dims(ctpred, axis=0)
+
+            return ctpred
+
+    else:
+        # pass through zeros until ready to fit GC portion of the model
+        fn = lambda x: np.zeros((1, x.shape[-1]))
+
+    return [rec[i].transform(fn, o)]
+
