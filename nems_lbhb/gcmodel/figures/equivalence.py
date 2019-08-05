@@ -18,7 +18,8 @@ plt.rcParams.update(params)  # loaded from definitions
 
 def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                         LN_filter=False, manual_cellids=None,
-                        plot_stat='r_ceiling', enable_hover=False):
+                        plot_stat='r_ceiling', enable_hover=False,
+                        add_combined=False):
     '''
     model1: GC
     model2: STP
@@ -43,15 +44,20 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     gc_test = plot_df[gc][cellids]
     stp_test = plot_df[stp][cellids]
     ln_test = plot_df[LN][cellids]
+    combined_test = plot_df[combined][cellids]
 
     gc_vs_ln = gc_test.values - ln_test.values
     stp_vs_ln = stp_test.values - ln_test.values
+    combined_vs_ln = combined_test.values - ln_test.values
     gc_vs_ln = gc_vs_ln.astype('float32')
     stp_vs_ln = stp_vs_ln.astype('float32')
+    combined_vs_ln = combined_vs_ln.astype('float32')
 
-    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln)
+    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln) & np.isfinite(combined_vs_ln)
     gc_vs_ln = gc_vs_ln[ff]
     stp_vs_ln = stp_vs_ln[ff]
+    combined_vs_ln = combined_vs_ln[ff]
+
     #r = np.corrcoef(gc_vs_ln, stp_vs_ln)[0, 1]
     r2, p = st.pearsonr(gc_vs_ln, stp_vs_ln)
     # TODO: compute p manually? the scipy documentation isn't
@@ -71,7 +77,7 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     ax = plt.gca()
     ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
     ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
-    scatter = ax.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
+    ax.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
     ax.set_xlabel("GC - LN model")
     ax.set_ylabel("STP - LN model")
     ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
@@ -84,6 +90,30 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                 "add",
                 lambda sel: sel.annotation.set_text(cellids[sel.target.index])
                 )
+
+    if add_combined:
+        fig2 = plt.figure(figsize=figsize)
+        ax = plt.gca()
+        ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
+        ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
+        ax.scatter(combined_vs_ln, stp_vs_ln, c=wsu_crimson, s=20,
+                    alpha=0.3, label='combined vs stp')
+        ax.scatter(gc_vs_ln, combined_vs_ln, c='goldenrod', s=20,
+             alpha=0.3, label='gc vs combined')
+        ax.legend()
+        ax.set_xlabel("GC - LN model")
+        ax.set_ylabel("STP - LN model")
+        ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
+                  % (r2, p, n))
+        ax.set_ylim(ymin=(-1)*abs_max, ymax=abs_max)
+        ax.set_xlim(xmin=(-1)*abs_max, xmax=abs_max)
+        adjustFigAspect(fig, aspect=1)
+        if enable_hover:
+            mplcursors.cursor(ax, hover=True).connect(
+                    "add",
+                    lambda sel: sel.annotation.set_text(cellids[sel.target.index])
+                    )
+
 
     return fig
 

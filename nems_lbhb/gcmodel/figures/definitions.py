@@ -32,10 +32,11 @@ dash_spacing = (10,20)
 # MOST CURRENT
 gc_PF3_o1 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
 gc_PF3_o1_ks = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d.k.s_gc2.PF'
-gc_stp_PF3_o1 = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
-gc_stp_PF3_o1_ks = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-ctk.off1.f-dsig.d.k.s_gc2.PF'
+gc_stp_PF3_o1 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
+gc_stp_PF3_o1_ks = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-ctk.off1.f-dsig.d.k.s_gc2.PF'
 stp_dexp3 = 'ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic'
 ln_dexp3 = 'ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic'
+strf3 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1_init-basic'
 
 gc_ms30 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
 gc_ms70 = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'

@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 import scipy.stats as st
@@ -489,8 +490,8 @@ def dynamic_sigmoid_range(cellid, batch, modelname, plot=True,
     thetas = list(lows.values())
     theta_mods = list(highs.values())
     for t, t_m, k in zip(thetas, theta_mods, list(lows.keys())):
-        lows[k] = t + (t - t_m)*ctmin_val
-        highs[k] = t + (t - t_m)*ctmax_val
+        lows[k] = t + (t_m - t)*ctmin_val
+        highs[k] = t + (t_m - t)*ctmax_val
 
     low_out = _double_exponential(pred_before_dsig, **lows).flatten()
     high_out = _double_exponential(pred_before_dsig, **highs).flatten()
@@ -540,7 +541,7 @@ def dynamic_sigmoid_distribution(cellid, batch, modelname, sample_every=10,
         try:
             ts = {}
             for t, t_m, k in zip(thetas, theta_mods, list(lows.keys())):
-                ts[k] = t + (t - t_m)*ctpred[i*sample_every]
+                ts[k] = t + (t_m - t)*ctpred[i*sample_every]
             y = _double_exponential(pred_before_dsig, **ts)
             plt.scatter(pred_before_dsig, y, color='black', alpha=alpha,
                        s=0.01)
@@ -551,8 +552,8 @@ def dynamic_sigmoid_distribution(cellid, batch, modelname, sample_every=10,
     t_max = {}
     t_min = {}
     for t, t_m, k in zip(thetas, theta_mods, list(lows.keys())):
-        t_max[k] = t + (t - t_m)*np.nanmax(ctpred)
-        t_min[k] = t + (t - t_m)*np.nanmin(ctpred)
+        t_max[k] = t + (t_m - t)*np.nanmax(ctpred)
+        t_min[k] = t + (t_m - t)*np.nanmin(ctpred)
     max_out = _double_exponential(pred_before_dsig, **t_max)
     min_out = _double_exponential(pred_before_dsig, **t_min)
     plt.scatter(pred_before_dsig, max_out, color='red', s=0.1)
@@ -581,86 +582,43 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
     plt.hist(ratios, bins=bins)
 
 
-def dynamic_sigmoid_pred_matched(cellid, batch, modelname, per_stim=False,
-                                 segment_length=500, test_limit=None,
-                                 nl_fn=_double_exponential):
+def dynamic_sigmoid_pred_matched(cellid, batch, modelname):
     xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
     modelspec = ctx['modelspec']
     modelspec.recording = ctx['val']
     val = ctx['val'].apply_mask()
     ctpred = val['ctpred'].as_continuous().flatten()
+    # HACK
+    # this really shouldn't happen.. but for some reason some  of the
+    # batch 263 cells are getting nans, so temporary fix.
+    ctpred[np.isnan(ctpred)] = 0
+    pred_after_dsig = val['pred'].as_continuous().flatten()
     val_before_dsig = ms.evaluate(val, modelspec, stop=-1)
     pred_before_dsig = val_before_dsig['pred'].as_continuous().flatten()
-    lows = {k: v for k, v in modelspec[-1]['phi'].items()
-            if '_mod' not in k}
-    highs = {k[:-4]: v for k, v in modelspec[-1]['phi'].items()
-             if '_mod' in k}
-    for k in lows:
-        if k not in highs:
-            highs[k] = lows[k]
-    # re-sort keys to make sure they're in the same order
-    lows = {k: lows[k] for k in sorted(lows)}
-    highs = {k: highs[k] for k in sorted(highs)}
-    thetas = list(lows.values())
-    theta_mods = list(highs.values())
-    keys = list(lows.keys())
 
-    if not per_stim:
-        median_ct = np.median(ctpred)
+    fig = plt.figure(figsize=figsize)
+    plt.scatter(pred_before_dsig, pred_after_dsig, c=ctpred, s=2,
+                alpha=0.75, cmap=plt.get_cmap('plasma'))
+    ax = plt.gca()
+    plt.colorbar(ax=ax)
+    plt.title(cellid)
+    plt.xlabel('pred in')
+    plt.ylabel('pred out')
 
-        plt.figure(figsize=figsize)
-        for p, ct in zip(pred_before_dsig, ctpred):
-            kwargs = {}
-            for t, t_m, k in zip(thetas, theta_mods, keys):
-                kwargs[k] = t + (t - t_m)*ct
-                kwargs[k] = t + (t - t_m)*ct
+    return fig
 
-            out = nl_fn(p, **kwargs).flatten()
-            if ct >= median_ct:
-                plt.scatter(p, out, color='red', s=2, alpha=0.5)
-            else:
-                plt.scatter(p, out, color='blue', s=2, alpha=0.5)
 
-    else:
-        start = 0
-        end = segment_length
-        count = int(pred_before_dsig.size/segment_length)
-        # figure out a square layout for subplots
-        root = 1
-        while root**2 < count:
-            root += 1
-        fig, axs = plt.subplots(nrows=root, ncols=root, figsize=figsize,
-                                squeeze=0, sharex=True, sharey=True)
-
-        for i, ax in enumerate(axs.reshape(-1)):
-            this_ct = ctpred[start:end]
-            this_pred = pred_before_dsig[start:end]
-            # *1.25 is arbitrary bump to counteract 0-padding during silence
-            median_ct = np.median(this_ct)*1.25
-            for p, ct in zip(this_pred, this_ct):
-                kwargs = {}
-                for t, t_m, k in zip(thetas, theta_mods, keys):
-                    kwargs[k] = t + (t - t_m)*ct
-                    kwargs[k] = t + (t - t_m)*ct
-
-                out = nl_fn(p, **kwargs).flatten()
-                if ct >= median_ct:
-                    ax.scatter(p, out, color='red', s=2, alpha=0.5)
-                else:
-                    ax.scatter(p, out, color='blue', s=2, alpha=0.5)
-            start += segment_length
-            end += segment_length
-
-            if i % root == 0:
-                # leftmost column, keep y axis
-                pass
-            else:
-                ax.get_yaxis().set_visible(False)
-            if (count - i + 1) < root:
-                # bottom row, keep x axis
-                pass
-            else:
-                ax.get_xaxis().set_visible(False)
+def save_pred_matched_batch(batch, modelname, save_path, test_limit=None):
+    cells = nd.get_batch_cells(batch, as_list=True)
+    for cellid in cells[:test_limit]:
+        try:
+            fig = dynamic_sigmoid_pred_matched(cellid, batch, modelname)
+            full_path = os.path.join(save_path, str(batch), cellid)
+            fig.savefig(full_path, format='pdf')
+            plt.close(fig)
+        except:
+            # model probably not fit for that cell
+            continue
 
 
 def mean_prior_used(batch, modelname):
@@ -687,17 +645,41 @@ def mean_prior_used(batch, modelname):
         print('no results found')
 
 
-def random_condition_convergence(cellid, batch, modelname):
+def random_condition_convergence(cellid, batch, modelname,
+                                 separate_figures=True):
     xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
     meta = ctx['modelspec'].meta
     rcs = meta['random_conditions']
-    plt.figure(figsize=figsize)
+    best_idx = meta['best_random_idx']
     keys = list(rcs[0][0].keys())
-    colors = [np.random.rand(3,) for k in keys]
-    for initial, final in rcs:
-        starts = list(initial.values())
-        ends = list(final.values())
-        for i, k in enumerate(keys):
-            plt.plot([0, 1], [np.asscalar(starts[i]), np.asscalar(ends[i])],
-                     c=colors[i])
-    plt.legend(keys)
+
+    if not separate_figures:
+        plt.figure(figsize=figsize)
+        colors = [np.random.rand(3,) for k in keys]
+        for initial, final in rcs:
+            starts = list(initial.values())
+            ends = list(final.values())
+            for i, k in enumerate(keys):
+                plt.plot([0, 1], [np.asscalar(starts[i]), np.asscalar(ends[i])],
+                         c=colors[i])
+        plt.legend(keys)
+
+    else:
+        for k in keys:
+            plt.figure(figsize=figsize)
+            for i, (initial, final) in enumerate(rcs):
+                start = initial[k]
+                end = final[k]
+                if i == 0:
+                    color = 'blue'
+                    label = 'mean'
+                elif i == best_idx:
+                    color = 'red'
+                    label = 'best'
+                else:
+                    color = 'black'
+                    label = None
+                plt.plot([0, 1], np.concatenate((start,end)), color=color,
+                         label=label)
+            plt.legend()
+            plt.title("%s, best_idx: %d" % (k, best_idx))

@@ -222,49 +222,6 @@ def dsig_phi_to_prior(modelspec):
 
     modelspec[dsig_idx]['prior'] = priors
 
-#    try:
-#        # still set as tuple like ('Exponential', {'beta': [[0]]})
-#        modelspec[dsig_idx]['prior']['base'][1]['beta'] = b
-#        if b_m:
-#            modelspec[dsig_idx]['prior']['base_mod'][1]['beta'] = b
-#    except TypeError:
-#        # has been converted to distribution object
-#        modelspec[dsig_idx]['prior']['base']._beta = b
-#        if b_m:
-#            modelspec[dsig_idx]['prior']['base_mod']._beta = b
-#    try:
-#        modelspec[dsig_idx]['prior']['amplitude'][1]['beta'] = a
-#        if a_m:
-#            modelspec[dsig_idx]['prior']['amplitude_mod'][1]['beta'] = a
-#    except TypeError:
-#        modelspec[dsig_idx]['prior']['amplitude']._beta = a
-#        if a_m:
-#            modelspec[dsig_idx]['prior']['amplitude_mod']._beta = a
-#    try:
-#        modelspec[dsig_idx]['prior']['shift'][1]['mean'] = s
-#        modelspec[dsig_idx]['prior']['shift'][1]['sd'] = s*2
-#        if s_m:
-#            modelspec[dsig_idx]['prior']['shift_mod'][1]['mean'] = s
-#            modelspec[dsig_idx]['prior']['shift_mod'][1]['sd'] = s*2
-#    except TypeError:
-#        modelspec[dsig_idx]['prior']['shift']._mean = s
-#        modelspec[dsig_idx]['prior']['shift']._sd = s*2
-#        if s_m:
-#            modelspec[dsig_idx]['prior']['shift_mod']._mean = s
-#            modelspec[dsig_idx]['prior']['shift_mod']._sd = s*2
-#    try:
-#        modelspec[dsig_idx]['prior']['kappa'][1]['mean'] = k
-#        modelspec[dsig_idx]['prior']['kappa'][1]['sd'] = k*2
-#        if k_m:
-#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['mean'] = k
-#            modelspec[dsig_idx]['prior']['kappa_mod'][1]['sd'] = k*2
-#    except TypeError:
-#        modelspec[dsig_idx]['prior']['kappa']._mean = k
-#        modelspec[dsig_idx]['prior']['kappa']._sd = k
-#        if k_m:
-#            modelspec[dsig_idx]['prior']['kappa_mod']._mean = k
-#            modelspec[dsig_idx]['prior']['kappa_mod']._sd = k
-
 
 def _prefit_contrast_modules(est, modelspec, analysis_function,
                              fitter, metric=None, fit_kwargs={}):
