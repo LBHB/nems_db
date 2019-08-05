@@ -28,8 +28,8 @@ def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
     fs = rec['stim'].fs
     epochs = rec.epochs
     stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
-    pre_silence = _silence_duration(epochs, 'PreStimSilence')
-    post_silence = _silence_duration(epochs, 'PostStimSilence')
+    pre_silence = silence_duration(epochs, 'PreStimSilence')
+    post_silence = silence_duration(epochs, 'PostStimSilence')
 
     results = {}
     for s in stim_epochs:
@@ -55,7 +55,7 @@ def scatter_soundstats(results):
     plt.xlabel('std')
 
 
-def _silence_duration(epochs, prepost):
+def silence_duration(epochs, prepost):
     start = epochs[epochs.name == prepost]['start']
     end = epochs[epochs.name == prepost]['end']
     duration = (end.values - start.values).flatten()[0]

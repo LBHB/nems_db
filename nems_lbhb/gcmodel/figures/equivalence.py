@@ -172,7 +172,8 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     #d_threshold = (np.sqrt(-0.5*np.log(alpha)))*np.sqrt((2*n_samps)/n_samps**2)
     n_cells = rs.shape[0]
     fig = plt.figure(figsize=figsize)
-    plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light])
+    plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light],
+             edgecolor='black', linewidth=1)
     plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--',
              linewidth=2, dashes=dash_spacing)
     plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),

@@ -15,7 +15,7 @@ from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
 from nems_lbhb.gcmodel.figures.examples import improved_cells_to_list
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
-from nems_lbhb.gcmodel.figures.soundstats import _silence_duration
+from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_db.params import fitted_params_per_batch
 import nems.modelspec as ms
 from nems.modules.nonlinearity import _double_exponential, _saturated_rectifier
@@ -561,16 +561,35 @@ def dynamic_sigmoid_distribution(cellid, batch, modelname, sample_every=10,
 
 
 def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
-                                save_path=None, load_path=None):
+                                save_path=None, load_path=None,
+                                use_quartiles=False):
 
     if load_path is None:
         cellids = nd.get_batch_cells(batch, as_list=True)
         ratios = []
-        for c in cellids[:test_limit]:
-            pred, low, high = dynamic_sigmoid_range(c, batch, modelname, plot=False)
-            low = low.flatten()
-            high = high.flatten()
-            ratio = np.trapz(low-high)/np.trapz(low+high)
+        for cellid in cellids[:test_limit]:
+            xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+            val = ctx['val'].apply_mask()
+            ctpred = val['ctpred'].as_continuous().flatten()
+            pred_after = val['pred'].as_continuous().flatten()
+            val_before = ms.evaluate(val, ctx['modelspec'], stop=-1)
+            pred_before = val_before['pred'].as_continuous().flatten()
+            median_ct = np.nanmedian(ctpred)
+            if use_quartiles:
+                low = np.percentile(ctpred, 25)
+                high = np.percentile(ctpred, 75)
+                low_mask = (ctpred >= low) & (ctpred < median_ct)
+                high_mask = ctpred >= high
+            else:
+                low_mask = ctpred < median_ct
+                high_mask = ctpred >= median_ct
+
+            indices = np.argsort(pred_before)
+            high_indices = indices[high_mask]
+            high = pred_after[high_indices]
+            low_indices = indices[low_mask]
+            low = pred_after[low_indices]
+            ratio = np.nanmean((low - high)/(np.abs(low) + np.abs(high)))
             ratios.append(ratio)
 
         ratios = np.array(ratios)
@@ -579,7 +598,15 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
     else:
         ratios = np.load(load_path)
 
-    plt.hist(ratios, bins=bins)
+    plt.figure(figsize=figsize)
+    plt.hist(ratios, bins=bins, color=[wsu_gray_light], edgecolor='black',
+             linewidth=1)
+    #plt.rc('text', usetex=True)
+    #plt.xlabel(r'\texit{\frac{low-high}{\left|high\right|+\left|low\right|}}')
+    plt.xlabel('(low - high)/(|low| + |high|)')
+    plt.ylabel('cell count')
+    plt.title("difference of low-contrast output and high-contrast output\n"
+              "positive means low-contrast has higher firing rate on average")
 
 
 def dynamic_sigmoid_pred_matched(cellid, batch, modelname):
@@ -599,11 +626,10 @@ def dynamic_sigmoid_pred_matched(cellid, batch, modelname):
     fig = plt.figure(figsize=figsize)
     plt.scatter(pred_before_dsig, pred_after_dsig, c=ctpred, s=2,
                 alpha=0.75, cmap=plt.get_cmap('plasma'))
-    ax = plt.gca()
-    plt.colorbar(ax=ax)
     plt.title(cellid)
     plt.xlabel('pred in')
     plt.ylabel('pred out')
+    plt.colorbar()
 
     return fig
 
