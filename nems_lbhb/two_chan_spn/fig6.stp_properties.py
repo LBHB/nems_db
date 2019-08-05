@@ -68,7 +68,11 @@ if 1:
     modelname0 = "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
     modelname = "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
 
-    # 3-channel DO
+    # 5-channel DO
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+
+    # 3-channel DO -- for STP vs. predxc analysis
     modelname0 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
     modelname = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
 
@@ -103,6 +107,7 @@ if modelname0 is not None:
                                                 meta=['r_test', 'r_fit', 'se_test', 'r_ceiling'],
                                                 stats_keys=[], multi='first')
 
+df_ceil = nd.batch_comp(batch, [modelname0, modelname], stat='r_ceiling')
 df_r = nd.batch_comp(batch, [modelname0, modelname], stat='r_test')
 df_e = nd.batch_comp(batch, [modelname0, modelname], stat='se_test')
 
@@ -186,6 +191,7 @@ se0_test_mtx = np.zeros(len(u))
 r_ceiling_mtx = np.zeros(len(u))
 r0_ceiling_mtx = np.zeros(len(u))
 str_mtx = np.zeros_like(u_mtx)
+str_mtx_avg = np.zeros(len(u))
 
 r_test_mtx_p = np.zeros(len(u))
 r0_test_mtx_p = np.zeros(len(u))
@@ -222,7 +228,7 @@ for cellid in u.index:
     u_mtx[i, :] = u[cellid][xidx]
     tau_mtx[i, :] = np.abs(tau[cellid][xidx])
     str_mtx[i, :] = nmet.stp_magnitude(tau_mtx[i, :], u_mtx[i, :], fs=100, A=1.5)[0]
-
+    str_mtx_avg[i] = np.mean(np.abs(nmet.stp_magnitude(np.abs(tau[cellid]), u[cellid], fs=100, A=1.5)[0]))
     #if fir0_index:
     fir0[cellid] = fir0[cellid] / np.std(fir0[cellid])
     t_fir0 = fir0[cellid]
@@ -249,6 +255,7 @@ good_pred = ((r_test_mtx > se_test_mtx*3) |
 mod_units = (r_test_mtx-se_test_mtx) > (r0_test_mtx+se0_test_mtx)
 
 show_units = mod_units & good_pred
+nshow_units = ~mod_units & good_pred
 
 u_mtx[u_mtx < u_bounds[0]] = u_bounds[0]
 u_mtx[u_mtx > u_bounds[1]] = u_bounds[1]
@@ -314,6 +321,8 @@ stateplots.beta_comp(r0_test_mtx[good_pred], r_test_mtx[good_pred],
                      n1='LN STRF', n2='RW3 STP STRF',
                      hist_range=[0.0, 1.0], ax=ax)
 
+
+"""
 ax = fh0.add_subplot(3,2,5)
 F0=np.concatenate(fir0,axis=0)
 plt.hist(F0.flatten())
@@ -321,6 +330,41 @@ plt.hist(F0.flatten())
 ax = fh0.add_subplot(3,2,6)
 F=np.concatenate(fir,axis=0)
 plt.hist(F.flatten())
+"""
+#plt.close('all'); fh0 = plt.figure(figsize=(6,8))
+
+rceil_diff = r_ceiling_mtx - r0_ceiling_mtx
+rt_diff = r_test_mtx - r0_test_mtx
+vgood_pred = (((r_test_mtx > se_test_mtx*3) |
+              (r0_test_mtx > se0_test_mtx*3)) &
+              (rceil_diff>-0.1))
+#vgood_pred = good_pred
+mod_units = (r_test_mtx-se_test_mtx) > (r0_test_mtx+se0_test_mtx)
+
+vshow_units = mod_units & vgood_pred
+nshow_units = ~mod_units & vgood_pred
+
+ax = fh0.add_subplot(3,2,5)
+a = np.mean(np.abs(str_mtx[:,1:2]),axis=1)
+b = rceil_diff
+cc,pp = ss.pearsonr(a[vgood_pred],b[vgood_pred])
+
+plt.plot(np.array([0-0.1, str_bounds[1]]), [0, 0], 'k--', lw=0.5)
+plt.plot(np.zeros(2), np.array([-0.1, 0.4]), 'k--', lw=0.5)
+plt.plot(a[nshow_units], b[nshow_units], '.', color=dotcolor_ns)
+plt.plot(a[vshow_units], b[vshow_units], '.', color=dotcolor)
+plt.title('E str v pred change: {:.3f} (p<{:.3})'.format(cc,pp))
+
+ax = fh0.add_subplot(3,2,6)
+a = np.mean(np.abs(str_mtx[:,0:2]),axis=1)
+b = rceil_diff
+cc,pp = ss.pearsonr(a[vgood_pred],b[vgood_pred])
+
+plt.plot(np.array([0-0.1, str_bounds[1]]), [0, 0], 'k--', lw=0.5)
+plt.plot(np.zeros(2), np.array([-0.1, 0.4]), 'k--', lw=0.5)
+plt.plot(a[nshow_units], b[nshow_units], '.', color=dotcolor_ns)
+plt.plot(a[vshow_units], b[vshow_units], '.', color=dotcolor)
+plt.title('E str v pred change: {:.3f} (p<{:.3})'.format(cc,pp))
 
 
 fh = plt.figure(figsize=(8, 5))

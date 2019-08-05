@@ -11,7 +11,7 @@ import nems.xform_helper as xhelp
 from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_batch_modelspecs
 import pandas as pd
 import numpy as np
-from scipy.stats import wilcoxon
+from scipy.stats import wilcoxon, ttest_ind
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
@@ -44,6 +44,8 @@ mod_key = 'id'
 multi = 'mean'
 meta = ['r_test', 'r_fit', 'se_test']
 stats_keys = ['mean', 'std', 'sem', 'max', 'min']
+
+rg = {}
 
 for batch, bs in zip(batches, batstring):
     modelspecs = get_batch_modelspecs(batch, modelname, multi=multi, limit=None)
@@ -103,7 +105,7 @@ for batch, bs in zip(batches, batstring):
 
     fig = plt.figure()
     ax=plt.subplot(2,2,1)
-    bound = 1.0
+    bound = 1.2
     beta_comp(b, f, n1='bg', n2='fg', hist_range=[-bound, bound],
               ax=ax, click_fun=_rdt_info, highlight=si, title=bs)
 
@@ -112,6 +114,8 @@ for batch, bs in zip(batches, batstring):
     gdiff = f-b
     stat, p = wilcoxon(f,b)
     md = np.mean(f-b)
+    rg[batch] = gdiff
+
     h0, x0 = np.histogram(gdiff[~si], bins=histbins)
     h, x = np.histogram(gdiff[si], bins=histbins)
     d=(x0[1]-x0[0])/2
@@ -151,3 +155,9 @@ for batch, bs in zip(batches, batstring):
     plt.xlabel('FG-BG gain')
 
     fig.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
+
+ttest_result = ttest_ind(rg[269], rg[273])
+
+print("Mean A1={:.3f} PEG={:.3f} p<{:.4f}".format(
+    np.mean(rg[269]), np.mean(rg[273]), ttest_result.pvalue))
+

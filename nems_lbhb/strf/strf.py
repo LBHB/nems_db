@@ -170,7 +170,7 @@ def tor_tuning(mfilename,cellid,plot=False):
         axs[0].hlines(ybf,0,xhigh,linestyle='dashed')
         axs[0].vlines(latbin,0,yhigh,linestyle='dashed')
         axs[0].vlines(durbin,0,yhigh,linestyle='dashed')
-        axs[0].set_title('%s - BF %d Hz' % (os.path.basename(mfilename),bf),fontweight='bold')
+        axs[0].set_title('%s - BF %d Hz' % (cellid,bf),fontweight='bold')
         axs[0].set_xlabel('SNR %.2f linxc %.2f' % (snr,linpred))
 
         #move to next subplot

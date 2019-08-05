@@ -165,7 +165,7 @@ def strf_input_gen(stacked,TorcObject,exptparams,fs):
     Params['T'] = T
 
     Ompos = [x for x in frqs if x >= 0]
-    Omnegzero = np.flip([x for x in frqs if x <= 0])
+    Omnegzero = np.flip([x for x in frqs if x <= 0], axis=0)
 
     Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)
 

@@ -76,7 +76,7 @@ def baphy_stim_cachefile_DEP(exptparams, parmfilepath=None, **options):
 
     code adapted from loadstimfrombaphy.m
     """
-
+    raise Warning('DEPRECATED FUNCTION??')
     if 'truncatetargets' not in options:
         options['truncatetargets'] = 1
     if 'pertrial' not in options:
@@ -198,10 +198,36 @@ def baphy_load_data(parmfilepath, **options):
 
     # figure out stimulus cachefile to load
     if 'stim' in options.keys() and options['stim']:
-        stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
-        print("Cached stim: {0}".format(stimfilepath))
-        # load stimulus spectrogram
-        stim, tags, stimparam = baphy_load_specgram(stimfilepath)
+        if exptparams['runclass']=='VOC_VOC':
+            stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+            stimfilepath2 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+            print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
+            # load stimulus spectrogram
+            stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
+            stim2, tags2, stimparam2 = baphy_load_specgram(stimfilepath2)
+            stim = np.concatenate((stim1,stim2), axis=2)
+            if exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR'] >= 100:
+                t2 = [t+'_0dB' for t in tags2]
+                tags = np.concatenate((tags1,t2))
+                eventmatch='Reference1'
+            else:
+                t1 = [t+'_0dB' for t in tags1]
+                tags = np.concatenate((t1,tags2))
+                eventmatch = 'Reference2'
+            #import pdb
+            #pdb.set_trace()
+            for i in range(len(exptevents)):
+                if eventmatch in exptevents.loc[i,'name']:
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('.wav','.wav_0dB')
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference1','Reference')
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference2','Reference')
+
+            stimparam = stimparam1
+        else:
+            stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
+            print("Cached stim: {0}".format(stimfilepath))
+            # load stimulus spectrogram
+            stim, tags, stimparam = baphy_load_specgram(stimfilepath)
 
         if options["stimfmt"]=='envelope' and \
             exptparams['TrialObject'][1]['ReferenceClass']=='SSA':
@@ -239,7 +265,11 @@ def baphy_load_data(parmfilepath, **options):
         else:
             stim_object = 'ReferenceHandle'
 
-        tags = exptparams['TrialObject'][1][stim_object][1]['Names']
+        if options['runclass']=='VOC' & exptparams['runclass']=='VOC_VOC':
+            # special kludge for clean + noisy VOC expts
+            raise Warning("VOC_VOC files not supported")
+        else:
+            tags = exptparams['TrialObject'][1][stim_object][1]['Names']
         tags, tagids = np.unique(tags, return_index=True)
         stimparam = []
 
@@ -439,6 +469,10 @@ def baphy_load_dataset(parmfilepath, **options):
                 'BEHAVIOR,PUMPON,Pump': 'HIT_TRIAL'}
     this_event_times = event_times.copy()
     any_behavior = False
+
+    #import pdb
+    #pdb.set_trace()
+
     for trialidx in range(1, TrialCount+1):
         # determine behavioral outcome, log event time to add epochs
         # spanning each trial
