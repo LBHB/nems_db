@@ -8,56 +8,29 @@ import numpy as np
 
 import nems.xform_helper as xhelp
 import nems.epoch as ep
-from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
-                                             get_dataframes)
+from nems_lbhb.gcmodel.figures.utils import improved_cells_to_list
 
 log = logging.getLogger(__name__)
 
 
-# TODO: the values in df_r don't match up to the values in ctx['modelspec'].meta
-#       what gives?
-def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,
-                           LN_filter=False):
+# TODO:    Deprecated below until they are fixed to use the new return format
+#          of improved_cells_to_list
 
-    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
 
-    gc_test = df_r[gc][cellids]
-    stp_test = df_r[stp][cellids]
-    ln_test = df_r[LN][cellids]
 
-    gc_vs_ln = gc_test.values - ln_test.values
-    stp_vs_ln = stp_test.values - ln_test.values
-    gc_vs_ln = gc_vs_ln.astype('float32')
-    stp_vs_ln = stp_vs_ln.astype('float32')
 
-    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln) & np.isfinite(ln_test.values)
-    gc_vs_ln = gc_vs_ln[ff]
-    stp_vs_ln = stp_vs_ln[ff]
-    ln_test = ln_test.values[ff]
 
-    ln_good = ln_test > 0.4
-    gc_pos = gc_vs_ln > -0.01
-    gc_imp = gc_vs_ln > 0.05
-    stp_pos = stp_vs_ln > -0.01
-    stp_imp = stp_vs_ln > 0.05
 
-    #both_pos = (gc_pos & stp_pos)
-    #either_imp = ((gc_imp | stp_imp) & both_pos & ln_good)
-    #one_imp = (np.logical_xor(gc_imp, stp_imp) & both_pos & ln_good)
 
-    gc_better = gc_imp & stp_pos & ln_good & ((gc_vs_ln - stp_vs_ln) > 0.05)
-    stp_better = stp_imp & gc_pos & ln_good & ((stp_vs_ln - gc_vs_ln) > 0.05)
-    both_better = gc_imp & stp_imp & ln_good
 
-    gc_cells = gc_test[gc_better].index.values.tolist()
-    stp_cells = gc_test[stp_better].index.values.tolist()
-    both_cells = gc_test[both_better].index.values.tolist()
 
-    return gc_cells, stp_cells, both_cells
+
+
+
+
+
+
+
 
 
 def save_improved_cells(gc_cells, stp_cells, both_cells, batch, gc, stp, LN,

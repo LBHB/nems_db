@@ -11,8 +11,9 @@ import nems.epoch as ep
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
-                                             adjustFigAspect)
-from nems_lbhb.gcmodel.figures.examples import improved_cells_to_list
+                                             adjustFigAspect,
+                                             improved_cells_to_list)
+from nems_lbhb.gcmodel.figures.respstats import _binned_xvar, _binned_yavg
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_lbhb.gcmodel.figures.soundstats import silence_duration
@@ -560,9 +561,9 @@ def dynamic_sigmoid_distribution(cellid, batch, modelname, sample_every=10,
     plt.scatter(pred_before_dsig, min_out, color='blue', s=0.1)
 
 
-def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
+def dynamic_sigmoid_differences(batch, modelname, hist_bins=60, test_limit=None,
                                 save_path=None, load_path=None,
-                                use_quartiles=False):
+                                use_quartiles=False, avg_bin_count=20):
 
     if load_path is None:
         cellids = nd.get_batch_cells(batch, as_list=True)
@@ -584,11 +585,12 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
                 low_mask = ctpred < median_ct
                 high_mask = ctpred >= median_ct
 
-            indices = np.argsort(pred_before)
-            high_indices = indices[high_mask]
-            high = pred_after[high_indices]
-            low_indices = indices[low_mask]
-            low = pred_after[low_indices]
+            # TODO: do some kind of binning here since the two vectors
+            # don't actually overlap in x axis
+            mean_before, bin_masks = _binned_xvar(pred_before, avg_bin_count)
+            low = _binned_yavg(pred_after, low_mask, bin_masks)
+            high = _binned_yavg(pred_after, high_mask, bin_masks)
+
             ratio = np.nanmean((low - high)/(np.abs(low) + np.abs(high)))
             ratios.append(ratio)
 
@@ -599,7 +601,7 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
         ratios = np.load(load_path)
 
     plt.figure(figsize=figsize)
-    plt.hist(ratios, bins=bins, color=[wsu_gray_light], edgecolor='black',
+    plt.hist(ratios, bins=hist_bins, color=[wsu_gray_light], edgecolor='black',
              linewidth=1)
     #plt.rc('text', usetex=True)
     #plt.xlabel(r'\texit{\frac{low-high}{\left|high\right|+\left|low\right|}}')
@@ -609,7 +611,7 @@ def dynamic_sigmoid_differences(batch, modelname, bins=60, test_limit=None,
               "positive means low-contrast has higher firing rate on average")
 
 
-def dynamic_sigmoid_pred_matched(cellid, batch, modelname):
+def dynamic_sigmoid_pred_matched(cellid, batch, modelname, include_phi=True):
     xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
     modelspec = ctx['modelspec']
     modelspec.recording = ctx['val']
@@ -623,15 +625,33 @@ def dynamic_sigmoid_pred_matched(cellid, batch, modelname):
     val_before_dsig = ms.evaluate(val, modelspec, stop=-1)
     pred_before_dsig = val_before_dsig['pred'].as_continuous().flatten()
 
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=(12, 7))
+    plasma = plt.get_cmap('plasma')
     plt.scatter(pred_before_dsig, pred_after_dsig, c=ctpred, s=2,
-                alpha=0.75, cmap=plt.get_cmap('plasma'))
+                alpha=0.75, cmap=plasma)
     plt.title(cellid)
     plt.xlabel('pred in')
     plt.ylabel('pred out')
-    plt.colorbar()
 
+    if include_phi:
+        dsig_phi = modelspec.phi[-1]
+        phi_string = '\n'.join(['%s:  %.4E' % (k, v) for k, v in dsig_phi.items()])
+        thetas = list(dsig_phi.keys())[0:-1:2]
+        mods = list(dsig_phi.keys())[1::2]
+        weights = {k: (dsig_phi[mods[i]] - dsig_phi[thetas[i]])
+                   for i, k in enumerate(thetas)}
+        weights_string = 'weights:\n' + '\n'.join(['%s:  %.4E' % (k, v)
+                                                   for k, v in weights.items()])
+        fig.text(0.775, 0.9, phi_string, va='top', ha='left')
+        fig.text(0.775, 0.1, weights_string, va='bottom', ha='left')
+        plt.subplots_adjust(right=0.775, left=0.075)
+
+    plt.colorbar()
     return fig
+
+# if going back to discrete colors for pred_matched sigmoid, can use this:
+#        plasma = plt.get_cmap('plasma')
+#        c1, c2, c3, c4 = [plasma(n) for n in [.1, .4, .7, .9]]
 
 
 def save_pred_matched_batch(batch, modelname, save_path, test_limit=None):
@@ -645,6 +665,47 @@ def save_pred_matched_batch(batch, modelname, save_path, test_limit=None):
         except:
             # model probably not fit for that cell
             continue
+
+
+def filtered_pred_matched_batch(batch, gc, stp, LN, combined, save_path,
+                                good_ln=0.4, test_limit=None, stat='r_ceiling'):
+
+    e, n, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           good_ln=good_ln)
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    if stat == 'r_ceiling':
+        df = df_c
+    else:
+        df = df_r
+
+    tags = ['either', 'neither', 'gc', 'stp', 'combined']
+    for cells, tag in zip([e, n, g, s, c], tags):
+        _sigmoid_sub_batch(cells[:test_limit], df, tag, stat, batch, gc, stp, LN,
+                           combined, save_path)
+
+
+def _sigmoid_sub_batch(cells, df, tag, stat, batch, gc, stp, LN, combined,
+                       save_path):
+    for cellid in cells:
+        try:
+            fig = dynamic_sigmoid_pred_matched(cellid, batch, gc)
+            gc_r = df[gc][cellid]
+            stp_r = df[stp][cellid]
+            LN_r = df[LN][cellid]
+            combined_r = df[combined][cellid]
+        except:
+            # model probably not fit for that cell
+            continue
+
+        full_path = os.path.join(save_path, str(batch), tag, cellid)
+        parent_directory = '/'.join(full_path.split('/')[:-1])
+        if not os.path.exists(parent_directory):
+            os.makedirs(parent_directory, mode=0o777)
+        fig.suptitle("model performances, %s:\n"
+                     "gc: %.4f  |stp: %.4f  |LN: %.4f  |comb.: %.4f"
+                     % (stat, gc_r, stp_r, LN_r, combined_r))
+        fig.savefig(full_path, format='pdf', dpi=fig.dpi)
+        plt.close(fig)
 
 
 def mean_prior_used(batch, modelname):

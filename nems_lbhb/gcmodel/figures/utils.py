@@ -5,6 +5,67 @@ from nems_db.params import fitted_params_per_batch
 import nems.db as nd
 
 
+def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,
+                           LN_filter=False, good_ln=0.4):
+
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
+
+    gc_test = df_r[gc][cellids]
+    stp_test = df_r[stp][cellids]
+    ln_test = df_r[LN][cellids]
+    combined_test = df_r[combined][cellids]
+
+    gc_vs_ln = gc_test.values - ln_test.values
+    stp_vs_ln = stp_test.values - ln_test.values
+    combined_vs_ln = combined_test.values - ln_test.values
+    gc_vs_ln = gc_vs_ln.astype('float32')
+    stp_vs_ln = stp_vs_ln.astype('float32')
+    combined_vs_ln = combined_vs_ln.astype('float32')
+
+    ff = (np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln)
+          & np.isfinite(ln_test.values) & np.isfinite(combined_test.values))
+    gc_vs_ln = gc_vs_ln[ff]
+    stp_vs_ln = stp_vs_ln[ff]
+    ln_test = ln_test.values[ff]
+    combined_test = combined_test.values[ff]
+
+    ln_err = df_e[LN][cellids]
+    gc_err = df_e[gc][cellids]
+    stp_err = df_e[stp][cellids]
+    combined_err = df_e[combined][cellids]
+
+    ln_good = ln_test > good_ln
+    gc_imp = gc_vs_ln > (ln_err + gc_err)
+    stp_imp = stp_vs_ln > (ln_err + stp_err)
+    combined_imp = combined_vs_ln > (ln_err + combined_err)
+
+    # none of the nonlinear models helps
+    neither_better = (ln_good & np.logical_not(gc_imp) & np.logical_not(stp_imp)
+                      & np.logical_not(combined_imp))
+    # exactly one model helps
+    gc_better = ln_good & gc_imp & np.logical_not(stp_imp)
+    stp_better = ln_good & stp_imp & np.logical_not(gc_imp)
+    combined_better = (ln_good & combined_imp & np.logical_not(gc_imp)
+                       & np.logical_not(stp_imp))
+    # more than one model helps
+    either_better = (ln_good & (gc_imp | stp_imp | combined_imp)
+                     & np.logical_not(gc_better)
+                     & np.logical_not(stp_better)
+                     & np.logical_not(combined_better))
+
+    either_cells = gc_test[either_better].index.values.tolist()
+    neither_cells = gc_test[neither_better].index.values.tolist()
+    gc_cells = gc_test[gc_better].index.values.tolist()
+    stp_cells = gc_test[stp_better].index.values.tolist()
+    combined_cells = gc_test[combined_better].index.values.tolist()
+
+    return either_cells, neither_cells, gc_cells, stp_cells, combined_cells
+
+
 # Copied from:
 # https://stackoverflow.com/questions/7965743/
 # how-can-i-set-the-aspect-ratio-in-matplotlib
