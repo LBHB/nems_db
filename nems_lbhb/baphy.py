@@ -265,7 +265,7 @@ def baphy_load_data(parmfilepath, **options):
         else:
             stim_object = 'ReferenceHandle'
 
-        if options['runclass']=='VOC' & exptparams['runclass']=='VOC_VOC':
+        if (options['runclass']=='VOC') & (exptparams['runclass']=='VOC_VOC'):
             # special kludge for clean + noisy VOC expts
             raise Warning("VOC_VOC files not supported")
         else:

@@ -35,8 +35,6 @@ basemodel = "-ref.e-psthfr.s_stategain.S.s"
 d = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 d.to_csv('d_sbg_309.csv')
 
-
-
 # fil only
 state_list = ['st.fil0','st.fil']
 basemodel = "-ref-psthfr.s_stategain.S"
@@ -445,6 +443,8 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     d = dataframe output by get_model_results_per_state_model()
     nb = number of bins
     """
+    if state_list is None:
+        state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 
     plt.figure(figsize=(4,6))
 
@@ -453,20 +453,39 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     dp = da.pivot(index='cellid',columns='state_sig',values=['r','r_se'])
 
     dr = dp['r'].copy()
-    dr['b_unique'] = dr[state_list[3]]**2 - dr[state_list[2]]**2
-    dr['p_unique'] = dr[state_list[3]]**2 - dr[state_list[1]]**2
-    dr['bp_common'] = dr[state_list[3]]**2 - dr[state_list[0]]**2 - dr['b_unique'] - dr['p_unique']
-    dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
-    dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
-    dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
-    dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
-         (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+    if len(state_list)==4:
+        dr['b_unique'] = dr[state_list[3]]**2 - dr[state_list[2]]**2
+        dr['p_unique'] = dr[state_list[3]]**2 - dr[state_list[1]]**2
+        dr['bp_common'] = dr[state_list[3]]**2 - dr[state_list[0]]**2 - dr['b_unique'] - dr['p_unique']
+        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
+        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
+        dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
-    #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-    dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
-    dm = dm.sort_values(['null'])
-    mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
+        dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
+             (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+
+        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
+        dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
+        dm = dm.sort_values(['null'])
+        mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
+
+    elif len(state_list)==2:
+        dr['bp_common'] = dr[state_list[1]]**2 - dr[state_list[0]]**2
+        dr['b_unique'] = dr['bp_common']*0
+        dr['p_unique'] = dr['bp_common']*0
+
+        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
+        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
+        dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
+
+        dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
+             (dp['r_se'][state_list[1]]+dp['r_se'][state_list[0]]))
+
+        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
+        dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
+        dm = dm.sort_values(['null'])
+        mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
 
     if nb > 0:
         stepsize = mfull.shape[0]/nb
@@ -476,7 +495,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
             #x1=int(np.floor((i+1)*stepsize))
             #mm[i,:]=np.mean(m[x0:x1,:],axis=0)
             x01=(mfull[:,0]>i/nb) & (mfull[:,0]<=(i+1)/nb)
-            mm[i,:]=np.nanmean(mfull[x01,:],axis=0)
+            if np.sum(x01):
+                mm[i,:]=np.nanmean(mfull[x01,:],axis=0)
+                
         print(np.round(mm,3))
 
         m = mm.copy()
@@ -517,18 +538,39 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     return ax1, ax2, ax3
 
 
-def aud_vs_state_wrapper():
+def aud_vs_state_wrapper(batches=None, pupil=True):
+    """
+    batches includes any of...
 
-    #batch = 307  # A1 SUA and MUA
-    #batch = 309  # IC SUA and MUA
+    active/passive only (pupil=True)
+      batch = 305  # IC SUA
+      batch = 313  # IC SUA and MUA
+      batch = 311  # A1 SUA and MUA onBF
 
-    # pup vs. active/passive
-    state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
-    basemodel = "-ref-psthfr.s_sdexp.S"
+    pupil + active/passive  (pupil=False)
+      batch = 307  # A1 SUA and MUA (pup)
+      batch = 309  # IC SUA and MUA (pup)
+
+"""
+    if batches is None:
+        # IC / A1 SUA and MUA (pup)
+        batches = [309, 307]
+
+    if pupil:
+        # pup vs. active/passive
+        state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
+        basemodel = "-ref-psthfr.s_sdexp.S"
+        loader = "psth.fs20.pup-ld-"
+    else:
+        # active/passive only
+        state_list = ['st.beh0','st.beh']
+        basemodel = "-ref-psthfr.s_stategain.S"
+        loader = "psth.fs20-ld-"
 
     #plt.close('all')
-    for bi, batch in enumerate([309,307]):
-        df = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
+    for bi, batch in enumerate(batches):
+        df = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                               basemodel=basemodel, loader=loader)
 
         ax1, ax2, ax3 = aud_vs_state(df, nb=5, title='batch {}'.format(batch),
                                      state_list=state_list)

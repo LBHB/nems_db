@@ -834,10 +834,14 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                 #       .format(c, u, st.shape[1], len(uniquetrials)))
 
                 unit_spike_events = np.array([])
-                for trialidx in uniquetrials:
+                for trialidx in range(1,TrialCount+1):
                     ff = (st[0, :] == trialidx)
-                    this_spike_events = (st[1, ff]
-                                         + Offset_spikefs[np.int(trialidx-1)])
+                    try:
+                        this_spike_events = (st[1, ff]
+                                             + Offset_spikefs[np.int(trialidx-1)])
+                    except:
+                        import pdb
+                        pdb.set_trace()
                     if len(comment) > 0:
                         if comment == 'PC-cluster sorted by mespca.m':
                             # remove last spike, which is stray
