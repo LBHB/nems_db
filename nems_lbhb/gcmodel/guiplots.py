@@ -1,6 +1,7 @@
 import copy
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import nems.modelspec as ms
 from nems.plots.heatmap import plot_heatmap
@@ -84,6 +85,15 @@ def contrast_kernel_heatmap2(rec, modelspec, ax=None, title=None,
     _strf_heatmap(strf, wc_coefs, fir_coefs, xlabel=xlabel, ylabel=ylabel,
                   ax=ax, title=title)
 
+    return ax
+
+
+def summed_contrast(rec, modelspec, ax=None, title='Summed Contrast', idx=0,
+                    channels=0, xlabel='Time (s)', ylabel='A.U.', **options):
+
+    ctpred = rec.apply_mask()['ctpred']
+    ax = timeseries_from_signals([ctpred], title=title, xlabel=xlabel,
+                                 ylabel=ylabel, ax=ax)
     return ax
 
 

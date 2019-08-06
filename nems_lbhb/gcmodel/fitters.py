@@ -217,7 +217,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             prefit_tolerance=10**-5.5, metric='nmse', fitter='scipy_minimize',
             cost_function=None, IsReload=False, post_fit=False, post_copy=True,
-            n_random=0, rand_seed=1234, **context):
+            n_random=0, rand_seed=1234, summed_contrast=False, **context):
     '''
     Xforms wrapper for fitting the locked STRF=CTSTRF version of the GC model.
 
@@ -406,7 +406,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         for k, v in frozen_priors.items():
             modelspec[dsig_idx]['prior'][k] = v
         modelspec[ctk_idx]['fn_kwargs']['compute_contrast'] = True
-        if modelspec[ctk_idx]['fn_kwargs']['offsets'] is not None:
+        if modelspec[ctk_idx]['fn_kwargs'].get('offsets', None) is not None:
             offsets = modelspec[ctk_idx]['fn_kwargs']['offsets']
             fir_channels = modelspec[fir_idx]['fn_kwargs']['coefficients'].shape[0]
             if type(offsets) is int:
@@ -498,8 +498,11 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
             else:
                 # Let ctkernel phi be fitted independent of wc and fir
                 log.info('Fitting all modules together, ctkernel separate ...\n')
-                modelspec[ctk_idx]['phi'].update(modelspec[wc_idx]['phi'])
-                modelspec[ctk_idx]['phi'].update(modelspec[fir_idx]['phi'])
+                if summed_contrast:
+                    pass
+                else:
+                    modelspec[ctk_idx]['phi'].update(modelspec[wc_idx]['phi'])
+                    modelspec[ctk_idx]['phi'].update(modelspec[fir_idx]['phi'])
                 modelspec = fit_basic(est, modelspec, fitter_fn, cost_function,
                                       metric=metric_fn, metaname='fit_gc',
                                       fit_kwargs=fit_kwargs)

@@ -217,6 +217,23 @@ def ctk2(kw):
     return template
 
 
+def ctk3(kw):
+    # default 20ms offset, will be converted to fittable parameter
+    # during latter portion of fit
+    offsets = np.array([[20]])
+    template = {
+            'fn': 'nems_lbhb.gcmodel.modules.summed_contrast_kernel',
+            'fn_kwargs': {'i': 'contrast', 'o': 'ctpred',
+                          'compute_contrast': False, 'offsets': offsets,
+                          'fixed': False},
+            'plot_fns': ['nems_lbhb.gcmodel.guiplots.summed_contrast'],
+            'phi': {},
+            'prior': {}
+            }
+
+    return template
+
+
 def dsig(kw):
     '''
     Note: these priors will typically be overwritten during initialization
