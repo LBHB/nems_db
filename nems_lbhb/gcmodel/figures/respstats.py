@@ -2,12 +2,15 @@ import os
 
 import numpy as np
 import scipy.stats as st
+from scipy import ndimage
+from scipy.optimize import curve_fit
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import nems.xform_helper as xhelp
 import nems.db as nd
 import nems.epoch as ep
+from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
 from nems_lbhb.gcmodel.figures.utils import (improved_cells_to_list,
                                              get_filtered_cellids,
                                              get_dataframes,
@@ -17,10 +20,6 @@ from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems.recording import load_recording
 from nems.preprocessing import average_away_epoch_occurrences
 
-# TODO: analyses for separating model fits by:
-#       max firing rate
-#       spont rate
-#       characteristic frequency
 
 def rate_by_batch(batch, cells=None, stat='max', fs=100):
     if cells is None:
@@ -77,16 +76,26 @@ def rate_by_batch(batch, cells=None, stat='max', fs=100):
 
 def rate_vs_performance(batch, gc, stp, LN, combined, se_filter=True,
                         LN_filter=False, plot_stat='r_ceiling',
-                        test_limit=None, normalize_rates=False, load_path=None,
+                        normalize_rates=False, load_path=None,
                         save_path=None, rate_stat='max', fs=100,
-                        relative_performance=False, include_combined=False):
+                        relative_performance=False, include_combined=False,
+                        only_improvements=False):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
                                                           LN, combined,
                                                           se_filter,
                                                           LN_filter)
 
-    cellids = cellids[:test_limit]
+    cellids = cellids
+    if only_improvements:
+        e, n, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+        gc_cells = list((set(cellids) & (set(e) | set(g))) - set(c) - set(s))
+        stp_cells = list((set(cellids) & (set(e) | set(s))) - set(c) - set(g))
+        n_gc = len(gc_cells)
+        n_stp = len(stp_cells)
+    else:
+        gc_cells = stp_cells = cellids
+        n_gc = n_stp = len(cellids)
 
     if plot_stat == 'r_ceiling':
         plot_df = df_c
@@ -94,36 +103,43 @@ def rate_vs_performance(batch, gc, stp, LN, combined, se_filter=True,
         plot_df = df_r
 
     if load_path is None:
-        rates = rate_by_batch(batch, cellids, stat=rate_stat, fs=fs)
-        rates = rates['rate'][cellids].values.astype('float32')
+        df = rate_by_batch(batch, cellids, stat=rate_stat, fs=fs)
+        rates = df['rate'][cellids].values.astype('float32')
+        gc_rates = df['rate'][gc_cells].values.astype('float32')
+        stp_rates = df['rate'][stp_cells].values.astype('float32')
         if save_path is not None:
-            np.save(save_path, rates)
+            df.to_pickle(save_path)
     else:
-        rates = np.load(load_path)
+        df = pd.read_pickle(load_path)
+        rates = df['rate'][cellids].values.astype('float32')
+        gc_rates = df['rate'][gc_cells].values.astype('float32')
+        stp_rates = df['rate'][stp_cells].values.astype('float32')
 
-    gc_test = plot_df[gc][cellids].values.astype('float32')
-    stp_test = plot_df[stp][cellids].values.astype('float32')
-    combined_test = plot_df[combined][cellids].values.astype('float32')
+    gc_test = plot_df[gc][gc_cells].values.astype('float32')
+    stp_test = plot_df[stp][stp_cells].values.astype('float32')
+    #combined_test = plot_df[combined][cellids].values.astype('float32')
     if normalize_rates:
-        rates /= rates.max()
+        gc_rates /= rates.max()
+        stp_rates /= rates.max()
     if relative_performance:
-        ln_test = plot_df[LN][cellids].values.astype('float32')
-        gc_test = gc_test - ln_test
-        stp_test = stp_test - ln_test
-        combined_test = combined_test - ln_test
+        gc_ln_test = plot_df[LN][gc_cells].values.astype('float32')
+        stp_ln_test = plot_df[LN][stp_cells].values.astype('float32')
+        gc_test = gc_test - gc_ln_test
+        stp_test = stp_test - stp_ln_test
+        #combined_test = combined_test - ln_test
 
-    r_gc, p_gc = st.pearsonr(rates, gc_test)
-    r_stp, p_stp = st.pearsonr(rates, stp_test)
+    r_gc, p_gc = st.pearsonr(gc_rates, gc_test)
+    r_stp, p_stp = st.pearsonr(stp_rates, stp_test)
 
     fig = plt.figure(figsize=figsize)
     ax = plt.gca()
-    ax.scatter(rates, gc_test, color='goldenrod', alpha=0.75, s=20,
+    ax.scatter(gc_rates, gc_test, color='goldenrod', alpha=0.75, s=20,
                label='GC')
-    ax.scatter(rates, stp_test, color=wsu_crimson, alpha=0.75, s=20,
+    ax.scatter(stp_rates, stp_test, color=wsu_crimson, alpha=0.75, s=20,
                label='STP')
-    if include_combined:
-        ax.scatter(rates, combined_test, color='purple', alpha=0.75, s=20,
-                   label='combined')
+#    if include_combined:
+#        ax.scatter(rates, combined_test, color='purple', alpha=0.75, s=20,
+#                   label='combined')
     ax.legend()
     adjustFigAspect(fig, aspect=1)
     plt.xlabel("%s rate\n"
@@ -132,12 +148,12 @@ def rate_vs_performance(batch, gc, stp, LN, combined, se_filter=True,
                "relative to LN?  %s" % (plot_stat, relative_performance))
 
     title = ("%s vs model performance\n"
-             "gc -- r:  %.4f, p:  %.4E\n"
-             "stp -- r:  %.4f, p:  %.4E"
-             % (rate_stat, r_gc, p_gc, r_stp, p_stp))
-    if include_combined:
-        r_combined, p_combined = st.pearsonr(rates, combined_test)
-        title += "\ncombined -- r:  %.4f, p:  %.4E" % (r_combined, p_combined)
+             "gc -- r:  %.4f, p:  %.4E, n:  %d\n"
+             "stp -- r:  %.4f, p:  %.4E, n:  %d"
+             % (rate_stat, r_gc, p_gc, n_gc, r_stp, p_stp, n_stp))
+#    if include_combined:
+#        r_combined, p_combined = st.pearsonr(rates, combined_test)
+#        title += "\ncombined -- r:  %.4f, p:  %.4E" % (r_combined, p_combined)
     plt.title(title)
 
 
@@ -333,3 +349,142 @@ def _strf_resp_sub_batch(cells, df, tag, stat, batch, gc, stp, LN,
                      % (stat, gc_r, stp_r, LN_r, combined_r))
         fig.savefig(full_path, format='pdf', dpi=fig.dpi)
         plt.close(fig)
+
+
+def cf_from_LN_strf(cellid, batch, modelname, f_low=0.2, f_high=20,
+                    nf=18, method='gaussian'):
+    # calculate characteristic frequency based on STRF from LN model
+    # assemble STRF from parameters, take absolute value,
+    # sum over time, then find center of mass along frequency
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname,
+                                         eval_model=False)
+    modelspec = ctx['modelspec']
+    wc_coefs = _get_wc_coefficients(modelspec, idx=0)
+    fir_coefs = _get_fir_coefficients(modelspec, idx=0)
+    strf = wc_coefs.T @ fir_coefs
+    abs_strf = np.abs(strf)
+    # extra dim just added back in for plotting convenience
+    summed_time = np.expand_dims(np.sum(abs_strf, axis=1), axis=-1)
+    khz_freqs = np.logspace(np.log(f_low), np.log(f_high), num=nf, base=np.e)
+
+    if method == 'com':
+        # use center of mass
+        com_bin, _ = ndimage.measurements.center_of_mass(summed_time)
+        cf = khz_freqs[int(round(com_bin))]
+        cf_bin = com_bin
+    else:
+        # use mean of gaussian fit
+        def fn(x, mu, sigma, a, s):
+            exponent = -0.5*((x-mu)/sigma)**2
+            y = a*(1/(sigma*np.sqrt(2*np.pi))) * np.exp(exponent) + s
+            return y
+        ydata = summed_time.flatten()
+        xdata = np.arange(ydata.size)
+        bounds = (0, np.array([nf-1, np.inf, np.inf, np.inf]))
+        (mu, sigma, a, s), _ = curve_fit(fn, xdata, ydata, bounds=bounds)
+        cf = khz_freqs[int(round(mu))]
+        cf_bin = mu
+
+    return cf, cf_bin
+
+
+def cf_batch(batch, modelname, save_path=None, load_path=None, f_low=0.2,
+             f_high=20, nf=18, method='gaussian', test_limit=None):
+    if load_path is None:
+        cells = nd.get_batch_cells(batch, as_list=True)
+        cfs = []
+        cf_bins = []
+        skipped = []
+        for cellid in cells[:test_limit]:
+            try:
+                cf, cf_bin = cf_from_LN_strf(cellid, batch, modelname, f_low,
+                                             f_high, nf, method)
+                cfs.append(cf)
+                cf_bins.append(cf_bin)
+            except:
+                # cell probably not fit for this model
+                skipped.append(cellid)
+                continue
+
+        cellid_index = [c for c in cells[:test_limit] if c not in skipped]
+        results = {'cellid': cellid_index, 'cf': cfs, 'cf_bin': cf_bins}
+        df = pd.DataFrame.from_dict(results)
+        df.set_index('cellid', inplace=True)
+        if save_path is not None:
+            df.to_pickle(save_path)
+    else:
+        df = pd.read_pickle(load_path)
+
+    return df
+
+
+def cf_distribution(batch, modelname, load_path=None, bins=60, cf_kwargs={},
+                    plot_bins=False):
+    if load_path is None:
+        df = cf_batch(batch, modelname, load_path=load_path, **cf_kwargs)
+    else:
+        df = pd.read_pickle(load_path)
+    plt.figure(figsize=figsize)
+    if plot_bins:
+        values = df['cf_bin'].values
+    else:
+        values = df['cf'].values
+    plt.hist(values, bins=bins, color=[wsu_gray_light],
+             edgecolor='black', linewidth=1)
+
+
+def cf_vs_model_performance(batch, gc, stp, LN, combined, cf_load_path=None,
+                            cf_kwargs={}, se_filter=True, LN_filter=False,
+                            plot_stat='r_ceiling', include_LN=False,
+                            include_combined=False, only_improvements=False):
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+                                                          LN, combined,
+                                                          se_filter,
+                                                          LN_filter)
+
+    cellids = cellids
+    if only_improvements:
+        e, n, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+        gc_cells = list((set(cellids) & (set(e) | set(g))) - set(c) - set(s))
+        stp_cells = list((set(cellids) & (set(e) | set(s))) - set(c) - set(g))
+        n_gc = len(gc_cells)
+        n_stp = len(stp_cells)
+    else:
+        gc_cells = stp_cells = cellids
+        n_gc = n_stp = len(cellids)
+
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
+    else:
+        plot_df = df_r
+
+    if cf_load_path is None:
+        df = cf_batch(batch, LN, load_path=cf_load_path, **cf_kwargs)
+    else:
+        df = pd.read_pickle(cf_load_path)
+
+    gc_cfs = df['cf'][gc_cells].values.astype('float32')
+    stp_cfs = df['cf'][stp_cells].values.astype('float32')
+    #ln_test = plot_df[LN][cellids].values.astype('float32')
+    gc_test = plot_df[gc][gc_cells].values.astype('float32')
+    stp_test = plot_df[stp][stp_cells].values.astype('float32')
+    #combined_test = plot_df[combined][cellids].values.astype('float32')
+
+    r_gc, p_gc = st.spearmanr(gc_cfs, gc_test)
+    r_stp, p_stp = st.spearmanr(stp_cfs, stp_test)
+
+    plt.figure(figsize=figsize)
+#    if include_LN:
+#        plt.scatter(cfs, ln_test, color='gray', alpha=0.5)
+    plt.scatter(gc_cfs, gc_test, color='goldenrod', alpha=0.5)
+    plt.scatter(stp_cfs, stp_test, color=wsu_crimson, alpha=0.5)
+#    if include_combined:
+#        plt.scatter(cfs, combined_test, color='purple', alpha=0.5)
+    plt.xscale('log', basex=np.e)
+
+    title = ("CF vs model performance\n"
+             "gc -- rho:  %.4f, p:  %.4E, n:  %d\n"
+             "stp -- rho:  %.4f, p:  %.4E, n:  %d"
+             % (r_gc, p_gc, n_gc, r_stp, p_stp, n_stp))
+    plt.title(title)
