@@ -210,7 +210,6 @@ def reformat_RDT_recording(rec):
     m = ~np.isfinite(x_mapped)
     x_mapped[m] = 0
     x_mapped = x_mapped.astype('i')
-
     rec['target_id_map'] = target_id._modified_copy(x_mapped)
     rec['target_id_map'].meta = {'target_map': target_map}
     rec.meta = {'n_targets': len(targets)}
