@@ -302,3 +302,23 @@ def contrast(rec, tau, a, b, s, mean, sd, i='stim', o='ctpred', c='contrast',
 
     return [rec[i].transform(fn, o)]
 
+
+def summed_contrast_kernel(rec, offsets, i='contrast', o='ctpred',
+                           compute_contrast=False, **kwargs):
+    # **kwargs is just to catch some unused fn_kargs that normally get passed
+    # to contrast_kernel.
+    fs = rec[i].fs
+    if compute_contrast:
+        def fn(x):
+            summed = np.expand_dims(np.sum(x, axis=0), axis=0)
+            if not np.all(offsets == 0):
+                summed = _offset_coefficients(summed, offsets=offsets, fs=fs,
+                                              pad_bins=False)
+
+            return summed
+
+    else:
+        # pass through zeros until ready to fit GC portion of the model
+        fn = lambda x: np.zeros((1, x.shape[-1]))
+
+    return [rec[i].transform(fn, o)]

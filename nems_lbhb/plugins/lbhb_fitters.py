@@ -79,6 +79,10 @@ def gc2(fitkey):
         elif op.startswith('rp'):
             rc = int(op[1:])
             xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+        elif op == 'SC':
+            kwargs['summed_contrast'] = True
+            kwargs['post_copy'] = False
+            kwargs['post_fit'] = True
 
     xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc2', kwargs])
     return xfspec
