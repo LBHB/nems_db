@@ -10,6 +10,7 @@ from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_
 import pandas as pd
 import numpy as np
 from nems_lbhb.stateplots import beta_comp
+import nems.plots.api as nplt
 
 font_size=8
 params = {'legend.fontsize': font_size-2,
@@ -48,11 +49,11 @@ batches = [269, 273]
 batstring = ['A1','PEG']
 
 fig = plt.figure(figsize=(10,5))
-ax_mean = plt.subplot(1,3,1)
 slegend = []
 
 save_dpred_S = {}
 save_dpred_RS = {}
+meanpred = np.zeros((2, 3))
 for b, batch in enumerate(batches):
     d=nd.batch_comp(batch=batch, modelnames=modelnames, stat='r_test')
 
@@ -76,7 +77,8 @@ for b, batch in enumerate(batches):
     save_dpred_S[batch] = r.loc[r['sig'],'r_test'] - r.loc[r['sig'], 'r_test_S']
     save_dpred_RS[batch] = r.loc[r['sig'],'r_test_S'] - r.loc[r['sig'], 'r_test_RS']
 
-    ax_mean.plot(r.loc[r['sig'],d.columns].mean().values, label=batstring[b])
+    meanpred[b,:] = r.loc[r['sig'],d.columns].mean().values
+    #ax_mean.plot(r.loc[r['sig'],d.columns].mean().values, label=batstring[b])
     #ax_mean.plot(r.loc[r['sig'],d.columns].median().values,ls='--')
 
     slegend.append('{} (n={}/{})'.format(batstring[b], r['sig'].sum(), len(r['sig'])))
@@ -85,7 +87,7 @@ for b, batch in enumerate(batches):
 
     histbins = np.linspace(-0.1, 0.1, 21)
 
-    ax = plt.subplot(2,3,2+3*b)
+    ax = plt.subplot(2,4,3+4*b)
     h0, x0 = np.histogram(r.loc[r['nsS'],'r_test'] - r.loc[r['nsS'], 'r_test_S'],
                           bins=histbins)
     h, x = np.histogram(r.loc[r['sigdiffS'], 'r_test'] - r.loc[r['sigdiffS'], 'r_test_S'],
@@ -109,7 +111,7 @@ for b, batch in enumerate(batches):
     if b == 0:
         plt.title('{}'.format(keywordstring))
 
-    ax = plt.subplot(2,3,3+3*b)
+    ax = plt.subplot(2,4,4+4*b)
     h0, x0 = np.histogram(r.loc[r['nsR'],'r_test_S'] - r.loc[r['nsR'], 'r_test_RS'],
                           bins=histbins)
     h, x = np.histogram(r.loc[r['sigdiffR'],'r_test_S'] - r.loc[r['sigdiffR'], 'r_test_RS'],
@@ -129,10 +131,18 @@ for b, batch in enumerate(batches):
     plt.text(tx,ty, t, va='top')
     plt.xlabel('Rep/no-rep improvement')
 
-ax_mean.legend()
-ax_mean.set_xticks(np.arange(0,len(sxticks)))
-ax_mean.set_xticklabels(sxticks)
+
+ax_mean = plt.subplot(1,2,1)
+ax_mean.bar(np.arange(2)-0.28, meanpred[:,0]-0.2, bottom=0.2,width=0.2)
+ax_mean.bar(np.arange(2), meanpred[:,1]-0.2, bottom=0.2,width=0.2)
+ax_mean.bar(np.arange(2)+0.28, meanpred[:,2]-0.2, bottom=0.2,width=0.2)
+
+ax_mean.legend(['RS','S','full'])
+ax_mean.set_xticks(np.arange(0,2))
+ax_mean.set_xticklabels(['A1','PEG'])
 ax_mean.set_ylabel('mean pred corr.')
+nplt.ax_remove_box(ax_mean)
+
 #plt.suptitle('{}'.format(keywordstring))
 plt.tight_layout()
 

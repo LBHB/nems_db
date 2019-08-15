@@ -46,10 +46,13 @@ meta = ['r_test', 'r_fit', 'se_test']
 stats_keys = ['mean', 'std', 'sem', 'max', 'min']
 
 rg = {}
+rgdf = {}
 
 for batch, bs in zip(batches, batstring):
     modelspecs = get_batch_modelspecs(batch, modelname, multi=multi, limit=None)
     modelspecs_shf = get_batch_modelspecs(batch, modelnames[1], multi=multi, limit=None)
+    modelspecs_SR = get_batch_modelspecs(batch, modelnames[0], multi=multi, limit=None)
+    
     stats = ms.summary_stats(modelspecs, mod_key=mod_key,
                              meta_include=meta, stats_keys=stats_keys)
     index = list(stats.keys())
@@ -59,6 +62,8 @@ for batch, bs in zip(batches, batstring):
     fields = ['bg_gain', 'fg_gain']
     b = np.array([])
     f = np.array([])
+    tar_id = np.array([])
+    cellids = []
     b_S = np.array([])
     f_S = np.array([])
     c = np.array([])
@@ -67,19 +72,30 @@ for batch, bs in zip(batches, batstring):
     se_test = np.array([])
     r_test_S = np.array([])
     se_test_S = np.array([])
+    r_test_SR = np.array([])
+
     for i, m in enumerate(modelspecs):
         cellid=m.meta['cellid']
         ishf=0
+        iSR = 0
         while modelspecs_shf[ishf].meta['cellid'] != cellid:
-            ishf+=1
-        mshf=modelspecs_shf[ishf]
+            ishf += 1
+        mshf = modelspecs_shf[ishf]
+        while modelspecs_shf[iSR].meta['cellid'] != cellid:
+            iSR += 1
+        mSR = modelspecs_SR[iSR]
 
         r=m.meta['r_test'][0]
         se=m.meta['se_test'][0]
         if r > se*2:
             b = np.append(b, m.phi[midx]['bg_gain'][1:])
             f = np.append(f, m.phi[midx]['fg_gain'][1:])
+            tar_id = np.append(tar_id, np.arange(1,len(m.phi[midx]['fg_gain'][1:])+1))
+            for i in range(len(m.phi[midx]['fg_gain'][1:])):
+                cellids.append(cellid)
+            
             s = np.ones(m.phi[midx]['fg_gain'][1:].shape)
+
             c = np.append(c, s * i)
             cid.extend([m['meta']['cellid']]*len(s))
             r_test = np.append(r_test, s * r)
@@ -90,6 +106,8 @@ for batch, bs in zip(batches, batstring):
             se_test_S = np.append(se_test_S, s * mshf.meta['se_test'][0])
             b_S = np.append(b_S, mshf.phi[midx]['bg_gain'][1:])
             f_S = np.append(f_S, mshf.phi[midx]['fg_gain'][1:])
+
+            r_test_SR = np.append(r_test_SR, s * mSR.meta['r_test'][0])
 
     si = (r_test-r_test_S) > (se_test + se_test_S)
 
@@ -116,6 +134,10 @@ for batch, bs in zip(batches, batstring):
     md = np.mean(f-b)
     rg[batch] = gdiff
 
+    list_of_tuples = list(zip(cellids, tar_id, f, b, gdiff, r_test, r_test_S, r_test_SR)) 
+    rgdf[batch] = pd.DataFrame(list_of_tuples, columns=['cellid','tar_id','fg','bg',
+                                                        'gdiff','r','r_S','r_SR'])
+    
     h0, x0 = np.histogram(gdiff[~si], bins=histbins)
     h, x = np.histogram(gdiff[si], bins=histbins)
     d=(x0[1]-x0[0])/2
@@ -134,7 +156,6 @@ for batch, bs in zip(batches, batstring):
     beta_comp(b_S, f_S, n1='bg_S', n2='fg_S',
               ax=ax, hist_range=[-bound, bound], highlight=si,
               title=bs+" (shf)")
-
 
     ax = plt.subplot(2,2,4)
 
@@ -155,7 +176,8 @@ for batch, bs in zip(batches, batstring):
     plt.xlabel('FG-BG gain')
 
     fig.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
-
+    rgdf[batch].to_csv(outpath+'strf_rg_summary_'+bs+'.csv')
+    
 ttest_result = ttest_ind(rg[269], rg[273])
 
 print("Mean A1={:.3f} PEG={:.3f} p<{:.4f}".format(
