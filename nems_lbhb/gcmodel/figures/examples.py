@@ -58,7 +58,7 @@ def example_cell(cellid, batch, gc, stp, LN, combined):
                    show_yaxis=True, show_xaxis=True, seconds=False,
                    linewidth=1):
         signals = []
-        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        fig, ax = plt.subplots(1, 1)
         xmin = 0
         length = stim.shape[1]
         if stop is not None:

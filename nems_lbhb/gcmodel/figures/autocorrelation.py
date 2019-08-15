@@ -8,9 +8,12 @@ from scipy.optimize import curve_fit
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems.recording import load_recording
 import nems.db as nd
-from nems_lbhb.gcmodel.figures.utils import get_dataframes
+from nems_lbhb.gcmodel.figures.utils import (get_dataframes,
+                                             improved_cells_to_list)
+from nems_lbhb.gcmodel.figures.definitions import *
 
 log = logging.getLogger(__name__)
+plt.rcParams.update(params)
 
 
 current_path = '/auto/users/jacob/notes/gc_rank3/autocorrelation/batch289_100hz_cutoff1000.pkl'
@@ -200,53 +203,48 @@ def decaying_exponential(t, A, tau, B):
 
 
 # Uses df from batch analysis above
-def tau_vs_model_performance(df, batch, gc, stp, LN, combined, bin_count=60):
+def tau_vs_model_performance(df, batch, gc, stp, LN, combined, bin_count=60,
+                             good_ln=0.0, log_tau=False):
 
-    LN_cells, gc_cells, stp_cells, both_cells = _get_cells(df, batch, gc, stp,
-                                                           LN, combined)
-    _filter_cells(df, LN_cells, stp_cells, gc_cells, both_cells)
+    # either, neither, gc, stp, combined
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           good_ln=good_ln, as_lists=False)
+    # want categories to be exclusive in this case
+    n = (a & np.logical_not(g) & np.logical_not(s) & np.logical_not(c))
+    g1 = (g & np.logical_not(s))
+    s1 = (s & np.logical_not(g))
+    c1 = (c & np.logical_not(g) & np.logical_not(s))
+
     taus = df['tau']
-    tau_range, bins, bar_width, axis_locs = _setup_bar(taus, LN_cells, gc_cells,
-                                                       stp_cells, both_cells,
+    if log_tau:
+        taus = np.log(taus)
+    _filter_cells(taus, n, g1, s1, c1)
+
+    tau_range, bins, bar_width, axis_locs = _setup_bar(taus, n, g1, s1, c1,
                                                        bin_count)
 
-    _stack_4_bar(taus, LN_cells, gc_cells, stp_cells, both_cells,
-                     tau_range, axis_locs, bar_width, bins)
+    fig = _stack_4_bar(taus, n, g1, s1, c1, tau_range, axis_locs, bar_width, bins)
+    plt.tight_layout()
+    return fig
 
 
 def tau_vs_contrast_window(df, batch, gc30, gc60, LN, combined, bin_count=60):
     tau_vs_model_performance(df, batch, gc30, gc60, LN, combined, bin_count)
 
 
-def _get_cells(df, batch, gc, stp, LN, combined):
-    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids = df_r[LN] > df_e[LN]*2
-    gc_LN_SE = (df_e[gc] + df_e[LN])
-    stp_LN_SE = (df_e[stp] + df_e[LN])
-    gc_cells = (cellids) & ((df_r[gc] - df_r[LN]) > gc_LN_SE)
-    stp_cells = (cellids) & ((df_r[stp] - df_r[LN]) > stp_LN_SE)
-    both_cells = gc_cells & stp_cells
-    gc_cells = gc_cells & np.logical_not(both_cells)
-    stp_cells = stp_cells & np.logical_not(both_cells)
-    LN_cells = cellids & np.logical_not(gc_cells | stp_cells | both_cells)
-
-    return LN_cells, gc_cells, stp_cells, both_cells
-
-
-def _filter_cells(df, LN_cells, gc_cells, stp_cells, both_cells):
-    taus = df['tau']
+def _filter_cells(taus, LN_cells, gc_cells, stp_cells, both_cells):
     nan_mask = np.isnan(taus)
-    upper_mask = (taus > 1000)
-    lower_mask = (taus <= 0)
+    #upper_mask = (taus > 1000)
+    #lower_mask = (taus <= 0)
 
-    for c in df.index.values:
+    for c in taus.index.values:
         for group in [LN_cells, gc_cells, stp_cells, both_cells]:
             if c not in group:
                 group[c] = False
 
-    for c in df.index.values:
+    for c in taus.index.values:
         for group in [LN_cells, gc_cells, stp_cells, both_cells]:
-            group[nan_mask | upper_mask | lower_mask] = False
+            group[nan_mask] = False# | upper_mask | lower_mask] = False
 
 
 def _setup_bar(taus, LN_cells, gc_cells, stp_cells, both_cells, bin_count):
@@ -267,14 +265,25 @@ def _stack_4_bar(taus, LN_cells, gc_cells, stp_cells, both_cells,
     gc_raw = np.histogram(taus[gc_cells], range=tau_range, bins=bins)[0]
     stp_raw = np.histogram(taus[stp_cells], range=tau_range, bins=bins)[0]
     both_raw = np.histogram(taus[both_cells], range=tau_range, bins=bins)[0]
+    n_LN = np.sum(LN_cells)
+    n_gc = np.sum(gc_cells)
+    n_stp = np.sum(stp_cells)
+    n_combined = np.sum(both_cells)
+    n_cells = np.sum(np.isfinite(taus))
 
-    fig = plt.figure(figsize=figsize)
-    plt.bar(axis_locs, LN_raw, width=bar_width, color='gray', alpha=0.8)
-    plt.bar(axis_locs, gc_raw, width=bar_width, color='maroon', alpha=0.8,
-            bottom=LN_raw)
-    plt.bar(axis_locs, stp_raw, width=bar_width, color='teal', alpha=0.8,
-            bottom=LN_raw+gc_raw)
-    plt.bar(axis_locs, both_raw, width=bar_width, color='goldenrod', alpha=0.8,
-            bottom=LN_raw+gc_raw+stp_raw)
-
-    plt.legend(['LN', 'm1', 'm2', 'both'])
+    fig = plt.figure()
+    plt.bar(axis_locs, LN_raw, width=bar_width, color=model_colors['LN'],
+            alpha=0.8)
+    plt.bar(axis_locs, gc_raw, width=bar_width, color=model_colors['gc'],
+            alpha=0.8, bottom=LN_raw)
+    plt.bar(axis_locs, stp_raw, width=bar_width, color=model_colors['stp'],
+            alpha=0.8, bottom=LN_raw+gc_raw)
+    plt.bar(axis_locs, both_raw, width=bar_width, color=model_colors['combined'],
+            alpha=0.8, bottom=LN_raw+gc_raw+stp_raw)
+    plt.xlabel('Tau (ms)')
+    plt.ylabel('Cell count')
+    plt.title("Autocorrelation by model improvement category\n"
+              "n:  %d" % n_cells)
+    plt.legend(['LN, %d' % n_LN, 'gc, %d' % n_gc, 'stp, %d' % n_stp,
+                'combined, %d' % n_combined])
+    return fig

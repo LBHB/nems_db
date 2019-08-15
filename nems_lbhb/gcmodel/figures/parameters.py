@@ -12,7 +12,8 @@ from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
                                              adjustFigAspect,
-                                             improved_cells_to_list)
+                                             improved_cells_to_list,
+                                             is_outlier)
 from nems_lbhb.gcmodel.figures.respstats import _binned_xvar, _binned_yavg
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
@@ -20,30 +21,30 @@ from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_db.params import fitted_params_per_batch
 import nems.modelspec as ms
 from nems.modules.nonlinearity import _double_exponential, _saturated_rectifier
+from nems_lbhb.gcmodel.figures.definitions import *
 
 log = logging.getLogger(__name__)
 
 plt.rcParams.update(params)  # loaded from definitions
-_ALPHA = 0.3
-_BINS = 30
 
 
 def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
-                      good_LN=0):
+                      good_ln=0):
 
-    gc_cells, stp_cells, both_cells = improved_cells_to_list(
-            batch, gc, stp, LN, combined
-            )
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
                                                           LN, combined,
-                                                          se_filter)
-    cellids = df_r[LN] > good_LN
+                                                          se_filter=se_filter,
+                                                          as_lists=False)
+    _, _, _, s, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           good_ln=good_ln)
+
     stp_params = fitted_params_per_batch(289, stp, stats_keys=[], meta=[])
     stp_params_cells = stp_params.transpose().index.values.tolist()
     for c in stp_params_cells:
         if c not in cellids:
             cellids[c] = False
+    not_s = list(set(stp_params.transpose()[cellids].index.values) - set(s))
 
     # index keys are formatted like "2--stp.2--tau"
     mod_keys = stp.split('_')[1]
@@ -58,48 +59,74 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     dims = all_taus.values.flatten()[0].shape[0]
 
     # convert to dims x cells array instead of cells, array w/ multidim values
-    sep_taus = _df_to_array(all_taus, dims)
-    sep_us = _df_to_array(all_us, dims)
-    stp_taus = all_taus[stp_cells]
-    stp_us = all_us[stp_cells]
-    stp_sep_taus = _df_to_array(stp_taus, dims)
-    stp_sep_us = _df_to_array(stp_us, dims)
+    #sep_taus = _df_to_array(all_taus, dims).mean(axis=0)
+    #sep_us = _df_to_array(all_us, dims).mean(axis=0)
+    #med_tau = np.median(sep_taus)
+    #med_u = np.median(sep_u)
+    sep_taus = _df_to_array(all_taus[not_s], dims).mean(axis=0)
+    sep_us = _df_to_array(all_us[not_s], dims).mean(axis=0)
+    sep_taus = sep_taus[~is_outlier(sep_taus)]
+    sep_us = sep_us[~is_outlier(sep_us)]
+    med_tau = np.median(sep_taus)
+    med_u = np.median(sep_us)
 
-    fig, axes = plt.subplots(dims, 2, figsize=(12,12), sharex=True)
-    hist_kwargs = {'alpha': _ALPHA, 'bins': _BINS}
-    for d in range(dims):
-        #tau col 0
-        plt.sca(axes[d][0])
-        plt.hist(sep_taus[d, :], **hist_kwargs)
-        plt.hist(stp_sep_taus[d, :], **hist_kwargs, color='black')
-        plt.title('tau %d' % d)
-        if d == 0:
-            plt.legend(['all cells', 'stp > gc'])
+    stp_taus = all_taus[s]
+    stp_us = all_us[s]
+    stp_sep_taus = _df_to_array(stp_taus, dims).mean(axis=0)
+    stp_sep_us = _df_to_array(stp_us, dims).mean(axis=0)
+    stp_sep_taus = stp_sep_taus[~is_outlier(stp_sep_taus)]
+    stp_sep_us = stp_sep_us[~is_outlier(stp_sep_us)]
+    stp_med_tau = np.median(stp_sep_taus)
+    stp_med_u = np.median(stp_sep_us)
 
-        #u col 1
-        plt.sca(axes[d][1])
-        plt.hist(sep_us[d, :], **hist_kwargs)
-        plt.hist(stp_sep_us[d, :], **hist_kwargs, color='black')
-        plt.title('u %d' % d)
+
+    fig, (a1, a2) = plt.subplots(2, 1)
+    hist_kwargs = {'bins': 60, 'linewidth': 1}
+    color = model_colors['LN']
+    stp_color = model_colors['stp']
+
+    plt.sca(a1)
+    plt.hist(sep_taus, color=color, **hist_kwargs)
+    plt.hist(stp_sep_taus, color=stp_color, label='STP ++',
+             **hist_kwargs)
+    a1.axes.axvline(med_tau, color=color, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    a1.axes.axvline(stp_med_tau, color=stp_color, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    plt.title('tau')
+    plt.legend()
+
+
+    plt.sca(a2)
+    plt.hist(sep_us, color=color, **hist_kwargs)
+    plt.hist(stp_sep_us, color=stp_color,
+             label='STP ++', **hist_kwargs)
+    a2.axes.axvline(med_u, color=color, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    a2.axes.axvline(stp_med_u, color=stp_color, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    plt.title('u')
 
     fig.suptitle('STP parameter distributions')
+    return fig
 
 
-def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_LN=0):
+def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
 
-    gc_cells, stp_cells, both_cells = improved_cells_to_list(
-            batch, gc, stp, LN, combined
-            )
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
                                                           LN, combined,
-                                                          se_filter)
-    cellids = df_r[LN] > good_LN
+                                                          se_filter,
+                                                          as_lists=False)
+    _, _, g, _, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           good_ln=good_ln)
+
     gc_params = fitted_params_per_batch(289, gc, stats_keys=[], meta=[])
     gc_params_cells = gc_params.transpose().index.values.tolist()
     for c in gc_params_cells:
         if c not in cellids:
             cellids[c] = False
+    not_g = list(set(gc_params.transpose()[cellids].index.values) - set(g))
 
     # index keys are formatted like "4--dsig.d--kappa"
     mod_keys = gc.split('_')[1]
@@ -114,37 +141,49 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_LN=0):
     ba_key = b_key + '_mod'
     aa_key = a_key + '_mod'
     sa_key = s_key + '_mod'
-    all_keys = [b_key, a_key, s_key, k_key, ba_key, aa_key, sa_key, ka_key]
+    all_keys = [b_key, ba_key, a_key, aa_key, s_key, sa_key, k_key, ka_key]
 
     phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
                for k in all_keys]
-    sep_dfs = [df.values.flatten().astype(np.float64) for df in phi_dfs]
-    gc_sep_dfs = [df[gc_cells].values.flatten().astype(np.float64)
+    sep_dfs = [df[not_g].values.flatten().astype(np.float64) for df in phi_dfs]
+    gc_sep_dfs = [df[g].values.flatten().astype(np.float64)
                   for df in phi_dfs]
+
+    # removing extreme outliers b/c kept getting one or two cells with
+    # values that were multiple orders of magnitude different than all others
     diffs = [sep_dfs[i+1] - sep_dfs[i]
              for i, _ in enumerate(sep_dfs[:-1])
              if i % 2 == 0]
+    diffs = [d[~is_outlier(d)] for d in diffs]
     gc_diffs = [gc_sep_dfs[i+1] - gc_sep_dfs[i]
                 for i, _ in enumerate(gc_sep_dfs[:-1])
                 if i % 2 == 0]
+    gc_diffs = [d[~is_outlier(d)] for d in gc_diffs]
+    medians = [np.median(d) for d in diffs]
+    gc_medians = [np.median(d) for d in gc_diffs]
 
-    fig, axes = plt.subplots(3, 4, figsize=(16,13), sharex=True, sharey=True)
-    flatax = axes.flatten()
-    hist_kwargs = {'alpha': _ALPHA, 'bins': _BINS}
-    for i in range(12):
-        plt.sca(flatax[i])
-        if i < 8:
-            plt.hist(sep_dfs[i], **hist_kwargs)
-            plt.hist(gc_sep_dfs[i], **hist_kwargs, color='black')
-            plt.title(all_keys[i].split('-')[-1])
-            if i == 0:
-                plt.legend(['all cells', 'gc > stp'])
-        else:
-            plt.hist(diffs[i-8], **hist_kwargs)
-            plt.hist(gc_diffs[i-8], **hist_kwargs, color='black')
-            plt.title(all_keys[i-8].split('-')[-1] + ' difference')
 
-    fig.suptitle('GC parameter distributions')
+    fig, ((a1, a2), (a3, a4)) = plt.subplots(2, 2)
+    hist_kwargs = {'bins': 60}
+    color = model_colors['LN']
+    gc_color = model_colors['gc']
+
+    # b a s k
+    for i, ax in zip([0, 1, 2, 3], [a1, a2, a3, a4]):
+        ax.hist(diffs[i], color=color, **hist_kwargs)
+        ax.hist(gc_diffs[i], color=gc_color, **hist_kwargs)
+        ax.axes.axvline(medians[i], color=color, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
+        ax.axes.axvline(gc_medians[i], color=gc_color, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
+    a1.set_title('base')
+    a2.set_title('amplitude')
+    a3.set_title('shift')
+    a4.set_title('kappa')
+
+    fig.suptitle('GC parameter differences')
+    return fig
+
 
 def _df_to_array(df, dims):
     vals = df.values.flatten()
@@ -241,7 +280,7 @@ def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
 #    stp_ratio = stp_k_low / stp_k_high
 #    both_ratio = both_k_low / both_k_high
 
-    fig1, ((ax1), (ax2)) = plt.subplots(1, 2, figsize=figsize)
+    fig1, ((ax1), (ax2)) = plt.subplots(1, 2, )
     ax1.hist(ratio, bins=bins)
     ax1.set_title('all cells')
     ax2.hist(gc_ratio, bins=bins)
@@ -255,11 +294,11 @@ def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
     fig1.suptitle(title)
 
 
-    fig3 = plt.figure(figsize=figsize)
+    fig3 = plt.figure()
     plt.scatter(ratio, r_test)
     plt.title('low/high vs r_test')
 
-    fig4 = plt.figure(figsize=figsize)
+    fig4 = plt.figure()
     plt.scatter(gc_ratio, gc_r)
     plt.title('low/high vs r_test, gc improvements only')
 
@@ -361,7 +400,7 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
 #        both_k_low = np.exp(both_k_low)
 #        both_k_high = np.exp(both_k_high)
 
-#    fig = plt.figure(figsize=figsize)#, axes = plt.subplots(1, 2, figsize=figsize)
+#    fig = plt.figure()#, axes = plt.subplots(1, 2, )
 #    #axes[0].plot([ctmin, ctmax], [k_low, k_high], color='black', alpha=0.5)
 #    plt.hist(high-low, bins=bins, color='black', alpha=0.5)
 #
@@ -400,7 +439,7 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
 #    prop_both_hist = both_hist[0] / np.sum(both_hist[0])
 
 
-    fig1 = plt.figure(figsize=figsize)
+    fig1 = plt.figure()
     plt.bar(axis_locs, raw, width=bar_width, color='gray', alpha=0.8)
     plt.bar(axis_locs, gc_raw, width=bar_width, color='maroon', alpha=0.8,
             bottom=raw)
@@ -416,7 +455,7 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
                 #, f'stp, {len(stp_low)}',
                 #f'both, {len(both_low)}'])
 
-#    fig2 = plt.figure(figsize=figsize)
+#    fig2 = plt.figure()
 #    plt.bar(axis_locs, prop_hist, width=bar_width, color='gray', alpha=0.8)
 #    plt.bar(axis_locs, prop_gc_hist, width=bar_width, bottom=prop_hist,
 #            color='maroon', alpha=0.8)
@@ -432,7 +471,7 @@ def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
 #                #f'both, {len(both_low)}'])
 
     # Not really seeing anything from these so far, so commenting out for now.
-#    fig3, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=figsize)
+#    fig3, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, )
 #
 #    r1, p1 = st.pearsonr(high-low, r_test)
 #    ax1.scatter(gain, r_test)
@@ -498,7 +537,7 @@ def dynamic_sigmoid_range(cellid, batch, modelname, plot=True,
     high_out = _double_exponential(pred_before_dsig, **highs).flatten()
 
     if plot:
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure()
         plt.scatter(pred_before_dsig, low_out, color='blue', s=0.7, alpha=0.6)
         plt.scatter(pred_before_dsig, high_out, color='red', s=0.7, alpha=0.6)
 
@@ -537,7 +576,7 @@ def dynamic_sigmoid_distribution(cellid, batch, modelname, sample_every=10,
     thetas = list(lows.values())
     theta_mods = list(highs.values())
 
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure()
     for i in range(int(len(pred_before_dsig)/sample_every)):
         try:
             ts = {}
@@ -600,7 +639,7 @@ def dynamic_sigmoid_differences(batch, modelname, hist_bins=60, test_limit=None,
     else:
         ratios = np.load(load_path)
 
-    plt.figure(figsize=figsize)
+    plt.figure()
     plt.hist(ratios, bins=hist_bins, color=[wsu_gray_light], edgecolor='black',
              linewidth=1)
     #plt.rc('text', usetex=True)
@@ -668,9 +707,10 @@ def save_pred_matched_batch(batch, modelname, save_path, test_limit=None):
 
 
 def filtered_pred_matched_batch(batch, gc, stp, LN, combined, save_path,
-                                good_ln=0.4, test_limit=None, stat='r_ceiling'):
+                                good_ln=0.0, test_limit=None, stat='r_ceiling',
+                                replace_existing=True):
 
-    e, n, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     if stat == 'r_ceiling':
@@ -679,14 +719,22 @@ def filtered_pred_matched_batch(batch, gc, stp, LN, combined, save_path,
         df = df_r
 
     tags = ['either', 'neither', 'gc', 'stp', 'combined']
-    for cells, tag in zip([e, n, g, s, c], tags):
+    a = list(set(a) - set(e))
+    for cells, tag in zip([e, a, g, s, c], tags):
         _sigmoid_sub_batch(cells[:test_limit], df, tag, stat, batch, gc, stp, LN,
-                           combined, save_path)
+                           combined, save_path,
+                           replace_existing=replace_existing)
 
 
 def _sigmoid_sub_batch(cells, df, tag, stat, batch, gc, stp, LN, combined,
-                       save_path):
+                       save_path, replace_existing=True):
     for cellid in cells:
+        full_path = os.path.join(save_path, str(batch), tag, cellid)
+        if not replace_existing:
+            if os.path.exists(full_path):
+                print('skipping existing result for:   %s' % cellid)
+                continue
+
         try:
             fig = dynamic_sigmoid_pred_matched(cellid, batch, gc)
             gc_r = df[gc][cellid]
@@ -697,7 +745,6 @@ def _sigmoid_sub_batch(cells, df, tag, stat, batch, gc, stp, LN, combined,
             # model probably not fit for that cell
             continue
 
-        full_path = os.path.join(save_path, str(batch), tag, cellid)
         parent_directory = '/'.join(full_path.split('/')[:-1])
         if not os.path.exists(parent_directory):
             os.makedirs(parent_directory, mode=0o777)
@@ -741,7 +788,7 @@ def random_condition_convergence(cellid, batch, modelname,
     keys = list(rcs[0][0].keys())
 
     if not separate_figures:
-        plt.figure(figsize=figsize)
+        plt.figure()
         colors = [np.random.rand(3,) for k in keys]
         for initial, final in rcs:
             starts = list(initial.values())
@@ -753,7 +800,7 @@ def random_condition_convergence(cellid, batch, modelname,
 
     else:
         for k in keys:
-            plt.figure(figsize=figsize)
+            plt.figure()
             for i, (initial, final) in enumerate(rcs):
                 start = initial[k]
                 end = final[k]
