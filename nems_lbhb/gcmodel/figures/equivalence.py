@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import mplcursors
@@ -8,10 +9,12 @@ import nems.db as nd
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
-                                             adjustFigAspect)
+                                             adjustFigAspect,
+                                             improved_cells_to_list)
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
+from nems_lbhb.gcmodel.figures.definitions import *
 
 plt.rcParams.update(params)  # loaded from definitions
 
@@ -19,7 +22,7 @@ plt.rcParams.update(params)  # loaded from definitions
 def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                         LN_filter=False, manual_cellids=None,
                         plot_stat='r_ceiling', enable_hover=False,
-                        add_combined=False):
+                        add_combined=False, color_improvements=False):
     '''
     model1: GC
     model2: STP
@@ -32,6 +35,9 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                                                           LN, combined,
                                                           se_filter,
                                                           LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           as_lists=False)
+
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
@@ -49,14 +55,29 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     gc_vs_ln = gc_test.values - ln_test.values
     stp_vs_ln = stp_test.values - ln_test.values
     combined_vs_ln = combined_test.values - ln_test.values
-    gc_vs_ln = gc_vs_ln.astype('float32')
-    stp_vs_ln = stp_vs_ln.astype('float32')
-    combined_vs_ln = combined_vs_ln.astype('float32')
 
-    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln) & np.isfinite(combined_vs_ln)
-    gc_vs_ln = gc_vs_ln[ff]
-    stp_vs_ln = stp_vs_ln[ff]
-    combined_vs_ln = combined_vs_ln[ff]
+    if color_improvements:
+        gc_test_gc_cells = plot_df[gc][cellids][g].values
+        stp_test_gc_cells = plot_df[stp][cellids][g].values
+        ln_test_gc_cells = plot_df[LN][cellids][g].values
+        gc_test_stp_cells = plot_df[gc][cellids][s].values
+        stp_test_stp_cells = plot_df[stp][cellids][s].values
+        ln_test_stp_cells = plot_df[LN][cellids][s].values
+
+        gc_vs_ln_gc_cells = gc_test_gc_cells - ln_test_gc_cells
+        stp_vs_ln_gc_cells = stp_test_gc_cells - ln_test_gc_cells
+        gc_vs_ln_stp_cells = gc_test_stp_cells - ln_test_stp_cells
+        stp_vs_ln_stp_cells = stp_test_stp_cells - ln_test_stp_cells
+
+
+#    gc_vs_ln = gc_vs_ln.astype('float32')
+#    stp_vs_ln = stp_vs_ln.astype('float32')
+#    combined_vs_ln = combined_vs_ln.astype('float32')
+#
+#    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln) & np.isfinite(combined_vs_ln)
+#    gc_vs_ln = gc_vs_ln[ff]
+#    stp_vs_ln = stp_vs_ln[ff]
+#    combined_vs_ln = combined_vs_ln[ff]
 
     #r = np.corrcoef(gc_vs_ln, stp_vs_ln)[0, 1]
     r2, p = st.pearsonr(gc_vs_ln, stp_vs_ln)
@@ -73,11 +94,14 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     abs_max = max(np.abs(y_max), np.abs(x_max), np.abs(y_min), np.abs(x_min))
     abs_max *= 1.15
 
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure()
     ax = plt.gca()
     ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
     ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
     ax.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
+    if color_improvements:
+        ax.scatter(gc_vs_ln_gc_cells, stp_vs_ln_gc_cells, c=model_colors['gc'])
+        ax.scatter(gc_vs_ln_stp_cells, stp_vs_ln_stp_cells, c=model_colors['stp'])
     ax.set_xlabel("GC - LN model")
     ax.set_ylabel("STP - LN model")
     ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
@@ -92,7 +116,7 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                 )
 
     if add_combined:
-        fig2 = plt.figure(figsize=figsize)
+        fig2 = plt.figure()
         ax = plt.gca()
         ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
         ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
@@ -114,7 +138,7 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                     lambda sel: sel.annotation.set_text(cellids[sel.target.index])
                     )
 
-
+    plt.tight_layout()
     return fig
 
 
@@ -171,7 +195,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     #n_samps = gcff.shape[-1]
     #d_threshold = (np.sqrt(-0.5*np.log(alpha)))*np.sqrt((2*n_samps)/n_samps**2)
     n_cells = rs.shape[0]
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure()
     plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light],
              edgecolor='black', linewidth=1)
     plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--',
@@ -184,7 +208,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     # TODO: maybe not working as intended? or maybe it is and the p values
     #       are just tiny, but end up with all < 0.00001
     #       Ask SVD about continuing with this.
-#    fig2 = plt.figure(figsize=figsize)
+#    fig2 = plt.figure()
 #    plt.hist(logks, bins=30, range=[0, 5], histtype='bar',
 #                                    color=['gray'])
 #    plt.plot(np.array([-np.log10(0.05), -np.log10(0.05)]),
@@ -194,7 +218,77 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 #    plt.xlabel('-log p')
 #    plt.title('Kolmolgorov-Smirnov Test\nBetween Prediction Changes Relative to LN Model')
 
+    plt.tight_layout()
     return fig#, fig2
+
+
+def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
+                            LN_filter=False, save_path=None, load_path=None,
+                            test_limit=None):
+
+    if load_path is None:
+        e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                               se_filter=se_filter,
+                                               LN_filter=LN_filter)
+        equivs = []
+        gcs = []
+        stps = []
+        effects = []
+        for cell in a[:test_limit]:
+            xf1, ctx1 = xhelp.load_model_xform(cell, batch, gc)
+            xf2, ctx2 = xhelp.load_model_xform(cell, batch, stp)
+            xf3, ctx3 = xhelp.load_model_xform(cell, batch, LN)
+
+            gc_pred = ctx1['val'].apply_mask()['pred'].as_continuous()
+            stp_pred = ctx2['val'].apply_mask()['pred'].as_continuous()
+            ln_pred = ctx3['val'].apply_mask()['pred'].as_continuous()
+
+            ff = np.isfinite(gc_pred) & np.isfinite(stp_pred) & np.isfinite(ln_pred)
+            gcff = gc_pred[ff]
+            stpff = stp_pred[ff]
+            lnff = ln_pred[ff]
+
+            equivs.append(np.corrcoef(gcff-lnff, stpff-lnff)[0, 1])
+            this_gc = np.corrcoef(gcff, lnff)[0,1]
+            this_stp = np.corrcoef(stpff, lnff)[0,1]
+            gcs.append(this_gc)
+            stps.append(this_stp)
+            effects.append(1 - 0.5*(this_gc+this_stp))
+
+        results = {'cellid': a[:test_limit], 'equivalence': equivs,
+                   'effect_size': effects, 'corr_gc_LN': gcs,
+                   'corr_stp_LN': stps}
+        df = pd.DataFrame.from_dict(results)
+        df.set_index('cellid', inplace=True)
+        if save_path is not None:
+            df.to_pickle(save_path)
+    else:
+        df = pd.read_pickle(load_path)
+
+    equivalence = df['equivalence'].values
+    effect_size = df['effect_size'].values
+
+    fig1 = plt.figure()
+    plt.scatter(effect_size, equivalence, s=20, color='black')
+    plt.ylabel('Equivalence:  CC(GC-LN, STP-LN)')
+    plt.xlabel('Effect size:  1 - 0.5*(CC(GC,LN) + CC(STP,LN))')
+    plt.title("Equivalence of Change to Predicted PSTH\n"
+              "vs Effect Size")
+    plt.tight_layout()
+
+    fig2 = plt.figure()
+    md = np.nanmedian(equivalence)
+    n_cells = equivalence.shape[0]
+    plt.hist(equivalence, bins=30, range=[-0.5, 1], histtype='bar',
+             color=[wsu_gray_light], edgecolor='black', linewidth=1)
+    plt.plot(np.array([0,0]), np.array(fig2.axes[0].get_ylim()), 'k--',
+             linewidth=2, dashes=dash_spacing)
+    plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
+             ha='left', va='top', transform=fig2.axes[0].transAxes)
+    plt.xlabel('CC, GC-LN vs STP-LN')
+    plt.title('Equivalence of Change in Prediction Relative to LN Model')
+
+    return fig1, fig2
 
 
 def residual_histogram(batch, model1, model2, model3, model4, se_filter=True,
@@ -293,7 +387,7 @@ def residual_histogram(batch, model1, model2, model3, model4, se_filter=True,
     #n_samps = gcff.shape[-1]
     #d_threshold = (np.sqrt(-0.5*np.log(alpha)))*np.sqrt((2*n_samps)/n_samps**2)
     n_cells = rs.shape[0]
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure()
     plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light])
     plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--', dashes=dash_spacing)
     plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
@@ -304,7 +398,7 @@ def residual_histogram(batch, model1, model2, model3, model4, se_filter=True,
     # TODO: maybe not working as intended? or maybe it is and the p values
     #       are just tiny, but end up with all < 0.00001
     #       Ask SVD about continuing with this.
-    fig2 = plt.figure(figsize=figsize)
+    fig2 = plt.figure()
     plt.hist(logks, bins=30, range=[0, 10], histtype='bar',
                                     color=[wsu_gray_light])
     plt.plot(np.array([-np.log10(0.05), -np.log10(0.05)]),
@@ -315,6 +409,7 @@ def residual_histogram(batch, model1, model2, model3, model4, se_filter=True,
     plt.title('Kolmolgorov-Smirnov Test\nBetween Changes in Magnitude of Error Relative to LN Model')
 
     return fig, fig2
+
 
 def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
                         ln_filter=False, test_limit=None):

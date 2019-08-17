@@ -6,7 +6,22 @@ import nems.db as nd
 
 
 def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,
-                           LN_filter=False, good_ln=0.4):
+                           LN_filter=False, good_ln=0.0, as_lists=True):
+    '''
+    Returns:
+    --------
+    either, neither, gc_cells, stp_cells, combined_cells : lists or pd series
+        Respectively, cellids for which:
+            1) There is a significant improvement over the LN model for
+            at least one of the three nonlinear models.
+            2) All cellids for which performance is above 2*SE for all models.
+            3) The gain control model performs significantly better than
+               the LN model.
+            4) The STP model performs significantly better than the LN model.
+            5) The combined model performs significantly better than
+               the LN model.
+
+    '''
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -38,32 +53,39 @@ def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,
     stp_err = df_e[stp][cellids]
     combined_err = df_e[combined][cellids]
 
-    ln_good = ln_test > good_ln
+    ln_good = df_r[LN][cellids] > good_ln
     gc_imp = gc_vs_ln > (ln_err + gc_err)
     stp_imp = stp_vs_ln > (ln_err + stp_err)
     combined_imp = combined_vs_ln > (ln_err + combined_err)
 
-    # none of the nonlinear models helps
-    neither_better = (ln_good & np.logical_not(gc_imp) & np.logical_not(stp_imp)
-                      & np.logical_not(combined_imp))
-    # exactly one model helps
-    gc_better = ln_good & gc_imp & np.logical_not(stp_imp)
-    stp_better = ln_good & stp_imp & np.logical_not(gc_imp)
-    combined_better = (ln_good & combined_imp & np.logical_not(gc_imp)
-                       & np.logical_not(stp_imp))
-    # more than one model helps
-    either_better = (ln_good & (gc_imp | stp_imp | combined_imp)
-                     & np.logical_not(gc_better)
-                     & np.logical_not(stp_better)
-                     & np.logical_not(combined_better))
+#    # none of the nonlinear models helps
+#    neither_better = (ln_good & np.logical_not(gc_imp) & np.logical_not(stp_imp)
+#                      & np.logical_not(combined_imp))
+    # all cellids
+    all_good = ln_good
+
+    # at least this model helps
+    gc_better = ln_good & gc_imp
+    stp_better = ln_good & stp_imp
+    combined_better = ln_good & combined_imp
+
+    # at least one model helps
+    either_better = ln_good & (gc_imp | stp_imp | combined_imp)
+
+    # to get exclusives: use e.g. gc_better - stp_better - combined_better
 
     either_cells = gc_test[either_better].index.values.tolist()
-    neither_cells = gc_test[neither_better].index.values.tolist()
+    #neither_cells = gc_test[neither_better].index.values.tolist()
+    all_cells = gc_test[all_good].index.values.tolist()
     gc_cells = gc_test[gc_better].index.values.tolist()
     stp_cells = gc_test[stp_better].index.values.tolist()
     combined_cells = gc_test[combined_better].index.values.tolist()
 
-    return either_cells, neither_cells, gc_cells, stp_cells, combined_cells
+    if as_lists:
+        return either_cells, all_cells, gc_cells, stp_cells, combined_cells
+    else:
+        return (either_better, all_good, gc_better, stp_better,
+                combined_better)
 
 
 # Copied from:
@@ -102,14 +124,22 @@ def get_dataframes(batch, gc, stp, LN, combined):
     df_e = nd.batch_comp(batch, [gc, stp, LN, combined],
                          stat='se_test')
     # Remove any cellids that have NaN for 1 or more models
+    # and sort indexes, double check that all are equal
     df_r.dropna(axis=0, how='any', inplace=True)
     df_e.dropna(axis=0, how='any', inplace=True)
+    df_c.dropna(axis=0, how='any', inplace=True)
+    df_r.sort_index(inplace=True)
+    df_e.sort_index(inplace=True)
+    df_c.sort_index(inplace=True)
+    if (not np.all(df_r.index.values == df_e.index.values)) \
+            or (not np.all(df_r.index.values == df_c.index.values)):
+        raise ValueError('index mismatch in dataframes')
 
     return df_r, df_c, df_e
 
 
 def get_filtered_cellids(df_r, df_e, gc, stp, LN, combined, se_filter=True,
-                         LN_filter=False):
+                         LN_filter=False, as_lists=True):
 
     cellids = df_r.index.values.tolist()
 
@@ -140,11 +170,15 @@ def get_filtered_cellids(df_r, df_e, gc, stp, LN, combined, se_filter=True,
         bad_cells = (gc_test == np.nan)
 
     keep = good_cells & ~bad_cells
-    cellids = df_r[keep].index.values.tolist()
-    under_chance = df_r[~good_cells].index.values.tolist()
-    less_LN = df_r[bad_cells].index.values.tolist()
 
-    return cellids, under_chance, less_LN
+
+    if as_lists:
+        cellids = df_r[keep].index.values.tolist()
+        under_chance = df_r[~good_cells].index.values.tolist()
+        less_LN = df_r[bad_cells].index.values.tolist()
+        return cellids, under_chance, less_LN
+    else:
+        return keep, ~good_cells, bad_cells
 
 
 
@@ -190,3 +224,40 @@ def get_valid_improvements(batch, model1, model2, threshold = 2.5):
     valid_improvements = ratio.loc[ratio < threshold].loc[ratio > 1/threshold]
 
     return valid_improvements.index.values.tolist()
+
+
+# copied from:
+# https://stackoverflow.com/questions/11882393/ ...
+#   matplotlib-disregard-outliers-when-plotting
+def is_outlier(points, thresh=3.5):
+    """
+    Returns a boolean array with True if points are outliers and False
+    otherwise.
+
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+
+    References:
+    ----------
+        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+        Handle Outliers", The ASQC Basic References in Quality Control:
+        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh

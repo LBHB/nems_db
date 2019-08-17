@@ -2,11 +2,15 @@ import copy
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import nems.recording
 import nems.db as nd
 import nems.epoch as ep
 import nems_lbhb.xform_wrappers as xwrap
+from nems_lbhb.gcmodel.figures.definitions import *
+
+plt.rcParams.update(params)
 
 
 def spectrogram_mean_sd(spectrogram, max_db_scale=65, pre_log_floor=1):
@@ -21,13 +25,15 @@ def spectrogram_mean_sd(spectrogram, max_db_scale=65, pre_log_floor=1):
 
 
 def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
-                               max_db_scale=65, pre_log_floor=1):
+                               max_db_scale=65, pre_log_floor=1,
+                               stims_to_skip=[]):
     rec_path = xwrap.generate_recording_uri(cellid, batch, loadkey=loadkey)
     rec = nems.recording.load_recording(rec_path)
     stim = copy.deepcopy(rec['stim'].as_continuous())
     fs = rec['stim'].fs
     epochs = rec.epochs
     stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+    stim_epochs = [s for s in stim_epochs if s not in stims_to_skip]
     pre_silence = silence_duration(epochs, 'PreStimSilence')
     post_silence = silence_duration(epochs, 'PostStimSilence')
 
@@ -43,6 +49,37 @@ def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
     return results
 
 
+def mean_sd_per_stim_by_batch(batch, loadkey='ozgf.fs100.ch18', max_db_scale=65,
+                              pre_log_floor=1, test_limit=None, save_path=None,
+                              load_path=None):
+    if load_path is None:
+        cellids = nd.get_batch_cells(batch, as_list=True)
+        batch_results = {}
+        stims_to_skip = []
+        for c in cellids[:test_limit]:
+            # wastes some time calculating repeat stims, but oh well...
+            # doesn't take that long anyway
+            results = mean_sd_per_stim_by_cellid(c, batch, loadkey, max_db_scale,
+                                                 pre_log_floor, stims_to_skip)
+            batch_results.update(results)
+            stims_to_skip = list(batch_results.keys())
+        df_dict = {'stim': list(batch_results.keys()),
+                   'stats': list(batch_results.values())}
+        df = pd.DataFrame.from_dict(df_dict)
+        df.set_index('stim', inplace=True)
+        if save_path is not None:
+            df.to_pickle(save_path)
+    else:
+        df = pd.read_pickle(load_path)
+        stims = df.index.values.tolist()
+        stats = df['stats'].values.tolist()
+        batch_results = {k: v for k, v in zip(stims, stats)}
+
+    fig = scatter_soundstats(batch_results)
+    fig.axes[0].set_title('Sound stats for batch:  %d' % batch)
+    return fig
+
+
 def scatter_soundstats(results):
     means = []
     sds = []
@@ -50,9 +87,13 @@ def scatter_soundstats(results):
         means.append(mean)
         sds.append(sd)
 
-    plt.scatter(sds, means)
-    plt.ylabel('mean level')
-    plt.xlabel('std')
+    fig = plt.figure()
+    plt.scatter(sds, means, color='black', s=20)
+    plt.ylabel('mean level (dB SPL)')
+    plt.xlabel('std (dB SPL)')
+    plt.tight_layout()
+
+    return fig
 
 
 def silence_duration(epochs, prepost):
