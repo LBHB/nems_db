@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 import nems_lbhb.io as io
 
 def compute_di(parmfile, **options):
@@ -89,7 +90,7 @@ def compute_di(parmfile, **options):
     fields = [k for k in ReferenceHandle['UserDefinableFields']]
 
     # for cases where REF changes (think of this like changing the context. For example, coherent vs. incoherent REF streams)
-    # for now, hard coding only to look for incoherent / coherent cases
+    # FOR NOW, HARD CODING only to look for incoherent / coherent cases
     unique_tar_suffixes = np.unique([suf.split(":")[-1] for suf in trialparms['TargetHandle'][1]['Names']]) 
     trialref_type = -1 * np.ones((1, trialcount))
     if len(unique_tar_suffixes) > 0:
@@ -97,9 +98,9 @@ def compute_di(parmfile, **options):
             idx = np.array([id for id in range(1, len(perf)+1) if unique_tar_suffixes[i-1] in perf[id]['ThisTargetNote'][0]])
             trialref_type[:, idx-1] = i
             tar_suffixes = unique_tar_suffixes
-        else: 
-            tar_suffixes = []
-            trialref_type = np.ones((1, trialcount))
+    else: 
+        tar_suffixes = []
+        trialref_type = np.ones((1, trialcount))
 
     trialtargetid = np.zeros((1,trialcount))
 
@@ -122,3 +123,36 @@ def compute_di(parmfile, **options):
     else:
         UniqueCount = 1
         trialtargetid = np.ones(len(perf))
+
+    if tar_suffixes != []:
+        reftype_by_tarid = np.nan * np.ones(len(exptparams['UniqueTargets']))
+        for i in range(0, len(tar_suffixes)):
+            if two_target:
+                idx = np.unique([np.array(trialtargetid_all)[(trialref_type==(i+1)).squeeze()]])
+                idx = np.unique(list(itertools.chain.from_iterable(idx))) - 1
+                reftype_by_tarid[idx] = i+1
+            else:
+                idx = np.unique([np.array(trialtargetid)[(trialref_type==(i+1)).squeeze()]])
+                idx = np.unique(list(itertools.chain.from_iterable(idx))) - 1
+                reftype_by_tarid[idx] = i+1
+    else:
+        reftype_by_tarid = np.ones(len(exptparams['UniqueTargets']))
+
+    resptime=[]
+    resptimeperfect=[]
+    stimtype=[]
+    stimtime=[]
+    reftype=[]
+    tcounter=[]
+    trialnum=[]
+
+    # exclude misses at very beginning and end
+    Misses = [perf[i+1]['Miss'] for i in range(0, len(perf))]
+    if np.sum(Misses) == trialcount:
+        # if all missed
+        t1 = t2 = 1
+    else:
+        t1 = np.where(np.array(Misses)==0)[0][0]
+        t2 = len(Misses) - np.where(np.array(Misses[::-1])==0)[0][0] 
+    
+    
