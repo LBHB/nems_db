@@ -85,6 +85,7 @@ import os
 import sys
 import pandas as pd
 import scipy.signal as ss
+import scipy.stats as st
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -525,14 +526,20 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    ind = np.arange(mb.shape[0])
-    #ind = m[:,0]
-    p1 = plt.plot(ind, mb[:,0])
-    p2 = plt.plot(ind, mb[:,1]+mb[:,0])
-    p3 = plt.plot(ind, mb[:,2]+mb[:,0]+mb[:,1])
-    plt.legend(('common','p_unique','b-unique'))
-    plt.xlabel('behavior-independent quintile')
-    plt.ylabel('mean r2')
+    stateplots.beta_comp(mfull[:,0],mfull[:,1]-mfull[:,0],
+                         n1='State independent',n2='dep - indep',
+                     ax=ax3, highlight=dm['sig'], hist_range=[-0.3, 1])
+    r, p = st.pearsonr(mfull[:,0],mfull[:,1]-mfull[:,0])
+    plt.title('cc={:.3} p={:.4}'.format(r,p))
+
+    #ind = np.arange(mb.shape[0])
+    ##ind = m[:,0]
+    #p1 = plt.plot(ind, mb[:,0])
+    #p2 = plt.plot(ind, mb[:,1]+mb[:,0])
+    #p3 = plt.plot(ind, mb[:,2]+mb[:,0]+mb[:,1])
+    #plt.legend(('common','p_unique','b-unique'))
+    #plt.xlabel('behavior-independent quintile')
+    #plt.ylabel('mean r2')
 
     plt.tight_layout()
     return ax1, ax2, ax3
