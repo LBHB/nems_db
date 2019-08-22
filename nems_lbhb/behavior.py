@@ -1,5 +1,6 @@
 import numpy as np
 import itertools
+import sys
 import nems_lbhb.io as io
 
 def compute_di(parmfile, **options):
@@ -65,7 +66,7 @@ def compute_di(parmfile, **options):
     TarPreStimSilence = trialparms['TargetHandle'][1]['PreStimSilence']
     if 'SingleRefSegmentLen' in trialparms.keys() and trialparms['SingleRefSegmentLen'] > 0:
         RefSegLen = trialparms['SingleRefSegmentLen']
-        PossibleTarTimes = (np.where(trialparms['ReferenceCountFreq'])[0]-0) * \
+        PossibleTarTimes = ((np.where(trialparms['ReferenceCountFreq'])[0]-0) + 1) * \
                 trialparms['SingleRefSegmentLen'] + perf[1]['FirstRefTime']
         
         if two_target:
@@ -138,13 +139,13 @@ def compute_di(parmfile, **options):
     else:
         reftype_by_tarid = np.ones(len(exptparams['UniqueTargets']))
 
-    resptime=[]
-    resptimeperfect=[]
-    stimtype=[]
-    stimtime=[]
-    reftype=[]
-    tcounter=[]
-    trialnum=[]
+    resptime = []
+    resptimeperfect = []
+    stimtype = []
+    stimtime = []
+    reftype = []
+    tcounter = []
+    trialnum = []
 
     # exclude misses at very beginning and end
     Misses = [perf[i+1]['Miss'] for i in range(0, len(perf))]
@@ -155,4 +156,41 @@ def compute_di(parmfile, **options):
         t1 = np.where(np.array(Misses)==0)[0][0]
         t2 = len(Misses) - np.where(np.array(Misses[::-1])==0)[0][0] 
     
-    
+    for tt in range(t1, t2):
+        if 'FirstTarTime' not in perf[tt+1].keys() or perf[tt+1]['FirstTarTime'] == []:
+            perf[tt+1]['FirstTarTime'] = perf[tt+1]['TarResponseWinStart'] - behaviorparams['EarlyWindow']
+        if 'FirstLickTime' not in perf[tt+1].keys() or perf[tt+1]['FirstLickTime'] == []:
+            if perf[tt+1]['FirstLickTime'] == []:
+                perf[tt+1]['FirstLickTime'] = np.nan
+            else:
+                perf[tt+1]['FirstLickTime'] = np.min(exptevents[(exptevents['name']=='LICK') & 
+                                                            (exptevents['Trial']==tt+1)]['start'])
+
+        Ntar_per_reftype= len(trialparms['TargetIdxFreq'])
+
+        if two_target:
+            idx = ((np.array(trialtargetid_all[tt]) - 1)  % Ntar_per_reftype)
+            Distlinds = np.array(trialparms['TargetDistSet'])[idx]  == 1
+
+            if not np.any(Distlinds):
+                sys.warning("Make sure this works if a trial doesn''t have a target from slot 1")
+            
+            if len(Distlinds) > 1:
+                tar_time = np.array(perf[tt+1]['TarTimes'])[Distlinds]
+            else:
+                tar_time = perf[tt+1]['FirstTarTime']
+                
+        else:
+            tar_time = perf[tt+1]['FirstTarTime']
+
+        TarSlotCount = np.sum(PossibleTarTimes < tar_time)
+        if TarSlotCount > 0:
+            stimtime.extend(PossibleTarTimes[:TarSlotCount])
+            stimtime.append(tar_time)
+        else:
+            stimtime.append(tar_time)
+
+        resptime.extend((np.ones(TarSlotCount + 1) * perf[tt+1]['FirstLickTime']).tolist())
+        # 0: ref, 1:tar1, 2: tar2
+        stimtype.extend((np.zeros(TarSlotCount).tolist()))
+        stimtype.extend([1])
