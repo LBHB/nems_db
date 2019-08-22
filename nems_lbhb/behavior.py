@@ -31,7 +31,7 @@ def compute_di(parmfile, **options):
        metrics_newT has metrics calculated only from trials immediately
        following hits or misses (should be trials in which a new stimulus was
        played)
-            DI2 = (1+HR-FAR)/2;  % area under the ROC
+            DI2 = (1+HR-FAR)/2  % area under the ROC
             Bias2 = (HR+FAR)/2
             DI = area under ROC curved based on RTs
     """
@@ -70,7 +70,7 @@ def compute_di(parmfile, **options):
                 trialparms['SingleRefSegmentLen'] + perf[1]['FirstRefTime']
         
         if two_target:
-            PossibleTar2Offsets = (np.where(trialparms['Tar2SegCountFreq'])[0]) * \
+            PossibleTar2Offsets = (np.where(trialparms['Tar2SegCountFreq'])[0] + 1) * \
                     trialparms['Tar2SegmentLen'] + perf[1]['FirstRefTime']
             PossibleTar2Times = np.tile(PossibleTarTimes, (1, len(PossibleTar2Offsets))) \
                     + np.tile(PossibleTar2Offsets[:, np.newaxis], (len(PossibleTarTimes), 1))
@@ -186,11 +186,119 @@ def compute_di(parmfile, **options):
         TarSlotCount = np.sum(PossibleTarTimes < tar_time)
         if TarSlotCount > 0:
             stimtime.extend(PossibleTarTimes[:TarSlotCount])
-            stimtime.append(tar_time)
+            if type(tar_time) != float:
+                stimtime.extend(tar_time)
+            else:
+                stimtime.append(tar_time)
         else:
-            stimtime.append(tar_time)
+            if type(tar_time) != float:
+                stimtime.extend(tar_time)
+            else:
+                stimtime.append(tar_time)
 
         resptime.extend((np.ones(TarSlotCount + 1) * perf[tt+1]['FirstLickTime']).tolist())
         # 0: ref, 1:tar1, 2: tar2
         stimtype.extend((np.zeros(TarSlotCount).tolist()))
         stimtype.extend([1])
+    
+        reftype.extend(trialref_type[0, tt] * np.ones(TarSlotCount+1))
+
+        if two_target:
+            tcounter.extend(np.ones(TarSlotCount+1) * np.array(trialtargetid_all[tt])[Distlinds])
+        else:
+            tcounter.extend(np.ones(TarSlotCount+1) * trialtargetid[tt])
+
+        trialnum.extend(np.ones(TarSlotCount+1) * (tt+1))
+
+        if two_target:
+            Dist2inds = np.array(trialparms['TargetDistSet'])[((np.array(trialtargetid_all[tt])-1) % Ntar_per_reftype)] == 2
+            if np.sum(Dist2inds) == 1:
+                tar2_time = np.expand_dims(perf[tt+1]['TarTimes'], 0)[np.expand_dims(Dist2inds, 0)]
+                if 0:
+                    Tar2SlotCount = np.sum(PossibleTar2Times < tar2_time)
+                    PossibleTar2Times_this_trial = PossibleTar2Times[0:Tar2SlotCount]
+                else:
+                    PossibleTar2Times_this_trial = tar_time + PossibleTar2Offsets
+                    PossibleTar2Times_this_trial = PossibleTar2Times_this_trial[~(PossibleTar2Times_this_trial >= tar2_time)]
+                    Tar2SlotCount = len(PossibleTar2Times_this_trial)
+                
+                stimtime.extend(PossibleTar2Times_this_trial)
+                stimtime.extend(tar2_time)
+                resptime.extend(np.ones(Tar2SlotCount+1) * perf[tt+1]['FirstLickTime'])
+                stimtype.extend(np.zeros(Tar2SlotCount))
+                stimtype.append(1)
+                reftype.extend(trialref_type[0, tt] * np.ones(Tar2SlotCount+1))
+                tcounter.extend(np.ones(Tar2SlotCount+1) * np.expand_dims(trialtargetid_all[tt], 0)[np.expand_dims(Dist2inds, 0)])
+                trialnum.extend(np.ones(Tar2SlotCount+1) * (tt+1))
+            
+            elif np.sum(Dist2inds) > 1:
+                sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...') 
+
+    resptime[resptime==0] = Inf
+    
+    NoLick = resptime>stimtime+TarWindowStop
+    Lick = (resptime>=stimtime+TarWindowStart & resptime<stimtime+TarWindowStop)
+    ValidStim = resptime>=stimtime+TarWindowStart
+
+    stop_respwin = behaviorparams.EarlyWindow + behaviorparams.ResponseWindow + stop_respwin_offset
+    early_window = behaviorparams.EarlyWindow
+    if isempty(trials):
+        use = true(size(trialnum))
+    else:
+        use = ismember(trialnum,trials)
+    
+    if two_target:
+        repTarDistSet = repmat(trialparms.TargetDistSet,1,length(tar_suffixes))
+    else:
+        repTarDistSet = 1
+    
+    metrics = compute_metrics(Lick(use), NoLick(use), stimtype(use), stimtime(use), resptime(use), tcounter(use), 
+                        stop_respwin,ValidStim(use), trialtargetid, trialnum(use), reftype(use), reftype_by_tarid,
+                        early_window, repTarDistSet)
+
+    # metrics using only trials with new stimuli
+    HorM_trials = find([dat.exptparams.Performance(1:end-1).Hit]|[dat.exptparams.Performance(1:end-1).Miss])
+    use_trials = HorM_trials+1
+    if ~isempty(trials):
+        use_trials(~ismember(use_trials,trials))=[]
+
+    if 0 #use only hit trials from first rep
+        use_trials = find([dat.exptparams.Performance(1:end-1).Hit])
+        non_cue_start = find(~[dat.exptparams.TrialParams.CueSeg],1)
+        use_trials(use_trials<non_cue_start) = []
+        use_trials(~ismember([dat.exptparams.TrialParams(use_trials).rep],[1])) = []
+    
+    use = ismember(trialnum,[1 use_trials])
+    metrics_newT = compute_metrics(Lick(use), NoLick(use), stimtype(use), stimtime(use), resptime(use), tcounter(use), 
+                            stop_respwin, ValidStim(use), trialtargetid, trialnum(use), reftype(use),
+                            reftype_by_tarid, early_window, repTarDistSet)
+
+    # metrics using only trials with new stimuli, first half
+    use_trials1 = use_trials(use_trials<max(use_trials)/2)
+    use = ismember(trialnum,use_trials1)
+    metrics_newT.pt1 = compute_metrics(Lick(use),NoLick(use),stimtype(use),stimtime(use),resptime(use),tcounter(use),stop_respwin,ValidStim(use),trialtargetid,trialnum(use),reftype(use),reftype_by_tarid,early_window,repTarDistSet)
+    use_trials2 = use_trials(use_trials>max(use_trials)/2)
+    use = ismember(trialnum,use_trials2)
+    metrics_newT.pt2 = compute_metrics(Lick(use),NoLick(use),stimtype(use),stimtime(use),resptime(use),tcounter(use),stop_respwin,ValidStim(use),trialtargetid,trialnum(use),reftype(use),reftype_by_tarid,early_window,repTarDistSet)
+
+    return metrics, metrics_newT
+
+def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_respwin, ValidStim, trialtargetid,
+                    trialnum, reftype, reftype_by_tarid, early_window, repTarDistSet):
+    FA=Lick & ValidStim & stimtype==0
+    CR=NoLick & ValidStim & stimtype==0
+    Hit=Lick & ValidStim & stimtype==1
+    Miss=NoLick & ValidStim & stimtype==1
+    m.details=struct('Hits',sum(Hit),'Misses',sum(Miss),...
+        'FAs',sum(FA),'CRs',sum(CR))
+    m.HR=sum(Hit)./(sum(Hit)+sum(Miss))
+    m.FAR=sum(FA)./(sum(FA)+sum(CR))
+    % calculate DI using reaction time
+    resptime(resptime==0)=inf
+    m.DI=compute_di(stimtime(ValidStim),resptime(ValidStim),...
+        stimtype(ValidStim),stop_respwin)
+    if all(~ValidStim)
+        m.DI=NaN
+    end
+    m.DI2=(1+m.HR-m.FAR)/2
+    m.Bias2= (m.HR+m.FAR)/2
