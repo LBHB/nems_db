@@ -234,28 +234,30 @@ def compute_di(parmfile, **options):
             elif np.sum(Dist2inds) > 1:
                 sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...') 
 
-    resptime[resptime==0] = Inf
+    resptime[resptime==0] = np.nan
     
-    NoLick = resptime>stimtime+TarWindowStop
-    Lick = (resptime>=stimtime+TarWindowStart & resptime<stimtime+TarWindowStop)
-    ValidStim = resptime>=stimtime+TarWindowStart
+    NoLick = resptime > (np.array(stimtime) + TarWindowStop)
+    Lick = ((resptime >= (np.array(stimtime) + TarWindowStart)) & (resptime < (np.array(stimtime) + TarWindowStop)))
+    ValidStim = resptime >= (np.array(stimtime) + TarWindowStart)
 
-    stop_respwin = behaviorparams.EarlyWindow + behaviorparams.ResponseWindow + stop_respwin_offset
-    early_window = behaviorparams.EarlyWindow
-    if isempty(trials):
-        use = true(size(trialnum))
+    stop_respwin = behaviorparams['EarlyWindow'] + behaviorparams['ResponseWindow'] + stop_respwin_offset
+    early_window = behaviorparams['EarlyWindow']
+    if trials == False:
+        use = np.ones(len(trialnum)).astype(bool).tolist()
     else:
-        use = ismember(trialnum,trials)
+        
+        use = [t for t in trialnum if t in trials]
     
     if two_target:
-        repTarDistSet = repmat(trialparms.TargetDistSet,1,length(tar_suffixes))
+        repTarDistSet = np.tile(trialparms['TargetDistSet'] ,(1, len(tar_suffixes)))
     else:
         repTarDistSet = 1
     
-    metrics = compute_metrics(Lick(use), NoLick(use), stimtype(use), stimtime(use), resptime(use), tcounter(use), 
-                        stop_respwin,ValidStim(use), trialtargetid, trialnum(use), reftype(use), reftype_by_tarid,
-                        early_window, repTarDistSet)
-
+    metrics = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use], np.array(stimtime)[use], 
+                        np.array(resptime)[use], np.array(tcounter)[use], 
+                        stop_respwin, ValidStim[use], trialtargetid, np.array(trialnum)[use], np.array(reftype)[use],
+                        reftype_by_tarid, early_window, repTarDistSet)
+# ==================
     # metrics using only trials with new stimuli
     HorM_trials = find([dat.exptparams.Performance(1:end-1).Hit]|[dat.exptparams.Performance(1:end-1).Miss])
     use_trials = HorM_trials+1
@@ -285,20 +287,54 @@ def compute_di(parmfile, **options):
 
 def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_respwin, ValidStim, trialtargetid,
                     trialnum, reftype, reftype_by_tarid, early_window, repTarDistSet):
-    FA=Lick & ValidStim & stimtype==0
-    CR=NoLick & ValidStim & stimtype==0
-    Hit=Lick & ValidStim & stimtype==1
-    Miss=NoLick & ValidStim & stimtype==1
-    m.details=struct('Hits',sum(Hit),'Misses',sum(Miss),...
-        'FAs',sum(FA),'CRs',sum(CR))
-    m.HR=sum(Hit)./(sum(Hit)+sum(Miss))
-    m.FAR=sum(FA)./(sum(FA)+sum(CR))
-    % calculate DI using reaction time
-    resptime(resptime==0)=inf
-    m.DI=compute_di(stimtime(ValidStim),resptime(ValidStim),...
-        stimtype(ValidStim),stop_respwin)
-    if all(~ValidStim)
-        m.DI=NaN
-    end
-    m.DI2=(1+m.HR-m.FAR)/2
-    m.Bias2= (m.HR+m.FAR)/2
+    m = dict()
+    import pdb; pdb.set_trace()
+    FA = Lick & ValidStim & (stimtype==np.zeros(len(stimtype)))
+    CR = NoLick & ValidStim & (stimtype==np.zeros(len(stimtype)))
+    Hit = Lick & ValidStim & (stimtype==np.ones(len(stimtype)))
+    Miss = NoLick & ValidStim & (stimtype==np.ones(len(stimtype)))
+    m['details'] = {'Hits':sum(Hit), 'Misses': sum(Miss), 'FAs': sum(FA), 'CRs': sum(CR)}
+    m['HR'] = sum(Hit) / (sum(Hit)+sum(Miss))
+    m['FAR'] = sum(FA) / (sum(FA)+sum(CR))
+    # calculate DI using reaction time
+    resptime[resptime==0] = np.nan
+    m['DI'] = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
+    if np.all(~ValidStim):
+        m['DI'] = NaN
+    
+    m['DI2'] = (1+ m['HR'] - m['FAR']) / 2
+    m['Bias2'] = (m['HR'] + m['FAR']) / 2
+
+    return m
+
+
+def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
+
+    if stepcount is None:
+       stepcount = 50
+
+    tsteps = np.linspace(0, stop_respwin, stepcount-1).tolist().append(np.nan)
+    hits = np.zeros(stepcount)
+    fas = np.zeros(stepcount)
+    for tt in range(0, stepcount):
+        hits[tt] = sum(stimtype == 1 & (resptime-stimtime) <= tsteps[tt])
+        fas[tt] = sum(stimtype == 0 & (resptime-stimtime) <= tsteps[tt])
+
+    # total number of targets presented, ie, one for each hit and miss trial
+    targcount = sum(stimtype==1)
+    # total number of references = total stim minus targcount
+    refcount = sum(stimtype==0)
+
+    hits = hits / (targcount + (targcount==0))
+    fas= fas / (refcount + (refcount==0))
+    hits[-1] = 1
+    fas[-1] = 1
+
+    w = diff[fas] + diff[fas] / 2
+    di = sum(w * hits)
+    w2= diff[hits] + diff[hits] / 2
+    di2 = 1 - sum(w2 * fas)
+
+    di = (di+di2) / 2
+
+    return di, hits, fas, tsteps
