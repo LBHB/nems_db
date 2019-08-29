@@ -126,7 +126,7 @@ def compute_di(parmfile, **options):
         trialtargetid = np.ones(len(perf))
 
     if tar_suffixes != []:
-        reftype_by_tarid = np.nan * np.ones(len(exptparams['UniqueTargets']))
+        reftype_by_tarid = np.inf * np.ones(len(exptparams['UniqueTargets']))
         for i in range(0, len(tar_suffixes)):
             if two_target:
                 idx = np.unique([np.array(trialtargetid_all)[(trialref_type==(i+1)).squeeze()]])
@@ -161,7 +161,7 @@ def compute_di(parmfile, **options):
             perf[tt+1]['FirstTarTime'] = perf[tt+1]['TarResponseWinStart'] - behaviorparams['EarlyWindow']
         if 'FirstLickTime' not in perf[tt+1].keys() or perf[tt+1]['FirstLickTime'] == []:
             if perf[tt+1]['FirstLickTime'] == []:
-                perf[tt+1]['FirstLickTime'] = np.nan
+                perf[tt+1]['FirstLickTime'] = np.inf
             else:
                 perf[tt+1]['FirstLickTime'] = np.min(exptevents[(exptevents['name']=='LICK') & 
                                                             (exptevents['Trial']==tt+1)]['start'])
@@ -233,8 +233,9 @@ def compute_di(parmfile, **options):
             
             elif np.sum(Dist2inds) > 1:
                 sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...') 
-
-    resptime[resptime==0] = np.nan
+    
+    resptime = np.array(resptime)
+    resptime[resptime==0] = np.inf
     
     NoLick = resptime > (np.array(stimtime) + TarWindowStop)
     Lick = ((resptime >= (np.array(stimtime) + TarWindowStart)) & (resptime < (np.array(stimtime) + TarWindowStop)))
@@ -288,7 +289,6 @@ def compute_di(parmfile, **options):
 def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_respwin, ValidStim, trialtargetid,
                     trialnum, reftype, reftype_by_tarid, early_window, repTarDistSet):
     m = dict()
-    import pdb; pdb.set_trace()
     FA = Lick & ValidStim & (stimtype==np.zeros(len(stimtype)))
     CR = NoLick & ValidStim & (stimtype==np.zeros(len(stimtype)))
     Hit = Lick & ValidStim & (stimtype==np.ones(len(stimtype)))
@@ -297,8 +297,9 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
     m['HR'] = sum(Hit) / (sum(Hit)+sum(Miss))
     m['FAR'] = sum(FA) / (sum(FA)+sum(CR))
     # calculate DI using reaction time
-    resptime[resptime==0] = np.nan
-    m['DI'] = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
+    resptime[resptime==0] = np.inf
+    di, hits, fas, tsteps = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
+    m['DI'] = di
     if np.all(~ValidStim):
         m['DI'] = NaN
     
@@ -313,12 +314,12 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
     if stepcount is None:
        stepcount = 50
 
-    tsteps = np.linspace(0, stop_respwin, stepcount-1).tolist().append(np.nan)
+    tsteps = np.append(np.linspace(0, stop_respwin, stepcount-1) , np.inf)
     hits = np.zeros(stepcount)
     fas = np.zeros(stepcount)
     for tt in range(0, stepcount):
-        hits[tt] = sum(stimtype == 1 & (resptime-stimtime) <= tsteps[tt])
-        fas[tt] = sum(stimtype == 0 & (resptime-stimtime) <= tsteps[tt])
+        hits[tt] = sum((stimtype == np.ones(len(stimtype))) & ((resptime-stimtime) <= tsteps[tt] * np.ones(len(stimtype))))
+        fas[tt] = sum((stimtype == np.zeros(len(stimtype))) & ((resptime-stimtime) <= np.ones(len(stimtype)) * tsteps[tt]))
 
     # total number of targets presented, ie, one for each hit and miss trial
     targcount = sum(stimtype==1)
@@ -330,9 +331,9 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
     hits[-1] = 1
     fas[-1] = 1
 
-    w = diff[fas] + diff[fas] / 2
+    w = np.append(0, np.diff(fas)) + np.append(np.diff(fas), 0) / 2
     di = sum(w * hits)
-    w2= diff[hits] + diff[hits] / 2
+    w2= np.append(0, np.diff(hits)) + np.append(np.diff(hits), 0) / 2
     di2 = 1 - sum(w2 * fas)
 
     di = (di+di2) / 2
