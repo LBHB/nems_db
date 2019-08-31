@@ -298,6 +298,7 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
     m['FAR'] = sum(FA) / (sum(FA)+sum(CR))
     # calculate DI using reaction time
     resptime[resptime==0] = np.inf
+    import pdb; pdb.set_trace()
     di, hits, fas, tsteps = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
     m['DI'] = di
     if np.all(~ValidStim):
@@ -313,7 +314,7 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
 
     if stepcount is None:
        stepcount = 50
-
+    import pdb; pdb.set_trace()
     tsteps = np.append(np.linspace(0, stop_respwin, stepcount-1) , np.inf)
     hits = np.zeros(stepcount)
     fas = np.zeros(stepcount)
@@ -328,8 +329,6 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
 
     hits = hits / (targcount + (targcount==0))
     fas= fas / (refcount + (refcount==0))
-    hits[-1] = 1
-    fas[-1] = 1
 
     w = np.append(0, np.diff(fas)) + np.append(np.diff(fas), 0) / 2
     di = sum(w * hits)
