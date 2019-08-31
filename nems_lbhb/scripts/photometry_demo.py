@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 import scipy.ndimage.filters as snf
 
 fp = '/auto/data/daq/Amanita/AMT039/'
-fn = 'AMT039f02_p_VOC'
+fn = 'AMT039c05_p_VOC'
 pup_fn = fp + 'sorted/' + fn + '.pickle'
 photo_fn = fp + fn + '.photo.avi'
 
@@ -17,9 +17,9 @@ photo = io.load_raw_photometry(photo_fn)
 # choose signal length and force both signals to this to "align"
 n_samps = int(pup.shape[0] / 10)
 
-pup = ss.resample(pup[5:-5], n_samps)
+pup = ss.resample(pup[10:-10], n_samps)
 # remove low peaks of photo signal
-photo = pd.Series(photo.squeeze()).rolling(5).max().dropna().values[5:-5]
+photo = pd.Series(photo.squeeze()).rolling(5).max().dropna().values[10:-10]
 photo = ss.resample(photo, n_samps)
 
 # fit a second order polynomial to photo to regress out the bleaching shift
