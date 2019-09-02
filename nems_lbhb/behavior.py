@@ -298,14 +298,89 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
     m['FAR'] = sum(FA) / (sum(FA)+sum(CR))
     # calculate DI using reaction time
     resptime[resptime==0] = np.inf
-    import pdb; pdb.set_trace()
     di, hits, fas, tsteps = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
     m['DI'] = di
     if np.all(~ValidStim):
-        m['DI'] = NaN
+        m['DI'] = np.nan
     
     m['DI2'] = (1+ m['HR'] - m['FAR']) / 2
     m['Bias2'] = (m['HR'] + m['FAR']) / 2
+
+    NuniqueTars = len(reftype_by_tarid)
+    uHit = np.zeros((1, NuniqueTars))
+    uMiss = np.zeros((1, NuniqueTars))
+    uFA = np.zeros((1, NuniqueTars))
+    uET = np.zeros((1, NuniqueTars))
+    uRT = np.zeros((1, NuniqueTars))
+    sRT = np.zeros((1, NuniqueTars))
+    medRT = np.zeros((1, NuniqueTars))
+    qrRT = np.zeros((2, NuniqueTars))
+    uN = np.zeros(NuniqueTars)
+    uDI = np.zeros(NuniqueTars)
+    uDI_hits = np.zeros((NuniqueTars, 50))
+    uDI_fas = np.zeros((NuniqueTars, 50))
+    for uu in range(0, NuniqueTars):
+        uN[uu] = len(np.unique(trialnum[ValidStim & (tcounter == (np.ones(len(tcounter))) * (uu+1))]))
+        
+        hitI = Lick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
+        uHit[0, uu] = sum(hitI)
+        missI = NoLick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
+        uMiss[0, uu] = sum(missI)
+        uFA[0, uu] = uN[uu] - uHit[0, uu] - uMiss[0, uu]
+        uET[0, uu] = sum((resptime < stimtime) & (stimtype == np.zeros(len(stimtype))) & (stimtime == np.ones(len(stimtime)) * min(stimtime)) \
+                & (tcounter == ((uu+1) * np.ones(len(tcounter)))))
+        RTs = resptime[hitI] - stimtime[hitI] - early_window
+        if len(RTs) == 0:
+            uRT[0, uu] = np.nan
+            sRT[0, uu] = np.nan
+            medRT[0, uu] = np.nan
+            qrRT[:, uu] = np.ones(2) * np.nan
+
+        else:    
+            uRT[0, uu] = np.mean(RTs)
+            sRT[0, uu] = np.std(RTs)
+            medRT[0, uu] = np.median(RTs)
+            qrRT[:, uu] = np.percentile(RTs, [25, 75])
+        
+        FAI = Lick & ValidStim & (stimtype == np.zeros(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
+        RTs = resptime[FAI] - stimtime[FAI] - early_window
+        
+        inds = ValidStim & ((tcounter == ((uu+1) * np.ones(len(tcounter)))) | (stimtype == np.zeros(len(stimtype)))) \
+                 & (reftype == (np.ones(len(reftype)) * reftype_by_tarid[uu]))
+        if np.any(repTarDistSet > 1):
+            tar_inds_using_this_set = np.where(repTarDistSet[0, uu] == repTarDistSet[0, :])[0] + 1
+            idx_mask = [False if x in tar_inds_using_this_set else True for x in tcounter]
+            inds[idx] = False
+        
+        uDI[uu], uDI_hits[uu, :], uDI_fas[uu, :], tsteps = compute_di(stimtime[inds], resptime[inds], stimtype[inds], stop_respwin)
+        if np.all(~inds):
+            uDI[uu] = np.nan
+        
+    uDI[uN == 0] = np.nan
+    uHR = []
+    for i, v in enumerate((uHit + uMiss).squeeze()):
+        if v != 0:
+            uHR.append(uHit[0, i] / v)
+        else:
+            uHR.append(np.nan)
+    uHR = np.array(uHR)
+    uDI2 = (1 + uHR - m['FAR']) / 2
+
+    m['details']['uHit'] = uHit
+    m['details']['uMiss'] = uMiss
+    m['details']['uFA'] = uFA
+    m['details']['uET'] = uET
+    m['details']['uHR'] = uHR
+    m['details']['uRT'] = uRT
+    m['details']['medRT'] = medRT
+    m['details']['sRT'] = sRT
+    m['details']['qrRT'] = qrRT
+    m['details']['uDI'] = uDI
+    m['details']['uDI2'] = uDI2
+    m['details']['uN'] = uN
+    m['details']['uDI_hits'] = uDI_hits
+    m['details']['uDI_fas'] = uDI_fas
+    m['details']['tsteps'] = tsteps
 
     return m
 
@@ -314,14 +389,12 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
 
     if stepcount is None:
        stepcount = 50
-    import pdb; pdb.set_trace()
     tsteps = np.append(np.linspace(0, stop_respwin, stepcount-1) , np.inf)
     hits = np.zeros(stepcount)
     fas = np.zeros(stepcount)
     for tt in range(0, stepcount):
         hits[tt] = sum((stimtype == np.ones(len(stimtype))) & ((resptime-stimtime) <= tsteps[tt] * np.ones(len(stimtype))))
         fas[tt] = sum((stimtype == np.zeros(len(stimtype))) & ((resptime-stimtime) <= np.ones(len(stimtype)) * tsteps[tt]))
-
     # total number of targets presented, ie, one for each hit and miss trial
     targcount = sum(stimtype==1)
     # total number of references = total stim minus targcount
@@ -329,10 +402,12 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
 
     hits = hits / (targcount + (targcount==0))
     fas= fas / (refcount + (refcount==0))
+    hits[-1] = 1
+    fas[-1] = 1
 
-    w = np.append(0, np.diff(fas)) + np.append(np.diff(fas), 0) / 2
+    w = (np.append(0, np.diff(fas)) + np.append(np.diff(fas), 0)) / 2
     di = sum(w * hits)
-    w2= np.append(0, np.diff(hits)) + np.append(np.diff(hits), 0) / 2
+    w2 = (np.append(0, np.diff(hits)) + np.append(np.diff(hits), 0)) / 2
     di2 = 1 - sum(w2 * fas)
 
     di = (di+di2) / 2
