@@ -22,7 +22,7 @@ pup = ss.resample(pup[5:-5], n_samps)
 photo = pd.Series(photo.squeeze()).rolling(5).max().dropna().values[5:-5]
 photo = ss.resample(photo, n_samps)
 
-# fit a second order polynomial to photo to regress out the bleaching shift
+# fit a exponential decay to regress out the bleaching shift
 x = np.arange(0, len(photo))
 def exp(x, a, b, c):
     return a * np.exp(-b * x) + c
