@@ -14,17 +14,17 @@ def compute_di(parmfile, **options):
     ================================================================================
     parmfile - string with full path to .m filename
     options - dictionary
-        
+
         force_use_original_target_window: if true, forse hit anf FA analysis to
             use target window used during data collection. Otherwise, if target
             window is longer than RefSegLen, sets target window to RefSegLen.
-        
+
         trials: trials over which to calculate metrics
-        
+
         stop_respwin_offset: offset to add to end of time window over which di is
             calculated (default 1). The window end is the end of the target window,
             plus this offset value.
-    
+
     Outputs:
     ================================================================================
     metrics and metrics_newT are dictionaries containing the metrics
@@ -45,7 +45,7 @@ def compute_di(parmfile, **options):
     globalparams, exptparams, exptevents = io.baphy_parm_read(parmfile)
 
     trialparms = exptparams['TrialObject'][1]
-    
+
     # ???? What is this for ??????
     two_target = 'TargetDistSet' in trialparms.keys() and np.any(np.array(trialparms['TargetDistSet'])>1)
 
@@ -54,7 +54,7 @@ def compute_di(parmfile, **options):
         trialcount = globalparams['rawfilecount']
     else:
         trialcount = len(exptparams['Performance'])
-    
+
     wanted_trials = np.arange(1, trialcount+1)
     perf = dict((k, exptparams['Performance'][k]) for k in wanted_trials if k in exptparams['Performance'])
 
@@ -68,14 +68,14 @@ def compute_di(parmfile, **options):
         RefSegLen = trialparms['SingleRefSegmentLen']
         PossibleTarTimes = ((np.where(trialparms['ReferenceCountFreq'])[0]-0) + 1) * \
                 trialparms['SingleRefSegmentLen'] + perf[1]['FirstRefTime']
-        
+
         if two_target:
             PossibleTar2Offsets = (np.where(trialparms['Tar2SegCountFreq'])[0] + 1) * \
                     trialparms['Tar2SegmentLen'] + perf[1]['FirstRefTime']
             PossibleTar2Times = np.tile(PossibleTarTimes, (1, len(PossibleTar2Offsets))) \
                     + np.tile(PossibleTar2Offsets[:, np.newaxis], (len(PossibleTarTimes), 1))
             PossibleTar2Times = np.unique(PossibleTar2Times)
-    
+
     else:
         RefSegLen = trialparms['ReferenceHandle'][1]['PreStimSilence'] + \
                 trialparms['ReferenceHandle'][1]['Duration'] + \
@@ -92,14 +92,14 @@ def compute_di(parmfile, **options):
 
     # for cases where REF changes (think of this like changing the context. For example, coherent vs. incoherent REF streams)
     # FOR NOW, HARD CODING only to look for incoherent / coherent cases
-    unique_tar_suffixes = np.unique([suf.split(":")[-1] for suf in trialparms['TargetHandle'][1]['Names']]) 
+    unique_tar_suffixes = np.unique([suf.split(":")[-1] for suf in trialparms['TargetHandle'][1]['Names']])
     trialref_type = -1 * np.ones((1, trialcount))
     if len(unique_tar_suffixes) > 0:
         for i in range(1, len(unique_tar_suffixes)+1):
             idx = np.array([id for id in range(1, len(perf)+1) if unique_tar_suffixes[i-1] in perf[id]['ThisTargetNote'][0]])
             trialref_type[:, idx-1] = i
             tar_suffixes = unique_tar_suffixes
-    else: 
+    else:
         tar_suffixes = []
         trialref_type = np.ones((1, trialcount))
 
@@ -112,7 +112,7 @@ def compute_di(parmfile, **options):
         for tt in range(0, trialcount):
             if 'NullField' not in perf[1].keys() or perf[tt]['NullTrial']:
                 if two_target:
-                    trialtargetid_all[tt] = [np.where(x == np.array(exptparams['UniqueTargets']))[0][0] + 1 
+                    trialtargetid_all[tt] = [np.where(x == np.array(exptparams['UniqueTargets']))[0][0] + 1
                                                 for x in perf[tt+1]['ThisTargetNote']]
                     try:
                         trialtargetid[tt] = trialtargetid_all[tt][0]
@@ -126,7 +126,7 @@ def compute_di(parmfile, **options):
         trialtargetid = np.ones(len(perf))
 
     if tar_suffixes != []:
-        reftype_by_tarid = np.inf * np.ones(len(exptparams['UniqueTargets']))
+        reftype_by_tarid = np.nan * np.ones(len(exptparams['UniqueTargets']))
         for i in range(0, len(tar_suffixes)):
             if two_target:
                 idx = np.unique([np.array(trialtargetid_all)[(trialref_type==(i+1)).squeeze()]])
@@ -154,8 +154,8 @@ def compute_di(parmfile, **options):
         t1 = t2 = 1
     else:
         t1 = np.where(np.array(Misses)==0)[0][0]
-        t2 = len(Misses) - np.where(np.array(Misses[::-1])==0)[0][0] 
-    
+        t2 = len(Misses) - np.where(np.array(Misses[::-1])==0)[0][0]
+
     for tt in range(t1, t2):
         if 'FirstTarTime' not in perf[tt+1].keys() or perf[tt+1]['FirstTarTime'] == []:
             perf[tt+1]['FirstTarTime'] = perf[tt+1]['TarResponseWinStart'] - behaviorparams['EarlyWindow']
@@ -163,7 +163,7 @@ def compute_di(parmfile, **options):
             if perf[tt+1]['FirstLickTime'] == []:
                 perf[tt+1]['FirstLickTime'] = np.inf
             else:
-                perf[tt+1]['FirstLickTime'] = np.min(exptevents[(exptevents['name']=='LICK') & 
+                perf[tt+1]['FirstLickTime'] = np.min(exptevents[(exptevents['name']=='LICK') &
                                                             (exptevents['Trial']==tt+1)]['start'])
 
         Ntar_per_reftype= len(trialparms['TargetIdxFreq'])
@@ -174,12 +174,12 @@ def compute_di(parmfile, **options):
 
             if not np.any(Distlinds):
                 sys.warning("Make sure this works if a trial doesn''t have a target from slot 1")
-            
+
             if len(Distlinds) > 1:
                 tar_time = np.array(perf[tt+1]['TarTimes'])[Distlinds]
             else:
                 tar_time = perf[tt+1]['FirstTarTime']
-                
+
         else:
             tar_time = perf[tt+1]['FirstTarTime']
 
@@ -200,7 +200,7 @@ def compute_di(parmfile, **options):
         # 0: ref, 1:tar1, 2: tar2
         stimtype.extend((np.zeros(TarSlotCount).tolist()))
         stimtype.extend([1])
-    
+
         reftype.extend(trialref_type[0, tt] * np.ones(TarSlotCount+1))
 
         if two_target:
@@ -221,7 +221,7 @@ def compute_di(parmfile, **options):
                     PossibleTar2Times_this_trial = tar_time + PossibleTar2Offsets
                     PossibleTar2Times_this_trial = PossibleTar2Times_this_trial[~(PossibleTar2Times_this_trial >= tar2_time)]
                     Tar2SlotCount = len(PossibleTar2Times_this_trial)
-                
+
                 stimtime.extend(PossibleTar2Times_this_trial)
                 stimtime.extend(tar2_time)
                 resptime.extend(np.ones(Tar2SlotCount+1) * perf[tt+1]['FirstLickTime'])
@@ -230,13 +230,13 @@ def compute_di(parmfile, **options):
                 reftype.extend(trialref_type[0, tt] * np.ones(Tar2SlotCount+1))
                 tcounter.extend(np.ones(Tar2SlotCount+1) * np.expand_dims(trialtargetid_all[tt], 0)[np.expand_dims(Dist2inds, 0)])
                 trialnum.extend(np.ones(Tar2SlotCount+1) * (tt+1))
-            
+
             elif np.sum(Dist2inds) > 1:
-                sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...') 
-    
+                sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...')
+
     resptime = np.array(resptime)
     resptime[resptime==0] = np.inf
-    
+
     NoLick = resptime > (np.array(stimtime) + TarWindowStop)
     Lick = ((resptime >= (np.array(stimtime) + TarWindowStart)) & (resptime < (np.array(stimtime) + TarWindowStop)))
     ValidStim = resptime >= (np.array(stimtime) + TarWindowStart)
@@ -246,44 +246,48 @@ def compute_di(parmfile, **options):
     if trials == False:
         use = np.ones(len(trialnum)).astype(bool).tolist()
     else:
-        
+
         use = [t for t in trialnum if t in trials]
-    
+
     if two_target:
         repTarDistSet = np.tile(trialparms['TargetDistSet'] ,(1, len(tar_suffixes)))
     else:
         repTarDistSet = 1
-    
-    metrics = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use], np.array(stimtime)[use], 
-                        np.array(resptime)[use], np.array(tcounter)[use], 
+    metrics = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use], np.array(stimtime)[use],
+                        np.array(resptime)[use], np.array(tcounter)[use],
                         stop_respwin, ValidStim[use], trialtargetid, np.array(trialnum)[use], np.array(reftype)[use],
                         reftype_by_tarid, early_window, repTarDistSet)
 # ==================
     # metrics using only trials with new stimuli
-    HorM_trials = find([dat.exptparams.Performance(1:end-1).Hit]|[dat.exptparams.Performance(1:end-1).Miss])
+    tf = []
+    HorM_trials = np.where([True if exptparams['Performance'][k]['Hit'] or exptparams['Performance'][k]['Miss'] else False
+                    for k in exptparams['Performance'].keys()][:-1])[0] + 1
     use_trials = HorM_trials+1
-    if ~isempty(trials):
+    if trials:
         use_trials(~ismember(use_trials,trials))=[]
 
-    if 0 #use only hit trials from first rep
-        use_trials = find([dat.exptparams.Performance(1:end-1).Hit])
-        non_cue_start = find(~[dat.exptparams.TrialParams.CueSeg],1)
-        use_trials(use_trials<non_cue_start) = []
-        use_trials(~ismember([dat.exptparams.TrialParams(use_trials).rep],[1])) = []
-    
-    use = ismember(trialnum,[1 use_trials])
-    metrics_newT = compute_metrics(Lick(use), NoLick(use), stimtype(use), stimtime(use), resptime(use), tcounter(use), 
-                            stop_respwin, ValidStim(use), trialtargetid, trialnum(use), reftype(use),
-                            reftype_by_tarid, early_window, repTarDistSet)
+    use = [True if x in np.append(1, use_trials) else False for x in trialnum]
+    metrics_newT = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use],
+                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
+                            stop_respwin, ValidStim[use], trialtargetid, np.array(trialnum)[use],
+                            np.array(reftype)[use], reftype_by_tarid, early_window, repTarDistSet)
 
     # metrics using only trials with new stimuli, first half
-    use_trials1 = use_trials(use_trials<max(use_trials)/2)
-    use = ismember(trialnum,use_trials1)
-    metrics_newT.pt1 = compute_metrics(Lick(use),NoLick(use),stimtype(use),stimtime(use),resptime(use),tcounter(use),stop_respwin,ValidStim(use),trialtargetid,trialnum(use),reftype(use),reftype_by_tarid,early_window,repTarDistSet)
-    use_trials2 = use_trials(use_trials>max(use_trials)/2)
-    use = ismember(trialnum,use_trials2)
-    metrics_newT.pt2 = compute_metrics(Lick(use),NoLick(use),stimtype(use),stimtime(use),resptime(use),tcounter(use),stop_respwin,ValidStim(use),trialtargetid,trialnum(use),reftype(use),reftype_by_tarid,early_window,repTarDistSet)
-
+    use_trials1 = use_trials[use_trials < (np.ones(len(use_trials)) * max(use_trials) / 2)]
+    use = [True if x in use_trials1 else False for x in trialnum]
+    metrics_newT['pt1'] = compute_metrics(Lick[use],NoLick[use], np.array(stimtype)[use],
+                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
+                            stop_respwin, ValidStim[use], trialtargetid,
+                            np.array(trialnum)[use], np.array(reftype)[use],
+                            reftype_by_tarid,early_window,repTarDistSet)
+    use_trials2 = use_trials[use_trials > (np.ones(len(use_trials)) * max(use_trials) / 2)]
+    use = [True if x in use_trials2 else False for x in trialnum]
+    metrics_newT['pt2'] = compute_metrics(Lick[use],NoLick[use], np.array(stimtype)[use],
+                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
+                            stop_respwin, ValidStim[use], trialtargetid,
+                            np.array(trialnum)[use], np.array(reftype)[use],
+                            reftype_by_tarid,early_window,repTarDistSet)
+                            
     return metrics, metrics_newT
 
 def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_respwin, ValidStim, trialtargetid,
@@ -302,7 +306,7 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
     m['DI'] = di
     if np.all(~ValidStim):
         m['DI'] = np.nan
-    
+
     m['DI2'] = (1+ m['HR'] - m['FAR']) / 2
     m['Bias2'] = (m['HR'] + m['FAR']) / 2
 
@@ -321,7 +325,7 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
     uDI_fas = np.zeros((NuniqueTars, 50))
     for uu in range(0, NuniqueTars):
         uN[uu] = len(np.unique(trialnum[ValidStim & (tcounter == (np.ones(len(tcounter))) * (uu+1))]))
-        
+
         hitI = Lick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
         uHit[0, uu] = sum(hitI)
         missI = NoLick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
@@ -336,26 +340,28 @@ def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_r
             medRT[0, uu] = np.nan
             qrRT[:, uu] = np.ones(2) * np.nan
 
-        else:    
+        else:
             uRT[0, uu] = np.mean(RTs)
-            sRT[0, uu] = np.std(RTs)
+            sRT[0, uu] = np.std(RTs, ddof=1) # to agree with matlab need to set degrees of freedom
             medRT[0, uu] = np.median(RTs)
-            qrRT[:, uu] = np.percentile(RTs, [25, 75])
-        
+            # this funct. behaves differently in python than matlab which is why
+            # baphy's version of di_nolick returns slightly diff uDI values
+            qrRT[:, uu] = np.percentile(RTs, [25, 75], interpolation='linear')
+
+
         FAI = Lick & ValidStim & (stimtype == np.zeros(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
         RTs = resptime[FAI] - stimtime[FAI] - early_window
-        
+
         inds = ValidStim & ((tcounter == ((uu+1) * np.ones(len(tcounter)))) | (stimtype == np.zeros(len(stimtype)))) \
                  & (reftype == (np.ones(len(reftype)) * reftype_by_tarid[uu]))
         if np.any(repTarDistSet > 1):
             tar_inds_using_this_set = np.where(repTarDistSet[0, uu] == repTarDistSet[0, :])[0] + 1
             idx_mask = [False if x in tar_inds_using_this_set else True for x in tcounter]
-            inds[idx] = False
-        
+            inds[idx_mask] = False
         uDI[uu], uDI_hits[uu, :], uDI_fas[uu, :], tsteps = compute_di(stimtime[inds], resptime[inds], stimtype[inds], stop_respwin)
         if np.all(~inds):
             uDI[uu] = np.nan
-        
+
     uDI[uN == 0] = np.nan
     uHR = []
     for i, v in enumerate((uHit + uMiss).squeeze()):
