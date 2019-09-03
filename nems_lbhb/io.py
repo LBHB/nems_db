@@ -1642,7 +1642,8 @@ def load_raw_photometry(photofilepath, fs=None):
     video_container = av.open(photofilepath)
     video_stream = [s for s in video_container.streams][0]
 
-    F_mag = []
+    F_mag1 = []
+    F_mag2 = []
     for i, packet in enumerate(video_container.demux(video_stream)):
         if i%1000 == 0:
             print("frame: {}".format(i))
@@ -1653,26 +1654,40 @@ def load_raw_photometry(photofilepath, fs=None):
             plt.imshow(frame_[:, :, 0])
             print("Before closing image, locate the center of your ROI!")
             plt.show()
-            x = int(input("x center: "))
-            y = int(input("y center: "))
+            print("left ROI: ")
+            x = int(input("x1 center: "))
+            y = int(input("y1 center: "))
+            print("right ROI: ")
+            x2 = int(input("x2 center: "))
+            y2 = int(input("y2 center: "))
 
             # define roi:
-            x_range = np.arange(x-2, x+2)
-            y_range = np.arange(y-2, y+2)
+            x1_range = np.arange(x-2, x+2)
+            y1_range = np.arange(y-2, y+2)
 
-            roi = frame_[:, :, 0][x_range, :][:, y_range]
-            fmag = np.mean(roi)
-            F_mag.append(fmag)
+            x2_range = np.arange(x2-2, x2+2)
+            y2_range = np.arange(y2-2, y2+2)
+
+
+            roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+            roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+            fmag1 = np.mean(roi1)
+            fmag2 = np.mean(roi2)
+            F_mag1.append(fmag1)
+            F_mag2.append(fmag2)
 
         else:
             try:
                 frame = packet.decode()[0]
                 frame_ = np.asarray(frame.to_image().convert('LA'))
-                roi = frame_[:, :, 0][x_range, :][:, y_range]
-                fmag = np.mean(roi)
-                F_mag.append(fmag)
+                roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+                roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+                fmag1 = np.mean(roi1)
+                fmag2 = np.mean(roi2)
+                F_mag1.append(fmag1)
+                F_mag2.append(fmag2)
             except:
                 print('end of file reached')
 
     
-    return np.array(F_mag)[:, np.newaxis]
+    return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
