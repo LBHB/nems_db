@@ -19,6 +19,7 @@ import nems.db as nd
 import scipy.io
 import nems_db
 import sys
+from tkinter import filedialog
 
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
@@ -100,21 +101,9 @@ class PupilBrowser:
     def get_frame(self):
         animal = self.animal_name.get()
         video_n = self.video_name.get()
-        video = video_folder + animal + '/' + video_n[:6] + '/' + video_n + '.mj2'
-
-        if os.path.isfile(video) != True:
-            video_1 = video_folder + animal + '/training2019/' + video_n + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + video_n + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                video = video_1
-            elif os.path.isfile(video_2) == True:
-                video = video_2
-            else:
-                raise ValueError("can't find video")
+        video = self.raw_video
 
         frame = int(self.frame_n_value.get())
-        fps = 30
         t = frame * (1 / 30)
 
         # save new frames
@@ -320,8 +309,22 @@ class PupilBrowser:
         Display the first frame of the video on the pupil canvas.
         """
 
-        params_file = self.video_name.get()
-        animal = self.animal_name.get()
+        # get the pupil video file
+        self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
+                            title = "Select raw video file", 
+                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+        
+        params_file = os.path.split(self.raw_video)[-1].split('.')[0]
+        animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
+
+        self.video_name.delete(0, 'end')
+        self.animal_name.delete(0, 'end')
+        self.video_name.insert(0, params_file)
+        self.animal_name.insert(0, animal)
+
+        fn = os.path.split(self.raw_video)[-1].split('.')[0] + '_pred.pickle'
+        fp = os.path.split(self.raw_video)[0]
+        self.processed_video = os.path.join(fp, 'sorted', fn)
 
         self.plot_trace(params_file)
 
@@ -332,18 +335,7 @@ class PupilBrowser:
         self.exclude_ends = []
 
         # save first ten frames and display the first
-        video = video_folder + animal + '/' + params_file[:6] + '/' + params_file + '.mj2'
-
-        if os.path.isfile(video) != True:
-            video_1 = video_folder + animal + '/training2019/' + params_file + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + params_file + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                video = video_1
-            elif os.path.isfile(video_2) == True:
-                video = video_2
-            else:
-                raise ValueError("can't find video")
+        video = self.raw_video
 
         os.system("ffmpeg -ss 00:00:00 -i {0} -vframes 1 {1}frame%d.jpg".format(video, tmp_frame_folder))
 
@@ -379,25 +371,13 @@ class PupilBrowser:
         video_name = self.video_name.get()
         animal = self.animal_name.get()
         site = video_name[:6]
-        save_path = os.path.join(video_folder, animal, site, "sorted", video_name + ".pickle")
+
+        fn = video_name + '.pickle'
+        fn_mat = video_name + '.mat'
+        fp = os.path.split(self.processed_video)[0]
+        save_path = os.path.join(fp, fn)
         # for matlab loading
-        mat_fn = os.path.join(video_folder, animal, site, "sorted", video_name + ".mat")
-
-        if os.path.isdir(os.path.join(video_folder, animal, site)) != True:
-
-            video_1 = video_folder + animal + '/training2019/' + video_name + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + video_name + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                save_path = os.path.join(video_folder, animal, "training2019", "sorted", video_name + ".pickle")
-                mat_fn = os.path.join(video_folder, animal, "training2019", "sorted", video_name + ".mat")
-            elif os.path.isfile(video_2) == True:
-                save_path = os.path.join(video_folder, animal, "training2018", "sorted", video_name + ".pickle")
-                mat_fn = os.path.join(video_folder, animal, "training2018", "sorted", video_name + ".mat")
-            else:
-                raise ValueError("can't find video")
-
-
+        mat_fn = os.path.join(fp, fn_mat)
 
         sorted_dir = os.path.split(save_path)[0]
 
