@@ -160,8 +160,39 @@ class BAPHYExperiment:
             return load_trial_starts_openephys(self.openephys_folder)
         raise ValueError(f'Method "{method}" not supported')
 
+    def get_baphy_events(self, correction_method='auto', **kw):
+        '''
+        Return BAPHY event times, optionally corrected to align with other
+        event times.
+
+        Parameters
+        ----------
+        correction_method : {'auto', 'openephys', 'spikes', None}
+            If 'auto', tries each of the correction methods in the order listed
+            in the options for this parameter until one succeeds. Otherwise,
+            use the correction method specified (None performs no correction).
+
+        Optional arguments, passed in by keyword, are passed directly to the
+        appropriate correction method (for 'auto', no keyword arguments are
+        allowed).
+        '''
+        correction_methods = ['openephys', 'spikes', None]
+        if correction_method != 'auto':
+            return self._get_baphy_events(correction_method, **kw)
+        for correction_method in correction_methods:
+            if kw:
+                m = "Keyword arguments not supported when correction_method is set to 'auto'"
+                raise ValueError(m)
+            try:
+                return self._get_baphy_events(correction_method, **kw)
+            except Exception as base_exc:
+                pass
+        else:
+            m = f'Unable to load BAPHY event times for {self.parmfile}'
+            raise ValueError(m) from base_exc
+
     @lru_cache(maxsize=128)
-    def get_baphy_events(self, correction_method='openephys', **kw):
+    def _get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self._get_baphy_parameters()[-1]
         if correction_method is None:
             return baphy_events
@@ -898,7 +929,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
-    
+
 
     pupilfilepath = get_pupil_file(pupilfilepath)
 
@@ -933,24 +964,12 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     if options["pupil_derivative"]:
         raise ValueError('pupil_derivative not implemented.')
 
-    # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
-    # these times are set based on openephys data, since baphy doesn't log exact trial start times
+    # we want to use exptevents TRIALSTART events as the ground truth for the
+    # time when each trial starts.  Ideally, these times are set based on
+    # openephys data, since baphy doesn't log exact trial start times.
     if exptevents is None:
         experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
-        trial_starts = experiment.get_trial_starts()
         exptevents = experiment.get_baphy_events()
-
-        #parmfilepath = pupilfilepath.replace(".pup.mat",".m")
-        #globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-        #pp, bb = os.path.split(parmfilepath)
-        #spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
-        #log.info("Spike file: {0}".format(spkfilepath))
-        ## load spike times
-        #sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
-        ## adjust spike and event times to be in seconds since experiment started
-        #exptevents, spiketimes, unit_names = baphy_align_time(
-        #        exptevents, sortinfo, spikefs, rasterfs
-        #        )
 
     if '.pickle' in pupilfilepath:
 
@@ -1078,7 +1097,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         returned_measurement = eye_speed
     else:
         returned_measurement = pupil_diameter
-    
+
     # resample and remove dropped frames
 
     # find and parse pupil events
@@ -1096,8 +1115,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         firstframe[t] = int(p[1])
     pp = ['PUPILSTOP' in x['name'] for i, x in exptevents.iterrows()]
     lastidx = np.argwhere(pp)[-1]
-    
-    
+
+
     s = exptevents.iloc[lastidx[0]]['name'].split(",[")
     p = eval("[" + s[1])
     timestamp[-1] = p[0]
@@ -1689,5 +1708,5 @@ def load_raw_photometry(photofilepath, fs=None):
             except:
                 print('end of file reached')
 
-    
+
     return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
