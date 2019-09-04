@@ -29,7 +29,8 @@ batch = 307  # A1 SUA and MUA
 
 # pup vs. active/passive
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
-basemodel = "-ref-psthfr.s_stategain.S"
+#basemodel = "-ref-psthfr.s_stategain.S"
+basemodel = "-ref-psthfr.s_sdexp.S"
 
 #batch = 307  # A1 SUA and MUA
 #batch = 309  # IC SUA and MUA
@@ -69,6 +70,7 @@ for batch in batches:
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 basemodel = "-ref-psthfr.s_sdexp.S"
+#basemodel = "-ref-psthfr_sdexp.S"
 
 # RUN IF CONNECTED TO SERVER
 # A1 SUA+MUA: pup vs. beh 307 per state dataframe

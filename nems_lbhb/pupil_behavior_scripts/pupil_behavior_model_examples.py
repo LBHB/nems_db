@@ -194,6 +194,8 @@ def pupil_behavior_batch_sum():
 
 
 # BEGIN main code
+line_colors = stateplots.line_colors
+
 loader = "psth.fs20.pup-ld-"
 fitter = "jk.nf20-basic"
 
@@ -202,10 +204,10 @@ cellids = ["TAR010c-06-1"]
 
 basemodel = "ref-psthfr_sdexp.S"
 
-modelname_p0b0 = loader + "st.pup0.beh0-ref-" + basemodel + "_" + fitter
-modelname_p0b = loader + "st.pup0.beh-ref-" + basemodel + "_" + fitter
-modelname_pb0 = loader + "st.pup.beh0-ref-" + basemodel + "_" + fitter
-modelname_pb = loader + "st.pup.beh-ref-" + basemodel + "_" + fitter
+modelname_p0b0 = loader + "st.pup0.beh0-" + basemodel + "_" + fitter
+modelname_p0b = loader + "st.pup0.beh-" + basemodel + "_" + fitter
+modelname_pb0 = loader + "st.pup.beh0-" + basemodel + "_" + fitter
+modelname_pb = loader + "st.pup.beh-" + basemodel + "_" + fitter
 
 factor0 = "baseline"
 factor1 = "pupil"
@@ -221,8 +223,9 @@ state_colors = [[line_colors['small'], line_colors['large']],
                 [line_colors['pas5'], line_colors['post']],
                 [line_colors['pas6'], line_colors['post']]]
 
-fh, stats = _model_step_plot(cellid, batch, modelnames, factors,
-                             state_colors=state_colors)
+for cellid in cellids:
+    fh, stats = stateplots._model_step_plot(
+        cellid, batch, modelnames, factors, state_colors=state_colors)
 
 plt.tight_layout()
 

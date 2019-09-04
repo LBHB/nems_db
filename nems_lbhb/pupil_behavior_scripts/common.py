@@ -33,12 +33,13 @@ pd.set_option('display.max_columns', 100)
 def scat_states(df,
                 x_model,
                 y_model,
-                beh_state,
-                area,
-                sig_list,
-                x_column,
-                y_column,
-                color_list,
+                x_beh_state,
+                y_beh_state=None,
+                area=None,
+                sig_list=None,
+                x_column=None,
+                y_column=None,
+                color_list=None,
                 highlight_cellids={},
                 hue=False,
                 save=False,
@@ -65,6 +66,9 @@ def scat_states(df,
     else:
         plt.sca(ax)
 
+    if y_beh_state is None:
+        y_beh_state = x_beh_state
+
     # need a slope and c to fix the position of line
     if xlim is not None:
         xlim = xlim
@@ -85,35 +89,35 @@ def scat_states(df,
     plt.axhline(0, linestyle='--', linewidth=0.5, color='k')
 
     if hue:
-        sns.scatterplot(x=df.loc[x_model & beh_state & area, x_column].tolist(),
-                        y=df.loc[y_model & beh_state & area, y_column].tolist(),
-                        s=200, hue=df.loc[x_model & beh_state & area, hue],
+        sns.scatterplot(x=df.loc[x_model & x_beh_state & area, x_column].tolist(),
+                        y=df.loc[y_model & y_beh_state & area, y_column].tolist(),
+                        s=200, hue=df.loc[x_model & x_beh_state & area, hue],
                         marker=marker, edgecolors='white', linewidth=0.5)
 
     elif pup_state:
         # plot not significant units
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[0], x_column].tolist(),
-                    y=df.loc[y_model & beh_state & area & sig_list[0], y_column].tolist(),
+                    y=df.loc[y_model & x_beh_state & area & sig_list[0], y_column].tolist(),
                     s=150, color=color_list[0], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant state units
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[1], x_column].tolist(),
-                    y=df.loc[y_model & beh_state & area & sig_list[1], y_column].tolist(),
+                    y=df.loc[y_model & x_beh_state & area & sig_list[1], y_column].tolist(),
                     s=200, color=color_list[1], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique behavior
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[2], x_column].tolist(),
-                    y=df.loc[y_model & beh_state & area & sig_list[2], y_column].tolist(),
+                    y=df.loc[y_model & x_beh_state & area & sig_list[2], y_column].tolist(),
                     s=200, color=color_list[2], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique pupil
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[3], x_column].tolist(),
-                    y=df.loc[y_model & beh_state & area & sig_list[3], y_column].tolist(),
+                    y=df.loc[y_model & x_beh_state & area & sig_list[3], y_column].tolist(),
                     s=200, color=color_list[3], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique both
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[4], x_column].tolist(),
-                    y=df.loc[y_model & beh_state & area & sig_list[4], y_column].tolist(),
+                    y=df.loc[y_model & x_beh_state & area & sig_list[4], y_column].tolist(),
                     s=200, color=color_list[4], marker=marker, edgecolors='white', linewidth=0.5)
 
     else:
@@ -122,8 +126,8 @@ def scat_states(df,
 
         # iterate: not significant units, sig state, sig u beh, sig u pup, sig u both
         for i, sig in enumerate(sig_list):
-            x = df.loc[x_model & beh_state & area & sig, x_column].values
-            y = df.loc[y_model & beh_state & area & sig, y_column].values
+            x = df.loc[x_model & x_beh_state & area & sig, x_column].values
+            y = df.loc[y_model & y_beh_state & area & sig, y_column].values
             x = np.clip(x, xlim[0], xlim[1])
             y = np.clip(y, ylim[0], ylim[1])
             x_outlier = (x <= xlim[0]) | (x >= xlim[1])
@@ -144,8 +148,8 @@ def scat_states(df,
         raise Exception('highlight_cellids has got to be a dict!')
     else:
         for cellid, color in highlight_cellids.items():
-            plt.scatter(x=df.loc[x_model & beh_state & area & (df['cellid'] == cellid), x_column].tolist(),
-                        y=df.loc[y_model & beh_state & area & (df['cellid'] == cellid), y_column].tolist(),
+            plt.scatter(x=df.loc[x_model & x_beh_state & area & (df['cellid'] == cellid), x_column].tolist(),
+                        y=df.loc[y_model & y_beh_state & area & (df['cellid'] == cellid), y_column].tolist(),
                         s=200, color=color, marker=marker, edgecolors='white', linewidth=0.5)
     ax.set_aspect('equal', 'box')
     nplt.ax_remove_box(ax)

@@ -227,6 +227,7 @@ def get_model_results(batch=307, state_list=None,
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
+            import pdb; pdb.set_trace()
             for j, sc in enumerate(state_chans):
                 ii = ((d['cellid'] == c) & (d['state_chan'] == sc))
                 if np.sum(ii) == 0:
@@ -498,7 +499,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
             x01=(mfull[:,0]>i/nb) & (mfull[:,0]<=(i+1)/nb)
             if np.sum(x01):
                 mm[i,:]=np.nanmean(mfull[x01,:],axis=0)
-                
+
         print(np.round(mm,3))
 
         m = mm.copy()
@@ -506,6 +507,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
         # alt to look at each cell individually:
         m = mfull.copy()
 
+    mall = np.nanmean(mfull, axis=0, keepdims=True)
+
+    # remove sensory component, which swamps everything else
+    mall = mall[:, 2:]
     mb=m[:,2:]
 
     ax1 = plt.subplot(3,1,1)
@@ -513,12 +518,13 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
                          ax=ax1, highlight=dm['sig'], hist_range=[-0.1, 1])
 
     ax2 = plt.subplot(3,1,2)
-    ind = np.arange(mb.shape[0])
     width=0.8
     #ind = m[:,0]
-    p1 = plt.bar(ind, mb[:,0], width=width)
-    p2 = plt.bar(ind, mb[:,1], width=width, bottom=mb[:,0])
-    p3 = plt.bar(ind, mb[:,2], width=width, bottom=mb[:,0]+mb[:,1])
+    mplots=np.concatenate((mall, mb), axis=0)
+    ind = np.arange(mplots.shape[0])
+    p1 = plt.bar(ind, mplots[:,0], width=width)
+    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0])
+    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1])
     plt.legend(('common','p_unique','b-unique'))
     if title is not None:
         plt.title(title)
@@ -526,10 +532,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    stateplots.beta_comp(mfull[:,0],mfull[:,1]-mfull[:,0],
-                         n1='State independent',n2='dep - indep',
+    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
                      ax=ax3, highlight=dm['sig'], hist_range=[-0.3, 1])
-    r, p = st.pearsonr(mfull[:,0],mfull[:,1]-mfull[:,0])
+    r, p = st.pearsonr(mfull[:,0],d)
     plt.title('cc={:.3} p={:.4}'.format(r,p))
 
     #ind = np.arange(mb.shape[0])
