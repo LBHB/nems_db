@@ -55,26 +55,11 @@ if __name__ == '__main__':
     model = keras.models.load_model(modelpath)
 
     path = os.path.split(video_file)[0] 
-    #'/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
+
     if os.path.isdir(path):
         pass
     else:
         raise ValueError("can't find pupil video")
-    '''
-    else:
-        try:
-            path = '/auto/data/daq/{0}/training2019/{1}'.format(animal, filename+'.m')
-            if os.path.isfile(path):
-                path = '/auto/data/daq/{0}/training2019/'.format(animal)
-            else:
-                raise ValueError("can't find pupil video")
-        except:
-            path = '/auto/data/daq/{0}/training2018/{1}'.format(animal, filename+'.m')
-            if os.path.isfile(path):
-                path = '/auto/data/daq/{0}/training2018/'.format(animal)
-            else:
-                raise ValueError("can't find pupil video")
-    '''
 
     save_path = os.path.join(path, 'sorted')
     video = video_file
