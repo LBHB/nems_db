@@ -223,12 +223,6 @@ class BAPHYExperiment:
         change.
         chans (list or numpy slice): which electrodes to load data from
         '''
-        # get filenames (TODO: can this be sped up?)
-        #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-        #    log.info("Finding filenames in tarfile...")
-        #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
-        #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
-
         # Use xml settings instead of the tar file. Much faster. Also, takes care
         # of channel mapping (I think)
         recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
