@@ -36,9 +36,8 @@ if __name__ == '__main__':
         nd.update_job_start(queueid)
 
     # perform pupil fit
-    animal = sys.argv[1]
-    filename = sys.argv[2]
-    modelname = sys.argv[3]
+    video_file = sys.argv[1]
+    modelname = sys.argv[2]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
     #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
@@ -55,9 +54,13 @@ if __name__ == '__main__':
 
     model = keras.models.load_model(modelpath)
 
-    path = '/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
+    path = os.path.split(video_file)[0] 
+    #'/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
     if os.path.isdir(path):
         pass
+    else:
+        raise ValueError("can't find pupil video")
+    '''
     else:
         try:
             path = '/auto/data/daq/{0}/training2019/{1}'.format(animal, filename+'.m')
@@ -71,9 +74,13 @@ if __name__ == '__main__':
                 path = '/auto/data/daq/{0}/training2018/'.format(animal)
             else:
                 raise ValueError("can't find pupil video")
+    '''
 
-    save_path = path + 'sorted/'
-    video = path + filename + '.mj2'
+    save_path = os.path.join(path, 'sorted')
+    video = video_file
+    results_name = os.path.split(video_file)[-1].split('.')[0] + '_pred.pickle'
+
+    log.info("saving analysis to: {0}".format(os.path.join(save_path, results_name)))
 
     # define empty lists to hold params (cnn)
     a_cnn = []
@@ -156,7 +163,7 @@ if __name__ == '__main__':
     # make sure the directory is writeable
     os.system("chmod a+w {}".format(save_path))
 
-    save_file = save_path + filename + '_pred.pickle'
+    save_file = os.path.join(save_path, results_name)
 
     # write the results
     with open(save_file, 'wb') as fp:

@@ -7,6 +7,7 @@ except:
     import Tkinter as tk
 import nems.db as nd
 import getpass
+from tkinter import filedialog
 
 import sys
 import os
@@ -20,19 +21,17 @@ class queue_pupil_job:
     def __init__(self, master):
         self.master = master
         master.title("Queue pupil job")
-        master.geometry('300x110')
-
-        self.animal = tk.Label(master, text="Animal: ")
-        self.animal.grid(row=0, column=0)
-        self.animal_value = tk.Entry(master)
-        self.animal_value.grid(row=0, column=1, sticky='ew')
-        self.animal_value.focus_set()
+        master.geometry('300x120')
 
         self.filename = tk.Label(master, text="Filename: ")
         self.filename.grid(row=1, column=0)
         self.filename_value = tk.Entry(master)
         self.filename_value.grid(row=1, column=1, sticky='ew')
         self.filename_value.focus_set()
+        
+        self.file_browse = tk.Button(master, text="Select pupil file", command=self.get_fn)
+        self.file_browse.grid(row=0, column=0)
+
 
         self.fitDate = tk.Label(master, text="CNN train date: ")
         self.fitDate.grid(row=2, column=0)
@@ -62,8 +61,7 @@ class queue_pupil_job:
 
 
     def start_fit(self):
-        animal = self.animal_value.get()
-        filename = self.filename_value.get()
+        fn = self.video_file
         modeldate = self.fitDate_value.get()
         py_path = self.executable_path_value.get()
         script_path = self.script_path_value.get()
@@ -73,10 +71,17 @@ class queue_pupil_job:
         username = getpass.getuser()
 
         # add job to queue
-        nd.add_job_to_queue([animal, filename, modeldate], note="Pupil Job: {}".format(filename),
+        nd.add_job_to_queue([fn, modeldate], note="Pupil Job: {}".format(fn),
         			        executable_path=py_path, user=username,
                             force_rerun=True, script_path=script_path, GPU_job=1)
         print("added job to queue")
+
+    def get_fn(self):
+        self.video_file = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
+                            title = "Select raw video file", 
+                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+        self.filename_value.delete(0, 'end')
+        self.filename_value.insert(0, self.video_file)
 
 root = tk.Tk()
 my_gui = queue_pupil_job(root)
