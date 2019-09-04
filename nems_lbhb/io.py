@@ -829,35 +829,37 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             unitcount = s.shape[0]
             for u in range(0, unitcount):
                 st = s[u, 0]
-                uniquetrials = np.unique(st[0, :])
-                # print('chan {0} unit {1}: {2} spikes {3} trials'
-                #       .format(c, u, st.shape[1], len(uniquetrials)))
+                if st.size:
+                    print("{} {}".format(u,str(st.shape)))
+                    uniquetrials = np.unique(st[0, :])
+                    # print('chan {0} unit {1}: {2} spikes {3} trials'
+                    #       .format(c, u, st.shape[1], len(uniquetrials)))
 
-                unit_spike_events = np.array([])
-                for trialidx in range(1,TrialCount+1):
-                    ff = (st[0, :] == trialidx)
-                    try:
-                        this_spike_events = (st[1, ff]
-                                             + Offset_spikefs[np.int(trialidx-1)])
-                    except:
-                        import pdb
-                        pdb.set_trace()
-                    if len(comment) > 0:
-                        if comment == 'PC-cluster sorted by mespca.m':
-                            # remove last spike, which is stray
-                            this_spike_events = this_spike_events[:-1]
-                    unit_spike_events = np.concatenate(
-                            (unit_spike_events, this_spike_events), axis=0
-                            )
-                    # print("   trial {0} first spike bin {1}"
-                    #       .format(trialidx,st[1,ff]))
+                    unit_spike_events = np.array([])
+                    for trialidx in range(1,TrialCount+1):
+                        ff = (st[0, :] == trialidx)
+                        try:
+                            this_spike_events = (st[1, ff]
+                                                 + Offset_spikefs[np.int(trialidx-1)])
+                        except:
+                            import pdb
+                            pdb.set_trace()
+                        if len(comment) > 0:
+                            if comment == 'PC-cluster sorted by mespca.m':
+                                # remove last spike, which is stray
+                                this_spike_events = this_spike_events[:-1]
+                        unit_spike_events = np.concatenate(
+                                (unit_spike_events, this_spike_events), axis=0
+                                )
+                        # print("   trial {0} first spike bin {1}"
+                        #       .format(trialidx,st[1,ff]))
 
-                totalunits += 1
-                if chancount <= 8:
-                    unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                else:
-                    unit_names.append("{0:02d}-{1}".format(c+1, u+1))
-                spiketimes.append(unit_spike_events / spikefs)
+                    totalunits += 1
+                    if chancount <= 8:
+                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                    else:
+                        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                    spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
 

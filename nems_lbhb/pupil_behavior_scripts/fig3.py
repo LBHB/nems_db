@@ -95,16 +95,31 @@ dp = pd.pivot_table(da1, index='cellid',columns='state_sig',values=['r','r_se'])
 
 # Fig 3A
 
-A1_n_sig_both = len(df[full_model & is_active & A1 & sig_both])
-A1_n_sig_ubeh = len(df[full_model & is_active & A1 & sig_ubeh]) - A1_n_sig_both
-A1_n_sig_upup = len(df[full_model & is_active & A1 & sig_upup]) - A1_n_sig_both
-A1_n_sig_state = len(df[full_model & is_active & A1 & sig_state])
+xsubset = df.cellid.str.startswith('AMT')
+#xsubset = df.cellid.str.startswith('XXXXXX')
+
+A1_n_sig_both = len(df[~xsubset & full_model & is_active & A1 & sig_both])
+A1_n_sig_ubeh = len(df[~xsubset & full_model & is_active & A1 & sig_ubeh]) - A1_n_sig_both
+A1_n_sig_upup = len(df[~xsubset & full_model & is_active & A1 & sig_upup]) - A1_n_sig_both
+A1_n_sig_state = len(df[~xsubset & full_model & is_active & A1 & sig_state])
 A1_n_sig_either = A1_n_sig_state - (A1_n_sig_both + A1_n_sig_ubeh + A1_n_sig_upup)
 
-A1_n_total = len(df[full_model & is_active & A1 & sig_any])
+A1_n_total = len(df[~xsubset & full_model & is_active & A1 & sig_any])
 A1_n_not_sig = A1_n_total - (A1_n_sig_state)
 
 A1_units = [A1_n_sig_ubeh, A1_n_sig_upup, A1_n_sig_both, A1_n_sig_either, A1_n_not_sig]
+
+if 0:
+    A1x_n_sig_both = len(df[cellsubset & full_model & is_active & A1 & sig_both])
+    A1x_n_sig_ubeh = len(df[cellsubset & full_model & is_active & A1 & sig_ubeh]) - A1x_n_sig_both
+    A1x_n_sig_upup = len(df[cellsubset & full_model & is_active & A1 & sig_upup]) - A1x_n_sig_both
+    A1x_n_sig_state = len(df[cellsubset & full_model & is_active & A1 & sig_state])
+    A1x_n_sig_either = A1x_n_sig_state - (A1x_n_sig_both + A1x_n_sig_ubeh + A1x_n_sig_upup)
+
+    A1x_n_total = len(df[cellsubset & full_model & is_active & A1 & sig_any])
+    A1x_n_not_sig = A1x_n_total - (A1x_n_sig_state)
+
+    A1x_units = [A1x_n_sig_ubeh, A1x_n_sig_upup, A1x_n_sig_both, A1x_n_sig_either, A1x_n_not_sig]
 
 # IC
 
@@ -118,8 +133,38 @@ IC_n_total = len(df[full_model & is_active & (ICC | ICX) & sig_any])
 IC_n_not_sig = IC_n_total - (IC_n_sig_state)
 
 IC_units = [IC_n_sig_ubeh, IC_n_sig_upup, IC_n_sig_both, IC_n_sig_either, IC_n_not_sig]
+
+ICc_n_sig_both = len(df[full_model & is_active & (ICC) & sig_both])
+ICc_n_sig_ubeh = len(df[full_model & is_active & (ICC) & sig_ubeh]) - ICc_n_sig_both
+ICc_n_sig_upup = len(df[full_model & is_active & (ICC) & sig_upup]) - ICc_n_sig_both
+ICc_n_sig_state = len(df[full_model & is_active & (ICC) & sig_state])
+ICc_n_sig_either = ICc_n_sig_state - (ICc_n_sig_both + ICc_n_sig_ubeh + ICc_n_sig_upup)
+ICc_n_total = len(df[full_model & is_active & (ICC) & sig_any])
+ICc_n_not_sig = ICc_n_total - (ICc_n_sig_state)
+ICc_units = [ICc_n_sig_ubeh, ICc_n_sig_upup, ICc_n_sig_both, ICc_n_sig_either, ICc_n_not_sig]
+
+ICx_n_sig_both = len(df[full_model & is_active & (ICX) & sig_both])
+ICx_n_sig_ubeh = len(df[full_model & is_active & (ICX) & sig_ubeh]) - ICx_n_sig_both
+ICx_n_sig_upup = len(df[full_model & is_active & (ICX) & sig_upup]) - ICx_n_sig_both
+ICx_n_sig_state = len(df[full_model & is_active & (ICX) & sig_state])
+ICx_n_sig_either = ICx_n_sig_state - (ICx_n_sig_both + ICx_n_sig_ubeh + ICx_n_sig_upup)
+ICx_n_total = len(df[full_model & is_active & (ICX) & sig_any])
+ICx_n_not_sig = ICx_n_total - (ICx_n_sig_state)
+ICx_units = [ICx_n_sig_ubeh, ICx_n_sig_upup, ICx_n_sig_both, ICx_n_sig_either, ICx_n_not_sig]
+
+
 colors = [common.color_b, common.color_p, common.color_both, common.color_either, common.color_ns]
 
+if 0:
+    # ICC/ICx breakdown - no difference, though N is kinda small for ICc
+    fh, axs = plt.subplots(1, 2, figsize=(8,4))
+    plt.sca(axs[0])
+    donut_plot('ICc', ICc_units, colors, savefigure=False)
+
+    plt.sca(axs[1])
+    donut_plot('ICx', ICx_units, colors, savefigure=False)
+
+# Figure 3A
 fh, axs = plt.subplots(3, 2, figsize=(8,12))
 
 plt.sca(axs[0,0])
@@ -127,7 +172,6 @@ donut_plot('A1', A1_units, colors, savefigure=False)
 
 plt.sca(axs[0,1])
 donut_plot('IC', IC_units, colors, savefigure=False)
-
 
 
 # Figure 3B

@@ -1262,6 +1262,17 @@ def baphy_load_recording(**options):
         rec: recording
 
     """
+
+    # STEP 1: FIGURE OUT FILE(S) and SIGNAL(S) TO LOAD
+
+    # TODO: add logic for options['resp']==False so this doesn't barf if
+    #       cellid/batch/celllist/siteid aren't specified
+    # TODO: break apart different signal loaders, make them work even if
+    #        resp=False
+    # TODO: (load all signals for one recording, make recording) =>
+    #           move functionality to BAPHYExperiment wrapper
+    #       then concatenate recordings
+
     options = fill_default_options(options)
     meta = options
     mfilename = options.get('mfilename', None)
@@ -1317,6 +1328,7 @@ def baphy_load_recording(**options):
        raise ValueError('NarfData not found for cell {0}/batch {1}'.format(
                cellid,batch))
 
+    # STEP 2: LOOP THROUGH FILES, LOAD RELEVANT SIGNALS FOR EACH
     for i, parmfilepath in enumerate(files):
         # load the file and do a bunch of preprocessing:
         if options["runclass"] == "RDT":
@@ -1692,8 +1704,15 @@ def baphy_load_recording_uri(recache=False, **options):
 
 def baphy_load_recording_file(**options):
     """
-    very simply, load a recording
-    if necessary create a cache file first
+    "simple" wrapper to load recording, calls get_recording_uri to figure
+    out cache file and create if necessary. then load
+
+    :param options:
+    specify files with list of raw ids or mfile list or cellid/siteid/cellids+batch
+    specify signals with resp=True/False, stim=True/False, pupil=True/False, etc
+    other options as in other places (rasterfs, stimfmt, etc...)
+    model fit use case options includes
+    :return:
     """
     uri = baphy_load_recording_uri(**options)
 

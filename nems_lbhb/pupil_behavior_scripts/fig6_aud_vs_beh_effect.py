@@ -27,8 +27,11 @@ basemodel = "-ref-psthfr.s_sdexp.S"
 
 df = pd.read_csv('pup_beh_processed.csv')
 
+xsubset = df.cellid.str.startswith('AMT')
+#xsubset = df.cellid.str.startswith('XXXXXX')
+
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
-A1 = df['area']=='A1'
+A1 = (df['area']=='A1') & ~xsubset
 ICC = df['area']=='ICC'
 ICX = df['area']=='ICX'
 onBF = df['onBF']==True
@@ -58,7 +61,11 @@ is_active = (dfb['state_chan'] == 'active')
 full_model = (dfb['state_sig'] == 'st.beh')
 null_model = (dfb['state_sig'] == 'st.beh0')
 
-A1 = dfb['area']=='A1'
+xsubset = dfb.cellid.str.startswith('AMT')
+#xsubset = dfb.cellid.str.startswith('XXXXXX')
+
+# creating list of booleans to mask A1, IC, onBF and offBF out of big df
+A1 = (dfb['area']=='A1') & ~xsubset
 IC = dfb['area']=='IC'
 SU = dfb['SU']==True
 sig_ubeh = dfb['sig_ubeh']==True
