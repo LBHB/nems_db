@@ -900,6 +900,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
+    
 
     pupilfilepath = get_pupil_file(pupilfilepath)
 
@@ -1079,7 +1080,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         returned_measurement = eye_speed
     else:
         returned_measurement = pupil_diameter
-
+    
     # resample and remove dropped frames
 
     # find and parse pupil events
@@ -1097,7 +1098,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         firstframe[t] = int(p[1])
     pp = ['PUPILSTOP' in x['name'] for i, x in exptevents.iterrows()]
     lastidx = np.argwhere(pp)[-1]
-
+    
+    
     s = exptevents.iloc[lastidx[0]]['name'].split(",[")
     p = eval("[" + s[1])
     timestamp[-1] = p[0]
@@ -1602,3 +1604,92 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
 
     return pupil_trace, is_rem, options
+
+
+def load_raw_pupil(pupilfilepath, fs=None):
+    """
+    Simple function to read continuous pupil trace in w/o baphy trial start alignment etc.
+
+    Right now, only works for .pickle pupil files.
+    """
+
+    with open(pupilfilepath, 'rb') as fp:
+            pupildata = pickle.load(fp)
+
+
+    pupil_diameter = pupildata['cnn']['a'] * 2
+
+    # missing frames/frames that couldn't be decoded were saved as nans
+    # pad them here
+    nan_args = np.argwhere(np.isnan(pupil_diameter))
+
+    for arg in nan_args:
+        arg = arg[0]
+        log.info("padding missing pupil frame {0} with adjacent ellipse params".format(arg))
+        try:
+            pupil_diameter[arg] = pupil_diameter[arg-1]
+        except:
+            pupil_diameter[arg] = pupil_diameter[arg-1]
+
+    pupil_diameter = pupil_diameter[:-1, np.newaxis]
+
+    return pupil_diameter
+
+def load_raw_photometry(photofilepath, fs=None):
+    """
+    Simple function to read (and process photometry trace). Will ask for user input to define ROI based
+    on the first frame of the video file.
+    """
+    import av
+    video_container = av.open(photofilepath)
+    video_stream = [s for s in video_container.streams][0]
+
+    F_mag1 = []
+    F_mag2 = []
+    for i, packet in enumerate(video_container.demux(video_stream)):
+        if i%1000 == 0:
+            print("frame: {}".format(i))
+
+        if i == 0:
+            frame = packet.decode()[0]
+            frame_ = np.asarray(frame.to_image().convert('LA'))
+            plt.imshow(frame_[:, :, 0])
+            print("Before closing image, locate the center of your ROI!")
+            plt.show()
+            print("left ROI: ")
+            x = int(input("x1 center: "))
+            y = int(input("y1 center: "))
+            print("right ROI: ")
+            x2 = int(input("x2 center: "))
+            y2 = int(input("y2 center: "))
+
+            # define roi:
+            x1_range = np.arange(x-2, x+2)
+            y1_range = np.arange(y-2, y+2)
+
+            x2_range = np.arange(x2-2, x2+2)
+            y2_range = np.arange(y2-2, y2+2)
+
+
+            roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+            roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+            fmag1 = np.mean(roi1)
+            fmag2 = np.mean(roi2)
+            F_mag1.append(fmag1)
+            F_mag2.append(fmag2)
+
+        else:
+            try:
+                frame = packet.decode()[0]
+                frame_ = np.asarray(frame.to_image().convert('LA'))
+                roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+                roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+                fmag1 = np.mean(roi1)
+                fmag2 = np.mean(roi2)
+                F_mag1.append(fmag1)
+                F_mag2.append(fmag2)
+            except:
+                print('end of file reached')
+
+    
+    return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
