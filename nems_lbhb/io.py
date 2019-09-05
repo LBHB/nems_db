@@ -176,13 +176,17 @@ class BAPHYExperiment:
         appropriate correction method (for 'auto', no keyword arguments are
         allowed).
         '''
-        correction_methods = ['openephys', 'spikes', None]
+        correction_methods = ['openephys', 'spikes', 'baphy', None]
+        
         if correction_method != 'auto':
             return self._get_baphy_events(correction_method, **kw)
         for correction_method in correction_methods:
+            '''
+            # why is this here?
             if kw:
                 m = "Keyword arguments not supported when correction_method is set to 'auto'"
                 raise ValueError(m)
+            '''
             try:
                 return self._get_baphy_events(correction_method, **kw)
             except Exception as base_exc:
@@ -194,15 +198,20 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def _get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self._get_baphy_parameters()[-1]
+        fs = kw.get('rasterfs', 100)
         if correction_method is None:
             return baphy_events
         if correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
-            return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
+            return baphy_align_events_openephys(baphy_events, trial_starts, fs, **kw)
         if correction_method == 'spikes':
-            spikes, fs = self._get_spikes()
-            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
+            
+            spikes, spikefs = self._get_spikes()
+            exptevents, _, _ = baphy_align_events_spikes(baphy_events, spikes, spikefs, fs)
             return exptevents
+        if correction_method == 'baphy':
+            return baphy_align_events_baphy(baphy_events, fs)
+
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
 
@@ -264,7 +273,7 @@ class BAPHYExperiment:
         return continuous_data
 
 
-def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
+def baphy_align_events_openephys(events, timestamps, rasterfs, baphy_legacy_format=False):
     '''
     Parameters
     ----------
@@ -292,6 +301,10 @@ def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
     for i, timestamp in enumerate(timestamps) :
         m = events['Trial'] == i+1
         events.loc[m, ['start', 'end']] += timestamp
+
+    # round epochs according to rasterfs
+    events[['start', 'end']] = np.floor(events[['start', 'end']] * rasterfs) / rasterfs
+
     return events
 
 
@@ -671,106 +684,7 @@ def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
     return sortinfo, spikefs
 
 
-def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
-
-    # number of channels in recording (not all necessarily contain spikes)
-    chancount = len(sortinfo)
-
-    # figure out how long each trial is by the time of the last spike count.
-    # this method is a hack!
-    # but since recordings are longer than the "official"
-    # trial end time reported by baphy, this method preserves extra spikes
-    TrialCount = np.max(exptevents['Trial'])
-    TrialLen_sec = np.array(
-            exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
-            )
-    TrialLen_spikefs = np.concatenate(
-            (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis]*spikefs), axis=0
-            )
-
-    for c in range(0, chancount):
-        if len(sortinfo[c]) and sortinfo[c][0].size:
-            s = sortinfo[c][0][0]['unitSpikes']
-            s = np.reshape(s, (-1, 1))
-            unitcount = s.shape[0]
-            for u in range(0, unitcount):
-                st = s[u, 0]
-
-                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
-                for trialidx in range(1, TrialCount+1):
-                    ff = (st[0, :] == trialidx)
-                    if np.sum(ff):
-                        utrial_spikefs = np.max(st[1, ff])
-                        TrialLen_spikefs[trialidx, 0] = np.max(
-                                [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
-                                )
-
-    # using the trial lengths, figure out adjustments to trial event times.
-    if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
-        # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs*finalfs)
-                / finalfs*spikefs
-                )
-        # print(TrialLen_spikefs)
-
-    Offset_spikefs = np.cumsum(TrialLen_spikefs)
-    Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
-
-    # adjust times in exptevents to approximate time since experiment started
-    # rather than time since trial started (native format)
-    for Trialidx in range(1, TrialCount+1):
-        ff = (exptevents['Trial'] == Trialidx)
-        exptevents.loc[ff, ['start', 'end']] = (
-                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
-                )
-
-    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
-
-    # convert spike times from samples since trial started to
-    # (approximate) seconds since experiment started (matched to exptevents)
-    totalunits = 0
-    spiketimes = []  # list of spike event times for each unit in recording
-    unit_names = []  # string suffix for each unit (CC-U)
-    chan_names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-    for c in range(0, chancount):
-        if len(sortinfo[c]) and sortinfo[c][0].size:
-            s = sortinfo[c][0][0]['unitSpikes']
-            comment = sortinfo[c][0][0][0][0][2][0]
-            log.debug('Comment: %s', comment)
-
-            s = np.reshape(s, (-1, 1))
-            unitcount = s.shape[0]
-            for u in range(0, unitcount):
-                st = s[u, 0]
-                uniquetrials = np.unique(st[0, :])
-
-                unit_spike_events = np.array([])
-                for trialidx in uniquetrials:
-                    ff = (st[0, :] == trialidx)
-                    this_spike_events = (st[1, ff]
-                                         + Offset_spikefs[np.int(trialidx-1)])
-                    if (comment != []):
-                        if (comment == 'PC-cluster sorted by mespca.m'):
-                            # remove last spike, which is stray
-                            this_spike_events = this_spike_events[:-1]
-                    unit_spike_events = np.concatenate(
-                            (unit_spike_events, this_spike_events), axis=0
-                            )
-
-                totalunits += 1
-                if chancount <= 8:
-                    unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                else:
-                    unit_names.append("{0:02d}-{1}".format(c+1, u+1))
-                spiketimes.append(unit_spike_events / spikefs)
-
-    return exptevents, spiketimes, unit_names
-
-
-def baphy_align_time_baphy_events(exptevents, rasterfs):
+def baphy_align_events_baphy(exptevents, rasterfs):
     """
     Trial alignment for recordings where spike data was not recorded
     or manta was used and spikes are not yet sorted.
@@ -800,7 +714,14 @@ def baphy_align_time_baphy_events(exptevents, rasterfs):
     
     return exptevents
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+
+def baphy_align_events_spikes(exptevents, sortinfo, spikefs, finalfs=0):
+    """
+    Determines the time offset for each trial based on first/last spike time and returns
+    new exptevents (baphy events) dataframe. Also returns updated spike times and unit names
+    by calling baphy_align_spike_times (this is primarily to preserve backwards compatability. 
+    probably not necessary in the long run)
+    """
 
     # number of channels in recording (not all necessarily contain spikes)
     chancount = len(sortinfo)
@@ -826,7 +747,6 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
 
-                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
                 for trialidx in range(1, TrialCount+1):
                     ff = (st[0, :] == trialidx)
                     if np.sum(ff):
@@ -839,35 +759,39 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     if finalfs:
         print('rounding Trial offset spike times'
               ' to even number of rasterfs bins')
-        # print(TrialLen_spikefs)
         TrialLen_spikefs = (
                 np.ceil(TrialLen_spikefs / spikefs*finalfs) / finalfs*spikefs
                 )
-        #TrialLen_spikefs = (
-        #        np.ceil(TrialLen_spikefs / spikefs*finalfs + 1) / finalfs*spikefs
-        #        )
-        # print(TrialLen_spikefs)
 
     Offset_spikefs = np.cumsum(TrialLen_spikefs)
     Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
     # adjust times in exptevents to approximate time since experiment started
     # rather than time since trial started (native format)
     for Trialidx in range(1, TrialCount+1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
         ff = (exptevents['Trial'] == Trialidx)
         exptevents.loc[ff, ['start', 'end']] = (
                 exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
                 )
 
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
-    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+    # call baphy_align_spike_times 
+    spiketimes, unitnames = baphy_align_spike_times(exptevents, sortinfo, spikefs)
 
+    return exptevents, spiketimes, unitnames
+
+def baphy_align_spike_times(exptevents, sortinfo, spikefs):
+
+    #number of channels in recording (not all necessarily contain spikes)
+    chancount = len(sortinfo)
+    while chancount>1 and sortinfo[chancount-1].size == 0:
+        chancount -= 1
+    
+    TrialCount = np.max(exptevents['Trial'])
+    
+    tt = [True if 'TRIALSTART' in n else False for n in exptevents['name']]
+    Offset_spikefs = (exptevents.loc[tt, 'start'] * spikefs).values
+    
     # convert spike times from samples since trial started to
     # (approximate) seconds since experiment started (matched to exptevents)
     totalunits = 0
@@ -913,7 +837,14 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                 else:
                     unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                 spiketimes.append(unit_spike_events / spikefs)
+                
+        return spiketimes, unit_names
 
+
+def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+    # just keeping here for backwards compatibility. Should get rid of it eventually.
+    raise DeprecationWarning('This function is deprecated. Instead, call io.baphy_align_events_spikes')
+    exptevents, spiketimes, unit_names = baphy_align_events_spikes(exptevents, sortinfo, spikefs, finalfs)
     return exptevents, spiketimes, unit_names
 
 
@@ -943,8 +874,23 @@ def set_default_pupil_options(options):
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
     options["verbose"] = options.get('verbose', False)
+    options["resp"] = options.get('resp', False)
 
     return options
+
+
+def get_event_alignment_method(**options):
+    """
+    Based on loading options, decide how to align baphy events. i.e. if no spikes, use baphy timestamps
+    instead of spiketimes. The default is to set alignment method to 'auto' which will default to using
+    openephys times, if they exist. If not, it will try spike times. If that fails, baphy times. And if
+    that fails, it won't perform an alignment.
+    """
+    resp = options.get('resp', True)
+    if resp == False:
+        return 'baphy'
+    else:
+        return 'auto'
 
 
 def load_pupil_trace(pupilfilepath, exptevents=None, **options):
@@ -953,7 +899,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
-
 
     pupilfilepath = get_pupil_file(pupilfilepath)
 
@@ -993,7 +938,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     # openephys data, since baphy doesn't log exact trial start times.
     if exptevents is None:
         experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
-        exptevents = experiment.get_baphy_events()
+        correction_method = get_event_alignment_method(**options)
+        exptevents = experiment.get_baphy_events(correction_method=correction_method, **options)
 
     if '.pickle' in pupilfilepath:
 

@@ -1217,6 +1217,7 @@ def fill_default_options(options):
     options['cellid'] = options.get('cellid', cellid)
     options['batch'] = int(batch)
     options['rawid'] = options.get('rawid', None)
+    options['resp'] = options.get('resp', True)
 
     if options['stimfmt'] in ['envelope', 'parm']:
         log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
