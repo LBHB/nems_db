@@ -205,7 +205,6 @@ class BAPHYExperiment:
             trial_starts = self.get_trial_starts('openephys')
             return baphy_align_events_openephys(baphy_events, trial_starts, fs, **kw)
         if correction_method == 'spikes':
-            
             spikes, spikefs = self._get_spikes()
             exptevents, _, _ = baphy_align_events_spikes(baphy_events, spikes, spikefs, fs)
             return exptevents
@@ -843,7 +842,7 @@ def baphy_align_spike_times(exptevents, sortinfo, spikefs):
 
 def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     # just keeping here for backwards compatibility. Should get rid of it eventually.
-    raise DeprecationWarning('This function is deprecated. Instead, call io.baphy_align_events_spikes')
+    log.info("DeprecationWarning: This function is deprecated. Instead, call io.baphy_align_events_spikes")
     exptevents, spiketimes, unit_names = baphy_align_events_spikes(exptevents, sortinfo, spikefs, finalfs)
     return exptevents, spiketimes, unit_names
 
