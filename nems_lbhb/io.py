@@ -770,6 +770,36 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     return exptevents, spiketimes, unit_names
 
 
+def baphy_align_time_baphy_events(exptevents, rasterfs):
+    """
+    Trial alignment for recordings where spike data was not recorded
+    or manta was used and spikes are not yet sorted.
+    """
+
+    ts = [True if 'TRIALSTART' in n else False for n in exptevents['name']]
+    trialstarts = [x.split(',')[-1] for x in exptevents.loc[ts, 'name']]
+    timestamps = [datetime.datetime.strptime(x, "%H:%M:%S.%f").timestamp() 
+                            for x in trialstarts]
+    
+    # this is a stupid way to deal with last trial.
+    # could cause issues. No "good" solution though
+    n_trials = exptevents['Trial'].max()
+    last_trial = exptevents[(exptevents['Trial'] == n_trials) & \
+                        (exptevents['name']=='TRIALSTOP')]['end']
+    offsets = np.diff(timestamps)
+    offsets = np.append(offsets, last_trial)
+    offsets = np.cumsum(offsets) - offsets[0]
+    
+    # add offsets to trial start/end times
+    for i, offset in enumerate(offsets):
+        m = exptevents['Trial'] == i+1
+        exptevents.loc[m, ['start', 'end']] += offset
+    
+    # round epochs according to rasterfs
+    exptevents[['start', 'end']] = np.floor(exptevents[['start', 'end']] * rasterfs) / rasterfs
+    
+    return exptevents
+
 def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     # number of channels in recording (not all necessarily contain spikes)
