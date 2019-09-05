@@ -454,26 +454,9 @@ def create_pupil_mask(rec, **options):
         return r
 
     r = r.apply_mask(reset_epochs=True)
-    newrec = newrec.apply_mask(reset_epochs=True)  # why wasn't this here before? CRH 1/30/19
-    newrec = newrec.create_mask(True)
-
-    # define the pupil divider for appropriate cases
-    if method == 'median':
-        pupil_divider = np.median(r['pupil'].as_continuous())
-    elif method == 'mean':
-        pupil_divider = np.mean(r['pupil'].as_continuous())
-    elif method == 'cache':
-        use_cache = True
-        log.info('using cached pupil classifications')
-    elif method == 'fraction':
-        pupil_max = get_max_pupil(r['resp'].chans[0][:7])
-        if np.isnan(pupil_max):
-            pupil_max = r['pupil'].as_continuous().max()
-        upper_lim = fraction[1]
-        lower_lim = fraction[0]
-        # normalize pupil
-        r['pupil'] = r['pupil']._modified_copy(r['pupil'].as_continuous() / pupil_max)
-        state = None
+    # we want the returned rec to be the same size, so don't apply any masking
+    #newrec = newrec.apply_mask(reset_epochs=True)  # why wasn't this here before? CRH 1/30/19
+    #newrec = newrec.create_mask(True)
 
     if use_cache == False:
         # process/classify pupil here, based on mean/median/abs size
@@ -510,16 +493,6 @@ def create_pupil_mask(rec, **options):
             # rebuild pupil signal
             r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
 
-            # create short mask
-            if state == 'big':
-                short_mask = r['pupil'].as_continuous() >= pupil_divider
-            elif state == 'small':
-                short_mask = r['pupil'].as_continuous() < pupil_divider
-            elif method == 'fraction':
-                short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
-            else:
-                raise ValueError
-
         elif (collapse is True) & (epoch is not None):
             log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
 
@@ -536,27 +509,9 @@ def create_pupil_mask(rec, **options):
             # rebuild pupil signal
             r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
 
-            # create short mask
-            if state == 'big':
-                short_mask = r['pupil'].as_continuous() >= pupil_divider
-            elif state == 'small':
-                short_mask = r['pupil'].as_continuous() < pupil_divider
-            elif method == 'fraction':
-                short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
-            else:
-                raise ValueError
-
         elif (fs == rec['resp'].fs) & (epoch is None):
             log.info('classifying pupil continuously (at each time point)')
 
-            if state == 'big':
-                short_mask = r['pupil'].as_continuous() >= pupil_divider
-            elif state == 'small':
-                short_mask = r['pupil'].as_continuous() < pupil_divider
-            elif method == 'fraction':
-                short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
-            else:
-                raise ValueError
 
         elif (fs != rec['resp'].fs) & (epoch is None):
             log.info('WARNING - this could lead to weird edge effects later on')
@@ -584,22 +539,44 @@ def create_pupil_mask(rec, **options):
             # rebuild pupil signal
             r['pupil'] = r['pupil']._modified_copy(pupil_trace)
 
-            if state == 'big':
-                short_mask = r['pupil'].as_continuous() >= pupil_divider
-            elif state == 'small':
-                short_mask = r['pupil'].as_continuous() < pupil_divider
-            elif method == 'fraction':
-                short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
-            else:
-                raise ValueError
+        
+        # get pupil divider based on new pupil signal
+        if method == 'median':
+            pupil_divider = np.median(r['pupil'].as_continuous())
+        elif method == 'mean':
+            pupil_divider = np.mean(r['pupil'].as_continuous())
+        elif method == 'cache':
+            use_cache = True
+            log.info('using cached pupil classifications')
+        elif method == 'fraction':
+            pupil_max = get_max_pupil(r['resp'].chans[0][:7])
+            if np.isnan(pupil_max):
+                pupil_max = r['pupil'].as_continuous().max()
+            upper_lim = fraction[1]
+            lower_lim = fraction[0]
+            # normalize pupil
+            r['pupil'] = r['pupil']._modified_copy(r['pupil'].as_continuous() / pupil_max)
+            state = None
+
+        # create short mask (on the masked data - for ex, because of rem exclusion)
+        if state == 'big':
+            short_mask = r['pupil'].as_continuous() >= pupil_divider
+        elif state == 'small':
+            short_mask = r['pupil'].as_continuous() < pupil_divider
+        elif method == 'fraction':
+            short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
+        else:
+            raise ValueError
 
         # Now, go through the short mask and make it the correct length using
-        # newrec's mask. Short mask should be 1D and lenght of the current mask sum
-        current_mask = newrec['mask'].as_continuous().squeeze()
+        # newrec's mask. short_mask size should be equal to current_mask sum
+        current_mask = newrec['mask'].as_continuous().squeeze()  # this is the long mask (which has rem excluded)
 
         final_mask = np.zeros(current_mask.shape).astype(np.bool)
 
         j = 0
+        # loop over the current mask (with the mask set to False when rem is True). 
+        # only copy over the pupil mask (the short_mask) for periods when current mask is True
         for i, m in enumerate(current_mask):
 
             if m == True:
