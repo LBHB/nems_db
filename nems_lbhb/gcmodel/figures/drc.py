@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import nems.epoch as ep
+from nems.plots.utils import ax_remove_box
 from nems.recording import load_recording
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.gcmodel.contrast import make_contrast_signal
@@ -14,20 +15,22 @@ plt.rcParams.update(params)
 def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
                            percentile=50, n_segments=12, example_batch=289,
                            example_cell='TAR010c-13-1', voc_batch=263,
-                           voc_cell='tul034b-b1'):
+                           voc_cell='tul034b-b1', plot_seconds=19):
     '''
     Plot a sample DRC stimulus next to assigned contrast
     and calculated contrast.
     '''
-    drc = rec_from_DRC(fs=fs, n_segments=n_segments)
-    rec = make_contrast_signal(drc, name='continuous', continuous=True, ms=ms,
-                                bands=bands, normalize=normalize)
-    s = rec['stim'].as_continuous()
-    c1 = rec['contrast'].as_continuous()
-    c3 = rec['continuous'].as_continuous()
+#    drc = rec_from_DRC(fs=fs, n_segments=n_segments)
+#    rec = make_contrast_signal(drc, name='continuous', continuous=True, ms=ms,
+#                                bands=bands, normalize=normalize)
+#    s = rec['stim'].as_continuous()
+#    c1 = rec['contrast'].as_continuous()
+#    c3 = rec['continuous'].as_continuous()
 
 
     loadkey = 'ozgf.fs%d.ch18' % fs
+    plot_bins = plot_seconds * fs
+    seconds = np.arange(0, plot_bins)/fs
     recording_uri = generate_recording_uri(cellid=example_cell,
                                            batch=example_batch,
                                            loadkey=loadkey, stim=True)
@@ -35,8 +38,8 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
     nat_rec = make_contrast_signal(nat_rec, name='continuous', continuous=True,
                                    ms=ms, percentile=percentile, bands=bands,
                                    normalize=normalize)
-    nat_stim = nat_rec['stim'].as_continuous()[:, :s.shape[-1]]
-    nat_contrast = nat_rec['continuous'].as_continuous()[:, :s.shape[-1]]
+    nat_stim = nat_rec['stim'].as_continuous()[:, :plot_bins]
+    nat_contrast = nat_rec['continuous'].as_continuous()[:, :plot_bins]
     nat_summed = np.sum(nat_contrast, axis=0)
     nat_summed /= np.max(nat_summed) # norm 0 to 1 just to match axes
 
@@ -67,28 +70,29 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
                                                dtype=np.int32))
 
 
-    voc_stim = voc_rec['stim'].as_continuous()[:, indices][:, :s.shape[-1]]
-    voc_contrast = voc_rec['continuous'].as_continuous()[:, indices][:, :s.shape[-1]]
+    voc_stim = voc_rec['stim'].as_continuous()[:, indices][:, :plot_bins]
+    voc_contrast = voc_rec['continuous'].as_continuous()[:, indices][:, :plot_bins]
     voc_summed = np.sum(voc_contrast, axis=0)
     voc_summed /= np.max(voc_summed) # norm 0 to 1 just to match axes
 
 
-    fig, ((a1,a2,a3), (a4,a5,a6), (a7,a8,a9)) = plt.subplots(3,3)
+    #fig, ((a1,a2,a3), (a4,a5,a6), (a7,a8,a9)) = plt.subplots(3,3)
+    fig, ((a2,a3), (a5,a6), (a8,a9)) = plt.subplots(3,2)
 
-    # DRC
-    plt.sca(a1)
-    plt.title('RC-DRC')
-    plt.imshow(s, aspect='auto', origin='lower')#, cmap=plt.get_cmap('jet'))
-    a1.get_xaxis().set_visible(False)
-
-    plt.sca(a4)
-    plt.title('Calculated Contrast')
-    plt.imshow(c3, aspect='auto', cmap=contrast_cmap, origin='lower')
-    a4.get_xaxis().set_visible(False)
-
-    plt.sca(a7)
-    plt.title('Assigned Contrast')
-    plt.imshow(c1, aspect='auto', cmap=contrast_cmap, origin='lower')
+#    # DRC
+#    plt.sca(a1)
+#    plt.title('RC-DRC')
+#    plt.imshow(s, aspect='auto', origin='lower')#, cmap=plt.get_cmap('jet'))
+#    a1.get_xaxis().set_visible(False)
+#
+#    plt.sca(a4)
+#    plt.title('Calculated Contrast')
+#    plt.imshow(c3, aspect='auto', cmap=contrast_cmap, origin='lower')
+#    a4.get_xaxis().set_visible(False)
+#
+#    plt.sca(a7)
+#    plt.title('Assigned Contrast')
+#    plt.imshow(c1, aspect='auto', cmap=contrast_cmap, origin='lower')
 
 
     # Natural Sound
@@ -96,19 +100,24 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
     plt.title('Nat. Sound')
     plt.imshow(nat_stim, aspect='auto', origin='lower')
     a2.get_xaxis().set_visible(False)
-    a2.get_yaxis().set_visible(False)
+    #a2.get_yaxis().set_visible(False)
+    plt.ylabel('Freq. Channel')
 
     plt.sca(a5)
-    #plt.title('Calculated Contrast')
+    plt.title('Contrast')
     plt.imshow(nat_contrast, aspect='auto', origin='lower', cmap=contrast_cmap)
     a5.get_xaxis().set_visible(False)
     a5.get_yaxis().set_visible(False)
 
     plt.sca(a8)
-    #plt.title('Frequency-Summed Contrast')
-    plt.plot(nat_summed)
+    plt.title('Summed')
+    plt.plot(seconds, nat_summed)
     a8.set_ylim(-0.1, 1.1)
-    a8.get_yaxis().set_visible(False)
+    #a8.get_yaxis().set_visible(False)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Summed Contrast (A.U.)')
+    a8.set_xlim(seconds.min(), seconds.max())
+
 
     # Voc in noise
     plt.sca(a3)
@@ -124,10 +133,12 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
     a6.get_yaxis().set_visible(False)
 
     plt.sca(a9)
-    plt.title('Summed')
-    plt.plot(voc_summed)
+    #plt.title('Summed')
+    plt.plot(seconds, voc_summed)
     a9.set_ylim(-0.1, 1.1)
-    a9.get_yaxis().tick_right()
+    #a9.get_yaxis().tick_right()
+    a9.get_yaxis().set_visible(False)
+    a9.set_xlim(seconds.min(), seconds.max())
 
 
     return fig

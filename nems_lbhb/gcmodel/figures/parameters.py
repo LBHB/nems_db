@@ -4,10 +4,12 @@ import os
 import numpy as np
 import scipy.stats as st
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 import nems.xform_helper as xhelp
 import nems.db as nd
 import nems.epoch as ep
+from nems.utils import find_module
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
@@ -29,7 +31,7 @@ plt.rcParams.update(params)  # loaded from definitions
 
 
 def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
-                      good_ln=0):
+                      good_ln=0, log_scale=False):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -79,39 +81,73 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     stp_med_tau = np.median(stp_sep_taus)
     stp_med_u = np.median(stp_sep_us)
 
+    tau_t, tau_p = st.ttest_ind(sep_taus, stp_sep_taus)
+    u_t, u_p = st.ttest_ind(sep_us, stp_sep_us)
+
 
     fig, (a1, a2) = plt.subplots(2, 1)
-    hist_kwargs = {'bins': 60, 'linewidth': 1}
     color = model_colors['LN']
     stp_color = model_colors['stp']
+    stp_label = 'STP ++ (%d)' % len(s)
+    total_cells = len(s) + len(not_s)
+    bin_count = 30
+    hist_kwargs = {'bins': bin_count, 'linewidth': 1, 'color': [color, stp_color],
+                   'label': ['not imp', 'stp imp']}
+
 
     plt.sca(a1)
-    plt.hist(sep_taus, color=color, **hist_kwargs)
-    plt.hist(stp_sep_taus, color=stp_color, label='STP ++',
-             **hist_kwargs)
+    weights = [np.ones(len(sep_taus))/len(sep_taus),
+               np.ones(len(stp_sep_taus))/len(stp_sep_taus)]
+    if log_scale:
+        lower_bound = min(sep_taus.min(), stp_sep_taus.min())
+        upper_bound = max(sep_taus.max(), stp_sep_taus.max())
+        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
+        hist_kwargs['bins'] = bins
+    plt.hist([sep_taus, stp_sep_taus], weights=weights, **hist_kwargs)
+#    plt.hist(sep_taus, color=color, **hist_kwargs, alpha=0.6)
+#    plt.hist(stp_sep_taus, color=stp_color, label=stp_label,
+#             **hist_kwargs, alpha=0.6)
     a1.axes.axvline(med_tau, color=color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
     a1.axes.axvline(stp_med_tau, color=stp_color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    plt.title('tau')
+    plt.title('tau,  sig diff?:  p=%.4E' % tau_p)
+    plt.xlabel('tau (ms)')
     plt.legend()
 
 
     plt.sca(a2)
-    plt.hist(sep_us, color=color, **hist_kwargs)
-    plt.hist(stp_sep_us, color=stp_color,
-             label='STP ++', **hist_kwargs)
+    weights = [np.ones(len(sep_us))/len(sep_us),
+               np.ones(len(stp_sep_us))/len(stp_sep_us)]
+    if log_scale:
+        lower_bound = min(sep_us.min(), stp_sep_us.min())
+        upper_bound = max(sep_us.max(), stp_sep_us.max())
+        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
+        hist_kwargs['bins'] = bins
+    plt.hist([sep_us, stp_sep_us], weights=weights, **hist_kwargs)
+#    plt.hist(sep_us, color=color, **hist_kwargs, alpha=0.6)
+#    plt.hist(stp_sep_us, color=stp_color,
+#             label='STP ++', **hist_kwargs, alpha=0.6)
     a2.axes.axvline(med_u, color=color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
     a2.axes.axvline(stp_med_u, color=stp_color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    plt.title('u')
+    plt.title('u,  sig diff?:  p=%.4E' % u_p)
+    plt.xlabel('u (fractional change in gain \nper unit of stimulus amplitude)')
+    plt.ylabel('proportion within group')
 
-    fig.suptitle('STP parameter distributions')
+
+    fig.suptitle("STP parameter distributions,  n: %d\n"
+                 "n stp imp:  %d\n"
+                 "n not imp:  %d\n"
+                 % (total_cells, len(s), len(not_s)))
     return fig
 
 
-def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
+def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
+                     log_scale=False):
+    if log_scale:
+        raise NotImplementedError('log scale not implemented yet for gc dist')
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -163,26 +199,47 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
     gc_medians = [np.median(d) for d in gc_diffs]
 
 
-    fig, ((a1, a2), (a3, a4)) = plt.subplots(2, 2)
-    hist_kwargs = {'bins': 60}
+    ts, ps = zip(*[st.ttest_ind(diff, gc_diff)
+                   for diff, gc_diff in zip(diffs, gc_diffs)])
+
+    fig1, (a1, a3) = plt.subplots(2, 1)
+    fig2, (a2, a4) = plt.subplots(2, 1)
     color = model_colors['LN']
     gc_color = model_colors['gc']
+    gc_label = 'GC ++ (%d)' % len(g)
+    total_cells = len(g) + len(not_g)
+    hist_kwargs = {'bins': 30, 'color': [color, gc_color],
+                   'label': ['no imp', 'sig imp']}
 
     # b a s k
-    for i, ax in zip([0, 1, 2, 3], [a1, a2, a3, a4]):
-        ax.hist(diffs[i], color=color, **hist_kwargs)
-        ax.hist(gc_diffs[i], color=gc_color, **hist_kwargs)
+    for i, ax in zip([0, 1, 2, 3], [a1, a3, a2, a4]):
+#        ax.hist(diffs[i], color=color, **hist_kwargs, alpha=0.6)
+#        ax.hist(gc_diffs[i], color=gc_color, label=gc_label, **hist_kwargs,
+#                alpha=0.6)
+        weights = [np.ones(len(diffs[i]))/len(diffs[i]),
+                   np.ones(len(gc_diffs[i]))/len(gc_diffs[i])]
+        ax.hist([diffs[i], gc_diffs[i]], weights=weights, **hist_kwargs)
         ax.axes.axvline(medians[i], color=color, linewidth=2,
                         linestyle='dashed', dashes=dash_spacing)
         ax.axes.axvline(gc_medians[i], color=gc_color, linewidth=2,
                         linestyle='dashed', dashes=dash_spacing)
-    a1.set_title('base')
-    a2.set_title('amplitude')
-    a3.set_title('shift')
-    a4.set_title('kappa')
+        if (i == 0) or (i == 2):
+            ax.legend()
 
-    fig.suptitle('GC parameter differences')
-    return fig
+    a1.set_title('base,   sig diff?  %.4E' % ps[0])
+    a2.set_title('amplitude,   sig diff?  %.4E' % ps[1])
+    a3.set_title('shift,   sig diff?  %.4E' % ps[2])
+    a3.set_xlabel('fractional change in parameter\nper unit contrast')
+    a3.set_ylabel('proportion within group')
+    a4.set_title('kappa,   sig diff?  %.4E' % ps[3])
+
+    title = ("GC parameter differences, total n: %d\n"
+             "n gc improved:  %d\n"
+             "n not improved: %d\n"
+             % (total_cells, len(g), len(not_g)))
+    fig1.suptitle(title)
+    fig2.suptitle(title)
+    return fig1, fig2
 
 
 def _df_to_array(df, dims):
@@ -192,7 +249,7 @@ def _df_to_array(df, dims):
     return array
 
 
-def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
+def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=30,
              use_exp=True):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     #cellids = df_r[LN] > good_LN
@@ -304,7 +361,7 @@ def gd_ratio(batch, gc, stp, LN, combined, se_filter=True, good_LN=0, bins=60,
 
 
 def gain_by_contrast_slopes(batch, gc, stp, LN, combined, se_filter=True,
-                            good_LN=0, bins=60, use_exp=True):
+                            good_LN=0, bins=30, use_exp=True):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     #cellids = df_r[LN] > good_LN
@@ -691,6 +748,45 @@ def dynamic_sigmoid_pred_matched(cellid, batch, modelname, include_phi=True):
 # if going back to discrete colors for pred_matched sigmoid, can use this:
 #        plasma = plt.get_cmap('plasma')
 #        c1, c2, c3, c4 = [plasma(n) for n in [.1, .4, .7, .9]]
+
+
+def stp_sigmoid_pred_matched(cellid, batch, modelname, LN, include_phi=True):
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname)
+    ln_spec, ln_ctx = xhelp.load_model_xform(cellid, batch, LN)
+    modelspec = ctx['modelspec']
+    modelspec.recording = ctx['val']
+    val = ctx['val'].apply_mask()
+    ln_modelspec = ln_ctx['modelspec']
+    ln_modelspec.recording = ln_ctx['val']
+    ln_val = ln_ctx['val'].apply_mask()
+
+    pred_after_NL = val['pred'].as_continuous().flatten() # with stp
+    val_before_NL = ms.evaluate(ln_val, ln_modelspec, stop=-1)
+    pred_before_NL = val_before_NL['pred'].as_continuous().flatten() # no stp
+
+    stp_idx = find_module('stp', modelspec)
+    val_before_stp = ms.evaluate(val, modelspec, stop=stp_idx)
+    val_after_stp = ms.evaluate(val, modelspec, stop=stp_idx+1)
+    pred_before_stp = val_before_stp['pred'].as_continuous().mean(axis=0).flatten()
+    pred_after_stp = val_after_stp['pred'].as_continuous().mean(axis=0).flatten()
+    stp_effect = (pred_after_stp - pred_before_stp)/(pred_after_stp + pred_before_stp)
+
+    fig = plt.figure()
+    plasma = plt.get_cmap('plasma')
+    plt.scatter(pred_before_NL, pred_after_NL, c=stp_effect, s=2,
+                alpha=0.75, cmap=plasma)
+    plt.title(cellid)
+    plt.xlabel('pred in (no stp)')
+    plt.ylabel('pred out (with stp)')
+
+    if include_phi:
+        stp_phi = modelspec.phi[stp_idx]
+        phi_string = '\n'.join(['%s:  %.4E' % (k, v) for k, v in stp_phi.items()])
+        fig.text(0.775, 0.9, phi_string, va='top', ha='left')
+        plt.subplots_adjust(right=0.775, left=0.075)
+    plt.colorbar()
+
+    return fig
 
 
 def save_pred_matched_batch(batch, modelname, save_path, test_limit=None):

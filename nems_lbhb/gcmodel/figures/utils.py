@@ -261,3 +261,8 @@ def is_outlier(points, thresh=3.5):
     modified_z_score = 0.6745 * diff / med_abs_deviation
 
     return modified_z_score > thresh
+
+
+def drop_common_outliers(*arrays):
+    common_outliers = np.logical_or.reduce([is_outlier(a) for a in arrays])
+    return [a[~common_outliers] for a in arrays]
