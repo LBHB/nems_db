@@ -10,7 +10,8 @@ from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
                                              adjustFigAspect,
-                                             improved_cells_to_list)
+                                             improved_cells_to_list,
+                                             is_outlier, drop_common_outliers)
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
@@ -20,9 +21,10 @@ plt.rcParams.update(params)  # loaded from definitions
 
 
 def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
-                        LN_filter=False, manual_cellids=None,
-                        plot_stat='r_ceiling', enable_hover=False,
-                        add_combined=False, color_improvements=False):
+                        LN_filter=False, plot_stat='r_ceiling',
+                        enable_hover=False, manual_lims=None,
+                        drop_outliers=False, color_improvements=True,
+                        xmodel='GC', ymodel='STP'):
     '''
     model1: GC
     model2: STP
@@ -31,115 +33,92 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     '''
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
-    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                           as_lists=False)
-
-    if manual_cellids is not None:
-        # WARNING: Will override se and ratio filters even if they are set
-        cellids = manual_cellids
-
     if plot_stat == 'r_ceiling':
         plot_df = df_c
     else:
         plot_df = df_r
 
-    gc_test = plot_df[gc][cellids]
-    stp_test = plot_df[stp][cellids]
-    ln_test = plot_df[LN][cellids]
-    combined_test = plot_df[combined][cellids]
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    improved = e
+    not_improved = list(set(a) - set(e))
+    models = [gc, stp, LN]
+    gc_rel_imp, stp_rel_imp = _relative_score(plot_df, models, improved,
+                                              drop_outliers=drop_outliers)
+    gc_rel_not, stp_rel_not = _relative_score(plot_df, models, not_improved,
+                                              drop_outliers=drop_outliers)
+    gc_rel_all, stp_rel_all = _relative_score(plot_df, models, a,
+                                              drop_outliers=drop_outliers)
 
-    gc_vs_ln = gc_test.values - ln_test.values
-    stp_vs_ln = stp_test.values - ln_test.values
-    combined_vs_ln = combined_test.values - ln_test.values
+    r_imp, p_imp = st.pearsonr(gc_rel_imp, stp_rel_imp)
+    r_not, p_not = st.pearsonr(gc_rel_not, stp_rel_not)
+    r_all, p_all = st.pearsonr(gc_rel_all, stp_rel_all)
+    n_imp = len(improved)
+    n_not = len(not_improved)
+    n_all = len(a)
 
-    if color_improvements:
-        gc_test_gc_cells = plot_df[gc][cellids][g].values
-        stp_test_gc_cells = plot_df[stp][cellids][g].values
-        ln_test_gc_cells = plot_df[LN][cellids][g].values
-        gc_test_stp_cells = plot_df[gc][cellids][s].values
-        stp_test_stp_cells = plot_df[stp][cellids][s].values
-        ln_test_stp_cells = plot_df[LN][cellids][s].values
-
-        gc_vs_ln_gc_cells = gc_test_gc_cells - ln_test_gc_cells
-        stp_vs_ln_gc_cells = stp_test_gc_cells - ln_test_gc_cells
-        gc_vs_ln_stp_cells = gc_test_stp_cells - ln_test_stp_cells
-        stp_vs_ln_stp_cells = stp_test_stp_cells - ln_test_stp_cells
-
-
-#    gc_vs_ln = gc_vs_ln.astype('float32')
-#    stp_vs_ln = stp_vs_ln.astype('float32')
-#    combined_vs_ln = combined_vs_ln.astype('float32')
-#
-#    ff = np.isfinite(gc_vs_ln) & np.isfinite(stp_vs_ln) & np.isfinite(combined_vs_ln)
-#    gc_vs_ln = gc_vs_ln[ff]
-#    stp_vs_ln = stp_vs_ln[ff]
-#    combined_vs_ln = combined_vs_ln[ff]
-
-    #r = np.corrcoef(gc_vs_ln, stp_vs_ln)[0, 1]
-    r2, p = st.pearsonr(gc_vs_ln, stp_vs_ln)
-    # TODO: compute p manually? the scipy documentation isn't
-    #       very clear on how they calculate it, something to do with
-    #       a beta function
-    n = gc_vs_ln.size
-
-    y_max = np.max(stp_vs_ln)
-    y_min = np.min(stp_vs_ln)
-    x_max = np.max(gc_vs_ln)
-    x_min = np.min(gc_vs_ln)
-
-    abs_max = max(np.abs(y_max), np.abs(x_max), np.abs(y_min), np.abs(x_min))
-    abs_max *= 1.15
+    y_max = np.max(stp_rel_all)
+    y_min = np.min(stp_rel_all)
+    x_max = np.max(gc_rel_all)
+    x_min = np.min(gc_rel_all)
 
     fig = plt.figure()
     ax = plt.gca()
-    ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
-    ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
-    ax.scatter(gc_vs_ln, stp_vs_ln, c=wsu_gray, s=20)
+    ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+    ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
     if color_improvements:
-        ax.scatter(gc_vs_ln_gc_cells, stp_vs_ln_gc_cells, c=model_colors['gc'])
-        ax.scatter(gc_vs_ln_stp_cells, stp_vs_ln_stp_cells, c=model_colors['stp'])
-    ax.set_xlabel("GC - LN model")
-    ax.set_ylabel("STP - LN model")
-    ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
-              % (r2, p, n))
-    ax.set_ylim(ymin=(-1)*abs_max, ymax=abs_max)
-    ax.set_xlim(xmin=(-1)*abs_max, xmax=abs_max)
-    adjustFigAspect(fig, aspect=1)
+        ax.scatter(gc_rel_not, stp_rel_not, c=model_colors['LN'], s=15)
+        ax.scatter(gc_rel_imp, stp_rel_imp, edgecolors=model_colors['max'],
+                   facecolors='none', s=40, linewidth=2)
+    else:
+        ax.scatter(gc_rel_all, stp_rel_all, c='black', s=20)
+    ax.set_xlabel("%s - LN model" % xmodel)
+    ax.set_ylabel("%s - LN model" % ymodel)
+    ax.set_title("Performance Improvements over LN\n"
+                 "dropped outliers?:  %s\n"
+                 "all cells:  r: %.02f, p: %.2E, n: %d\n"
+                 "improved:  r: %.02f, p: %.2E, n: %d\n"
+                 "not imp:  r: %.02f, p: %.2E, n: %d\n"
+                 % (drop_outliers, r_all, p_all, n_all, r_imp, p_imp, n_imp,
+                    r_not, p_not, n_not))
+    plt.legend()
+
+    if manual_lims is not None:
+        ax.set_ylim(*manual_lims)
+        ax.set_xlim(*manual_lims)
+    else:
+        upper = max(y_max, x_max)
+        lower = min(y_min, x_min)
+        upper_lim = np.ceil(10*upper)/10
+        lower_lim = np.floor(10*lower)/10
+        ax.set_ylim(lower_lim, upper_lim)
+        ax.set_xlim(lower_lim, upper_lim)
+
     if enable_hover:
         mplcursors.cursor(ax, hover=True).connect(
                 "add",
-                lambda sel: sel.annotation.set_text(cellids[sel.target.index])
+                lambda sel: sel.annotation.set_text(a[sel.target.index])
                 )
-
-    if add_combined:
-        fig2 = plt.figure()
-        ax = plt.gca()
-        ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
-        ax.axes.axvline(0, color='black', linewidth=2, linestyle='dashed', dashes=dash_spacing)
-        ax.scatter(combined_vs_ln, stp_vs_ln, c=wsu_crimson, s=20,
-                    alpha=0.3, label='combined vs stp')
-        ax.scatter(gc_vs_ln, combined_vs_ln, c='goldenrod', s=20,
-             alpha=0.3, label='gc vs combined')
-        ax.legend()
-        ax.set_xlabel("GC - LN model")
-        ax.set_ylabel("STP - LN model")
-        ax.set_title("Performance Improvements over LN\nr: %.02f, p: %.2E, n: %d\n"
-                  % (r2, p, n))
-        ax.set_ylim(ymin=(-1)*abs_max, ymax=abs_max)
-        ax.set_xlim(xmin=(-1)*abs_max, xmax=abs_max)
-        adjustFigAspect(fig, aspect=1)
-        if enable_hover:
-            mplcursors.cursor(ax, hover=True).connect(
-                    "add",
-                    lambda sel: sel.annotation.set_text(cellids[sel.target.index])
-                    )
 
     plt.tight_layout()
     return fig
+
+
+def _relative_score(df, models, mask, drop_outliers=False):
+    g, s, L = models
+    gc = df[g][mask]
+    stp = df[s][mask]
+    LN = df[L][mask]
+    gc_rel = gc.values - LN.values
+    stp_rel = stp.values - LN.values
+
+    if drop_outliers:
+        gc_rel, stp_rel = drop_common_outliers(gc_rel, stp_rel)
+
+    return gc_rel, stp_rel
 
 
 def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
@@ -151,17 +130,19 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     model3: LN
 
     '''
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+    improved = e
+    not_improved = list(set(a) - set(e))
 
     if load_path is None:
         df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-        cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                              LN, combined,
+        cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc,
+                                                              stp, LN, combined,
                                                               se_filter,
                                                               LN_filter)
 
         rs = []
-        #ks = []
-        for c in cellids[:test_limit]:
+        for c in a[:test_limit]:
             xf1, ctx1 = xhelp.load_model_xform(c, batch, gc)
             xf2, ctx2 = xhelp.load_model_xform(c, batch, stp)
             xf3, ctx3 = xhelp.load_model_xform(c, batch, LN)
@@ -175,61 +156,70 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
             stpff = stp_pred[ff]
             lnff = ln_pred[ff]
             rs.append(np.corrcoef(gcff-lnff, stpff-lnff)[0, 1])
-            #p = st.ks_2samp(gcff-lnff, stpff-lnff)[1]
-            #ks.append(D)
-    #        if p == 0:
-    #            ks.append(1e-5)
-    #        else:
-    #            ks.append(p)
 
-        rs = np.array(rs)
+        blank = np.full_like(rs, np.nan)
+        results = {'cellid': cellids[:test_limit], 'equivalence': rs,
+                   'effect_size': blank, 'corr_gc_LN': blank,
+                   'corr_stp_LN': blank}
+        df = pd.DataFrame.from_dict(results)
+        df.set_index('cellid', inplace=True)
         if save_path is not None:
-            np.save(save_path, rs)
+            df.to_pickle(save_path)
     else:
-        rs = np.load(load_path)
+        df = pd.read_pickle(load_path)
 
-    md = np.nanmedian(rs)
-    #mks = np.nanmedian(ks)
-    #logks = -1*np.log10(ks)
+    rs = df['equivalence'].values
 
-    #n_samps = gcff.shape[-1]
-    #d_threshold = (np.sqrt(-0.5*np.log(alpha)))*np.sqrt((2*n_samps)/n_samps**2)
-    n_cells = rs.shape[0]
-    fig = plt.figure()
-    plt.hist(rs, bins=30, range=[-0.5, 1], histtype='bar', color=[wsu_gray_light],
-             edgecolor='black', linewidth=1)
-    plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--',
-             linewidth=2, dashes=dash_spacing)
-    plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
-             ha='left', va='top', transform=fig.axes[0].transAxes)
-    plt.xlabel('CC, GC-LN vs STP-LN')
-    plt.title('Equivalence of Change in Prediction Relative to LN Model')
+    imp = np.array(improved)
+    not_imp = np.array(not_improved)
+    imp_mask = np.isin(a, imp)
+    not_mask = np.isin(a, not_imp)
+    rs_not = rs[not_mask]
+    rs_imp = rs[imp_mask]
+    md_not = np.nanmedian(rs_not)
+    md_imp = np.nanmedian(rs_imp)
+    t, p = st.ttest_ind(rs_not, rs_imp)
+    n_not = len(not_improved)
+    n_imp = len(improved)
 
-    # TODO: maybe not working as intended? or maybe it is and the p values
-    #       are just tiny, but end up with all < 0.00001
-    #       Ask SVD about continuing with this.
-#    fig2 = plt.figure()
-#    plt.hist(logks, bins=30, range=[0, 5], histtype='bar',
-#                                    color=['gray'])
-#    plt.plot(np.array([-np.log10(0.05), -np.log10(0.05)]),
-#             np.array(fig.axes[0].get_ylim()), 'k--')
-#    plt.text(0.05, 0.95, 'n = %d' % n_cells,
+    colors = [model_colors['LN'], model_colors['max']]
+    weights = [np.ones(len(rs_not))/len(rs_not),
+               np.ones(len(rs_imp))/len(rs_imp)]
+
+    #n_cells = rs.shape[0]
+    fig, ax = plt.subplots()
+    plt.hist([rs_not, rs_imp], bins=30, range=[-0.5, 1], weights=weights,
+             color=colors, edgecolor='black', linewidth=1)
+    ax.axes.axvline(md_not, color=model_colors['LN'], linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    ax.axes.axvline(md_imp, color=model_colors['max'], linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+#    plt.plot(np.array([0,0]), np.array(fig.axes[0].get_ylim()), 'k--',
+#             linewidth=2, dashes=dash_spacing)
+
+#    plt.text(0.05, 0.95, 'n = %d\nmd = %.2f' % (n_cells, md),
 #             ha='left', va='top', transform=fig.axes[0].transAxes)
-#    plt.xlabel('-log p')
-#    plt.title('Kolmolgorov-Smirnov Test\nBetween Prediction Changes Relative to LN Model')
+    plt.xlabel('CC, GC-LN vs STP-LN')
+    plt.ylabel('proportion within group')
+    plt.title('Equivalence of Change in Prediction Relative to LN Model\n'
+              'n not imp:  %d,  md:  %.2f\n'
+              'n sig. imp:  %d,  md:  %.2f\n'
+              'p:  %.4E'
+              % (n_not, md_not, n_imp, md_imp, p))
 
     plt.tight_layout()
-    return fig#, fig2
+    return fig
 
 
 def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
                             LN_filter=False, save_path=None, load_path=None,
-                            test_limit=None):
+                            test_limit=None, color_improvements=False):
+
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
 
     if load_path is None:
-        e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                               se_filter=se_filter,
-                                               LN_filter=LN_filter)
         equivs = []
         gcs = []
         stps = []
@@ -267,14 +257,47 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 
     equivalence = df['equivalence'].values
     effect_size = df['effect_size'].values
+    r, p = st.pearsonr(effect_size, equivalence)
 
-    fig1 = plt.figure()
-    plt.scatter(effect_size, equivalence, s=20, color='black')
+    fig1, ax = plt.subplots(1,1)
+    ax.axes.axhline(0, color='black', linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+
+    extra_title_lines = []
+    if color_improvements:
+        improved = e
+        not_improved = list(set(a) - set(e))
+        equivalence_imp = df['equivalence'][improved].values
+        equivalence_not = df['equivalence'][not_improved].values
+        effectsize_imp = df['effect_size'][improved].values
+        effectsize_not = df['effect_size'][not_improved].values
+        r_imp, p_imp = st.pearsonr(effectsize_imp, equivalence_imp)
+        r_not, p_not = st.pearsonr(effectsize_not, equivalence_not)
+        n_imp = len(improved)
+        n_not = len(not_improved)
+        lines = ["improved cells,  r:  %.4f,    p:  %.4E" % (r_imp, p_imp),
+                 "not improved,  r:  %.4f,    p:  %.4E" % (r_not, p_not)]
+        extra_title_lines.extend(lines)
+
+        plt.scatter(effectsize_not, equivalence_not, s=15,
+                    color=model_colors['LN'], label='no imp')
+        plt.scatter(effectsize_imp, equivalence_imp, s=40, facecolors='none',
+                    edgecolors=model_colors['max'], linewidth=2,
+                    label='sig. imp.')
+        plt.legend()
+    else:
+        plt.scatter(effect_size, equivalence, s=20, color='black')
+
     plt.ylabel('Equivalence:  CC(GC-LN, STP-LN)')
     plt.xlabel('Effect size:  1 - 0.5*(CC(GC,LN) + CC(STP,LN))')
-    plt.title("Equivalence of Change to Predicted PSTH\n"
-              "vs Effect Size")
+    title = ("Equivalence of Change to Predicted PSTH\n"
+             "vs Effect Size\n"
+             "all cells,  r:  %.4f,    p:  %.4E" % (r, p))
+    for ln in extra_title_lines:
+        title += "\n%s" % ln
+    plt.title(title)
     plt.tight_layout()
+
 
     fig2 = plt.figure()
     md = np.nanmedian(equivalence)

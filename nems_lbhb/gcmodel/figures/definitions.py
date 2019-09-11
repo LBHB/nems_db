@@ -9,15 +9,15 @@ ohsu_navy = '#0e4d8f'
 greys = plt.get_cmap('Greys')
 contrast_cmap = plt.get_cmap('plasma')
 model_cmap = plt.get_cmap('viridis')
-model_color_spacing = [0.0, 0.3, 0.45, 0.6, 0.9]
+model_color_spacing = [0.0, 0.3, 0.45, 0.6, 0.75]
 model_colors = {k: model_cmap(n) for k, n in
                 zip(['LN', 'gc', 'max', 'stp', 'combined'],
                     model_color_spacing)}
 
 params = {  # small version for screens
         #'font.weight': 'bold',
-        'font.size': 24,
-        #'font.size': 12,
+        #'font.size': 24,
+        'font.size': 16,
         'font.family': 'Arial',
         'pdf.fonttype': 42,
         'ps.fonttype': 42,
@@ -96,7 +96,7 @@ ln_dexp = ("ozgf.fs100.ch18-ld-sev_"
 ###############################################################################
 
 # AC data
-autocorrelation = '/auto/users/jacob/notes/gc_rank3/autocorrelation/batch289_100hz_cutoff1000.pkl'
+autocorrelation = '/auto/users/jacob/notes/gc_rank3/autocorrelation/batch289_100hz_cutoff1000_run2.pkl'
 
 # CF data
 com = '/auto/users/jacob/notes/gc_rank3/characteristic_frequencies/289_com.pkl'
@@ -110,8 +110,8 @@ cf_save_path = '/auto/users/jacob/notes/gc_rank3/characteristic_frequencies/comp
 # TODO: need to re-run, separate for summed & other, b289 and b263
 
 # response stats
-max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_6_b289.pkl'
-spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/8_6_b289.pkl'
+max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'
+spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/8_15_b289.pkl'
 
 # sigmoid ratio histogram
 sigmoid_hist_o1 = '/auto/users/jacob/notes/gc_rank3/sigmoid_ratio_arrays/8_6_b289_gc_PF3_o1.npy'
@@ -124,6 +124,10 @@ sigmoid_shapes = '/auto/users/jacob/notes/gc_rank3/sigmoids/'
 # saved strf_vs_resp plots
 strf_vs_resp = '/auto/users/jacob/notes/gc_rank3/strf_vs_resp/'
 
+# sound stats
+ss_289 = '/auto/users/jacob/notes/gc_rank3/sound_stats/b289.pkl'
+ss_263 = '/auto/users/jacob/notes/gc_rank3/sound_stats/b263.pkl'
+
 
 load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
               'spont': spont_289, 'sigmoid_histogram': sigmoid_hist_o1,
@@ -132,12 +136,12 @@ load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
                       'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_PFo1.npy'
                       },
               'equivalence_effect_size': {
-                      'summed': '',
-                      'kernel': ''
+                      'summed': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_summed_b289.pkl',
+                      'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_kernel_b289.pkl'
                       },
               'sound_stats': {
-                      '289': '/auto/users/jacob/notes/gc_rank3/sound_stats/b289.pkl',
-                      '263': '/auto/users/jacob/notes/gc_rank3/sound_stats/b263.pkl'
+                      '289': ss_289,
+                      '263': ss_263
                       },
 
               }

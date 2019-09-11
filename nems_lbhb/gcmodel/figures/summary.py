@@ -23,9 +23,66 @@ plt.rcParams.update(params) # loaded from definitions
 dropped_cell_color = wsu_crimson
 scatter_color = wsu_gray
 
+
+def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling'):
+    all_batch_cells = nd.get_batch_cells(batch, as_list=True)
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=True, LN_filter=False,
+                                           as_lists=True)
+
+    if plot_stat == 'r_ceiling':
+        plot_df = df_c
+    else:
+        plot_df = df_r
+
+    improved = e
+    not_improved = list(set(a) - set(e))
+    models = [gc, stp, LN, combined]
+    names = ['gc', 'stp', 'LN', 'combined']
+    m1 = models[compare[0]]
+    m2 = models[compare[1]]
+    name1 = names[compare[0]]
+    name2 = names[compare[1]]
+    n_batch = len(all_batch_cells)
+    n_all = len(a)
+    n_imp = len(improved)
+    n_not_imp = len(not_improved)
+
+    m1_scores = plot_df[m1][not_improved]
+    m1_scores_improved = plot_df[m1][improved]
+    m2_scores = plot_df[m2][not_improved]
+    m2_scores_improved = plot_df[m2][improved]
+
+    fig = plt.figure()
+    plt.plot([0,1],[0,1], color='black', linewidth=2, linestyle='dashed',
+             dashes=dash_spacing)
+    plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=15,
+                label='no imp.')
+    plt.scatter(m1_scores_improved, m2_scores_improved, facecolors='none',
+                edgecolors=model_colors['max'], s=40, label='sig. imp.',
+                linewidth=2)
+    plt.xlabel('%s for %s' % (plot_stat, name1))
+    plt.ylabel('%s for %s' % (plot_stat, name2))
+    title = ("%s vs %s, batch %d\n"
+             "%d/%d  auditory/total cells\n"
+             "%d no improvements\n"
+             "%d at least one improvement"
+             % (name1, name2, batch, n_all, n_batch, n_not_imp, n_imp))
+    plt.title(title)
+    plt.legend()
+    plt.xlim(0,1)
+    plt.ylim(0,1)
+    plt.tight_layout()
+    plt.axes().set_aspect('equal')
+
+    return fig
+
+
 def performance_scatters(batch, gc, stp, LN, combined,
                          se_filter=True, LN_filter=False, manual_cellids=None,
-                         plot_stat='r_ceiling'):
+                         plot_stat='r_ceiling', show_dropped=True,
+                         color_improvements=False):
     '''
     model1: GC
     model2: STP
@@ -169,46 +226,59 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                     LN_filter=False, plot_stat='r_ceiling'):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
-
+#    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+#                                                          LN, combined,
+#                                                          se_filter,
+#                                                          LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    improved = e
+    not_improved = list(set(a) - set(e))
 
     if plot_stat == 'r_ceiling':
         plot_df = df_c
     else:
         plot_df = df_r
 
-    gc_test = plot_df[gc][cellids]
-    gc_test_under_chance = plot_df[gc][under_chance]
-    stp_test = plot_df[stp][cellids]
-    stp_test_under_chance = plot_df[stp][under_chance]
-    ln_test = plot_df[LN][cellids]
-    gc_stp_test = plot_df[combined][cellids]
-    max_test = np.maximum(gc_test, stp_test)
-    gc_stp_test_rel = gc_stp_test - ln_test
-    max_test_rel = np.maximum(gc_test, stp_test) - ln_test
+    gc_not = plot_df[gc][not_improved]
+    gc_imp = plot_df[gc][improved]
+    #gc_test_under_chance = plot_df[gc][under_chance]
+    stp_not = plot_df[stp][not_improved]
+    stp_imp = plot_df[stp][improved]
+    #stp_test_under_chance = plot_df[stp][under_chance]
+    #ln_test = plot_df[LN][cellids]
+    gc_stp_not = plot_df[combined][not_improved]
+    gc_stp_imp = plot_df[combined][improved]
+    max_not = np.maximum(gc_not, stp_not)
+    max_imp = np.maximum(gc_imp, stp_imp)
+    #gc_stp_test_rel = gc_stp_test - ln_test
+    #max_test_rel = np.maximum(gc_test, stp_test) - ln_test
 
     fig1 = plt.figure()
-    plt.scatter(max_test, gc_stp_test, c=scatter_color, s=20)
-    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=dropped_cell_color, s=20)
+    c_not = model_colors['LN']
+    c_imp = model_colors['max']
+    plt.scatter(max_not, gc_stp_not, c=c_not, s=15, label='no imp.')
+    plt.scatter(max_imp, gc_stp_imp, edgecolors=c_imp, s=40, facecolors='none',
+                linewidth=2, label='sig. imp.')
     ax = fig1.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
-    plt.title('Absolute')
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2,
+             dashes=dash_spacing)
+    plt.title('Max vs Combined')
     plt.ylabel('GC+STP')
     plt.xlabel('Max GC or STP')
+    plt.legend()
 
-    fig2 = plt.figure()
-    plt.scatter(max_test_rel, gc_stp_test_rel, c=scatter_color, s=20)
-    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=dropped_cell_color, s=20)
-    ax = fig2.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
-    plt.title('Relative')
-    plt.ylabel('GC+STP')
-    plt.xlabel('Max GC or STP')
+#    fig2 = plt.figure()
+#    plt.scatter(max_test_rel, gc_stp_test_rel, c=scatter_color, s=20)
+#    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=dropped_cell_color, s=20)
+#    ax = fig2.axes[0]
+#    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
+#    plt.title('Max vs Combined, Relative')
+#    plt.ylabel('GC+STP')
+#    plt.xlabel('Max GC or STP')
 
-    return fig1, fig2
+    return fig1#, fig2
 
 
 def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
@@ -276,15 +346,140 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
         t = plt.text(i+1, y_text, "%0.04f" % m, **common_kwargs)
         t.set_path_effects([pe.withStroke(linewidth=3, foreground='black')])
     plt.title("Median Performance for LN, GC, STP, GC+STP and Max(Gc,STP),\n"
-              "n: %d   Only improved?:  %s" % (n_cells, only_improvements))
+              "batch: %d\n"
+              "n: %d   Only improved?:  %s" % (batch, n_cells,
+                                               only_improvements))
 
     return fig
+
+
+def performance_table(batch1, gc, stp, LN, combined, batch2,
+                      plot_stat='r_ceiling', height_scaling=3):
+    # 4 tables: batch 289 and 263 all cells / improved cells
+    df_r1, df_c1, df_e1 = get_dataframes(batch1, gc, stp, LN, combined)
+    cellids1, under_chance1, less_LN1 = get_filtered_cellids(df_r1, df_e1, gc,
+                                                             stp, LN, combined)
+
+    df_r2, df_c2, df_e2 = get_dataframes(batch2, gc, stp, LN, combined)
+    cellids2, under_chance2, less_LN2 = get_filtered_cellids(df_r2, df_e2, gc,
+                                                             stp, LN, combined)
+    e1, a1, _, _, _ = improved_cells_to_list(batch1, gc, stp, LN, combined)
+    e2, a2, _, _, _ = improved_cells_to_list(batch2, gc, stp, LN, combined)
+
+    if plot_stat == 'r_ceiling':
+        df1 = df_c1
+        df2 = df_c2
+    else:
+        df1 = df_r1
+        df2 = df_c2
+
+    models = [LN, gc, stp, combined]
+    a289, a289_stats = _make_table(df1, df_e1, models, a1)
+    a263, a263_stats = _make_table(df2, df_e2, models, a2)
+    i289, i289_stats = _make_table(df1, df_e1, models, e1)
+    i263, i263_stats = _make_table(df2, df_e2, models, e2)
+    model_names = ['LN', 'GC', 'STP', 'GC+STP', 'Max(GC,STP)']
+
+    fig1, ((a1, a2), (a3, a4)) = plt.subplots(2,2)
+    fig2, ((a5, a6), (a7, a8)) = plt.subplots(2,2)
+    fig1.patch.set_visible(False)
+    fig2.patch.set_visible(False)
+    iters = zip([a1, a2, a3, a4],
+                [a5, a6, a7, a8],
+                [a289, a263, i289, i263],
+                [a289_stats, a263_stats, i289_stats, i263_stats],
+                ['Natural stimuli, all cells', 'Voc. in noise, all cells',
+                 'Natural stimuli, nonlinear cells',
+                 'Voc. in noise, nonlinear cells'])
+
+    for ax1, ax2, table, stats, title in iters:
+        ax1.axis('off')
+        ax1.axis('tight')
+        table1 = ax1.table(cellText=table, colLabels=model_names, rowLabels=model_names,
+                         loc='center', cellLoc='center', rowLoc='center')
+        table1_cells = table1.properties()['child_artists']
+        for c1 in table1_cells:
+            current_height1 = c1.get_height()
+            c1.set_height(current_height1*height_scaling)
+        ax1.set_title(title)
+
+        ax2.axis('off')
+        ax2.axis('tight')
+        row_labels = ['mean', 'median', 'std err']
+        table_text = np.empty((len(row_labels), len(model_names)), dtype='U7')
+        for i, _ in enumerate(row_labels):
+            for j, _ in enumerate(model_names):
+                s = stats[j][i]
+                text = '%.5f' % s
+                table_text[i][j] = text
+        table2 = ax2.table(cellText=table_text, colLabels=model_names,
+                         rowLabels=row_labels, loc='center', cellLoc='center',
+                         rowLoc='center')
+        table2_cells = table2.properties()['child_artists']
+        for c2 in table2_cells:
+            current_height2 = c2.get_height()
+            c2.set_height(current_height2*height_scaling)
+        ax2.set_title(title)
+
+    fig1.tight_layout()
+    fig2.tight_layout()
+
+
+    return fig2, fig1
+
+
+def _make_table(df, df_e, models, cells):
+    vals = []
+    stats = []
+    for m in models:
+        v = df[m][cells].values
+        vals.append(v)
+        mean = np.mean(v)
+        median = np.median(v)
+        se = st.sem(v)
+        stats.append((mean, median, se))
+
+    max_v = np.maximum(vals[0], vals[1])  # max(gc, stp)
+    vals.append(max_v)
+    max_mean = np.mean(max_v)
+    max_median = np.median(max_v)
+    max_se = st.sem(max_v)
+    stats.append((max_mean, max_median, max_se))
+
+    table = np.empty((len(vals), len(vals)), dtype='U7')
+    for i, v_one in enumerate(vals):
+        for j, v_two in enumerate(vals):
+            if j == i:
+                # if indices equal, on diagonal so no comparison
+                table[i][j] = '       '
+            elif j > i:
+                # if j is larger below diagonal so no comparison
+                table[i][j] = '       '
+            else:
+                # if j is smaller, above diagonal so run wilcoxon test and
+                # get p-value and round to nearest power of 10 for small p's
+                p = st.wilcoxon(v_one, v_two)[1]
+                if p < 0.001:
+                    p = int(np.ceil(np.log10(p)))
+                    if p <= -100:
+                        p = -99
+                    if p <= -10:
+                        pad = ''
+                    else:
+                        pad = '0'
+                    text = '< 1E%s%d' % (pad, p)
+                else:
+                    text = '  %.3f' % p
+                table[i][j] = text
+
+    return table, stats
 
 
 def relative_bar_comparison(batch1, batch2, gc, stp, LN, combined,
                             se_filter=True, ln_filter=False,
                             plot_stat='r_ceiling', only_improvements=False,
                             good_ln=0.0):
+    raise ValueError('fix cellid filters before using me')
 
     df_r1, df_c1, df_e1 = get_dataframes(batch1, gc, stp, LN, combined)
     cellids1, under_chance1, less_LN1 = get_filtered_cellids(df_r1, df_e1, gc,
@@ -385,7 +580,7 @@ def relative_bar_comparison(batch1, batch2, gc, stp, LN, combined,
 def significance(batch, gc, stp, LN, combined, se_filter=True,
                  LN_filter=False, ratio_filter=False, threshold=2.5,
                  manual_cellids=None, plot_stat='r_ceiling',
-                 include_legend=True):
+                 include_legend=True, only_improvements=False):
     '''
     model1: GC
     model2: STP
@@ -403,6 +598,10 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
+    elif only_improvements:
+        e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                               as_lists=True)
+        cellids = e
 
     gc_test = df_r[gc][cellids]
     stp_test = df_r[stp][cellids]
@@ -485,7 +684,8 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     ax.set_xticks(minor_xticks, minor=True)
     ax.grid(b=False)
     ax.grid(which='minor', color='b', linestyle='-', linewidth=0.75)
-    ax.set_title("Wilcoxon Signed Test", ha='center', fontsize = 14)
+    title = "Wilcoxon Signed Test\nOnly improvements?:  %s" % only_improvements
+    ax.set_title(title, ha='center', fontsize = 14)
 
     if include_legend:
         blue_patch = mpatch.Patch(

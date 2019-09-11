@@ -177,10 +177,9 @@ def rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
     ax = plt.gca()
     imp_color = model_colors[compare]
     not_color = model_colors['LN']
-    ax.scatter(imp_rates, imp_scores, color=imp_color, s=30,
-               label='sig. imp.')
-    ax.scatter(not_rates, not_scores, color=not_color, s=20, alpha=0.7,
-               label='not imp.')
+    ax.scatter(not_rates, not_scores, color=not_color, s=15, label='not imp.')
+    ax.scatter(imp_rates, imp_scores, color=imp_color, facecolors='none',
+               s=40, linewidth=2, label='sig. imp.')
     ax.legend()
     adjustFigAspect(fig, aspect=1)
     plt.xlabel("%s rate\n"
