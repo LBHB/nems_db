@@ -1692,4 +1692,4 @@ def load_raw_photometry(photofilepath, fs=None):
                 print('end of file reached')
 
     
-    return np.array(F_mag1)[:, np.newaxis], np.array(F_mag)[:, np.newaxis]
+    return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
