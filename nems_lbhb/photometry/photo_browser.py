@@ -6,7 +6,6 @@ try:
     import tkinter as tk
 except:
     import Tkinter as tk
-
 import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib as mpl
@@ -65,11 +64,20 @@ class PhotoBrowser:
         self.frame_n_value.grid(row=2, column=1)
         self.frame_n_value.focus_set()
 
+        self.next_frame = tk.Button(master, text="Next frame", command=self.get_next_frame)
+        self.next_frame.grid(row=3, column=1)
+
+        self.previous_frame = tk.Button(master, text="Previous frame", command=self.get_prev_frame)
+        self.previous_frame.grid(row=3, column=0)
+
+        self.frame_update = tk.Button(master, text="Jump to frame", command=self.get_frame)
+        self.frame_update.grid(row=2, column=2)
+
 
     def load_video_file(self,):
         self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
                             title = "Select raw video file", 
-                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+                            filetypes = (("avi files","*.avi*"), ("mj2 files","*.mj2")))
         params_file = os.path.split(self.raw_video)[-1].split('.')[0]
         animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
         
@@ -92,17 +100,61 @@ class PhotoBrowser:
         frame = mpimg.imread(frame_file)
         canvas = self.video_canvas
         canvas.delete('all')
+        loc = (0, 0)
 
         figure = mpl.figure.Figure(figsize=(4, 3))
         ax = figure.add_axes([0, 0, 1, 1])
         ax.imshow(frame)
 
-        # get frame number
-        fn = int(self.frame_n_value.get())
+        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
+        figure_canvas_agg.draw()
 
-        # get predictions
-        filename = self.video_name.get()
-        animal = self.animal_name.get()
+        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
+
+        figure_w = self.video_canvas.winfo_width()
+        figure_h = self.video_canvas.winfo_height()
+        photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
+
+        # Position: convert from top-left anchor to center anchor
+        canvas.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
+
+        # Unfortunately, there's no accessor for the pointer to the native renderer
+        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+
+        return photo
+
+    def get_next_frame(self):
+        '''
+        display the next frame in the training set
+        '''
+        frame = int(self.frame_n_value.get())
+        self.frame_n_value.delete(0, 'end')
+        self.frame_n_value.insert(0, string=str(frame+1))
+
+        self.get_frame()
+
+    def get_prev_frame(self):
+        '''
+        display the previous frame in the training set
+        '''
+        frame = int(self.frame_n_value.get())
+        self.frame_n_value.delete(0, 'end')
+        self.frame_n_value.insert(0, string=str(frame-1))
+
+        self.get_frame()
+    
+    def get_frame(self):
+        video = self.raw_video
+
+        frame = int(self.frame_n_value.get())
+        t = frame * (1 / 30)
+
+        # save new frames
+        os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
+        #import pdb; pdb.set_trace()
+        frame_file = tmp_frame_folder + 'frame1.jpg'
+
+        self.video_plot = self.plot_frame(frame_file)
 
 def analyze_video(videofile, roi):
     """
