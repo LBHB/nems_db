@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 import scipy.ndimage.filters as snf
 
 fp = '/auto/data/daq/Amanita/AMT039/'
-fn = 'AMT039e02_p_VOC'
+fn = 'AMT039b04_p_VOC'
 pup_fn = fp + 'sorted/' + fn + '.pickle'
 photo_fn = fp + fn + '.photo.avi'
 
@@ -36,29 +36,46 @@ parms, pcov = curve_fit(exp, x, photo2, np.array([np.max(photo2), 0.001, 0]))
 photo2_pred = exp(x, parms[0], parms[1], parms[2])
 
 sigma = 5
-f, ax = plt.subplots(4, 1, sharex=True)
+f, ax = plt.subplots(3, 1, sharex=True)
 
 ax[0].plot(pup, color='blue', lw=2)
 ax[0].set_ylabel("pupil size")
 
 ax[1].set_title("baseline corrected, smoothed")
-ax[1].plot(snf.gaussian_filter1d(photo1-photo1_pred, sigma), color='r', lw=2, label='left roi')
-ax[1].plot(snf.gaussian_filter1d(photo2-photo2_pred, sigma), color='b', lw=2, label='right roi')
+ax[1].plot(snf.gaussian_filter1d(photo1-photo1_pred, sigma), color='r', lw=2, label='SnFR')
+ax[1].legend()
 ax[1].set_ylabel("abs(fluorescence)")
 
-ax[2].set_title("baseline corrected")
-ax[2].plot(photo1-photo1_pred, color='grey', lw=2)
-ax[2].plot(photo2-photo2_pred, color='grey', lw=2)
-ax[2].plot(snf.gaussian_filter1d(photo1-photo1_pred, sigma), color='r', lw=2, label='left roi')
-ax[2].plot(snf.gaussian_filter1d(photo2-photo2_pred, sigma), color='b', lw=2, label='right roi')
+ax[2].plot(snf.gaussian_filter1d(photo2-photo2_pred, sigma), color='b', lw=2, label='iso')
+ax[2].set_ylabel("abs(fluorescence)")
+ax[2].legend()
+
+f.suptitle(fn)
+
+f.tight_layout()
+
+f, ax = plt.subplots(3, 1, sharex=True)
+ax[0].set_title("baseline corrected")
+ax[0].plot(photo1-photo1_pred, color='grey', lw=2)
+ax[0].plot(photo2-photo2_pred, color='grey', lw=2)
+ax[0].plot(snf.gaussian_filter1d(photo1-photo1_pred, sigma), color='r', lw=2, label='SnFR')
+ax[0].plot(snf.gaussian_filter1d(photo2-photo2_pred, sigma), color='b', lw=2, label='iso')
+ax[0].set_ylabel("abs(fluorescence)")
+
+ax[1].set_title("raw")
+ax[1].plot(photo1, color='grey', lw=2)
+ax[1].plot(photo1_pred, color='r', lw=2, label='SnFR')
+ax[1].legend()
+ax[1].set_ylabel("abs(fluorescence)")
+
+
+ax[2].plot(photo2, color='grey', lw=2)
+ax[2].plot(photo2_pred, color='b', lw=2,  label='iso')
+ax[2].legend()
 ax[2].set_ylabel("abs(fluorescence)")
 
-ax[3].set_title("raw")
-ax[3].plot(photo1, color='grey', lw=2)
-ax[3].plot(photo1_pred, color='r', lw=2, label='left roi')
-ax[3].plot(photo2, color='grey', lw=2)
-ax[3].plot(photo2_pred, color='b', lw=2,  label='right roi')
-ax[3].legend()
-ax[3].set_ylabel("abs(fluorescence)")
+f.suptitle(fn)
+
+f.tight_layout()
 
 plt.show()
