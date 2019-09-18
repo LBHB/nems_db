@@ -38,7 +38,7 @@ cellids=np.unique(df['cellid'].values)
 batch=307
 loadkey="psth.fs100.pup"
 
-#cellids = [c for c in cellids if not c.startswith("AMT018")]
+cellids = [c for c in cellids if not c.startswith("AMT018")]
 cellids = [c for c in cellids if not c.startswith("AMT020")]
 #cellids = ['BRT026c-02-1']
 
@@ -123,10 +123,11 @@ for c, cellid in enumerate(cellids[63:]):
         latplotidx = latidx/res[aidx].STRF.shape[1]*StimParams['basep'] + 5
         #bfidx = int(np.round(np.min([14, bfidx]))-1)
         meanlatidx=int(np.round(latbin+durbin/2)-1)
-        delta = strf_diff[bfidx, meanlatidx]
-        deltafrac = delta/res[pidx].STRF[bfidx,meanlatidx]
-        tdelta = strf_diff[taridx, meanlatidx]
-        tdeltafrac = tdelta/res[pidx].STRF[taridx,meanlatidx]
+
+        delta = strf_diff[bfidx, latidx]
+        deltafrac = delta/res[pidx].STRF[bfidx,latidx]
+        tdelta = strf_diff[taridx, latidx]
+        tdeltafrac = tdelta/res[pidx].STRF[bfidx,latidx]
 
         print('{} BF delta frac (bf,lat {:d},{:d})= {:.3f}/{:.3f} = {:.3f}'.format(
             cellid, bfidx, meanlatidx, delta, res[pidx].STRF[bfidx,latidx], deltafrac))

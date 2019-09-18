@@ -46,13 +46,13 @@ part_beh_model = (df['state_sig'] == 'st.pup0.beh')
 part_pup_model = (df['state_sig'] == 'st.pup.beh0')
 
 xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
-#xsubset = df.cellid.str.startswith('AMT020')
+xsubset = df.cellid.str.startswith('AMT')
 #xsubset = df.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
 A1 = (df['area']=='A1') & ~xsubset
-ICC = df['area']=='ICC'
-ICX = df['area']=='ICX'
+ICC = (df['area']=='ICC') & ~xsubset
+ICX = (df['area']=='ICX') & ~xsubset
 onBF = df['onBF']==True
 offBF = df['onBF']==False
 SU = df['SU']==True

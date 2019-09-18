@@ -26,8 +26,8 @@ basemodel = "-ref-psthfr.s_sdexp.S"
 #df = pd.read_csv('pup_beh_processed.csv')
 df = pd.read_csv('pup_beh_processed'+basemodel+'.csv')
 
-xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
-#xsubset = df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
+xsubset = df.cellid.str.startswith('AMT')
 #xsubset = df.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df

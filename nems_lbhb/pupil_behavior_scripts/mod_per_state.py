@@ -468,9 +468,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
              (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
 
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
+        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
         dm = dm.sort_values(['null'])
-        mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
+        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
 
     elif len(state_list)==2:
         dr['bp_common'] = dr[state_list[1]]**2 - dr[state_list[0]]**2
@@ -485,9 +485,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
              (dp['r_se'][state_list[1]]+dp['r_se'][state_list[0]]))
 
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
+        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
         dm = dm.sort_values(['null'])
-        mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
+        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
 
     if nb > 0:
         stepsize = mfull.shape[0]/nb
@@ -526,7 +526,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     p1 = plt.bar(ind, mplots[:,0], width=width, color=colors[1])
     p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
     p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
-    plt.legend(('common','p_unique','b-unique'))
+    plt.legend(('common','b-unique','p_unique'))
     if title is not None:
         plt.title(title)
     plt.xlabel('behavior-independent quintile')
