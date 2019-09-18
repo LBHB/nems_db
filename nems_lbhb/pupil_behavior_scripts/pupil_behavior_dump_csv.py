@@ -26,7 +26,6 @@ batch = 311  # A1 old (SVD) data -- on BF
 batch = 312  # A1 old (SVD) data -- off BF
 batch = 307  # A1 SUA and MUA
 
-
 # pup vs. active/passive
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 #basemodel = "-ref-psthfr.s_stategain.S"
@@ -39,21 +38,19 @@ for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
     d.to_csv('d_'+str(batch)+'_pb.csv')
 
-
-
 # fil only
 state_list = ['st.fil0','st.fil']
-basemodel = "-ref-psthfr.s_stategain.S"
+basemodel2 = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20-ld-"
 batches = [307, 309]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
-                                          basemodel=basemodel, loader=loader)
+                                          basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_fil.csv')
 
 # beh only
 state_list = ['st.beh0','st.beh']
-basemodel = "-ref-psthfr.s_stategain.S"
+basemodel2 = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20-ld-"
 fitter = "_jk.nf20-basic"
 #batch = 307  # DS A1+MU
@@ -62,23 +59,13 @@ fitter = "_jk.nf20-basic"
 batches = [307, 311, 313]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
-                                      basemodel=basemodel, loader=loader)
+                                          basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_beh.csv')
 
 ### do a bunch of grouping/preprocessing
 
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
-basemodel = "-ref-psthfr.s_sdexp.S"
-#basemodel = "-ref-psthfr_sdexp.S"
-
-# RUN IF CONNECTED TO SERVER
-# A1 SUA+MUA: pup vs. beh 307 per state dataframe
-#batch = 307  # A1 SUA and MUA
-#d_pb307 = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
-# IC SUA+MUA: pup vs. beh 307 per state dataframe
-#batch = 309  # IC SUA and MUA
-#d_pb309 = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 
 # RUN IF NOT CONNECTED TO SERVER
 # A1 SUA+MUA: pup vs. beh 307 per state
@@ -115,7 +102,6 @@ d_IC_area = pd.read_csv('IC_cells_area.csv')
 d_pb309 = pd.merge(left=d_pb309, right=d_IC_area, how='outer', on='cellid')
 
 nan_rows = d_pb309[d_pb309['area'].isnull()]
-nan_rows
 
 d_307_strf = pd.read_csv('tuning_info_batch_307.csv')
 d_307_strf = d_307_strf.drop(['Unnamed: 43'], axis=1)
@@ -194,7 +180,8 @@ for cellid in df['cellid'].unique():
     df.loc[mask_for_cellid, 'sig_any'] = ((r_pup_beh - rse_pup_beh*3) > 0) | \
         ((r_pup0_beh0 - rse_pup0_beh0*3) > 0)
 
-df.to_csv('pup_beh_processed.csv')
+#df.to_csv('pup_beh_processed.csv')
+df.to_csv('pup_beh_processed'+basemodel+'.csv')
 
 d_b307 = pd.read_csv('d_307_beh.csv')
 d_b311 = pd.read_csv('d_311_beh.csv')
@@ -275,4 +262,5 @@ for cellid in dfb['cellid'].unique():
     dfb.loc[mask_for_cellid, 'sig_upup'] = False
     dfb.loc[mask_for_cellid, 'sig_obeh'] = False
 
-dfb.to_csv('beh_only_processed.csv')
+dfb.to_csv('beh_only_processed'+basemodel+'.csv')
+#dfb.to_csv('beh_only_processed.csv')

@@ -22,7 +22,8 @@ import common
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 basemodel = "-ref-psthfr.s_sdexp.S"
 
-df = pd.read_csv('pup_beh_processed.csv')
+#df = pd.read_csv('pup_beh_processed.csv')
+df = pd.read_csv('pup_beh_processed'+basemodel+'.csv')
 
 # creating subdf with only rows that match conditions
 is_active = (df['state_chan'] == 'active')
@@ -32,8 +33,12 @@ null_model = (df['state_sig'] == 'st.pup0.beh0')
 part_beh_model = (df['state_sig'] == 'st.pup0.beh')
 part_pup_model = (df['state_sig'] == 'st.pup.beh0')
 
+xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('XXXXXX')
+
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
-A1 = df['area']=='A1'
+A1 = (df['area']=='A1') & ~xsubset
 ICC = df['area']=='ICC'
 ICX = df['area']=='ICX'
 onBF = df['onBF']==True
@@ -52,7 +57,7 @@ fh, axs = plt.subplots(1, 2, figsize=(8,4))
 # common.color_list = [color_ns, color_either, color_b, color_p, color_both]
 common.scat_states(df, x_model=full_model,
             y_model=full_model,
-            beh_state=is_active,
+            x_beh_state=is_active,
             area=A1,
             sig_list=[~sig_state, sig_state, sig_ubeh, sig_upup,sig_both],
             x_column='MIpup_unique',
@@ -65,12 +70,12 @@ common.scat_states(df, x_model=full_model,
             title='A1',
             xlim=(-0.6,0.6),
             ylim=(-0.6,0.6),
-                   ax=axs[0])
+            ax=axs[0])
 
 # IC
 common.scat_states(df, x_model=full_model,
             y_model=full_model,
-            beh_state=is_active,
+            x_beh_state=is_active,
             area=(ICX | ICC),
             sig_list=[~sig_state, sig_state, sig_ubeh, sig_upup,sig_both],
             x_column='MIpup_unique',
@@ -83,4 +88,4 @@ common.scat_states(df, x_model=full_model,
             title='ICC & ICX',
             xlim=(-0.3,0.4),
             ylim=(-0.3,0.4),
-                   ax=axs[1])
+            ax=axs[1])

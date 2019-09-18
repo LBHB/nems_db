@@ -16,7 +16,7 @@ from nems_lbhb.strf.torc_subfunctions import interpft, strfplot, strf_torc_pred,
 # cellid = 'AMT005c-12-1'
 ###################################
 
-def tor_tuning(mfilename,cellid,plot=False):
+def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     '''
     Creates STRF from stimulus and response
     :param mfilename: File with your data in it
@@ -25,9 +25,19 @@ def tor_tuning(mfilename,cellid,plot=False):
     :param plot: If True, makes a nice plot of your data
     :return: named tuple with important data that would be found in plot (strf, bestfreq, snr, onset/offset latency)
     '''
-    fs = 1000
-    rec = nb.baphy_load_recording_file(mfilename=mfilename, cellid=cellid,fs=fs, stim=False)
-    globalparams, exptparams, exptevents = nio.baphy_parm_read(mfilename)
+
+    if rec is None:
+        if fs is None:
+            fs=1000
+        rec = nb.baphy_load_recording_file(mfilename=mfilename, cellid=cellid,fs=fs, stim=False)
+    else:
+        if fs is None:
+            fs=rec['resp'].fs
+    if type(mfilename) is str:
+        _, exptparams, _ = nio.baphy_parm_read(mfilename)
+    else:
+        exptparams = mfilename
+
     signal = rec['resp'].rasterize(fs=fs)
 
     # Pick only TORC epochs, find them, extract them
@@ -38,9 +48,14 @@ def tor_tuning(mfilename,cellid,plot=False):
     # Transform r to have dimensions time x repetitions x torc recordings
     all_arr = list()
     for val in r.values():
-        fval = np.swapaxes(np.squeeze(val),0, 1)
+        fval = np.swapaxes(val[:, 0, :], 0, 1)
         all_arr.append(fval)
-    stacked = np.stack(all_arr, axis=2)      #rasters
+
+    maxreps=np.max([r.shape[1] for r in all_arr])
+
+    all_arr2 = [np.pad(z,((0,0),(0,maxreps-z.shape[1])), 'constant', constant_values=np.nan)
+                for z in all_arr]
+    stacked = np.stack(all_arr2, axis=2)      #rasters
 
     TorcObject = exptparams["TrialObject"][1]["ReferenceHandle"][1]
 
@@ -54,16 +69,16 @@ def tor_tuning(mfilename,cellid,plot=False):
     [strf0,snr,stim,strfemp,StimParams] = strf_est_core(stacked, TorcObject, exptparams, fs, INC1stCYCLE, 16)
 
     pred = strf_torc_pred(stim, strf0)
+    basep = StimParams['basep']
 
     if INC1stCYCLE:
         FirstStimTime = 0
     else:
-        FirstStimTime = 250
+        FirstStimTime = basep
 
     numreps = stacked.shape[1]
     numstims = stacked.shape[2]
     [_,stimT,_] = stim.shape
-    basep = StimParams['basep']
 
     stackeduse = stacked[FirstStimTime:,:,:]
     cyclesperrep = int(stackeduse.shape[0] / basep)
@@ -78,9 +93,15 @@ def tor_tuning(mfilename,cellid,plot=False):
     xc = np.expand_dims(np.zeros(jackcount),axis=1)
 
     for jj in range(jackcount):
-        estidx = range(mm) + np.round((jj) * jackstep) + 1
-        estidx = (np.remainder(estidx - 1, totalreps)).astype(int)
-        validx = (np.setdiff1d(range(totalreps), estidx)).astype(int)
+        validx = np.arange(jj,totalreps,jackcount)
+        estidx = np.setdiff1d(np.arange(totalreps), validx).astype(int)
+
+        #estidx = range(mm) + np.round((jj) * jackstep) + 1
+        #estidx = (np.remainder(estidx - 1, totalreps)).astype(int)
+        #validx = (np.setdiff1d(range(totalreps), estidx)).astype(int)
+        if stackeduse[:,estidx,:].size==0:
+            print('empty stackeduse')
+            import pdb; pdb.set_trace()
         tr = np.expand_dims(np.nanmean(stackeduse[:,estidx,:], 1),axis=1)
         trval = np.nanmean(stackeduse[:,validx,:],1)
 
@@ -105,9 +126,11 @@ def tor_tuning(mfilename,cellid,plot=False):
 
     ff = np.exp(np.linspace(np.log(StimParams['lfreq']),np.log(StimParams['hfreq']),strfsmooth.shape[0]))
 
+    #find "best" (highest signed gain) frequency
     mm = np.mean(strfsmooth[:,:7] * (1*(strfsmooth[:,:7] > 0)), 1)
     if sum(np.abs(mm)) > 0:
-        bfidx = int(sum(((mm == np.max(mm)).ravel().nonzero())))
+        bfidx = np.argwhere(mm==np.max(mm))[0][0]
+        #bfidx = int(sum(((mm == np.max(mm)).ravel().nonzero())))
         bf = np.round(ff[bfidx])
         bfshiftbins = (maxoct / 2 - np.log2(bf / StimParams['lfreq'])) / stepsize2
     else:
@@ -115,9 +138,10 @@ def tor_tuning(mfilename,cellid,plot=False):
         bf = 0
         bfshiftbins = 0
 
+    #find "worst" (lowest signed gain) frequency
     mmneg = np.mean(strfsmooth[:,:7] * (1*(strfsmooth[:,:7] < 0)), 1)
-    if sum(np.abs(mm)) > 0:
-        wfidx = int(sum(((mmneg == np.min(mmneg)).ravel().nonzero())))
+    if sum(np.abs(mmneg)) > 0:
+        wfidx = np.argwhere(mmneg==np.min(mmneg))[0][0]
         wf = np.round(ff[wfidx])
         wfshiftbins = (maxoct / 2 - np.log2(wf / StimParams['lfreq'])) / stepsize2
     else:
@@ -195,6 +219,6 @@ def tor_tuning(mfilename,cellid,plot=False):
         axs[2].set_xlabel('Frequency (Hz)')
         axs[2].set_ylabel('Gain (a.u.)')
 
-    tor_tuning_output = collections.namedtuple('STRF_Data',['STRF','Best_Frequency_Hz','Signal_to_Noise','Onset_Latency_ms','Offset_Latency_ms'])
+    tor_tuning_output = collections.namedtuple('STRF_Data',['STRF','STRF_error','Best_Frequency_Hz','Signal_to_Noise','Onset_Latency_ms','Offset_Latency_ms','StimParams'])
 
-    return tor_tuning_output(strf0, bf, snr, lat, offlat)
+    return tor_tuning_output(strf0, strfemp, bf, snr, lat, offlat, StimParams)

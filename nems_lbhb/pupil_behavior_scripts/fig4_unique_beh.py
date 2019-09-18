@@ -23,10 +23,15 @@ import common
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 basemodel = "-ref-psthfr.s_sdexp.S"
 
-df = pd.read_csv('pup_beh_processed.csv')
+#df = pd.read_csv('pup_beh_processed.csv')
+df = pd.read_csv('pup_beh_processed'+basemodel+'.csv')
+
+xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
-A1 = df['area']=='A1'
+A1 = (df['area']=='A1') & ~xsubset
 ICC = df['area']=='ICC'
 ICX = df['area']=='ICX'
 onBF = df['onBF']==True
@@ -54,7 +59,7 @@ fh, axs = plt.subplots(3, 3, figsize=(12,12))
 # A1
 common.scat_states(df, x_model=full_model,
             y_model=full_model,
-            beh_state=is_active,
+            x_beh_state=is_active,
             area=A1,
             sig_list=[~sig_state, sig_state, sig_ubeh, sig_upup,sig_both],
             x_column='MIbeh_only',
@@ -72,7 +77,7 @@ common.scat_states(df, x_model=full_model,
 # ICC
 common.scat_states(df, x_model=full_model,
             y_model=full_model,
-            beh_state=is_active,
+            x_beh_state=is_active,
             area=ICC,
             sig_list=[~sig_state, sig_state, sig_ubeh, sig_upup,sig_both],
             x_column='MIbeh_only',
@@ -91,7 +96,7 @@ common.scat_states(df, x_model=full_model,
 # ICX
 common.scat_states(df, x_model=full_model,
             y_model=full_model,
-            beh_state=is_active,
+            x_beh_state=is_active,
             area=ICX,
             sig_list=[~sig_state, sig_state, sig_ubeh, sig_upup,sig_both],
             x_column='MIbeh_only',
@@ -125,7 +130,7 @@ plt.xlabel('A1 units')
 plt.ylabel('MI_task only (pupil ignored)')
 plt.title('MI_task only (A1)')
 #plt.savefig('MI_task_only_A1.pdf')
-nplt.ax_remove_box(ax)
+nplt.ax_remove_box(axs[1,0])
 
 plt.sca(axs[2,0])
 plt.bar(x_axis_A1, df_MI_unique_sorted.loc[full_model & is_active & A1, 'MIbeh_unique'], color = common.color_b,
@@ -135,7 +140,7 @@ plt.xlabel('A1 units')
 plt.ylabel('MI_task unique (pupil regressed out)')
 plt.title('MI_task unique (A1)')
 #plt.savefig('MI_task_unique_A1.pdf')
-nplt.ax_remove_box(ax)
+nplt.ax_remove_box(axs[2,0])
 
 
 plt.sca(axs[1,1])
@@ -145,7 +150,7 @@ plt.xlabel('IC units')
 plt.ylabel('MI_task only (pupil ignored)')
 plt.title('MI_task only (IC)')
 #plt.savefig('MI_task_only_IC.pdf')
-nplt.ax_remove_box(ax)
+nplt.ax_remove_box(axs[1,1])
 
 
 plt.sca(axs[2,1])
@@ -156,7 +161,7 @@ plt.xlabel('IC units')
 plt.ylabel('MI_task unique (pupil regressed out)')
 plt.title('MI_task unique (IC)')
 #plt.savefig('MI_task_unique_IC.pdf')
-nplt.ax_remove_box(ax)
+nplt.ax_remove_box(axs[2,1])
 
 # To quantify differences in modulation without the confounding element of sign let's do
 # (MItask only - MItask unique) * sign((MItask only+MItask unique)/2)

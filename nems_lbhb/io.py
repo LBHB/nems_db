@@ -900,7 +900,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
-    
 
     pupilfilepath = get_pupil_file(pupilfilepath)
 
@@ -1098,7 +1097,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         firstframe[t] = int(p[1])
     pp = ['PUPILSTOP' in x['name'] for i, x in exptevents.iterrows()]
     lastidx = np.argwhere(pp)[-1]
-    
     
     s = exptevents.iloc[lastidx[0]]['name'].split(",[")
     p = eval("[" + s[1])

@@ -25,9 +25,11 @@ basemodel = "-ref-psthfr.s_sdexp.S"
 #
 # Figures 6A-B  - separate pup and beh effects
 
-df = pd.read_csv('pup_beh_processed.csv')
+#df = pd.read_csv('pup_beh_processed.csv')
+df = pd.read_csv('pup_beh_processed'+basemodel+'.csv')
 
-xsubset = df.cellid.str.startswith('AMT')
+xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
+#xsubset = df.cellid.str.startswith('AMT020')
 #xsubset = df.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
@@ -45,23 +47,25 @@ sig_obeh = df['sig_obeh']==True
 sig_oubeh = sig_ubeh | sig_obeh
 
 # 6A
-aud_vs_state(df.loc[A1], nb=5)
+aud_vs_state(df.loc[A1], nb=5, colors=common.color_list)
 
 # 6B
-aud_vs_state(df.loc[ICC | ICX], nb=5)
+aud_vs_state(df.loc[ICC | ICX], nb=5, colors=common.color_list)
 
 
 # Figures 6C-D  - beh only effects, bigger set of cells
 # later figure -- beh only (ignore pupil, can use larger stim set)
 
-dfb = pd.read_csv('beh_only_processed.csv')
+#dfb = pd.read_csv('beh_only_processed.csv')
+dfb = pd.read_csv('beh_only_processed'+basemodel+'.csv')
 
 # creating subdf with only rows that match conditions
 is_active = (dfb['state_chan'] == 'active')
 full_model = (dfb['state_sig'] == 'st.beh')
 null_model = (dfb['state_sig'] == 'st.beh0')
 
-xsubset = dfb.cellid.str.startswith('AMT')
+xsubset = dfb.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
+#xsubset = dfb.cellid.str.startswith('AMT020')
 #xsubset = dfb.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
@@ -112,7 +116,7 @@ if 0:
                 ylabel='state-dependent R2',
                 title='IC')
 
-aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'])
-aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'])
+aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list)
+aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list)
 
 

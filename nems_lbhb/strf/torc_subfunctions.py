@@ -76,6 +76,73 @@ def insteadofbin(resp,binsize,mf=1):
 
 
 
+def get_strf_tuning(strf0, strfemp, StimParams):
+
+    # figure out some tuning properties
+    maxoct = int(np.log2(StimParams['hfreq']/StimParams['lfreq']))
+    stepsize2 = maxoct / strf0.shape[0]
+    fs=1000
+
+    smooth = [100,strf0.shape[1]]
+    strfsmooth = interpft(strf0, smooth[0], 0)
+    strfempsmooth = interpft(strfemp, smooth[0], 0)
+
+    ff = np.exp(np.linspace(np.log(StimParams['lfreq']),np.log(StimParams['hfreq']),strfsmooth.shape[0]))
+
+    mm = np.mean(strfsmooth[:,:7] * (1*(strfsmooth[:,:7] > 0)), 1)
+    if sum(np.abs(mm)) > 0:
+        bfidx = int(sum(((mm == np.max(mm)).ravel().nonzero())))
+        bf = np.round(ff[bfidx])
+        bfshiftbins = (maxoct / 2 - np.log2(bf / StimParams['lfreq'])) / stepsize2
+    else:
+        bfidx = 1
+        bf = 0
+        bfshiftbins = 0
+
+    mmneg = np.mean(strfsmooth[:,:7] * (1*(strfsmooth[:,:7] < 0)), 1)
+    if sum(np.abs(mm)) > 0:
+        wfidx = int(sum(((mmneg == np.min(mmneg)).ravel().nonzero())))
+        wf = np.round(ff[wfidx])
+        wfshiftbins = (maxoct / 2 - np.log2(wf / StimParams['lfreq'])) / stepsize2
+    else:
+        wfidx = 1
+        wf = 0
+        wfshiftbins = 0
+
+    if -mmneg[wfidx] > mm[bfidx]:
+        # If stronger negative component, calculate latency with neg
+        shiftbins = wfshiftbins
+        irsmooth = -interpft(strfsmooth[wfidx, :], 250)
+        irempsmooth = interpft(strfempsmooth[wfidx], 250, 0)
+    else:
+        # Use positives
+        shiftbins = bfshiftbins
+        irsmooth = interpft(strfsmooth[bfidx, :], 250)
+        irempsmooth = interpft(strfempsmooth[bfidx], 250)
+
+    mb = 0
+    # Find significantly modulated time bins
+    sigmod = np.asarray((irsmooth-mb > irempsmooth*2).ravel().nonzero())
+    sigmod = sigmod[np.logical_and(sigmod>=7,sigmod<124)]
+
+    if len(sigmod) > 3:
+        latbin = sigmod[0]
+        dd = np.concatenate([np.diff(sigmod),[41]])
+        durbin = sigmod[np.min((dd[0:] > 40).ravel().nonzero())]
+        lat = int(np.round(latbin * 1000 / fs))
+        offlat = int(np.round(durbin * 1000 / fs))
+        #print("onset/offset latency:", lat, offlat)
+    else:
+        latbin = 0
+        lat = 0
+        durbin = 0
+        offlat = 0
+        print('no significant onset latency\n')
+
+    return bf, lat, offlat, bfidx*strf0.shape[0]/100, \
+           latbin*strf0.shape[1]/250, durbin*strf0.shape[1]/250
+
+
 def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
     '''
     Plots STRF using smoothing and interpolation
@@ -90,22 +157,26 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
     '''
     if axs == None:
         fig, axs = plt.subplots()
+
     if smooth:
         if smooth == 1:
             smooth = [100, 250]
         strfdata = interpft(interpft(strf0, smooth[0], 0), smooth[1], 1)
+    else:
+        strfdata = strf0
 
-        axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
+    axs.imshow(strf0, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
 
-        if lfreq:
-            freqappend = lfreq
-            freqticks = []
-            for fff in range(noct+1):
-                if fff != 0:
-                    freqappend = freqappend * 2
-                freqticks.append(freqappend)
-            axs.set_yticks(np.arange(noct))
-            axs.set_yticklabels(freqticks)
+    if lfreq:
+        freqappend = lfreq
+        freqticks = []
+        for fff in range(noct+1):
+            if fff != 0:
+                freqappend = freqappend * 2
+            freqticks.append(freqappend)
+        axs.set_yticks(np.arange(noct))
+        axs.set_yticklabels(freqticks)
+
     return freqticks,strfdata
 
 
@@ -179,7 +250,7 @@ def get_snr(spdata,stim,basep,mf,allrates):
     :return: snr
     '''
 
-    spdata[(np.isnan(spdata)).ravel().nonzero()] = 0
+    #spdata[(np.isnan(spdata)).ravel().nonzero()] = 0
     [numdata,numsweeps,numrecs] = spdata.shape
     [_,stimtime,_] = stim.shape
 
@@ -189,21 +260,29 @@ def get_snr(spdata,stim,basep,mf,allrates):
     #Response variability as a function of frequency per stimulus (-pair)#
     #-------------------------------------------------------------------#
     n = numsweeps * numdata / mf / basep
-    tmp = spdata[range(int(np.round(np.floor(n / numsweeps) * mf * basep))),:,:]
-    spdata2 = np.reshape(tmp, [int(basep * mf), int(numsweeps * np.floor(n / numsweeps)), numrecs], order='F')
-    n = numsweeps * np.floor(n / numsweeps)
 
-    if n/numsweeps > 1:
-        spdata2trim = np.delete(spdata2, np.arange(0,n,n/numsweeps), axis=1)
+    reps_per_sweep = np.floor(numdata/basep)
+    # remove incomplete rep
+    tmp = spdata[range(int(reps_per_sweep * basep)), :, :]
+    if reps_per_sweep>1:
+        #remove first rep
+        tmp=tmp[basep:, :, :]
+        reps_per_sweep -= 1
+    spdata2trim = np.reshape(tmp, [int(basep), int(reps_per_sweep * numsweeps), numrecs], order='F')
+
+    # don't need this any more
+    #n = numsweeps * np.floor(n / numsweeps)
+    #if n/numsweeps > 1:
+    #    spdata2trim = np.delete(spdata2, np.arange(0,n,n/numsweeps), axis=1)
 
     n = spdata2trim.shape[1]
 
     vrf = 1e6 * np.square(stimtime) / np.square(basep) / n * np.square(
-        np.std(np.fft.fft(spdata2trim, spdata2trim.shape[0], 0), ddof=1, axis=1))
+        np.nanstd(np.fft.fft(spdata2trim, spdata2trim.shape[0], 0), ddof=1, axis=1))
 
     ##############Response power as a function of frequency##############
     #--------------------------------------------------------------------
-    spikeperiod = np.squeeze(np.mean(spdata2trim,1))
+    spikeperiod = np.squeeze(np.nanmean(spdata2trim,1))
 
     #"downsample spike histogram using insteadofbin()"#
     if basep/stimtime != 1/mf:
@@ -300,7 +379,7 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     RefDuration = TorcObject['Duration']
 
     numrecs = referencecount
-    mf = int(fs/1000)
+    mf = int(fs/1000)  # used to be int(fs/1000)
     stdur = int(RefDuration*1000)
 
     # change nesting to TORCs(StimParam(...))
@@ -420,13 +499,17 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     strfest = np.zeros([stimX,stimT])
 
     ##only loop over real (nonNaN) reps, may be diff number of reps for diff torcs
-    if stacked.shape[0] <= fs/4:
-        realrepcount = np.max(np.logical_not(np.isnan(stacked[1,:,1])).ravel().nonzero())+1
-    else:
-        realrepcount = np.max(np.logical_not(np.isnan(stacked[int(np.round(fs/4))+1,:,1])).ravel().nonzero())+1
+    try:
+        if stacked.shape[0] <= fs/4:
+            realrepcount = np.max(np.logical_not(np.isnan(stacked[1,:,1])).ravel().nonzero())+1
+        else:
+            realrepcount = np.max(np.logical_not(np.isnan(stacked[int(np.round(fs/4))+1,:,1])).ravel().nonzero())+1
+    except:
+        print('stacked matrix is empty, dropping to debugger')
+        import pdb; pdb.set_trace()
 
     if INC1stCYCLE == 1:
-        if stacked.shape[0]>250:
+        if stacked.shape[0]>basep:
             print('Including 1st TORC Cycle')
         FirstStimTime = 0
     elif INC1stCYCLE > 0:
@@ -448,12 +531,11 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     else:
         snr = 0
 
-
-    if not jackN:                            #normalize by the num of reps that were presented
+    if not jackN:         #normalize by the num of reps that were presented
         for rep in range(realrepcount):
             for rec in range(numstim):
 
-                if np.all(stacked[0] <= fs/4):
+                if stacked.shape[0] <= fs/4:
                     thisrepcount = sum(np.logical_not(np.isnan(stacked[0,:,rec])))
                 else:
                     thisrepcount = sum(sum(np.logical_not(np.isnan(stacked[int(np.round(fs/4)+1):,:,0]))) > 0).astype(int)

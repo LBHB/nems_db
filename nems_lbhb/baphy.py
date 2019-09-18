@@ -1083,7 +1083,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
                 state = state.concatenate_time([state, t_state])
 
     resp.meta = options
-
+    resp.meta['files'] = files
     signals = {'resp': resp}
 
     if options['stim']:
@@ -1548,6 +1548,7 @@ def baphy_load_recording(**options):
     if options["runclass"] == "RDT":
         signals['state'] = state
         #signals['stim'].meta={'BigStimMatrix': BigStimMatrix}
+    meta['files']=files
     rec = nems.recording.Recording(signals=signals, meta=meta, name=siteid)
 
     if goodtrials.size > np.sum(goodtrials):

@@ -440,7 +440,7 @@ def hlf_wrapper(use_hlf=True):
             hlf_analysis(df, state_list, title=title, norm_sign=True, states=states);
 
 
-def aud_vs_state(df, nb=5, title=None, state_list=None):
+def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']):
     """
     d = dataframe output by get_model_results_per_state_model()
     nb = number of bins
@@ -522,9 +522,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     #ind = m[:,0]
     mplots=np.concatenate((mall, mb), axis=0)
     ind = np.arange(mplots.shape[0])
-    p1 = plt.bar(ind, mplots[:,0], width=width)
-    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0])
-    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1])
+
+    p1 = plt.bar(ind, mplots[:,0], width=width, color=colors[1])
+    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
+    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
     plt.legend(('common','p_unique','b-unique'))
     if title is not None:
         plt.title(title)
