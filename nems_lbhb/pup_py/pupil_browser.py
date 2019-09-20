@@ -427,8 +427,8 @@ class PupilBrowser:
 
     def open_training_browser(self):
         os.system("{0} \
-                {1} {2} {3} {4} {5}".format(executable_path, training_browser_path,
-            self.animal_name.get(), self.video_name.get(), 0, self.max_frame))
+                {1} {2} {3} {4} {5} {6}".format(executable_path, training_browser_path,
+            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame))
 
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
