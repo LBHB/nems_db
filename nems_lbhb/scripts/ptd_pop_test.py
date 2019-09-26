@@ -32,8 +32,10 @@ cellids = ['TAR010c-21-1','bbl102d-01-1', 'BRT026c-02-2', 'BRT033b-02-1',
            ]
 fit_alg = "basic"
 
-modelname="parm.fs40.pup-ld.k-st.beh.pup-ref-pca.psth.no_wc.15x6.g-fir.2x8x3-lvl.3-stategain.Sx3-wc.3xR-lvl.R_jk.nf5.o-initpop-iter.pop.T4,5,6"
-cellid = "TAR010c-21-1"
+#modelname="parm.fs40.pup-ld-st.beh.pup-ref-pca.psth.no_wc.15x1.g-fir.1x8-lvl.1-stategain.S-lvl.R_jk.nf5.o-initpop-iter.pop.T4,5,6"
+modelname="parm.fs40.pup-ld-st.beh.pup-ref_wc.15x2.g-fir.2x8-lvl.1-stategain.S_jk.nf5.o-init.st-tf.n"
+#cellid = "TAR010c-21-1"
+cellid = 'BRT032e-15-1'
 
 
 autoPlot = True
