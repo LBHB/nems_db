@@ -19,7 +19,7 @@ tmp_save = '/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, min_frame=0, max_frame=5000):
+    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
@@ -39,10 +39,7 @@ class TrainingDataBrowser:
             predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
 
             # save videos
-            video = '/auto/data/daq/{0}/{1}/{2}.mj2'.format(animal, video_name[:6], video_name)
-
-            if os.path.isfile(video) != True:
-                video = '/auto/data/daq/{0}/training2019/{1}.mj2'.format(animal, video_name)
+            video = raw_video
 
             # current parameters (the current best fit based on the cnn fit)
             params_file = predictions_folder + video_name + '_pred.pickle'
@@ -55,7 +52,6 @@ class TrainingDataBrowser:
             fps = 30
             t0 = int(min_frame) * (1 / fps)
             tend = int(max_frame) * (1 / fps)
-
             frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
             output_dict = {}
             for i, t in enumerate(frames):

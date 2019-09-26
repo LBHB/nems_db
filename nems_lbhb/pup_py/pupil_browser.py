@@ -33,16 +33,16 @@ class PupilBrowser:
     def __init__(self, master):
         self.master = master
         master.title("Pupil browser")
-        master.geometry('950x600')
+        master.geometry('1050x600')
 
         # create a plot attributemod
         self.pupil_plot = None
         self.pupil_trace_plot = None
 
         self.pupil_canvas = tk.Canvas(master, width=400, height=300)
-        self.pupil_canvas.grid(row=0, column=3, rowspan=6, columnspan=5)
+        self.pupil_canvas.grid(row=0, column=4, rowspan=6, columnspan=5)
 
-        fig = mpl.figure.Figure(figsize=(9.5, 3), dpi=100)
+        fig = mpl.figure.Figure(figsize=(10.5, 3), dpi=100)
         self.ax = fig.add_subplot(1,1,1)
         self.pupil_trace = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
         self.pupil_trace.draw()
@@ -54,8 +54,11 @@ class PupilBrowser:
         master.grid_columnconfigure(3, weight=1)
         master.grid_rowconfigure(10, weight=1)
 
+        self.file_browse = tk.Button(master, text="Browse", command=self.browse_file)
+        self.file_browse.grid(row=1, column=2)
+
         self.load_button = tk.Button(master, text="Load recording", command=self.load_file)
-        self.load_button.grid(row=1, column=2)
+        self.load_button.grid(row=1, column=3)
 
         self.animal_n = tk.Label(master, text="animal")
         self.animal_n.grid(row=0, column=0, columnspan=1)
@@ -302,13 +305,8 @@ class PupilBrowser:
             self.shift_is_held=False
         else:
             pass
-
-    def load_file(self):
-        """
-        Load the overall predictions and plot the trace on the trace canvas.
-        Display the first frame of the video on the pupil canvas.
-        """
-
+    
+    def browse_file(self):
         # get the pupil video file
         self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
                             title = "Select raw video file", 
@@ -322,9 +320,23 @@ class PupilBrowser:
         self.video_name.insert(0, params_file)
         self.animal_name.insert(0, animal)
 
-        fn = os.path.split(self.raw_video)[-1].split('.')[0] + '_pred.pickle'
+        self.load_file()
+
+    def load_file(self):
+        """
+        Load the overall predictions and plot the trace on the trace canvas.
+        Display the first frame of the video on the pupil canvas.
+        """
+        
+        params_file = self.video_name.get()
+        # get raw video -- try to use the exisiting path from raw video
         fp = os.path.split(self.raw_video)[0]
-        self.processed_video = os.path.join(fp, 'sorted', fn)
+        self.processed_video = os.path.join(fp, 'sorted', params_file)
+        
+        # reset raw video attribute
+        ext = self.raw_video.split('.')[-1]
+        self.raw_video = os.path.join(fp, params_file)+'.'+ext
+        print(self.raw_video)
 
         self.plot_trace(params_file)
 
@@ -415,8 +427,8 @@ class PupilBrowser:
 
     def open_training_browser(self):
         os.system("{0} \
-                {1} {2} {3} {4} {5}".format(executable_path, training_browser_path,
-            self.animal_name.get(), self.video_name.get(), 0, self.max_frame))
+                {1} {2} {3} {4} {5} {6}".format(executable_path, training_browser_path,
+            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame))
 
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
