@@ -46,26 +46,56 @@ def rate_by_batch(batch, cells=None, stat='max', fs=100):
         # using ln_dexp3 because it should be the fastest to evaluate,
         # but actual model doesn't matter since we only need response
         xfspec, ctx = xhelp.load_model_xform(cellid, batch, ln_dexp3)
-        resp = ctx['val'].apply_mask()['resp'].as_continuous().flatten()
+        # using val data makes epochs not line up, use full resp
+        #resp = ctx['val'].apply_mask()['resp'].as_continuous().flatten()
+        resp = ctx['rec']['resp'].as_continuous().flatten()
         if stat == 'max':
             raw_max = np.nanmax(resp)
             mean_3sd = np.nanmean(resp) + 3*np.nanstd(resp)
             max_rate = min(raw_max, mean_3sd)
             rates.append(max_rate)
         elif stat == 'spont':
-            epochs = ctx['val'].apply_mask()['resp'].epochs
+            epochs = ctx['rec']['resp'].epochs
             stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
             pre_silence = silence_duration(epochs, 'PreStimSilence')
             silence_only = np.empty(0,)
             # cut out only the pre-stim silence portions
             for s in stim_epochs:
                 row = epochs[epochs.name == s]
-                pre_start = int(row['start'].values[0]*fs)
-                stim_start = int((row['start'].values[0] + pre_silence)*fs)
-                silence_only = np.append(silence_only, resp[pre_start:stim_start])
+                if row.size/3 == 1:
+                    starts = [row['start'].values[0]]
+                else:
+                    starts = row.values[:, 0]
+                for st in starts:
+                    pre_start = int(st*fs)
+                    stim_start = int((st + pre_silence)*fs)
+                    silence_only = np.append(silence_only,
+                                             resp[pre_start:stim_start])
 
             spont_rate = np.nanmean(silence_only)
             rates.append(spont_rate)
+        elif stat == 'mean':
+            epochs = ctx['rec']['resp'].epochs
+            stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+            pre_silence = silence_duration(epochs, 'PreStimSilence')
+            post_silence = silence_duration(epochs, 'PostStimSilence')
+            stim_only = np.empty(0,)
+            # cut out only the stim portions
+            for s in stim_epochs:
+                row = epochs[epochs.name == s]
+                if row.size/3 == 1:
+                    starts = [row['start'].values[0]]
+                    ends = [row['end'].values[0]]
+                else:
+                    starts = row.values[:, 0]
+                    ends = row.values[:, 1]
+                for st, e in zip(starts, ends):
+                    stim_start = int((st + pre_silence)*fs)
+                    stim_end = int((e - post_silence)*fs)
+                    stim_only = np.append(stim_only, resp[stim_start:stim_end])
+
+            mean_rate = np.nanmean(stim_only)
+            rates.append(mean_rate)
 
         else:
             raise ValueError("unrecognized stat: use 'max' for maximum or "
@@ -77,6 +107,19 @@ def rate_by_batch(batch, cells=None, stat='max', fs=100):
     df.set_index('cellid', inplace=True)
 
     return df
+
+
+def save_resp_stats(batch, max_path=None, spont_path=None, mean_path=None,
+                    fs=100):
+    if max_path is not None:
+        df = rate_by_batch(batch, stat='max', fs=fs)
+        df.to_pickle(max_path)
+    if spont_path is not None:
+        df = rate_by_batch(batch, stat='spont', fs=fs)
+        df.to_pickle(spont_path)
+    if mean_path is not None:
+        df = rate_by_batch(batch, stat='mean', fs=fs)
+        df.to_pickle(mean_path)
 
 
 def rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',

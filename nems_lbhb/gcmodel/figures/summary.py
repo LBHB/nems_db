@@ -36,8 +36,8 @@ def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling')
     else:
         plot_df = df_r
 
-    improved = e
-    not_improved = list(set(a) - set(e))
+    improved = c
+    not_improved = list(set(a) - set(c))
     models = [gc, stp, LN, combined]
     names = ['gc', 'stp', 'LN', 'combined']
     m1 = models[compare[0]]
@@ -233,8 +233,8 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
                                            LN_filter=LN_filter)
-    improved = e
-    not_improved = list(set(a) - set(e))
+    improved = c
+    not_improved = list(set(a) - set(c))
 
     if plot_stat == 'r_ceiling':
         plot_df = df_c
@@ -316,21 +316,21 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
     stp_test = plot_df[stp][cellids]
     ln_test = plot_df[LN][cellids]
     gc_stp_test = plot_df[combined][cellids]
-    max_test = np.maximum(gc_test, stp_test)
+    #max_test = np.maximum(gc_test, stp_test)
 
     gc = np.median(gc_test.values)
     stp = np.median(stp_test.values)
     ln = np.median(ln_test.values)
     gc_stp = np.median(gc_stp_test.values)
-    maximum = np.median(max_test)
-    largest = max(gc, stp, ln, gc_stp, maximum)
+    #maximum = np.median(max_test)
+    largest = max(gc, stp, ln, gc_stp)#, maximum)
 
-    colors = [model_colors[k] for k in ['LN', 'gc', 'stp', 'combined', 'max']]
+    colors = [model_colors[k] for k in ['LN', 'gc', 'stp', 'combined']]#, 'max']]
     fig = plt.figure(figsize=(15, 12))
-    plt.bar([1, 2, 3, 4, 5], [ln, gc, stp, gc_stp, maximum],
+    plt.bar([1, 2, 3, 4], [ln, gc, stp, gc_stp],# maximum],
             color=colors,
             edgecolor="black", linewidth=2)
-    plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GC+STP', 'Max(GC,STP)'])
+    plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GC+STP'])#, 'Max(GC,STP)'])
     if abbr_yaxis:
         lower = np.floor(10*min(gc, stp, ln, gc_stp))/10
         upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10 + y_adjust
@@ -342,10 +342,10 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
         y_text = 0.5*(lower + min(gc, stp, ln, gc_stp))
     else:
         y_text = 0.2
-    for i, m in enumerate([ln, gc, stp, gc_stp, maximum]):
+    for i, m in enumerate([ln, gc, stp, gc_stp]):#, maximum]):
         t = plt.text(i+1, y_text, "%0.04f" % m, **common_kwargs)
         t.set_path_effects([pe.withStroke(linewidth=3, foreground='black')])
-    plt.title("Median Performance for LN, GC, STP, GC+STP and Max(Gc,STP),\n"
+    plt.title("Median Performance for LN, GC, STP, GC+STP,\n"
               "batch: %d\n"
               "n: %d   Only improved?:  %s" % (batch, n_cells,
                                                only_improvements))

@@ -41,8 +41,8 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
                                            LN_filter=LN_filter)
-    improved = e
-    not_improved = list(set(a) - set(e))
+    improved = c
+    not_improved = list(set(a) - set(c))
     models = [gc, stp, LN]
     gc_rel_imp, stp_rel_imp = _relative_score(plot_df, models, improved,
                                               drop_outliers=drop_outliers)
@@ -131,8 +131,8 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
     '''
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
-    improved = e
-    not_improved = list(set(a) - set(e))
+    improved = c
+    not_improved = list(set(a) - set(c))
 
     if load_path is None:
         df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
@@ -265,8 +265,8 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 
     extra_title_lines = []
     if color_improvements:
-        improved = e
-        not_improved = list(set(a) - set(e))
+        improved = c
+        not_improved = list(set(a) - set(c))
         equivalence_imp = df['equivalence'][improved].values
         equivalence_not = df['equivalence'][not_improved].values
         effectsize_imp = df['effect_size'][improved].values

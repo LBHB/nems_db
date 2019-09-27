@@ -110,8 +110,9 @@ cf_save_path = '/auto/users/jacob/notes/gc_rank3/characteristic_frequencies/comp
 # TODO: need to re-run, separate for summed & other, b289 and b263
 
 # response stats
-max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'
-spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/8_15_b289.pkl'
+max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/9_27_b289.pkl'
+spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/9_27_b289.pkl'
+mean_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/mean/9_27_b289.pkl'
 
 # sigmoid ratio histogram
 sigmoid_hist_o1 = '/auto/users/jacob/notes/gc_rank3/sigmoid_ratio_arrays/8_6_b289_gc_PF3_o1.npy'
@@ -130,7 +131,8 @@ ss_263 = '/auto/users/jacob/notes/gc_rank3/sound_stats/b263.pkl'
 
 
 load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
-              'spont': spont_289, 'sigmoid_histogram': sigmoid_hist_o1,
+              'spont': spont_289, 'mean': mean_289,
+              'sigmoid_histogram': sigmoid_hist_o1,
               'equivalence_histogram': {
                       'summed': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_summed.npy',
                       'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_PFo1.npy'
