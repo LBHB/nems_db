@@ -263,6 +263,7 @@ def sum_contrast(rec, name='ctpred', source_name='contrast', offsets=20,
         if not np.all(offsets == 0):
             summed = _offset_coefficients(summed, offsets=offsets, fs=fs,
                                           pad_bins=False)
+        summed /= np.nanmax(summed)
 
         return summed
 
