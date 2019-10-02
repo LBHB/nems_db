@@ -79,7 +79,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
 
 def pop_selector(recording_uri_list, batch=None, cellid=None,
                  rand_match=False, cell_count=20, best_cells=False,
-                 whiten=True, **context):
+                 whiten=True, meta={}, **context):
 
     rec = load_recording(recording_uri_list[0])
     cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
@@ -101,8 +101,9 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
 
     # preserve "actual" cellids for saving to database
     rec.meta['cellid'] = cellid
-
-    return {'rec': rec}
+    del meta['cellid']
+    meta['cellids'] = cellid
+    return {'rec': rec, 'meta': meta}
 
 
 def split_pop_rec_by_mask(rec, **contex):
@@ -123,8 +124,9 @@ def pop_file(stimfmt='ozgf', batch=None,
 
     if siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']:
         subsetstr = "NAT1"
-    elif siteid in ['AMT003c','AMT005c','bbl099g','bbl104h','BRT026c',
-            'BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
+    elif siteid in ['AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
+                    'bbl099g','bbl104h',
+                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
         subsetstr = "NAT3"
     else:
         raise ValueError('site not known for popfile')
