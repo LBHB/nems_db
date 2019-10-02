@@ -20,6 +20,7 @@ from scipy.signal import convolve2d
 import nems
 from nems import signal
 from nems.modules.nonlinearity import _dlog
+from nems.modules.fir import _offset_coefficients
 
 log = logging.getLogger(__name__)
 
@@ -245,6 +246,30 @@ def contrast_calculation(array, history, bands, offset, mode):
     contrast = np.sqrt(var) / (mn*.99 + np.nanmax(mn)*0.01)
 
     return contrast
+
+
+def sum_contrast(rec, name='ctpred', source_name='contrast', offsets=20,
+                 IsReload=False, **context):
+    if IsReload:
+        return {}
+
+    if type(offsets) is int:
+        offsets = np.array([[offsets]])
+
+    rec = rec.copy()
+    fs = rec[source_name].fs
+    def fn(x):
+        summed = np.expand_dims(np.sum(x, axis=0), axis=0)
+        if not np.all(offsets == 0):
+            summed = _offset_coefficients(summed, offsets=offsets, fs=fs,
+                                          pad_bins=False)
+        summed /= np.nanmax(summed)
+
+        return summed
+
+    summed = rec[source_name].transform(fn, name)
+    rec[name] = summed
+    return {'rec': rec}
 
 
 def add_contrast(rec, name='contrast', source_name='stim', ms=500, bins=None,

@@ -38,15 +38,15 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
                                                           LN, combined,
                                                           se_filter=se_filter,
                                                           as_lists=False)
-    _, _, _, s, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+    _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
 
     stp_params = fitted_params_per_batch(289, stp, stats_keys=[], meta=[])
     stp_params_cells = stp_params.transpose().index.values.tolist()
-    for c in stp_params_cells:
-        if c not in cellids:
-            cellids[c] = False
-    not_s = list(set(stp_params.transpose()[cellids].index.values) - set(s))
+    for cell in stp_params_cells:
+        if cell not in cellids:
+            cellids[cell] = False
+    not_c = list(set(stp_params.transpose()[cellids].index.values) - set(c))
 
     # index keys are formatted like "2--stp.2--tau"
     mod_keys = stp.split('_')[1]
@@ -65,15 +65,15 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     #sep_us = _df_to_array(all_us, dims).mean(axis=0)
     #med_tau = np.median(sep_taus)
     #med_u = np.median(sep_u)
-    sep_taus = _df_to_array(all_taus[not_s], dims).mean(axis=0)
-    sep_us = _df_to_array(all_us[not_s], dims).mean(axis=0)
+    sep_taus = _df_to_array(all_taus[not_c], dims).mean(axis=0)
+    sep_us = _df_to_array(all_us[not_c], dims).mean(axis=0)
     sep_taus = sep_taus[~is_outlier(sep_taus)]
     sep_us = sep_us[~is_outlier(sep_us)]
     med_tau = np.median(sep_taus)
     med_u = np.median(sep_us)
 
-    stp_taus = all_taus[s]
-    stp_us = all_us[s]
+    stp_taus = all_taus[c]
+    stp_us = all_us[c]
     stp_sep_taus = _df_to_array(stp_taus, dims).mean(axis=0)
     stp_sep_us = _df_to_array(stp_us, dims).mean(axis=0)
     stp_sep_taus = stp_sep_taus[~is_outlier(stp_sep_taus)]
@@ -87,11 +87,11 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
 
     fig, (a1, a2) = plt.subplots(2, 1)
     color = model_colors['LN']
-    stp_color = model_colors['stp']
-    stp_label = 'STP ++ (%d)' % len(s)
-    total_cells = len(s) + len(not_s)
+    imp_color = model_colors['max']
+    stp_label = 'STP ++ (%d)' % len(c)
+    total_cells = len(c) + len(not_c)
     bin_count = 30
-    hist_kwargs = {'bins': bin_count, 'linewidth': 1, 'color': [color, stp_color],
+    hist_kwargs = {'bins': bin_count, 'linewidth': 1, 'color': [color, imp_color],
                    'label': ['not imp', 'stp imp']}
 
 
@@ -109,7 +109,7 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
 #             **hist_kwargs, alpha=0.6)
     a1.axes.axvline(med_tau, color=color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    a1.axes.axvline(stp_med_tau, color=stp_color, linewidth=2,
+    a1.axes.axvline(stp_med_tau, color=imp_color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
     plt.title('tau,  sig diff?:  p=%.4E' % tau_p)
     plt.xlabel('tau (ms)')
@@ -130,7 +130,7 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
 #             label='STP ++', **hist_kwargs, alpha=0.6)
     a2.axes.axvline(med_u, color=color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    a2.axes.axvline(stp_med_u, color=stp_color, linewidth=2,
+    a2.axes.axvline(stp_med_u, color=imp_color, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
     plt.title('u,  sig diff?:  p=%.4E' % u_p)
     plt.xlabel('u (fractional change in gain \nper unit of stimulus amplitude)')
@@ -140,7 +140,7 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     fig.suptitle("STP parameter distributions,  n: %d\n"
                  "n stp imp:  %d\n"
                  "n not imp:  %d\n"
-                 % (total_cells, len(s), len(not_s)))
+                 % (total_cells, len(c), len(not_c)))
     return fig
 
 
@@ -154,15 +154,15 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
                                                           LN, combined,
                                                           se_filter,
                                                           as_lists=False)
-    _, _, g, _, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+    _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
 
     gc_params = fitted_params_per_batch(289, gc, stats_keys=[], meta=[])
     gc_params_cells = gc_params.transpose().index.values.tolist()
-    for c in gc_params_cells:
-        if c not in cellids:
-            cellids[c] = False
-    not_g = list(set(gc_params.transpose()[cellids].index.values) - set(g))
+    for cell in gc_params_cells:
+        if cell not in cellids:
+            cellids[cell] = False
+    not_c = list(set(gc_params.transpose()[cellids].index.values) - set(c))
 
     # index keys are formatted like "4--dsig.d--kappa"
     mod_keys = gc.split('_')[1]
@@ -181,8 +181,8 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
 
     phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
                for k in all_keys]
-    sep_dfs = [df[not_g].values.flatten().astype(np.float64) for df in phi_dfs]
-    gc_sep_dfs = [df[g].values.flatten().astype(np.float64)
+    sep_dfs = [df[not_c].values.flatten().astype(np.float64) for df in phi_dfs]
+    gc_sep_dfs = [df[c].values.flatten().astype(np.float64)
                   for df in phi_dfs]
 
     # removing extreme outliers b/c kept getting one or two cells with
@@ -205,10 +205,10 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
     fig1, (a1, a3) = plt.subplots(2, 1)
     fig2, (a2, a4) = plt.subplots(2, 1)
     color = model_colors['LN']
-    gc_color = model_colors['gc']
-    gc_label = 'GC ++ (%d)' % len(g)
-    total_cells = len(g) + len(not_g)
-    hist_kwargs = {'bins': 30, 'color': [color, gc_color],
+    c_color = model_colors['max']
+    gc_label = 'GC ++ (%d)' % len(c)
+    total_cells = len(c) + len(not_c)
+    hist_kwargs = {'bins': 30, 'color': [color, c_color],
                    'label': ['no imp', 'sig imp']}
 
     # b a s k
@@ -221,7 +221,7 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
         ax.hist([diffs[i], gc_diffs[i]], weights=weights, **hist_kwargs)
         ax.axes.axvline(medians[i], color=color, linewidth=2,
                         linestyle='dashed', dashes=dash_spacing)
-        ax.axes.axvline(gc_medians[i], color=gc_color, linewidth=2,
+        ax.axes.axvline(gc_medians[i], color=c_color, linewidth=2,
                         linestyle='dashed', dashes=dash_spacing)
         if (i == 0) or (i == 2):
             ax.legend()
@@ -236,7 +236,7 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
     title = ("GC parameter differences, total n: %d\n"
              "n gc improved:  %d\n"
              "n not improved: %d\n"
-             % (total_cells, len(g), len(not_g)))
+             % (total_cells, len(c), len(not_c)))
     fig1.suptitle(title)
     fig2.suptitle(title)
     return fig1, fig2

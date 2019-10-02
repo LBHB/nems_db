@@ -118,6 +118,30 @@ def gc3(fitkey):
     return xfspec
 
 
+def gc4(fitkey):
+    ops = fitkey.split('.')[1:]
+    kwargs = {}
+    xfspec = []
+    for op in ops:
+        if op.startswith('t'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['tolerance'] = 10**tolpower
+        elif op.startswith('pt'):
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            kwargs['prefit_tolerance'] = 10**tolpower
+        elif op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['max_iter'] = int(re.match(pattern, op).group(1))
+        elif op.startswith('pmi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
+
+    xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc4', kwargs])
+    return xfspec
+
+
 def testLN(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}

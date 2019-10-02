@@ -7,6 +7,8 @@ several functions migrated out of old loader keywords
 import logging
 import re
 
+import numpy as np
+
 log = logging.getLogger(__name__)
 
 
@@ -271,6 +273,17 @@ def contrast(loadkey):
             kwargs['offset'] = int(op[3:])
 
     return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
+
+
+def csum(loadkey):
+    ops = loadkey.split('.')[1:]
+    kwargs = {}
+    for op in ops:
+        if op.startswith('off'):
+            offsets = int(op[3:])
+            kwargs['offsets'] = np.array([[offsets]])
+
+    return [['nems_lbhb.gcmodel.contrast.sum_contrast', kwargs]]
 
 
 def onoff(loadkey):

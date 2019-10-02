@@ -33,7 +33,9 @@ cellids = ['TAR010c-21-1','bbl102d-01-1', 'BRT026c-02-2', 'BRT033b-02-1',
 fit_alg = "basic"
 
 #modelname="parm.fs40.pup-ld-st.beh.pup-ref-pca.psth.no_wc.15x1.g-fir.1x8-lvl.1-stategain.S-lvl.R_jk.nf5.o-initpop-iter.pop.T4,5,6"
+modelname="parm.fs40.pup-ld-st.beh.pup-ref_wc.15x2.g-fir.1x8x2-lvl.2-wc.2xR-stategain.S_jk.nf5.o-init.st-tf.n"
 modelname="parm.fs40.pup-ld-st.beh.pup-ref_wc.15x2.g-fir.2x8-lvl.1-stategain.S_jk.nf5.o-init.st-tf.n"
+
 cellid = "TAR010c-21-1"
 #cellid = 'BRT032e-15-1'
 
