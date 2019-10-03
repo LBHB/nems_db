@@ -3,7 +3,7 @@ import itertools
 import sys
 import nems_lbhb.io as io
 
-def compute_di(parmfile, **options):
+def compute_di_nolick(parmfile, **options):
     """
     calculate behavioral performance on a per-token basis using "traditional" performance metrics.
     Copy of di_nolick.m from lbhb_tools: https://bitbucket.org/lbhb/lbhb-tools/src/master/
@@ -419,3 +419,5 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
     di = (di+di2) / 2
 
     return di, hits, fas, tsteps
+
+
