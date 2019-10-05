@@ -294,8 +294,11 @@ def get_RT(parmfile, **options):
     ev = events[events.Trial.isin(trials)]
 
     first_lick = np.array([ev[(ev['Trial']==t) & (ev['name']=='LICK')]['start'].values[0] for t in trials])
-    return first_lick
-    #onsets = ev[ev['start'] < first_lick]['start'].values
+    ref_ev = ev[ev.name.str.contains('Reference')]
+    onsets = np.array([ref_ev[(ref_ev['Trial']==t) & (ref_ev['start'] < first_lick[i])]['start'].values[-1] for i, t in enumerate(trials)])
+    RT['REF'] = first_lick - onsets
+
+    return RT
 
 # =================================================================================================================
 # Copied functions from MATLAB for reference. Will become deprecated.
