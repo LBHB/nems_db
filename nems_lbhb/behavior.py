@@ -145,16 +145,16 @@ def get_valid_trials(exptevents, exptparams, **options):
     valid_trials_idx[CUE] = False
 
     # remove HITS following FAs
-    iv_hit = [idx-1 for idx in range(1, nTrials) if HIT[:, idx].sum() & FA[idx-1]]
+    iv_hit = [idx for idx in range(nTrials) if HIT[:, idx].sum() & FA[idx-1]]
     valid_trials_idx[iv_hit] = False
 
     # remove MISSES following FAs
-    iv_miss = [idx-1 for idx in range(1, nTrials) if MISS[:, idx].sum() & FA[idx-1]]
+    iv_miss = [idx for idx in range(nTrials) if MISS[:, idx].sum() & FA[idx-1]]
     valid_trials_idx[iv_miss] = False
 
     # remove corr. rej following unrewarded hit
-    iv_corr_rej = [idx-1 for idx in range(1, nTrials) if NOREWARD[idx] & MISS[:, idx].sum() & \
-                    (MISS[:, idx-1].sum() |HIT[:, idx-1].sum()) & NOREWARD[idx-1]]
+    iv_corr_rej = [idx for idx in range(nTrials) if NOREWARD[idx] & MISS[:, idx].sum() & \
+                    (MISS[:, idx-1].sum() | HIT[:, idx-1].sum()) & NOREWARD[idx-1]]
     valid_trials_idx[iv_corr_rej] = False
 
     valid_trials = valid_trials[valid_trials_idx]
@@ -240,7 +240,7 @@ def get_cue_vector(exptevents, exptparams):
     # get Cue Trials
     finalCueTrialidx = np.argwhere(HIT.sum(axis=0))[nCueTrials-1][0]
     CUE = False * np.ones(nTrials).astype(np.bool)
-    CUE[:finalCueTrialidx] = True
+    CUE[:finalCueTrialidx+1] = True
 
     return CUE
 
