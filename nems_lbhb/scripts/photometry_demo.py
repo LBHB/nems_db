@@ -8,11 +8,13 @@ import scipy.ndimage.filters as snf
 
 fp = '/auto/data/daq/Amanita/AMT039/'
 fn = 'AMT039b04_p_VOC'
+fp = '/auto/data/daq/Leyva/ley077/'
+fn = 'ley077b01_p_VOC'
 pup_fn = fp + 'sorted/' + fn + '.pickle'
 photo_fn = fp + fn + '.photo.avi'
 
 pup = io.load_raw_pupil(pup_fn)
-photo1, photo2 = io.load_raw_photometry(photo_fn)
+photo1, photo2 = io.load_raw_photometry(photo_fn, framen=500)
 
 # choose signal length and force both signals to this to "align"
 n_samps = int(pup.shape[0] / 10)
@@ -35,7 +37,7 @@ photo1_pred = exp(x, parms[0], parms[1], parms[2])
 parms, pcov = curve_fit(exp, x, photo2, np.array([np.max(photo2), 0.001, 0]))
 photo2_pred = exp(x, parms[0], parms[1], parms[2])
 
-sigma = 5
+sigma = 1
 f, ax = plt.subplots(3, 1, sharex=True)
 
 ax[0].plot(pup, color='blue', lw=2)
