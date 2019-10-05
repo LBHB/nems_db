@@ -1665,7 +1665,7 @@ def load_raw_photometry(photofilepath, fs=None, framen=0):
             y2 = int(input("y2 center: "))
 
             # define roi:
-            roi_width = 10
+            roi_width = 4
             x1_range = np.arange(x-roi_width, x+roi_width)
             y1_range = np.arange(y-roi_width, y+roi_width)
 

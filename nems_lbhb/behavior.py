@@ -2,6 +2,9 @@ import numpy as np
 import itertools
 import sys
 import nems_lbhb.io as io
+import logging
+
+log = logging.getLogger(__name__)
 
 def compute_di_nolick(parmfile, **options):
     """
@@ -421,6 +424,40 @@ def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
     return di, hits, fas, tsteps
 
 
+def get_HR_FAR(parmfile, **options):
+    """
+    Return a dictionary of hit rates for each target, and the FAR
+    Each key is a target name, or FAR, and each value is the hit rate/FAR
+    """
+    # load parmfile using baphy io
+    globalparams, exptparams, exptevents = io.baphy_parm_read(parmfile)
+
+    valid_trials = options.get('valid_trials', False)
+
+    if valid_trials:
+        log.info("Excluding invalid trials from analysis")
+        vt = get_valid_trials(exptevents, exptparams)
+        # update event data frame to only include valid trials
+        ev_idx = [i for i in range(0, exptevents.shape[0]) if exptevents.iloc[i]['Trial'] in vt]
+        events = exptevents.iloc[ev_idx]
+    else:
+        log.info("Keeping all trials for analysis")
+        events = exptevents
+
+    HIT = get_hit_matrix(events, exptparams)
+    MISS = get_miss_matrix(events, exptparams)
+
+    targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    HR = dict.fromkeys(targets)
+    for i, k in enumerate(HR.keys()):
+        HR[k] = HIT[i, :].sum() / (HIT[i, :].sum() + MISS[i, :].sum())
+
+    FAR = np.sum((HIT.sum(axis=0) == False) & (MISS.sum(axis=0) == False)) / HIT.shape[-1]
+
+    HR['FAR'] = FAR
+
+    return HR
+
 def get_valid_trials(exptevents, exptparams, **options):
     """
     Remove invalid trials for behavioral metrics calculations such as HR.
@@ -432,8 +469,8 @@ def get_valid_trials(exptevents, exptparams, **options):
     resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
-    pump_dur = exptparams['BehaveObject'][1]['PumpDuration']
-    tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    tar_names = np.array(exptparams['TrialObject'][1]['TargetHandle'][1]['Names'])
     nTargets = len(tar_names)
     nTrials = exptevents['Trial'].max()
 
@@ -442,7 +479,87 @@ def get_valid_trials(exptevents, exptparams, **options):
     # these vectors to mark valid trials / invalid trials 
 
     # get HIT Trials
-    HIT = False * np.ones((nTargets, nTrials))
+    HIT = get_hit_matrix(exptevents, exptparams)
+
+    # get MISS Trials
+    MISS = get_miss_matrix(exptevents, exptparams)
+
+    # get FA Trials
+    # these are all remaining trials that weren't hits or misses (includes early trials at this point)
+    # FA can't be specific to target, because there is no target, so we collapse over hits/misses along
+    # the target axis
+    FA = (MISS.sum(axis=0)==False) & (HIT.sum(axis=0)==False)
+
+    # get Cue Trials
+    finalCueTrialidx = np.argwhere(HIT.sum(axis=0))[nCueTrials-1][0]
+    CUE = False * np.ones(nTrials).astype(np.bool)
+    CUE[:finalCueTrialidx] = True
+
+    # get Rewarded Tone Trials 
+    REWARD = False * np.ones(nTrials).astype(np.bool)
+    reward_targets_idx = np.argwhere(pump_dur>0)[0]
+    rew_targets = tar_names[reward_targets_idx]
+    reward_trials = []
+    for idx, tar in zip(reward_targets_idx, rew_targets):
+        rt = [exptevents.iloc[i]['Trial']-1 for i, n in enumerate(exptevents['name']) if n == 'Stim , {} , Target'.format(tar)]
+        rt = [t for t in rt if HIT[idx, t] | MISS[idx, t]]
+        reward_trials.extend(rt)
+
+    REWARD[reward_trials] = True
+
+    # get Unrewarded Trials
+    NOREWARD = False * np.ones(nTrials).astype(np.bool)
+    reward_targets_idx = np.argwhere(pump_dur==0)[0]
+    rew_targets = tar_names[reward_targets_idx]
+    reward_trials = []
+    for idx, tar in zip(reward_targets_idx, rew_targets):
+        rt = [exptevents.iloc[i]['Trial']-1 for i, n in enumerate(exptevents['name']) if n == 'Stim , {} , Target'.format(tar)]
+        rt = [t for t in rt if HIT[idx, t] | MISS[idx, t]]
+        reward_trials.extend(rt)
+
+    NOREWARD[reward_trials] = True
+
+    # ======================================================================================================
+    # now, based on the above boolean vectors, exclude any invalid trials based on passed options dictionary
+    # ======================================================================================================
+    valid_trials = np.unique(exptevents['Trial'])
+    valid_trials_idx = True * np.ones(nTrials).astype(np.bool)
+
+    # remove cue trials
+    valid_trials_idx[CUE] = False
+
+    # remove HITS following FAs
+    iv_hit = [idx-1 for idx in range(1, nTrials) if HIT[:, idx].sum() & FA[idx-1]]
+    valid_trials_idx[iv_hit] = False
+
+    # remove MISSES following FAs
+    iv_miss = [idx-1 for idx in range(1, nTrials) if MISS[:, idx].sum() & FA[idx-1]]
+    valid_trials_idx[iv_miss] = False
+
+    # remove corr. rej following unrewarded hit
+    iv_corr_rej = [idx-1 for idx in range(1, nTrials) if NOREWARD[idx] & MISS[:, idx].sum() & \
+                    (MISS[:, idx-1].sum() |HIT[:, idx-1].sum()) & NOREWARD[idx-1]]
+    valid_trials_idx[iv_corr_rej] = False
+
+    valid_trials = valid_trials[valid_trials_idx]
+
+    return valid_trials
+
+def get_hit_matrix(exptevents, exptparams):
+    """
+    Simple function to return a target x trial boolean matrix for hits
+    """
+    # get valid response window
+    resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+    nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    tar_names = np.array(exptparams['TrialObject'][1]['TargetHandle'][1]['Names'])
+    nTargets = len(tar_names)
+    nTrials = exptevents['Trial'].max()
+
+    # get HIT Trials
+    HIT = False * np.ones((nTargets, nTrials)).astype(np.bool)
     for i, t in enumerate(tar_names):
         mask = [True if (('Target' in n) & (t in n) & ('Stim ' in n)) | ('LICK' in n) else False for n in exptevents.name]
         ev = exptevents[mask]
@@ -450,40 +567,54 @@ def get_valid_trials(exptevents, exptparams, **options):
         ltrials = [t for t in trials if np.sum([('LICK' in n) for n in ev[ev['Trial']==t]['name']]) > 0]
         ttrials = [t for t in trials if np.sum([('Target' in n) for n in ev[ev['Trial']==t]['name']]) > 0]
         trials = np.array([t for t in trials if (t in ltrials) & (t in ttrials)])
-        hit = [True if ((ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] < \
-                        ev[(ev['Trial']==i) & ([t in n for n in ev['name']])]['start'].values[0] + resp_win + early_win)) & \
-                        (ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] > \
-                        ev[(ev['Trial']==i) & ([t in n for n in ev['name']])]['start'].values[0] + early_win)
+        ev = ev[[True if t in trials else False for t in ev['Trial']]] 
+
+        # hit is complete trial where lick occured inside the response window
+        resp_start = ev[[True if ('Target' in n) else False for n in ev['name']]]['start'] + early_win
+        rs = pd.DataFrame(index=trials, columns=['start'], data=resp_start.values)
+        resp_end = ev[[True if ('Target' in n) else False for n in ev['name']]]['start'] + early_win + resp_win
+        re = pd.DataFrame(index=trials, columns=['start'], data=resp_end.values)
+
+        hit = [True if ((ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] < re.loc[i].values[0]) & \
+                        (ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] > rs.loc[i].values[0]))
                         else False for i in trials] 
+
         HIT[i, trials-1] = hit
 
-    # get MISS Trials
-    MISS = False * np.ones((nTargets, nTrials))
+    return HIT
+
+def get_miss_matrix(exptevents, exptparams):
+    """
+    Simple function to return a target x trial boolean matrix for hits
+    """
+    # get valid response window
+    resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+    nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    tar_names = np.array(exptparams['TrialObject'][1]['TargetHandle'][1]['Names'])
+    nTargets = len(tar_names)
+    nTrials = exptevents['Trial'].max()
+
+    MISS = False * np.ones((nTargets, nTrials)).astype(np.bool)
     for i, t in enumerate(tar_names):
         mask = [True if (('Target' in n) & (t in n) & ('Stim ' in n)) | ('LICK' in n) else False for n in exptevents.name]
         ev = exptevents[mask]
         trials = np.unique(ev['Trial'].values)
         trials = [t for t in trials if np.sum([('Target' in n) for n in ev[ev['Trial']==t]['name']]) > 0]
-        miss = [True if 
-                        ((ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] > \
-                        ev[(ev['Trial']==i) & ([t in n for n in ev['name']])]['start'].values[0] + resp_win + early_win)) \
-                        else False for i in trials] 
-        MISS[i, trials-1] = miss
+        ltrials = [t for t in trials if np.sum([('LICK' in n) for n in ev[ev['Trial']==t]['name']]) > 0]
 
-    # get FA Trials
+        # miss is a complete trial where there were no licks
+        miss1_trials = list(set(ltrials) ^ set(trials))
+        miss1_trials = (np.array(miss1_trials) - 1).tolist()
 
-    # get Cue Trials
+        # or a complete trial where the lick came late
+        miss2_trials = [i for i in ltrials if ((ev[(ev['Trial']==i) & (ev['name']=='LICK')]['start'].values[0] > \
+                        ev[(ev['Trial']==i) & ([t in n for n in ev['name']])]['start'].values[0] + resp_win + early_win))]
+        miss2_trials = (np.array(miss2_trials) -1 ).tolist()
 
-    # get Rewarded Trials
+        MISS[i, miss1_trials] = True
+        MISS[i, miss2_trials] = True
 
-    # get Unrewarded Trials
+    return MISS
 
-
-def get_hit_rate(parmfile, **options):
-    # load parmfile using baphy io
-    globalparams, exptparams, exptevents = io.baphy_parm_read(parmfile)
-
-    # return exptevents (trials) only with hits
-    target_mask    
-
-    return HR
