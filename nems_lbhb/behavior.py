@@ -53,32 +53,51 @@ def get_HR_FAR(parmfile, **options):
     # load parmfile using baphy io
     _, exptparams, exptevents = io.baphy_parm_read(parmfile)
 
-    valid_trials = options.get('valid_trials', False)
+    vt = get_valid_trials(exptevents, exptparams, **options)
+    # update event data frame to only include valid trials
+    events = exptevents[exptevents.Trial.isin(vt)]
 
-    if valid_trials:
-        log.info("Excluding invalid trials from analysis")
-        vt = get_valid_trials(exptevents, exptparams)
-        # update event data frame to only include valid trials
-        events = exptevents[exptevents.Trial.isin(vt)]
-    else:
-        log.info("Keeping all trials for analysis")
-        events = exptevents
+    all_valid_trials = np.unique(events['Trial'])
 
     HIT = get_hit_matrix(events, exptparams)
     MISS = get_miss_matrix(events, exptparams)
-    # use original event to find cue trials
-    CUE = get_cue_vector(exptevents, exptparams)
 
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     HR = dict.fromkeys(targets)
     for i, k in enumerate(HR.keys()):
         HR[k] = HIT[i, :].sum() / (HIT[i, :].sum() + MISS[i, :].sum())
 
-    FAR = np.sum((HIT.sum(axis=0) == False) & (MISS.sum(axis=0) == False) & (CUE == False)) / HIT.shape[-1]
+    FAs = (HIT.sum(axis=0) == False) & (MISS.sum(axis=0) == False)
+    FAs = [f if (t+1) in all_valid_trials else False for t, f in enumerate(FAs)]
+    nValidRefs = sum(get_refs_per_trial(events))
+    FAR = np.sum(FAs) / nValidRefs
 
     HR['FAR'] = FAR
 
     return HR
+
+
+def get_refs_per_trial(exptevents):
+    """
+    Given an events data frame, find the number of all valid references
+    in the passed event data frame
+    """
+    trials = np.unique(exptevents['Trial'])
+    nRefs = []
+    for t in trials:
+        ev = exptevents[exptevents['Trial']==t]
+        if sum(ev.name.str.contains('LICK'))==0:
+            # no licks on this trial, count all refs
+            fl = np.inf
+        else:
+            fl = ev[ev.name.str.contains('LICK')]['start'].values[0]
+        
+        # only if sound actually played (preStim shoudln't be counted)
+        ev = ev[ev.name.str.contains('Stim ,') & ev.name.str.contains(', Reference')]
+        count = np.sum([True for s in ev['start'] if s < fl])
+        nRefs.append(count)
+
+    return nRefs
 
 def get_valid_trials(exptevents, exptparams, **options):
     """
@@ -86,6 +105,12 @@ def get_valid_trials(exptevents, exptparams, **options):
     Example options: remove FA trials, remove hits that happened after FA,
     remove correct rejects after incorrect hits, exclude cue trials etc.
     """ 
+
+    force_remove = options.get('force_remove', None)                # array of trials numbers to exclude manually
+    early_trials = options.get('early_trials', False)               # default to not include early trials
+    unique_trials_only = options.get('unique_trials_only', False)   # by default, keep all trials, even after FA
+    corr_rej_reminder = options.get('corr_rej_reminder', True)      # by default keep reminder trials (these are repeated non-rewarded trials)
+    cue_trials = options.get('cue_trials', False)                   # remove cue trials, if they exist
 
     # get valid response window
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
@@ -101,7 +126,6 @@ def get_valid_trials(exptevents, exptparams, **options):
 
     # get MISS Trials
     MISS = get_miss_matrix(exptevents, exptparams)
-
     # get FA Trials
     # these are all remaining trials that weren't hits or misses (includes early trials at this point)
     # FA can't be specific to target, because there is no target, so we collapse over hits/misses along
@@ -142,24 +166,100 @@ def get_valid_trials(exptevents, exptparams, **options):
     valid_trials_idx = True * np.ones(nTrials).astype(np.bool)
 
     # remove cue trials
-    valid_trials_idx[CUE] = False
+    if cue_trials == False:
+        valid_trials_idx[CUE] = False
 
     # remove HITS following FAs
-    iv_hit = [idx for idx in range(nTrials) if HIT[:, idx].sum() & FA[idx-1]]
-    valid_trials_idx[iv_hit] = False
+    if unique_trials_only:
+        iv_hit = [idx for idx in range(nTrials) if HIT[:, idx].sum() & FA[idx-1]]
+        valid_trials_idx[iv_hit] = False
 
-    # remove MISSES following FAs
-    iv_miss = [idx for idx in range(nTrials) if MISS[:, idx].sum() & FA[idx-1]]
-    valid_trials_idx[iv_miss] = False
+        # remove MISSES following FAs
+        iv_miss = [idx for idx in range(nTrials) if MISS[:, idx].sum() & FA[idx-1]]
+        valid_trials_idx[iv_miss] = False
 
     # remove corr. rej following unrewarded hit
-    iv_corr_rej = [idx for idx in range(nTrials) if NOREWARD[idx] & MISS[:, idx].sum() & \
-                    (MISS[:, idx-1].sum() | HIT[:, idx-1].sum()) & NOREWARD[idx-1]]
-    valid_trials_idx[iv_corr_rej] = False
+    if corr_rej_reminder == False:
+        iv_corr_rej = [idx for idx in range(nTrials) if NOREWARD[idx] & MISS[:, idx].sum() & \
+                        (MISS[:, idx-1].sum() | HIT[:, idx-1].sum()) & NOREWARD[idx-1]]
+        valid_trials_idx[iv_corr_rej] = False
+
+    # remove early trials
+    if early_trials:
+        early_trials = get_early_trials(exptevents, exptparams)
+        valid_trials_idx[np.array(early_trials)-1] = False
+
+    if force_remove is not None:
+        valid_trials_idx[force_remove] = False
 
     valid_trials = valid_trials[valid_trials_idx]
 
     return valid_trials
+
+def get_early_trials(exptevents, exptparams):
+    """
+    return a list of early trials.
+    this includes:
+        REF responses before the early window
+        Target response before the early window
+        REF responses in a non-Target slot 
+           (i.e. must have at least one REF before a target can be presented)
+    """
+    all_trials = np.unique(exptevents['Trial'])
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+    resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
+    refCountDist = exptparams['TrialObject'][1]['ReferenceCountFreq']
+    refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
+    refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+    refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
+    tarPreStim = exptparams['TrialObject'][1]['TargetHandle'][1]['PreStimSilence']
+
+    invalidRefSlots = np.append(0, np.argwhere(refCountDist==0)[:-1]+1)
+    min_lick_time = len(invalidRefSlots) * (refPreStim + refDuration + refPostStim) + refPreStim + early_win
+    # for each first lick, count how many refs prior on that trial. 
+    # If nrefs < invalidRefSlots, then call early trial
+    early_trials = []
+    for t in all_trials:
+        ev = exptevents[exptevents['Trial']==t]
+
+        if sum(ev.name.str.contains('LICK'))==0:
+            # no licks on this trial, pass
+            pass
+        else:
+            fl = ev[ev.name.str.contains('LICK')]['start'].values[0]
+            
+            if sum(ev.name.str.contains('Target'))>0:
+                # entered target window for this trial
+                target_start = ev[ev.name.str.contains('Target')]['start'].values[0]
+
+            n_refs_before = int(fl / (refPreStim + refDuration + refPostStim)) - 1
+            if n_refs_before < 0:
+                n_refs_before = 0
+            resp_win_start = (n_refs_before * (refPreStim + refDuration + refPostStim)) + refPreStim + early_win
+            
+            if n_refs_before != 0:
+                prev_refs_before = n_refs_before - 1
+
+            prev_resp_win_start = (prev_refs_before * (refPreStim + refDuration + refPostStim)) + refPreStim + early_win
+
+            if fl < min_lick_time:
+                # in an invalid target slot
+                early_trials.append(t)
+
+            elif (fl > min_lick_time) & (fl > target_start) & \
+                        (fl < (target_start + tarPreStim + early_win)) & (fl > resp_win_start + resp_win):
+                # determine if in early window of target and not in resp_win of previous ref
+                early_trials.append(t)
+
+            elif (fl > min_lick_time) & (fl < target_start) & (fl < resp_win_start) & (fl > prev_resp_win_start + resp_win):
+                # determine if in the early window of a valid reference and NOT in the 
+                # valid response window of the previous REF
+                early_trials.append(t)
+            else:
+                # valid FA / HIT / MISS lick
+                pass
+
+    return early_trials
 
 def get_hit_matrix(exptevents, exptparams):
     """
@@ -253,27 +353,24 @@ def get_RT(parmfile, **options):
 
     _, exptparams, exptevents = io.baphy_parm_read(parmfile)
 
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+    refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
+    refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+    refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
+
     valid_trials = options.get('valid_trials', False)
 
-    # get CUE trials before updating the events to exclude "bad"
-    # trials, otherwise, can't find CUE trials anymore
-    CUE = get_cue_vector(exptevents, exptparams)
-
-    if valid_trials:
-        log.info("Excluding invalid trials from analysis")
-        vt = get_valid_trials(exptevents, exptparams)
-        # update event data frame to only include valid trials
-        events = exptevents[exptevents.Trial.isin(vt)]
-    else:
-        log.info("Keeping all trials for analysis")
-        events = exptevents
+    vt = get_valid_trials(exptevents, exptparams, **options)
+    # update event data frame to only include valid trials
+    events = exptevents[exptevents.Trial.isin(vt)]
 
     HIT = get_hit_matrix(events, exptparams)
     MISS = get_miss_matrix(events, exptparams)
-    FA = (HIT.sum(axis=0)==False) & (MISS.sum(axis=0)==False) & (CUE==False)
+    FA = (HIT.sum(axis=0)==False) & (MISS.sum(axis=0)==False)
+    FA = [f if (t+1) in np.unique(events['Trial']) else False for t, f in enumerate(FA)]
 
     tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names'].copy()
-    nTrials = exptevents['Trial'].max()
+    nTrials = events['Trial'].max()
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     RT = dict.fromkeys(tar_names)
     for i, tar in enumerate(tar_names):
@@ -294,8 +391,11 @@ def get_RT(parmfile, **options):
     ev = events[events.Trial.isin(trials)]
 
     first_lick = np.array([ev[(ev['Trial']==t) & (ev['name']=='LICK')]['start'].values[0] for t in trials])
-    ref_ev = ev[ev.name.str.contains('Reference')]
-    onsets = np.array([ref_ev[(ref_ev['Trial']==t) & (ref_ev['start'] < first_lick[i])]['start'].values[-1] for i, t in enumerate(trials)])
+    ref_ev = ev[ev.name.str.contains(', Reference') & ev.name.str.contains('Stim ,')]
+    ref_sep = refDuration + refPostStim + refPreStim
+    onsets = np.array([ref_ev[(ref_ev['Trial']==t)]['start'].values[-1] for i, t in enumerate(trials)])
+    rts = first_lick - onsets
+    rts = [rt + ref_sep if rt < early_win else rt for rt in rts]
     RT['REF'] = first_lick - onsets
 
     return RT
