@@ -326,17 +326,17 @@ def _compute_metrics(exptparams, exptevents):
         nFA = ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL')).sum()
         R['RR']['Reference'] = nFA / nTrials
 
-        # Finally compute d' values
+        # Finally compute d' values and DI values
 
         # for each target
         tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
         for tar in tar_keys:
-            R['DI'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
+            R['Dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
         
         # for pairs of targets
         tar_combos = list(combinations(tar_keys, 2))
         for tc in tar_combos:
-            R['DI']['_'.join(tc)] = _compute_dprime(R['RR'][tc[0]], R['RR'][tc[1]])
+            R['Dprime']['_'.join(tc)] = _compute_dprime(R['RR'][tc[0]], R['RR'][tc[1]])
 
     return R
 
