@@ -1207,9 +1207,10 @@ def fill_default_options(options):
     options['includeprestim'] = options.get('includeprestim', 1)
     options['pupil'] = int(options.get('pupil', False))
     options['rem'] = int(options.get('rem', False))
+    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
         options = set_default_pupil_options(options)
-    #options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
+        
     #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
     #options['pupil_median'] = options.get('pupil_median', 0)
@@ -1424,7 +1425,7 @@ def baphy_load_recording(**options):
             max_all=pupil.epochs['end'].max()
             print('pupil max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
 
-        if (options['pupil_eyespeed']) & ('pupil_eyespeed' in state_dict.keys()):
+        if (options['pupil_eyespeed']) and ('pupil_eyespeed' in state_dict.keys()):
             # create pupil signal if it exists
             rlen = int(t_resp.ntimes)
             pcount = state_dict['pupil_eyespeed'].shape[0]
