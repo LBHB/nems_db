@@ -32,7 +32,7 @@ from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
 from nems_lbhb.io import (baphy_parm_read, baphy_align_time, baphy_stim_cachefile, load_pupil_trace,
-                          get_rem, load_rem_options)
+                          get_rem, load_rem_options, set_default_pupil_options)
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -1206,12 +1206,14 @@ def fill_default_options(options):
     options['pertrial'] = int(options.get('pertrial', False))
     options['includeprestim'] = options.get('includeprestim', 1)
     options['pupil'] = int(options.get('pupil', False))
-    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
-    options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
-    options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 0.75)
-    options['pupil_median'] = options.get('pupil_median', 0.5)
-    options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options['rem'] = int(options.get('rem', False))
+    if options['pupil'] or options['rem']:
+        options = set_default_pupil_options(options)
+    #options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
+    #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
+    #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
+    #options['pupil_median'] = options.get('pupil_median', 0)
+    #options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['cellid'] = options.get('cellid', cellid)

@@ -871,7 +871,7 @@ def set_default_pupil_options(options):
     options['pupil'] = options.get('pupil', 1)
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
-    options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', (1/3))
+    options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
     options["pupil_median"] = options.get('pupil_median', 0)
     options["pupil_smooth"] = options.get('pupil_smooth', 0)
     options["pupil_highpass"] = options.get('pupil_highpass', 0)
