@@ -184,9 +184,10 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['chancount'] = int(op[2:])
 
         elif op=='pup':
-            options.update({'pupil': True, 'pupil_deblink': True,
-                            'pupil_deblink_dur': 1,
-                            'pupil_median': 0, 'rem': 1})
+            options.update({'pupil': True, 'rem': 1})
+            #options.update({'pupil': True, 'pupil_deblink': True,
+            #                'pupil_deblink_dur': 1,
+            #                'pupil_median': 0, 'rem': 1})
         elif op=='rem':
             options['rem'] = True
 
