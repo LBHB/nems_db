@@ -289,7 +289,7 @@ def _compute_metrics(exptparams, exptevents):
 
     # for each target, decide if rewarded / unrewarded the get the 
     # hit rate / miss rate 
-    R = {'RR': {}, 'DI': {}}
+    R = {'RR': {}, 'dprime': {}, 'DI': {}}
     for pd, tar_key in zip(pump_dur, targets):
         rewarded = pd > 0
         tar = 'Stim , {} , Target'.format(tar_key)
@@ -326,20 +326,53 @@ def _compute_metrics(exptparams, exptevents):
         nFA = ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL')).sum()
         R['RR']['Reference'] = nFA / nTrials
 
-        # Finally compute d' values and DI values
-
+        # Use the HRs above to compute d' values
         # for each target
         tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
         for tar in tar_keys:
-            R['Dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
+            R['dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
         
-        # for pairs of targets
-        tar_combos = list(combinations(tar_keys, 2))
-        for tc in tar_combos:
-            R['Dprime']['_'.join(tc)] = _compute_dprime(R['RR'][tc[0]], R['RR'][tc[1]])
+        # Calculate the RT vectors for each target and for References, then compute DI
+        # - Yin, Fritz, & Shamma, 2010 JASA
+        # DI is the area under the ROC curve defined by plotting cummulative HR against 
+        # cummalative FAR
+        tar_RTs = _get_target_RTs(exptparams, exptevents)
+        ref_RTs = _get_reference_RTs(exptparams, exptevents)
+        resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
+        for tar in tar_keys:
+            R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
+                                       ref_RTs, R['RR']['Reference'], 
+                                       resp_window)
 
     return R
 
+
+def _compute_DI(tar_RTs, tarHR, ref_RTs, FAR, resp_window, dx=0.1):
+    """
+    Compute discrimination index (DI) between a given target and and reference -- Yin, Fritz, & Shamma, 2010 JASA
+
+    This metric combines HR, FAR, and reaction time to produce a metric between 0 and 1 describing the 
+    animal's behavioral performance. DI=1 corresponds to perfect performance, DI=0.5 corresponds to chance performance.
+    Less than 0.5 would indicate a preference for the Reference over target sounds.
+    """
+
+    # create set of rt bins
+    bins = np.arange(0, resp_window, dx)
+
+    # compute response probability in each bin
+    tar_counts, _ = np.histogram(tar_RTs, bins=bins)
+    ref_counts, _ = np.histogram(ref_RTs, bins=bins)
+    tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * tarHR
+    ref_prob = (np.cumsum(ref_counts) / sum(ref_counts)) * FAR    
+
+    # force the area bounded by the ROC curve to end at (1, 1)
+    tar_RT_prob = np.append(tar_prob, 1)
+    ref_RT_prob = np.append(ref_prob, 1)
+
+    # compute area under the curve using trapezoid approximation
+    auc = np.trapz(tar_RT_prob, ref_RT_prob)
+
+    return auc
 
 def _compute_dprime(hr, far):
     """
@@ -469,7 +502,7 @@ def _get_reference_RTs(exptparams, exptevents):
         for s in resp_window_start:
             rts.append(fl - s)
 
-    return rts
+    return np.array(rts)
 
 
 

@@ -53,7 +53,11 @@ for parmfile in parmfiles:
     for i, k in enumerate(all_RTs.keys()): 
         counts, xvals = np.histogram(all_RTs[k], bins=bins)
         rwdstr = 'rewarded' if pump_dur[i] > 0 else 'non-rewarded'
-        ax[0].step(xvals[:-1], np.cumsum(counts) / len(all_RTs[k]) * all_metrics['RR'][k], label='{0}, {1}'.format(k, rwdstr))
+        try:
+            DI = round(all_metrics['DI'][k], 2)
+        except:
+            DI = 'N/A'
+        ax[0].step(xvals[:-1], np.cumsum(counts) / len(all_RTs[k]) * all_metrics['RR'][k], label='{0}, {1}, DI: {2}'.format(k, rwdstr, DI))
 
     ax[0].legend(fontsize=6)
     ax[0].set_xlabel('Reaction time', fontsize=8)
@@ -64,7 +68,11 @@ for parmfile in parmfiles:
     for i, k in enumerate(valid_RTs.keys()): 
         counts, xvals = np.histogram(valid_RTs[k], bins=bins)
         rwdstr = 'rewarded' if pump_dur[i] > 0 else 'non-rewarded'
-        ax[1].step(xvals[:-1], np.cumsum(counts) / len(valid_RTs[k]) * valid_metrics['RR'][k], label='{0}, {1}'.format(k, rwdstr))
+        try:
+            DI = round(valid_metrics['DI'][k], 2)
+        except:
+            DI = 'N/A'
+        ax[1].step(xvals[:-1], np.cumsum(counts) / len(valid_RTs[k]) * valid_metrics['RR'][k], label='{0}, {1}, DI: {2}'.format(k, rwdstr, DI))
 
     ax[1].legend(fontsize=6)
     ax[1].set_xlabel('Reaction time', fontsize=8)
