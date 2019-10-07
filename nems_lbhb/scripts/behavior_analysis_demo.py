@@ -161,6 +161,9 @@ all_metrics = beh.compute_metrics(exptparams, exptevents, **all_options)
 valid_RTs = beh.compute_RTs(exptparams, exptevents, **valid_options)
 all_RTs = beh.compute_RTs(exptparams, exptevents, **all_options)
 
+resp_window = exptparams['BehaveObject'][1]['ResponseWindow'] 
+bins = np.arange(0, resp_window, 0.1)
+
 f, ax = plt.subplots(1, 2)
 for i, k in enumerate(all_RTs.keys()): 
     counts, xvals = np.histogram(all_RTs[k], bins=bins)
