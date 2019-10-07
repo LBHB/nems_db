@@ -1079,7 +1079,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         returned_measurement = eye_speed
     else:
         returned_measurement = pupil_diameter
-    
+
     # resample and remove dropped frames
 
     # find and parse pupil events
@@ -1097,7 +1097,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         firstframe[t] = int(p[1])
     pp = ['PUPILSTOP' in x['name'] for i, x in exptevents.iterrows()]
     lastidx = np.argwhere(pp)[-1]
-    
+
     s = exptevents.iloc[lastidx[0]]['name'].split(",[")
     p = eval("[" + s[1])
     timestamp[-1] = p[0]
@@ -1633,7 +1633,7 @@ def load_raw_pupil(pupilfilepath, fs=None):
 
     return pupil_diameter
 
-def load_raw_photometry(photofilepath, fs=None):
+def load_raw_photometry(photofilepath, fs=None, framen=0):
     """
     Simple function to read (and process photometry trace). Will ask for user input to define ROI based
     on the first frame of the video file.
@@ -1648,7 +1648,10 @@ def load_raw_photometry(photofilepath, fs=None):
         if i%1000 == 0:
             print("frame: {}".format(i))
 
-        if i == 0:
+        if i < framen:
+            frame = packet.decode()[0]
+
+        elif i == framen:
             frame = packet.decode()[0]
             frame_ = np.asarray(frame.to_image().convert('LA'))
             plt.imshow(frame_[:, :, 0])
@@ -1662,11 +1665,12 @@ def load_raw_photometry(photofilepath, fs=None):
             y2 = int(input("y2 center: "))
 
             # define roi:
-            x1_range = np.arange(x-2, x+2)
-            y1_range = np.arange(y-2, y+2)
+            roi_width = 4
+            x1_range = np.arange(x-roi_width, x+roi_width)
+            y1_range = np.arange(y-roi_width, y+roi_width)
 
-            x2_range = np.arange(x2-2, x2+2)
-            y2_range = np.arange(y2-2, y2+2)
+            x2_range = np.arange(x2-roi_width, x2+roi_width)
+            y2_range = np.arange(y2-roi_width, y2+roi_width)
 
 
             roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
@@ -1689,5 +1693,5 @@ def load_raw_photometry(photofilepath, fs=None):
             except:
                 print('end of file reached')
 
-    
+
     return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]

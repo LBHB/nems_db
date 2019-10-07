@@ -1,421 +1,476 @@
+# Set of functions to perform basic behavioral analyses on RewardTargetLBHB baphy experiments
+# CRH, 10/06/2019
+
 import numpy as np
-import itertools
-import sys
+from scipy.stats import norm
+import pandas as pd
 import nems_lbhb.io as io
+from itertools import combinations
+import logging
 
-def compute_di(parmfile, **options):
+log = logging.getLogger(__name__)
+
+def load_behavior(parmfile, classify_trials=True):
     """
-    calculate behavioral performance on a per-token basis using "traditional" performance metrics.
-    Copy of di_nolick.m from lbhb_tools: https://bitbucket.org/lbhb/lbhb-tools/src/master/
-
-    CRH, 08-20-2019
-
-    Inputs:
-    ================================================================================
-    parmfile - string with full path to .m filename
-    options - dictionary
-
-        force_use_original_target_window: if true, forse hit anf FA analysis to
-            use target window used during data collection. Otherwise, if target
-            window is longer than RefSegLen, sets target window to RefSegLen.
-
-        trials: trials over which to calculate metrics
-
-        stop_respwin_offset: offset to add to end of time window over which di is
-            calculated (default 1). The window end is the end of the target window,
-            plus this offset value.
-
-    Outputs:
-    ================================================================================
-    metrics and metrics_newT are dictionaries containing the metrics
-       metrics_newT has metrics calculated only from trials immediately
-       following hits or misses (should be trials in which a new stimulus was
-       played)
-            DI2 = (1+HR-FAR)/2  % area under the ROC
-            Bias2 = (HR+FAR)/2
-            DI = area under ROC curved based on RTs
+    Load behavior events/params for the given parmfile using 
+    baphy parmread. By default, add trial labels to the event
+    dataframe using behavior.create_trial_labels
+    To load raw event/params from baphy_parm_read, set classify=False
     """
 
-    # set defaults for options dictionary
-    force_use_original_target_window = options.get('force_use_original_target_window', False)
-    trials = options.get("trials", False)
-    stop_respwin_offset = options.get('stop_respwin_offset', True)
+    _, exptparams, exptevents = io.baphy_parm_read(parmfile)
 
-    # load parmfile using baphy io
-    globalparams, exptparams, exptevents = io.baphy_parm_read(parmfile)
-
-    trialparms = exptparams['TrialObject'][1]
-
-    # ???? What is this for ??????
-    two_target = 'TargetDistSet' in trialparms.keys() and np.any(np.array(trialparms['TargetDistSet'])>1)
-
-    # need to add one because we're translating from matlab which indexes at 1
-    if 'rawfilecount' in globalparams.keys():
-        trialcount = globalparams['rawfilecount']
+    if classify_trials == False:
+        pass    
     else:
-        trialcount = len(exptparams['Performance'])
+        exptevents = create_trial_labels(exptparams, exptevents)
+    
+    return exptparams, exptevents
 
-    wanted_trials = np.arange(1, trialcount+1)
-    perf = dict((k, exptparams['Performance'][k]) for k in wanted_trials if k in exptparams['Performance'])
 
-    behaviorparams = exptparams['BehaveObject'][1]
+def create_trial_labels(exptparams, exptevents):
+    """
+    Classify every trial as HIT_TRIAL, MISS_TRIAL etc.
+    Also, add two columns to number and classify each individual sound as its own trial
+        - For example, each REF can be CORRECT_REJECT or FALSE_ALARM etc.
+        - For sounds that weren't played (for ex because of lick early on causing a FA),
+            label them NULL and give them trial number 0.
+    """
 
-    TarWindowStart = behaviorparams['EarlyWindow']
+    all_trials = np.unique(exptevents['Trial'])
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+    resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
+    refCountDist = exptparams['TrialObject'][1]['ReferenceCountFreq']
+    refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
+    refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+    refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
+    tarPreStim = exptparams['TrialObject'][1]['TargetHandle'][1]['PreStimSilence']
+    tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    invalidRefSlots = np.append(0, np.argwhere(refCountDist==0)[:-1]+1)
+    min_time = len(invalidRefSlots) * (refPreStim + refDuration + refPostStim) + refPreStim + early_win
 
-    # "strict" - FA is response to any possible target slot preceeding the target
-    TarPreStimSilence = trialparms['TargetHandle'][1]['PreStimSilence']
-    if 'SingleRefSegmentLen' in trialparms.keys() and trialparms['SingleRefSegmentLen'] > 0:
-        RefSegLen = trialparms['SingleRefSegmentLen']
-        PossibleTarTimes = ((np.where(trialparms['ReferenceCountFreq'])[0]-0) + 1) * \
-                trialparms['SingleRefSegmentLen'] + perf[1]['FirstRefTime']
+    if pump_dur.shape == ():
+        pump_dur = np.tile(pump_dur, [len(tar_names)])
 
-        if two_target:
-            PossibleTar2Offsets = (np.where(trialparms['Tar2SegCountFreq'])[0] + 1) * \
-                    trialparms['Tar2SegmentLen'] + perf[1]['FirstRefTime']
-            PossibleTar2Times = np.tile(PossibleTarTimes, (1, len(PossibleTar2Offsets))) \
-                    + np.tile(PossibleTar2Offsets[:, np.newaxis], (len(PossibleTarTimes), 1))
-            PossibleTar2Times = np.unique(PossibleTar2Times)
+    # for each trial, append a line to the event data frame specifying the trial
+    # category. Also, create new column to label each sound w/in the trial
+    trial_dfs = []
+    for t in all_trials:
+        ev = exptevents[exptevents['Trial']==t].copy()
+        trial_outcome = None
+        if sum(ev.name.str.contains('LICK'))>0:
+            # lick(s) detected
+            fl = ev[ev.name=='LICK']['start'].values[0]
+            # decide what each sound is, then use this to classify the trial
+            sID = []
+            for _, r in ev.iterrows():
+                name = r['name']
+                if ('PreStim' in name) | ('PostStim' in name):
+                    sID.append('NULL')
+                
+                elif 'Reference' in name:
+                    ref_start = r['start']
+                    if (fl < min_time):
+                        sID.append('EARLY_TRIAL')
+                        trial_outcome = 'EARLY_TRIAL'
+                    elif ((fl > ref_start) & (fl < (ref_start + early_win))):
+                        sID.append('EARLY_TRIAL')
+                        # if in window of prevrious ref, trial is FA, else it's Early
+                        if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
+                            trial_outcome = 'FALSE_ALARM_TRIAL'
+                        else:
+                            trial_outcome = 'EARLY_TRIAL'
+                    elif (fl < ref_start):
+                        sID.append('NULL')
+                    elif (fl > ref_start) & (fl < ref_start + resp_win):
+                        sID.append('FALSE_ALARM_TRIAL')
+                        trial_outcome = 'FALSE_ALARM_TRIAL'
+                    elif ((fl > ref_start) & (fl > ref_start + resp_win)) | \
+                            (fl < ref_start):
+                        sID.append('CORRECT_REJECT_TRIAL')
+                    else:
+                        sID.append('UNKNOWN')
 
-    else:
-        RefSegLen = trialparms['ReferenceHandle'][1]['PreStimSilence'] + \
-                trialparms['ReferenceHandle'][1]['Duration'] + \
-                trialparms['ReferenceHandle'][1]['PostStimSilence']
-        PossibleTarTimes = np.unique([perf[k]['FirstTarTime'] for k in perf.keys()]).T
-
-    if behaviorparams['ResponseWindow'] > RefSegLen and not force_use_original_target_window:
-        TarWindowStop = TarWindowStart + RefSegLen
-    else:
-        TarWindowStop = TarWindowStart + behaviorparams['ResponseWindow']
-
-    ReferenceHandle = trialparms['ReferenceHandle'][1]
-    fields = [k for k in ReferenceHandle['UserDefinableFields']]
-
-    # for cases where REF changes (think of this like changing the context. For example, coherent vs. incoherent REF streams)
-    # FOR NOW, HARD CODING only to look for incoherent / coherent cases
-    unique_tar_suffixes = np.unique([suf.split(":")[-1] for suf in trialparms['TargetHandle'][1]['Names']])
-    trialref_type = -1 * np.ones((1, trialcount))
-    if len(unique_tar_suffixes) > 0:
-        for i in range(1, len(unique_tar_suffixes)+1):
-            idx = np.array([id for id in range(1, len(perf)+1) if unique_tar_suffixes[i-1] in perf[id]['ThisTargetNote'][0]])
-            trialref_type[:, idx-1] = i
-            tar_suffixes = unique_tar_suffixes
-    else:
-        tar_suffixes = []
-        trialref_type = np.ones((1, trialcount))
-
-    trialtargetid = np.zeros((1,trialcount))
-
-    if 'UniqueTargets' in exptparams.keys() and len(exptparams['UniqueTargets']) > 1:
-        UniqueCount = len(exptparams['UniqueTargets'])
-        trialtargetid_all = np.zeros(trialcount).tolist()
-        trialtargetid = np.zeros(trialcount)
-        for tt in range(0, trialcount):
-            if 'NullField' not in perf[1].keys() or perf[tt]['NullTrial']:
-                if two_target:
-                    trialtargetid_all[tt] = [np.where(x == np.array(exptparams['UniqueTargets']))[0][0] + 1
-                                                for x in perf[tt+1]['ThisTargetNote']]
-                    try:
-                        trialtargetid[tt] = trialtargetid_all[tt][0]
-                    except:
-                        trialtargetid[tt] = trialtargetid_all[tt]
+                elif 'Target' in name:
+                    tar_start = r['start']
+                    rewarded = (pump_dur[[True if t in name else False for t in tar_names]] > 0)[0]
+                    if rewarded:
+                        if fl < tar_start:
+                            sID.append('NULL')
+                        elif (fl > tar_start + early_win) & (fl < (tar_start + resp_win + early_win)):
+                            sID.append('HIT_TRIAL')
+                            trial_outcome = 'HIT_TRIAL'
+                        elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
+                            sID.append('MISS_TRIAL')
+                            trial_outcome = 'MISS_TRIAL'
+                        elif (fl > tar_start) & (fl < (tar_start + early_win)):
+                            sID.append('EARLY_TRIAL')
+                            if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                                trial_outcome = 'FALSE_ALARM'
+                            else:
+                                trial_outcome = 'EARLY_TRIAL'
+                        else:
+                            sID.append('UNKNOWN')
+                    else:
+                        if fl < tar_start:
+                            sID.append('NULL')
+                        elif (fl > tar_start + early_win) & (fl < (tar_start + resp_win + early_win)):
+                            sID.append('INCORRECT_HIT_TRIAL')
+                            trial_outcome = 'INCORRECT_HIT_TRIAL'
+                        elif ((fl > tar_start + early_win) & (fl > (tar_start + resp_win + early_win))):
+                            sID.append('CORRECT_REJECT_TRIAL')
+                            trial_outcome = 'CORRECT_REJECT_TRIAL'
+                        elif (fl > tar_start) & (fl < (tar_start + early_win)):
+                            sID.append('EARLY_TRIAL')
+                            if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                                trial_outcome = 'FALSE_ALARM'
+                            else:
+                                trial_outcome = 'EARLY_TRIAL'
+                        else:
+                            sID.append('UNKNOWN')
+                
                 else:
-                    trialtargetid[tt] = np.where(perf[tt+1]['ThisTargetNote'][0] ==
-                                                    np.array(exptparams['UniqueTargets']))[0][0]
-    else:
-        UniqueCount = 1
-        trialtargetid = np.ones(len(perf))
+                    sID.append('NUll')
 
-    if tar_suffixes != []:
-        reftype_by_tarid = np.nan * np.ones(len(exptparams['UniqueTargets']))
-        for i in range(0, len(tar_suffixes)):
-            if two_target:
-                idx = np.unique([np.array(trialtargetid_all)[(trialref_type==(i+1)).squeeze()]])
-                idx = np.unique(list(itertools.chain.from_iterable(idx))) - 1
-                reftype_by_tarid[idx] = i+1
-            else:
-                idx = np.unique([np.array(trialtargetid)[(trialref_type==(i+1)).squeeze()]])
-                idx = np.unique(list(itertools.chain.from_iterable(idx))) - 1
-                reftype_by_tarid[idx] = i+1
-    else:
-        reftype_by_tarid = np.ones(len(exptparams['UniqueTargets']))
-
-    resptime = []
-    resptimeperfect = []
-    stimtype = []
-    stimtime = []
-    reftype = []
-    tcounter = []
-    trialnum = []
-
-    # exclude misses at very beginning and end
-    Misses = [perf[i+1]['Miss'] for i in range(0, len(perf))]
-    if np.sum(Misses) == trialcount:
-        # if all missed
-        t1 = t2 = 1
-    else:
-        t1 = np.where(np.array(Misses)==0)[0][0]
-        t2 = len(Misses) - np.where(np.array(Misses[::-1])==0)[0][0]
-
-    for tt in range(t1, t2):
-        if 'FirstTarTime' not in perf[tt+1].keys() or perf[tt+1]['FirstTarTime'] == []:
-            perf[tt+1]['FirstTarTime'] = perf[tt+1]['TarResponseWinStart'] - behaviorparams['EarlyWindow']
-        if 'FirstLickTime' not in perf[tt+1].keys() or perf[tt+1]['FirstLickTime'] == []:
-            if perf[tt+1]['FirstLickTime'] == []:
-                perf[tt+1]['FirstLickTime'] = np.inf
-            else:
-                perf[tt+1]['FirstLickTime'] = np.min(exptevents[(exptevents['name']=='LICK') &
-                                                            (exptevents['Trial']==tt+1)]['start'])
-
-        Ntar_per_reftype= len(trialparms['TargetIdxFreq'])
-
-        if two_target:
-            idx = ((np.array(trialtargetid_all[tt]) - 1)  % Ntar_per_reftype)
-            Distlinds = np.array(trialparms['TargetDistSet'])[idx]  == 1
-
-            if not np.any(Distlinds):
-                sys.warning("Make sure this works if a trial doesn''t have a target from slot 1")
-
-            if len(Distlinds) > 1:
-                tar_time = np.array(perf[tt+1]['TarTimes'])[Distlinds]
-            else:
-                tar_time = perf[tt+1]['FirstTarTime']
+            ev.insert(4, 'soundTrial', sID)
+            if trial_outcome is not None:  
+                outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
+                ev.loc[ev.name==outcome, 'name'] = trial_outcome
+            trial_dfs.append(ev)
 
         else:
-            tar_time = perf[tt+1]['FirstTarTime']
-
-        TarSlotCount = np.sum(PossibleTarTimes < tar_time)
-        if TarSlotCount > 0:
-            stimtime.extend(PossibleTarTimes[:TarSlotCount])
-            if type(tar_time) != float:
-                stimtime.extend(tar_time)
-            else:
-                stimtime.append(tar_time)
-        else:
-            if type(tar_time) != float:
-                stimtime.extend(tar_time)
-            else:
-                stimtime.append(tar_time)
-
-        resptime.extend((np.ones(TarSlotCount + 1) * perf[tt+1]['FirstLickTime']).tolist())
-        # 0: ref, 1:tar1, 2: tar2
-        stimtype.extend((np.zeros(TarSlotCount).tolist()))
-        stimtype.extend([1])
-
-        reftype.extend(trialref_type[0, tt] * np.ones(TarSlotCount+1))
-
-        if two_target:
-            tcounter.extend(np.ones(TarSlotCount+1) * np.array(trialtargetid_all[tt])[Distlinds])
-        else:
-            tcounter.extend(np.ones(TarSlotCount+1) * trialtargetid[tt])
-
-        trialnum.extend(np.ones(TarSlotCount+1) * (tt+1))
-
-        if two_target:
-            Dist2inds = np.array(trialparms['TargetDistSet'])[((np.array(trialtargetid_all[tt])-1) % Ntar_per_reftype)] == 2
-            if np.sum(Dist2inds) == 1:
-                tar2_time = np.expand_dims(perf[tt+1]['TarTimes'], 0)[np.expand_dims(Dist2inds, 0)]
-                if 0:
-                    Tar2SlotCount = np.sum(PossibleTar2Times < tar2_time)
-                    PossibleTar2Times_this_trial = PossibleTar2Times[0:Tar2SlotCount]
+            # no licks, MISS_TRIAL
+            outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
+            sID = []
+            for name in ev.name:
+                if ('PreStim' in name) | ('PostStim' in name):
+                    sID.append('NULL')
+                elif 'Reference' in name:
+                    sID.append('CORRECT_REJECT_TRIAL')
+                    trial_outcome = 'MISS_TRIAL'
+                elif 'Target' in name:
+                    rewarded = (pump_dur[[True if t in name else False for t in tar_names]] > 0)[0]
+                    if rewarded:
+                        sID.append('MISS_TRIAL')
+                        trial_outcome = 'MISS_TRIAL'
+                    else: 
+                        sID.append('CORRECT_REJECT_TRIAL')
+                        trial_outcome = 'CORRECT_REJECT_TRIAL'
                 else:
-                    PossibleTar2Times_this_trial = tar_time + PossibleTar2Offsets
-                    PossibleTar2Times_this_trial = PossibleTar2Times_this_trial[~(PossibleTar2Times_this_trial >= tar2_time)]
-                    Tar2SlotCount = len(PossibleTar2Times_this_trial)
+                    sID.append('NULL')
 
-                stimtime.extend(PossibleTar2Times_this_trial)
-                stimtime.extend(tar2_time)
-                resptime.extend(np.ones(Tar2SlotCount+1) * perf[tt+1]['FirstLickTime'])
-                stimtype.extend(np.zeros(Tar2SlotCount))
-                stimtype.append(1)
-                reftype.extend(trialref_type[0, tt] * np.ones(Tar2SlotCount+1))
-                tcounter.extend(np.ones(Tar2SlotCount+1) * np.expand_dims(trialtargetid_all[tt], 0)[np.expand_dims(Dist2inds, 0)])
-                trialnum.extend(np.ones(Tar2SlotCount+1) * (tt+1))
+            ev.loc[ev.name==outcome, 'name'] = trial_outcome
+            ev.insert(4, 'soundTrial', sID)
 
-            elif np.sum(Dist2inds) > 1:
-                sys.warning('There should only be one target from TargetDistSet 2 per trial. There are more somehow...')
+            trial_dfs.append(ev)
 
-    resptime = np.array(resptime)
-    resptime[resptime==0] = np.inf
+    new_events = pd.concat(trial_dfs)
+        
+    return new_events
 
-    NoLick = resptime > (np.array(stimtime) + TarWindowStop)
-    Lick = ((resptime >= (np.array(stimtime) + TarWindowStart)) & (resptime < (np.array(stimtime) + TarWindowStop)))
-    ValidStim = resptime >= (np.array(stimtime) + TarWindowStart)
 
-    stop_respwin = behaviorparams['EarlyWindow'] + behaviorparams['ResponseWindow'] + stop_respwin_offset
-    early_window = behaviorparams['EarlyWindow']
-    if trials == False:
-        use = np.ones(len(trialnum)).astype(bool).tolist()
-    else:
+def mark_invalid_trials(exptparams, exptevents, **options):
+    """
+    Add two boolean columns to the events dataframe specifying if each 
+    sound / trial is valid.
 
-        use = [t for t in trialnum if t in trials]
+    options dictionary:
+        - keep_early_trials: default = False
+                default, exclude early response trials. If True, treat as FAs.
+        - keep_cue_trials: default = False
+                default, exclude cue trials. If True, analyze cue trials with logic specified in remained options fields.
+        - keep_follwing_incorrect_trial: default = False
+                default, exclude trials that follow incorrect trials e.g. miss of rewarded target, false alarm, hit of unrewarded target.
+                If True, treat each trial as normal.
+    """
+    
+    events = exptevents.copy()
 
-    if two_target:
-        repTarDistSet = np.tile(trialparms['TargetDistSet'] ,(1, len(tar_suffixes)))
-    else:
-        repTarDistSet = 1
-    metrics = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use], np.array(stimtime)[use],
-                        np.array(resptime)[use], np.array(tcounter)[use],
-                        stop_respwin, ValidStim[use], trialtargetid, np.array(trialnum)[use], np.array(reftype)[use],
-                        reftype_by_tarid, early_window, repTarDistSet)
-# ==================
-    # metrics using only trials with new stimuli
-    tf = []
-    HorM_trials = np.where([True if exptparams['Performance'][k]['Hit'] or exptparams['Performance'][k]['Miss'] else False
-                    for k in exptparams['Performance'].keys()][:-1])[0] + 1
-    use_trials = HorM_trials+1
-    if trials:
-        use_trials(~ismember(use_trials,trials))=[]
+    # first, make sure that trials have been labeled using nems_lbhb.behavior.create_trial_labels()
+    if 'soundTrial' not in events.columns:
+        log.info('Trials have not been labeled. Labeling trials in order to compute metrics... ')
+        events = create_trial_labels(exptparams, exptevents)
 
-    use = [True if x in np.append(1, use_trials) else False for x in trialnum]
-    metrics_newT = compute_metrics(Lick[use], NoLick[use], np.array(stimtype)[use],
-                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
-                            stop_respwin, ValidStim[use], trialtargetid, np.array(trialnum)[use],
-                            np.array(reftype)[use], reftype_by_tarid, early_window, repTarDistSet)
+    # set default options
+    keep_early_trials = options.get('keep_early_trials', False)
+    keep_cue_trials = options.get('keep_cue_trials', False)
+    keep_following_incorrect_trial = options.get('keep_following_incorrect_trial', False)
 
-    # metrics using only trials with new stimuli, first half
-    use_trials1 = use_trials[use_trials < (np.ones(len(use_trials)) * max(use_trials) / 2)]
-    use = [True if x in use_trials1 else False for x in trialnum]
-    metrics_newT['pt1'] = compute_metrics(Lick[use],NoLick[use], np.array(stimtype)[use],
-                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
-                            stop_respwin, ValidStim[use], trialtargetid,
-                            np.array(trialnum)[use], np.array(reftype)[use],
-                            reftype_by_tarid,early_window,repTarDistSet)
-    use_trials2 = use_trials[use_trials > (np.ones(len(use_trials)) * max(use_trials) / 2)]
-    use = [True if x in use_trials2 else False for x in trialnum]
-    metrics_newT['pt2'] = compute_metrics(Lick[use],NoLick[use], np.array(stimtype)[use],
-                            np.array(stimtime)[use], resptime[use], np.array(tcounter)[use],
-                            stop_respwin, ValidStim[use], trialtargetid,
-                            np.array(trialnum)[use], np.array(reftype)[use],
-                            reftype_by_tarid,early_window,repTarDistSet)
-                            
-    return metrics, metrics_newT
+    iv_trials = False * np.ones(events.shape[0]).astype(np.bool)
+    iv_sound_trials = False * np.ones(events.shape[0]).astype(np.bool)
+    if keep_early_trials == False:
+        # mark early trials as invalid per soundTrial
+        iv = events['soundTrial']=='EARLY_TRIAL'
+        iv_sound_trials = iv | iv_sound_trials
+        
+        # mark overall trials as early
+        et_trials = events[events.name.str.contains('EARLY_TRIAL')]['Trial'].values
+        iv = events.Trial.isin(et_trials)
+        iv_trials = iv | iv_trials
 
-def compute_metrics(Lick, NoLick, stimtype, stimtime, resptime, tcounter, stop_respwin, ValidStim, trialtargetid,
-                    trialnum, reftype, reftype_by_tarid, early_window, repTarDistSet):
-    m = dict()
-    FA = Lick & ValidStim & (stimtype==np.zeros(len(stimtype)))
-    CR = NoLick & ValidStim & (stimtype==np.zeros(len(stimtype)))
-    Hit = Lick & ValidStim & (stimtype==np.ones(len(stimtype)))
-    Miss = NoLick & ValidStim & (stimtype==np.ones(len(stimtype)))
-    m['details'] = {'Hits':sum(Hit), 'Misses': sum(Miss), 'FAs': sum(FA), 'CRs': sum(CR)}
-    m['HR'] = sum(Hit) / (sum(Hit)+sum(Miss))
-    m['FAR'] = sum(FA) / (sum(FA)+sum(CR))
-    # calculate DI using reaction time
-    resptime[resptime==0] = np.inf
-    di, hits, fas, tsteps = compute_di(stimtime[ValidStim], resptime[ValidStim], stimtype[ValidStim], stop_respwin)
-    m['DI'] = di
-    if np.all(~ValidStim):
-        m['DI'] = np.nan
+    if keep_cue_trials == False:
+        # mark cue trials as invalid
+        # same for single sounds and overall trials
+        nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
+        cue_hit_trials = events[events.name.str.contains('HIT_TRIAL')]['Trial'][:nCueTrials+1].values
+        iv = events.Trial.isin(np.arange(1, cue_hit_trials.max()))
+        iv_sound_trials = iv | iv_sound_trials
+        iv_trials = iv | iv_trials
 
-    m['DI2'] = (1+ m['HR'] - m['FAR']) / 2
-    m['Bias2'] = (m['HR'] + m['FAR']) / 2
+    if keep_following_incorrect_trial == False:
+        # mark trials following an incorrect trial as invalid
+        # this happens only on a per baphy trial basis i.e. a REF after a FA is marked as NULL already
+        # so don't both updating iv_sound_trials for this
+        incorrect_trials = events[events.name.isin(['INCORRECT_HIT_TRIAL', 'MISS_TRIAL', 'FALSE_ALARM_TRIAL'])]['Trial'].values
+        following_trials = incorrect_trials + 1
+        iv = events.Trial.isin(following_trials)
+        iv_trials = iv | iv_trials
 
-    NuniqueTars = len(reftype_by_tarid)
-    uHit = np.zeros((1, NuniqueTars))
-    uMiss = np.zeros((1, NuniqueTars))
-    uFA = np.zeros((1, NuniqueTars))
-    uET = np.zeros((1, NuniqueTars))
-    uRT = np.zeros((1, NuniqueTars))
-    sRT = np.zeros((1, NuniqueTars))
-    medRT = np.zeros((1, NuniqueTars))
-    qrRT = np.zeros((2, NuniqueTars))
-    uN = np.zeros(NuniqueTars)
-    uDI = np.zeros(NuniqueTars)
-    uDI_hits = np.zeros((NuniqueTars, 50))
-    uDI_fas = np.zeros((NuniqueTars, 50))
-    for uu in range(0, NuniqueTars):
-        uN[uu] = len(np.unique(trialnum[ValidStim & (tcounter == (np.ones(len(tcounter))) * (uu+1))]))
+    # Finally, make sure that soundTrials labeled as NULL are marked as invalidSoundTrials
+    iv = events.soundTrial == 'NULL'
+    iv_sound_trials = iv | iv_sound_trials
 
-        hitI = Lick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
-        uHit[0, uu] = sum(hitI)
-        missI = NoLick & ValidStim & (stimtype == np.ones(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
-        uMiss[0, uu] = sum(missI)
-        uFA[0, uu] = uN[uu] - uHit[0, uu] - uMiss[0, uu]
-        uET[0, uu] = sum((resptime < stimtime) & (stimtype == np.zeros(len(stimtype))) & (stimtime == np.ones(len(stimtime)) * min(stimtime)) \
-                & (tcounter == ((uu+1) * np.ones(len(tcounter)))))
-        RTs = resptime[hitI] - stimtime[hitI] - early_window
-        if len(RTs) == 0:
-            uRT[0, uu] = np.nan
-            sRT[0, uu] = np.nan
-            medRT[0, uu] = np.nan
-            qrRT[:, uu] = np.ones(2) * np.nan
+    events.insert(events.shape[-1], 'invalidSoundTrial', iv_sound_trials)
+    events.insert(events.shape[-1], 'invalidTrial', iv_trials)    
 
+    return events
+
+
+def compute_metrics(exptparams, exptevents, **options):
+    """
+    Return the following metrics in a dictionary:
+        - Response Rate (RR):
+            - Per target correct hit rate (hit trials)
+            - Per target incorrect hit rate (incorrect hits = total - correct rejects) -- NaN if all targets are rewarded
+            - Reference false alarm rate
+            (note, incorrect hit rate / correct hit rate are not distinguished in the resulting dictionary.
+            Results are just labeled by target name, so use extparams to decide which are rewarded/unrewarded
+            outside of this function)
+
+        - Discrimination Index (DI):
+            - DI per target
+            - DI between pairs of targets (if multiple)
+
+    options dictionary:
+        ====== These defaults are set in nems_lbhb.behavior.mark_invalid_trials ========
+        - keep_early_trials: default = False
+                default, exclude early response trials. If True, treat as FAs.
+        - keep_cue_trials: default = False
+                default, exclude cue trials. If True, analyze cue trials normally.
+        - keep_follwing_incorrect_trial: default = False
+                default, exclude trials that follow incorrect trials e.g. miss of rewarded target, false alarm, hit of unrewarded target.
+                If True, analyze these trials normally.
+        =============== These defaults set inside this function ========================
+
+    """
+
+    events = exptevents.copy()
+    
+    # 1) mark invalid trials
+    events = mark_invalid_trials(exptparams, events, **options)
+
+    # 2) calculate metrics
+    metrics = _compute_metrics(exptparams, events)
+
+    return metrics
+
+
+def _compute_metrics(exptparams, exptevents):
+    """
+    "private" function called by nems_lbhb.behavior.compute_metrics(). See latter function for docs.
+    """
+
+    targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+
+    if pump_dur.shape == ():
+        pump_dur = np.tile(pump_dur, [len(targets)])
+
+    # for each target, decide if rewarded / unrewarded the get the 
+    # hit rate / miss rate 
+    R = {'RR': {}, 'DI': {}}
+    for pd, tar_key in zip(pump_dur, targets):
+        rewarded = pd > 0
+        tar = 'Stim , {} , Target'.format(tar_key)
+        if rewarded:
+            # looking for "HIT_TRIALS" and "MISS_TRIALS"
+            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                        (exptevents.invalidTrial==False) & \
+                                        (exptevents.name.isin(['HIT_TRIAL', 'MISS_TRIAL']))]['Trial']
+            nTrials = len(np.unique(validTrialList))
+            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+            nHits = (validTrialdf.name=='HIT_TRIAL').sum()
+            R['RR'][tar_key] = nHits / nTrials
         else:
-            uRT[0, uu] = np.mean(RTs)
-            sRT[0, uu] = np.std(RTs, ddof=1) # to agree with matlab need to set degrees of freedom
-            medRT[0, uu] = np.median(RTs)
-            # this funct. behaves differently in python than matlab which is why
-            # baphy's version of di_nolick returns slightly diff uDI values
-            qrRT[:, uu] = np.percentile(RTs, [25, 75], interpolation='linear')
+            # looking for "INCORRECT_HIT_TRIALS" and "CORRECT_REJECT_TRIALS"
+            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                        (exptevents.invalidTrial==False) & \
+                                        (exptevents.name.isin(['CORRECT_REJECT_TRIAL', 'INCORRECT_HIT_TRIAL']))]['Trial']
+            nTrials = len(np.unique(validTrialList))
+            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+            nHits = (validTrialdf.name=='INCORRECT_HIT_TRIAL').sum()
+            R['RR'][tar_key] = nHits / nTrials
+
+        # Compute the FAR (REF hit rate) (Note, we include early trials here just in case they have not be marked 
+        # invalid in the options dictionary. We never want early target responses. So that's not an option
+        # above)
+        allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
+        validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
+                                        (exptevents.invalidSoundTrial==False) & \
+                                        (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
+        validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+        nTrials = sum((validTrialdf.invalidSoundTrial==False) & (validTrialdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])))
+        nFA = ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL')).sum()
+        R['RR']['Reference'] = nFA / nTrials
+
+        # Finally compute d' values and DI values
+
+        # for each target
+        tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
+        for tar in tar_keys:
+            R['Dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
+        
+        # for pairs of targets
+        tar_combos = list(combinations(tar_keys, 2))
+        for tc in tar_combos:
+            R['Dprime']['_'.join(tc)] = _compute_dprime(R['RR'][tc[0]], R['RR'][tc[1]])
+
+    return R
 
 
-        FAI = Lick & ValidStim & (stimtype == np.zeros(len(stimtype))) & (tcounter == ((uu+1) * np.ones(len(tcounter))))
-        RTs = resptime[FAI] - stimtime[FAI] - early_window
+def _compute_dprime(hr, far):
+    """
+    "private" function for computing d' given any two response rates.
+    In general, hr will be a target hit rate and far will be a 
+    reference false alarm rate.
+    """
+    if far == 1:
+        far = 0.99
+    elif far == 0:
+        far = 0.01
+    zFAR = norm.ppf(far)
 
-        inds = ValidStim & ((tcounter == ((uu+1) * np.ones(len(tcounter)))) | (stimtype == np.zeros(len(stimtype)))) \
-                 & (reftype == (np.ones(len(reftype)) * reftype_by_tarid[uu]))
-        if np.any(repTarDistSet > 1):
-            tar_inds_using_this_set = np.where(repTarDistSet[0, uu] == repTarDistSet[0, :])[0] + 1
-            idx_mask = [False if x in tar_inds_using_this_set else True for x in tcounter]
-            inds[idx_mask] = False
-        uDI[uu], uDI_hits[uu, :], uDI_fas[uu, :], tsteps = compute_di(stimtime[inds], resptime[inds], stimtype[inds], stop_respwin)
-        if np.all(~inds):
-            uDI[uu] = np.nan
+    if hr == 1:
+        hr = 0.99
+    elif hr == 0:
+        hr = 0.01
 
-    uDI[uN == 0] = np.nan
-    uHR = []
-    for i, v in enumerate((uHit + uMiss).squeeze()):
-        if v != 0:
-            uHR.append(uHit[0, i] / v)
+    zHR = norm.ppf(hr)
+    dprime = zHR - zFAR
+
+    return dprime
+
+
+def compute_RTs(exptparams, exptevents, **options):
+    """
+    Compute RT vectors for each target and for REF on all valid trials
+
+    options dictionary:
+        ====== These defaults are set in nems_lbhb.behavior.mark_invalid_trials =======
+        - keep_early_trials: default = False
+                default, exclude early response trials. If True, treat as FAs.
+        - keep_cue_trials: default = False
+                default, exclude cue trials. If True, analyze cue trials with logic specified in remained options fields.
+        - keep_follwing_incorrect_trial: default = False
+                default, exclude trials that follow incorrect trials e.g. miss of rewarded target, false alarm, hit of unrewarded target.
+                If True, treat each trial as normal.
+    """
+
+    events = exptevents.copy()
+
+    # check to see if trials have been labeled as valid or not
+    if 'invalidTrial' not in events.columns:
+        events = mark_invalid_trials(exptparams, events, **options)
+
+    tar_rts = _get_target_RTs(exptparams, events)
+    ref_rts = _get_reference_RTs(exptparams, events)
+
+    tar_rts['Reference'] = np.array(ref_rts)
+
+    return tar_rts
+
+
+def _get_target_RTs(exptparams, exptevents):
+    """
+    "private" function to get RTs for targets. Separate from refs because logic is slightly different
+    """
+
+    targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
+
+    if pump_dur.shape == ():
+        pump_dur = np.tile(pump_dur, [len(targets)])
+
+    RTs = dict.fromkeys(targets)
+    for pd, tar_key in zip(pump_dur, targets):
+        rewarded = pd > 0
+        tar = 'Stim , {} , Target'.format(tar_key)  
+        if rewarded:
+            # looking for "HIT_TRIALS" and "MISS_TRIALS"
+            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                        (exptevents.invalidTrial==False) & \
+                                        (exptevents.name=='HIT_TRIAL')]['Trial']
+            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+            fl = []
+            tar_start = []
+            for t in validTrialList:
+                tdf = validTrialdf[validTrialdf.Trial==t]
+                fl.append(tdf[tdf.name=='LICK']['start'].values[0])
+                tar_start.append(tdf[tdf.name==tar]['start'].values[0])
+            
+            RTs[tar_key] = np.array(fl) - np.array(tar_start) - early_win
         else:
-            uHR.append(np.nan)
-    uHR = np.array(uHR)
-    uDI2 = (1 + uHR - m['FAR']) / 2
+            # looking for "INCORRECT_HIT_TRIALS" and "CORRECT_REJECT_TRIALS"
+            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                        (exptevents.invalidTrial==False) & \
+                                        (exptevents.name=='INCORRECT_HIT_TRIAL')]['Trial']
+            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+            fl = []
+            tar_start = []
+            for t in validTrialList:
+                tdf = validTrialdf[validTrialdf.Trial==t]
+                fl.append(tdf[tdf.name=='LICK']['start'].values[0])
+                tar_start.append(tdf[tdf.name==tar]['start'].values[0])
+            
+            RTs[tar_key] = np.array(fl) - (np.array(tar_start) + early_win)
 
-    m['details']['uHit'] = uHit
-    m['details']['uMiss'] = uMiss
-    m['details']['uFA'] = uFA
-    m['details']['uET'] = uET
-    m['details']['uHR'] = uHR
-    m['details']['uRT'] = uRT
-    m['details']['medRT'] = medRT
-    m['details']['sRT'] = sRT
-    m['details']['qrRT'] = qrRT
-    m['details']['uDI'] = uDI
-    m['details']['uDI2'] = uDI2
-    m['details']['uN'] = uN
-    m['details']['uDI_hits'] = uDI_hits
-    m['details']['uDI_fas'] = uDI_fas
-    m['details']['tsteps'] = tsteps
-
-    return m
+    return RTs
 
 
-def compute_di(stimtime, resptime, stimtype, stop_respwin, stepcount=None):
+def _get_reference_RTs(exptparams, exptevents):
+    """
+    "private" function to get RTs for references. Separate from targets because logic is slightly different
+    """
+    early_win = exptparams['BehaveObject'][1]['EarlyWindow']
 
-    if stepcount is None:
-       stepcount = 50
-    tsteps = np.append(np.linspace(0, stop_respwin, stepcount-1) , np.inf)
-    hits = np.zeros(stepcount)
-    fas = np.zeros(stepcount)
-    for tt in range(0, stepcount):
-        hits[tt] = sum((stimtype == np.ones(len(stimtype))) & ((resptime-stimtime) <= tsteps[tt] * np.ones(len(stimtype))))
-        fas[tt] = sum((stimtype == np.zeros(len(stimtype))) & ((resptime-stimtime) <= np.ones(len(stimtype)) * tsteps[tt]))
-    # total number of targets presented, ie, one for each hit and miss trial
-    targcount = sum(stimtype==1)
-    # total number of references = total stim minus targcount
-    refcount = sum(stimtype==0)
+    allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
+    validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
+                                    (exptevents.invalidSoundTrial==False) & \
+                                    (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL']))]['Trial'].unique()
+    validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
 
-    hits = hits / (targcount + (targcount==0))
-    fas= fas / (refcount + (refcount==0))
-    hits[-1] = 1
-    fas[-1] = 1
+    # NOTE: for each trial, could have multiple RTs for the same lick (if lick is in window of more than one
+    # ref)
 
-    w = (np.append(0, np.diff(fas)) + np.append(np.diff(fas), 0)) / 2
-    di = sum(w * hits)
-    w2 = (np.append(0, np.diff(hits)) + np.append(np.diff(hits), 0)) / 2
-    di2 = 1 - sum(w2 * fas)
+    rts = []
+    for t in validTrialList:
+        tdf = validTrialdf[validTrialdf.Trial == t]
+        # get only FALSE_ALARM_TRIALS or EARLY_TRIALS with invalidSoundTrial is also False
+        sound_onsets = tdf[tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])]['start'].values
+        fl = tdf[tdf.name=='LICK']['start'].values[0]
+        resp_window_start = sound_onsets + early_win
 
-    di = (di+di2) / 2
+        for s in resp_window_start:
+            rts.append(fl - s)
 
-    return di, hits, fas, tsteps
+    return rts
+
+
+
+    
