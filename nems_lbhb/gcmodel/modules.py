@@ -21,7 +21,7 @@ import logging
 import numpy as np
 from scipy.signal import convolve2d
 
-from nems.modules.fir import (per_channel, da_coefficients, _offset_coefficients,
+from nems.modules.fir import (per_channel, do_coefficients, _offset_coefficients,
                               fir_exp_coefficients)
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
@@ -240,7 +240,7 @@ def _get_ctk_coefficients(wc_coefficients=None, fir_coefficients=None, mean=None
     if use_phi:
         wc_coeffs = gaussian_coefficients(mean, sd, n_coefs)
         if coefficients is None:
-            fir_coeffs = da_coefficients(f1s=f1s, taus=taus,
+            fir_coeffs = do_coefficients(f1s=f1s, taus=taus,
                                                delays=delays,
                                                gains=gains, n_coefs=n_coefs)
         else:
