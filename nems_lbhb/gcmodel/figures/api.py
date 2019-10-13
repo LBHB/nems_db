@@ -55,76 +55,100 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
     #             distributions of sound statistics for both batches
     # DRC contrast comparisons
     log.info('Contrast and DRC comparisons ...\n')
-    fig1a = test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
-                                   percentile=70, n_segments=8, plot_seconds=19)
+    fig1a, fig1aa = test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
+                                           percentile=70, n_segments=8,
+                                           plot_seconds=19)
     figures_to_save.append((fig1a, 'contrast_comparison'))
+    figures_to_save.append((fig1aa, 'contrast_comparison_text'))
 
     # sound stats
     path_1 = load_paths['sound_stats'][str(batch)]
     path_2 = load_paths['sound_stats'][str(batch2)]
-    fig1b = mean_sd_per_stim_by_batch(batch, load_path=path_1)
-    fig1c = mean_sd_per_stim_by_batch(batch2, load_path=path_2)
+    fig1b, fig1bb = mean_sd_per_stim_by_batch(batch, load_path=path_1)
+    fig1c, fig1cc = mean_sd_per_stim_by_batch(batch2, load_path=path_2)
     figures_to_save.append((fig1b, 'sound_stats_b%d' % batch))
+    figures_to_save.append((fig1bb, 'sound_stats_b%d_text' % batch))
     figures_to_save.append((fig1c, 'sound_stats_b%d' % batch2))
+    figures_to_save.append((fig1cc, 'sound_stats_b%d_text' % batch2))
 
 
     # Figure 2 -- summaries of prediction accuracy, for both only_improvements
     #             and for all cells.
-    fig2a = performance_bar(batch, gc, stp, LN, combined, plot_stat=plot_stat)
+    fig2a, fig2at = performance_bar(batch, gc, stp, LN, combined, plot_stat=plot_stat,
+                                    abbr_yaxis=True, manual_y=(0.5, 0.65))
+    fig2b, fig2bt = performance_bar(batch2, gc, stp, LN, combined, plot_stat=plot_stat,
+                                    abbr_yaxis=True, manual_y=(0.5, 0.65))
     fig2aa = significance(batch, gc, stp, LN, combined, include_legend=False,
                           plot_stat=plot_stat)
-#    fig2b = performance_bar(batch, gc, stp, LN, combined, plot_stat=plot_stat,
-#                            only_improvements=True)
-    fig2b, fig2bb = performance_table(batch, gc, stp, LN, combined, batch2,
-                                      plot_stat=plot_stat, height_scaling=3)
-#    fig2bb = significance(batch, gc, stp, LN, combined, include_legend=False,
-#                          plot_stat=plot_stat, only_improvements=True)
-    fig2c = single_scatter(batch, gc, stp, LN, combined, compare=(2,3),
+    fig2bb = significance(batch2, gc, stp, LN, combined, include_legend=False,
+                          plot_stat=plot_stat)
+    fig2c, fig2cc = single_scatter(batch, gc, stp, LN, combined, compare=(2,3),
                            plot_stat=plot_stat)
-    fig2d = combined_vs_max(batch, gc, stp, LN, combined,
-                            plot_stat=plot_stat)
+    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined, plot_stat=plot_stat)
+    fig2e, fig2ee = single_scatter(batch2, gc, stp, LN, combined, compare=(2,3),
+                                   plot_stat=plot_stat)
 
-    figures_to_save.append((fig2a, 'performance_bar_all'))
-    figures_to_save.append((fig2aa, 'significance_tests_all'))
-    figures_to_save.append((fig2b, 'performance_table'))
-    figures_to_save.append((fig2bb, 'significance_table'))
-    figures_to_save.append((fig2c, 'ln_vs_combined'))
+    figures_to_save.append((fig2a, 'performance_bar_289'))
+    figures_to_save.append((fig2at, 'performance_bar_289_text'))
+    figures_to_save.append((fig2aa, 'significance_tests_289'))
+    figures_to_save.append((fig2b, 'performance_bar_263'))
+    figures_to_save.append((fig2bt, 'performance_bar_263_text'))
+    figures_to_save.append((fig2bb, 'significance_tests_263'))
+    figures_to_save.append((fig2c, 'ln_vs_combined_289'))
+    figures_to_save.append((fig2cc, 'ln_vs_combined_289_text'))
+    figures_to_save.append((fig2e, 'ln_vs_combined_263'))
+    figures_to_save.append((fig2ee, 'ln_vs_combined_263_text'))
 #    for sf, sn in zip(scatter_figs, scatter_names):
 #        figures_to_save.append((sf, sn))
-    figures_to_save.append((fig2d, 'combined_vs_max'))
+    figures_to_save.append((fig2d, 'combined_vs_max_289'))
+    figures_to_save.append((fig2dd, 'combined_vs_max_289_text'))
+
 
 
     # Figure 3:
     # Equivalence
     log.info('Equivalence analyses ...\n')
-    fig3a = equivalence_scatter(batch, gc, stp, LN, combined,
-                                plot_stat=plot_stat, drop_outliers=True,
-                                color_improvements=True)#,
-                                #manual_lims=(-0.3, 0.3))
-    fig3b = equivalence_scatter(batch, gc, stp, LN, combined,
-                                plot_stat=plot_stat, drop_outliers=False,
-                                color_improvements=True)#,
-                                #manual_lims=(-0.3, 0.3))
-    fig3c = equivalence_scatter(batch, combined, stp, LN, gc,
-                                plot_stat=plot_stat, drop_outliers=True,
-                                color_improvements=True,
-                                xmodel='GC+STP', ymodel='STP')
-    fig3d = equivalence_scatter(batch, combined, gc, LN, stp,
-                                plot_stat=plot_stat, drop_outliers=True,
-                                color_improvements=True,
-                                xmodel='GC+STP', ymodel='GC')
+    fig3a, fig3aa = equivalence_scatter(batch, gc, stp, LN, combined,
+                                        plot_stat=plot_stat, drop_outliers=True,
+                                        color_improvements=True)#,
+    fig3b, fig3bb = equivalence_scatter(batch2, gc, stp, LN, combined,
+                                        plot_stat=plot_stat, drop_outliers=True,
+                                        color_improvements=True)#,
+                                        #manual_lims=(-0.3, 0.3))
+#    fig3c = equivalence_scatter(batch, combined, stp, LN, gc,
+#                                plot_stat=plot_stat, drop_outliers=True,
+#                                color_improvements=True,
+#                                xmodel='GC+STP', ymodel='STP')
+#    fig3d = equivalence_scatter(batch, combined, gc, LN, stp,
+#                                plot_stat=plot_stat, drop_outliers=True,
+#                                color_improvements=True,
+#                                xmodel='GC+STP', ymodel='GC')
     hist_path = load_paths['equivalence_effect_size'][gc_version]
-    fig3e, _ = equivalence_effect_size(batch, gc, stp, LN, combined,
-                                       load_path=hist_path,
-                                       color_improvements=True)
-    fig3f = equivalence_histogram(batch, gc, stp, LN, combined,
-                                  load_path=hist_path)
+    hist_path_263 = load_paths['equivalence_effect_size']['263']
+    fig3e, fig3ee = equivalence_effect_size(batch, gc, stp, LN, combined,
+                                            load_path=hist_path,
+                                            color_improvements=True)
+    fig3f, fig3fff = equivalence_histogram(batch, gc, stp, LN, combined,
+                                                   load_path=hist_path)
+    fig3g, fig3gg = equivalence_effect_size(batch2, gc, stp, LN, combined,
+                                            load_path=hist_path_263,
+                                            color_improvements=True)
+    fig3h, fig3hhh = equivalence_histogram(batch2, gc, stp, LN, combined,
+                                           load_path=hist_path_263)
     figures_to_save.append((fig3a, 'equivalence_scatter'))
-    figures_to_save.append((fig3b, 'equivalence_scatter_outliers'))
-    figures_to_save.append((fig3c, 'equivalence_scatter_comb_vs_stp'))
-    figures_to_save.append((fig3d, 'equivalence_scatter_comb_vs_gc'))
+    figures_to_save.append((fig3aa, 'equivalence_scatter_text'))
+    figures_to_save.append((fig3b, 'equivalence_scatter_263'))
+    figures_to_save.append((fig3bb, 'equivalence_scatter_263_text'))
+#    figures_to_save.append((fig3c, 'equivalence_scatter_comb_vs_stp'))
+#    figures_to_save.append((fig3d, 'equivalence_scatter_comb_vs_gc'))
     figures_to_save.append((fig3e, 'equivalence_vs_effect'))
     figures_to_save.append((fig3f, 'equivalence_histogram'))
+    figures_to_save.append((fig3ee, 'equivalence_effect_text'))
+    figures_to_save.append((fig3fff, 'equivalence_hist_text'))
+    figures_to_save.append((fig3g, 'equivalence_vs_effect_263'))
+    figures_to_save.append((fig3h, 'equivalence_histogram_263'))
+    figures_to_save.append((fig3gg, 'equivalence_effect_text_263'))
+    figures_to_save.append((fig3hhh, 'equivalence_hist_text_263'))
 
 
     # figure 4:
@@ -141,76 +165,84 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
 
     # Parameters
     log.info('Parameter analyses ...\n')
-    fig5a = stp_distributions(batch, gc, stp, LN, combined, log_scale=False)
-    fig5b, fig5c = gc_distributions(batch, gc, stp, LN, combined,
-                                    log_scale=False)
+    fig5a1, fig5a2, fig5a3, fig5a4, fig5a5 = stp_distributions(
+            batch, gc, stp, LN, combined)
+    gc_dist_figs = gc_distributions(batch, gc, stp, LN, combined)
+    labels = ['base_dist', 'base_text', 'amp_dist', 'amp_text',
+              'shift_dist', 'shift_text', 'kappa_dist', 'kappa_text',
+              'md_nonimp_effects', 'md_nonimp_text', 'md_imp_effects',
+              'md_imp_text']
     # TOOD: something for the sigmoid parameters?
     # o     or just use some examples from the single cell plots?
     #fig7 = ...
 
-    figures_to_save.append((fig5a, 'stp_distributions'))
-    figures_to_save.append((fig5b, 'gc_distributions_base_shift'))
-    figures_to_save.append((fig5c, 'gc_distributions_amp_kappa'))
+    figures_to_save.append((fig5a1, 'tau_distributions'))
+    figures_to_save.append((fig5a2, 'tau_dist_text'))
+    figures_to_save.append((fig5a3, 'u_distributions'))
+    figures_to_save.append((fig5a4, 'u_dist_text'))
+    figures_to_save.append((fig5a5, 'med_stp_effects'))
+    for f, n in zip(gc_dist_figs, labels):
+        figures_to_save.append((f, n))
 
 
     # Supplemental, just included here to group w/ paramter analyses
     # may put a condensed version in w/ parameter dist plots
     # Big Correlation
-    log.info("Parameter Correlation analysis ...\n")
-    figs = per_cell_group(batch, gc, stp, LN, combined, hist_path,
-                          drop_outliers=True)
-    labels = ['neither_r', 'neither_p', 'both_r', 'both_p', 'gc_r', 'gc_p',
-              'stp_r', 'stp_p']
-    for fig, label in zip(figs, labels):
-        figures_to_save.append((fig, 'param_corr_' + label))
+#    log.info("Parameter Correlation analysis ...\n")
+#    figs = per_cell_group(batch, gc, stp, LN, combined, hist_path,
+#                          drop_outliers=True)
+#    labels = ['neither_r', 'neither_p', 'both_r', 'both_p', 'gc_r', 'gc_p',
+#              'stp_r', 'stp_p']
+#    for fig, label in zip(figs, labels):
+#        figures_to_save.append((fig, 'param_corr_' + label))
 
 
 ######################################################## PROGRESS
 
 
     # Figure 7 - response statistics
-    log.info('Response statistics ...\n')
-    spont_path = load_paths['spont']
-    max_path = load_paths['max']
-    # 6 figures: compare gc, stp, and combined models for max and spont
-    fig7a = rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
-                                plot_stat=plot_stat, rate_stat='spont',
-                                relative_performance=True,
-                                load_path=spont_path)
-    fig7b = rate_vs_performance(batch, gc, stp, LN, combined, compare='stp',
-                                plot_stat=plot_stat, rate_stat='spont',
-                                relative_performance=True,
-                                load_path=spont_path)
-    fig7c = rate_vs_performance(batch, gc, stp, LN, combined, compare='combined',
-                                plot_stat=plot_stat, rate_stat='spont',
-                                relative_performance=True,
-                                load_path=spont_path)
-    fig7d = rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
-                                plot_stat=plot_stat, rate_stat='max',
-                                relative_performance=True,
-                                load_path=max_path)
-    fig7e = rate_vs_performance(batch, gc, stp, LN, combined, compare='stp',
-                                plot_stat=plot_stat, rate_stat='max',
-                                relative_performance=True,
-                                load_path=max_path)
-    fig7f = rate_vs_performance(batch, gc, stp, LN, combined, compare='combined',
-                                plot_stat=plot_stat, rate_stat='max',
-                                relative_performance=True,
-                                load_path=max_path)
-    figures_to_save.append((fig7a, 'spont_vs_gc'))
-    figures_to_save.append((fig7b, 'spont_vs_stp'))
-    figures_to_save.append((fig7c, 'spont_vs_combined'))
-    figures_to_save.append((fig7d, 'max_vs_gc'))
-    figures_to_save.append((fig7e, 'max_vs_stp'))
-    figures_to_save.append((fig7f, 'max_vs_combined'))
+#    log.info('Response statistics ...\n')
+#    spont_path = load_paths['spont']
+#    max_path = load_paths['max']
+#    # 6 figures: compare gc, stp, and combined models for max and spont
+#    fig7a = rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
+#                                plot_stat=plot_stat, rate_stat='spont',
+#                                relative_performance=True,
+#                                load_path=spont_path)
+#    fig7b = rate_vs_performance(batch, gc, stp, LN, combined, compare='stp',
+#                                plot_stat=plot_stat, rate_stat='spont',
+#                                relative_performance=True,
+#                                load_path=spont_path)
+#    fig7c = rate_vs_performance(batch, gc, stp, LN, combined, compare='combined',
+#                                plot_stat=plot_stat, rate_stat='spont',
+#                                relative_performance=True,
+#                                load_path=spont_path)
+#    fig7d = rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
+#                                plot_stat=plot_stat, rate_stat='max',
+#                                relative_performance=True,
+#                                load_path=max_path)
+#    fig7e = rate_vs_performance(batch, gc, stp, LN, combined, compare='stp',
+#                                plot_stat=plot_stat, rate_stat='max',
+#                                relative_performance=True,
+#                                load_path=max_path)
+#    fig7f = rate_vs_performance(batch, gc, stp, LN, combined, compare='combined',
+#                                plot_stat=plot_stat, rate_stat='max',
+#                                relative_performance=True,
+#                                load_path=max_path)
+#    figures_to_save.append((fig7a, 'spont_vs_gc'))
+#    figures_to_save.append((fig7b, 'spont_vs_stp'))
+#    figures_to_save.append((fig7c, 'spont_vs_combined'))
+#    figures_to_save.append((fig7d, 'max_vs_gc'))
+#    figures_to_save.append((fig7e, 'max_vs_stp'))
+#    figures_to_save.append((fig7f, 'max_vs_combined'))
 
     # Autocorrelation analyses
-    log.info('Autocorrelation ...\n')
-    df = load_batch_results(load_paths['AC'])
-    # TODO: figure out why log tau gives a weird result
-    fig7f = tau_vs_model_performance(df, batch, gc, stp, LN, combined,
-                                    log_tau=True)
-    figures_to_save.append((fig7f, 'tau_vs_performance'))
+#    log.info('Autocorrelation ...\n')
+#    df = load_batch_results(load_paths['AC'])
+#    # TODO: figure out why log tau gives a weird result
+#    fig7f = tau_vs_model_performance(df, batch, gc, stp, LN, combined,
+#                                    log_tau=True)
+#    figures_to_save.append((fig7f, 'tau_vs_performance'))
 
 
     # Save everything

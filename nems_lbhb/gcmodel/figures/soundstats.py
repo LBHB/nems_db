@@ -76,11 +76,15 @@ def mean_sd_per_stim_by_batch(batch, loadkey='ozgf.fs100.ch18', max_db_scale=65,
         batch_results = {k: v for k, v in zip(stims, stats)}
 
     fig = scatter_soundstats(batch_results)
-    fig.axes[0].set_title('Sound stats for batch:  %d' % batch)
-    return fig
+    fig2 = plt.figure()
+    text = ("x: mean level (db SPL)\n"
+            "y: std (dB SPL)\n"
+            "batch: %d\n" % batch)
+    plt.text(0.1, 0.5, text)
+    return fig, fig2
 
 
-def scatter_soundstats(results):
+def scatter_soundstats(results, legend=False):
     # HACK to get separate markers for batch 263 noisy vs clean dsounds
     voc_in_noise = False
     for k in results:
@@ -101,10 +105,12 @@ def scatter_soundstats(results):
                 clean_means.append(mean)
                 clean_sds.append(sd)
         fig = plt.figure()
-        plt.scatter(clean_sds, clean_means, color='black', s=15, label='clean')
-        plt.scatter(noisy_sds, noisy_means, facecolors='none',
-                    edgecolors='black', s=40, label='noisy')
-        plt.legend()
+        plt.scatter(clean_sds, clean_means, color=model_colors['combined'],
+                    s=big_scatter, label='clean')
+        plt.scatter(noisy_sds, noisy_means, color=model_colors['LN'],
+                    s=small_scatter, label='noisy')
+        if legend:
+            plt.legend()
 
     else:
         means = []
@@ -114,10 +120,8 @@ def scatter_soundstats(results):
             sds.append(sd)
 
         fig = plt.figure()
-        plt.scatter(sds, means, color='black', s=20)
+        plt.scatter(sds, means, color=model_colors['combined'], s=big_scatter)
 
-    plt.ylabel('mean level (dB SPL)')
-    plt.xlabel('std (dB SPL)')
     plt.tight_layout()
 
     return fig

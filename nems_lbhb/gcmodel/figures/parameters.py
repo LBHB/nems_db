@@ -9,16 +9,18 @@ import matplotlib.patheffects as pe
 import nems.xform_helper as xhelp
 import nems.db as nd
 import nems.epoch as ep
-from nems.utils import find_module
+from nems.utils import find_module, ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
                                              adjustFigAspect,
                                              improved_cells_to_list,
-                                             is_outlier)
+                                             is_outlier,
+                                             drop_common_outliers)
 from nems_lbhb.gcmodel.figures.respstats import _binned_xvar, _binned_yavg
 from nems.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
+from nems.modules.nonlinearity import _double_exponential
 from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_db.params import fitted_params_per_batch
 import nems.modelspec as ms
@@ -31,7 +33,7 @@ plt.rcParams.update(params)  # loaded from definitions
 
 
 def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
-                      good_ln=0, log_scale=False):
+                      good_ln=0, log_scale=False, legend=False):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -67,8 +69,6 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     #med_u = np.median(sep_u)
     sep_taus = _df_to_array(all_taus[not_c], dims).mean(axis=0)
     sep_us = _df_to_array(all_us[not_c], dims).mean(axis=0)
-    sep_taus = sep_taus[~is_outlier(sep_taus)]
-    sep_us = sep_us[~is_outlier(sep_us)]
     med_tau = np.median(sep_taus)
     med_u = np.median(sep_us)
 
@@ -76,79 +76,135 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     stp_us = all_us[c]
     stp_sep_taus = _df_to_array(stp_taus, dims).mean(axis=0)
     stp_sep_us = _df_to_array(stp_us, dims).mean(axis=0)
-    stp_sep_taus = stp_sep_taus[~is_outlier(stp_sep_taus)]
-    stp_sep_us = stp_sep_us[~is_outlier(stp_sep_us)]
+
+
     stp_med_tau = np.median(stp_sep_taus)
     stp_med_u = np.median(stp_sep_us)
+    #tau_t, tau_p = st.ttest_ind(sep_taus, stp_sep_taus)
+    #u_t, u_p = st.ttest_ind(sep_us, stp_sep_us)
 
-    tau_t, tau_p = st.ttest_ind(sep_taus, stp_sep_taus)
-    u_t, u_p = st.ttest_ind(sep_us, stp_sep_us)
+    # NOTE: not actually a t statistic now, it's mann-whitney U statistic,
+    #       just didn't want to change all of the var names incase i revert
+    tau_t, tau_p = st.mannwhitneyu(sep_taus, stp_sep_taus, alternative='two-sided')
+    u_t, u_p = st.mannwhitneyu(sep_us, stp_sep_us, alternative='two-sided')
+
+    sep_taus, sep_us = drop_common_outliers(sep_taus, sep_us)
+    stp_sep_taus, stp_sep_us = drop_common_outliers(stp_sep_taus, stp_sep_us)
+    not_imp_outliers = len(sep_taus)
+    imp_outliers = len(stp_sep_taus)
 
 
-    fig, (a1, a2) = plt.subplots(2, 1)
+    fig1, (a1, a2) = plt.subplots(2, 1, sharex=True, sharey=True)
     color = model_colors['LN']
     imp_color = model_colors['max']
     stp_label = 'STP ++ (%d)' % len(c)
     total_cells = len(c) + len(not_c)
     bin_count = 30
-    hist_kwargs = {'bins': bin_count, 'linewidth': 1, 'color': [color, imp_color],
+    hist_kwargs = {'linewidth': 1,
                    'label': ['not imp', 'stp imp']}
 
 
     plt.sca(a1)
-    weights = [np.ones(len(sep_taus))/len(sep_taus),
-               np.ones(len(stp_sep_taus))/len(stp_sep_taus)]
-    if log_scale:
-        lower_bound = min(sep_taus.min(), stp_sep_taus.min())
-        upper_bound = max(sep_taus.max(), stp_sep_taus.max())
-        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
-        hist_kwargs['bins'] = bins
-    plt.hist([sep_taus, stp_sep_taus], weights=weights, **hist_kwargs)
-#    plt.hist(sep_taus, color=color, **hist_kwargs, alpha=0.6)
-#    plt.hist(stp_sep_taus, color=stp_color, label=stp_label,
-#             **hist_kwargs, alpha=0.6)
-    a1.axes.axvline(med_tau, color=color, linewidth=2,
+    weights1 = [np.ones(len(sep_taus))/len(sep_taus)]
+    weights2 = [np.ones(len(stp_sep_taus))/len(stp_sep_taus)]
+    upper = max(sep_taus.max(), stp_sep_taus.max())
+    lower = min(sep_taus.min(), stp_sep_taus.min())
+    bins = np.linspace(lower, upper, bin_count+1)
+#    if log_scale:
+#        lower_bound = min(sep_taus.min(), stp_sep_taus.min())
+#        upper_bound = max(sep_taus.max(), stp_sep_taus.max())
+#        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
+#        hist_kwargs['bins'] = bins
+#    plt.hist([sep_taus, stp_sep_taus], weights=weights, **hist_kwargs)
+    a1.hist(sep_taus, weights=weights1, fc=faded_LN, edgecolor=dark_LN,
+            bins=bins, **hist_kwargs)
+    a2.hist(stp_sep_taus, weights=weights2, fc=faded_max, edgecolor=dark_max,
+            bins=bins, **hist_kwargs)
+    a1.axes.axvline(med_tau, color=dark_LN, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    a1.axes.axvline(stp_med_tau, color=imp_color, linewidth=2,
+    a1.axes.axvline(stp_med_tau, color=dark_max, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    plt.title('tau,  sig diff?:  p=%.4E' % tau_p)
-    plt.xlabel('tau (ms)')
-    plt.legend()
-
-
-    plt.sca(a2)
-    weights = [np.ones(len(sep_us))/len(sep_us),
-               np.ones(len(stp_sep_us))/len(stp_sep_us)]
-    if log_scale:
-        lower_bound = min(sep_us.min(), stp_sep_us.min())
-        upper_bound = max(sep_us.max(), stp_sep_us.max())
-        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
-        hist_kwargs['bins'] = bins
-    plt.hist([sep_us, stp_sep_us], weights=weights, **hist_kwargs)
-#    plt.hist(sep_us, color=color, **hist_kwargs, alpha=0.6)
-#    plt.hist(stp_sep_us, color=stp_color,
-#             label='STP ++', **hist_kwargs, alpha=0.6)
-    a2.axes.axvline(med_u, color=color, linewidth=2,
+    a2.axes.axvline(med_tau, color=dark_LN, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    a2.axes.axvline(stp_med_u, color=imp_color, linewidth=2,
+    a2.axes.axvline(stp_med_tau, color=dark_max, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
-    plt.title('u,  sig diff?:  p=%.4E' % u_p)
-    plt.xlabel('u (fractional change in gain \nper unit of stimulus amplitude)')
-    plt.ylabel('proportion within group')
+    ax_remove_box(a1)
+    ax_remove_box(a2)
+
+    #plt.title('tau,  sig diff?:  p=%.4E' % tau_p)
+    #plt.xlabel('tau (ms)')
+
+    fig2 = plt.figure(figsize=text_fig)
+    text = ("tau distributions, n: %d\n"
+            "n stp imp (bot): %d, med: %.4f\n"
+            "n not imp (top): %d, med: %.4f\n"
+            "yaxes: fraction of cells\n"
+            "xaxis: tau(ms)\n"
+            "st.mannwhitneyu u: %.4E,\np: %.4E\n"
+            "not imp after outliers: %d\n"
+            "imp after outliers: %d\n"
+            % (total_cells, len(c), stp_med_tau, len(not_c), med_tau,
+               tau_t, tau_p, not_imp_outliers, imp_outliers))
+    plt.text(0.1, 0.5, text)
 
 
-    fig.suptitle("STP parameter distributions,  n: %d\n"
-                 "n stp imp:  %d\n"
-                 "n not imp:  %d\n"
-                 % (total_cells, len(c), len(not_c)))
-    return fig
+    fig3, (a3, a4) = plt.subplots(2, 1, sharex=True, sharey=True)
+    weights3 = [np.ones(len(sep_us))/len(sep_us)]
+    weights4 = [np.ones(len(stp_sep_us))/len(stp_sep_us)]
+    upper = max(sep_us.max(), stp_sep_us.max())
+    lower = min(sep_us.min(), stp_sep_us.min())
+    bins = np.linspace(lower, upper, bin_count+1)
+#    if log_scale:
+#        lower_bound = min(sep_us.min(), stp_sep_us.min())
+#        upper_bound = max(sep_us.max(), stp_sep_us.max())
+#        bins = np.logspace(lower_bound, upper_bound, bin_count+1)
+#        hist_kwargs['bins'] = bins
+#    plt.hist([sep_us, stp_sep_us], weights=weights, **hist_kwargs)
+    a3.hist(sep_us, weights=weights3, fc=faded_LN, edgecolor=dark_LN,
+            bins=bins, **hist_kwargs)
+    a4.hist(stp_sep_us, weights=weights4, fc=faded_max, edgecolor=dark_max,
+            bins=bins, **hist_kwargs)
+    a3.axes.axvline(med_u, color=dark_LN, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    a3.axes.axvline(stp_med_u, color=dark_max, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    a4.axes.axvline(med_u, color=dark_LN, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    a4.axes.axvline(stp_med_u, color=dark_max, linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    ax_remove_box(a3)
+    ax_remove_box(a4)
+    #plt.title('u,  sig diff?:  p=%.4E' % u_p)
+    #plt.xlabel('u (fractional change in gain \nper unit of stimulus amplitude)')
+    #plt.ylabel('proportion within group')
+
+    fig4 = plt.figure(figsize=text_fig)
+    text = ("u distributions, n: %d\n"
+            "n stp imp (bot): %d, med: %.4f\n"
+            "n not imp (top): %d, med: %.4f\n"
+            "yaxes: fraction of cells\n"
+            "xaxis: u(fractional change in gain per unit stimulus amplitude)\n"
+            "st.mannwhitneyu u: %.4E,\np: %.4E"
+            % (total_cells, len(c), stp_med_u, len(not_c), med_u,
+               u_t, u_p))
+    plt.text(0.1, 0.5, text)
 
 
-def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
-                     log_scale=False):
-    if log_scale:
-        raise NotImplementedError('log scale not implemented yet for gc dist')
+    stp_mag, stp_yin, stp_out = stp_magnitude(np.array([[stp_med_tau]]),
+                                               np.array([[stp_med_u]]))
+    mag, yin, out = stp_magnitude(np.array([[med_tau]]), np.array([[med_u]]))
+    fig5 = plt.figure(figsize=short_fig)
+    plt.plot(stp_out.as_continuous().flatten(), color=imp_color, label='STP ++')
+    plt.plot(out.as_continuous().flatten(), color=color)
+    if legend:
+        plt.legend()
+    ax_remove_box()
 
+
+    return fig1, fig2, fig3, fig4, fig5
+
+
+def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
                                                           LN, combined,
@@ -177,7 +233,7 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
     ba_key = b_key + '_mod'
     aa_key = a_key + '_mod'
     sa_key = s_key + '_mod'
-    all_keys = [b_key, ba_key, a_key, aa_key, s_key, sa_key, k_key, ka_key]
+    all_keys = [b_key, a_key, s_key, k_key, ba_key, aa_key, sa_key, ka_key]
 
     phi_dfs = [gc_params[gc_params.index==k].transpose()[cellids].transpose()
                for k in all_keys]
@@ -187,59 +243,155 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
 
     # removing extreme outliers b/c kept getting one or two cells with
     # values that were multiple orders of magnitude different than all others
-    diffs = [sep_dfs[i+1] - sep_dfs[i]
-             for i, _ in enumerate(sep_dfs[:-1])
-             if i % 2 == 0]
-    diffs = [d[~is_outlier(d)] for d in diffs]
-    gc_diffs = [gc_sep_dfs[i+1] - gc_sep_dfs[i]
-                for i, _ in enumerate(gc_sep_dfs[:-1])
-                if i % 2 == 0]
-    gc_diffs = [d[~is_outlier(d)] for d in gc_diffs]
+#    diffs = [sep_dfs[i+1] - sep_dfs[i]
+#             for i, _ in enumerate(sep_dfs[:-1])
+#             if i % 2 == 0]
+    #diffs = sep_dfs[1::2] - sep_dfs[::2]
+
+#    gc_diffs = [gc_sep_dfs[i+1] - gc_sep_dfs[i]
+#                for i, _ in enumerate(gc_sep_dfs[:-1])
+#                if i % 2 == 0]
+    #gc_diffs = gc_sep_dfs[1::2] - gc_sep_dfs[::2]
+
+    raw_low, raw_high = sep_dfs[:4], sep_dfs[4:]
+    diffs = [high - low for low, high in zip(raw_low, raw_high)]
     medians = [np.median(d) for d in diffs]
+    medians_low = [np.median(d) for d in raw_low]
+    medians_high = [np.median(d) for d in raw_high]
+
+    gc_raw_low, gc_raw_high = gc_sep_dfs[:4], gc_sep_dfs[4:]
+    gc_diffs = [high - low for low, high in zip(gc_raw_low, gc_raw_high)]
+
+
     gc_medians = [np.median(d) for d in gc_diffs]
+    gc_medians_low = [np.median(d) for d in gc_raw_low]
+    gc_medians_high = [np.median(d) for d in gc_raw_high]
 
-
-    ts, ps = zip(*[st.ttest_ind(diff, gc_diff)
+    ts, ps = zip(*[st.mannwhitneyu(diff, gc_diff, alternative='two-sided')
                    for diff, gc_diff in zip(diffs, gc_diffs)])
 
-    fig1, (a1, a3) = plt.subplots(2, 1)
-    fig2, (a2, a4) = plt.subplots(2, 1)
+    diffs = drop_common_outliers(*diffs)
+    gc_diffs = drop_common_outliers(*gc_diffs)
+    not_imp_outliers = len(diffs[0])
+    imp_outliers = len(gc_diffs[0])
+
+
     color = model_colors['LN']
     c_color = model_colors['max']
     gc_label = 'GC ++ (%d)' % len(c)
     total_cells = len(c) + len(not_c)
-    hist_kwargs = {'bins': 30, 'color': [color, c_color],
-                   'label': ['no imp', 'sig imp']}
+    hist_kwargs = {'label': ['no imp', 'sig imp'], 'linewidth': 1}
 
-    # b a s k
-    for i, ax in zip([0, 1, 2, 3], [a1, a3, a2, a4]):
-#        ax.hist(diffs[i], color=color, **hist_kwargs, alpha=0.6)
-#        ax.hist(gc_diffs[i], color=gc_color, label=gc_label, **hist_kwargs,
-#                alpha=0.6)
-        weights = [np.ones(len(diffs[i]))/len(diffs[i]),
-                   np.ones(len(gc_diffs[i]))/len(gc_diffs[i])]
-        ax.hist([diffs[i], gc_diffs[i]], weights=weights, **hist_kwargs)
-        ax.axes.axvline(medians[i], color=color, linewidth=2,
-                        linestyle='dashed', dashes=dash_spacing)
-        ax.axes.axvline(gc_medians[i], color=c_color, linewidth=2,
-                        linestyle='dashed', dashes=dash_spacing)
-        if (i == 0) or (i == 2):
-            ax.legend()
+    figs = []
+    for i, name in zip([0, 1, 2, 3], ['base', 'amplitude', 'shift', 'kappa']):
+        f1 = _stacked_hists(diffs[i], gc_diffs[i], medians[i], gc_medians[i],
+                           color, c_color, hist_kwargs=hist_kwargs)
+        f2 = plt.figure(figsize=text_fig)
+        text = ("%s distributions, n: %d\n"
+                "n gc imp (bot): %d, med: %.4f\n"
+                "n not imp (top): %d, med: %.4f\n"
+                "yaxes: fraction of cells\n"
+                "xaxis: 'fractional change in parameter per unit contrast'\n"
+                "st.mannwhitneyu u: %.4E,\np: %.4E\n"
+                "not imp w/o outliers: %d\n"
+                "imp w/o outliers: %d"
+                % (name, total_cells, len(c), gc_medians[i], len(not_c),
+                   medians[i], ts[i], ps[i], not_imp_outliers, imp_outliers))
+        plt.text(0.1, 0.5, text)
+        figs.append(f1)
+        figs.append(f2)
 
-    a1.set_title('base,   sig diff?  %.4E' % ps[0])
-    a2.set_title('amplitude,   sig diff?  %.4E' % ps[1])
-    a3.set_title('shift,   sig diff?  %.4E' % ps[2])
-    a3.set_xlabel('fractional change in parameter\nper unit contrast')
-    a3.set_ylabel('proportion within group')
-    a4.set_title('kappa,   sig diff?  %.4E' % ps[3])
+    f3 = plt.figure()
+    # median gc effect plots
+    yin1, out1 = gc_dummy_sigmoid(*medians_low, low=0.0, high=0.3)
+    yin2, out2 = gc_dummy_sigmoid(*medians_high, low=0.0, high=0.3)
+    plt.scatter(yin1, out1, color=color, s=big_scatter, alpha=0.6)
+    plt.scatter(yin2, out2, color=color, s=big_scatter*2)
+    figs.append(f3)
+    ax_remove_box()
 
-    title = ("GC parameter differences, total n: %d\n"
-             "n gc improved:  %d\n"
-             "n not improved: %d\n"
-             % (total_cells, len(c), len(not_c)))
-    fig1.suptitle(title)
-    fig2.suptitle(title)
-    return fig1, fig2
+    f3a = plt.figure(figsize=text_fig)
+    text = ("non improved cells\n"
+            "median low contrast:\n"
+            "base:  %.4f,   amplitude:  %.4f\n"
+            "shift:  %.4f,   kappa:  %.4f\n"
+            "median high contrast:\n"
+            "base:  %.4f,   amplitude:  %.4f\n"
+            "shift:  %.4f,   kappa:  %.4f\n"
+            % (*medians_low, *medians_high))
+    plt.text(0.1, 0.5, text)
+    figs.append(f3a)
+    ax_remove_box
+
+
+    f4 = plt.figure()
+    gc_yin1, gc_out1 = gc_dummy_sigmoid(*gc_medians_low, low=0.0, high=0.3)
+    gc_yin2, gc_out2 = gc_dummy_sigmoid(*gc_medians_high, low=0.0, high=0.3)
+    plt.scatter(gc_yin1, gc_out1, color=c_color, s=big_scatter, alpha=0.6)
+    plt.scatter(gc_yin2, gc_out2, color=c_color, s=big_scatter*2)
+    figs.append(f4)
+
+    f4a = plt.figure(figsize=text_fig)
+    text = ("improved cells\n"
+            "median low contrast:\n"
+            "base:  %.4f,   amplitude:  %.4f\n"
+            "shift:  %.4f,   kappa:  %.4f\n"
+            "median high contrast:\n"
+            "base:  %.4f,   amplitude:  %.4f\n"
+            "shift:  %.4f,   kappa:  %.4f\n"
+            % (*gc_medians_low, *gc_medians_high))
+    plt.text(0.1, 0.5, text)
+    figs.append(f4a)
+
+    return figs
+
+
+def _stacked_hists(var1, var2, m1, m2, c1, c2, bin_count=30, hist_kwargs={}):
+    #c1: LN, c2: max
+    fig, (a1, a2) = plt.subplots(2, 1, sharex=True, sharey=True)
+    w1 = [np.ones(len(var1))/len(var1)]
+    w2 = [np.ones(len(var2))/len(var2)]
+    upper = max(var1.max(), var2.max())
+    lower = min(var1.min(), var2.min())
+    bins = np.linspace(lower, upper, bin_count+1)
+    a1.hist(var1, weights=w1, fc=faded_LN, bins=bins, edgecolor=dark_LN,
+            **hist_kwargs)
+    a2.hist(var2, weights=w2, fc=faded_max, bins=bins, edgecolor=dark_max,
+            **hist_kwargs)
+    a1.axes.axvline(m1, color=dark_LN, linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+    a1.axes.axvline(m2, color=dark_max, linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+    a2.axes.axvline(m1, color=dark_LN, linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+    a2.axes.axvline(m2, color=dark_max, linewidth=2, linestyle='dashed',
+                    dashes=dash_spacing)
+    ax_remove_box(a1)
+    ax_remove_box(a2)
+
+    return fig
+
+
+def gc_dummy_sigmoid(base, amplitude, shift, kappa, fs=100,
+                     low=None, high=None):
+#    zero = np.zeros(25,)
+#    ones = np.ones(25,)
+#    left = np.linspace(0, 1, 25)
+#    right = np.linspace(1, 0, 25)
+#    pred = np.concatenate([zero, zero, ones, ones, ones, zero,
+#                           zero, ones, ones, ones, zero, zero])
+#    ctpred = np.concatenate([zero, zero, left, ones, ones, right,
+#                             zero, ones, ones, ones, zero, zero])
+#    phis = [p*ctpred for p in [base, amplitude, shift, kappa]]
+#    out = _double_exponential(pred, *phis
+    if low is None:
+        low = -1*shift
+    if high is None:
+        high = 2*shift
+    dummy_pred = np.linspace(low, high, 100)
+    out = _double_exponential(dummy_pred, base, amplitude, shift, kappa)
+
+    return dummy_pred, out
 
 
 def _df_to_array(df, dims):
