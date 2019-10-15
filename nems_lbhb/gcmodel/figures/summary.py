@@ -56,7 +56,7 @@ def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling',
     m2_scores = plot_df[m2][not_improved]
     m2_scores_improved = plot_df[m2][improved]
 
-    fig = plt.figure(figsize=small_fig)
+    fig = plt.figure()
     plt.plot([0,1],[0,1], color='black', linewidth=1, linestyle='dashed',
              dashes=dash_spacing)
     plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=small_scatter,
@@ -333,11 +333,11 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
 
     colors = [model_colors[k] for k in ['LN', 'gc', 'stp', 'combined']]#, 'max']]
     #fig = plt.figure(figsize=(15, 12))
-    fig = plt.figure(figsize=small_fig)
+    fig = plt.figure()
     plt.bar([1, 2, 3, 4], [ln, gc, stp, gc_stp],# maximum],
             color=colors,
             edgecolor="black", linewidth=1)
-    plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GS'])#, 'Max(GC,STP)'])
+    plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GC+STP'])#, 'Max(GC,STP)'])
     if abbr_yaxis:
         if manual_y:
             lower, upper = manual_y

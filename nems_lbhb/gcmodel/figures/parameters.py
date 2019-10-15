@@ -301,13 +301,14 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
         figs.append(f1)
         figs.append(f2)
 
-    f3 = plt.figure()
+    f3 = plt.figure(figsize=small_fig)
     # median gc effect plots
     yin1, out1 = gc_dummy_sigmoid(*medians_low, low=0.0, high=0.3)
     yin2, out2 = gc_dummy_sigmoid(*medians_high, low=0.0, high=0.3)
-    plt.scatter(yin1, out1, color=color, s=big_scatter, alpha=0.6)
+    plt.scatter(yin1, out1, color=color, s=big_scatter, alpha=0.3)
     plt.scatter(yin2, out2, color=color, s=big_scatter*2)
     figs.append(f3)
+    plt.tight_layout()
     ax_remove_box()
 
     f3a = plt.figure(figsize=text_fig)
@@ -321,15 +322,17 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
             % (*medians_low, *medians_high))
     plt.text(0.1, 0.5, text)
     figs.append(f3a)
-    ax_remove_box
 
 
-    f4 = plt.figure()
+    f4 = plt.figure(figsize=small_fig)
     gc_yin1, gc_out1 = gc_dummy_sigmoid(*gc_medians_low, low=0.0, high=0.3)
     gc_yin2, gc_out2 = gc_dummy_sigmoid(*gc_medians_high, low=0.0, high=0.3)
-    plt.scatter(gc_yin1, gc_out1, color=c_color, s=big_scatter, alpha=0.6)
+    plt.scatter(gc_yin1, gc_out1, color=c_color, s=big_scatter, alpha=0.3)
     plt.scatter(gc_yin2, gc_out2, color=c_color, s=big_scatter*2)
     figs.append(f4)
+    plt.tight_layout()
+    ax_remove_box()
+
 
     f4a = plt.figure(figsize=text_fig)
     text = ("improved cells\n"

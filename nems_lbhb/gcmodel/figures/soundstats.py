@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 import nems.recording
+from nems.utils import ax_remove_box
 import nems.db as nd
 import nems.epoch as ep
 import nems_lbhb.xform_wrappers as xwrap
@@ -104,7 +105,7 @@ def scatter_soundstats(results, legend=False):
             else:
                 clean_means.append(mean)
                 clean_sds.append(sd)
-        fig = plt.figure()
+        fig = plt.figure(figsize=small_fig)
         plt.scatter(clean_sds, clean_means, color=model_colors['combined'],
                     s=big_scatter, label='clean')
         plt.scatter(noisy_sds, noisy_means, color=model_colors['LN'],
@@ -123,6 +124,7 @@ def scatter_soundstats(results, legend=False):
         plt.scatter(sds, means, color=model_colors['combined'], s=big_scatter)
 
     plt.tight_layout()
+    ax_remove_box()
 
     return fig
 

@@ -127,12 +127,12 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
     hist_path_263 = load_paths['equivalence_effect_size']['263']
     fig3e, fig3ee = equivalence_effect_size(batch, gc, stp, LN, combined,
                                             load_path=hist_path,
-                                            color_improvements=True)
+                                            only_improvements=True)
     fig3f, fig3fff = equivalence_histogram(batch, gc, stp, LN, combined,
                                                    load_path=hist_path)
     fig3g, fig3gg = equivalence_effect_size(batch2, gc, stp, LN, combined,
                                             load_path=hist_path_263,
-                                            color_improvements=True)
+                                            only_improvements=True)
     fig3h, fig3hhh = equivalence_histogram(batch2, gc, stp, LN, combined,
                                            load_path=hist_path_263)
     figures_to_save.append((fig3a, 'equivalence_scatter'))
@@ -339,10 +339,10 @@ def run_all(batch, gc, stp, LN, combined, batch2=263, good_ln=0.0,
     hist_path = load_paths['equivalence_effect_size'][gc_version]
     fig4a, fig4b = equivalence_effect_size(batch, gc, stp, LN, combined,
                                            load_path=hist_path,
-                                           color_improvements=False)
-    fig4c, _ = equivalence_effect_size(batch, gc, stp, LN, combined,
-                                       load_path=hist_path,
-                                       color_improvements=True)
+                                           only_improvements=True)
+#    fig4c, _ = equivalence_effect_size(batch, gc, stp, LN, combined,
+#                                       load_path=hist_path,
+#                                       only_improvements=True)
     figures_to_save.append((fig3a, 'equivalence_scatter'))
     figures_to_save.append((fig3b, 'equivalence_scatter_outliers'))
     figures_to_save.append((fig3c, 'equivalence_scatter_comb_vs_stp'))

@@ -187,7 +187,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     rs_imp = rs[imp_mask]
     md_not = np.nanmedian(rs_not)
     md_imp = np.nanmedian(rs_imp)
-    t, p = st.ttest_ind(rs_not, rs_imp)
+    u, p = st.mannwhitneyu(rs_not, rs_imp, alternative='two-sided')
     n_not = len(not_improved)
     n_imp = len(improved)
 
@@ -222,8 +222,8 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
              "y: cell fraction\n"
              "n not imp:  %d,  md:  %.2f\n"
              "n sig. imp:  %d,  md:  %.2f\n"
-             "p:  %.4E"
-             % (batch, n_not, md_not, n_imp, md_imp, p))
+             "st.mannwhitneyu:  u:  %.4E p:  %.4E"
+             % (batch, n_not, md_not, n_imp, md_imp, u, p))
     plt.text(0.1, 0.5, text2)
 
     return fig1, fig3
@@ -231,7 +231,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
 def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
                             LN_filter=False, save_path=None, load_path=None,
-                            test_limit=None, color_improvements=False,
+                            test_limit=None, only_improvements=False,
                             legend=False):
 
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
@@ -284,7 +284,7 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
     ax_remove_box(ax)
 
     extra_title_lines = []
-    if color_improvements:
+    if only_improvements:
         improved = c
         not_improved = list(set(a) - set(c))
         equivalence_imp = df['equivalence'][improved].values
@@ -299,8 +299,8 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
                  "not improved,  r:  %.4f,    p:  %.4E" % (r_not, p_not)]
         extra_title_lines.extend(lines)
 
-        plt.scatter(effectsize_not, equivalence_not, s=small_scatter,
-                    color=model_colors['LN'], label='no imp')
+#        plt.scatter(effectsize_not, equivalence_not, s=small_scatter,
+#                    color=model_colors['LN'], label='no imp')
         plt.scatter(effectsize_imp, equivalence_imp, s=big_scatter,
                     color=model_colors['max'], label='sig. imp.')
         if legend:

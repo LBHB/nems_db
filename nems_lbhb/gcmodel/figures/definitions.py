@@ -23,9 +23,9 @@ faded_max = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_max)])
 small_scatter = 2
 big_scatter = 3
 
-standard_fig = [2.75, 2.75]
-small_fig = [2, 2]
-short_fig = [2.75, 1.5]
+standard_fig = [2.25, 2.25]
+small_fig = [1.75, 1.75]
+short_fig = [2.25, 1.75]
 text_fig = [6, 6]
 
 params = {  # small version for screens
