@@ -179,9 +179,21 @@ class BAPHYExperiment:
         return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
 
     # Methods below this line just pass through to the functions for now.
-    def _get_baphy_parameters(self):
+    def _get_baphy_parameters(self, userdef_convert=False):
+        '''
+        Parameters
+        ----------
+        userdef_convert : bool
+            If True, find all instances of the `UserDefinableFields` key in the
+            BAPHY parms data and convert them to dictionaries embedded in the
+            parent dictionary. See :func:`baphy_convert_user_definable_fields` for
+            example.
+        '''
         # Returns tuple of global, expt and events
-        return baphy_parm_read(self.parmfile)
+        result = baphy_parm_read(self.parmfile)
+        if userdef_convert:
+            baphy_convert_user_definable_fields(result)
+        return result
 
     def _get_spikes(self):
         return baphy_load_spike_data_raw(str(self.spikefile))
@@ -526,6 +538,42 @@ def baphy_parm_read(filepath):
         exptevents.replace(epoch_map, inplace=True)
 
     return globalparams, exptparams, exptevents
+
+
+def baphy_convert_user_definable_fields(x):
+    '''
+    Converts all occurances of the `'UserDefinableFields'` list to a dictionary
+    embedded in the parent. This is recursive, so it will scan the full dataset
+    returned by `baphy_parm_read`.
+
+    Example
+    ------
+    >>> data = {
+            'descriptor': 'NoiseSample',
+            'UserDefinableFields': ['PreStimSilence', 'edit', 0,
+                                    'PostStimSilence', 'edit', 0,
+                                    'Duration', 'edit', 0.3,]
+        }
+
+    >>> baphy_convert_user_definable_fields(data)
+    >>> print(data)
+    {'descriptor': 'NoiseSample',
+    'PreStimSilence': 0,
+    'PostStimSilence': 0,
+    'Duration': 0.3}
+    '''
+    if isinstance(x, dict) and 'UserDefinableFields' in x:
+        userdef = x.pop('UserDefinableFields')
+        keys = userdef[::3]
+        values = userdef[2::3]
+        newdict = dict(zip(keys, values))
+        x.update(newdict)
+    if isinstance(x, dict):
+        for v in x.values():
+            baphy_convert_user_definable_fields(v)
+    elif isinstance(x, (tuple, list)):
+        for v in x:
+            baphy_convert_user_definable_fields(v)
 
 
 def baphy_load_specgram(stimfilepath):
