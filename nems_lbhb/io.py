@@ -185,9 +185,8 @@ class BAPHYExperiment:
         ----------
         userdef_convert : bool
             If True, find all instances of the `UserDefinableFields` key in the
-            BAPHY parms data and convert them to dictionaries embedded in the
-            parent dictionary. See :func:`baphy_convert_user_definable_fields` for
-            example.
+            BAPHY parms data and convert them to dictionaries. See
+            :func:`baphy_convert_user_definable_fields` for example.
         '''
         # Returns tuple of global, expt and events
         result = baphy_parm_read(self.parmfile)
@@ -542,9 +541,9 @@ def baphy_parm_read(filepath):
 
 def baphy_convert_user_definable_fields(x):
     '''
-    Converts all occurances of the `'UserDefinableFields'` list to a dictionary
-    embedded in the parent. This is recursive, so it will scan the full dataset
-    returned by `baphy_parm_read`.
+    Converts all occurances of the `'UserDefinableFields'` list to a
+    dictionary. This is recursive, so it will scan the full dataset returned by
+    `baphy_parm_read`.
 
     Example
     ------
@@ -558,16 +557,13 @@ def baphy_convert_user_definable_fields(x):
     >>> baphy_convert_user_definable_fields(data)
     >>> print(data)
     {'descriptor': 'NoiseSample',
-    'PreStimSilence': 0,
-    'PostStimSilence': 0,
-    'Duration': 0.3}
+     'UserDefinableFields': {'PreStimSilence': 0, 'PostStimSilence': 0, 'Duration': 0.3}
     '''
     if isinstance(x, dict) and 'UserDefinableFields' in x:
         userdef = x.pop('UserDefinableFields')
         keys = userdef[::3]
         values = userdef[2::3]
-        newdict = dict(zip(keys, values))
-        x.update(newdict)
+        x['UserDefinableFields'] = dict(zip(keys, values))
     if isinstance(x, dict):
         for v in x.values():
             baphy_convert_user_definable_fields(v)
