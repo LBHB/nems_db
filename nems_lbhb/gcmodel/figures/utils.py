@@ -229,7 +229,7 @@ def get_valid_improvements(batch, model1, model2, threshold = 2.5):
 # copied from:
 # https://stackoverflow.com/questions/11882393/ ...
 #   matplotlib-disregard-outliers-when-plotting
-def is_outlier(points, thresh=3.5):
+def is_outlier(points, thresh=5):
     """
     Returns a boolean array with True if points are outliers and False
     otherwise.
