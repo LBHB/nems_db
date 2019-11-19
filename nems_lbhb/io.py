@@ -202,7 +202,7 @@ class BAPHYExperiment:
         # of channel mapping (I think)
         recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
         connector = [i for i in recChans.keys()][0]
-
+        #import pdb; pdb.set_trace()
         # handle channel remapping
         info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
         mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
@@ -216,9 +216,8 @@ class BAPHYExperiment:
                             for i in recChans[connector].keys()]
         data_files = [connector + '_' + c + '.continuous' for c in recChans]
         all_chans = np.arange(len(data_files))
-        idx = all_chans[chans]
+        idx = all_chans[chans].tolist()
         selected_data = np.take(data_files, idx)
-
         continuous_data = []
         for filename in selected_data:
             full_filename = self.openephys_folder / filename

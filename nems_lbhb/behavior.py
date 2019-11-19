@@ -94,11 +94,11 @@ def create_trial_labels(exptparams, exptevents):
 
                 elif 'Target' in name:
                     tar_start = r['start']
-                    rewarded = (pump_dur[[True if t in name else False for t in tar_names]] > 0)[0]
+                    rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
                     if rewarded:
                         if fl < tar_start:
                             sID.append('NULL')
-                        elif (fl > tar_start + early_win) & (fl < (tar_start + resp_win + early_win)):
+                        elif (fl > (tar_start + early_win)) & (fl < (tar_start + resp_win + early_win)):
                             sID.append('HIT_TRIAL')
                             trial_outcome = 'HIT_TRIAL'
                         elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
@@ -280,7 +280,6 @@ def _compute_metrics(exptparams, exptevents):
     """
     "private" function called by nems_lbhb.behavior.compute_metrics(). See latter function for docs.
     """
-
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
 
@@ -289,16 +288,16 @@ def _compute_metrics(exptparams, exptevents):
 
     # for each target, decide if rewarded / unrewarded the get the 
     # hit rate / miss rate 
-    R = {'RR': {}, 'dprime': {}, 'DI': {}}
-    for pd, tar_key in zip(pump_dur, targets):
-        rewarded = pd > 0
+    R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
+    for pud, tar_key in zip(pump_dur, targets):
+        rewarded = pud > 0
         tar = 'Stim , {} , Target'.format(tar_key)
         if rewarded:
             # looking for "HIT_TRIALS" and "MISS_TRIALS"
             allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
             validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
                                         (exptevents.invalidTrial==False) & \
-                                        (exptevents.name.isin(['HIT_TRIAL', 'MISS_TRIAL']))]['Trial']
+                                        (exptevents.name.isin(['HIT_TRIAL', 'MISS_TRIAL', 'CUE_TRIAL']))]['Trial']
             nTrials = len(np.unique(validTrialList))
             validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
             nHits = (validTrialdf.name=='HIT_TRIAL').sum()
@@ -314,6 +313,8 @@ def _compute_metrics(exptparams, exptevents):
             nHits = (validTrialdf.name=='INCORRECT_HIT_TRIAL').sum()
             R['RR'][tar_key] = nHits / nTrials
 
+        R['nTrials'][tar_key] = nTrials
+
         # Compute the FAR (REF hit rate) (Note, we include early trials here just in case they have not be marked 
         # invalid in the options dictionary. We never want early target responses. So that's not an option
         # above)
@@ -325,6 +326,7 @@ def _compute_metrics(exptparams, exptevents):
         nTrials = sum((validTrialdf.invalidSoundTrial==False) & (validTrialdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])))
         nFA = ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL')).sum()
         R['RR']['Reference'] = nFA / nTrials
+        R['nTrials']['Reference'] = nTrials
 
         # Use the HRs above to compute d' values
         # for each target

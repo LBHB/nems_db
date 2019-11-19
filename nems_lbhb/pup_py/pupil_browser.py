@@ -305,13 +305,13 @@ class PupilBrowser:
             self.shift_is_held=False
         else:
             pass
-    
+
     def browse_file(self):
         # get the pupil video file
         self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
-                            title = "Select raw video file", 
+                            title = "Select raw video file",
                             filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
-        
+
         params_file = os.path.split(self.raw_video)[-1].split('.')[0]
         animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
 
@@ -327,15 +327,20 @@ class PupilBrowser:
         Load the overall predictions and plot the trace on the trace canvas.
         Display the first frame of the video on the pupil canvas.
         """
-        
+
         params_file = self.video_name.get()
         # get raw video -- try to use the exisiting path from raw video
         fp = os.path.split(self.raw_video)[0]
         self.processed_video = os.path.join(fp, 'sorted', params_file)
-        
+
         # reset raw video attribute
+        parts = self.raw_video.split('.')
         ext = self.raw_video.split('.')[-1]
-        self.raw_video = os.path.join(fp, params_file)+'.'+ext
+        if len(self.raw_video.split('.')) > 2:
+            ext2 = self.raw_video.split('.')[-2]
+            self.raw_video = os.path.join(fp, params_file)+'.'+ext2+'.'+ext
+        else:
+            self.raw_video = os.path.join(fp, params_file)+'.'+ext
         print(self.raw_video)
 
         self.plot_trace(params_file)

@@ -7,6 +7,7 @@ import numpy as np
 import scipy.stats as st
 
 import nems.db as nd
+from nems.utils import ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
@@ -24,7 +25,8 @@ dropped_cell_color = wsu_crimson
 scatter_color = wsu_gray
 
 
-def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling'):
+def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling',
+                   legend=False):
     all_batch_cells = nd.get_batch_cells(batch, as_list=True)
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
@@ -55,28 +57,31 @@ def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling')
     m2_scores_improved = plot_df[m2][improved]
 
     fig = plt.figure()
-    plt.plot([0,1],[0,1], color='black', linewidth=2, linestyle='dashed',
+    plt.plot([0,1],[0,1], color='black', linewidth=1, linestyle='dashed',
              dashes=dash_spacing)
-    plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=15,
+    plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=small_scatter,
                 label='no imp.')
-    plt.scatter(m1_scores_improved, m2_scores_improved, facecolors='none',
-                edgecolors=model_colors['max'], s=40, label='sig. imp.',
-                linewidth=2)
-    plt.xlabel('%s for %s' % (plot_stat, name1))
-    plt.ylabel('%s for %s' % (plot_stat, name2))
-    title = ("%s vs %s, batch %d\n"
-             "%d/%d  auditory/total cells\n"
-             "%d no improvements\n"
-             "%d at least one improvement"
-             % (name1, name2, batch, n_all, n_batch, n_not_imp, n_imp))
-    plt.title(title)
-    plt.legend()
+    plt.scatter(m1_scores_improved, m2_scores_improved,
+                color=model_colors['max'], s=big_scatter, label='sig. imp.')
+    ax_remove_box()
+
+    if legend:
+        plt.legend()
     plt.xlim(0,1)
     plt.ylim(0,1)
     plt.tight_layout()
     plt.axes().set_aspect('equal')
 
-    return fig
+    fig2 = plt.figure(figsize=text_fig)
+    plt.text(0.1, 0.5, "batch %d\n"
+             "%d/%d  auditory/total cells\n"
+             "%d no improvements\n"
+             "%d at least one improvement\n"
+             "stat: %s, x: %s, y: %s"
+             % (batch, n_all, n_batch, n_not_imp, n_imp, plot_stat,
+                name1, name2))
+
+    return fig, fig2
 
 
 def performance_scatters(batch, gc, stp, LN, combined,
@@ -223,7 +228,8 @@ def gc_stp_scatter(batch, gc, stp, LN, combined,
 
 
 def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
-                    LN_filter=False, plot_stat='r_ceiling'):
+                    LN_filter=False, plot_stat='r_ceiling',
+                    legend=False):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
 #    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -258,33 +264,33 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     fig1 = plt.figure()
     c_not = model_colors['LN']
     c_imp = model_colors['max']
-    plt.scatter(max_not, gc_stp_not, c=c_not, s=15, label='no imp.')
-    plt.scatter(max_imp, gc_stp_imp, edgecolors=c_imp, s=40, facecolors='none',
-                linewidth=2, label='sig. imp.')
+    plt.scatter(max_not, gc_stp_not, c=c_not, s=small_scatter, label='no imp.')
+    plt.scatter(max_imp, gc_stp_imp, c=c_imp, s=big_scatter, label='sig. imp.')
     ax = fig1.axes[0]
-    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2,
+    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1,
              dashes=dash_spacing)
-    plt.title('Max vs Combined')
-    plt.ylabel('GC+STP')
-    plt.xlabel('Max GC or STP')
-    plt.legend()
+    if legend:
+        plt.legend()
+    plt.xlim(0,1)
+    plt.ylim(0,1)
+    plt.tight_layout()
+    plt.axes().set_aspect('equal')
+    ax_remove_box()
 
-#    fig2 = plt.figure()
-#    plt.scatter(max_test_rel, gc_stp_test_rel, c=scatter_color, s=20)
-#    plt.scatter(gc_test_under_chance, stp_test_under_chance, c=dropped_cell_color, s=20)
-#    ax = fig2.axes[0]
-#    plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=2, dashes=dash_spacing)
-#    plt.title('Max vs Combined, Relative')
-#    plt.ylabel('GC+STP')
-#    plt.xlabel('Max GC or STP')
+    fig2 = plt.figure(figsize=text_fig)
+    text = ("batch: %d\n"
+            "x: Max(GC,STP)\n"
+            "y: GC+STP\n" % batch)
+    plt.text(0.1, 0.5, text)
 
-    return fig1#, fig2
+
+    return fig1, fig2
 
 
 def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
                     LN_filter=False, manual_cellids=None, abbr_yaxis=False,
-                    plot_stat='r_ceiling', y_adjust=0.05,
-                    only_improvements=False):
+                    plot_stat='r_ceiling', y_adjust=0.05, manual_y=None,
+                    only_improvements=False, show_text_labels=False):
     '''
     model1: GC
     model2: STP
@@ -326,14 +332,18 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
     largest = max(gc, stp, ln, gc_stp)#, maximum)
 
     colors = [model_colors[k] for k in ['LN', 'gc', 'stp', 'combined']]#, 'max']]
-    fig = plt.figure(figsize=(15, 12))
+    #fig = plt.figure(figsize=(15, 12))
+    fig = plt.figure()
     plt.bar([1, 2, 3, 4], [ln, gc, stp, gc_stp],# maximum],
             color=colors,
-            edgecolor="black", linewidth=2)
+            edgecolor="black", linewidth=1)
     plt.xticks([1, 2, 3, 4, 5], ['LN', 'GC', 'STP', 'GC+STP'])#, 'Max(GC,STP)'])
     if abbr_yaxis:
-        lower = np.floor(10*min(gc, stp, ln, gc_stp))/10
-        upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10 + y_adjust
+        if manual_y:
+            lower, upper = manual_y
+        else:
+            lower = np.floor(10*min(gc, stp, ln, gc_stp))/10
+            upper = np.ceil(10*max(gc, stp, ln, gc_stp))/10 + y_adjust
         plt.ylim(ymin=lower, ymax=upper)
     else:
         plt.ylim(ymax=largest*1.4)
@@ -342,15 +352,20 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
         y_text = 0.5*(lower + min(gc, stp, ln, gc_stp))
     else:
         y_text = 0.2
-    for i, m in enumerate([ln, gc, stp, gc_stp]):#, maximum]):
-        t = plt.text(i+1, y_text, "%0.04f" % m, **common_kwargs)
-        t.set_path_effects([pe.withStroke(linewidth=3, foreground='black')])
-    plt.title("Median Performance for LN, GC, STP, GC+STP,\n"
-              "batch: %d\n"
-              "n: %d   Only improved?:  %s" % (batch, n_cells,
-                                               only_improvements))
+    if show_text_labels:
+        for i, m in enumerate([ln, gc, stp, gc_stp]):#, maximum]):
+            t = plt.text(i+1, y_text, "%0.04f" % m, **common_kwargs)
+        #t.set_path_effects([pe.withStroke(linewidth=3, foreground='black')])
+    xmin, xmax = plt.xlim()
+    plt.xlim(xmin, xmax - 0.35)
+    ax_remove_box()
+    plt.tight_layout()
 
-    return fig
+    fig2 = plt.figure(figsize=text_fig)
+    text = "Median Performance, batch: %d\, n:%d" % (batch, n_cells)
+    plt.text(0.1, 0.5, text)
+
+    return fig, fig2
 
 
 def performance_table(batch1, gc, stp, LN, combined, batch2,
@@ -640,7 +655,7 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     minor_xticks = np.arange(-0.5, len(modelnames), 1)
     minor_yticks = np.arange(-0.5, len(modelnames), 1)
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12,12))
     ax = plt.gca()
 
     # ripped from stackoverflow. adds text labels to the grid

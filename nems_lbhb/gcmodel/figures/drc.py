@@ -77,7 +77,7 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
 
 
     #fig, ((a1,a2,a3), (a4,a5,a6), (a7,a8,a9)) = plt.subplots(3,3)
-    fig, ((a2,a3), (a5,a6), (a8,a9)) = plt.subplots(3,2)
+    fig, ((a2,a3), (a5,a6), (a8,a9)) = plt.subplots(3,2, figsize=(4.5,3))
 
 #    # DRC
 #    plt.sca(a1)
@@ -97,48 +97,63 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
 
     # Natural Sound
     plt.sca(a2)
-    plt.title('Nat. Sound')
+    #plt.title('Nat. Sound')
     plt.imshow(nat_stim, aspect='auto', origin='lower')
     a2.get_xaxis().set_visible(False)
-    #a2.get_yaxis().set_visible(False)
-    plt.ylabel('Freq. Channel')
+    a2.get_yaxis().set_visible(False)
+    ax_remove_box(a2)
+    #plt.ylabel('Freq. Channel')
 
     plt.sca(a5)
-    plt.title('Contrast')
+    #plt.title('Contrast')
     plt.imshow(nat_contrast, aspect='auto', origin='lower', cmap=contrast_cmap)
     a5.get_xaxis().set_visible(False)
     a5.get_yaxis().set_visible(False)
+    ax_remove_box(a5)
 
     plt.sca(a8)
-    plt.title('Summed')
-    plt.plot(seconds, nat_summed)
+    #plt.title('Summed')
+    plt.plot(seconds, nat_summed, color=model_colors['combined'])
     a8.set_ylim(-0.1, 1.1)
-    #a8.get_yaxis().set_visible(False)
-    plt.xlabel('Time (s)')
-    plt.ylabel('Summed Contrast (A.U.)')
+    a8.get_yaxis().set_visible(False)
+    #plt.xlabel('Time (s)')
+    #plt.ylabel('Summed Contrast (A.U.)')
     a8.set_xlim(seconds.min(), seconds.max())
+    ax_remove_box(a8)
 
 
     # Voc in noise
     plt.sca(a3)
-    plt.title('Voc. in Noise')
+    #plt.title('Voc. in Noise')
     plt.imshow(voc_stim, aspect='auto', origin='lower')
     a3.get_xaxis().set_visible(False)
     a3.get_yaxis().set_visible(False)
+    ax_remove_box(a3)
 
     plt.sca(a6)
     #plt.title('Continuous Calculated Contrast')
     plt.imshow(voc_contrast, aspect='auto', origin='lower', cmap=contrast_cmap)
     a6.get_xaxis().set_visible(False)
     a6.get_yaxis().set_visible(False)
+    ax_remove_box(a6)
 
     plt.sca(a9)
     #plt.title('Summed')
-    plt.plot(seconds, voc_summed)
+    plt.plot(seconds, voc_summed, color=model_colors['combined'])
     a9.set_ylim(-0.1, 1.1)
     #a9.get_yaxis().tick_right()
     a9.get_yaxis().set_visible(False)
     a9.set_xlim(seconds.min(), seconds.max())
+    ax_remove_box(a9)
 
 
-    return fig
+    fig2 = plt.figure()
+    text = ("top: spectrogram\n"
+            "middle: contrast\n"
+            "bottom: summed contrast\n"
+            "left: 289, right: 263\n"
+            "x: Time (s)\n"
+            "summed 0 to 1, contrast arb., spec freq increasing")
+    plt.text(0.1, 0.5, text)
+
+    return fig, fig2

@@ -9,23 +9,37 @@ ohsu_navy = '#0e4d8f'
 greys = plt.get_cmap('Greys')
 contrast_cmap = plt.get_cmap('plasma')
 model_cmap = plt.get_cmap('viridis')
-model_color_spacing = [0.0, 0.3, 0.45, 0.6, 0.75]
+model_color_spacing = [0.0, 0.25, 0.45, 0.65, 0.85]
 model_colors = {k: model_cmap(n) for k, n in
-                zip(['LN', 'gc', 'max', 'stp', 'combined'],
+                zip(['combined', 'stp', 'max', 'gc', 'LN'],
                     model_color_spacing)}
+base_LN = model_colors['LN']
+base_max = model_colors['max']
+dark_LN = tuple([max(0, i + j) for i, j in zip(base_LN, (-0.2, -0.2, -0.2, 0))])
+dark_max = tuple([max(0, i +j) for i, j in zip(base_max, (-0.2, -0.2, -0.2, 0))])
+faded_LN = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_LN)])
+faded_max = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_max)])
+
+small_scatter = 2
+big_scatter = 3
+
+standard_fig = [2.25, 2.25]
+small_fig = [1.75, 1.75]
+short_fig = [2.25, 1.75]
+text_fig = [6, 6]
 
 params = {  # small version for screens
         #'font.weight': 'bold',
         #'font.size': 24,
-        'font.size': 16,
+        'font.size': 8,
         'font.family': 'Arial',
         'pdf.fonttype': 42,
         'ps.fonttype': 42,
-        'figure.figsize': [12.0, 12.0],
+        'figure.figsize': standard_fig,
         'legend.frameon': False,
         }
 
-dash_spacing = (10,20)
+dash_spacing = (2,3)
 
 
 ###############################################################################
@@ -107,11 +121,14 @@ cf_load_paths = {'com': com, 'gaussian': gauss, 'softmax': sm, 'rank1': r1}
 cf_save_path = '/auto/users/jacob/notes/gc_rank3/characteristic_frequencies/comparisons/'
 
 # equivalence histogram
-# TODO: need to re-run, separate for summed & other, b289 and b263
+eq_289 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_summed_b289.pkl'
+eq_263 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/10_6_summed_b263.pkl'
 
 # response stats
-max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/9_27_b289.pkl'
-spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/9_27_b289.pkl'
+max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'
+spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/8_15_b289.pkl'
+#max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/9_27_b289.pkl'
+#spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/9_27_b289.pkl'
 mean_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/mean/9_27_b289.pkl'
 
 # sigmoid ratio histogram
@@ -135,11 +152,12 @@ load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
               'sigmoid_histogram': sigmoid_hist_o1,
               'equivalence_histogram': {
                       'summed': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_summed.npy',
-                      'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_PFo1.npy'
+                      'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_13_289_PFo1.npy',
                       },
               'equivalence_effect_size': {
-                      'summed': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_summed_b289.pkl',
-                      'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_kernel_b289.pkl'
+                      'summed': eq_289,
+                      'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_kernel_b289.pkl',
+                      '263': eq_263
                       },
               'sound_stats': {
                       '289': ss_289,

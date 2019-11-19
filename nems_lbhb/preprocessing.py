@@ -11,7 +11,7 @@ Created on Fri Aug 31 12:50:49 2018
 import logging
 import re
 import numpy as np
-
+import copy
 import nems.epoch as ep
 import nems.signal as signal
 
