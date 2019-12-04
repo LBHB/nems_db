@@ -35,3 +35,30 @@ def state_dexp(rec, i, o, s, g, d, base, amplitude, kappa):
 
     return [rec[i].transform(fn, o)]
 
+
+def _state_exp(x, s, g):
+    
+    sg = np.exp(g[:, 1:] @ s[1:, :])
+    base = g[:, 0][:, np.newaxis] @ s[0, :][np.newaxis, :]
+
+    return (sg * x) + base
+
+
+def state_exp(rec, i, o, s, g):
+    '''
+    pure state gain model with exp (following Rabinowitz 2015) 
+    r[o] = r[i] * exp(g * r[s] + b)
+    
+    i: input
+    o: output
+    s: state signal(s)
+    g: weight(s)
+    (b = baseline -- first dim on state signal is baseline,
+        so first dim of g are the baseline weights)
+
+    CRH 12/3/2019
+    '''
+    
+    fn = lambda x : _state_exp(x, rec[s]._data, g)
+
+    return [rec[i].transform(fn, o)]

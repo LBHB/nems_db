@@ -357,6 +357,39 @@ def _one_zz(zerocount=1):
     """ vector of 1 followed by zerocount 0s """
     return np.concatenate((np.ones(1), np.zeros(zerocount)))
 
+def sexp(kw):
+    '''
+    Generate and register modulespec for the state_exp
+     - gain only state model based on Rabinowitz  2015
+    CRH 12/3/2019
+    '''
+    pattern = re.compile(r'^sexp\.?(\d{1,})x(\d{1,})$')
+    parsed = re.match(pattern, kw)
+    try:
+        n_vars = int(parsed.group(1))
+        if len(parsed.groups())>1:
+            n_chans = int(parsed.group(2))
+        else:
+            n_chans = 1
+    except TypeError:
+        raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "sdexp.{n_state_variables} \n"
+                         "keyword given: %s" % kw)
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+
+    template = {
+    'fn': 'nems_lbhb.modules.state.state_exp',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  's': 'state'},
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})}
+    }
+
+    return template
+
 
 def sdexp(kw):
     '''
