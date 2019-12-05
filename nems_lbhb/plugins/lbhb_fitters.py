@@ -346,6 +346,7 @@ def _parse_pupLVbasic(options):
     fitter = 'scipy_minimize'
     choose_best = False
     fast_eval = False
+    alpha = 0
     for op in options:
         if op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
