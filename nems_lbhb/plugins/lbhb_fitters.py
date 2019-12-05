@@ -1,4 +1,5 @@
 import re
+import numpy as np
 
 from nems.plugins.default_fitters import basic
 from nems.plugins.default_fitters import iter
@@ -258,6 +259,8 @@ def _parse_basic(options):
     max_iter = 1000
     tolerance = 1e-7
     fitter = 'scipy_minimize'
+    choose_best = False
+    fast_eval = False
     for op in options:
         if op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -270,8 +273,12 @@ def _parse_basic(options):
             tolerance = 10**tolpower
         elif op == 'cd':
             fitter = 'coordinate_descent'
+        elif op == 'b':
+            choose_best = True
+        elif op == 'f':
+            fast_eval = True
 
-    return max_iter, tolerance, fitter
+    return max_iter, tolerance, fitter, choose_best, fast_eval
 
 
 def _parse_iter(options):
@@ -305,3 +312,57 @@ def _parse_iter(options):
         module_sets = None
 
     return tolerances, module_sets, fit_iter, tol_iter, fitter
+
+
+def pupLVbasic(fitkey):
+    """
+    exact same as fit basic, but add constraint that the latent variable (LV)
+    must change variance between big/small pupil
+
+    CRH 12/4/2019
+    """
+    xfspec = []
+
+    options = _extract_options(fitkey)
+    max_iter, tolerance, fitter, choose_best, fast_eval, alpha = _parse_pupLVbasic(options)
+    xfspec = []
+    #if fast_eval:
+    #    xfspec = [['nems.xforms.fast_eval', {}]]
+    #else:
+    #    xfspec = []
+    xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
+                  {'max_iter': max_iter,
+                   'fitter': fitter, 'tolerance': tolerance, 
+                   'alpha': alpha}])
+    if choose_best:
+        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
+
+    return xfspec
+
+def _parse_pupLVbasic(options):
+    '''Options specific to basic.'''
+    max_iter = 1000
+    tolerance = 1e-7
+    fitter = 'scipy_minimize'
+    choose_best = False
+    fast_eval = False
+    for op in options:
+        if op.startswith('mi'):
+            pattern = re.compile(r'^mi(\d{1,})')
+            max_iter = int(re.match(pattern, op).group(1))
+        elif op.startswith('t'):
+            # Should use \ to escape going forward, but keep d-sub in
+            # for backwards compatibility.
+            num = op.replace('d', '.').replace('\\', '')
+            tolpower = float(num[1:])*(-1)
+            tolerance = 10**tolpower
+        elif op == 'cd':
+            fitter = 'coordinate_descent'
+        elif op == 'b':
+            choose_best = True
+        elif op == 'f':
+            fast_eval = True
+        elif 'a' in op:
+            alpha = np.float('.'.join(op[1:].split(':')))
+
+    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha

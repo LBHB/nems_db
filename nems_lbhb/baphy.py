@@ -1375,6 +1375,8 @@ def baphy_load_recording(**options):
 
         goodtrials = np.concatenate((goodtrials, _goodtrials))
 
+        # CRH 12/2/2019 - use behavior code to label trials
+        #import pdb; pdb.set_trace()
         # generate response signal
         t_resp = nems.signal.PointProcess(
                 fs=options['rasterfs'], data=spike_dict,
