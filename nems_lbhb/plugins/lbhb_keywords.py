@@ -385,7 +385,46 @@ def sexp(kw):
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
                   's': 'state'},
-    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})}
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})},
+    'bounds': {'g': (None, 10)}
+    }
+
+    return template
+
+
+def slv(kw):
+    '''
+    Generate and register modelspec for state_latent_variable
+        (for fitting a state-dependent lv)
+
+    CRH 12/4/2019
+    '''
+    #pattern = re.compile(r'^slv\.?(\d{1,})x(\d{1,})$')
+    #parsed = re.match(pattern, kw)
+    parsed = kw.split('.')[1]
+
+    n_vars = int(parsed.split('x')[0])
+    if len(parsed.split('x'))>1:
+        n_chans = int(parsed.split('x')[1])
+    else:
+        n_chans = 1
+
+    shuffle = False
+    ops = kw.split('.')[2:]
+    for o in ops:
+        if o == 'shuf':
+            shuffle = True
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = np.ones([n_chans, n_vars])
+
+    template = {
+    'fn': 'nems_lbhb.modules.state.state_latent_variable',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  'shuffle': shuffle},
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})},
+    'bounds': {'g': (None, 10)}
     }
 
     return template
