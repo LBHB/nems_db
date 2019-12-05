@@ -24,7 +24,7 @@ def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,
     '''
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
                                                           LN, combined,
                                                           se_filter,
                                                           LN_filter)
@@ -138,24 +138,29 @@ def get_dataframes(batch, gc, stp, LN, combined):
     return df_r, df_c, df_e
 
 
-def get_filtered_cellids(df_r, df_e, gc, stp, LN, combined, se_filter=True,
+def get_filtered_cellids(batch, gc, stp, LN, combined, se_filter=True,
                          LN_filter=False, as_lists=True):
 
-    cellids = df_r.index.values.tolist()
+    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+    df_f = nd.batch_comp(batch, [gc, stp, LN, combined], stat='r_floor')
+    df_f.dropna(axis=0, how='any', inplace=True)
+    df_f.sort_index(inplace=True)
+    if not np.all(df_f.index.values == df_r.index.values):
+        raise ValueError('index mismatch in dataframes')
 
-    gc_test = df_r[gc]
-    gc_se = df_e[gc]
-    stp_test = df_r[stp]
-    stp_se = df_e[stp]
-    ln_test = df_r[LN]
-    ln_se = df_e[LN]
-    gc_stp_test = df_r[combined]
-    gc_stp_se = df_e[combined]
+    cellids = df_r.index.values.tolist()
+    gc_test, gc_se, gc_floor = [d[gc] for d in [df_r, df_e, df_f]]
+    stp_test, stp_se, stp_floor = [d[stp] for d in [df_r, df_e, df_f]]
+    ln_test, ln_se, ln_floor = [d[LN] for d in [df_r, df_e, df_f]]
+    gc_stp_test, gc_stp_se, gc_stp_floor = [d[combined] for d in
+                                            [df_r, df_e, df_f]]
 
     if se_filter:
-        # Remove is performance not significant at all
-        good_cells = ((gc_test > gc_se*2) & (stp_test > stp_se*2) &
-                     (ln_test > ln_se*2) & (gc_stp_test > gc_stp_se*2))
+        # Remove if performance not significant at all
+        good_cells = ((gc_test > gc_se*2) & (gc_test > gc_floor) &
+                      (stp_test > stp_se*2) & (stp_test > stp_floor) &
+                      (ln_test > ln_se*2) & (ln_test > ln_floor) &
+                      (gc_stp_test > gc_stp_se*2) & (gc_stp_test > gc_stp_floor))
     else:
         # Set to series w/ all True, so none are skipped
         good_cells = (gc_test != np.nan)
