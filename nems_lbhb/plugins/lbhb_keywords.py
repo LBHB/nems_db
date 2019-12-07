@@ -357,6 +357,45 @@ def _one_zz(zerocount=1):
     """ vector of 1 followed by zerocount 0s """
     return np.concatenate((np.ones(1), np.zeros(zerocount)))
 
+
+def slogsig(kw):
+    '''
+    Generate and register modelspec for linear state gain model with rectification
+    CRH 12/6/2019
+    '''
+    pattern = re.compile(r'^slogsig\.?(\d{1,})x(\d{1,})$')
+    parsed = re.match(pattern, kw)
+    try:
+        n_vars = int(parsed.group(1))
+        if len(parsed.groups())>1:
+            n_chans = int(parsed.group(2))
+        else:
+            n_chans = 1
+    except TypeError:
+        raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "sdexp.{n_state_variables} \n"
+                         "keyword given: %s" % kw)
+    zeros = np.zeros([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
+    baseline_u = np.zeros([n_chans, 1])
+    baseline_sd = np.ones([n_chans, 1])
+    
+    template = {
+    'fn': 'nems_lbhb.modules.state.state_logsig',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  's': 'state'},
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd})},
+    'plot_fns': ['nems_lbhb.plots.state_logsig_plot'],
+        'plot_fn_idx': 0,
+    'bounds': {'g': (None, None)}
+    }
+
+    return template
+
+
 def sexp(kw):
     '''
     Generate and register modulespec for the state_exp
@@ -378,7 +417,7 @@ def sexp(kw):
                          "keyword given: %s" % kw)
 
     zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
     'fn': 'nems_lbhb.modules.state.state_exp',
@@ -392,15 +431,76 @@ def sexp(kw):
     return template
 
 
-def slv(kw):
+def lvexp(kw):
     '''
-    Generate and register modelspec for state_latent_variable
-        (for fitting a state-dependent lv)
+    Generate and register modelspec for fitting gain parms
+        for the latent variable signal. (need to create LV first)
 
     CRH 12/4/2019
     '''
-    #pattern = re.compile(r'^slv\.?(\d{1,})x(\d{1,})$')
-    #parsed = re.match(pattern, kw)
+
+    parsed = kw.split('.')[1]
+
+    n_vars = int(parsed.split('x')[0])
+    if len(parsed.split('x'))>1:
+        n_chans = int(parsed.split('x')[1])
+    else:
+        n_chans = 1
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
+
+    template = {
+    'fn': 'nems_lbhb.modules.state.state_exp',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  's': 'lv'},
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})},
+    'bounds': {'g': (None, 10)}
+    }
+
+    return template
+
+
+def lvlogsig(kw):
+    '''
+    Generate and register modelspec for linear state gain model with rectification
+        for latent variable
+    CRH 12/6/2019
+    '''
+    parsed = kw.split('.')[1]
+
+    n_vars = int(parsed.split('x')[0])
+    if len(parsed.split('x'))>1:
+        n_chans = int(parsed.split('x')[1])
+    else:
+        n_chans = 1
+
+    zeros = np.zeros([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
+    baseline_u = np.zeros([n_chans, 1])
+    baseline_sd = np.ones([n_chans, 1])
+    template = {
+    'fn': 'nems_lbhb.modules.state.state_logsig',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  's': 'lv'},
+    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd})},
+    'bounds': {'g': (None, None)}
+    }
+
+    return template
+
+
+def lv(kw):
+    '''
+    Generate and register modelspec for create_lv
+        1) Find the encoding (projection) weights for a lv model
+        2) Add this lv to the list of rec signals
+
+    CRH 12/4/2019
+    '''
     parsed = kw.split('.')[1]
 
     n_vars = int(parsed.split('x')[0])
@@ -415,16 +515,18 @@ def slv(kw):
         if o == 'shuf':
             shuffle = True
 
-    zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
+    mean = 0.01 * np.ones([n_chans, n_vars])
+    sd = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
-    'fn': 'nems_lbhb.modules.state.state_latent_variable',
+    'fn': 'nems_lbhb.modules.state.add_lv',
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
                   'shuffle': shuffle},
-    'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})},
-    'bounds': {'g': (None, 10)}
+    'plot_fns': ['nems_lbhb.plots.lv_quickplot'],
+        'plot_fn_idx': 0,
+    'prior': {'e': ('Normal', {'mean': mean, 'sd': sd})},
+    'bounds': {'e': (None, None)}
     }
 
     return template

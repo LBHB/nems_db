@@ -1,5 +1,6 @@
 import nems
 import numpy as np
+import matplotlib.pyplot as plt
 import logging
 
 log = logging.getLogger(__name__)
@@ -61,5 +62,6 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
         pup_cost /= np.var(lv)
 
     cost = (alpha * pup_cost) + ((1 - alpha) * nmse)
-
+    if ~np.isfinite(cost):
+        import pdb; pdb.set_trace()
     return cost

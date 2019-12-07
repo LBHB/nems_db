@@ -1342,3 +1342,80 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     nplt.ax_remove_box(ax)
 
     return ax, b_ceiling
+
+
+
+def lv_quickplot(rec, modelspec, ax=None, **options):
+    """
+    quick view of latent variable and the "encoding" weights
+    """
+    r = rec.apply_mask()
+    
+    f = plt.figure()
+    lv = plt.subplot2grid((1, 3), (0, 0), colspan=2)
+    weights = plt.subplot2grid((1, 3), (0, 2), colspan=1)
+    
+    lv.plot(r['lv']._data[1, :], color='purple')
+    lv.set_xlabel('Time')
+    lv.set_title('Latent Variable')
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.add_lv'][0]
+
+    bins = np.arange(-1, 1, 0.1)
+    weights.hist(modelspec.phi[idx]['e'].squeeze(), bins=bins, color='lightgrey', edgecolor='k')
+    weights.axvline(0, linestyle='--', color='r')
+    weights.set_xlabel('Encoding weights')
+
+    f.tight_layout()
+
+
+def state_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    quick view of first order model fit weight(s). Show fit for 
+    'best' first order prediction.
+    """
+
+    r = rec.apply_mask()
+
+    f = plt.figure()
+    rp_fig = plt.subplot2grid((2, 3), (0, 0), colspan=2)
+    state_plot = plt.subplot2grid((2, 3), (1, 0), colspan=2)
+    sig = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    weights = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.state_logsig'][0]
+
+    best = np.argmax(abs(modelspec.phi[idx]['g'][:, 1]))
+    cellid = r['resp'].chans[best]
+
+    # prediction of "best" first order cell (biggest state effect, based on model fit)
+    rp_fig.plot(r['resp']._data[best, :], color='grey', label='resp')
+    rp_fig.plot(r['pred']._data[best, :], color='k', label='pred')
+    rp_fig.legend()
+    rp_fig.set_title(cellid)
+
+    # plot state timeseries
+    state_plot.plot(r['state']._data.T)
+    state_plot.set_xlabel('Time')
+    state_plot.set_title('state signals')
+    
+    # gain applied as function of pupil for this "best" cell
+    s = r['state']._data
+    g = modelspec.phi[idx]['g'][best, :]
+    sg = g @ s
+    sg = 2 / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='k')
+    sig.set_xlabel('state')
+    sig.set_ylabel('linear gain applied')
+    sig.legend(['state gain (phi): {}'.format(round(modelspec.phi[idx]['g'][best, 1], 3))])
+    sig.set_title(cellid)
+
+    # all model weights (pupil gain weights)
+    bins = np.arange(-1, 1, 0.1)
+    weights.hist(modelspec.phi[idx]['g'][:, 1], bins=bins, color='lightgrey', edgecolor='k')
+    weights.set_xlabel('state gain (phi)')
+    weights.set_ylabel('n neurons')
+    weights.axvline(0, linestyle='--', color='r')
+    f.tight_layout()

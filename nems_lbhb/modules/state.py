@@ -56,8 +56,6 @@ def state_exp(rec, i, o, s, g):
     o: output
     s: state signal(s)
     g: weight(s)
-    (b = baseline -- first dim on state signal is baseline,
-        so first dim of g are the baseline weights)
 
     CRH 12/3/2019
     '''
@@ -67,28 +65,70 @@ def state_exp(rec, i, o, s, g):
     return [rec[i].transform(fn, o)]
 
 
-def state_latent_variable(rec, i, o, g, shuffle):
-    """
-    Fit LV to the residuals of the preceding module prediction.
-        For example, if first module is pupil stategain, subtract 
-        this model prediction, then project the residuals onto 'g'
-        to create the latent variable. Then latent variable is used 
-        to predict response just like a state signal.
+def _state_logsig(x, s, g, b):
+    '''
+    Gain is fixed to a max of 50 (this could be a free param)
+    '''
+    a = 2
+    def fn(x):
+        sig = a / (1 + np.exp(-x))
+        return sig
     
-    CRH 12/4/2019
+    sg = fn(g @ s)
+
+    return sg * x + b
+
+
+def state_logsig(rec, i, o, s, g, b):
+    '''
+    State gain model with sigmoidal expansions/compression.
+    r[o] = r[i] * sig(g * r[s])
+
+    i: intput
+    o: output
+    s: state signal(s)
+    g: weight(s)
+    '''
+
+    fn = lambda x: _state_logsig(x, rec[s]._data, g, b)
+
+    return [rec[i].transform(fn, o)]
+
+
+def add_lv(rec, i, o, e, shuffle):
     """
+    Compute latent variable and add to state signals:
+        projection of residual responses (resp minus current pred)
+        onto encoding weights (e). Add a channel  of all 1's to the
+        lv signal. This will be for offset in state models.
+    
+    i: 'resp'
+    o: 'lv'
+    e: encoding weights
+    shuffle: bool (should you shuffle LV or not)
+    """ 
+
     res = rec['resp'].rasterize()._data - rec['pred']._data
-    lv = g.T @ res
-    # standardize lv (zscore)
-    lv -= lv.mean(axis=-1, keepdims=True)
-    if np.sum(lv==0) != lv.shape[-1]:
-        lv /= lv.std(axis=-1, keepdims=True)
+    lv = e.T @ res
+
+    lv = np.concatenate((np.ones(lv.shape), lv), axis=0)
+
+    # z-score lv? (to avoid pred blowing up)
+    lv = lv - lv.mean(axis=-1, keepdims=True)
+    if ~np.any(lv.std(axis=-1) == 0):
+        lv = lv / lv.std(axis=-1, keepdims=True)
 
     lv_sig = rec['resp'].rasterize()._modified_copy(lv)
     lv_sig.name = 'lv'
+    nchans = e.shape[-1]
+    lv_chans = []
+    for c in range(nchans):
+        lv_chans.append('lv{0}'.format(c))
+    lv_sig.chans = lv_chans
+    
     if shuffle:
         lv = lv_sig.shuffle_time(rand_seed=1)._data
+        lv_sig = lv_sig._modified_copy(lv)
 
-    fn = lambda x : _state_exp(x, lv, g)
 
-    return  [rec[i].transform(fn, o), lv_sig]
+    return [lv_sig]
