@@ -380,6 +380,8 @@ def slogsig(kw):
     ones = 0.01 * np.ones([n_chans, n_vars])
     baseline_u = np.zeros([n_chans, 1])
     baseline_sd = np.ones([n_chans, 1])
+    amplitude = 2 * np.ones([n_chans, 1])
+    amp_sd = 0.01 * np.ones([n_chans, 1])
     
     template = {
     'fn': 'nems_lbhb.modules.state.state_logsig',
@@ -387,7 +389,8 @@ def slogsig(kw):
                   'o': 'pred',
                   's': 'state'},
     'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
-              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd})},
+              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+              'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
     'plot_fns': ['nems_lbhb.plots.state_logsig_plot'],
         'plot_fn_idx': 0,
     'bounds': {'g': (None, None)}
@@ -480,13 +483,18 @@ def lvlogsig(kw):
     ones = 0.01 * np.ones([n_chans, n_vars])
     baseline_u = np.zeros([n_chans, 1])
     baseline_sd = np.ones([n_chans, 1])
+    amplitude = 2 * np.ones([n_chans, 1])
+    amp_sd = 0.01 * np.ones([n_chans, 1])
     template = {
     'fn': 'nems_lbhb.modules.state.state_logsig',
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
                   's': 'lv'},
     'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
-              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd})},
+              'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+              'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
+    'plot_fns': ['nems_lbhb.plots.lv_logsig_plot'],
+        'plot_fn_idx': 0,
     'bounds': {'g': (None, None)}
     }
 

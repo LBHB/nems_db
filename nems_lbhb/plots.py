@@ -1351,7 +1351,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     """
     r = rec.apply_mask()
     
-    f = plt.figure()
+    f = plt.figure(figsize=(8, 4))
     lv = plt.subplot2grid((1, 3), (0, 0), colspan=2)
     weights = plt.subplot2grid((1, 3), (0, 2), colspan=1)
     
@@ -1362,11 +1362,14 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     # figure out module index
     idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.add_lv'][0]
 
-    bins = np.arange(-1, 1, 0.1)
+    lim = np.max(abs(modelspec.phi[idx]['e'].squeeze()))
+    bins = np.linspace(-lim, lim, 11)
     weights.hist(modelspec.phi[idx]['e'].squeeze(), bins=bins, color='lightgrey', edgecolor='k')
     weights.axvline(0, linestyle='--', color='r')
     weights.set_xlabel('Encoding weights')
 
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
     f.tight_layout()
 
 
@@ -1387,8 +1390,10 @@ def state_logsig_plot(rec, modelspec, ax=None, **options):
     # figure out module index
     idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.state_logsig'][0]
 
-    best = np.argmax(abs(modelspec.phi[idx]['g'][:, 1]))
+    best = np.argmax(modelspec.phi[idx]['g'][:, 1])
+    best2 = np.argmin(modelspec.phi[idx]['g'][:, 1])
     cellid = r['resp'].chans[best]
+    cellid2 = r['resp'].chans[best2]
 
     # prediction of "best" first order cell (biggest state effect, based on model fit)
     rp_fig.plot(r['resp']._data[best, :], color='grey', label='resp')
@@ -1404,21 +1409,66 @@ def state_logsig_plot(rec, modelspec, ax=None, **options):
     # gain applied as function of pupil for this "best" cell
     s = r['state']._data
     g = modelspec.phi[idx]['g'][best, :]
+    a = modelspec.phi[idx]['a'][best, :]
     sg = g @ s
-    sg = 2 / (1 + np.exp(-sg))
+    sg = a / (1 + np.exp(-sg))
     sig.plot(s[1, :], sg, '.', color='k')
     sig.set_xlabel('state')
     sig.set_ylabel('linear gain applied')
-    sig.legend(['state gain (phi): {}'.format(round(modelspec.phi[idx]['g'][best, 1], 3))])
-    sig.axhline(1, linestyle='--', color='k')
-    sig.axvline(0, linestyle='--', color='k')
-    sig.set_title(cellid)
+    
+
+    g = modelspec.phi[idx]['g'][best2, :]
+    a = modelspec.phi[idx]['a'][best2, :]
+    sg = g @ s
+    sg = a / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='r')
+
+    sig.legend(['{0} state gain (phi): {1}'.format(cellid, round(modelspec.phi[idx]['g'][best, 1], 3)), 
+                '{0} state gain (phi): {1}'.format(cellid2, round(modelspec.phi[idx]['g'][best2, 1], 3))])
+    sig.axhline(1, linestyle='--', color='grey')
+    sig.axvline(0, linestyle='--', color='grey')
+    
 
     # all model weights (pupil gain weights)
     lim = np.max(abs(modelspec.phi[idx]['g'][:, 1]))
-    bins = np.linspace(-lim, lim, 10)
+    bins = np.linspace(-lim, lim, 11)
     weights.hist(modelspec.phi[idx]['g'][:, 1], bins=bins, color='lightgrey', edgecolor='k')
     weights.set_xlabel('state gain (phi)')
     weights.set_ylabel('n neurons')
     weights.axvline(0, linestyle='--', color='r')
+
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
     f.tight_layout()
+
+
+def lv_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    Quick view of latent variable model fit. 
+    Compare encoding and decoding phi. 
+    Encoding weights are purely linear weightings,
+    decoding weights allow lv to pass through sigmoid first.
+    """
+
+    r = rec.apply_mask()
+
+    f, ax = plt.subplots(1, 1)
+
+    # simple scatter plot of encoding vs. decoding weights
+    modelspecs = modelspec.modelspecname.split('-')
+    idx = [i for i in range(0, len(modelspecs)) if 'lv.' in modelspecs[i]][0]
+    e = modelspec.phi[idx]['e'].squeeze()
+
+    idx = [i for i in range(0, len(modelspecs)) if 'lvlogsig.' in modelspecs[i]][0]
+    g = modelspec.phi[idx]['g'][:, 1]
+
+    ulim = np.max(np.concatenate((e, g)))
+    llim = np.min(np.concatenate((e, g)))
+
+    ax.scatter(e, g, s=30, color='k', edgecolor='white')
+    ax.plot([llim, ulim], [llim, ulim], color='grey', linestyle='--')
+    ax.axhline(0, linestyle='--', color='grey')
+    ax.axvline(0, linestyle='--', color='grey')
+    ax.set_xlabel('Encoding weight')
+    ax.set_ylabel('Decoding weight')
+    ax.set_title(modelspecs[idx])

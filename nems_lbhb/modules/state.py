@@ -65,11 +65,10 @@ def state_exp(rec, i, o, s, g):
     return [rec[i].transform(fn, o)]
 
 
-def _state_logsig(x, s, g, b):
+def _state_logsig(x, s, g, b, a):
     '''
     Gain is fixed to a max of 50 (this could be a free param)
     '''
-    a = 2
     def fn(x):
         sig = a / (1 + np.exp(-x))
         return sig
@@ -79,7 +78,7 @@ def _state_logsig(x, s, g, b):
     return sg * x + b
 
 
-def state_logsig(rec, i, o, s, g, b):
+def state_logsig(rec, i, o, s, g, b, a):
     '''
     State gain model with sigmoidal expansions/compression.
     r[o] = r[i] * sig(g * r[s])
@@ -88,9 +87,10 @@ def state_logsig(rec, i, o, s, g, b):
     o: output
     s: state signal(s)
     g: weight(s)
+    a: amplitude
     '''
 
-    fn = lambda x: _state_logsig(x, rec[s]._data, g, b)
+    fn = lambda x: _state_logsig(x, rec[s]._data, g, b, a)
 
     return [rec[i].transform(fn, o)]
 
