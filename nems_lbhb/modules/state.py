@@ -5,6 +5,7 @@ functions for applying state-related transformations
 """
 
 import numpy as np
+import nems_lbhb.preprocessing as preproc
 
 def _state_dexp(x, s, g, d, base, amplitude, kappa):
    # Apparently, numpy is VERY slow at taking the exponent of a negative number
@@ -95,7 +96,7 @@ def state_logsig(rec, i, o, s, g, b, a):
     return [rec[i].transform(fn, o)]
 
 
-def add_lv(rec, i, o, e, shuffle):
+def add_lv(rec, i, o, e, shuffle, cutoff):
     """
     Compute latent variable and add to state signals:
         projection of residual responses (resp minus current pred)
@@ -106,9 +107,14 @@ def add_lv(rec, i, o, e, shuffle):
     o: 'lv'
     e: encoding weights
     shuffle: bool (should you shuffle LV or not)
+    cutoff: float or None. If float, high pass filter LV 
     """ 
+    newrec = rec.copy()
+    if cutoff is not None:
+        # high pass filter resp before creating LV
+        newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
 
-    res = rec['resp'].rasterize()._data - rec['pred']._data
+    res = newrec['resp'].rasterize()._data - newrec['pred']._data
     lv = e.T @ res
 
     lv = np.concatenate((np.ones(lv.shape), lv), axis=0)
@@ -118,7 +124,7 @@ def add_lv(rec, i, o, e, shuffle):
     if ~np.any(lv.std(axis=-1) == 0):
         lv = lv / lv.std(axis=-1, keepdims=True)
 
-    lv_sig = rec['resp'].rasterize()._modified_copy(lv)
+    lv_sig = newrec['resp'].rasterize()._modified_copy(lv)
     lv_sig.name = 'lv'
     nchans = e.shape[-1]
     lv_chans = []
@@ -129,6 +135,5 @@ def add_lv(rec, i, o, e, shuffle):
     if shuffle:
         lv = lv_sig.shuffle_time(rand_seed=1)._data
         lv_sig = lv_sig._modified_copy(lv)
-
 
     return [lv_sig]

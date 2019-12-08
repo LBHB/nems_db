@@ -14,6 +14,8 @@ import numpy as np
 import copy
 import nems.epoch as ep
 import nems.signal as signal
+import scipy.fftpack as fp
+import scipy.signal as ss
 
 log = logging.getLogger(__name__)
 
@@ -705,3 +707,37 @@ def create_pupil_mask(rec, **options):
             newrec['mask'] = newrec['mask']._modified_copy(mask_trace)
 
         return newrec
+
+
+def bandpass_filter_resp(rec, low_c, high_c):
+    '''
+    Bandpass filter resp. Return new recording with filtered resp.
+    '''
+
+    if low_c is None:
+        low_c = 0
+    if high_c is None:
+        high_c = rec['resp'].fs
+
+    newrec = rec.copy()
+    #newrec = newrec.apply_mask(reset_epochs=True)
+    fs = rec['resp'].fs
+    newrec['resp'] = rec['resp'].rasterize()
+    resp = newrec['resp']._data
+    resp_filt = resp.copy()
+    for n in range(resp.shape[0]):
+        s = resp[n, :]
+        resp_fft = fp.fft(s)
+        w = fp.fftfreq(s.size, 1 / fs)
+        inds = np.argwhere((w >= low_c) & (w <= high_c))
+        inds2 = np.argwhere((w <= -low_c) & (w >= -high_c))
+        m = np.zeros(w.shape)
+        alpha = 0.1
+        m[inds] = ss.tukey(len(inds), alpha)[:, np.newaxis]
+        m[inds2] = ss.tukey(len(inds2), alpha)[:, np.newaxis]
+        resp_cut = resp_fft * m
+        resp_filt[n, :] = fp.ifft(resp_cut)
+
+    newrec['resp'] = newrec['resp']._modified_copy(resp_filt)
+
+    return newrec

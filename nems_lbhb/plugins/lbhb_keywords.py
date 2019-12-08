@@ -518,10 +518,13 @@ def lv(kw):
         n_chans = 1
 
     shuffle = False
+    cutoff = None
     ops = kw.split('.')[2:]
     for o in ops:
         if o == 'shuf':
             shuffle = True
+        if 'hp' in o:
+            cutoff = np.float(o[2:].replace(',', '.'))
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
@@ -530,7 +533,8 @@ def lv(kw):
     'fn': 'nems_lbhb.modules.state.add_lv',
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
-                  'shuffle': shuffle},
+                  'shuffle': shuffle,
+                  'cutoff': cutoff},
     'plot_fns': ['nems_lbhb.plots.lv_quickplot'],
         'plot_fn_idx': 0,
     'prior': {'e': ('Normal', {'mean': mean, 'sd': sd})},
