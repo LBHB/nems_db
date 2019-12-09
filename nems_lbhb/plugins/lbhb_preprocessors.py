@@ -303,6 +303,16 @@ def hrc(load_key):
     return xfspec
 
 
+def pbal(load_key):
+    """
+    Mask only epochs that are presented equally between large/small pupil conditions
+    """
+    xfspec = [['nems_lbhb.preprocessing.mask_pupil_balanced_epochs',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
 def ev(load_key):
     """
     Mask only evoked data

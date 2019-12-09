@@ -741,3 +741,53 @@ def bandpass_filter_resp(rec, low_c, high_c):
     newrec['resp'] = newrec['resp']._modified_copy(resp_filt)
 
     return newrec
+
+def get_pupil_balanced_epochs(rec, rec_sp=None, rec_bp=None):
+    """
+    Given big/small pupil recordings return list of
+    epochs that are balanced between the two.
+    """
+    all_epochs = np.unique([str(ep) for ep in rec.epochs.name if 'STIM_00' in ep]).tolist()
+
+    if (rec_sp is None) | (rec_bp is None):
+        pup_ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True}
+        rec_bp = create_pupil_mask(rec.copy(), **pup_ops)
+        pup_ops['state']='small'
+        rec_sp = create_pupil_mask(rec.copy(), **pup_ops)
+
+        rec_bp = rec_bp.apply_mask(reset_epochs=True)
+        rec_sp = rec_sp.apply_mask(reset_epochs=True)
+
+    # get rid of pre/post stim silence
+    #rec_bp = rec_bp.and_mask(['PostStimSilence'], invert=True)
+    #rec_sp = rec_sp.and_mask(['PostStimSilence'], invert=True)
+    #rec = rec.and_mask(['PostStimSilence'], invert=True)
+    #rec_bp = rec_bp.apply_mask(reset_epochs=True)
+    #rec_sp = rec_sp.apply_mask(reset_epochs=True)
+    #rec = rec.apply_mask(reset_epochs=True)
+
+    # find pupil matched epochs
+    balanced_eps = []
+    for ep in all_epochs:
+        sp = rec_sp['resp'].extract_epoch(ep).shape[0]
+        bp = rec_bp['resp'].extract_epoch(ep).shape[0]
+        if len(all_epochs)==3:
+            if abs(sp - bp) < 3:
+                balanced_eps.append(ep)
+        else:
+            if sp==bp:
+                balanced_eps.append(ep)
+
+    if len(balanced_eps)==0:
+        log.info("no balanced epochs at site {}".format(rec.name))
+
+    else:
+        log.info("found {0} balanced epochs:".format(len(balanced_eps)))
+
+    return balanced_eps
+
+def mask_pupil_balanced_epochs(rec):
+    r = rec.copy()
+    balanced_epochs = get_pupil_balanced_epochs(r)
+    r = r.and_mask(balanced_epochs)
+    return r
