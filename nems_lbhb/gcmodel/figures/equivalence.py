@@ -396,7 +396,8 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 def equiv_effect_cells(batch, gc, stp, LN, combined, se_filter=True,
                             LN_filter=False, save_path=None, load_path=None,
                             test_limit=None, only_improvements=False,
-                            effect_key='effect_size', plot_stat='r_ceiling'):
+                            effect_key='performance_effect', equiv_key='partial_corr',
+                            plot_stat='r_ceiling'):
 
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
@@ -404,16 +405,16 @@ def equiv_effect_cells(batch, gc, stp, LN, combined, se_filter=True,
     improved = c
     df = pd.read_pickle(load_path)
 
-    equivalence_imp = df['equivalence'][improved].values
-    effectsize_imp = df[effect_key][improved].values
-    print("effect size above 0.1:")
-    big_effect = improved[effectsize_imp > 0.1]
+    equivalence_imp = df['equivalence'][improved]
+    effectsize_imp = df[effect_key][improved]
+    print("effect size above 0.2:")
+    big_effect = effectsize_imp[effectsize_imp > 0.3].index.values.tolist()
     print(big_effect)
-    print("\nequivalence above 0.6:")
-    big_equiv = improved[equivalence_imp > 0.6]
+    print("\nequivalence above 0.5:")
+    big_equiv = equivalence_imp[equivalence_imp > 0.5].index.values.tolist()
     print(big_equiv)
     print("\nequivalence below 0.1:")
-    small_equiv = improved[equivalence_imp < 0.1]
+    small_equiv = equivalence_imp[equivalence_imp < 0.1].index.values.tolist()
     print(small_equiv)
 
     return big_effect, big_equiv, small_equiv

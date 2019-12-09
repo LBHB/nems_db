@@ -1,11 +1,30 @@
 from nems.initializers import from_keywords
 from nems.utils import find_module
 import nems.xform_helper as xhelp
-from nems.analysis import fit_basic
+from nems.analysis.fit_basic import fit_basic
+import nems.xforms as xforms
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 from nems_lbhb.gcmodel.figures.definitions import *
 _, gc, stp, LN, combined = default_args
+
+
+def _phis_to_arrays(*phis):
+    new_phis = []
+    for phi in phis:
+        if np.isscalar(phi):
+            new_phis.append(np.array([[phi]]))
+        else:
+            new_phis.append(phi)
+    return new_phis
+
+
+def get_default_rec():
+    xfspec, ctx = xhelp.load_model_xform('TAR010c-13-1', 289, LN,
+                                         eval_model=True)
+    return ctx['rec']
 
 
 def build_toy_LN_cell():
@@ -25,6 +44,7 @@ def build_toy_gc_cell(base, amplitude, shift, kappa):
 
 
 def build_toy_stp_cell(u, tau):
+    u, tau = _phis_to_arrays(u, tau)
     modelspec = from_keywords(stp.split('_')[1])
     stp_idx = find_module('stp', modelspec)
     modelspec[stp_idx]['phi'] = {'u': u, 'tau': tau}
@@ -54,26 +74,23 @@ def simulate_firing_rate(modelspec, rec, as_array=False):
         return simulated_response
 
 
-def fit_to_simulation(modelname, simulation_spec, rec,
-                      maxiter=1000, tolerance=1e-8):
-    # TODO: this should work for LN and stp, but need to do something
-    # more for contrast. either load in contrast manually and use different
-    # fitter, or loop through xforms system to take care of all of that
+def fit_to_simulation(modelname, simulation_spec):
+    # cell and batch are just used to get a stimulus set
+    cellid = 'TAR010c-13-1'
+    batch = 289
+    xfspec, ctx = xhelp.load_model_xform(cellid, batch, modelname,
+                                          eval_model=True)
+    rec = ctx['rec']
+    new_resp = simulate_firing_rate(simulation_spec, rec)
+    rec['resp'] = new_resp
 
-    # don't want to mess with est-val split or converting spikes
-    # to rate, so remove rec loader and sev from load string
-    modelspec = from_keywords(modelname.split('_')[1])
-    est, val = rec.split_using_epoch_occurrence_counts('STIM')
-    new_est_resp = simulate_firing_rate(simulation_spec, val)
-    new_val_resp = simulate_firing_rate(simulation_spec, est)
-    new_est = est.copy()
-    new_val = val.copy()
-    new_est['resp'] = new_est_resp
-    new_val['resp'] = new_val_resp
-    fitted_model = fit_basic(new_est, modelspec)
-    new_pred = fitted_model.evaluate(new_val)['pred'].as_continuous().flatten()
-    new_resp = new_val_resp.as_continuous().flatten()
+    # replace ozgf and ld with ldm
+    modelname = '-'.join(modelname.split('-')[2:])
+    xfspec = xhelp.generate_xforms_spec(modelname=modelname)
+    xfspec, ctx = xforms.evaluate(xfspec, context={'rec': rec})
 
-    plt.plot([new_pred, new_resp], legend=['pred', 'sim'])
+    simulation = ctx['val']['resp'].as_continuous().flatten()
+    prediction = ctx['val']['pred'].as_continuous().flatten()
+    plt.plot([prediction, simulation], legend=['pred', 'sim'])
 
-    return fitted_model, val, new_val
+    return ctx
