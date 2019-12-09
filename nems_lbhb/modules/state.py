@@ -79,6 +79,11 @@ def state_latent_variable(rec, i, o, g, shuffle):
     """
     res = rec['resp'].rasterize()._data - rec['pred']._data
     lv = g.T @ res
+    # standardize lv (zscore)
+    lv -= lv.mean(axis=-1, keepdims=True)
+    if np.sum(lv==0) != lv.shape[-1]:
+        lv /= lv.std(axis=-1, keepdims=True)
+
     lv_sig = rec['resp'].rasterize()._modified_copy(lv)
     lv_sig.name = 'lv'
     if shuffle:
