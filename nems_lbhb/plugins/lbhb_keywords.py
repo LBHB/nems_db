@@ -365,8 +365,7 @@ def slogsig(kw):
     '''
     options = kw.split('.')
     pattern = re.compile(r'^slogsig\.?(\d{1,})x(\d{1,})$')
-    pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
-    parsed = re.match(pattern, options[1])
+    parsed = re.match(pattern, '.'.join(options[0:2]))
     try:
         n_vars = int(parsed.group(1))
         if len(parsed.groups())>1:
