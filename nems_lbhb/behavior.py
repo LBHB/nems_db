@@ -131,7 +131,7 @@ def create_trial_labels(exptparams, exptevents):
                             sID.append('UNKNOWN')
                 
                 else:
-                    sID.append('NUll')
+                    sID.append('NULL')
 
             ev.insert(4, 'soundTrial', sID)
             if trial_outcome is not None:  
