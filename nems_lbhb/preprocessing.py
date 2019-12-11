@@ -791,3 +791,14 @@ def mask_pupil_balanced_epochs(rec):
     balanced_epochs = get_pupil_balanced_epochs(r)
     r = r.and_mask(balanced_epochs)
     return r
+
+def add_pupil_mask(rec):
+    '''
+    Simply add a p_mask signal that's true where p > median.
+    Does this on a "per ref" basis so that epochs aren't chopped up.
+    '''
+    r = rec.copy()
+    ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True} 
+    bp = create_pupil_mask(r, **ops)
+    r['p_mask'] = bp['mask']
+    return r

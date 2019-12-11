@@ -324,15 +324,22 @@ def pupLVbasic(fitkey):
     xfspec = []
 
     options = _extract_options(fitkey)
-    max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count = _parse_pupLVbasic(options)
+    max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint = _parse_pupLVbasic(options)
     xfspec = []
 
     if rand_count>1:
         xfspec.append(['nems.initializers.rand_phi', {'rand_count': rand_count}])
 
+    metric = 'pup_nmse'
+    if pup_constraint == 'lv_var':
+        metric = 'pup_nmse'
+    elif pup_constraint == 'nc':
+        metric = 'pup_nc_nmse'
+
     xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
                   {'max_iter': max_iter,
-                   'fitter': fitter, 'tolerance': tolerance, 
+                   'fitter': fitter, 'tolerance': tolerance,
+                   'metric': metric,
                    'alpha': alpha}])
     if choose_best:
         xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
@@ -346,6 +353,7 @@ def _parse_pupLVbasic(options):
     fitter = 'scipy_minimize'
     choose_best = False
     fast_eval = False
+    pup_constraint = 'lv_var'
     alpha = 0
     rand_count = 1
     for op in options:
@@ -372,5 +380,11 @@ def _parse_pupLVbasic(options):
             choose_best = True
         elif 'a' in op:
             alpha = np.float('.'.join(op[1:].split(':')))
+        elif op.startswith('constr'):
+            pc = op[6:]
+            if pc == 'LV':
+                pup_constraint = 'lv_var'
+            elif pc == 'NC':
+                pup_constraint = 'nc'
 
-    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count
+    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint

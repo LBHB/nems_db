@@ -95,6 +95,35 @@ def state_logsig(rec, i, o, s, g, b, a):
 
     return [rec[i].transform(fn, o)]
 
+def _state_logsig_dcgain(x, s, g, d, b, a):
+    '''
+    Gain is fixed to a max of 50 (this could be a free param)
+    '''
+    def fn(x, a):
+        sig = a / (1 + np.exp(-x))
+        return sig
+    
+    sg = fn(g @ s, a[:, 0][:, np.newaxis])
+    sd = fn(d @ s, a[:, 1][:, np.newaxis])
+
+    return sg * x + sd + b
+
+def state_logsig_dcgain(rec, i, o, s, g, d, b, a):
+    '''
+    State gain model with sigmoidal expansions/compression.
+    r[o] = r[i] * sig(g * r[s])
+
+    i: intput
+    o: output
+    s: state signal(s)
+    g: weight(s)
+    a: amplitude
+    '''
+
+    fn = lambda x: _state_logsig_dcgain(x, rec[s]._data, g, d, b, a)
+
+    return [rec[i].transform(fn, o)]
+
 
 def add_lv(rec, i, o, e, shuffle, cutoff):
     """

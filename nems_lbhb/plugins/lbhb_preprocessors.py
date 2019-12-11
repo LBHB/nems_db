@@ -322,6 +322,18 @@ def ev(load_key):
     
     return xfspec
 
+def apm(load_key):
+    """
+    Add a mask signal ('p_mask') for pupil that can be used later on in fitting. 
+    Doesn't go in "true" mask signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_pupil_mask',
+            {},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
 def pm(load_key):
     """
     pm = pupil mask
@@ -332,6 +344,7 @@ def pm(load_key):
     performs an AND mask (so will only create mask inside the existing current
         mask. If mask is None, creates mask with: rec = rec.create_mask(True))
     """
+    raise DeprecationWarning("Is anyone using this??")
     options = load_key.split('.')
     if len(options)>1:
         if options[1] == 'b':

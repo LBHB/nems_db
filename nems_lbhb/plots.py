@@ -1360,7 +1360,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     lv.set_title('Latent Variable')
 
     # figure out module index
-    idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.add_lv'][0]
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.add_lv' in modelspec.modules[i]['fn']][0]
 
     lim = np.max(abs(modelspec.phi[idx]['e'].squeeze()))
     bins = np.linspace(-lim, lim, 11)
@@ -1388,7 +1388,7 @@ def state_logsig_plot(rec, modelspec, ax=None, **options):
     weights = plt.subplot2grid((2, 3), (1, 2), colspan=1)
 
     # figure out module index
-    idx = [i for i in range(0, len(modelspec.modules)) if modelspec.modules[i]['fn']=='nems_lbhb.modules.state.state_logsig'][0]
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.state_logsig' in modelspec.modules[i]['fn']][0]
 
     best = np.argmax(modelspec.phi[idx]['g'][:, 1])
     best2 = np.argmin(modelspec.phi[idx]['g'][:, 1])
@@ -1409,7 +1409,7 @@ def state_logsig_plot(rec, modelspec, ax=None, **options):
     # gain applied as function of pupil for this "best" cell
     s = r['state']._data
     g = modelspec.phi[idx]['g'][best, :]
-    a = modelspec.phi[idx]['a'][best, :]
+    a = modelspec.phi[idx]['a'][best, 0]
     sg = g @ s
     sg = a / (1 + np.exp(-sg))
     sig.plot(s[1, :], sg, '.', color='k')
@@ -1418,7 +1418,7 @@ def state_logsig_plot(rec, modelspec, ax=None, **options):
     
 
     g = modelspec.phi[idx]['g'][best2, :]
-    a = modelspec.phi[idx]['a'][best2, :]
+    a = modelspec.phi[idx]['a'][best2, 0]
     sg = g @ s
     sg = a / (1 + np.exp(-sg))
     sig.plot(s[1, :], sg, '.', color='r')
