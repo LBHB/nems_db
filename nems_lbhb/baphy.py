@@ -516,7 +516,13 @@ def baphy_load_dataset(parmfilepath, **options):
                 #       .format(i, d['Trial'], d['name'], d['end']))
                 this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
                 any_behavior = True
-    
+
+    # CRH add check, just incase user messed up when doing experiment
+    # and selected: physiology yes, passive, but set behavior control to active
+    # in this case, behavior didn't run, file got created with _p_, but baphy
+    # still tried to label trials.
+    any_behavior = any_behavior & ('_a_' in parmfilepath)
+
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
     file_stop_time = np.max(event_times['end'])
