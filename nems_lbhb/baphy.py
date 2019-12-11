@@ -28,6 +28,7 @@ from nems import get_setting
 import nems.signal
 import nems.recording
 import nems.db as db
+import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
@@ -192,7 +193,6 @@ def baphy_load_data(parmfilepath, **options):
     # load parameter file
     log.info('Loading parameters: %s', parmfilepath)
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-
     # TODO: use paths that match LBHB filesystem? new s3 filesystem?
     #       or make s3 match LBHB?
 
@@ -387,6 +387,17 @@ def baphy_load_dataset(parmfilepath, **options):
     # get the relatively un-pre-processed data
     exptevents, stim, spike_dict, state_dict, tags, stimparam, exptparams = \
         baphy_load_data(parmfilepath, **options)
+    
+    # if runclass is BVT, add behavior outcome column (to be used later)
+    # very kludgy
+    # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
+    # with this loading procedure.
+    # CRH 12/10/2019
+    if (exptparams['runclass'] == 'BVT') & ('_a_' in parmfilepath):
+        exptevents = beh.create_trial_labels(exptparams, exptevents)
+        active_BVT = True
+    else:
+        active_BVT = False
 
     # pre-process event list (event_times) to only contain useful events
     # extract each trial
@@ -415,13 +426,14 @@ def baphy_load_dataset(parmfilepath, **options):
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
+
     event_times = pd.concat([exptevents.loc[ffstart, ['start']].reset_index(),
                              exptevents.loc[ffstop, ['end']].reset_index()],
                             axis=1)
     event_times['name'] = "TRIAL"
     event_times = event_times.drop(columns=['index'])
 
-    print('Removing post-response stimuli')
+    log.info('Removing post-response stimuli')
     keepevents = np.full(len(exptevents), True, dtype=bool)
     for trialidx in range(1, TrialCount+1):
         # remove stimulus events after TRIALSTOP or STIM,OFF event
@@ -469,26 +481,47 @@ def baphy_load_dataset(parmfilepath, **options):
                 'BEHAVIOR,PUMPON,Pump': 'HIT_TRIAL'}
     this_event_times = event_times.copy()
     any_behavior = False
-
     #import pdb
     #pdb.set_trace()
 
-    for trialidx in range(1, TrialCount+1):
-        # determine behavioral outcome, log event time to add epochs
-        # spanning each trial
-        ff = (((exptevents['name'] == 'OUTCOME,FALSEALARM')
-              | (exptevents['name'] == 'OUTCOME,EARLY')
-              | (exptevents['name'] == 'OUTCOME,VEARLY')
-              | (exptevents['name'] == 'OUTCOME,MISS')
-              | (exptevents['name'] == 'OUTCOME,MATCH')
-              | (exptevents['name'] == 'BEHAVIOR,PUMPON,Pump'))
-              & (exptevents['Trial'] == trialidx))
+    if active_BVT:
+        # CRH - using the labeled soundTrial events in exptevents
+        # this labels all sounds. i.e. a REF can be a correct_reject
+        # at this point, event_times is just labeling baphy trials though
+        # so just take last "soundTrial" and label the trial that
+        for trialidx in range(1, TrialCount+1):
+            ff = exptevents[exptevents.Trial==trialidx]
+            ff = ff[ff.soundTrial!='NULL']
+            try:
+                label = ff['soundTrial'].iloc[-1]
+                this_event_times.loc[trialidx-1, 'name'] = label
+            except:
+                this_event_times.loc[trialidx-1, 'name'] = 'EARLY_TRIAL'
+        
+        any_behavior = True
+    else:
+        for trialidx in range(1, TrialCount+1):
+            # determine behavioral outcome, log event time to add epochs
+            # spanning each trial
+            ff = (((exptevents['name'] == 'OUTCOME,FALSEALARM')
+                | (exptevents['name'] == 'OUTCOME,EARLY')
+                | (exptevents['name'] == 'OUTCOME,VEARLY')
+                | (exptevents['name'] == 'OUTCOME,MISS')
+                | (exptevents['name'] == 'OUTCOME,MATCH')
+                | (exptevents['name'] == 'BEHAVIOR,PUMPON,Pump'))
+                & (exptevents['Trial'] == trialidx))
 
-        for i, d in exptevents.loc[ff].iterrows():
-            # print("{0}: {1} - {2} - {3}"
-            #       .format(i, d['Trial'], d['name'], d['end']))
-            this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
-            any_behavior = True
+            for i, d in exptevents.loc[ff].iterrows():
+                # print("{0}: {1} - {2} - {3}"
+                #       .format(i, d['Trial'], d['name'], d['end']))
+                this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
+                any_behavior = True
+
+    # CRH add check, just incase user messed up when doing experiment
+    # and selected: physiology yes, passive, but set behavior control to active
+    # in this case, behavior didn't run, file got created with _p_, but baphy
+    # still tried to label trials.
+    any_behavior = any_behavior & ('_a_' in parmfilepath)
 
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
@@ -1375,8 +1408,6 @@ def baphy_load_recording(**options):
 
         goodtrials = np.concatenate((goodtrials, _goodtrials))
 
-        # CRH 12/2/2019 - use behavior code to label trials
-        #import pdb; pdb.set_trace()
         # generate response signal
         t_resp = nems.signal.PointProcess(
                 fs=options['rasterfs'], data=spike_dict,

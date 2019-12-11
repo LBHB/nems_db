@@ -74,7 +74,7 @@ def create_trial_labels(exptparams, exptevents):
                     if (fl < min_time):
                         sID.append('EARLY_TRIAL')
                         trial_outcome = 'EARLY_TRIAL'
-                    elif ((fl > ref_start) & (fl < (ref_start + early_win))):
+                    elif ((fl >= ref_start) & (fl < (ref_start + early_win))):
                         sID.append('EARLY_TRIAL')
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
@@ -83,7 +83,7 @@ def create_trial_labels(exptparams, exptevents):
                             trial_outcome = 'EARLY_TRIAL'
                     elif (fl < ref_start):
                         sID.append('NULL')
-                    elif (fl > ref_start) & (fl < ref_start + resp_win):
+                    elif (fl > ref_start) & (fl <= ref_start + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
                         trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif ((fl > ref_start) & (fl > ref_start + resp_win)) | \
@@ -96,15 +96,15 @@ def create_trial_labels(exptparams, exptevents):
                     tar_start = r['start']
                     rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
                     if rewarded:
-                        if fl < tar_start:
+                        if fl <= tar_start:
                             sID.append('NULL')
-                        elif (fl > (tar_start + early_win)) & (fl < (tar_start + resp_win + early_win)):
+                        elif (fl > (tar_start + early_win)) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('HIT_TRIAL')
                             trial_outcome = 'HIT_TRIAL'
                         elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('MISS_TRIAL')
                             trial_outcome = 'MISS_TRIAL'
-                        elif (fl > tar_start) & (fl < (tar_start + early_win)):
+                        elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM'
@@ -113,15 +113,15 @@ def create_trial_labels(exptparams, exptevents):
                         else:
                             sID.append('UNKNOWN')
                     else:
-                        if fl < tar_start:
+                        if fl <= tar_start:
                             sID.append('NULL')
-                        elif (fl > tar_start + early_win) & (fl < (tar_start + resp_win + early_win)):
+                        elif (fl > tar_start + early_win) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('INCORRECT_HIT_TRIAL')
                             trial_outcome = 'INCORRECT_HIT_TRIAL'
                         elif ((fl > tar_start + early_win) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('CORRECT_REJECT_TRIAL')
                             trial_outcome = 'CORRECT_REJECT_TRIAL'
-                        elif (fl > tar_start) & (fl < (tar_start + early_win)):
+                        elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM'
@@ -131,7 +131,7 @@ def create_trial_labels(exptparams, exptevents):
                             sID.append('UNKNOWN')
                 
                 else:
-                    sID.append('NUll')
+                    sID.append('NULL')
 
             ev.insert(4, 'soundTrial', sID)
             if trial_outcome is not None:  
