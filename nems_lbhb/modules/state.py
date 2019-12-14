@@ -125,7 +125,7 @@ def state_logsig_dcgain(rec, i, o, s, g, d, b, a):
     return [rec[i].transform(fn, o)]
 
 
-def add_lv(rec, i, o, e, shuffle, cutoff):
+def add_lv(rec, i, o, e):
     """
     Compute latent variable and add to state signals:
         projection of residual responses (resp minus current pred)
@@ -136,14 +136,18 @@ def add_lv(rec, i, o, e, shuffle, cutoff):
     o: 'lv'
     e: encoding weights
     shuffle: bool (should you shuffle LV or not)
-    cutoff: float or None. If float, high pass filter LV 
     """ 
     newrec = rec.copy()
-    if cutoff is not None:
-        # high pass filter resp before creating LV
-        newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
 
-    res = newrec['resp'].rasterize()._data - newrec['pred']._data
+    # CRH (12-13-2019) removing below code. 
+    # Residual signal now gets created
+    # (and shuffled) in preprocessing step
+    #if cutoff is not None:
+    #    # high pass filter resp before creating LV
+    #    newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
+
+    #res = newrec['resp'].rasterize()._data - newrec['pred']._data
+    res = newrec['residual']._data
     lv = e.T @ res
 
     lv = np.concatenate((np.ones(lv.shape), lv), axis=0)
@@ -161,8 +165,8 @@ def add_lv(rec, i, o, e, shuffle, cutoff):
         lv_chans.append('lv{0}'.format(c))
     lv_sig.chans = lv_chans
     
-    if shuffle:
-        lv = lv_sig.shuffle_time(rand_seed=1)._data
-        lv_sig = lv_sig._modified_copy(lv)
+    #if shuffle:
+    #    lv = lv_sig.shuffle_time(rand_seed=1)._data
+    #    lv_sig = lv_sig._modified_copy(lv)
 
     return [lv_sig]

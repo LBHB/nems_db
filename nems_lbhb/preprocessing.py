@@ -709,7 +709,7 @@ def create_pupil_mask(rec, **options):
         return newrec
 
 
-def bandpass_filter_resp(rec, low_c, high_c):
+def bandpass_filter_resp(rec, low_c, high_c, signal='resp'):
     '''
     Bandpass filter resp. Return new recording with filtered resp.
     '''
@@ -721,9 +721,9 @@ def bandpass_filter_resp(rec, low_c, high_c):
 
     newrec = rec.copy()
     #newrec = newrec.apply_mask(reset_epochs=True)
-    fs = rec['resp'].fs
-    newrec['resp'] = rec['resp'].rasterize()
-    resp = newrec['resp']._data
+    fs = rec[signal].fs
+    newrec[signal] = rec[signal].rasterize()
+    resp = newrec[signal]._data
     resp_filt = resp.copy()
     for n in range(resp.shape[0]):
         s = resp[n, :]
@@ -738,7 +738,7 @@ def bandpass_filter_resp(rec, low_c, high_c):
         resp_cut = resp_fft * m
         resp_filt[n, :] = fp.ifft(resp_cut)
 
-    newrec['resp'] = newrec['resp']._modified_copy(resp_filt)
+    newrec[signal] = newrec[signal]._modified_copy(resp_filt)
 
     return newrec
 
@@ -801,4 +801,18 @@ def add_pupil_mask(rec):
     ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True} 
     bp = create_pupil_mask(r, **ops)
     r['p_mask'] = bp['mask']
+    return r
+
+def create_residual(rec, cutoff=None, shuffle=False):
+
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    r['residual'] = r['resp']._modified_copy(r['resp']._data - r['psth_sp']._data)
+
+    if cutoff is not None:
+        r = bandpass_filter_resp(r, low_c=cutoff, high_c=None, signal='residual')
+
+    if shuffle:
+        r['residual'] = r['residual'].shuffle_time(rand_seed=1)
+
     return r

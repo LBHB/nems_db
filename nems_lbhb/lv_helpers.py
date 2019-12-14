@@ -93,15 +93,14 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     # add pupil constraint so that pairwise correlations
     # are equal between large/small after removing model prediction
     p_mask = result['p_mask'].as_continuous().squeeze()
-    residual_big = X2[0, p_mask] - X1[0, p_mask]
-    residual_small = X2[0, ~p_mask] - X1[0, ~p_mask]
+    residual_big = X2[:, p_mask] - X1[:, p_mask]
+    residual_small = X2[:, ~p_mask] - X1[:, ~p_mask]
     nc_big = np.corrcoef(residual_big)
     nc_small = np.corrcoef(residual_small)
     pup_cost = abs(nc_big - nc_small).mean()
-    pup_cost *= 100 # rescale so ~ on same scale as nsme
 
     cost = (alpha * pup_cost) + ((1 - alpha) * nmse)
-    
+
     if ~np.isfinite(cost):
         import pdb; pdb.set_trace()
 

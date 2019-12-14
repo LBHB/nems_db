@@ -504,3 +504,28 @@ def stSPO(load_key):
 def stimenv(load_key):
     return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
             ['rec'], ['rec']]]
+
+def residual(load_key):
+    """
+    Add residual signal to be used for pupil latent variable creation. 
+    Because LV creation happens dynamically during the fit,
+    want to create this signal first so that shuffling 
+    (if specified) only happens one time on the outside.
+    """
+    options = load_key.split('.')
+    
+    shuffle = False
+    cutoff = None
+
+    for op in options:
+        if op.endswith('0'):
+            shuffle = True
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',','.'))
+
+    xfspec = [['nems_lbhb.preprocessing.create_residual',
+            {'shuffle': shuffle, 
+            'cutoff': cutoff},
+            ['rec'], ['rec']]]
+
+    return xfspec
