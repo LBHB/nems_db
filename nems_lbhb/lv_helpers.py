@@ -126,8 +126,11 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
     # regress out model pred method 1
     log.info("regress out model prediction using method 1, compute noise correlations")
     r12 = r.copy()
-    r12['lv'] = r12['lv']._modified_copy(r12['lv']._data[1, :][np.newaxis, :])
-    r12 = cpreproc.regress_state(r12, state_sigs=['pupil', 'lv'], regress=['pupil', 'lv'])
+    if 'lv' in r12.signals.keys():
+        r12['lv'] = r12['lv']._modified_copy(r12['lv']._data[1, :][np.newaxis, :])
+        r12 = cpreproc.regress_state(r12, state_sigs=['pupil', 'lv'], regress=['pupil', 'lv'])
+    else:
+        r12 = cpreproc.regress_state(r12, state_sigs=['pupil'], regress=['pupil'])
 
     # mask pupil
     pup_ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True}
