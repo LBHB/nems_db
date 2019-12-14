@@ -496,6 +496,7 @@ def baphy_load_dataset(parmfilepath, **options):
                 label = ff['soundTrial'].iloc[-1]
                 this_event_times.loc[trialidx-1, 'name'] = label
             except:
+                # was labeled as NULL, since sound never played
                 this_event_times.loc[trialidx-1, 'name'] = 'EARLY_TRIAL'
         
         any_behavior = True
