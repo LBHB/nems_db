@@ -135,8 +135,17 @@ def create_trial_labels(exptparams, exptevents):
 
             ev.insert(4, 'soundTrial', sID)
             if trial_outcome is not None:  
-                outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
-                ev.loc[ev.name==outcome, 'name'] = trial_outcome
+                baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
+                # add a check here to override things labeled as HITS if 
+                # baphy called it FA. If baphy called it FA, then sound
+                # stopped, so the trial outcome should be a FALSE_ALARM
+                if ('FALSEALARM' in baphy_outcome) & (trial_outcome != 'FALSE_ALARM_TRIAL'):
+                    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
+                    # if this is the case, also update the last soundTrial
+                    soundIDX = ev[ev.soundTrial != 'NULL'].index[-1]
+                    ev.set_value(soundIDX, 'soundTrial', 'EARLY_TRIAL')
+                else:
+                    ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
             trial_dfs.append(ev)
 
         else:
