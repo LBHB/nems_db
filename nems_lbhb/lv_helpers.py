@@ -133,12 +133,10 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
         r12 = cpreproc.regress_state(r12, state_sigs=['pupil'], regress=['pupil'])
 
     # mask pupil
-    pup_ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True}
-    big = preproc.create_pupil_mask(r12.copy(), **pup_ops)
-    big = big.apply_mask(reset_epochs=True)
-    pup_ops['state'] = 'small'
-    small = preproc.create_pupil_mask(r12.copy(), **pup_ops)
-    small = small.apply_mask(reset_epochs=True)
+    big = r12.copy()
+    big['mask'] = big['p_mask']
+    small = r12.copy()
+    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
 
     epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
     r_dict = r12['resp'].extract_epochs(epochs)
@@ -158,11 +156,12 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
     r12['resp'] = r12['resp']._modified_copy(mod_data)
 
     # mask pupil
-    pup_ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True}
-    big = preproc.create_pupil_mask(r12.copy(), **pup_ops)
+    big = r12.copy()
+    big['mask'] = big['p_mask']
+    small = r12.copy()
+    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
+
     big = big.apply_mask(reset_epochs=True)
-    pup_ops['state'] = 'small'
-    small = preproc.create_pupil_mask(r12.copy(), **pup_ops)
     small = small.apply_mask(reset_epochs=True)
 
     epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
