@@ -11,7 +11,8 @@ import nems.xform_helper as xhelp
 from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_batch_modelspecs
 import pandas as pd
 import numpy as np
-from scipy.stats import wilcoxon, ttest_ind
+from scipy.stats import wilcoxon, ttest_ind, pearsonr
+from nems.plots.utils import ax_remove_box
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'
 
@@ -101,7 +102,7 @@ for batch, bs in zip(batches, batstring):
             r_test = np.append(r_test, s * r)
             se_test = np.append(se_test, s * se)
 
-            #
+            # aggregate gain changes for shuffled model. mean zero?
             r_test_S = np.append(r_test_S, s * mshf.meta['r_test'][0])
             se_test_S = np.append(se_test_S, s * mshf.meta['se_test'][0])
             b_S = np.append(b_S, mshf.phi[midx]['bg_gain'][1:])
@@ -109,7 +110,10 @@ for batch, bs in zip(batches, batstring):
 
             r_test_SR = np.append(r_test_SR, s * mSR.meta['r_test'][0])
 
-    si = (r_test-r_test_S) > (se_test + se_test_S)
+    rdiff = r_test - r_test_S
+    gdiff = f-b
+    si = (rdiff > (se_test + se_test_S)) & (np.abs(gdiff)<1.2)
+    nsi = (rdiff <= (se_test + se_test_S)) & (np.abs(gdiff)<1.2)
 
     def _rdt_info(i):
         print("{}: f={:.3} b={:.3}".format(cid[i],f[i],b[i]))
@@ -121,15 +125,15 @@ for batch, bs in zip(batches, batstring):
 
     histbins = np.linspace(-0.5, 0.5, 21)
 
-    fig = plt.figure()
-    ax=plt.subplot(2,2,1)
+    fig = plt.figure(figsize=(8,5))
+
+    ax=plt.subplot(2,3,1)
     bound = 1.2
     beta_comp(b, f, n1='bg', n2='fg', hist_range=[-bound, bound],
               ax=ax, click_fun=_rdt_info, highlight=si, title=bs)
 
-    ax = plt.subplot(2,2,2)
+    ax = plt.subplot(2,3,2)
 
-    gdiff = f-b
     stat, p = wilcoxon(f,b)
     md = np.mean(f-b)
     rg[batch] = gdiff
@@ -138,7 +142,7 @@ for batch, bs in zip(batches, batstring):
     rgdf[batch] = pd.DataFrame(list_of_tuples, columns=['cellid','tar_id','fg','bg',
                                                         'gdiff','r','r_S','r_SR'])
     
-    h0, x0 = np.histogram(gdiff[~si], bins=histbins)
+    h0, x0 = np.histogram(gdiff[nsi], bins=histbins)
     h, x = np.histogram(gdiff[si], bins=histbins)
     d=(x0[1]-x0[0])/2
     plt.bar(x0[:-1]+d, h0, width=d*1.8)
@@ -151,19 +155,26 @@ for batch, bs in zip(batches, batstring):
     plt.text(tx,ty, t, va='top')
     plt.xlabel('FG-BG gain')
 
+    ax = plt.subplot(2,3,3)
+    ax.plot(rdiff[nsi], gdiff[nsi], '.', color='lightgray')
+    ax.plot(rdiff[si], gdiff[si], '.', color='black')
+    r,p = pearsonr(rdiff[nsi+si], gdiff[nsi+si])
+    ax_remove_box(ax)
+    ax.set_xlabel('deltaR')
+    ax.set_ylabel('deltaG')
+    ax.set_title('R={:.3f} p={:.3f}'.format(r,p))
 
-    ax=plt.subplot(2,2,3)
-    beta_comp(b_S, f_S, n1='bg_S', n2='fg_S',
-              ax=ax, hist_range=[-bound, bound], highlight=si,
-              title=bs+" (shf)")
+    ax=plt.subplot(2,3,4)
+    beta_comp(b_S, f_S, n1='bg_S', n2='fg_S', ax=ax, hist_range=[-bound, bound],
+              highlight=si, title=bs+" (shf)")
 
-    ax = plt.subplot(2,2,4)
+    ax = plt.subplot(2,3,5)
 
-    gdiff = f_S-b_S
+    gdiff_S = f_S-b_S
     stat, p = wilcoxon(f_S,b_S)
     md = np.mean(f_S-b_S)
-    h0, x0 = np.histogram(gdiff[~si], bins=histbins)
-    h, x = np.histogram(gdiff[si], bins=histbins)
+    h0, x0 = np.histogram(gdiff_S[~si], bins=histbins)
+    h, x = np.histogram(gdiff_S[si], bins=histbins)
     d=(x0[1]-x0[0])/2
     plt.bar(x0[:-1]+d, h0, width=d*1.8)
     plt.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
