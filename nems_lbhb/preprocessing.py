@@ -44,6 +44,12 @@ def mask_high_repetion_stims(rec, epoch_regex='^STIM_'):
     return full_rec
 
 
+def mask_evoked(rec):
+    r = rec.copy()
+    r = r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
+    return r
+
+
 def pupil_mask(est, val, condition, balance):
     """
     Create pupil mask by epoch (use REF by default) - so entire epoch is

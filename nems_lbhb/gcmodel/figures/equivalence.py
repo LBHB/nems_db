@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import scipy.stats as st
+from scipy import stats, linalg
 import matplotlib.pyplot as plt
 import mplcursors
 
@@ -132,7 +133,8 @@ def _relative_score(df, models, mask):
 
 def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                           LN_filter=False, test_limit=None, alpha=0.05,
-                          save_path=None, load_path=None):
+                          save_path=None, load_path=None,
+                          equiv_key='equivalence'):
     '''
     model1: GC
     model2: STP
@@ -145,7 +147,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
     if load_path is None:
         df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-        cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc,
+        cellids, under_chance, less_LN = get_filtered_cellids(batch, gc,
                                                               stp, LN, combined,
                                                               se_filter,
                                                               LN_filter)
@@ -177,7 +179,10 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     else:
         df = pd.read_pickle(load_path)
 
-    rs = df['equivalence'].values
+    cellids, _, _ = get_filtered_cellids(batch, gc, stp, LN, combined,
+                                         se_filter, LN_filter, as_lists=False)
+    df = df[cellids]
+    rs = df[equiv_key].values
 
     imp = np.array(improved)
     not_imp = np.array(not_improved)
@@ -215,15 +220,22 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     ax_remove_box(a2)
     plt.tight_layout()
 
+
+    if equiv_key == 'equivalence':
+        x_text = 'equivalence, CC(GC-LN, STP-LN)\n'
+    elif equiv_key == 'partial_corr':
+        x_text = 'equivalence, partial correlation\n'
+    else:
+        x_text = 'unknown equivalence key'
     fig3 = plt.figure(figsize=text_fig)
     text2 = ("hist: equivalence of changein prediction relative to LN model\n"
              "batch: %d\n"
-             "x: equivalence, CC(GC-LN, STP-LN)\n"
+             "x: %s"
              "y: cell fraction\n"
              "n not imp:  %d,  md:  %.2f\n"
              "n sig. imp:  %d,  md:  %.2f\n"
              "st.mannwhitneyu:  u:  %.4E p:  %.4E"
-             % (batch, n_not, md_not, n_imp, md_imp, u, p))
+             % (batch, x_text, n_not, md_not, n_imp, md_imp, u, p))
     plt.text(0.1, 0.5, text2)
 
     return fig1, fig3
@@ -232,7 +244,9 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
                             LN_filter=False, save_path=None, load_path=None,
                             test_limit=None, only_improvements=False,
-                            legend=False):
+                            legend=False, effect_key='effect_size',
+                            equiv_key='equivalence',
+                            plot_stat='r_ceiling'):
 
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
@@ -240,6 +254,7 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 
     if load_path is None:
         equivs = []
+        partials = []
         gcs = []
         stps = []
         effects = []
@@ -257,6 +272,11 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
             stpff = stp_pred[ff]
             lnff = ln_pred[ff]
 
+            C = np.hstack((np.expand_dims(gcff, 0).transpose(),
+                           np.expand_dims(stpff, 0).transpose(),
+                           np.expand_dims(lnff, 0).transpose()))
+            partials.append(partial_corr(C)[0,1])
+
             equivs.append(np.corrcoef(gcff-lnff, stpff-lnff)[0, 1])
             this_gc = np.corrcoef(gcff, lnff)[0,1]
             this_stp = np.corrcoef(stpff, lnff)[0,1]
@@ -264,9 +284,21 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
             stps.append(this_stp)
             effects.append(1 - 0.5*(this_gc+this_stp))
 
+        df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
+
+        if plot_stat == 'r_ceiling':
+            plot_df = df_c
+        else:
+            plot_df = df_r
+        improved = c
+        models = [gc, stp, LN]
+        gc_rel_all, stp_rel_all = _relative_score(plot_df, models, a)
+
         results = {'cellid': a[:test_limit], 'equivalence': equivs,
                    'effect_size': effects, 'corr_gc_LN': gcs,
-                   'corr_stp_LN': stps}
+                   'corr_stp_LN': stps, 'partial_corr': partials,
+                   'performance_effect':0.5*(gc_rel_all[:test_limit]
+                                             + stp_rel_all[:test_limit])}
         df = pd.DataFrame.from_dict(results)
         df.set_index('cellid', inplace=True)
         if save_path is not None:
@@ -274,9 +306,15 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
     else:
         df = pd.read_pickle(load_path)
 
-    equivalence = df['equivalence'].values
-    effect_size = df['effect_size'].values
+    cellids, _, _ = get_filtered_cellids(batch, gc, stp, LN, combined,
+                                         se_filter, LN_filter, as_lists=False)
+    df = df[cellids]
+    equivalence = df[equiv_key].values
+    effect_size = df[effect_key].values
     r, p = st.pearsonr(effect_size, equivalence)
+    improved = c
+    not_improved = list(set(a) - set(c))
+
 
     fig1, ax = plt.subplots(1,1)
     ax.axes.axhline(0, color='black', linewidth=1, linestyle='dashed',
@@ -285,12 +323,11 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 
     extra_title_lines = []
     if only_improvements:
-        improved = c
-        not_improved = list(set(a) - set(c))
-        equivalence_imp = df['equivalence'][improved].values
-        equivalence_not = df['equivalence'][not_improved].values
-        effectsize_imp = df['effect_size'][improved].values
-        effectsize_not = df['effect_size'][not_improved].values
+        equivalence_imp = df[equiv_key][improved].values
+        equivalence_not = df[equiv_key][not_improved].values
+        effectsize_imp = df[effect_key][improved].values
+        effectsize_not = df[effect_key][not_improved].values
+
         r_imp, p_imp = st.pearsonr(effectsize_imp, equivalence_imp)
         r_not, p_not = st.pearsonr(effectsize_not, equivalence_not)
         n_imp = len(improved)
@@ -307,15 +344,29 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
             plt.legend()
     else:
         plt.scatter(effect_size, equivalence, s=big_scatter, color='black')
+        # I don't think the cellids are populating correctly
+        # for the hover feature.
+#        if enable_hover:
+#            mplcursors.cursor(ax, hover=True).connect(
+#                    "add",
+#                    lambda sel: sel.annotation.set_text(a[sel.target.index])
+#                    )
 
     #plt.ylabel('Equivalence:  CC(GC-LN, STP-LN)')
     #plt.xlabel('Effect size:  1 - 0.5*(CC(GC,LN) + CC(STP,LN))')
+    if equiv_key == 'equivalence':
+        y_text = 'equivalence, CC(GC-LN, STP-LN)\n'
+    elif equiv_key == 'partial_corr':
+        y_text = 'equivalence, partial correlation\n'
+    else:
+        y_text = 'unknown equivalence key'
     text = ("scatter: Equivalence of Change to Predicted PSTH\n"
             "batch: %d\n"
             "vs Effect Size\n"
             "all cells,  r:  %.4f,    p:  %.4E\n"
-            "y: equivalence, CC(GC-LN, STP-LN)\n"
-            "x: effect size: 1 - 0.5*(CC(GC,LN) + CC(STP,LN))" % (batch, r, p))
+            "y: %s"
+            "x: effect size: 1 - 0.5*(CC(GC,LN) + CC(STP,LN))"
+            % (batch, r, p, y_text))
     for ln in extra_title_lines:
         text += "\n%s" % ln
 
@@ -340,6 +391,33 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
 
 
     return fig1, fig3
+
+
+def equiv_effect_cells(batch, gc, stp, LN, combined, se_filter=True,
+                            LN_filter=False, save_path=None, load_path=None,
+                            test_limit=None, only_improvements=False,
+                            effect_key='performance_effect', equiv_key='partial_corr',
+                            plot_stat='r_ceiling'):
+
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    improved = c
+    df = pd.read_pickle(load_path)
+
+    equivalence_imp = df['equivalence'][improved]
+    effectsize_imp = df[effect_key][improved]
+    print("effect size above 0.2:")
+    big_effect = effectsize_imp[effectsize_imp > 0.3].index.values.tolist()
+    print(big_effect)
+    print("\nequivalence above 0.5:")
+    big_equiv = equivalence_imp[equivalence_imp > 0.5].index.values.tolist()
+    print(big_equiv)
+    print("\nequivalence below 0.1:")
+    small_equiv = equivalence_imp[equivalence_imp < 0.1].index.values.tolist()
+    print(small_equiv)
+
+    return big_effect, big_equiv, small_equiv
 
 
 def residual_histogram(batch, model1, model2, model3, model4, se_filter=True,
@@ -559,3 +637,42 @@ def gc_vs_stp_strengths(batch, model1, model2, model3, se_filter=True,
     plt.xlabel('GC Magnitude')
     plt.ylabel('STP Magnitude')
     fig.tight_layout()
+
+
+
+# https://gist.github.com/fabianp/9396204419c7b638d38f
+def partial_corr(C):
+    """
+    Returns the sample linear partial correlation coefficients between pairs of variables in C, controlling
+    for the remaining variables in C.
+    Parameters
+    ----------
+    C : array-like, shape (n, p)
+        Array with the different variables. Each column of C is taken as a variable
+    Returns
+    -------
+    P : array-like, shape (p, p)
+        P[i, j] contains the partial correlation of C[:, i] and C[:, j] controlling
+        for the remaining variables in C.
+    """
+
+    C = np.asarray(C)
+    p = C.shape[1]
+    P_corr = np.zeros((p, p), dtype=np.float)
+    for i in range(p):
+        P_corr[i, i] = 1
+        for j in range(i+1, p):
+            idx = np.ones(p, dtype=np.bool)
+            idx[i] = False
+            idx[j] = False
+            beta_i = linalg.lstsq(C[:, idx], C[:, j])[0]
+            beta_j = linalg.lstsq(C[:, idx], C[:, i])[0]
+
+            res_j = C[:, j] - C[:, idx].dot( beta_i)
+            res_i = C[:, i] - C[:, idx].dot(beta_j)
+
+            corr = stats.pearsonr(res_i, res_j)[0]
+            P_corr[i, j] = corr
+            P_corr[j, i] = corr
+
+    return P_corr

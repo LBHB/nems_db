@@ -64,8 +64,10 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
     # sound stats
     path_1 = load_paths['sound_stats'][str(batch)]
     path_2 = load_paths['sound_stats'][str(batch2)]
-    fig1b, fig1bb = mean_sd_per_stim_by_batch(batch, load_path=path_1)
-    fig1c, fig1cc = mean_sd_per_stim_by_batch(batch2, load_path=path_2)
+    fig1b, fig1bb = mean_sd_per_stim_by_batch(batch, load_path=path_1,
+                                              manual_lims=True)
+    fig1c, fig1cc = mean_sd_per_stim_by_batch(batch2, load_path=path_2,
+                                              manual_lims=True)
     figures_to_save.append((fig1b, 'sound_stats_b%d' % batch))
     figures_to_save.append((fig1bb, 'sound_stats_b%d_text' % batch))
     figures_to_save.append((fig1c, 'sound_stats_b%d' % batch2))
@@ -166,15 +168,23 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
     # Parameters
     log.info('Parameter analyses ...\n')
     fig5a1, fig5a2, fig5a3, fig5a4, fig5a5 = stp_distributions(
-            batch, gc, stp, LN, combined)
-    gc_dist_figs = gc_distributions(batch, gc, stp, LN, combined)
+            batch, gc, stp, LN, combined, use_combined=False)
+    gc_dist_figs = gc_distributions(batch, gc, stp, LN, combined,
+                                    use_combined=False)
     labels = ['base_dist', 'base_text', 'amp_dist', 'amp_text',
               'shift_dist', 'shift_text', 'kappa_dist', 'kappa_text',
               'md_nonimp_effects', 'md_nonimp_text', 'md_imp_effects',
               'md_imp_text']
-    # TOOD: something for the sigmoid parameters?
-    # o     or just use some examples from the single cell plots?
-    #fig7 = ...
+
+    fig5b1, fig5b2, fig5b3, fig5b4, fig5b5 = stp_distributions(
+            batch2, gc, stp, LN, combined)
+    gc_dist_figs2 = gc_distributions(batch2, gc, stp, LN, combined)
+    labels2 = ['base_dist', 'base_text', 'amp_dist', 'amp_text',
+              'shift_dist', 'shift_text', 'kappa_dist', 'kappa_text',
+              'md_nonimp_effects', 'md_nonimp_text', 'md_imp_effects',
+              'md_imp_text']
+    labels2 = [s + '_263' for s in labels2]
+
 
     figures_to_save.append((fig5a1, 'tau_distributions'))
     figures_to_save.append((fig5a2, 'tau_dist_text'))
@@ -182,6 +192,14 @@ def just_final_figures(plot_stat='r_ceiling', fig_format='pdf'):
     figures_to_save.append((fig5a4, 'u_dist_text'))
     figures_to_save.append((fig5a5, 'med_stp_effects'))
     for f, n in zip(gc_dist_figs, labels):
+        figures_to_save.append((f, n))
+
+    figures_to_save.append((fig5b1, 'tau_distributions_263'))
+    figures_to_save.append((fig5b2, 'tau_dist_text_263'))
+    figures_to_save.append((fig5b3, 'u_distributions_263'))
+    figures_to_save.append((fig5b4, 'u_dist_text_263'))
+    figures_to_save.append((fig5b5, 'med_stp_effects_263'))
+    for f, n in zip(gc_dist_figs2, labels2):
         figures_to_save.append((f, n))
 
 
