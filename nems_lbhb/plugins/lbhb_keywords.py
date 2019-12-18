@@ -502,6 +502,13 @@ def lvlogsig(kw):
         n_chans = 1
 
     options = kw.split('.')
+
+    in_sig = 'pred'
+    for op in options:
+        if op == 'ipsth':
+            # make input signal the psth
+            in_sig = 'psth'
+
     if 'd' in options[2:]:
         zeros = np.zeros([n_chans, n_vars])
         ones = 0.01 * np.ones([n_chans, n_vars])
@@ -511,7 +518,7 @@ def lvlogsig(kw):
         amp_sd = 0.01 * np.ones([n_chans, 2])
         template = {
         'fn': 'nems_lbhb.modules.state.state_logsig_dcgain',
-        'fn_kwargs': {'i': 'pred',
+        'fn_kwargs': {'i': in_sig,
                     'o': 'pred',
                     's': 'lv'},
         'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
@@ -531,7 +538,7 @@ def lvlogsig(kw):
         amp_sd = 0.01 * np.ones([n_chans, 1])
         template = {
         'fn': 'nems_lbhb.modules.state.state_logsig',
-        'fn_kwargs': {'i': 'pred',
+        'fn_kwargs': {'i': in_sig,
                     'o': 'pred',
                     's': 'lv'},
         'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
@@ -561,14 +568,13 @@ def lv(kw):
     else:
         n_chans = 1
 
-    #shuffle = False
-    #cutoff = None
-    #ops = kw.split('.')[2:]
-    #for o in ops:
-    #    if o == 'shuf':
-    #        shuffle = True
-    #    if 'hp' in o:
-    #        cutoff = np.float(o[2:].replace(',', '.'))
+    options = kw.split('.')
+    lv_names = []
+    for op in options:
+        if op == 'f':
+            lv_names.append('fast')
+        elif op == 's': 
+            lv_names.append('slow')
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
@@ -576,12 +582,16 @@ def lv(kw):
     template = {
     'fn': 'nems_lbhb.modules.state.add_lv',
     'fn_kwargs': {'i': 'pred',
-                  'o': 'pred'},
+                  'o': 'pred',
+                  'n': lv_names},
     'plot_fns': ['nems_lbhb.plots.lv_quickplot'],
         'plot_fn_idx': 0,
     'prior': {'e': ('Normal', {'mean': mean, 'sd': sd})},
     'bounds': {'e': (None, None)}
     }
+
+    if len(lv_names) == 0:
+        log.info("WARNING: No LV names specified, so will just minimize MSE")
 
     return template
 

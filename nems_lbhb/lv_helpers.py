@@ -3,6 +3,7 @@ import nems_lbhb.preprocessing as preproc
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import pandas as pd
 import logging
 
 log = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
         metric_fn = lambda d: pup_nmse(d, 'pred', output_name, alpha=context['alpha'])
     elif metric == 'pup_nc_nmse':
         metric_fn = lambda d: pup_nc_nmse(d, 'pred', output_name, alpha=context['alpha'])
+    elif metric == 'pup_dep_LVs':
+        metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, alpha=context['alpha'])
     fitter_fn = getattr(nems.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
@@ -95,9 +98,35 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     p_mask = result['p_mask'].as_continuous().squeeze()
     residual_big = X2[:, p_mask] - X1[:, p_mask]
     residual_small = X2[:, ~p_mask] - X1[:, ~p_mask]
-    nc_big = np.corrcoef(residual_big)
-    nc_small = np.corrcoef(residual_small)
-    pup_cost = abs(nc_big - nc_small).mean()
+    
+    if 'stim_epochs' in result.signals.keys():
+        # for minimizing per stimulus
+        epochs = result['stim_epochs']._data
+        idx = np.argwhere(epochs.sum(axis=-1) != 0)
+        epochs = epochs[idx, :].squeeze()
+        if len(epochs.shape)==1:
+            epochs = epochs[np.newaxis, :]
+        delta_nc = []
+        for i in range(epochs.shape[0]):
+            s_mask = epochs[i, :].astype(np.bool)
+            rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
+            rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
+            nc_big = np.corrcoef(rb)
+            nc_small = np.corrcoef(rs)
+            delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
+        pup_cost = np.mean(delta_nc)
+
+    else:
+        # for minimizing over ALL stimuli
+        nc_big = np.corrcoef(residual_big)
+        nc_small = np.corrcoef(residual_small)
+        pup_cost = abs(nc_big - nc_small).mean()
+
+    # additional pupil constraint to set first order mod index to zero
+    #residual_big = X2[:, p_mask] - X3[:, p_mask]
+    #residual_small = X2[:, ~p_mask] - X3[:, ~p_mask]
+    #mi_mean = np.nanmean((residual_big - residual_small / residual_big + residual_small))
+    #pup_cost2 = mi_mean
 
     cost = (alpha * pup_cost) + ((1 - alpha) * nmse)
 
@@ -106,6 +135,74 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
 
     return cost
 
+
+def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
+    '''
+    For purely LV model. Constrain first LV (lv_slow) to correlate with pupil,
+    second LV (lv_fast) to have variance that correlates with pupil.
+    Weigh these constraints vs. minimizing nsme.
+    '''
+    lv_chans = result['lv'].chans
+    X1 = result[pred_name].as_continuous()
+    X2 = result[resp_name].as_continuous()
+    respstd = np.nanstd(X2)
+    squared_errors = (X1-X2)**2
+    mse = np.sqrt(np.nanmean(squared_errors))
+    nmse = mse / respstd
+
+    if ('lv_fast' not in lv_chans) & ('lv_slow' not in lv_chans):
+        # don't know how to constrain LVs, just minimizing nmse
+        return nmse
+    
+    elif ('lv_fast' in lv_chans) & ('lv_slow' in lv_chans):
+        p = result['pupil']._data
+        lv_fast = result['lv'].extract_channels(['lv_fast'])._data
+        lv_slow = result['lv'].extract_channels(['lv_slow'])._data
+        fast_cc = -abs(lv_var_corr_pupil(p, lv_fast))
+        slow_cc = -abs(lv_corr_pupil(p, lv_slow))
+
+        cost = cost = (alpha * slow_cc) + (alpha * fast_cc) + ((1 - 2*alpha) * nmse)
+        return cost
+
+    elif ('lv_fast' in lv_chans):
+        p = result['pupil']._data
+        lv_fast = result['lv'].extract_channels(['lv_fast'])._data
+        fast_cc = -abs(lv_var_corr_pupil(p, lv_fast))
+
+        cost = (alpha * fast_cc) + ((1 - alpha) * nmse)
+        return cost
+
+    elif ('lv_slow' in lv_chans):
+        p = result['pupil']._data
+        lv_slow = result['lv'].extract_channels(['lv_slow'])._data
+        slow_cc = -abs(lv_corr_pupil(p, lv_slow))
+
+        cost = (alpha * slow_cc) + ((1 - alpha) * nmse)
+        return cost
+
+def lv_corr_pupil(p, lv):
+    """
+    return correlation of pupil and lv
+    """
+    return np.corrcoef(p.squeeze(), lv.squeeze())[0, 1]
+
+def lv_var_corr_pupil(p, lv):
+    """
+    return corr. between var(lv) and p for sliding window
+    """
+    win_size = int(p.shape[-1] / 10)
+    p_roll = rolling_window(p, win_size).squeeze()
+    lv_roll = rolling_window(lv, win_size).squeeze()
+
+    p_mean = np.mean(p_roll, axis=-1)
+    lv_var = np.var(lv_roll, axis=-1)
+
+    return np.corrcoef(p_mean, lv_var)[0, 1]
+
+def rolling_window(a, window):
+    shape = a.shape[:-1] + (a.shape[-1] - window +1, window)
+    strides = a.strides + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
                            rec=None, use_mask=True, **context):
@@ -137,19 +234,33 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
     big['mask'] = big['p_mask']
     small = r12.copy()
     small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
+    
+    big = big.apply_mask(reset_epochs=True)
+    small = small.apply_mask(reset_epochs=True)
 
     epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
     r_dict = r12['resp'].extract_epochs(epochs)
-    epochs = np.unique([e for e in big.epochs.name if 'STIM' in e]).tolist()
     big_dict = big['resp'].extract_epochs(epochs)
-    epochs = np.unique([e for e in small.epochs.name if 'STIM' in e]).tolist()
     small_dict = small['resp'].extract_epochs(epochs)
 
     all_df1 = nc.compute_rsc(r_dict)
     big_df1 = nc.compute_rsc(big_dict)
     small_df1 = nc.compute_rsc(small_dict)   
+    
+    # per stim
+    perstim_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    big_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    small_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    for e in epochs:
+        r_dict = r12['resp'].extract_epochs(e)
+        big_dict = big['resp'].extract_epochs(e)
+        small_dict = small['resp'].extract_epochs(e)
 
-    # regress out model pred method 2
+        perstim_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
+        big_perstim.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
+        small_perstim.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
+
+    # =========== regress out model pred method 2 ==================
     log.info("regress out model prediction using method 2, compute noise correlations")
     r12 = r.copy()
     mod_data = r12['resp']._data - r12['pred']._data + r12['psth_sp']._data
@@ -166,22 +277,37 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
     epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
     r_dict = r12['resp'].extract_epochs(epochs)
-    epochs = np.unique([e for e in big.epochs.name if 'STIM' in e]).tolist()
     big_dict = big['resp'].extract_epochs(epochs)
-    epochs = np.unique([e for e in small.epochs.name if 'STIM' in e]).tolist()
     small_dict = small['resp'].extract_epochs(epochs)
 
     all_df2 = nc.compute_rsc(r_dict)
     big_df2 = nc.compute_rsc(big_dict)
     small_df2 = nc.compute_rsc(small_dict) 
 
+    # per stim
+    perstim2_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    big_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    small_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
+    for e in epochs:
+        r_dict = r12['resp'].extract_epochs(e)
+        big_dict = big['resp'].extract_epochs(e)
+        small_dict = small['resp'].extract_epochs(e)
+
+        perstim2_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
+        big_perstim2.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
+        small_perstim2.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
 
     results = {'rsc_all': all_df1['rsc'].mean(), 'rsc_all_sem': all_df1['rsc'].sem(),
                'rsc_big': big_df1['rsc'].mean(), 'rsc_big_sem': big_df1['rsc'].sem(),
                'rsc_small': small_df1['rsc'].mean(), 'rsc_small_sem': small_df1['rsc'].sem(),
                'rsc_all2': all_df2['rsc'].mean(), 'rsc_all_sem2': all_df2['rsc'].sem(),
                'rsc_big2': big_df2['rsc'].mean(), 'rsc_big_sem2': big_df2['rsc'].sem(),
-               'rsc_small2': small_df2['rsc'].mean(), 'rsc_small_sem2': small_df2['rsc'].sem()}
+               'rsc_small2': small_df2['rsc'].mean(), 'rsc_small_sem2': small_df2['rsc'].sem(),
+               'rsc_perstim_small': small_perstim['rsc'].mean(), 'rsc_perstim_small_sem': np.nan,
+               'rsc_perstim_big': big_perstim['rsc'].mean(), 'rsc_perstim_big_sem': np.nan,
+               'rsc_perstim_small2': small_perstim2['rsc'].mean(), 'rsc_perstim_small_sem2': np.nan,
+               'rsc_perstim_big2': big_perstim2['rsc'].mean(), 'rsc_perstim_big_sem2': np.nan}
+
     modelspec['meta']['extra_results'] = json.dumps(results)
 
 

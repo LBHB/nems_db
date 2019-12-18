@@ -335,6 +335,8 @@ def pupLVbasic(fitkey):
         metric = 'pup_nmse'
     elif pup_constraint == 'nc':
         metric = 'pup_nc_nmse'
+    elif pup_constraint == 'lv_only':
+        metric = 'pup_dep_LVs'
 
     xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
                   {'max_iter': max_iter,
@@ -386,5 +388,7 @@ def _parse_pupLVbasic(options):
                 pup_constraint = 'lv_var'
             elif pc == 'NC':
                 pup_constraint = 'nc'
+            elif pc == 'LVonly':
+                pup_constraint = 'lv_only'
 
     return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint

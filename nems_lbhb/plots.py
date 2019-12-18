@@ -1355,16 +1355,20 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     lv = plt.subplot2grid((1, 3), (0, 0), colspan=2)
     weights = plt.subplot2grid((1, 3), (0, 2), colspan=1)
     
-    lv.plot(r['lv']._data[1, :], color='purple')
+    lv.plot(r['lv']._data.T)
+    lv.legend(r['lv'].chans, fontsize=6)
     lv.set_xlabel('Time')
-    lv.set_title('Latent Variable')
+    lv.set_title('Latent Variable(s)')
 
     # figure out module index
     idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.add_lv' in modelspec.modules[i]['fn']][0]
 
     lim = np.max(abs(modelspec.phi[idx]['e'].squeeze()))
     bins = np.linspace(-lim, lim, 11)
-    weights.hist(modelspec.phi[idx]['e'].squeeze(), bins=bins, color='lightgrey', edgecolor='k')
+    nLVs = modelspec.phi[idx]['e'].shape[-1]
+    for i in range(nLVs):
+        weights.hist(modelspec.phi[idx]['e'][:, i], bins=bins, alpha=0.5, edgecolor='k', label=r['lv'].chans[i+1])
+    weights.legend(fontsize=8)
     weights.axvline(0, linestyle='--', color='r')
     weights.set_xlabel('Encoding weights')
 
@@ -1457,18 +1461,23 @@ def lv_logsig_plot(rec, modelspec, ax=None, **options):
     # simple scatter plot of encoding vs. decoding weights
     modelspecs = modelspec.modelspecname.split('-')
     idx = [i for i in range(0, len(modelspecs)) if 'lv.' in modelspecs[i]][0]
-    e = modelspec.phi[idx]['e'].squeeze()
-
+    e = modelspec.phi[idx]['e']
     idx = [i for i in range(0, len(modelspecs)) if 'lvlogsig.' in modelspecs[i]][0]
-    g = modelspec.phi[idx]['g'][:, 1]
+    g = modelspec.phi[idx]['g'][:, 1:]
 
-    ulim = np.max(np.concatenate((e, g)))
-    llim = np.min(np.concatenate((e, g)))
+    for i in range(e.shape[-1]):
+        _e = e[:, i]
+        _g = g[:, i]
+        ulim = np.max(np.concatenate((e, g)))
+        llim = np.min(np.concatenate((e, g)))
+        ax.scatter(_e, _g, s=30, edgecolor='white', label=r['lv'].chans[i+1])
 
-    ax.scatter(e, g, s=30, color='k', edgecolor='white')
-    ax.plot([llim, ulim], [llim, ulim], color='grey', linestyle='--')
+    ax.legend(fontsize=8)
+    ax.plot([-1, 1], [-1, 1], color='grey', linestyle='--')
     ax.axhline(0, linestyle='--', color='grey')
     ax.axvline(0, linestyle='--', color='grey')
     ax.set_xlabel('Encoding weight')
     ax.set_ylabel('Decoding weight')
     ax.set_title(modelspecs[idx])
+
+    f.tight_layout()

@@ -816,3 +816,23 @@ def create_residual(rec, cutoff=None, shuffle=False):
         r['residual'] = r['residual'].shuffle_time(rand_seed=1)
 
     return r
+
+def add_epoch_signal(rec):
+    """
+    Add new signal to recording with each channel being the 
+    True/False mask for each STIM epoch
+    """
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    epochs = [e for e in r.epochs.name.unique() if 'STIM' in e]
+    resp = r['resp']._data
+    epoch_signal = np.zeros((len(epochs), resp.shape[-1]))
+
+    for i, e in enumerate(epochs):
+        s = r['resp'].epoch_to_signal(e)
+        epoch_signal[i, :] = s._data.squeeze()
+
+    r['stim_epochs'] = r['resp']._modified_copy(epoch_signal)
+    r['stim_epochs'].name = 'stim_epochs'
+
+    return r 

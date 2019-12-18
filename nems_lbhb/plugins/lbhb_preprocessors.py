@@ -529,3 +529,15 @@ def residual(load_key):
             ['rec'], ['rec']]]
 
     return xfspec
+
+def epsig(load_key):
+    """
+    Create epoch signal from epochs so that cost function has access to 
+    stim epoch times 
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_epoch_signal',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec
