@@ -29,3 +29,8 @@ nd.enqueue_single_model(parm1, parm2, parm3, force_rerun=force_rerun,
                         script_path=script_path, user=user)
 ```
 
+## OOPS! I made a mistake.
+
+Need to cancel all running jobs? You can kill queue jobs by sending the SQL command:
+
+    update tQueue set killnow = 2 where user = 'bburan' and note like "%||modelname||%"
