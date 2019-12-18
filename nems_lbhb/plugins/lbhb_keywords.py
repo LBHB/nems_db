@@ -661,7 +661,6 @@ def sdexp(kw):
     kappa_mean = base_mean
     kappa_sd = amp_sd
 
-
     template = {
         'fn': 'nems_lbhb.modules.state.state_dexp',
         'fn_kwargs': {'i': 'pred',
