@@ -1351,14 +1351,37 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     """
     r = rec.apply_mask()
     
-    f = plt.figure(figsize=(8, 4))
-    lv = plt.subplot2grid((1, 3), (0, 0), colspan=2)
-    weights = plt.subplot2grid((1, 3), (0, 2), colspan=1)
-    
-    lv.plot(r['lv']._data.T)
-    lv.legend(r['lv'].chans, fontsize=6)
-    lv.set_xlabel('Time')
-    lv.set_title('Latent Variable(s)')
+    nrows = len(r['lv'].chans[1:])
+    f = plt.figure(figsize=(12, 8))
+    pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
+    weights = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    if 'lv_slow' in r['lv'].chans:
+        scatter = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+        # scatter slow lv vs pupil
+        lv_slow = r['lv'].extract_channels(['lv_slow'])._data.squeeze()
+        p = r['pupil']._data.squeeze()
+        scatter.scatter(p, lv_slow, s=30, edgecolor='white')
+        scatter.set_xlabel('pupil size', fontsize=8)
+        scatter.set_ylabel('lv_slow', fontsize=8)
+        scatter.set_title("corr coef: {}".format(round(np.corrcoef(p, lv_slow)[0, 1], 3)), fontsize=8)
+    for i in range(nrows):
+        lv = plt.subplot2grid((nrows+1, 3), (i, 0), colspan=2)
+        if r['lv'].chans[i+1] == 'lv_fast':
+            # color by pupil size
+            time = np.arange(0, r['lv'].shape[-1])
+            lv_series = r['lv']._data[i+1, :].squeeze()
+            p = r['pupil']._data.squeeze()
+            lv.scatter(time, lv_series, c=p, s=20)
+            #lv.gray()
+        else:
+            lv.plot(r['lv']._data[i+1, :].T)
+        lv.legend([r['lv'].chans[i+1]], fontsize=6)
+        lv.axhline(0, linestyle='--', color='grey')
+        lv.set_xlabel('Time')
+
+    pup.plot(r['pupil']._data.T, color='purple')
+    pup.legend(['pupil'], fontsize=6)
+    pup.set_xlabel('Time')
 
     # figure out module index
     idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.add_lv' in modelspec.modules[i]['fn']][0]
@@ -1374,7 +1397,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
 
     modelspecs = modelspec.modelspecname.split('-')
     f.suptitle(modelspecs[idx])
-    f.tight_layout()
+    #f.tight_layout()
 
 
 def state_logsig_plot(rec, modelspec, ax=None, **options):

@@ -541,3 +541,16 @@ def epsig(load_key):
                 ['rec'], ['rec']]]
 
     return xfspec
+
+
+def addmeta(load_key):
+    """
+    Add meta data to recording that can be used later on in the fit. For example,
+    information about epochs could be useful.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_meta',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec

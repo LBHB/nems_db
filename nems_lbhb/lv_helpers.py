@@ -142,6 +142,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
     second LV (lv_fast) to have variance that correlates with pupil.
     Weigh these constraints vs. minimizing nsme.
     '''
+    fs = result['resp'].fs
     lv_chans = result['lv'].chans
     X1 = result[pred_name].as_continuous()
     X2 = result[resp_name].as_continuous()
@@ -151,23 +152,33 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
     nmse = mse / respstd
 
     if ('lv_fast' not in lv_chans) & ('lv_slow' not in lv_chans):
-        # don't know how to constrain LVs, just minimizing nmse
+        # don't know how to constrain LV(s), just minimizing nmse
         return nmse
     
     elif ('lv_fast' in lv_chans) & ('lv_slow' in lv_chans):
+        ref_len = result.meta['ref_len']
+        p = result['pupil']._data.reshape(-1, ref_len)
+        lv_fast = result['lv'].extract_channels(['lv_fast'])._data.reshape(-1, ref_len)
+        
+        p = np.mean(p, axis=-1)
+        lv_fast = np.var(lv_fast, axis=-1)
+        fast_cc = -abs(lv_corr_pupil(p, lv_fast))
+
         p = result['pupil']._data
-        lv_fast = result['lv'].extract_channels(['lv_fast'])._data
         lv_slow = result['lv'].extract_channels(['lv_slow'])._data
-        fast_cc = -abs(lv_var_corr_pupil(p, lv_fast))
         slow_cc = -abs(lv_corr_pupil(p, lv_slow))
 
         cost = cost = (alpha * slow_cc) + (alpha * fast_cc) + ((1 - 2*alpha) * nmse)
         return cost
 
     elif ('lv_fast' in lv_chans):
-        p = result['pupil']._data
-        lv_fast = result['lv'].extract_channels(['lv_fast'])._data
-        fast_cc = -abs(lv_var_corr_pupil(p, lv_fast))
+        ref_len = result.meta['ref_len']
+        p = result['pupil']._data.reshape(-1, ref_len)
+        lv_fast = result['lv'].extract_channels(['lv_fast'])._data.reshape(-1, ref_len)
+        
+        p = np.mean(p, axis=-1)
+        lv_fast = np.var(lv_fast, axis=-1)
+        fast_cc = -abs(lv_corr_pupil(p, lv_fast))
 
         cost = (alpha * fast_cc) + ((1 - alpha) * nmse)
         return cost
@@ -186,11 +197,12 @@ def lv_corr_pupil(p, lv):
     """
     return np.corrcoef(p.squeeze(), lv.squeeze())[0, 1]
 
-def lv_var_corr_pupil(p, lv):
+def lv_var_corr_pupil(p, lv, fs):
     """
     return corr. between var(lv) and p for sliding window
     """
-    win_size = int(p.shape[-1] / 10)
+    # 5 sec window
+    win_size = int(5 * fs)
     p_roll = rolling_window(p, win_size).squeeze()
     lv_roll = rolling_window(lv, win_size).squeeze()
 

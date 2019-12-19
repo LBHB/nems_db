@@ -836,3 +836,12 @@ def add_epoch_signal(rec):
     r['stim_epochs'].name = 'stim_epochs'
 
     return r 
+
+
+def add_meta(rec):
+
+    ref_len = rec.apply_mask(reset_epochs=True)['resp'].extract_epoch('REFERENCE').shape[-1]
+
+    rec.meta['ref_len'] = ref_len
+
+    return rec
