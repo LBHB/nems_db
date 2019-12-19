@@ -70,6 +70,7 @@ slegend = []
 save_dpred_S = {}
 save_dpred_RS = {}
 meanpred = np.zeros((2, 3))
+allpred = np.empty((2, 3), dtype='O')
 for b, batch in enumerate(batches):
     d=nd.batch_comp(batch=batch, modelnames=modelnames, stat='r_test')
 
@@ -94,6 +95,9 @@ for b, batch in enumerate(batches):
     save_dpred_RS[batch] = r.loc[r['sig'],'r_test_S'] - r.loc[r['sig'], 'r_test_RS']
 
     meanpred[b,:] = r.loc[r['sig'],d.columns].mean().values
+    for i, c in enumerate(d.columns):
+        allpred[b,i] = r.loc[r['sig'], c]
+
     #ax_mean.plot(r.loc[r['sig'],d.columns].mean().values, label=batstring[b])
     #ax_mean.plot(r.loc[r['sig'],d.columns].median().values,ls='--')
 
@@ -173,3 +177,37 @@ sns.despine(fig, offset=10)
 
 fig.savefig(outpath+'pred_comp_'+keywordstring+'.png')
 fig.savefig(outpath+'pred_comp_'+keywordstring+'.pdf')
+
+
+figure, ax = plt.subplots(1, 1, figsize=(4, 4))
+
+def colorize(bp, fc, ec):
+    for element in ['boxes', 'whiskers', 'fliers', 'means', 'medians', 'caps']:
+        plt.setp(bp[element], color=ec)
+    for patch in bp['boxes']:
+        patch.set(facecolor=fc)
+    return patch
+
+colors = ['blue', 'orange', 'green']
+colors = ['#1f77b4',
+            '#ff7f0e',
+            '#2ca02c',]
+
+handles = []
+for i, pred in enumerate(allpred.T):
+    bp1 = ax.boxplot(pred[0].values, positions=[i], widths=0.5, patch_artist=True)
+    bp2 = ax.boxplot(pred[1].values, positions=[i+4], widths=0.5, patch_artist=True)
+    p = colorize(bp1, colors[i], 'black')
+    colorize(bp2, colors[i], 'black')
+    handles.append(p)
+
+ax.legend(handles, ['RS', 'S', 'Full'])
+
+ax.set_xticks([1, 5])
+ax.set_xticklabels(['A1', 'PEG'])
+
+ax.set_ylabel('Mean pred. corr.')
+
+sns.despine(figure, offset=10)
+figure.savefig(outpath + 'pred_comp_boxplot_' + keywordstring + '.pdf')
+
