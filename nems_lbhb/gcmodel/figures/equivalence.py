@@ -134,7 +134,8 @@ def _relative_score(df, models, mask):
 def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                           LN_filter=False, test_limit=None, alpha=0.05,
                           save_path=None, load_path=None,
-                          equiv_key='equivalence'):
+                          equiv_key='partial_corr',
+                          effect_key='performance_effect'):
     '''
     model1: GC
     model2: STP
@@ -142,15 +143,13 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
     '''
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+    _, cellids, _, _, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                                 as_lists=False)
     improved = c
     not_improved = list(set(a) - set(c))
 
     if load_path is None:
         df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-        cellids, under_chance, less_LN = get_filtered_cellids(batch, gc,
-                                                              stp, LN, combined,
-                                                              se_filter,
-                                                              LN_filter)
 
         rs = []
         for c in a[:test_limit]:
@@ -169,7 +168,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
             rs.append(np.corrcoef(gcff-lnff, stpff-lnff)[0, 1])
 
         blank = np.full_like(rs, np.nan)
-        results = {'cellid': cellids[:test_limit], 'equivalence': rs,
+        results = {'cellid': a[:test_limit], 'equivalence': rs,
                    'effect_size': blank, 'corr_gc_LN': blank,
                    'corr_stp_LN': blank}
         df = pd.DataFrame.from_dict(results)
@@ -179,8 +178,6 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     else:
         df = pd.read_pickle(load_path)
 
-    cellids, _, _ = get_filtered_cellids(batch, gc, stp, LN, combined,
-                                         se_filter, LN_filter, as_lists=False)
     df = df[cellids]
     rs = df[equiv_key].values
 
@@ -244,13 +241,16 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
                             LN_filter=False, save_path=None, load_path=None,
                             test_limit=None, only_improvements=False,
-                            legend=False, effect_key='effect_size',
-                            equiv_key='equivalence',
+                            legend=False, effect_key='performance_effect',
+                            equiv_key='partial_corr',
                             plot_stat='r_ceiling'):
 
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
                                            LN_filter=LN_filter)
+    _, cellids, _, _, _ = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter, as_lists=False)
 
     if load_path is None:
         equivs = []
@@ -290,7 +290,7 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
             plot_df = df_c
         else:
             plot_df = df_r
-        improved = c
+
         models = [gc, stp, LN]
         gc_rel_all, stp_rel_all = _relative_score(plot_df, models, a)
 
@@ -306,8 +306,6 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
     else:
         df = pd.read_pickle(load_path)
 
-    cellids, _, _ = get_filtered_cellids(batch, gc, stp, LN, combined,
-                                         se_filter, LN_filter, as_lists=False)
     df = df[cellids]
     equivalence = df[equiv_key].values
     effect_size = df[effect_key].values
@@ -360,13 +358,21 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
         y_text = 'equivalence, partial correlation\n'
     else:
         y_text = 'unknown equivalence key'
+
+    if effect_key == 'effect_size':
+        x_text = 'effect size: 1 - 0.5*(CC(GC,LN) + CC(STP,LN))'
+    elif effect_key == 'performance_effect':
+        x_text = 'effect size: 0.5*(rGC-rLN + rSTP-rLN)'
+    else:
+        x_text = 'unknown effect key'
+
     text = ("scatter: Equivalence of Change to Predicted PSTH\n"
             "batch: %d\n"
             "vs Effect Size\n"
             "all cells,  r:  %.4f,    p:  %.4E\n"
             "y: %s"
-            "x: effect size: 1 - 0.5*(CC(GC,LN) + CC(STP,LN))"
-            % (batch, r, p, y_text))
+            "x: %s"
+            % (batch, r, p, y_text, x_text))
     for ln in extra_title_lines:
         text += "\n%s" % ln
 
@@ -393,22 +399,20 @@ def equivalence_effect_size(batch, gc, stp, LN, combined, se_filter=True,
     return fig1, fig3
 
 
-def equiv_effect_cells(batch, gc, stp, LN, combined, se_filter=True,
-                            LN_filter=False, save_path=None, load_path=None,
-                            test_limit=None, only_improvements=False,
-                            effect_key='performance_effect', equiv_key='partial_corr',
-                            plot_stat='r_ceiling'):
+def equiv_effect_cells(batch, gc, stp, LN, combined, save_path=None,
+                       load_path=None,
+                       test_limit=None, only_improvements=False,
+                       effect_key='performance_effect', equiv_key='partial_corr',
+                       plot_stat='r_ceiling'):
 
-    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                           se_filter=se_filter,
-                                           LN_filter=LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
     improved = c
     df = pd.read_pickle(load_path)
 
-    equivalence_imp = df['equivalence'][improved]
+    equivalence_imp = df[equiv_key][improved]
     effectsize_imp = df[effect_key][improved]
-    print("effect size above 0.2:")
-    big_effect = effectsize_imp[effectsize_imp > 0.3].index.values.tolist()
+    print("effect size above 0.15:")
+    big_effect = effectsize_imp[effectsize_imp > 0.15].index.values.tolist()
     print(big_effect)
     print("\nequivalence above 0.5:")
     big_equiv = equivalence_imp[equivalence_imp > 0.5].index.values.tolist()
