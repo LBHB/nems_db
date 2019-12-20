@@ -13,8 +13,10 @@ import pandas as pd
 import numpy as np
 from scipy.stats import wilcoxon, ttest_ind, pearsonr
 from nems.plots.utils import ax_remove_box
+import seaborn as sns
 
-outpath='/auto/users/svd/docs/current/RDT/nems/'
+#outpath='/auto/users/svd/docs/current/RDT/nems/'
+outpath='/auto/users/bburan/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
@@ -49,11 +51,14 @@ stats_keys = ['mean', 'std', 'sem', 'max', 'min']
 rg = {}
 rgdf = {}
 
+figure, axes = plt.subplots(2, 3, figsize=(8,5))
+axes[1, 2].remove()
+
 for batch, bs in zip(batches, batstring):
     modelspecs = get_batch_modelspecs(batch, modelname, multi=multi, limit=None)
     modelspecs_shf = get_batch_modelspecs(batch, modelnames[1], multi=multi, limit=None)
     modelspecs_SR = get_batch_modelspecs(batch, modelnames[0], multi=multi, limit=None)
-    
+
     stats = ms.summary_stats(modelspecs, mod_key=mod_key,
                              meta_include=meta, stats_keys=stats_keys)
     index = list(stats.keys())
@@ -94,7 +99,7 @@ for batch, bs in zip(batches, batstring):
             tar_id = np.append(tar_id, np.arange(1,len(m.phi[midx]['fg_gain'][1:])+1))
             for i in range(len(m.phi[midx]['fg_gain'][1:])):
                 cellids.append(cellid)
-            
+
             s = np.ones(m.phi[midx]['fg_gain'][1:].shape)
 
             c = np.append(c, s * i)
@@ -125,50 +130,49 @@ for batch, bs in zip(batches, batstring):
 
     histbins = np.linspace(-0.5, 0.5, 21)
 
-    fig = plt.figure(figsize=(8,5))
-
-    ax=plt.subplot(2,3,1)
+    ax=axes[0, 0]
     bound = 1.2
     beta_comp(b, f, n1='bg', n2='fg', hist_range=[-bound, bound],
               ax=ax, click_fun=_rdt_info, highlight=si, title=bs)
 
-    ax = plt.subplot(2,3,2)
+    ax = axes[0, 1]
 
     stat, p = wilcoxon(f,b)
     md = np.mean(f-b)
     rg[batch] = gdiff
 
-    list_of_tuples = list(zip(cellids, tar_id, f, b, gdiff, r_test, r_test_S, r_test_SR)) 
+    list_of_tuples = list(zip(cellids, tar_id, f, b, gdiff, r_test, r_test_S, r_test_SR))
     rgdf[batch] = pd.DataFrame(list_of_tuples, columns=['cellid','tar_id','fg','bg',
                                                         'gdiff','r','r_S','r_SR'])
-    
+
     h0, x0 = np.histogram(gdiff[nsi], bins=histbins)
     h, x = np.histogram(gdiff[si], bins=histbins)
     d=(x0[1]-x0[0])/2
-    plt.bar(x0[:-1]+d, h0, width=d*1.8)
-    plt.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
+    ax.bar(x0[:-1]+d, h0, width=d*1.8)
+    ax.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
     ylim = ax.get_ylim()
-    plt.plot([0, 0], ylim, 'k--')
+    ax.plot([0, 0], ylim, 'k--')
     tx = x0[0]+d
     ty = ylim[1]*0.95
     t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(si),si.shape[0], p, md)
-    plt.text(tx,ty, t, va='top')
-    plt.xlabel('FG-BG gain')
+    ax.text(tx,ty, t, va='top')
+    ax.set_xlabel('FG-BG gain')
 
-    ax = plt.subplot(2,3,3)
-    ax.plot(rdiff[nsi], gdiff[nsi], '.', color='lightgray')
-    ax.plot(rdiff[si], gdiff[si], '.', color='black')
+    ax = axes[0, 2]
+
+    ax.plot(rdiff[nsi], gdiff[nsi], 'o', color='gray', mec='w', mew=1)
+    ax.plot(rdiff[si], gdiff[si], 'o', color='#83428c', mec='w', mew=1)
     r,p = pearsonr(rdiff[nsi+si], gdiff[nsi+si])
     ax_remove_box(ax)
     ax.set_xlabel('deltaR')
     ax.set_ylabel('deltaG')
     ax.set_title('R={:.3f} p={:.3f}'.format(r,p))
 
-    ax=plt.subplot(2,3,4)
+    ax = axes[1, 0]
     beta_comp(b_S, f_S, n1='bg_S', n2='fg_S', ax=ax, hist_range=[-bound, bound],
               highlight=si, title=bs+" (shf)")
 
-    ax = plt.subplot(2,3,5)
+    ax = axes[1, 1]
 
     gdiff_S = f_S-b_S
     stat, p = wilcoxon(f_S,b_S)
@@ -176,20 +180,23 @@ for batch, bs in zip(batches, batstring):
     h0, x0 = np.histogram(gdiff_S[~si], bins=histbins)
     h, x = np.histogram(gdiff_S[si], bins=histbins)
     d=(x0[1]-x0[0])/2
-    plt.bar(x0[:-1]+d, h0, width=d*1.8)
-    plt.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
+    ax.bar(x0[:-1]+d, h0, width=d*1.8)
+    ax.bar(x0[:-1]+d, h, bottom=h0, width=d*1.8)
     ylim = ax.get_ylim()
-    plt.plot([0, 0], ylim, 'k--')
+    ax.plot([0, 0], ylim, 'k--')
     tx = x0[0]+d
     ty = ylim[1]*0.95
     t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(si),si.shape[0], p, md)
-    plt.text(tx,ty, t, va='top')
-    plt.xlabel('FG-BG gain')
+    ax.text(tx,ty, t, va='top')
+    ax.set_xlabel('FG-BG gain')
 
-    fig.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
+    sns.despine(figure, offset=10)
+    figure.tight_layout()
+    figure.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
     rgdf[batch].to_csv(outpath+'strf_rg_summary_'+bs+'.csv')
-    
+
 ttest_result = ttest_ind(rg[269], rg[273])
+
 
 print("Mean A1={:.3f} PEG={:.3f} p<{:.4f}".format(
     np.mean(rg[269]), np.mean(rg[273]), ttest_result.pvalue))
