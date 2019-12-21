@@ -96,10 +96,14 @@ def performance_scatters(batch, gc, stp, LN, combined,
 
     '''
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
+#    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
+#                                                          LN, combined,
+#                                                          se_filter,
+#                                                          LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    cellids = a
 
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
@@ -300,10 +304,15 @@ def performance_bar(batch, gc, stp, LN, combined, se_filter=True,
     '''
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
+#    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
+#                                                          LN, combined,
+#                                                          se_filter,
+#                                                          LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    cellids = a
+
     if manual_cellids is not None:
         # WARNING: Will override se and ratio filters even if they are set
         cellids = manual_cellids
@@ -605,18 +614,14 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     '''
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-                                                          LN, combined,
-                                                          se_filter,
-                                                          LN_filter)
-
-    if manual_cellids is not None:
-        # WARNING: Will override se and ratio filters even if they are set
-        cellids = manual_cellids
-    elif only_improvements:
-        e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                               as_lists=True)
-        cellids = e
+#    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
+#                                                          LN, combined,
+#                                                          se_filter,
+#                                                          LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
+                                           se_filter=se_filter,
+                                           LN_filter=LN_filter)
+    cellids = a
 
     gc_test = df_r[gc][cellids]
     stp_test = df_r[stp][cellids]

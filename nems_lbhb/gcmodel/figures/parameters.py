@@ -37,9 +37,8 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
                       use_combined=False):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
                                                           LN, combined,
-                                                          se_filter=se_filter,
                                                           as_lists=False)
     _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
@@ -213,9 +212,8 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
 def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
                      use_combined=False):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
                                                           LN, combined,
-                                                          se_filter,
                                                           as_lists=False)
     _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
