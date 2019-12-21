@@ -15,8 +15,8 @@ from scipy.stats import wilcoxon, ttest_ind, pearsonr
 from nems.plots.utils import ax_remove_box
 import seaborn as sns
 
-#outpath='/auto/users/svd/docs/current/RDT/nems/'
-outpath='/auto/users/bburan/'
+outpath='/auto/users/svd/docs/current/RDT/nems/'
+#outpath='/auto/users/bburan/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
@@ -50,9 +50,6 @@ stats_keys = ['mean', 'std', 'sem', 'max', 'min']
 
 rg = {}
 rgdf = {}
-
-figure, axes = plt.subplots(2, 3, figsize=(8,5))
-axes[1, 2].remove()
 
 for batch, bs in zip(batches, batstring):
     modelspecs = get_batch_modelspecs(batch, modelname, multi=multi, limit=None)
@@ -128,10 +125,13 @@ for batch, bs in zip(batches, batstring):
         ctx['modelspec'].quickplot(rec=ctx['val'])
 
 
-    histbins = np.linspace(-0.5, 0.5, 21)
+    figure, axes = plt.subplots(2, 3, figsize=(8, 5))
 
     ax=axes[0, 0]
+
     bound = 1.2
+    histbins = np.linspace(-0.5, 0.5, 21)
+
     beta_comp(b, f, n1='bg', n2='fg', hist_range=[-bound, bound],
               ax=ax, click_fun=_rdt_info, highlight=si, title=bs)
 
@@ -144,6 +144,7 @@ for batch, bs in zip(batches, batstring):
     list_of_tuples = list(zip(cellids, tar_id, f, b, gdiff, r_test, r_test_S, r_test_SR))
     rgdf[batch] = pd.DataFrame(list_of_tuples, columns=['cellid','tar_id','fg','bg',
                                                         'gdiff','r','r_S','r_SR'])
+    rgdf[batch]['trained'] = rgdf[batch]['cellid'].str.contains('oys')
 
     h0, x0 = np.histogram(gdiff[nsi], bins=histbins)
     h, x = np.histogram(gdiff[si], bins=histbins)
@@ -190,7 +191,16 @@ for batch, bs in zip(batches, batstring):
     ax.text(tx,ty, t, va='top')
     ax.set_xlabel('FG-BG gain')
 
+    ax = axes[1, 2]
+    mn = rgdf[batch].groupby('trained').mean()['gdiff'].values
+    se = rgdf[batch].groupby('trained').std()['gdiff'].values / np.sqrt(rgdf[batch].groupby('trained').count()['gdiff'].values)
+
+    ax.bar(x=np.array([0, 1]), height=mn, yerr=se)
+    ax.set_ylabel('mean+sem gdiff')
+    ax.set_xticklabels(['naive','trained'])
+    ax.set_title('{:.3}+{:.3} / {:.3}+{:.3}'.format(mn[0],se[0],mn[1],se[1]))
     sns.despine(figure, offset=10)
+
     figure.tight_layout()
     figure.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
     rgdf[batch].to_csv(outpath+'strf_rg_summary_'+bs+'.csv')
