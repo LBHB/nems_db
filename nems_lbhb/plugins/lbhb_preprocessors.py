@@ -210,7 +210,7 @@ def mod(loadkey):
 
 def pca(loadkey):
     """
-    computer pca (or some other state-space) on response
+    compute pca (or some other state-space) on response
     """
 
     ops = loadkey.split(".")
@@ -218,6 +218,7 @@ def pca(loadkey):
     overwrite_resp = True
     pc_count=None
     pc_idx=None
+    compute_power = 'no'
     for op in ops:
         if op == "psth":
             pc_source = "psth"
@@ -233,14 +234,17 @@ def pca(loadkey):
         elif op.startswith("n"):
             pc_count=int(op[1:])+1
             pc_idx=[int(op[1:])]
+        elif op.startswith("p"):
+            compute_power = "single_trial"
+
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'computer_power': compute_power}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count}]]
+                    'pc_count': pc_count, 'computer_power': compute_power}]]
 
     return xfspec
 

@@ -1693,7 +1693,7 @@ def baphy_load_recording_uri(recache=False, **options):
     #log.info(data_file)
     #log.info(options)
 
-    if not os.path.exists(data_file) or recache == True:
+    if not use_API and (not os.path.exists(data_file) or recache == True):
         log.info("Generating recording")
         # rec.meta is set = options in the following function
         rec = baphy_load_recording(**options)
