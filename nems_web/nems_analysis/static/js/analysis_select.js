@@ -1082,6 +1082,7 @@ $(document).ready(function(){
         var forceRerun = 0;
         var useKamiak = 0;
         var loadKamiak = 0;
+        var useGPU = 0;
 
         if (document.getElementById('forceRerun').checked){
             forceRerun = 1;
@@ -1093,6 +1094,10 @@ $(document).ready(function(){
 
         if (document.getElementById('loadKamiak').checked){
             loadKamiak = 1;
+        }
+
+        if (document.getElementById('useGPU').checked){
+            useGPU = 1;
         }
 
         if ((bSelected === null) || (bSelected === undefined) ||
@@ -1128,7 +1133,7 @@ $(document).ready(function(){
                    execPath:execPath, scriptPath:scriptPath,
                    useKamiak:useKamiak, kamiakFunction:kamiakFunction,
                    kamiakPath:kamiakPath, loadKamiak:loadKamiak,
-                   kamiakResults:kamiakResults},
+                   kamiakResults:kamiakResults, useGPU:useGPU},
             // TODO: should POST be used in this case?
             type: 'GET',
             success: function(result){
