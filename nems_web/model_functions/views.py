@@ -50,6 +50,7 @@ def enqueue_models_view():
     kamiakPath = request.args.get('kamiakPath')  # path to store output in
     loadKamiak = request.args.get('loadKamiak', type=int)  # check to load results
     kamiakResults = request.args.get('kamiakResults')  # path to results
+    useGPU = request.args.get('useGPU', type=int)  # path to results
 
     if loadKamiak:
         kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults,
@@ -77,12 +78,11 @@ def enqueue_models_view():
             scriptPath = None
 
         force_rerun = request.args.get('forceRerun', type=int)
-
         enqueue_models(
                 cSelected, bSelected, mSelected,
                 force_rerun=bool(force_rerun), user=user.username,
                 codeHash=codeHash, executable_path=execPath,
-                script_path=scriptPath,
+                script_path=scriptPath, GPU_job=useGPU
                 )
 
         return jsonify(data=True)
