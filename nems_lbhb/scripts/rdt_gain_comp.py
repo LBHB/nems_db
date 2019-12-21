@@ -15,8 +15,9 @@ from scipy.stats import wilcoxon, ttest_ind, pearsonr
 from nems.plots.utils import ax_remove_box
 import seaborn as sns
 
-outpath='/auto/users/svd/docs/current/RDT/nems/'
+#outpath='/auto/users/svd/docs/current/RDT/nems/'
 #outpath='/auto/users/bburan/'
+outpath='/tmp/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'

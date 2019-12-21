@@ -10,6 +10,9 @@ from pathlib import Path
 from scipy import stats
 import seaborn as sns
 
+#dataroot="/auto/users"
+dataroot="/Volumes/users"
+
 def load_cv(cv_path, glob='*summary.pkl'):
     results = []
     for filename in Path(cv_path).glob(glob):
@@ -23,10 +26,10 @@ def load_cv(cv_path, glob='*summary.pkl'):
                 print(f'Error loading {filename}')
     return pd.concat(results)
 
-cv = load_cv('/auto/users/bburan/analysis/RDT/token_based/results/cv', '*summaryV2.pkl').set_index(['cell', 'model'])
-scv = load_cv('/auto/users/bburan/analysis/RDT/token_based/results/shuffle_cv', '*summaryV2.pkl').set_index(['cell', 'model'])
+cv = load_cv(dataroot+ '/bburan/analysis/RDT/token_based/results/cv', '*summaryV2.pkl').set_index(['cell', 'model'])
+scv = load_cv(dataroot+ '/bburan/analysis/RDT/token_based/results/shuffle_cv', '*summaryV2.pkl').set_index(['cell', 'model'])
 
-with open('/auto/users/bburan/analysis/RDT/token_based/results/summarized.pkl', 'rb') as fh:
+with open(dataroot+ '/bburan/analysis/RDT/token_based/results/summarized.pkl', 'rb') as fh:
     sr, rate, rg, enh, tp, sp, observed = pd.read_pickle(fh, compression=None)
 cell_area_map = observed.groupby('cell').area.first()
 
@@ -63,13 +66,35 @@ ax.set_ylabel('Mean pred. corr.')
 sns.despine(figure, offset=10)
 figure.savefig('/tmp/PSTH-pred.pdf')
 
+meanpred=np.zeros((2,2))
+sempred=np.zeros((2,2))
+
 x = m.loc['A1'].unstack('shuffled').dropna()
 print('A1', stats.ttest_rel(x['yes'], x['no']))
-print(x.mean(), x.median())
+print(x.mean(), x.median(), x.std()/np.sqrt(x.count()))
+meanpred[0,:]=x.mean().values
+sempred[0,:]=(x.std()/np.sqrt(x.count())).values
 
 x = m.loc['PEG'].unstack('shuffled').dropna()
 print('PEG', stats.ttest_rel(x['yes'], x['no']))
-print(x.mean(), x.median())
+print(x.mean(), x.median(), x.std()/np.sqrt(x.count()))
+meanpred[1,:]=x.mean().values
+sempred[1,:]=(x.std()/np.sqrt(x.count())).values
+
+fig = plt.figure(figsize=(4,4))
+plt.bar(np.arange(2)-0.28, meanpred[:,0]-0.2, yerr=sempred[:,0], bottom=0.2,width=0.2)
+plt.bar(np.arange(2)+0.28, meanpred[:,1]-0.2, yerr=sempred[:,1], bottom=0.2,width=0.2)
+
+plt.legend(['S','full'])
+ax_mean=plt.gca()
+ax_mean.set_xticks(np.arange(0,2))
+ax_mean.set_xticklabels(['A1','PEG'])
+ax_mean.set_ylabel('mean pred corr.')
+#plt.ax_remove_box(ax_mean)
+
+sns.despine(fig, offset=10)
+fig.savefig('/tmp/PSTH-pred-meanbar.pdf')
+
 
 m = pd.concat([cv, scv], keys=['no', 'yes'], names=['shuffled'])['r_squared']
 #m = m.reset_index().join(cell_area_map, on='cell').set_index(['area'] + m.index.names)['r_squared'].xs('enh', level='model')

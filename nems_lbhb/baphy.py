@@ -1066,15 +1066,28 @@ def baphy_load_recording_RDT(cellid, batch, options):
                 spike_dict, fs=options['rasterfs'], event_times=event_times
                 )
 
-        # generate response signal
-        t_resp = nems.signal.RasterizedSignal(
-                fs=options['rasterfs'], data=raster_all, name='resp',
-                recording=cellid, chans=cellids, epochs=event_times
-                )
-        if i == 0:
-            resp = t_resp
+        if 1:
+            # generate response signal
+            t_resp = nems.signal.PointProcess(
+                    fs=options['rasterfs'], data=spike_dict,
+                    name='resp', chans=list(spike_dict.keys()),
+                    epochs=event_times
+                    )
+            if i == 0:
+                resp = t_resp
+            else:
+                # concatenate onto end of main response signal
+                resp = resp.append_time(t_resp)
         else:
-            resp = resp.concatenate_time([resp, t_resp])
+            # generate response signal
+            t_resp = nems.signal.RasterizedSignal(
+                    fs=options['rasterfs'], data=raster_all, name='resp',
+                    recording=cellid, chans=cellids, epochs=event_times
+                    )
+            if i == 0:
+                resp = t_resp
+            else:
+                resp = resp.concatenate_time([resp, t_resp])
 
         if options['stim']:
             t_stim = dict_to_signal(stim_dict, fs=options['rasterfs'],
