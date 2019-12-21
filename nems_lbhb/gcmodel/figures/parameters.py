@@ -33,17 +33,22 @@ plt.rcParams.update(params)  # loaded from definitions
 
 
 def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
-                      good_ln=0, log_scale=False, legend=False):
+                      good_ln=0, log_scale=False, legend=False,
+                      use_combined=False):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
                                                           LN, combined,
-                                                          se_filter=se_filter,
                                                           as_lists=False)
     _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
 
-    stp_params = fitted_params_per_batch(289, stp, stats_keys=[], meta=[])
+    if use_combined:
+        params_model = combined
+    else:
+        params_model = stp
+    stp_params = fitted_params_per_batch(batch, params_model, stats_keys=[],
+                                         meta=[])
     stp_params_cells = stp_params.transpose().index.values.tolist()
     for cell in stp_params_cells:
         if cell not in cellids:
@@ -204,16 +209,21 @@ def stp_distributions(batch, gc, stp, LN, combined, se_filter=True,
     return fig1, fig2, fig3, fig4, fig5
 
 
-def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
+def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0,
+                     use_combined=False):
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
+    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
                                                           LN, combined,
-                                                          se_filter,
                                                           as_lists=False)
     _, _, _, _, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            good_ln=good_ln)
 
-    gc_params = fitted_params_per_batch(289, gc, stats_keys=[], meta=[])
+    if use_combined:
+        params_model = combined
+    else:
+        params_model = gc
+    gc_params = fitted_params_per_batch(batch, params_model, stats_keys=[],
+                                        meta=[])
     gc_params_cells = gc_params.transpose().index.values.tolist()
     for cell in gc_params_cells:
         if cell not in cellids:
@@ -221,7 +231,7 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
     not_c = list(set(gc_params.transpose()[cellids].index.values) - set(c))
 
     # index keys are formatted like "4--dsig.d--kappa"
-    mod_keys = gc.split('_')[1]
+    mod_keys = params_model.split('_')[1]
     for i, k in enumerate(mod_keys.split('-')):
         if 'dsig' in k:
             break
@@ -285,7 +295,7 @@ def gc_distributions(batch, gc, stp, LN, combined, se_filter=True, good_ln=0):
     figs = []
     for i, name in zip([0, 1, 2, 3], ['base', 'amplitude', 'shift', 'kappa']):
         f1 = _stacked_hists(diffs[i], gc_diffs[i], medians[i], gc_medians[i],
-                           color, c_color, hist_kwargs=hist_kwargs)
+                            color, c_color, hist_kwargs=hist_kwargs)
         f2 = plt.figure(figsize=text_fig)
         text = ("%s distributions, n: %d\n"
                 "n gc imp (bot): %d, med: %.4f\n"

@@ -299,11 +299,22 @@ def hrc(load_key):
     Mask only data during stimuli that were repeated 10 or greater times.
     hrc = high rep count
     """
+
     xfspec = [['nems_lbhb.preprocessing.mask_high_repetion_stims',
-               {'epoch_regex':'^STIM_'}, ['rec'], ['rec']]]
+               {'epoch_regex':'^STIM_'},
+                 ['rec'], ['rec']]]
 
     return xfspec
 
+
+def ev(load_key):
+    """
+    Mask only evoked data
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.mask_evoked', {}, ['rec'], ['rec']]]
+    
+    return xfspec
 
 def pm(load_key):
     """

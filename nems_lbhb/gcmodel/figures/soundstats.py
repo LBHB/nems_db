@@ -52,7 +52,7 @@ def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
 
 def mean_sd_per_stim_by_batch(batch, loadkey='ozgf.fs100.ch18', max_db_scale=65,
                               pre_log_floor=1, test_limit=None, save_path=None,
-                              load_path=None):
+                              load_path=None, manual_lims=False):
     if load_path is None:
         cellids = nd.get_batch_cells(batch, as_list=True)
         batch_results = {}
@@ -76,7 +76,7 @@ def mean_sd_per_stim_by_batch(batch, loadkey='ozgf.fs100.ch18', max_db_scale=65,
         stats = df['stats'].values.tolist()
         batch_results = {k: v for k, v in zip(stims, stats)}
 
-    fig = scatter_soundstats(batch_results)
+    fig = scatter_soundstats(batch_results, manual_lims=manual_lims)
     fig2 = plt.figure()
     text = ("x: mean level (db SPL)\n"
             "y: std (dB SPL)\n"
@@ -85,7 +85,7 @@ def mean_sd_per_stim_by_batch(batch, loadkey='ozgf.fs100.ch18', max_db_scale=65,
     return fig, fig2
 
 
-def scatter_soundstats(results, legend=False):
+def scatter_soundstats(results, legend=False, manual_lims=False):
     # HACK to get separate markers for batch 263 noisy vs clean dsounds
     voc_in_noise = False
     for k in results:
@@ -105,13 +105,16 @@ def scatter_soundstats(results, legend=False):
             else:
                 clean_means.append(mean)
                 clean_sds.append(sd)
-        fig = plt.figure(figsize=small_fig)
+        fig = plt.figure()
         plt.scatter(clean_sds, clean_means, color=model_colors['combined'],
                     s=big_scatter, label='clean')
         plt.scatter(noisy_sds, noisy_means, color=model_colors['LN'],
                     s=small_scatter, label='noisy')
         if legend:
             plt.legend()
+        if manual_lims:
+            plt.xlim(0,32)
+            plt.ylim(0,65)
 
     else:
         means = []
@@ -122,6 +125,9 @@ def scatter_soundstats(results, legend=False):
 
         fig = plt.figure()
         plt.scatter(sds, means, color=model_colors['combined'], s=big_scatter)
+        if manual_lims:
+            plt.xlim(0,32)
+            plt.ylim(0,65)
 
     plt.tight_layout()
     ax_remove_box()
