@@ -56,29 +56,57 @@ resp=resp.rasterize()
 
 ep = resp.epochs
 
+stim=rec['stim'].extract_epoch('Stim , '+targetid+' , Target')[0,:,:]
+
 firsttar = (ep['name'].str.startswith('Stim , '+targetid+'+')  & ep['name'].str.endswith('Target'))
+trial_start = ep[ep['name']=='TRIAL']['start'].values
 s,e = ep['start'][firsttar].values, ep['end'][firsttar].values
+
+trial_start = np.zeros(s.shape)
+for i, ss in enumerate(s):
+
+    j = ((ep['name']=='TRIAL') & (ep['start']<ss))
+    trial_start[i] = ep.iloc[np.where(j)[0][-1]]['start']
+
 s = (s*resp.fs).astype(int)
 e = (e*resp.fs).astype(int)
 b = np.array([s,e]).T
 dur = int((e-s).mean())
+ts = (trial_start*resp.fs).astype(int) + 50
+bs = np.array([ts,ts+dur]).T
 
 maxreps=4
-fig = plt.figure(figsize=(10,4))
+fig = plt.figure(figsize=(15,4))
+plt.subplot(2, maxreps + 2, 1)
+raster = respfast.extract_epoch(bs * 10)[:, 0, :]
+psth = np.mean(resp.extract_epoch(bs)[:, 0, :], axis=0)
+
+x, y = np.where(raster)
+plt.plot(y, x, '.', color='black')
+plt.title('{} spont'.format(cellid))
+plt.xlim([0, dur * 10])
+ax_remove_box(plt.gca())
+
 for i in range(maxreps):
-    plt.subplot(2,maxreps,i+1)
+    plt.subplot(2,maxreps+2,i+2)
     raster = respfast.extract_epoch((b + dur*i)*10)[:,0,:]
     psth = np.mean(resp.extract_epoch(b + dur*i)[:,0,:], axis=0)
 
     x,y = np.where(raster)
     plt.plot(y,x,'.',color='black')
     plt.title('{} {} rep {}'.format(cellid,targetid,i))
+    plt.xlim([0,dur*10])
     ax_remove_box(plt.gca())
 
-    plt.subplot(2,maxreps,i+maxreps+1)
+    plt.subplot(2,maxreps+2,i+(maxreps+2)+2)
     plt.plot(psth*100,color='black')
     plt.ylim(ylim)
     ax_remove_box(plt.gca())
+
+plt.subplot(2,maxreps+2,maxreps+2)
+plt.imshow(np.sqrt(stim), origin='lower', aspect='auto')
+plt.subplot(2,maxreps+2,(maxreps+2)+maxreps+2)
+plt.imshow(np.sqrt(stim), origin='lower', interpolation='bilinear', aspect='auto')
 
 sns.despine(fig, offset=10)
 plt.tight_layout()

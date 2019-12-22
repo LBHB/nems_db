@@ -101,7 +101,7 @@ for batch, bs in zip(batches, batstring):
             s = np.ones(m.phi[midx]['fg_gain'][1:].shape)
 
             c = np.append(c, s * i)
-            cid.extend([m['meta']['cellid']]*len(s))
+            cid.extend([m.meta['cellid']]*len(s))
             r_test = np.append(r_test, s * r)
             se_test = np.append(se_test, s * se)
 
