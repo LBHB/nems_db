@@ -28,8 +28,8 @@ sns.set_context('paper')
 #plt.rcParams.update(params)
 
 #outpath='/auto/users/svd/docs/current/RDT/nems/'
-#outpath='/tmp/'
-outpath = '/auto/users/bburan/'
+outpath='/tmp/'
+#outpath = '/auto/users/bburan/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
@@ -70,6 +70,7 @@ slegend = []
 save_dpred_S = {}
 save_dpred_RS = {}
 meanpred = np.zeros((2, 3))
+sempred = np.zeros((2, 3))
 allpred = np.empty((2, 3), dtype='O')
 for b, batch in enumerate(batches):
     d=nd.batch_comp(batch=batch, modelnames=modelnames, stat='r_test')
@@ -95,6 +96,8 @@ for b, batch in enumerate(batches):
     save_dpred_RS[batch] = r.loc[r['sig'],'r_test_S'] - r.loc[r['sig'], 'r_test_RS']
 
     meanpred[b,:] = r.loc[r['sig'],d.columns].mean().values
+    sempred[b,:] = r.loc[r['sig'],d.columns].std().values / np.sqrt(r.loc[r['sig'],d.columns].count().values)
+
     for i, c in enumerate(d.columns):
         allpred[b,i] = r.loc[r['sig'], c]
 
@@ -154,9 +157,9 @@ for b, batch in enumerate(batches):
     ax.set_xlabel('Rep/no-rep\nimprovement')
 
 
-ax_mean.bar(np.arange(2)-0.28, meanpred[:,0]-0.2, bottom=0.2,width=0.2)
-ax_mean.bar(np.arange(2), meanpred[:,1]-0.2, bottom=0.2,width=0.2)
-ax_mean.bar(np.arange(2)+0.28, meanpred[:,2]-0.2, bottom=0.2,width=0.2)
+ax_mean.bar(np.arange(2)-0.28, meanpred[:,0]-0.2, yerr=sempred[:,0], bottom=0.2,width=0.2)
+ax_mean.bar(np.arange(2), meanpred[:,1]-0.2, yerr=sempred[:,1], bottom=0.2,width=0.2)
+ax_mean.bar(np.arange(2)+0.28, meanpred[:,2]-0.2, yerr=sempred[:,2], bottom=0.2,width=0.2)
 
 ax_mean.legend(['RS','S','full'])
 ax_mean.set_xticks(np.arange(0,2))
