@@ -571,8 +571,16 @@ def lv(kw):
     options = kw.split('.')
     lv_names = []
     for op in options:
-        if op == 'f':
-            lv_names.append('fast')
+        if op.startswith('f'):
+            if len(op)>1:
+                nfast = int(op[1:])
+                for i in range(nfast):
+                    if i!=0:
+                        lv_names.append('fast{}'.format(i))
+                    else:
+                        lv_names.append('fast')
+            else:
+                lv_names.append('fast')
         elif op == 's': 
             lv_names.append('slow')
 
