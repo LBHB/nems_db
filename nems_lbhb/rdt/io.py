@@ -214,7 +214,7 @@ def reformat_RDT_recording(rec):
     rec['target_id_map'].meta = {'target_map': target_map}
     rec.meta = {'n_targets': len(targets)}
 
-    resp = rec['resp']
+    resp = rec['resp'].rasterize()
     rec['resp'] = resp._modified_copy(resp._data[..., :-1])
 
     rec['dual_stream'] = state.loc['dual_stream']

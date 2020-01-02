@@ -1070,7 +1070,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
             # generate response signal
             t_resp = nems.signal.PointProcess(
                     fs=options['rasterfs'], data=spike_dict,
-                    name='resp', chans=list(spike_dict.keys()),
+                    name='resp', recording=cellid, chans=list(spike_dict.keys()),
                     epochs=event_times
                     )
             if i == 0:
