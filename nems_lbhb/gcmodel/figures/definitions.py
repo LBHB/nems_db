@@ -121,8 +121,8 @@ cf_load_paths = {'com': com, 'gaussian': gauss, 'softmax': sm, 'rank1': r1}
 cf_save_path = '/auto/users/jacob/notes/gc_rank3/characteristic_frequencies/comparisons/'
 
 # equivalence histogram
-eq_289 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/11_22_summed_b289.pkl'
-eq_263 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/10_6_summed_b263.pkl'
+eq_289 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/12_18_summed_b289.pkl'
+eq_263 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/12_19_summed_b263.pkl'
 
 # response stats
 max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'

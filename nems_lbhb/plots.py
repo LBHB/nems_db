@@ -1366,7 +1366,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
         scatter.set_title("corr coef: {}".format(round(np.corrcoef(p, lv_slow)[0, 1], 3)), fontsize=8)
     for i in range(nrows):
         lv = plt.subplot2grid((nrows+1, 3), (i, 0), colspan=2)
-        if r['lv'].chans[i+1] == 'lv_fast':
+        if 'lv_fast' in r['lv'].chans[i+1]:
             # color by pupil size
             time = np.arange(0, r['lv'].shape[-1])
             lv_series = r['lv']._data[i+1, :].squeeze()
@@ -1375,7 +1375,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
             #lv.gray()
         else:
             lv.plot(r['lv']._data[i+1, :].T)
-        lv.legend([r['lv'].chans[i+1]], fontsize=6)
+        lv.legend([r['lv'].chans[i+1]], fontsize=6, frameon=False)
         lv.axhline(0, linestyle='--', color='grey')
         lv.set_xlabel('Time')
 

@@ -21,14 +21,15 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
     if IsReload:
         return {}
     if (metric == 'pup_nmse') | (metric == 'nmse'):
-        metric_fn = lambda d: pup_nmse(d, 'pred', output_name, alpha=context['alpha'])
+        metric_fn = lambda d: pup_nmse(d, 'pred', output_name, **context)
     elif metric == 'pup_nc_nmse':
-        metric_fn = lambda d: pup_nc_nmse(d, 'pred', output_name, alpha=context['alpha'])
+        metric_fn = lambda d: pup_nc_nmse(d, 'pred', output_name, **context)
     elif metric == 'pup_dep_LVs':
-        metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, alpha=context['alpha'])
+        metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, **context)
     fitter_fn = getattr(nems.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
+    '''
     for fit_idx in range(modelspec.fit_count):
         for jack_idx, e in enumerate(est.views()):
             modelspec.jack_index = jack_idx
@@ -40,11 +41,14 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
             modelspec = nems.analysis.api.fit_basic(
                     e, modelspec, fit_kwargs=fit_kwargs,
                     metric=metric_fn, fitter=fitter_fn)
+    '''
+    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+        metric=metric_fn, fitter=fitter_fn)
 
     return {'modelspec': modelspec}
 
 
-def pup_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
+def pup_nmse(result, pred_name='pred', resp_name='resp', **context):
     """
     When alpha = 0, this is just standard nmse of pred vs. resp.
     When alpha > 0, we add a pupil constraint on the variance of the
@@ -57,7 +61,9 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     squared_errors = (X1-X2)**2
     mse = np.sqrt(np.nanmean(squared_errors))
     nmse = mse / respstd
-
+    
+    alpha = context['alpha']
+    
     # add pupil constraint on latent variable
     # constrain lv to have pupil-dependent variance
     lv = result['lv'].as_continuous()
@@ -79,7 +85,7 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     return cost
 
 
-def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
+def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     """
     When alpha = 0, this is just standard nmse of pred vs. resp.
     When alpha > 0, we add a pupil constraint on the variance of the
@@ -92,6 +98,8 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     squared_errors = (X1-X2)**2
     mse = np.sqrt(np.nanmean(squared_errors))
     nmse = mse / respstd
+
+    alpha = context['alpha']
 
     # add pupil constraint so that pairwise correlations
     # are equal between large/small after removing model prediction
@@ -136,13 +144,13 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', alpha=0):
     return cost
 
 
-def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
+def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
     '''
     For purely LV model. Constrain first LV (lv_slow) to correlate with pupil,
     second LV (lv_fast) to have variance that correlates with pupil.
     Weigh these constraints vs. minimizing nsme.
     '''
-    fs = result['resp'].fs
+    result = result.apply_mask()
     lv_chans = result['lv'].chans
     X1 = result[pred_name].as_continuous()
     X2 = result[resp_name].as_continuous()
@@ -151,6 +159,23 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
     mse = np.sqrt(np.nanmean(squared_errors))
     nmse = mse / respstd
 
+    alpha = context['alpha']
+    signed_correlation = context['signed_correlation']
+
+    if len(lv_chans) > 3:
+        raise ValueError("Not set up to handle greater than 2 LVs right now due to \
+                        complications with hyperparameter specification")
+
+    if type(alpha) is dict:
+        # passed different hyperparameters for each of the LVs
+        fast_alpha = alpha['fast_alpha']
+        slow_alpha = alpha['slow_alpha']
+    else:
+        fast_alpha = slow_alpha = alpha
+
+    if (fast_alpha + slow_alpha) > 1:
+            raise ValueError("Hyperparameter values must sum to < 1")
+
     if ('lv_fast' not in lv_chans) & ('lv_slow' not in lv_chans):
         # don't know how to constrain LV(s), just minimizing nmse
         return nmse
@@ -158,17 +183,29 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
     elif ('lv_fast' in lv_chans) & ('lv_slow' in lv_chans):
         ref_len = result.meta['ref_len']
         p = result['pupil']._data.reshape(-1, ref_len)
-        lv_fast = result['lv'].extract_channels(['lv_fast'])._data.reshape(-1, ref_len)
         
+        fast_lv_chans = [c for c in lv_chans if 'lv_fast' in c]
+        fast_cc = []
         p = np.mean(p, axis=-1)
-        lv_fast = np.var(lv_fast, axis=-1)
-        fast_cc = -abs(lv_corr_pupil(p, lv_fast))
+        for c in fast_lv_chans:
+            lv_fast = result['lv'].extract_channels([c])._data.reshape(-1, ref_len)
+            lv_fast = np.var(lv_fast, axis=-1)
+
+            if signed_correlation:
+                cc = lv_corr_pupil(p, lv_fast)
+            else:
+                cc = -abs(lv_corr_pupil(p, lv_fast))
+            fast_cc.append(cc)
 
         p = result['pupil']._data
         lv_slow = result['lv'].extract_channels(['lv_slow'])._data
         slow_cc = -abs(lv_corr_pupil(p, lv_slow))
 
-        cost = cost = (alpha * slow_cc) + (alpha * fast_cc) + ((1 - 2*alpha) * nmse)
+        cost = (slow_alpha * slow_cc) + ((1 - (slow_alpha + fast_alpha)) * nmse)
+
+        for i, c in enumerate(fast_lv_chans):
+            cost += (fast_alpha * fast_cc[i])
+
         return cost
 
     elif ('lv_fast' in lv_chans):
@@ -178,9 +215,12 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
         
         p = np.mean(p, axis=-1)
         lv_fast = np.var(lv_fast, axis=-1)
-        fast_cc = -abs(lv_corr_pupil(p, lv_fast))
+        if signed_correlation:
+            fast_cc = lv_corr_pupil(p, lv_fast)
+        else:
+            fast_cc = -abs(lv_corr_pupil(p, lv_fast))
 
-        cost = (alpha * fast_cc) + ((1 - alpha) * nmse)
+        cost = (fast_alpha * fast_cc) + ((1 - fast_alpha) * nmse)
         return cost
 
     elif ('lv_slow' in lv_chans):
@@ -188,7 +228,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', alpha=0):
         lv_slow = result['lv'].extract_channels(['lv_slow'])._data
         slow_cc = -abs(lv_corr_pupil(p, lv_slow))
 
-        cost = (alpha * slow_cc) + ((1 - alpha) * nmse)
+        cost = (slow_alpha * slow_cc) + ((1 - slow_alpha) * nmse)
         return cost
 
 def lv_corr_pupil(p, lv):

@@ -324,7 +324,7 @@ def pupLVbasic(fitkey):
     xfspec = []
 
     options = _extract_options(fitkey)
-    max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint = _parse_pupLVbasic(options)
+    max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation = _parse_pupLVbasic(options)
     xfspec = []
 
     if rand_count>1:
@@ -333,18 +333,25 @@ def pupLVbasic(fitkey):
     metric = 'pup_nmse'
     if pup_constraint == 'lv_var':
         metric = 'pup_nmse'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_nmse'
     elif pup_constraint == 'nc':
         metric = 'pup_nc_nmse'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_nc_nmse'
     elif pup_constraint == 'lv_only':
         metric = 'pup_dep_LVs'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_dep_LVs'
 
-    xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
+    xfspec.append(['nems.xforms.fit_wrapper',
                   {'max_iter': max_iter,
                    'fitter': fitter, 'tolerance': tolerance,
                    'metric': metric,
-                   'alpha': alpha}])
+                   'fit_function': 'nems_lbhb.lv_helpers.fit_pupil_lv', 
+                   'alpha': alpha,
+                   'signed_correlation': signed_correlation}])
     if choose_best:
-        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
+        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn, 
+                                                                       'alpha': alpha, 
+                                                                       'signed_correlation': signed_correlation}])
 
     return xfspec
 
@@ -357,7 +364,10 @@ def _parse_pupLVbasic(options):
     fast_eval = False
     pup_constraint = 'lv_var'
     alpha = 0
+    fast_alpha = None
+    slow_alpha = None
     rand_count = 1
+    signed_correlation = False
     for op in options:
         if op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -380,8 +390,20 @@ def _parse_pupLVbasic(options):
             else:
                 rand_count = int(op[2:])
             choose_best = True
+            
+        elif op.startswith('af'):
+            fast_alpha = np.float('.'.join(op[2:].split(':')))
+        
+        elif op.startswith('as'):
+            slow_alpha = np.float('.'.join(op[2:].split(':')))
+
         elif op.startswith('a'):
             alpha = np.float('.'.join(op[1:].split(':')))
+
+        elif op.startswith('sc'):
+            # force fast LV variance to be (-) corr. with pupil
+            signed_correlation = True
+        
         elif op.startswith('constr'):
             pc = op[6:]
             if pc == 'LV':
@@ -391,4 +413,13 @@ def _parse_pupLVbasic(options):
             elif pc == 'LVonly':
                 pup_constraint = 'lv_only'
 
-    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint
+    if (fast_alpha is not None) | (slow_alpha is not None):
+        if (fast_alpha is None):
+            alpha = slow_alpha
+        elif (slow_alpha is None):
+            alpha = fast_alpha
+        else:
+            alpha = {'fast_alpha': fast_alpha, 
+                     'slow_alpha': slow_alpha}
+
+    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation
