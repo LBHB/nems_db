@@ -380,7 +380,7 @@ def _parse_pupLVbasic(options):
             else:
                 rand_count = int(op[2:])
             choose_best = True
-        elif 'a' in op:
+        elif op.startswith('a'):
             alpha = np.float('.'.join(op[1:].split(':')))
         elif op.startswith('constr'):
             pc = op[6:]
