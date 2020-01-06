@@ -170,11 +170,12 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         # passed different hyperparameters for each of the LVs
         fast_alpha = alpha['fast_alpha']
         slow_alpha = alpha['slow_alpha']
+
+        if (fast_alpha + slow_alpha) > 1:
+                raise ValueError("Hyperparameter values must sum to < 1")
+
     else:
         fast_alpha = slow_alpha = alpha
-
-    if (fast_alpha + slow_alpha) > 1:
-            raise ValueError("Hyperparameter values must sum to < 1")
 
     if ('lv_fast' not in lv_chans) & ('lv_slow' not in lv_chans):
         # don't know how to constrain LV(s), just minimizing nmse
@@ -196,6 +197,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
             else:
                 cc = -abs(lv_corr_pupil(p, lv_fast))
             fast_cc.append(cc)
+
 
         p = result['pupil']._data
         lv_slow = result['lv'].extract_channels(['lv_slow'])._data
