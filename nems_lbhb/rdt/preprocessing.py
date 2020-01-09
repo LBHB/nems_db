@@ -70,13 +70,14 @@ def get_est_val_times(rec, balance_phase=False, njacks=5):
     return est_times, val_times
 
 
-def split_est_val(rec, balance_phase=False, njacks=5, jackknifed_fit=False, **context):
+def split_est_val(rec, balance_phase=False, njacks=5, jackknifed_fit=False,
+                  val_rep_only=False, val_dual_only=False, **context):
     est_times, val_times = get_est_val_times(rec, balance_phase, njacks)
     dual_only=False
     if not(jackknifed_fit):
-        est = select_times(rec, est_times[0], random_only=False, dual_only=dual_only)
-        val = select_times(rec, val_times[0], random_only=False, dual_only=dual_only)
-        rand = select_times(rec, est_times[0], random_only=True, dual_only=dual_only),
+        est = select_times(rec, est_times[0], random_only=False, rep_only=False, dual_only=dual_only)
+        val = select_times(rec, val_times[0], random_only=False, rep_only=val_rep_only, dual_only=val_dual_only)
+        rand = select_times(rec, est_times[0], random_only=True, rep_only=False, dual_only=dual_only),
 
     else:
         est = rec.tile_views(njacks)
@@ -85,11 +86,11 @@ def split_est_val(rec, balance_phase=False, njacks=5, jackknifed_fit=False, **co
 
         for jj in range(njacks):
             est = est.set_view(jj)
-            est = select_times(est, est_times[jj], random_only=False, dual_only=dual_only)
+            est = select_times(est, est_times[jj], random_only=False, rep_only=False, dual_only=dual_only)
             val = val.set_view(jj)
-            val = select_times(val, val_times[jj], random_only=False, dual_only=dual_only)
+            val = select_times(val, val_times[jj], random_only=False, rep_only=val_rep_only, dual_only=val_dual_only)
             rand = rand.set_view(jj)
-            rand = select_times(rand, est_times[jj], random_only=True, dual_only=dual_only)
+            rand = select_times(rand, est_times[jj], random_only=True, rep_only=False, dual_only=dual_only)
 
     return {'rand': rand, 'est': est, 'val': val, 'jackknifed_fit': jackknifed_fit}
 
@@ -179,7 +180,7 @@ def rdt_shuffle(rec, shuff_streams=False, shuff_rep=False, **context):
     return {'rec': rec0}
 
 
-def select_times(rec, subset, random_only=True, dual_only=True):
+def select_times(rec, subset, random_only=True, rep_only=False, dual_only=True):
     '''
     Parameters
     ----------
@@ -204,6 +205,9 @@ def select_times(rec, subset, random_only=True, dual_only=True):
     dual_epochs = rec['stim'].get_epoch_indices(m_dual)
     repeating_epochs = rec['stim'].get_epoch_indices(m_repeating)
     trial_epochs = rec['stim'].get_epoch_indices(m_trial)
+
+    if rep_only:
+        subset = epoch_intersection(subset, repeating_epochs)
 
     if random_only:
         subset = epoch_difference(subset, repeating_epochs)
