@@ -419,7 +419,8 @@ def baphy_mat2py(s):
 
     s4 = re.sub(r'\(([0-9]*)\)', r'[\g<1>]', s3)
 
-    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s4)
+    s5 = re.sub(r'\.wav', r"", s4) # MLE eliminates .wav file sufix to not confuse with field ToDo: elimiate .wav from param files ?
+    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
 
     s6 = re.sub(r'([0-9]+) ', r"\g<0>,", s5)
     s6 = re.sub(r'NaN ', r"np.nan,", s6)
@@ -508,7 +509,7 @@ def baphy_parm_read(filepath):
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
            exptparams['TrialObject'][1]['ReferenceHandle'][1]['descriptor']
-    # CPP special case, deletes added commas
+    # CPP special case, deletes added commas ToDo this might be unecesary, the task is done in MLE code.
     if exptparams['TrialObject'][1]['ReferenceClass'] == 'ContextProbe':
         tags = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']  # gets the list of tags
         tag_map = {oldtag: re.sub(r' , ', r'  ', oldtag)
