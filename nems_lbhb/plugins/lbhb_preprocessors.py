@@ -307,6 +307,16 @@ def hrc(load_key):
     return xfspec
 
 
+def pbal(load_key):
+    """
+    Mask only epochs that are presented equally between large/small pupil conditions
+    """
+    xfspec = [['nems_lbhb.preprocessing.mask_pupil_balanced_epochs',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
 def ev(load_key):
     """
     Mask only evoked data
@@ -314,6 +324,18 @@ def ev(load_key):
 
     xfspec = [['nems_lbhb.preprocessing.mask_evoked', {}, ['rec'], ['rec']]]
     
+    return xfspec
+
+def apm(load_key):
+    """
+    Add a mask signal ('p_mask') for pupil that can be used later on in fitting. 
+    Doesn't go in "true" mask signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_pupil_mask',
+            {},
+            ['rec'], ['rec']]]
+
     return xfspec
 
 def pm(load_key):
@@ -326,6 +348,7 @@ def pm(load_key):
     performs an AND mask (so will only create mask inside the existing current
         mask. If mask is None, creates mask with: rec = rec.create_mask(True))
     """
+    raise DeprecationWarning("Is anyone using this??")
     options = load_key.split('.')
     if len(options)>1:
         if options[1] == 'b':
@@ -485,3 +508,53 @@ def stSPO(load_key):
 def stimenv(load_key):
     return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
             ['rec'], ['rec']]]
+
+def residual(load_key):
+    """
+    Add residual signal to be used for pupil latent variable creation. 
+    Because LV creation happens dynamically during the fit,
+    want to create this signal first so that shuffling 
+    (if specified) only happens one time on the outside.
+    """
+    options = load_key.split('.')
+    
+    shuffle = False
+    cutoff = None
+
+    for op in options:
+        if op.endswith('0'):
+            shuffle = True
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',','.'))
+
+    xfspec = [['nems_lbhb.preprocessing.create_residual',
+            {'shuffle': shuffle, 
+            'cutoff': cutoff},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
+def epsig(load_key):
+    """
+    Create epoch signal from epochs so that cost function has access to 
+    stim epoch times 
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_epoch_signal',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+
+def addmeta(load_key):
+    """
+    Add meta data to recording that can be used later on in the fit. For example,
+    information about epochs could be useful.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_meta',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec

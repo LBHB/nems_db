@@ -195,6 +195,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['pupil_eyespeed'] = True
         elif op.startswith('pop'):
             load_pop_file = True
+        elif op == 'voc':
+            options.update({'runclass': 'VOC'})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, psth, parm, env, evt) not specified in loader='+loader)
