@@ -20,6 +20,9 @@ from nems.utils import (find_module)
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+from nems.modules.weight_channels import gaussian_coefficients
+from nems.modules.fir import da_coefficients
+from nems.gui.decorators import scrollable
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -52,15 +55,24 @@ def get_model_preds(cellid, batch, modelname):
 
 
 def compare_model_preds(cellid, batch, modelname1, modelname2,
-                        max_pre=0.25, max_dur=1.0):
+                        max_pre=0.25, max_dur=1.0, stim_ids=None,
+                        ctx1=None, ctx2=None):
     """
     compare prediction accuracy of two models on validation stimuli
 
     borrows a lot of functionality from nplt.quickplot()
 
     """
-    xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
-    xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    if ctx1 is None:
+        xf1, ctx1 = get_model_preds(cellid, batch, modelname1)
+    if ctx2 is None:
+        xf2, ctx2 = get_model_preds(cellid, batch, modelname2)
+    colors = [[254/255, 15/255, 6/255],
+              [217/255, 217/255, 217/255],
+              [129/255, 201/255, 224/255],
+              [128/255, 128/255, 128/255],
+              [32/255, 32/255, 32/255]
+              ]
 
     rec = ctx1['rec']
     val1 = ctx1['val']
@@ -86,7 +98,11 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
     max_rep_id, = np.where(repcount == np.max(repcount))
 
     # keep a max of two stimuli
-    stim_ids = max_rep_id[:2]
+    if stim_ids is None:
+        stim_ids = max_rep_id[:2]
+    else:
+        stim_ids = np.array(stim_ids)
+
     stim_count = len(stim_ids)
     # print(max_rep_id)
 
@@ -134,21 +150,54 @@ def compare_model_preds(cellid, batch, modelname1, modelname2,
         fn1(ax=ax)
         nplt.ax_remove_box(ax)
 
+    # model 1 wc
+    wcidx = find_module('weight_channels', ms1)
+    if wcidx:
+        ax = plt.subplot(5, 4, 2)
+        try:
+            coefs = ms1[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms1[wcidx]['phi']['mean'],
+                                          ms1[wcidx]['phi']['sd'],
+                                          ms1[wcidx]['fn_kwargs']['n_chan_in'])
+            coefs -= np.abs(np.min(coefs, axis=1, keepdims=True))
+            coefs /= np.abs(np.sum(coefs, axis=1, keepdims=True))
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
+        nplt.ax_remove_box(ax)
+
     # model 2 modules
     wcidx = find_module('weight_channels', ms2)
     if wcidx:
         ax = plt.subplot(5, 4, 4)
-        coefs = ms2[wcidx]['phi']['coefficients']
-        plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
-        plt.xlabel('in')
-        plt.ylabel('out')
-        plt.colorbar()
+        try:
+            coefs = ms2[wcidx]['phi']['coefficients']
+            plt.imshow(coefs, clim=np.array([-1,1])*np.max(np.abs(coefs)), cmap='bwr')
+            plt.xlabel('in')
+            plt.ylabel('out')
+            plt.colorbar()
+        except:
+            coefs = gaussian_coefficients(ms2[wcidx]['phi']['mean'],
+                                          ms2[wcidx]['phi']['sd'],
+                                          ms2[wcidx]['fn_kwargs']['n_chan_in'])
+            coefs -= np.abs(np.min(coefs, axis=1, keepdims=True))
+            coefs /= np.abs(np.sum(coefs, axis=1, keepdims=True))
+            ax.set_prop_cycle(color=colors)
+            plt.plot(coefs.T)
+            plt.xlabel('in')
+            plt.ylabel('gain')
         nplt.ax_remove_box(ax)
 
     if find_module('stp', ms2):
         ax = plt.subplot(5, 4, 7)
         nplt.before_and_after_stp(ms2, sig_name='pred', ax=ax, title='',
-                                  channels=0, xlabel='Time (s)', ylabel='STP',
+                                  channels=0, colors=colors, xlabel='Time (s)', ylabel='STP',
                                   fs=resp.fs)
         nplt.ax_remove_box(ax)
 
@@ -401,8 +450,8 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     return fh
 
 
-def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset'):
+def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
+                     overlap_method='offset', ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -411,7 +460,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     where there are more than one unit on a given electrode, additional units will
     be "offset" from the array geometry as additional electrodes.
     '''
-
 
     if type(cellids) is not np.ndarray:
         cellids = np.array(cellids)
@@ -439,20 +487,25 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     ch_nums = np.hstack((left_ch_nums, center_ch_nums, right_ch_nums))
     sort_inds = np.argsort(ch_nums)
 
-
-
     l_col = np.vstack((np.ones(21)*-0.2,lr_col))
     r_col = np.vstack((np.ones(21)*0.2,lr_col))
     c_col = np.vstack((np.zeros(22),center_col))
     locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
-    #plt.figure()
+    if ax is not None:
+        plt.sca(ax)
+    else:
+        plt.figure()
     plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=50)
 
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
 
     for i in range(0, len(cellids)):
-        electrodes[i] = int(cellids[i][-4:-2])
+        electrodes[i] = int(cellids[i].split("-")[-2])
+    if highlight_cellid is not None:
+        h_electrode = int(highlight_cellid.split("-")[-2])
+    else:
+        h_electrode = None
 
     # Add locations for cases where two or greater units on an electrode
     electrodes=list(electrodes-1)  # cellids labeled 1-64, python counts 0-63
@@ -533,7 +586,6 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     mask = np.ones(len(h),np.bool)
     mask[indexes]=0
 
-
     # plot the unique ones
     import matplotlib
     norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
@@ -554,6 +606,11 @@ def plot_weights_64D(h, cellids, vmin=None, vmax=None, cbar=True,
     colors = mappable.to_rgba(h_dupes)
     plt.scatter(dup_locations[0,:],dup_locations[1,:],
                           c=colors,vmin=vmin,vmax=vmax,s=50,edgecolor='none')
+    if h_electrode is not None:
+        print("h_electrode={}".format(h_electrode))
+        plt.scatter(locations[0, h_electrode], locations[1, h_electrode],
+                    facecolor='none', s=60, lw=2, edgecolor='red')
+
     if cbar is True:
         plt.colorbar(mappable)
 
@@ -778,6 +835,38 @@ def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, t
     plt.ylabel('Mean weight')
 
     plt.tight_layout()
+
+
+def pop_weights(modelspec, rec=None, idx=None, sig="state", variable="g", prefix="",
+                ax=None, title=None, **options):
+    """
+    :param modelspec: modelspec object
+    :param rec: recording object
+    :param idx: index into modelspec
+    :param ax: axes to use for plot. if None, plot in new figure
+    :return: axes where plotted
+    """
+
+    chans = rec[sig].chans
+    if prefix == "":
+        chan_match = [i for i in range(len(chans)) if (len(chans[i].split("-"))==3) and (chans[i][1]!='x')]
+    else:
+        chan_match = [i for i in range(len(chans)) if chans[i].startswith(prefix)]
+
+    phi_mean = modelspec.phi_mean[idx][variable]
+    phi_sem = modelspec.phi_sem[idx][variable]
+    phi_z = phi_mean / phi_sem
+    weights = [phi_z[0,i] for i in chan_match]
+    cellids = [chans[i] for i in chan_match]
+    print(cellids)
+
+    if ax is None:
+        plt.figure()
+        ax=plt.subplot(111)
+    highlight_cellid = modelspec.meta['cellid']
+    plot_weights_64D(h=weights, cellids=cellids, highlight_cellid=highlight_cellid, ax=ax)
+
+    return ax
 
 
 def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
@@ -1193,3 +1282,238 @@ def LN_pop_plot(ctx):
 #
 #    nplt.ax_remove_box(ax4)
     return fig
+
+
+def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
+                      offset=0.5, max=0.85, ax=None):
+
+    if (modelnames is None) and (modelgroups is None):
+        raise ValueError("Must specify modelnames list or modelgroups dict")
+    elif modelgroups is None:
+        modelgroups={'ALL': modelnames}
+    modelnames=[]
+    for k, m in modelgroups.items():
+        modelnames.extend(m)
+
+    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    if ax is None:
+        ax = plt.gca()
+
+    if goodcells is None:
+        cellids=None
+    else:
+        cellids=list(goodcells.index)
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
+
+    # find good cells
+    if goodcells is None:
+        b_test = nd.batch_comp(batch, modelnames, stat='r_test')
+        b_se = nd.batch_comp(batch, modelnames, stat='se_test')
+        b_goodcells = np.zeros_like(b_test)
+        for i, m in enumerate(modelnames):
+            td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
+            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+    #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
+    n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+
+    #u_modelgroups = np.unique(modelgroups)
+    #for i, g in enumerate(u_modelgroups):
+    i=0
+    for k, m in modelgroups.items():
+        jj = [m0 in m for m0 in modelnames]
+        modelset=[]
+        for jjj in range(len(jj)):
+            if jj[jjj]:
+                modelset.append(modelnames[jjj])
+        print("{} : {}".format(k, modelset))
+        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
+        i+=1
+
+    handles, labels = ax.get_legend_handles_labels()
+    # reverse the order
+    ax.legend(handles, labels, loc='lower right')
+
+    ax.set_xlabel('Free parameters')
+    ax.set_ylabel('Mean var explained')
+    ax.set_ylim((offset-0.05, max))
+    nplt.ax_remove_box(ax)
+
+    return ax, b_ceiling
+
+
+@scrollable
+def lv_timeseries(rec, modelspec, ax=None, **options):
+    r = rec.apply_mask(reset_epochs=True)
+    t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+    nrows = len(r['lv'].chans[1:])
+    for i in range(nrows):
+        ax.plot(t, r['lv']._data[i+1, :].T)
+
+@scrollable
+def lv_quickplot(rec, modelspec, ax=None, **options):
+    """
+    quick view of latent variable and the "encoding" weights
+    """
+    #r = rec.apply_mask(reset_epochs=True)
+    r = rec.copy()
+    nrows = len(r['lv'].chans[1:])
+    f = plt.figure(figsize=(12, 8))
+    pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
+    weights = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    if 'lv_slow' in r['lv'].chans:
+        scatter = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+        # scatter slow lv vs pupil
+        lv_slow = r['lv'].extract_channels(['lv_slow'])._data.squeeze()
+        p = r['pupil']._data.squeeze()
+        scatter.scatter(p, lv_slow, s=30, edgecolor='white')
+        scatter.set_xlabel('pupil size', fontsize=8)
+        scatter.set_ylabel('lv_slow', fontsize=8)
+        scatter.set_title("corr coef: {}".format(round(np.corrcoef(p, lv_slow)[0, 1], 3)), fontsize=8)
+    for i in range(nrows):
+        lv = plt.subplot2grid((nrows+1, 3), (i, 0), colspan=2)
+        if 'lv_fast' in r['lv'].chans[i+1]:
+            # color by pupil size
+            time = np.arange(0, r['lv'].shape[-1])
+            lv_series = r['lv']._data[i+1, :].squeeze()
+            p = r['pupil']._data.squeeze()
+            lv.scatter(time, lv_series, c=p, s=20)
+            #lv.gray()
+        else:
+            lv.plot(r['lv']._data[i+1, :].T)
+            t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+            ax.plot(t, r['lv']._data[i+1, :].T)
+        lv.legend([r['lv'].chans[i+1]], fontsize=6, frameon=False)
+        lv.axhline(0, linestyle='--', color='grey')
+        lv.set_xlabel('Time')
+
+    pup.plot(r['pupil']._data.T, color='purple')
+    pup.legend(['pupil'], fontsize=6)
+    pup.set_xlabel('Time')
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.add_lv' in modelspec.modules[i]['fn']][0]
+
+    lim = np.max(abs(modelspec.phi[idx]['e'].squeeze()))
+    bins = np.linspace(-lim, lim, 11)
+    nLVs = modelspec.phi[idx]['e'].shape[-1]
+    for i in range(nLVs):
+        weights.hist(modelspec.phi[idx]['e'][:, i], bins=bins, alpha=0.5, edgecolor='k', label=r['lv'].chans[i+1])
+    weights.legend(fontsize=8)
+    weights.axvline(0, linestyle='--', color='r')
+    weights.set_xlabel('Encoding weights')
+
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
+    #f.tight_layout()
+
+    return ax
+
+
+def state_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    quick view of first order model fit weight(s). Show fit for 
+    'best' first order prediction.
+    """
+
+    r = rec.apply_mask()
+
+    f = plt.figure()
+    rp_fig = plt.subplot2grid((2, 3), (0, 0), colspan=2)
+    state_plot = plt.subplot2grid((2, 3), (1, 0), colspan=2)
+    sig = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    weights = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.state_logsig' in modelspec.modules[i]['fn']][0]
+
+    best = np.argmax(modelspec.phi[idx]['g'][:, 1])
+    best2 = np.argmin(modelspec.phi[idx]['g'][:, 1])
+    cellid = r['resp'].chans[best]
+    cellid2 = r['resp'].chans[best2]
+
+    # prediction of "best" first order cell (biggest state effect, based on model fit)
+    rp_fig.plot(r['resp']._data[best, :], color='grey', label='resp')
+    rp_fig.plot(r['pred']._data[best, :], color='k', label='pred')
+    rp_fig.legend()
+    rp_fig.set_title(cellid)
+
+    # plot state timeseries
+    state_plot.plot(r['state']._data.T)
+    state_plot.set_xlabel('Time')
+    state_plot.set_title('state signals')
+    
+    # gain applied as function of pupil for this "best" cell
+    s = r['state']._data
+    g = modelspec.phi[idx]['g'][best, :]
+    a = modelspec.phi[idx]['a'][best, 0]
+    sg = g @ s
+    sg = a / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='k')
+    sig.set_xlabel('state')
+    sig.set_ylabel('linear gain applied')
+    
+
+    g = modelspec.phi[idx]['g'][best2, :]
+    a = modelspec.phi[idx]['a'][best2, 0]
+    sg = g @ s
+    sg = a / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='r')
+
+    sig.legend(['{0} state gain (phi): {1}'.format(cellid, round(modelspec.phi[idx]['g'][best, 1], 3)), 
+                '{0} state gain (phi): {1}'.format(cellid2, round(modelspec.phi[idx]['g'][best2, 1], 3))])
+    sig.axhline(1, linestyle='--', color='grey')
+    sig.axvline(0, linestyle='--', color='grey')
+    
+
+    # all model weights (pupil gain weights)
+    lim = np.max(abs(modelspec.phi[idx]['g'][:, 1]))
+    bins = np.linspace(-lim, lim, 11)
+    weights.hist(modelspec.phi[idx]['g'][:, 1], bins=bins, color='lightgrey', edgecolor='k')
+    weights.set_xlabel('state gain (phi)')
+    weights.set_ylabel('n neurons')
+    weights.axvline(0, linestyle='--', color='r')
+
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
+    f.tight_layout()
+
+
+def lv_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    Quick view of latent variable model fit. 
+    Compare encoding and decoding phi. 
+    Encoding weights are purely linear weightings,
+    decoding weights allow lv to pass through sigmoid first.
+    """
+
+    r = rec.apply_mask()
+
+    f, ax = plt.subplots(1, 1)
+
+    # simple scatter plot of encoding vs. decoding weights
+    modelspecs = modelspec.modelspecname.split('-')
+    idx = [i for i in range(0, len(modelspecs)) if 'lv.' in modelspecs[i]][0]
+    e = modelspec.phi[idx]['e']
+    idx = [i for i in range(0, len(modelspecs)) if 'lvlogsig.' in modelspecs[i]][0]
+    g = modelspec.phi[idx]['g'][:, 1:]
+
+    for i in range(e.shape[-1]):
+        _e = e[:, i]
+        _g = g[:, i]
+        ulim = np.max(np.concatenate((e, g)))
+        llim = np.min(np.concatenate((e, g)))
+        ax.scatter(_e, _g, s=30, edgecolor='white', label=r['lv'].chans[i+1])
+
+    ax.legend(fontsize=8)
+    ax.plot([-1, 1], [-1, 1], color='grey', linestyle='--')
+    ax.axhline(0, linestyle='--', color='grey')
+    ax.axvline(0, linestyle='--', color='grey')
+    ax.set_xlabel('Encoding weight')
+    ax.set_ylabel('Decoding weight')
+    ax.set_title(modelspecs[idx])
+
+    f.tight_layout()

@@ -18,6 +18,7 @@ import nems.modelspec as ms
 import nems.epoch as ep
 import nems.preprocessing as preproc
 from nems.metrics.state import state_mod_index
+from nems.utils import find_module
 import nems_lbhb.plots as lplt
 
 font_size=8
@@ -142,10 +143,10 @@ def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
 
     ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=6,
             markeredgecolor='white', markeredgewidth=0.5)
+    ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
+            markeredgewidth=0.5, markersize=6)
     ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=10,
             markeredgecolor='white', markeredgewidth=0.5)
-    ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
-            markeredgewidth=0.5, markersize=10)
 
     ax.set_aspect('equal', 'box')
     #plt.ylim(hist_range)
@@ -617,11 +618,11 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
     ctx_pb, l = xforms.evaluate(xf_pb, ctx_pb, start=0, stop=-2)
 
     # organize predictions by different models
-    val = ctx_pb['val'][0].copy()
+    val = ctx_pb['val'].copy()
 
-    # val['pred_p0b0'] = ctx_p0b0['val'][0]['pred'].copy()
-    val['pred_p0b'] = ctx_p0b['val'][0]['pred'].copy()
-    val['pred_pb0'] = ctx_pb0['val'][0]['pred'].copy()
+    # val['pred_p0b0'] = ctx_p0b0['val']['pred'].copy()
+    val['pred_p0b'] = ctx_p0b['val']['pred'].copy()
+    val['pred_pb0'] = ctx_pb0['val']['pred'].copy()
 
     state_var_list = val['state'].chans
 
@@ -666,11 +667,11 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
 
     fh = plt.figure(figsize=(8,8))
     ax = plt.subplot(4, 1, 1)
-    nplt.state_vars_timeseries(val, ctx_pb['modelspecs'][0],
+    nplt.state_vars_timeseries(val, ctx_pb['modelspec'],
                                state_colors=[s[1] for s in state_colors])
     ax.set_title("{}/{} - {}".format(cellid, batch, modelname_pb))
     ax.set_ylabel("{} r={:.3f}".format(factor0,
-                  ctx_p0b0['modelspecs'][0][0]['meta']['r_test'][0]))
+                  ctx_p0b0['modelspec'].meta['r_test'][0]))
     nplt.ax_remove_box(ax)
 
     for i, var in enumerate(factors[1:]):
@@ -689,13 +690,13 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
             ax.set_ylabel("Control model")
             ax.set_title("{} ctl r={:.3f}"
                          .format(varlbl.lower(),
-                                 ctx_p0b['modelspecs'][0][0]['meta']['r_test'][0]),
+                                 ctx_p0b['modelspec'].meta['r_test'][0]),
                          fontsize=6)
         else:
             ax.yaxis.label.set_visible(False)
             ax.set_title("{} ctl r={:.3f}"
                          .format(varlbl.lower(),
-                                 ctx_pb0['modelspecs'][0][0]['meta']['r_test'][0]),
+                                 ctx_pb0['modelspec'].meta['r_test'][0]),
                          fontsize=6)
         if ax.legend_:
             ax.legend_.remove()
@@ -721,7 +722,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
             j=1
 
         ax.set_title("r={:.3f} rawmod={:.3f} umod={:.3f}"
-                     .format(ctx_pb['modelspecs'][0][0]['meta']['r_test'][0],
+                     .format(ctx_pb['modelspec'].meta['r_test'][0],
                              pred_mod_full_norm[i+1][j], pred_mod_norm[i+1][j]),
                      fontsize=6)
 
@@ -816,37 +817,37 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
              'state_vars': state_var_list,
              'factors': factors,
              'r_test': np.array([
-                     ctx_p0b0['modelspecs'][0][0]['meta']['r_test'][0],
-                     ctx_p0b['modelspecs'][0][0]['meta']['r_test'][0],
-                     ctx_pb0['modelspecs'][0][0]['meta']['r_test'][0],
-                     ctx_pb['modelspecs'][0][0]['meta']['r_test'][0]
+                     ctx_p0b0['modelspec'].meta['r_test'][0],
+                     ctx_p0b['modelspec'].meta['r_test'][0],
+                     ctx_pb0['modelspec'].meta['r_test'][0],
+                     ctx_pb['modelspec'].meta['r_test'][0]
                      ]),
              'se_test': np.array([
-                     ctx_p0b0['modelspecs'][0][0]['meta']['se_test'][0],
-                     ctx_p0b['modelspecs'][0][0]['meta']['se_test'][0],
-                     ctx_pb0['modelspecs'][0][0]['meta']['se_test'][0],
-                     ctx_pb['modelspecs'][0][0]['meta']['se_test'][0]
+                     ctx_p0b0['modelspec'].meta['se_test'][0],
+                     ctx_p0b['modelspec'].meta['se_test'][0],
+                     ctx_pb0['modelspec'].meta['se_test'][0],
+                     ctx_pb['modelspec'].meta['se_test'][0]
                      ]),
              'r_floor': np.array([
-                     ctx_p0b0['modelspecs'][0][0]['meta']['r_floor'][0],
-                     ctx_p0b['modelspecs'][0][0]['meta']['r_floor'][0],
-                     ctx_pb0['modelspecs'][0][0]['meta']['r_floor'][0],
-                     ctx_pb['modelspecs'][0][0]['meta']['r_floor'][0]
+                     ctx_p0b0['modelspec'].meta['r_floor'][0],
+                     ctx_p0b['modelspec'].meta['r_floor'][0],
+                     ctx_pb0['modelspec'].meta['r_floor'][0],
+                     ctx_pb['modelspec'].meta['r_floor'][0]
                      ]),
              'pred_mod': pred_mod.T,
              'pred_mod_full': pred_mod_full.T,
              'pred_mod_norm': pred_mod_norm.T,
              'pred_mod_full_norm': pred_mod_full_norm.T,
              'g': np.array([
-                     ctx_p0b0['modelspecs'][0][0]['phi']['g'],
-                     ctx_p0b['modelspecs'][0][0]['phi']['g'],
-                     ctx_pb0['modelspecs'][0][0]['phi']['g'],
-                     ctx_pb['modelspecs'][0][0]['phi']['g']]),
+                     ctx_p0b0['modelspec'][0]['phi']['g'],
+                     ctx_p0b['modelspec'][0]['phi']['g'],
+                     ctx_pb0['modelspec'][0]['phi']['g'],
+                     ctx_pb['modelspec'][0]['phi']['g']]),
              'b': np.array([
-                     ctx_p0b0['modelspecs'][0][0]['phi']['d'],
-                     ctx_p0b['modelspecs'][0][0]['phi']['d'],
-                     ctx_pb0['modelspecs'][0][0]['phi']['d'],
-                     ctx_pb['modelspecs'][0][0]['phi']['d']]),
+                     ctx_p0b0['modelspec'][0]['phi']['d'],
+                     ctx_p0b['modelspec'][0]['phi']['d'],
+                     ctx_pb0['modelspec'][0]['phi']['d'],
+                     ctx_pb['modelspec'][0]['phi']['d']]),
              'ref_all_resp': all_ref_mean,
              'ref_common_resp': ref_mean,
              'tar_max_resp': tar_mean[0],
@@ -1040,3 +1041,52 @@ def psth_per_file(rec):
                           ylabel='spk/s')
 
     plt.tight_layout()
+
+
+def quick_pop_state_plot(modelspec=None, **ctx):
+    
+    modelname = modelspec.meta['modelname']
+    cellid = modelspec.meta['cellid']
+    rec = ctx['val'].apply_mask()
+    stateidx = find_module('state', modelspec)
+    wcidx = find_module('weight_channels', modelspec)
+
+    g = modelspec.phi[stateidx]['g']
+    d = modelspec.phi[stateidx]['d']
+    w = modelspec.phi[wcidx]['coefficients'][0,:]
+    s = rec['state'].as_continuous()
+    s_med = np.median(s, axis=1)
+    s_med[s_med==0] = 0.5
+    s_med[s_med==1] = 0.5
+    
+    loidx = (s[1,:]<=s_med[1]) & (s[2,:]<=s_med[2])
+    hi1idx=s[1,:]>s_med[1]
+    hi2idx=s[2,:]>s_med[2]
+    
+    dm=d.copy()
+    dm[:,0] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,1] = (d[:, 0] + d[:, 1] * np.mean(s[1, hi1idx]) + d[:, 2] * np.mean(s[2, loidx])) * w
+    dm[:,2] = (d[:, 0] + d[:, 1] * np.mean(s[1, loidx]) + d[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    gm=g.copy()
+    gm[:,0] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,1] = (g[:, 0] + g[:, 1] * np.mean(s[1, hi1idx]) + g[:, 2] * np.mean(s[2, loidx])) * w
+    gm[:,2] = (g[:, 0] + g[:, 1] * np.mean(s[1, loidx]) + g[:, 2] * np.mean(s[2, hi2idx])) * w
+
+    fh = plt.figure()
+    ax = plt.subplot(3, 1, 1)
+    nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+    ax.set_title('{} {}'.format(cellid, modelname))
+    
+    ax = plt.subplot(3, 1, 2)
+    ax.plot(dm)
+    plt.title('offset')
+    plt.legend(('base','d_pup','d_act'))
+
+    ax = plt.subplot(3, 1, 3)
+    ax.plot(gm)
+    plt.title('gain')
+    ax.set_xticks(np.arange(len(rec['stim'].chans)))
+    ax.set_xticklabels(rec['stim'].chans)
+
+    return {}

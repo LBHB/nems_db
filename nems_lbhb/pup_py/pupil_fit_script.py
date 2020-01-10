@@ -1,12 +1,13 @@
 import keras
-import utils as ut
+import nems.db as nd
+import nems_lbhb.pup_py.utils as ut
 import numpy as np
 import av
 import pickle
 import sys
 import os
 import nems
-import nems.db as nd
+#import nems.db as nd
 
 import logging
 log = logging.getLogger(__name__)
@@ -35,31 +36,36 @@ if __name__ == '__main__':
         nd.update_job_start(queueid)
 
     # perform pupil fit
-    animal = sys.argv[1]
-    filename = sys.argv[2]
+    video_file = sys.argv[1]
+    modelname = sys.argv[2]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
-    model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
+    #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
+    project_dir = '/auto/data/nems_db/pup_py/'
+    if (modelname == 'current') | (modelname == 'Current'):
+        default_date = os.listdir(project_dir + 'default_trained_model/')[0]
+        name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
+        modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
+    else:
+        date = modelname
+        datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
+        modelname = [m for m in datefolder if 'weights' in m][0]
+        modelpath = project_dir + 'old_model_fits/{0}/{1}'.format(date, modelname)
 
-    path = '/auto/data/daq/{0}/{1}/'.format(animal, filename[:6])
+    model = keras.models.load_model(modelpath)
+
+    path = os.path.split(video_file)[0] 
+
     if os.path.isdir(path):
         pass
     else:
-        try:
-            path = '/auto/data/daq/{0}/training2019/{1}'.format(animal, filename+'.m')
-            if os.path.isfile(path):
-                path = '/auto/data/daq/{0}/training2019/'.format(animal)
-            else:
-                raise ValueError("can't find pupil video")
-        except:
-            path = '/auto/data/daq/{0}/training2018/{1}'.format(animal, filename+'.m')
-            if os.path.isfile(path):
-                path = '/auto/data/daq/{0}/training2018/'.format(animal)
-            else:
-                raise ValueError("can't find pupil video")
+        raise ValueError("can't find pupil video")
 
-    save_path = path + 'sorted/'
-    video = path + filename + '.mj2'
+    save_path = os.path.join(path, 'sorted')
+    video = video_file
+    results_name = os.path.split(video_file)[-1].split('.')[0] + '_pred.pickle'
+
+    log.info("saving analysis to: {0}".format(os.path.join(save_path, results_name)))
 
     # define empty lists to hold params (cnn)
     a_cnn = []
@@ -75,6 +81,7 @@ if __name__ == '__main__':
     for i, packet in enumerate(container.demux(video_stream)):
         if i % 1000 == 0:
             log.info("frame: {0}...".format(i))
+            nd.update_job_tick()
         try:
             frame = packet.decode()[0]
 
@@ -114,7 +121,7 @@ if __name__ == '__main__':
             phi_cnn.append(ellipse_parms[4])
 
         except:
-            print("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
+            log.info("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
 
             y_cnn.append(np.nan)
             x_cnn.append(np.nan)
@@ -129,7 +136,8 @@ if __name__ == '__main__':
             'x': np.array(x_cnn),
             'y': np.array(y_cnn),
             'phi': np.array(phi_cnn)
-        }
+        },
+        'cnn_modelpath': modelpath
     }
 
     if os.path.isdir(save_path) != True:
@@ -140,13 +148,13 @@ if __name__ == '__main__':
     # make sure the directory is writeable
     os.system("chmod a+w {}".format(save_path))
 
-    save_file = save_path + filename + '_pred.pickle'
+    save_file = os.path.join(save_path, results_name)
 
     # write the results
     with open(save_file, 'wb') as fp:
                 pickle.dump(results, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-    print("finished fit")
+    log.info("finished fit")
 
     if queueid:
             nd.update_job_complete(queueid)

@@ -24,14 +24,16 @@ import copy
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import resample
+from nems import get_setting
 import nems.signal
 import nems.recording
 import nems.db as db
+import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
 from nems_lbhb.io import (baphy_parm_read, baphy_align_time, baphy_stim_cachefile, load_pupil_trace,
-                          get_rem, load_rem_options)
+                          get_rem, load_rem_options, set_default_pupil_options)
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -75,7 +77,7 @@ def baphy_stim_cachefile_DEP(exptparams, parmfilepath=None, **options):
 
     code adapted from loadstimfrombaphy.m
     """
-
+    raise Warning('DEPRECATED FUNCTION??')
     if 'truncatetargets' not in options:
         options['truncatetargets'] = 1
     if 'pertrial' not in options:
@@ -191,16 +193,41 @@ def baphy_load_data(parmfilepath, **options):
     # load parameter file
     log.info('Loading parameters: %s', parmfilepath)
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-
     # TODO: use paths that match LBHB filesystem? new s3 filesystem?
     #       or make s3 match LBHB?
 
     # figure out stimulus cachefile to load
     if 'stim' in options.keys() and options['stim']:
-        stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
-        print("Cached stim: {0}".format(stimfilepath))
-        # load stimulus spectrogram
-        stim, tags, stimparam = baphy_load_specgram(stimfilepath)
+        if exptparams['runclass']=='VOC_VOC':
+            stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+            stimfilepath2 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+            print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
+            # load stimulus spectrogram
+            stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
+            stim2, tags2, stimparam2 = baphy_load_specgram(stimfilepath2)
+            stim = np.concatenate((stim1,stim2), axis=2)
+            if exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR'] >= 100:
+                t2 = [t+'_0dB' for t in tags2]
+                tags = np.concatenate((tags1,t2))
+                eventmatch='Reference1'
+            else:
+                t1 = [t+'_0dB' for t in tags1]
+                tags = np.concatenate((t1,tags2))
+                eventmatch = 'Reference2'
+            #import pdb
+            #pdb.set_trace()
+            for i in range(len(exptevents)):
+                if eventmatch in exptevents.loc[i,'name']:
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('.wav','.wav_0dB')
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference1','Reference')
+                    exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference2','Reference')
+
+            stimparam = stimparam1
+        else:
+            stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
+            print("Cached stim: {0}".format(stimfilepath))
+            # load stimulus spectrogram
+            stim, tags, stimparam = baphy_load_specgram(stimfilepath)
 
         if options["stimfmt"]=='envelope' and \
             exptparams['TrialObject'][1]['ReferenceClass']=='SSA':
@@ -238,7 +265,11 @@ def baphy_load_data(parmfilepath, **options):
         else:
             stim_object = 'ReferenceHandle'
 
-        tags = exptparams['TrialObject'][1][stim_object][1]['Names']
+        if (options['runclass']=='VOC') & (exptparams['runclass']=='VOC_VOC'):
+            # special kludge for clean + noisy VOC expts
+            raise Warning("VOC_VOC files not supported")
+        else:
+            tags = exptparams['TrialObject'][1][stim_object][1]['Names']
         tags, tagids = np.unique(tags, return_index=True)
         stimparam = []
 
@@ -280,7 +311,8 @@ def baphy_load_data(parmfilepath, **options):
             spike_dict[x] = spiketimes[i]
         elif (x.lower() in cellids):
             spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
-
+    #import pdb
+    #pdb.set_trace()
     if not spike_dict:
         raise ValueError('No matching cellid in baphy spike file')
 
@@ -312,6 +344,7 @@ def baphy_load_data(parmfilepath, **options):
     if options['rem']:
         try:
             rem_options = load_rem_options(pupilfilepath)
+            rem_options['verbose'] = False
             #rem_options['rasterfs'] = options['rasterfs']
             is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
                               exptevents=exptevents, **rem_options)
@@ -354,6 +387,17 @@ def baphy_load_dataset(parmfilepath, **options):
     # get the relatively un-pre-processed data
     exptevents, stim, spike_dict, state_dict, tags, stimparam, exptparams = \
         baphy_load_data(parmfilepath, **options)
+    
+    # if runclass is BVT, add behavior outcome column (to be used later)
+    # very kludgy
+    # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
+    # with this loading procedure.
+    # CRH 12/10/2019
+    if (exptparams['runclass'] == 'BVT') & ('_a_' in parmfilepath):
+        exptevents = beh.create_trial_labels(exptparams, exptevents)
+        active_BVT = True
+    else:
+        active_BVT = False
 
     # pre-process event list (event_times) to only contain useful events
     # extract each trial
@@ -382,13 +426,14 @@ def baphy_load_dataset(parmfilepath, **options):
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
+
     event_times = pd.concat([exptevents.loc[ffstart, ['start']].reset_index(),
                              exptevents.loc[ffstop, ['end']].reset_index()],
                             axis=1)
     event_times['name'] = "TRIAL"
     event_times = event_times.drop(columns=['index'])
 
-    print('Removing post-response stimuli')
+    log.info('Removing post-response stimuli')
     keepevents = np.full(len(exptevents), True, dtype=bool)
     for trialidx in range(1, TrialCount+1):
         # remove stimulus events after TRIALSTOP or STIM,OFF event
@@ -436,22 +481,48 @@ def baphy_load_dataset(parmfilepath, **options):
                 'BEHAVIOR,PUMPON,Pump': 'HIT_TRIAL'}
     this_event_times = event_times.copy()
     any_behavior = False
-    for trialidx in range(1, TrialCount+1):
-        # determine behavioral outcome, log event time to add epochs
-        # spanning each trial
-        ff = (((exptevents['name'] == 'OUTCOME,FALSEALARM')
-              | (exptevents['name'] == 'OUTCOME,EARLY')
-              | (exptevents['name'] == 'OUTCOME,VEARLY')
-              | (exptevents['name'] == 'OUTCOME,MISS')
-              | (exptevents['name'] == 'OUTCOME,MATCH')
-              | (exptevents['name'] == 'BEHAVIOR,PUMPON,Pump'))
-              & (exptevents['Trial'] == trialidx))
+    #import pdb
+    #pdb.set_trace()
 
-        for i, d in exptevents.loc[ff].iterrows():
-            # print("{0}: {1} - {2} - {3}"
-            #       .format(i, d['Trial'], d['name'], d['end']))
-            this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
-            any_behavior = True
+    if active_BVT:
+        # CRH - using the labeled soundTrial events in exptevents
+        # this labels all sounds. i.e. a REF can be a correct_reject
+        # at this point, event_times is just labeling baphy trials though
+        # so just take last "soundTrial" and label the trial that
+        for trialidx in range(1, TrialCount+1):
+            ff = exptevents[exptevents.Trial==trialidx]
+            ff = ff[ff.soundTrial!='NULL']
+            try:
+                label = ff['soundTrial'].iloc[-1]
+                this_event_times.loc[trialidx-1, 'name'] = label
+            except:
+                # was labeled as NULL, since sound never played
+                this_event_times.loc[trialidx-1, 'name'] = 'EARLY_TRIAL'
+        
+        any_behavior = True
+    else:
+        for trialidx in range(1, TrialCount+1):
+            # determine behavioral outcome, log event time to add epochs
+            # spanning each trial
+            ff = (((exptevents['name'] == 'OUTCOME,FALSEALARM')
+                | (exptevents['name'] == 'OUTCOME,EARLY')
+                | (exptevents['name'] == 'OUTCOME,VEARLY')
+                | (exptevents['name'] == 'OUTCOME,MISS')
+                | (exptevents['name'] == 'OUTCOME,MATCH')
+                | (exptevents['name'] == 'BEHAVIOR,PUMPON,Pump'))
+                & (exptevents['Trial'] == trialidx))
+
+            for i, d in exptevents.loc[ff].iterrows():
+                # print("{0}: {1} - {2} - {3}"
+                #       .format(i, d['Trial'], d['name'], d['end']))
+                this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
+                any_behavior = True
+
+    # CRH add check, just incase user messed up when doing experiment
+    # and selected: physiology yes, passive, but set behavior control to active
+    # in this case, behavior didn't run, file got created with _p_, but baphy
+    # still tried to label trials.
+    any_behavior = any_behavior & ('_a_' in parmfilepath)
 
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
@@ -501,16 +572,13 @@ def baphy_load_dataset(parmfilepath, **options):
 
         ff_pre_all = exptevents['name'] == ""
         ff_post_all = ff_pre_all.copy()
-        
+
+        snr_suff=""
         if 'SNR' in exptparams['TrialObject'][1]['ReferenceHandle'][1].keys():
             SNR = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR']
             if SNR<100:
                 log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
                 snr_suff="_{}dB".format(SNR)
-            else:
-                snr_suff=""
-        else:
-            snr_suff = "" # MLE 2019-04-29 is there a reason why some exptparams do not have an SNR key/field??
 
         for eventidx in range(0, len(tags)):
 
@@ -998,15 +1066,28 @@ def baphy_load_recording_RDT(cellid, batch, options):
                 spike_dict, fs=options['rasterfs'], event_times=event_times
                 )
 
-        # generate response signal
-        t_resp = nems.signal.RasterizedSignal(
-                fs=options['rasterfs'], data=raster_all, name='resp',
-                recording=cellid, chans=cellids, epochs=event_times
-                )
-        if i == 0:
-            resp = t_resp
+        if 1:
+            # generate response signal
+            t_resp = nems.signal.PointProcess(
+                    fs=options['rasterfs'], data=spike_dict,
+                    name='resp', recording=cellid, chans=list(spike_dict.keys()),
+                    epochs=event_times
+                    )
+            if i == 0:
+                resp = t_resp
+            else:
+                # concatenate onto end of main response signal
+                resp = resp.append_time(t_resp)
         else:
-            resp = resp.concatenate_time([resp, t_resp])
+            # generate response signal
+            t_resp = nems.signal.RasterizedSignal(
+                    fs=options['rasterfs'], data=raster_all, name='resp',
+                    recording=cellid, chans=cellids, epochs=event_times
+                    )
+            if i == 0:
+                resp = t_resp
+            else:
+                resp = resp.concatenate_time([resp, t_resp])
 
         if options['stim']:
             t_stim = dict_to_signal(stim_dict, fs=options['rasterfs'],
@@ -1049,7 +1130,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
                 state = state.concatenate_time([state, t_state])
 
     resp.meta = options
-
+    resp.meta['files'] = files
     signals = {'resp': resp}
 
     if options['stim']:
@@ -1114,6 +1195,7 @@ def fill_default_options(options):
 
     options = options.copy()
 
+    mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
     cell_list = options.get('cell_list', None)
@@ -1122,8 +1204,8 @@ def fill_default_options(options):
 
     if (cellid is None) and (cell_list is None) and (siteid is None):
         raise ValueError("must provide cellid, cell_list or siteid")
-    if batch is None:
-        raise ValueError("must provide batch")
+    if (batch is None) and (mfilename is None):
+        raise ValueError("must provide batch or mfilename")
 
     if type(cellid) is list:
         cell_list = cellid
@@ -1131,7 +1213,12 @@ def fill_default_options(options):
     # No matter what the cell_list is, always want to set cell_list to be all
     # stable cells at the site/rawids. No point in caching different recs for
     # [cell1, cell2] and [cell3, cell4] if all four come from same recording
-    if cell_list is not None:
+    if mfilename is not None:
+        # simple, db-free case
+        pass
+        if batch is None:
+            batch=0
+    elif cell_list is not None:
         cellid = cell_list[0]
         siteid = cellid.split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
@@ -1166,12 +1253,15 @@ def fill_default_options(options):
     options['pertrial'] = int(options.get('pertrial', False))
     options['includeprestim'] = options.get('includeprestim', 1)
     options['pupil'] = int(options.get('pupil', False))
-    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
-    options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
-    options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 0.75)
-    options['pupil_median'] = options.get('pupil_median', 0.5)
-    options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options['rem'] = int(options.get('rem', False))
+    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
+    if options['pupil'] or options['rem']:
+        options = set_default_pupil_options(options)
+        
+    #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
+    #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
+    #options['pupil_median'] = options.get('pupil_median', 0)
+    #options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['cellid'] = options.get('cellid', cellid)
@@ -1222,9 +1312,20 @@ def baphy_load_recording(**options):
         rec: recording
 
     """
+
+    # STEP 1: FIGURE OUT FILE(S) and SIGNAL(S) TO LOAD
+
+    # TODO: add logic for options['resp']==False so this doesn't barf if
+    #       cellid/batch/celllist/siteid aren't specified
+    # TODO: break apart different signal loaders, make them work even if
+    #        resp=False
+    # TODO: (load all signals for one recording, make recording) =>
+    #           move functionality to BAPHYExperiment wrapper
+    #       then concatenate recordings
+
     options = fill_default_options(options)
     meta = options
-
+    mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
     cell_list = options.get('cell_list', None)
@@ -1257,18 +1358,27 @@ def baphy_load_recording(**options):
         else:
             rec_name = cellid
 
-    # query database to find all baphy files that belong to this cell/batch
-    d = db.get_batch_cell_data(batch=batch, cellid=cellid, label='parm',
-                               rawid=options['rawid'])
-    dni = d.reset_index()
-    files = list(set(list(d['parm'])))
-    files.sort()
-    goodtrials = np.array([], dtype=bool)
+    if mfilename is None:
+        # query database to find all baphy files that belong to this cell/batch
+        d = db.get_batch_cell_data(batch=batch, cellid=cellid, label='parm',
+                                   rawid=options['rawid'])
+        dni = d.reset_index()
+        files = list(set(list(d['parm'])))
+        files.sort()
+        goodtrials = np.array([], dtype=bool)
+    else:
+        if type(mfilename) is list:
+            files = mfilename
+        else:
+            files=[mfilename]
+        goodtrials = np.array([], dtype=bool)
+        dni = None
 
     if len(files) == 0:
        raise ValueError('NarfData not found for cell {0}/batch {1}'.format(
                cellid,batch))
 
+    # STEP 2: LOOP THROUGH FILES, LOAD RELEVANT SIGNALS FOR EACH
     for i, parmfilepath in enumerate(files):
         # load the file and do a bunch of preprocessing:
         if options["runclass"] == "RDT":
@@ -1290,22 +1400,25 @@ def baphy_load_recording(**options):
 
         tt = event_times[event_times['name'].str.startswith('TRIAL')]
         trialcount = len(tt)
-        s_goodtrials = dni.loc[dni['parm'] ==
-                               parmfilepath, 'goodtrials'].values[0]
 
-        if (s_goodtrials is not None) and len(s_goodtrials):
-            log.info("goodtrials not empty: %s", s_goodtrials)
-            s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
-            g = s_goodtrials.split(" ")
-            _goodtrials = np.zeros(trialcount, dtype=bool)
-            for b in g:
-                b1 = b.split(":")
-                if len(b1) == 1:
-                    # single trial in list, simulate colon syntax
-                    b1 = b1 + b1
-                _goodtrials[(int(b1[0])-1):int(b1[1])] = True
-        else:
-            _goodtrials = np.ones(trialcount, dtype=bool)
+        # if loading from database, check to see if goodtrials are specified
+        # so that bad trials can be masked out
+        _goodtrials = np.ones(trialcount, dtype=bool)
+        if dni is not None:
+            s_goodtrials = dni.loc[dni['parm'] ==
+                                   parmfilepath, 'goodtrials'].values[0]
+
+            if (s_goodtrials is not None) and len(s_goodtrials):
+                log.info("goodtrials not empty: %s", s_goodtrials)
+                s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                g = s_goodtrials.split(" ")
+                _goodtrials = np.zeros(trialcount, dtype=bool)
+                for b in g:
+                    b1 = b.split(":")
+                    if len(b1) == 1:
+                        # single trial in list, simulate colon syntax
+                        b1 = b1 + b1
+                    _goodtrials[(int(b1[0])-1):int(b1[1])] = True
 
         goodtrials = np.concatenate((goodtrials, _goodtrials))
 
@@ -1359,7 +1472,7 @@ def baphy_load_recording(**options):
             max_all=pupil.epochs['end'].max()
             print('pupil max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
 
-        if (options['pupil_eyespeed']) & ('pupil_eyespeed' in state_dict.keys()):
+        if (options['pupil_eyespeed']) and ('pupil_eyespeed' in state_dict.keys()):
             # create pupil signal if it exists
             rlen = int(t_resp.ntimes)
             pcount = state_dict['pupil_eyespeed'].shape[0]
@@ -1485,6 +1598,7 @@ def baphy_load_recording(**options):
     if options["runclass"] == "RDT":
         signals['state'] = state
         #signals['stim'].meta={'BigStimMatrix': BigStimMatrix}
+    meta['files']=files
     rec = nems.recording.Recording(signals=signals, meta=meta, name=siteid)
 
     if goodtrials.size > np.sum(goodtrials):
@@ -1540,13 +1654,13 @@ def baphy_data_path(**options):
     siteid = options.get('siteid', cellid.split("-")[0])
 
     # TODO : base filename on siteid/cellid plus hash from JSON-ized options
-    #data_path = ("/auto/data/nems_db/recordings/{0}/{1}{2}_fs{3}/"
+    #data_path = (get_setting('NEMS_RECORDINGS_DIR') + "/{0}/{1}{2}_fs{3}/"
     #             .format(options["batch"], options['stimfmt'],
     #                     options["chancount"], options["rasterfs"]))
     #data_file = data_path + cellid + '.tgz'
 
     data_file = recording_filename_hash(
-            siteid, options, uri_path="/auto/data/nems_db/recordings/")
+            siteid, options, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
 
     #log.info(data_file)
     #log.info(options)
@@ -1568,7 +1682,7 @@ def baphy_data_path(**options):
     return data_file
 
 
-def baphy_load_recording_uri(**options):
+def baphy_load_recording_uri(recache=False, **options):
     """
     Meant to be a "universal loader" for baphy recordings.
     First figure out hash for options dictionary
@@ -1595,6 +1709,7 @@ def baphy_load_recording_uri(**options):
     (CRH - 9/21/2018)
     """
 
+    mfilename = options.get('mfilename', None)
     batch = options.get('batch', None)
     siteid = options.get('siteid', None)
     cellid = options.get('cellid', None)
@@ -1605,22 +1720,27 @@ def baphy_load_recording_uri(**options):
         elif type(cellid) == str:
             siteid = cellid.split('-')[0]
 
-    if batch is None or siteid is None:
-        raise ValueError("options dict must include siteid and batch")
+    if (batch is None or siteid is None) and (mfilename is None):
+        raise ValueError("options dict must include (siteid, batch) or mfilename")
 
     # fill in default options
     options = fill_default_options(options)
 
-    recache = options.get('recache', 0)
-    if 'recache' in options:
-        del options['recache']
+    use_API = get_setting('USE_NEMS_BAPHY_API')
 
-    data_file = recording_filename_hash(siteid, options,
-                                    uri_path='/auto/data/nems_db/recordings/')
+    data_file = recording_filename_hash(
+        siteid, options, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+    if use_API:
+        p, f = os.path.split(data_file)
+        host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+        data_uri = host + '/recordings/' + str(batch) + '/' + f
+    else:
+        data_uri = data_file
+
     #log.info(data_file)
     #log.info(options)
 
-    if not os.path.exists(data_file) or recache == True:
+    if not use_API and (not os.path.exists(data_file) or recache == True):
         log.info("Generating recording")
         # rec.meta is set = options in the following function
         rec = baphy_load_recording(**options)
@@ -1628,9 +1748,26 @@ def baphy_load_recording_uri(**options):
         rec.save(data_file)
 
     else:
-        log.info('Cached recording found: %s', data_file)
+        log.info('Cached recording found: %s', data_uri)
 
-    return data_file
+    return data_uri
+
+
+def baphy_load_recording_file(**options):
+    """
+    "simple" wrapper to load recording, calls get_recording_uri to figure
+    out cache file and create if necessary. then load
+
+    :param options:
+    specify files with list of raw ids or mfile list or cellid/siteid/cellids+batch
+    specify signals with resp=True/False, stim=True/False, pupil=True/False, etc
+    other options as in other places (rasterfs, stimfmt, etc...)
+    model fit use case options includes
+    :return:
+    """
+    uri = baphy_load_recording_uri(**options)
+
+    return load_recording(uri)
 
 
 def get_kilosort_template(batch=None, cellid=None):

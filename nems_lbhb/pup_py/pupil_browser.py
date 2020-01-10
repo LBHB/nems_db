@@ -9,6 +9,7 @@ except:
 import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
+import sys
 import matplotlib as mpl
 import numpy as np
 from matplotlib.patches import Ellipse
@@ -16,6 +17,13 @@ import matplotlib.image as mpimg
 import getpass
 import nems.db as nd
 import scipy.io
+import nems_db
+import sys
+from tkinter import filedialog
+
+executable_path = sys.executable
+script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
+training_browser_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'browse_training_data.py')
 
 tmp_frame_folder = '/auto/data/nems_db/pup_py/tmp/'
 video_folder = '/auto/data/daq/'
@@ -25,32 +33,32 @@ class PupilBrowser:
     def __init__(self, master):
         self.master = master
         master.title("Pupil browser")
-        master.geometry('950x600')
+        master.geometry('1050x600')
 
         # create a plot attributemod
         self.pupil_plot = None
         self.pupil_trace_plot = None
 
         self.pupil_canvas = tk.Canvas(master, width=400, height=300)
-        self.pupil_canvas.grid(row=0, column=3, rowspan=6, columnspan=5)
+        self.pupil_canvas.grid(row=0, column=4, rowspan=6, columnspan=5)
 
-        fig = mpl.figure.Figure(figsize=(9.5, 3), dpi=100)
+        fig = mpl.figure.Figure(figsize=(10.5, 3), dpi=100)
         self.ax = fig.add_subplot(1,1,1)
         self.pupil_trace = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
         self.pupil_trace.draw()
-        self.pupil_trace.get_tk_widget().grid(row=10, column=0, rowspan=5, columnspan=8)
+        self.pupil_trace.get_tk_widget().grid(row=10, column=0, rowspan=5, columnspan=8, sticky='nwes')
         self.hline = None
         self.a_plot = None
         self.b_plot = None
 
-        self.load_button = tk.Button(master, text="Load recording", command=self.load_file)
-        self.load_button.grid(row=1, column=2)
+        master.grid_columnconfigure(3, weight=1)
+        master.grid_rowconfigure(10, weight=1)
 
-        self.video_n = tk.Label(master, text="video name")
-        self.video_n.grid(row=0, column=1, columnspan=1)
-        self.video_name = tk.Entry(master)
-        self.video_name.grid(row=1, column=1)
-        self.video_name.focus_set()
+        self.file_browse = tk.Button(master, text="Browse", command=self.browse_file)
+        self.file_browse.grid(row=1, column=2)
+
+        self.load_button = tk.Button(master, text="Load recording", command=self.load_file)
+        self.load_button.grid(row=1, column=3)
 
         self.animal_n = tk.Label(master, text="animal")
         self.animal_n.grid(row=0, column=0, columnspan=1)
@@ -58,11 +66,11 @@ class PupilBrowser:
         self.animal_name.grid(row=1, column=0)
         self.animal_name.focus_set()
 
-        self.next_frame = tk.Button(master, text="Next frame", command=self.get_next_frame)
-        self.next_frame.grid(row=3, column=1)
-
-        self.previous_frame = tk.Button(master, text="Previous frame", command=self.get_prev_frame)
-        self.previous_frame.grid(row=3, column=0)
+        self.video_n = tk.Label(master, text="video name")
+        self.video_n.grid(row=0, column=1, columnspan=1)
+        self.video_name = tk.Entry(master)
+        self.video_name.grid(row=1, column=1)
+        self.video_name.focus_set()
 
         # Jump to frame number
         self.frame_n = tk.Label(master, text="Frame number: ")
@@ -70,6 +78,12 @@ class PupilBrowser:
         self.frame_n_value = tk.Entry(master)
         self.frame_n_value.grid(row=2, column=1)
         self.frame_n_value.focus_set()
+
+        self.next_frame = tk.Button(master, text="Next frame", command=self.get_next_frame)
+        self.next_frame.grid(row=3, column=1)
+
+        self.previous_frame = tk.Button(master, text="Previous frame", command=self.get_prev_frame)
+        self.previous_frame.grid(row=3, column=0)
 
         self.frame_update = tk.Button(master, text="Jump to frame", command=self.get_frame)
         self.frame_update.grid(row=2, column=2)
@@ -83,25 +97,16 @@ class PupilBrowser:
         self.retrain = tk.Button(master, text="Re-train network", command=self.retrain)
         self.retrain.grid(row=4, column=2)
 
+        self.shift_is_held = False
+        self.exclude_starts = []
+        self.exclude_ends = []
 
     def get_frame(self):
         animal = self.animal_name.get()
         video_n = self.video_name.get()
-        video = video_folder + animal + '/' + video_n[:6] + '/' + video_n + '.mj2'
-
-        if os.path.isfile(video) != True:
-            video_1 = video_folder + animal + '/training2019/' + video_n + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + video_n + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                video = video_1
-            elif os.path.isfile(video_2) == True:
-                video = video_2
-            else:
-                raise ValueError("can't find video")
+        video = self.raw_video
 
         frame = int(self.frame_n_value.get())
-        fps = 30
         t = frame * (1 / 30)
 
         # save new frames
@@ -170,7 +175,7 @@ class PupilBrowser:
 
         return photo
 
-    def plot_trace(self, params_file):
+    def plot_trace(self, params_file, exclude=False):
 
         animal = self.animal_name.get()
 
@@ -192,6 +197,12 @@ class PupilBrowser:
         a = ellipse_preds['cnn']['a']
         b = ellipse_preds['cnn']['b']
 
+        if exclude:
+            # exclude frames marked as bad
+            for s, e in zip(self.exclude_starts, self.exclude_ends):
+                a[s:e] = np.nan
+                b[s:e] = np.nan
+
         self.max_frame = len(a)
 
         canvas = self.pupil_trace
@@ -204,13 +215,112 @@ class PupilBrowser:
                 pass
 
         self.a_plot = self.ax.plot(a, 'r')
-        self.b_plot = self.ax.plot(b, 'b', picker=5)
+        self.b_plot = self.ax.plot(b, color='b', picker=5)
+        self.ax.set_ylim((np.nanmin([np.nanmin(a), np.nanmin(b)]),
+                         np.nanmax([np.nanmax(a), np.nanmax(b)])))
+        self.ax.set_xlim((0, len(a)))
 
         self.ax.legend(['minor axis', 'major axis'])
 
+        canvas.get_tk_widget().focus_force()
+        canvas.mpl_connect('key_press_event', self.on_key)
         canvas.mpl_connect('pick_event', self.get_coords)
-
+        canvas.mpl_connect('key_release_event', self.off_key)
         canvas.draw()
+
+    def get_coords(self, event):
+        self.frame_n_value.delete(0, 'end')
+        self.frame_n_value.insert(0, str(int(event.mouseevent.xdata)))
+
+        if self.shift_is_held == False:
+            if hasattr(self, 'hline'):
+                try:
+                    self.hline.remove()
+                except:
+                    pass
+            self.hline = self.ax.axvline(event.ind[0], color='k')
+            self.pupil_trace.draw()
+
+            self.get_frame()
+
+        elif self.shift_is_held == True:
+            if event.mouseevent.button == 1:
+                if hasattr(self, 'hline_start'):
+                    self.hline_start.remove()
+                    del self.start_val
+
+                self.hline_start = self.ax.axvline(int(event.mouseevent.xdata),
+                                             color='red')
+                self.start_val = int(event.mouseevent.xdata)
+                self.pupil_trace.draw()
+
+            elif event.mouseevent.button == 3:
+                if hasattr(self, 'hline_end'):
+                    self.hline_end.remove()
+                    self.hline_fill.remove()
+                    del self.end_val
+
+                if hasattr(self, 'hline_start') == False:
+                    print("First specify start using shift+left-click!")
+                else:
+                    self.hline_end = self.ax.axvline(int(event.mouseevent.xdata),
+                                                 color='red')
+                    mi, ma = self.ax.get_ylim()
+                    mi = int(mi)
+                    ma = int(ma)+1
+                    self.end_val = int(event.mouseevent.xdata)
+                    self.hline_fill = self.ax.fill_betweenx(range(mi, ma),
+                                                self.end_val,
+                                                self.start_val, color='grey',
+                                                alpha=0.5)
+                    self.pupil_trace.draw()
+
+    def on_key(self, event):
+        if event.key=='shift':
+            self.shift_is_held=True
+        elif event.key=='enter':
+            # check if exclusion thing exists and delete it on the plot
+            if hasattr(self, 'hline_start') & hasattr(self, 'hline_end'):
+                self.hline_start.remove()
+                del self.hline_start
+                self.hline_end.remove()
+                del self.hline_end
+                self.hline_fill.remove()
+                del self.hline_fill
+                self.pupil_trace.draw()
+                # save the currently stored start/end values to self.exclude_starts
+                # and self.exclude_ends
+                self.exclude_starts.append(self.start_val)
+                self.exclude_ends.append(self.end_val)
+
+                self.plot_trace(self.video_name.get(), exclude=True)
+            else:
+                pass
+
+        else:
+            pass
+
+    def off_key(self, event):
+        if event.key=='shift':
+            self.shift_is_held=False
+        else:
+            pass
+
+    def browse_file(self):
+        # get the pupil video file
+        self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
+                            title = "Select raw video file",
+                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+
+        params_file = os.path.split(self.raw_video)[-1].split('.')[0]
+        animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
+
+        self.video_name.delete(0, 'end')
+        self.animal_name.delete(0, 'end')
+        self.video_name.insert(0, params_file)
+        self.animal_name.insert(0, animal)
+
+        self.load_file()
 
     def load_file(self):
         """
@@ -219,25 +329,30 @@ class PupilBrowser:
         """
 
         params_file = self.video_name.get()
-        animal = self.animal_name.get()
+        # get raw video -- try to use the exisiting path from raw video
+        fp = os.path.split(self.raw_video)[0]
+        self.processed_video = os.path.join(fp, 'sorted', params_file)
+
+        # reset raw video attribute
+        parts = self.raw_video.split('.')
+        ext = self.raw_video.split('.')[-1]
+        if len(self.raw_video.split('.')) > 2:
+            ext2 = self.raw_video.split('.')[-2]
+            self.raw_video = os.path.join(fp, params_file)+'.'+ext2+'.'+ext
+        else:
+            self.raw_video = os.path.join(fp, params_file)+'.'+ext
+        print(self.raw_video)
 
         self.plot_trace(params_file)
 
         self.frame_n_value.insert(0, str(0))
 
+        # reset exclusion frames
+        self.exclude_starts = []
+        self.exclude_ends = []
+
         # save first ten frames and display the first
-        video = video_folder + animal + '/' + params_file[:6] + '/' + params_file + '.mj2'
-
-        if os.path.isfile(video) != True:
-            video_1 = video_folder + animal + '/training2019/' + params_file + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + params_file + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                video = video_1
-            elif os.path.isfile(video_2) == True:
-                video = video_2
-            else:
-                raise ValueError("can't find video")
+        video = self.raw_video
 
         os.system("ffmpeg -ss 00:00:00 -i {0} -vframes 1 {1}frame%d.jpg".format(video, tmp_frame_folder))
 
@@ -269,44 +384,17 @@ class PupilBrowser:
 
         self.get_frame()
 
-    def get_coords(self, event):
-        self.frame_n_value.delete(0, 'end')
-        self.frame_n_value.insert(0, str(event.ind[0]))
-
-        if hasattr(self, 'hline'):
-            try:
-                self.hline.remove()
-            except:
-                pass
-
-        self.hline = self.ax.axvline(event.ind[0], color='k')
-        self.pupil_trace.draw()
-
-        self.get_frame()
-
     def save_analysis(self):
         video_name = self.video_name.get()
         animal = self.animal_name.get()
         site = video_name[:6]
-        save_path = os.path.join(video_folder, animal, site, "sorted", video_name + ".pickle")
+
+        fn = video_name + '.pickle'
+        fn_mat = video_name + '.mat'
+        fp = os.path.split(self.processed_video)[0]
+        save_path = os.path.join(fp, fn)
         # for matlab loading
-        mat_fn = os.path.join(video_folder, animal, site, "sorted", video_name + ".mat")
-
-        if os.path.isdir(os.path.join(video_folder, animal, site)) != True:
-
-            video_1 = video_folder + animal + '/training2019/' + video_name + '.mj2'
-            video_2 = video_folder + animal + '/training2018/' + video_name + '.mj2'
-
-            if os.path.isfile(video_1) == True:
-                save_path = os.path.join(video_folder, animal, "training2019", "sorted", video_name + ".pickle")
-                mat_fn = os.path.join(video_folder, animal, "training2019", "sorted", video_name + ".mat")
-            elif os.path.isfile(video_2) == True:
-                save_path = os.path.join(video_folder, animal, "training2018", "sorted", video_name + ".pickle")
-                mat_fn = os.path.join(video_folder, animal, "training2018", "sorted", video_name + ".mat")
-            else:
-                raise ValueError("can't find video")
-
-
+        mat_fn = os.path.join(fp, fn_mat)
 
         sorted_dir = os.path.split(save_path)[0]
 
@@ -319,6 +407,13 @@ class PupilBrowser:
             pass
 
         save_dict = self.parms
+
+        # add excluded frames to the save dictionary
+        excluded_frames = np.concatenate((np.array(self.exclude_starts)[np.newaxis, :],
+                                        np.array(self.exclude_ends)[np.newaxis, :]),
+                                        axis=0)
+        save_dict['cnn']['excluded_frames'] = excluded_frames.T
+
 
         print("computing eyespeed")
         x_diff = np.diff(save_dict['cnn']['x'])
@@ -336,15 +431,17 @@ class PupilBrowser:
         print("saved analysis successfully")
 
     def open_training_browser(self):
-        os.system("/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6 \
-                /auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/browse_training_data.py {0} {1} {2} {3}".format(
-            self.animal_name.get(), self.video_name.get(), 0, self.max_frame))
+        os.system("{0} \
+                {1} {2} {3} {4} {5} {6}".format(executable_path, training_browser_path,
+            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame))
 
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
-        py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
-        script_path = '/auto/users/hellerc/code/projects/pupil_processing/training_script.py'
+        py_path = sys.executable #'/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
+        #script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/training_script.py'
+        script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
+        script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()
 
         # add job to queue

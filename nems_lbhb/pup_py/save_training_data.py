@@ -1,4 +1,4 @@
-from utils import loadmat
+from nems_lbhb.pup_py.utils import loadmat
 import av
 import pims
 import numpy as np

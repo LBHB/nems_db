@@ -2,15 +2,15 @@ import numpy as np
 import os
 import pickle
 import keras
-import utils as ut
+import nems_lbhb.pup_py.utils as ut
 
 # define global variables for data
-path = '/auto/users/hellerc/code/projects/pupil_processing/training_data/data/'
+path = '/auto/data/nems_db/pup_py/training_data/'
 data_frames = os.listdir(path)
 
 
 class DataGenerator(keras.utils.Sequence):
-        
+
     def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=5, n_channels=3, shuffle=True,
                  augment_minibatches=False):
         self.batch_size = batch_size
@@ -61,6 +61,8 @@ class DataGenerator(keras.utils.Sequence):
 
             im = keras.applications.densenet.preprocess_input(im)
 
+            # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others
+            '''
             # normalize the params to live between 0 and 1
             y[i, 0] = y[i, 0] / self.image_dim[1]
             y[i, 1] = y[i, 1] / self.image_dim[1]
@@ -71,6 +73,7 @@ class DataGenerator(keras.utils.Sequence):
             y[i, 4] = (y[i, 4] / (np.pi * 2)) + 0.4
 
             y[i, :] = y[i, :] * 100
+            '''
 
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])
 
@@ -90,6 +93,38 @@ class DataGenerator(keras.utils.Sequence):
 
         return X, y
 
+def train(model, epochs=1):
 
+    # data path
+    path = 'training_data/data/'
+    training_files = os.listdir(path)
+    n_training_files = len(training_files)
 
+    params = {
+        'batch_size': 16,
+        'image_dim': (224, 224),
+        'n_parms': 5,
+        'n_channels': 3,
+        'shuffle': True,
+    }
 
+    # define train indexes
+    train = [i[0] for i in np.argwhere([True if 'AMT004b' not in i else False for i in training_files])]
+
+    # define validation indexes
+    test = [i[0] for i in np.argwhere([True if 'AMT004b' in i else False for i in training_files])]
+
+    partition = {
+        'train': train,
+        'validation': test
+    }
+
+    training_generator = DataGenerator(partition['train'], **params)
+    validation_generator = DataGenerator(partition['validation'], **params)
+
+    model.fit_generator(generator=training_generator,
+                        validation_data=validation_generator,
+                        use_multiprocessing=True,
+                        workers=6, epochs=epochs)
+
+    return model

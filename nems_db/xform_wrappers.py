@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
 # wrapper code for fitting models
+"""
+Created on Wed Jun 14 09:33:47 2017
+@author: svd
+
+THIS FILE IS DEPRECATED. REPLACED BY nems_lbhb.xform_wrappers !
+
+THIS directory is being phased out and/or merged with nems_web
+"""
+
+raise Warning("THIS LIBRARY IS DEPRECATED. USE nems_lbhb.xform_wrappers")
 
 import os
 import random
@@ -170,11 +180,12 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
     # check for special pop signal code
-    cc=cellid.split("_")
-    pc_idx = None
-    if (len(cc) > 1) and (cc[1][0]=="P"):
-        pc_idx=[int(cc[1][1:])]
-        cellid=cc[0]
+    if type(cellid) is str:
+        cc=cellid.split("_")
+        pc_idx = None
+        if (len(cc) > 1) and (cc[1][0]=="P"):
+            pc_idx=[int(cc[1][1:])]
+            cellid=cc[0]
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)

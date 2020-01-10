@@ -4,8 +4,13 @@
 Created on Tue Sep 18 16:47:56 2018
 
 @author: svd
+
+A bunch of routines for loading data from baphy/matlab
+
 """
 
+from functools import lru_cache
+from pathlib import Path
 import logging
 import re
 import os
@@ -18,6 +23,7 @@ import scipy.signal
 import numpy as np
 import json
 import sys
+import tarfile
 import io
 import datetime
 import glob
@@ -25,6 +31,8 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
+from . import OpenEphys as oe
+from . import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -40,6 +48,330 @@ stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
 
+###############################################################################
+# Main entry-point for BAPHY experiments
+###############################################################################
+class BAPHYExperiment:
+    '''
+    Facilitates managing the various files and datasets associated with a
+    single BAPHY experiment:
+
+        >>> parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+        >>> manager = BAPHYExperiment(parmfile)
+        >>> print(manager.pupilfile)
+        /auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.pup.mat
+        >>> print(manager.spikefile)
+        /auto/data/daq/Nameko/NMK004/sorted/NMK004e06_p_NON.spk.mat
+        >>> manager.get_trial_starts()
+        array([ 31.87386667,  44.28406667,  56.64683333,  68.99676667,
+                81.3689    , 102.33266667, 114.70163333, 127.0711    ,
+               139.4586    , 151.82203333, 167.28496667, 179.64786667,
+               192.05813333, 204.47266667, 216.8878    , 230.98546667,
+               243.3703    , 255.7584    , 268.1709    , 280.60616667])
+    '''
+    @classmethod
+    def from_spikefile(cls, spikefile):
+        '''
+        Initialize class from a spike filename.
+
+        Useful if you are debugging code so that you don't have to manually
+        edit the filename to arrive at the parmfilename.
+        '''
+        spikefile = Path(spikefile)
+        folder = spikefile.parent.parent
+        parmfile = folder / spikefile.name.rsplit('.', 2)[0]
+        parmfile = parmfile.with_suffix('.m')
+        return cls(parmfile)
+
+    @classmethod
+    def from_pupilfile(cls, pupilfile):
+        if 'sorted' in pupilfile:
+            # using new pupil analysis, which is save in sorted dir
+            pp, bb = os.path.split(pupilfile)
+            fn = bb.split('.')[0]
+            path = os.path.split(pp)[0]
+            parmfile = Path(os.path.join(path, fn)).with_suffix('.m')
+        else:
+            parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
+            parmfile = parmfile.with_suffix('.m')
+
+        return cls(parmfile)
+
+    def __init__(self, parmfile):
+        # Make sure that the '.m' suffix is present! In baphy_load data I see
+        # that there's care to make sure it's present so I assume not all
+        # functions are careful about the suffix.
+        self.parmfile = Path(parmfile).with_suffix('.m')
+        if not self.parmfile.exists():
+            raise IOError(f'{self.parmfile} not found')
+        self.folder = self.parmfile.parent
+        self.experiment = self.parmfile.name.split('_', 1)[0]
+        self.experiment_with_runclass = self.parmfile.stem
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_folder(self):
+        path = self.folder / 'raw' / self.experiment
+        candidates = list(path.glob(self.experiment_with_runclass + '*'))
+        if len(candidates) > 1:
+            raise ValueError('More than one candidate found')
+        if len(candidates) == 0:
+            raise ValueError('No candidates found')
+        return candidates[0]
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_tarfile(self):
+        '''
+        Return path to OpenEphys tarfile containing recordings
+        '''
+        path = self.folder / 'raw' / self.experiment
+        return path.with_suffix('.tgz')
+
+    @property
+    @lru_cache(maxsize=128)
+    def openephys_tarfile_relpath(self):
+        '''
+        Return relative path in OpenEphys tarfile that represents the "parent"
+        of all files (e.g., *.continuous) stored within, e.g.:
+
+            filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+            import tarfile
+            with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
+                fh.open(filename)
+        '''
+        parent = self.openephys_tarfile.parent
+        return self.openephys_folder.relative_to(parent)
+
+    @property
+    @lru_cache(maxsize=128)
+    def pupilfile(self):
+        return self.parmfile.with_suffix('.pup.mat')
+
+    @property
+    @lru_cache(maxsize=128)
+    def spikefile(self):
+        filename = self.folder / 'sorted' / self.experiment_with_runclass
+        return filename.with_suffix('.spk.mat')
+
+    @lru_cache(maxsize=128)
+    def get_trial_starts(self, method='openephys'):
+        if method == 'openephys':
+            return load_trial_starts_openephys(self.openephys_folder)
+        raise ValueError(f'Method "{method}" not supported')
+
+    @lru_cache(maxsize=128)
+    def get_baphy_events(self, correction_method='openephys', **kw):
+        baphy_events = self._get_baphy_parameters()[-1]
+        if correction_method is None:
+            return baphy_events
+        if correction_method == 'openephys':
+            trial_starts = self.get_trial_starts('openephys')
+            return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
+        if correction_method == 'spikes':
+            spikes, fs = self._get_spikes()
+            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
+            return exptevents
+        mesg = 'Unsupported correction method "{correction_method}"'
+        raise ValueError(mesg)
+
+    def get_pupil_trace(self, *args, **kwargs):
+        return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
+
+    # Methods below this line just pass through to the functions for now.
+    def _get_baphy_parameters(self):
+        # Returns tuple of global, expt and events
+        return baphy_parm_read(self.parmfile)
+
+    def _get_spikes(self):
+        return baphy_load_spike_data_raw(str(self.spikefile))
+
+    def get_continuous_data(self, chans):
+        '''
+        WARNING: This is a beta method. The interface and return value may
+        change.
+        chans (list or numpy slice): which electrodes to load data from
+        '''
+        # get filenames (TODO: can this be sped up?)
+        #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+        #    log.info("Finding filenames in tarfile...")
+        #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+        #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+
+        # Use xml settings instead of the tar file. Much faster. Also, takes care
+        # of channel mapping (I think)
+        recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
+        connector = [i for i in recChans.keys()][0]
+        #import pdb; pdb.set_trace()
+        # handle channel remapping
+        info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
+        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+        for k in mapping_keys:
+            ch_num = mapping[k].get('Number')
+            if ch_num in recChans[connector]:
+                recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
+
+        recChans = [recChans[connector][i]['name_mapped'] \
+                            for i in recChans[connector].keys()]
+        data_files = [connector + '_' + c + '.continuous' for c in recChans]
+        all_chans = np.arange(len(data_files))
+        idx = all_chans[chans].tolist()
+        selected_data = np.take(data_files, idx)
+        continuous_data = []
+        for filename in selected_data:
+            full_filename = self.openephys_folder / filename
+            if os.path.isfile(full_filename):
+                log.info('%s already extracted, load faster...', filename)
+                data = load_continuous_openephys(str(full_filename))
+                continuous_data.append(data['data'][np.newaxis, :])
+            else:
+                with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+                    log.info("Extracting / loading %s...", filename)
+                    full_filename = self.openephys_tarfile_relpath / filename
+                    with tar_fh.extractfile(str(full_filename)) as fh:
+                        data = load_continuous_openephys(fh)
+                        continuous_data.append(data['data'][np.newaxis, :])
+
+        continuous_data = np.concatenate(continuous_data, axis=0)
+
+        return continuous_data
+
+
+def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
+    '''
+    Parameters
+    ----------
+    events : DataFrame
+        Events stored in BAPHY parmfile
+    timestamps : array
+        Array of timestamps (in seconds) as read in from openephys
+    baphy_legacy_format : bool
+        If True, assume that all data before the onset of the first trial are
+        discarded (i.e., as is the case when aligning times using the spike
+        times file. This results in the first trial having a start timestamp of
+        0.
+    '''
+    n_baphy = events['Trial'].max()
+    n_oe = len(timestamps)
+    if n_baphy != n_oe:
+        mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
+                'OpenEphys ({n_oe}) do not match'
+        raise ValueError(mesg)
+
+    if baphy_legacy_format:
+        timestamps = timestamps - timestamps[0]
+
+    events = events.copy()
+    for i, timestamp in enumerate(timestamps) :
+        m = events['Trial'] == i+1
+        events.loc[m, ['start', 'end']] += timestamp
+    return events
+
+
+###############################################################################
+# Openephys utility functions
+###############################################################################
+def load_trial_starts_openephys(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = Path(openephys_folder) / 'all_channels.events'
+    data = oe.load(str(event_file))
+    header = data.pop('header')
+    df = pd.DataFrame(data)
+    ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+    return ts['timestamps'].values / float(header['sampleRate'])
+
+
+def load_continuous_openephys(fh):
+    '''
+    Read continous OpenEphys dataset
+
+    Parameters
+    ----------
+    fh : {str, file-like object, buffer}
+        If a file-like object or buffer, will read directly from it. If a
+        string, will open the file first (and close upon exiting).
+
+    Unlike the version provided by OpenEphys, this one can handle reading from
+    buffered streams (e.g., such as that provided by a tarfile) or existing
+    files.
+
+    Example
+    -------
+    import tarfile
+
+    parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
+    manager = io.BAPHYExperiment(parmfile)
+    filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
+    tar_fh = tarfile.open(manager.openephys_tarfile, 'r:gz')
+    fh = tar_fh.extractfile(str(filename))
+    ch_data = load_continous_openephys(fh)
+    '''
+    if not isinstance(fh, io.IOBase):
+        fh = open(fh, 'rb')
+        do_close = True
+    else:
+        do_close = False
+
+    header = oe.readHeader(fh)
+    scale = float(header['bitVolts'])
+    ts_dtype = np.dtype('<i8')
+    n_dtype = np.dtype('<u2')
+    record_number_dtype = np.dtype('>u2')
+    data_dtype = np.dtype('>i2')
+
+    timestamps = []
+    record_number = []
+    data = []
+
+    SAMPLES_PER_RECORD = 1024
+
+    while True:
+        try:
+            b = fh.read(ts_dtype.itemsize)
+            ts = np.frombuffer(b, ts_dtype, 1)[0]
+            b = fh.read(n_dtype.itemsize)
+            n = np.frombuffer(b, n_dtype, 1)[0]
+            if n != SAMPLES_PER_RECORD:
+                raise IOError('Found corrupt record')
+            b = fh.read(record_number_dtype.itemsize)
+            rn = np.frombuffer(b, record_number_dtype, 1)[0]
+            b = fh.read(data_dtype.itemsize * n)
+            d = np.frombuffer(b, data_dtype, n) * scale
+            _ = fh.read(10)
+
+            timestamps.append(ts)
+            record_number.append(rn)
+            data.append(d)
+        except ValueError:
+            # We have reached end of file?
+            break
+
+    timestamps = np.array(timestamps)
+    record_number = np.array(record_number)
+    data = np.concatenate(data)
+
+    if do_close:
+        fh.close()
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'record_number': record_number,
+    }
+
+
+###############################################################################
+# Unsorted functions
+###############################################################################
 def loadmat(filename):
     '''
     this function should be called instead of direct spio.loadmat
@@ -88,7 +420,8 @@ def baphy_mat2py(s):
 
     s4 = re.sub(r'\(([0-9]*)\)', r'[\g<1>]', s3)
 
-    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s4)
+    s5 = re.sub(r'\.wav', r"", s4) # MLE eliminates .wav file sufix to not confuse with field ToDo: elimiate .wav from param files ?
+    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
 
     s6 = re.sub(r'([0-9]+) ', r"\g<0>,", s5)
     s6 = re.sub(r'NaN ', r"np.nan,", s6)
@@ -167,6 +500,8 @@ def baphy_parm_read(filepath):
     else:
         exptevents = d
     # rename columns to NEMS standard epoch names
+    #import pdb
+    #pdb.set_trace()
     exptevents.columns = ['name', 'start', 'end', 'Trial']
     for i in range(len(exptevents)):
         if exptevents.loc[i, 'end'] == []:
@@ -175,7 +510,7 @@ def baphy_parm_read(filepath):
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
            exptparams['TrialObject'][1]['ReferenceHandle'][1]['descriptor']
-    # CPP special case, deletes added commas
+    # CPP special case, deletes added commas ToDo this might be unecesary, the task is done in MLE code.
     if exptparams['TrialObject'][1]['ReferenceClass'] == 'ContextProbe':
         tags = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']  # gets the list of tags
         tag_map = {oldtag: re.sub(r' , ', r'  ', oldtag)
@@ -243,7 +578,12 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
         return stim_cache_dir + dstr
 
     # otherwise use standard load stim from baphy format
-    if options['runclass'] is None:
+    if 'use_target' in options:
+        if options['use_target']:
+            RefObject = exptparams['TrialObject'][1]['TargetHandle'][1]
+        else:
+            RefObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    elif options['runclass'] is None:
         RefObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     elif 'runclass' in exptparams.keys():
         runclass = exptparams['runclass'].split("_")
@@ -358,18 +698,10 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     # adjust times in exptevents to approximate time since experiment started
     # rather than time since trial started (native format)
     for Trialidx in range(1, TrialCount+1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
         ff = (exptevents['Trial'] == Trialidx)
         exptevents.loc[ff, ['start', 'end']] = (
                 exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
                 )
-
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -390,8 +722,6 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
                 uniquetrials = np.unique(st[0, :])
-                # print('chan {0} unit {1}: {2} spikes {3} trials'
-                #       .format(c, u, st.shape[1], len(uniquetrials)))
 
                 unit_spike_events = np.array([])
                 for trialidx in uniquetrials:
@@ -405,8 +735,6 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
                     unit_spike_events = np.concatenate(
                             (unit_spike_events, this_spike_events), axis=0
                             )
-                    # print("   trial {0} first spike bin {1}"
-                    #       .format(trialidx,st[1,ff]))
 
                 totalunits += 1
                 if chancount <= 8:
@@ -502,31 +830,37 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             unitcount = s.shape[0]
             for u in range(0, unitcount):
                 st = s[u, 0]
-                uniquetrials = np.unique(st[0, :])
-                # print('chan {0} unit {1}: {2} spikes {3} trials'
-                #       .format(c, u, st.shape[1], len(uniquetrials)))
+                if st.size:
+                    print("{} {}".format(u,str(st.shape)))
+                    uniquetrials = np.unique(st[0, :])
+                    # print('chan {0} unit {1}: {2} spikes {3} trials'
+                    #       .format(c, u, st.shape[1], len(uniquetrials)))
 
-                unit_spike_events = np.array([])
-                for trialidx in uniquetrials:
-                    ff = (st[0, :] == trialidx)
-                    this_spike_events = (st[1, ff]
-                                         + Offset_spikefs[np.int(trialidx-1)])
-                    if len(comment) > 0:
-                        if comment == 'PC-cluster sorted by mespca.m':
-                            # remove last spike, which is stray
-                            this_spike_events = this_spike_events[:-1]
-                    unit_spike_events = np.concatenate(
-                            (unit_spike_events, this_spike_events), axis=0
-                            )
-                    # print("   trial {0} first spike bin {1}"
-                    #       .format(trialidx,st[1,ff]))
+                    unit_spike_events = np.array([])
+                    for trialidx in range(1,TrialCount+1):
+                        ff = (st[0, :] == trialidx)
+                        try:
+                            this_spike_events = (st[1, ff]
+                                                 + Offset_spikefs[np.int(trialidx-1)])
+                        except:
+                            import pdb
+                            pdb.set_trace()
+                        if len(comment) > 0:
+                            if comment == 'PC-cluster sorted by mespca.m':
+                                # remove last spike, which is stray
+                                this_spike_events = this_spike_events[:-1]
+                        unit_spike_events = np.concatenate(
+                                (unit_spike_events, this_spike_events), axis=0
+                                )
+                        # print("   trial {0} first spike bin {1}"
+                        #       .format(trialidx,st[1,ff]))
 
-                totalunits += 1
-                if chancount <= 8:
-                    unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                else:
-                    unit_names.append("{0:02d}-{1}".format(c+1, u+1))
-                spiketimes.append(unit_spike_events / spikefs)
+                    totalunits += 1
+                    if chancount <= 8:
+                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                    else:
+                        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                    spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
 
@@ -535,10 +869,10 @@ def set_default_pupil_options(options):
 
     options = options.copy()
     options["rasterfs"] = options.get('rasterfs', 100)
-    options['pupil'] = options.get('pupil', 0)
+    options['pupil'] = options.get('pupil', 1)
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
-    options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', (1/3))
+    options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
     options["pupil_median"] = options.get('pupil_median', 0)
     options["pupil_smooth"] = options.get('pupil_smooth', 0)
     options["pupil_highpass"] = options.get('pupil_highpass', 0)
@@ -556,7 +890,7 @@ def set_default_pupil_options(options):
     options["rem_min_saccades_per_minute"] = options.get('rem_min_saccades_per_minute', 0.01)
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
-    options["verbose"] = options.get('verbose', True)
+    options["verbose"] = options.get('verbose', False)
 
     return options
 
@@ -567,6 +901,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
+
+    pupilfilepath = get_pupil_file(pupilfilepath)
 
     options = set_default_pupil_options(options)
 
@@ -602,27 +938,25 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
     # these times are set based on openephys data, since baphy doesn't log exact trial start times
     if exptevents is None:
-        # if exptevents hasn't been loaded and corrected for spike data yet, do that so that we have accurate trial
-        # start times.
-        # key exptevents are exptevents['name'].str.startswith('TRIALSTART')
-        parmfilepath = pupilfilepath.replace(".pup.mat",".m")
-        globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
-        pp, bb = os.path.split(parmfilepath)
-        spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
-        log.info("Spike file: {0}".format(spkfilepath))
-        # load spike times
-        sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
-        # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = baphy_align_time(
-                exptevents, sortinfo, spikefs, rasterfs
-                )
+        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
+        trial_starts = experiment.get_trial_starts()
+        exptevents = experiment.get_baphy_events()
 
-    try:
-        basename = os.path.basename(pupilfilepath).split('.')[0]
-        abs_path = os.path.dirname(pupilfilepath)
-        pupildata_path = os.path.join(abs_path, "sorted", basename + '.pickle')
+        #parmfilepath = pupilfilepath.replace(".pup.mat",".m")
+        #globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
+        #pp, bb = os.path.split(parmfilepath)
+        #spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
+        #log.info("Spike file: {0}".format(spkfilepath))
+        ## load spike times
+        #sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+        ## adjust spike and event times to be in seconds since experiment started
+        #exptevents, spiketimes, unit_names = baphy_align_time(
+        #        exptevents, sortinfo, spikefs, rasterfs
+        #        )
 
-        with open(pupildata_path, 'rb') as fp:
+    if '.pickle' in pupilfilepath:
+
+        with open(pupilfilepath, 'rb') as fp:
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
@@ -657,10 +991,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
 
-    except:
+    elif '.pup.mat' in pupilfilepath:
         matdata = scipy.io.loadmat(pupilfilepath)
-
-        log.info("Attempted to load pupil from CNN analysis, but file didn't exist. Loading from pup.mat")
 
         p = matdata['pupil_data']
         params = p['params']
@@ -719,7 +1051,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 # print([i,x1,x2])
                 deblinked[x1:x2, 0] = np.linspace(
                         deblinked[x1], deblinked[x2-1], x2-x1
-                        )
+                        ).squeeze()
                 if pupil_eyespeed:
                     deblinked_eye_speed[x1:x2, 0] = np.nan
 
@@ -926,6 +1258,8 @@ def get_rem(pupilfilepath, exptevents=None, **options):
 
     ZPS 2018-09-24: Initial version.
     """
+    # find appropriate pupil file
+    pupilfilepath = get_pupil_file(pupilfilepath)
 
     #Set analysis parameters from defaults, if necessary.
     options = set_default_pupil_options(options)
@@ -1120,7 +1454,14 @@ def run_length_decode(a):
 
 def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat', '.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    options['verbose'] = False
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1132,7 +1473,12 @@ def cache_rem_options(pupilfilepath, cachepath=None, **options):
 
 def load_rem_options(pupilfilepath, cachepath=None, **options):
 
-    jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
+    pupilfilepath = get_pupil_file(pupilfilepath)
+
+    if '.pickle' in pupilfilepath:
+        jsonfilepath = pupilfilepath.replace('.pickle','.rem.json')
+    else:
+        jsonfilepath = pupilfilepath.replace('.pup.mat','.rem.json')
     if cachepath is not None:
         pp, bb = os.path.split(jsonfilepath)
         jsonfilepath = os.path.join(cachepath, bb)
@@ -1144,6 +1490,46 @@ def load_rem_options(pupilfilepath, cachepath=None, **options):
         return options
     else:
         raise ValueError("REM options file not found.")
+
+
+def get_pupil_file(pupilfilepath):
+    """
+    For backwards compatibility in pupil/rem functions. Default is to load the
+    pupil fit from the CNN model fit. However, for some older recordings, this
+    may not exist and so you may still want to load the pup.mat file. This
+    is a helper function to find which pupil file to load
+    6-28-2019, CRH
+    """
+    if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
+        log.info("Loading CNN pupil fit from .pickle file")
+        return pupilfilepath
+
+    elif 'pup.mat' in pupilfilepath:
+
+        if not os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return pupilfilepath
+            else:
+                raise FileNotFoundError("Pupil analysis not found")
+
+        elif os.path.isfile(pupilfilepath):
+            pp, bb = os.path.split(pupilfilepath)
+            CNN_pupilfilepath = pp + '/sorted/' + bb.split('.')[0] + '.pickle'
+
+            if os.path.isfile(CNN_pupilfilepath):
+                log.info("Loading CNN pupil fit from .pickle file")
+                return CNN_pupilfilepath
+            else:
+                log.info("CNN pupil fit doesn't exist, \
+                            Loading pupil fit from .pup.mat file")
+                return pupilfilepath
+
+    else:
+        raise FileNotFoundError("Pupil analysis not found")
 
 
 def baphy_pupil_uri(pupilfilepath, **options):
@@ -1217,3 +1603,96 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
 
     return pupil_trace, is_rem, options
+
+
+def load_raw_pupil(pupilfilepath, fs=None):
+    """
+    Simple function to read continuous pupil trace in w/o baphy trial start alignment etc.
+
+    Right now, only works for .pickle pupil files.
+    """
+
+    with open(pupilfilepath, 'rb') as fp:
+            pupildata = pickle.load(fp)
+
+
+    pupil_diameter = pupildata['cnn']['a'] * 2
+
+    # missing frames/frames that couldn't be decoded were saved as nans
+    # pad them here
+    nan_args = np.argwhere(np.isnan(pupil_diameter))
+
+    for arg in nan_args:
+        arg = arg[0]
+        log.info("padding missing pupil frame {0} with adjacent ellipse params".format(arg))
+        try:
+            pupil_diameter[arg] = pupil_diameter[arg-1]
+        except:
+            pupil_diameter[arg] = pupil_diameter[arg-1]
+
+    pupil_diameter = pupil_diameter[:-1, np.newaxis]
+
+    return pupil_diameter
+
+def load_raw_photometry(photofilepath, fs=None, framen=0):
+    """
+    Simple function to read (and process photometry trace). Will ask for user input to define ROI based
+    on the first frame of the video file.
+    """
+    import av
+    video_container = av.open(photofilepath)
+    video_stream = [s for s in video_container.streams][0]
+
+    F_mag1 = []
+    F_mag2 = []
+    for i, packet in enumerate(video_container.demux(video_stream)):
+        if i%1000 == 0:
+            print("frame: {}".format(i))
+
+        if i < framen:
+            frame = packet.decode()[0]
+
+        elif i == framen:
+            frame = packet.decode()[0]
+            frame_ = np.asarray(frame.to_image().convert('LA'))
+            plt.imshow(frame_[:, :, 0])
+            print("Before closing image, locate the center of your ROI!")
+            plt.show()
+            print("left ROI: ")
+            x = int(input("x1 center: "))
+            y = int(input("y1 center: "))
+            print("right ROI: ")
+            x2 = int(input("x2 center: "))
+            y2 = int(input("y2 center: "))
+
+            # define roi:
+            roi_width = 4
+            x1_range = np.arange(x-roi_width, x+roi_width)
+            y1_range = np.arange(y-roi_width, y+roi_width)
+
+            x2_range = np.arange(x2-roi_width, x2+roi_width)
+            y2_range = np.arange(y2-roi_width, y2+roi_width)
+
+
+            roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+            roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+            fmag1 = np.mean(roi1)
+            fmag2 = np.mean(roi2)
+            F_mag1.append(fmag1)
+            F_mag2.append(fmag2)
+
+        else:
+            try:
+                frame = packet.decode()[0]
+                frame_ = np.asarray(frame.to_image().convert('LA'))
+                roi1 = frame_[:, :, 0][x1_range, :][:, y1_range]
+                roi2 = frame_[:, :, 0][x2_range, :][:, y2_range]
+                fmag1 = np.mean(roi1)
+                fmag2 = np.mean(roi2)
+                F_mag1.append(fmag1)
+                F_mag2.append(fmag2)
+            except:
+                print('end of file reached')
+
+
+    return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]

@@ -35,8 +35,6 @@ basemodel = "-ref.e-psthfr.s_stategain.S.s"
 d = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 d.to_csv('d_sbg_309.csv')
 
-
-
 # fil only
 state_list = ['st.fil0','st.fil']
 basemodel = "-ref-psthfr.s_stategain.S"
@@ -51,6 +49,7 @@ psth.fs20-ld-st.fil-ref-psthfr.s_sdexp.S_jk.nf20-basic
 
 # beh only
 batch = 311  # A1 old (SVD) data -- on BF
+batch = 305  # IC PTD data (DS)
 state_list = ['st.beh0','st.beh']
 basemodel = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20-ld-"
@@ -86,6 +85,7 @@ import os
 import sys
 import pandas as pd
 import scipy.signal as ss
+import scipy.stats as st
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -227,6 +227,7 @@ def get_model_results(batch=307, state_list=None,
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
+            import pdb; pdb.set_trace()
             for j, sc in enumerate(state_chans):
                 ii = ((d['cellid'] == c) & (d['state_chan'] == sc))
                 if np.sum(ii) == 0:
@@ -439,11 +440,13 @@ def hlf_wrapper(use_hlf=True):
             hlf_analysis(df, state_list, title=title, norm_sign=True, states=states);
 
 
-def aud_vs_state(df, nb=5, title=None, state_list=None):
+def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']):
     """
     d = dataframe output by get_model_results_per_state_model()
     nb = number of bins
     """
+    if state_list is None:
+        state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 
     plt.figure(figsize=(4,6))
 
@@ -452,20 +455,39 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
     dp = da.pivot(index='cellid',columns='state_sig',values=['r','r_se'])
 
     dr = dp['r'].copy()
-    dr['b_unique'] = dr[state_list[3]]**2 - dr[state_list[2]]**2
-    dr['p_unique'] = dr[state_list[3]]**2 - dr[state_list[1]]**2
-    dr['bp_common'] = dr[state_list[3]]**2 - dr[state_list[0]]**2 - dr['b_unique'] - dr['p_unique']
-    dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
-    dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
-    dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
-    dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
-         (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+    if len(state_list)==4:
+        dr['b_unique'] = dr[state_list[3]]**2 - dr[state_list[2]]**2
+        dr['p_unique'] = dr[state_list[3]]**2 - dr[state_list[1]]**2
+        dr['bp_common'] = dr[state_list[3]]**2 - dr[state_list[0]]**2 - dr['b_unique'] - dr['p_unique']
+        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
+        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
+        dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
-    #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-    dm = dr.loc[:,['null','full','bp_common','p_unique','b_unique','sig']]
-    dm = dm.sort_values(['null'])
-    mfull=dm[['null','full','bp_common','p_unique','b_unique','sig']].values
+        dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
+             (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+
+        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
+        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
+        dm = dm.sort_values(['null'])
+        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
+
+    elif len(state_list)==2:
+        dr['bp_common'] = dr[state_list[1]]**2 - dr[state_list[0]]**2
+        dr['b_unique'] = dr['bp_common']*0
+        dr['p_unique'] = dr['bp_common']*0
+
+        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
+        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
+        dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
+
+        dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
+             (dp['r_se'][state_list[1]]+dp['r_se'][state_list[0]]))
+
+        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
+        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
+        dm = dm.sort_values(['null'])
+        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
 
     if nb > 0:
         stepsize = mfull.shape[0]/nb
@@ -475,7 +497,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
             #x1=int(np.floor((i+1)*stepsize))
             #mm[i,:]=np.mean(m[x0:x1,:],axis=0)
             x01=(mfull[:,0]>i/nb) & (mfull[:,0]<=(i+1)/nb)
-            mm[i,:]=np.nanmean(mfull[x01,:],axis=0)
+            if np.sum(x01):
+                mm[i,:]=np.nanmean(mfull[x01,:],axis=0)
+
         print(np.round(mm,3))
 
         m = mm.copy()
@@ -483,6 +507,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
         # alt to look at each cell individually:
         m = mfull.copy()
 
+    mall = np.nanmean(mfull, axis=0, keepdims=True)
+
+    # remove sensory component, which swamps everything else
+    mall = mall[:, 2:]
     mb=m[:,2:]
 
     ax1 = plt.subplot(3,1,1)
@@ -490,49 +518,79 @@ def aud_vs_state(df, nb=5, title=None, state_list=None):
                          ax=ax1, highlight=dm['sig'], hist_range=[-0.1, 1])
 
     ax2 = plt.subplot(3,1,2)
-    ind = np.arange(mb.shape[0])
     width=0.8
     #ind = m[:,0]
-    p1 = plt.bar(ind, mb[:,0], width=width)
-    p2 = plt.bar(ind, mb[:,1], width=width, bottom=mb[:,0])
-    p3 = plt.bar(ind, mb[:,2], width=width, bottom=mb[:,0]+mb[:,1])
-    plt.legend(('common','p_unique','b-unique'))
+    mplots=np.concatenate((mall, mb), axis=0)
+    ind = np.arange(mplots.shape[0])
+
+    p1 = plt.bar(ind, mplots[:,0], width=width, color=colors[1])
+    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
+    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
+    plt.legend(('common','b-unique','p_unique'))
     if title is not None:
         plt.title(title)
     plt.xlabel('behavior-independent quintile')
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    ind = np.arange(mb.shape[0])
-    #ind = m[:,0]
-    p1 = plt.plot(ind, mb[:,0])
-    p2 = plt.plot(ind, mb[:,1]+mb[:,0])
-    p3 = plt.plot(ind, mb[:,2]+mb[:,0]+mb[:,1])
-    plt.legend(('common','p_unique','b-unique'))
-    plt.xlabel('behavior-independent quintile')
-    plt.ylabel('mean r2')
+    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
+                     ax=ax3, highlight=dm['sig'], hist_range=[-0.3, 1])
+    r, p = st.pearsonr(mfull[:,0],d)
+    plt.title('cc={:.3} p={:.4}'.format(r,p))
+
+    #ind = np.arange(mb.shape[0])
+    ##ind = m[:,0]
+    #p1 = plt.plot(ind, mb[:,0])
+    #p2 = plt.plot(ind, mb[:,1]+mb[:,0])
+    #p3 = plt.plot(ind, mb[:,2]+mb[:,0]+mb[:,1])
+    #plt.legend(('common','p_unique','b-unique'))
+    #plt.xlabel('behavior-independent quintile')
+    #plt.ylabel('mean r2')
 
     plt.tight_layout()
     return ax1, ax2, ax3
 
 
-def aud_vs_state_wrapper():
+def aud_vs_state_wrapper(batches=None, pupil=True):
+    """
+    batches includes any of...
 
-    #batch = 307  # A1 SUA and MUA
-    #batch = 309  # IC SUA and MUA
+    active/passive only (pupil=True)
+      batch = 305  # IC SUA
+      batch = 313  # IC SUA and MUA
+      batch = 311  # A1 SUA and MUA onBF
 
-    # pup vs. active/passive
-    state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
-    basemodel = "-ref-psthfr.s_sdexp.S"
+    pupil + active/passive  (pupil=False)
+      batch = 307  # A1 SUA and MUA (pup)
+      batch = 309  # IC SUA and MUA (pup)
+
+"""
+    if batches is None:
+        # IC / A1 SUA and MUA (pup)
+        batches = [309, 307]
+
+    if pupil:
+        # pup vs. active/passive
+        state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
+        basemodel = "-ref-psthfr.s_sdexp.S"
+        loader = "psth.fs20.pup-ld-"
+    else:
+        # active/passive only
+        state_list = ['st.beh0','st.beh']
+        basemodel = "-ref-psthfr.s_stategain.S"
+        loader = "psth.fs20-ld-"
 
     #plt.close('all')
-    for bi, batch in enumerate([309,307]):
-        df = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
+    for bi, batch in enumerate(batches):
+        df = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                               basemodel=basemodel, loader=loader)
 
         ax1, ax2, ax3 = aud_vs_state(df, nb=5, title='batch {}'.format(batch),
                                      state_list=state_list)
         ax2.set_ylim([0,.1])
         ax3.set_ylim([0,.1])
+        
 
 
 def beh_only_plot(batch=311):

@@ -7,6 +7,7 @@ import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Ellipse
 from PIL import Image
@@ -18,25 +19,27 @@ tmp_save = '/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, min_frame=0, max_frame=5000):
+    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
         # the training directory and then display the first of these frames.
 
+        self.plot_calls = 0
+
         if (animal is None) and (video_name is None):
+            self.from_browser = False
             default_frame = os.listdir(train_data_path)[0].split('.')[0]
 
         else:
+            self.from_browser = True
+            self.video_name = video_name
             # where the prediction will be stored if this vid has already been
             # fit
             predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
 
             # save videos
-            video = '/auto/data/daq/{0}/{1}/{2}.mj2'.format(animal, video_name[:6], video_name)
-
-            if os.path.isfile(video) != True:
-                video = '/auto/data/daq/{0}/training2019/{1}.mj2'.format(animal, video_name)
+            video = raw_video
 
             # current parameters (the current best fit based on the cnn fit)
             params_file = predictions_folder + video_name + '_pred.pickle'
@@ -49,7 +52,6 @@ class TrainingDataBrowser:
             fps = 30
             t0 = int(min_frame) * (1 / fps)
             tend = int(max_frame) * (1 / fps)
-
             frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
             output_dict = {}
             for i, t in enumerate(frames):
@@ -89,6 +91,18 @@ class TrainingDataBrowser:
 
         self.load_button = tk.Button(master, text="Display current frame", command=self.browse_files)
         self.load_button.grid(row=0, column=1)
+
+        if self.from_browser:
+            self.frame_count = tk.Text(master, height=1, width=12)
+            all_frames = os.listdir(train_data_path)
+            all_frames = [f for f in all_frames if self.video_name in f]
+            self.frame_count.grid(row=0, column=2)
+            self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
+        else:
+            self.frame_count = tk.Text(master, height=1, width=12)
+            self.frame_count.grid(row=0, column=2)
+            all_frames = os.listdir(train_data_path)
+            self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
 
         self.frame_name = tk.Entry(master)
         self.frame_name.grid(row=0, column=0)
@@ -286,7 +300,13 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if f in self.video_name]
+            frame_numbers = [int(f[15:]) for f in all_frames]
+            inds = np.argsort(np.array(all_frames))
+        else:
+            inds = np.argsort(np.array(all_frames))
+
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
@@ -345,23 +365,31 @@ class TrainingDataBrowser:
         canvas.delete('all') # prevent memory leak
         loc = (0, 0)
 
-        figure = mpl.figure.Figure(figsize=(4, 4))
-        ax = figure.add_axes([0, 0, 1, 1])
-        ax.imshow(frame_data['frame'])
-
         X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
         Y0_in = np.float(self.x_pos_value.get())
         long_axis = np.float(self.long_axis_value.get())
         short_axis = np.float(self.short_axis_value.get())
         phi = np.float(self.phi_value.get()) / 180 * np.pi
 
-        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-        ax.add_patch(ellipse)
 
-        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
-        figure_canvas_agg.draw()
+        if self.plot_calls == 0:
+            self.plot_calls += 1
+            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.add_patch(ellipse)
 
-        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
+            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
+        else:
+            self.pupil_handle.set_data(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.patches[0].remove()
+            self.ax_handle.add_patch(ellipse)
+
+        self.figure_canvas_agg.draw()
+
+        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
         figure_w, figure_h = int(figure_w), int(figure_h)
         photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
 
@@ -369,12 +397,11 @@ class TrainingDataBrowser:
         canvas.create_image(loc[0] + figure_w / 2, loc[1] + figure_h / 2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
 
-        #self.master.mainloop()
+        # self.pupil_canvas = canvas
 
         return photo
-
 
     def plot_frame(self, frame_file):
         '''
@@ -384,14 +411,12 @@ class TrainingDataBrowser:
 
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
+            fp.close()
 
         canvas = self.pupil_canvas
         canvas.delete('all')  # prevent memory leak
-        loc = (0, 0)
-
-        figure = mpl.figure.Figure(figsize=(4, 4))
-        ax = figure.add_axes([0, 0, 1, 1])
-        ax.imshow(frame_data['frame'])
+        #if 'AMT003c11_p_NAT10995' in frame_file:
+        #    import pdb; pdb.set_trace()
 
         Y0_in = frame_data['ellipse_zack']['Y0_in']
         X0_in = frame_data['ellipse_zack']['X0_in']
@@ -402,13 +427,25 @@ class TrainingDataBrowser:
         # update the ellipse params display to correspond to the current frame
         self.update_ellipse_params(frame_data['ellipse_zack'])
 
-        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-        ax.add_patch(ellipse)
+        loc = (0, 0)
 
-        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
-        figure_canvas_agg.draw()
+        if self.plot_calls == 0:
+            self.plot_calls += 1
+            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.add_patch(ellipse)
+            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
+        else:
+            self.pupil_handle.set_data(frame_data['frame'])
+            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+            self.ax_handle.patches[0].remove()
+            self.ax_handle.add_patch(ellipse)
 
-        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
+        self.figure_canvas_agg.draw()
+
+        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
         figure_w, figure_h = int(figure_w), int(figure_h)
         photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
 
@@ -416,7 +453,9 @@ class TrainingDataBrowser:
         canvas.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
+
+        # self.pupil_canvas = canvas
 
         return photo
 
@@ -440,15 +479,26 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if self.video_name in f]
+            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            inds = np.argsort(np.array(frame_numbers))
+        else:
+            inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index + 1
+        self.frame_count.delete('1.0', tk.END)
+        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         if new_index == len(all_frames):
             new_index = 0
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
+
+        # if the current/new frame aren't from the same video, reset the plot
+        if new_frame[:15] != current_frame[:15]:
+            self.plot_calls = 0
 
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
@@ -463,18 +513,29 @@ class TrainingDataBrowser:
 
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
-        inds = np.argsort(np.array(all_frames))
+        if self.from_browser:
+            all_frames = [f for f in all_frames if self.video_name in f]
+            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            inds = np.argsort(np.array(frame_numbers))
+        else:
+            inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index - 1
+        self.frame_count.delete('1.0', tk.END)
+        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
+
+        if new_frame[:15] != current_frame[:15]:
+            self.plot_calls = 0
 
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_canvas.delete("all")
         self.pupil_plot = self.plot_frame(new_frame_root)
 
 root = tk.Tk()

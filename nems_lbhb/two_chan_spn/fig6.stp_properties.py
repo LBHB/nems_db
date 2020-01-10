@@ -21,6 +21,7 @@ import nems.xforms as xforms
 import nems.plots.api as nplt
 from nems.utils import find_module
 import nems.metrics.api as nmet
+from nems.modules.fir import da_coefficients
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -38,7 +39,7 @@ params = {'legend.fontsize': 6,
 plt.rcParams.update(params)
 
 # start main code
-outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev/"
+outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"
 save_fig = True
 #if save_fig:
 plt.close('all')
@@ -59,6 +60,26 @@ if 1:
     # no shrinkage, wc normed
     # modelname0 = "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic"
     # modelname = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
+
+    modelname0 = "env.fs100-ld-sev_dlog.f-fir.2x15-lvl.1-dexp.1_init-basic"
+    modelname = "env.fs100-ld-sev_dlog.f-wc.2x3.c.n-stp.3-fir.3x15-lvl.1-dexp.1_init-basic"
+
+     # 2 channel DO
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x2.c-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x2.c-stp.2.s-do.2x15-lvl.1-dexp.1_init.r10-basic.b"
+
+    # 5-channel DO
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x5.c-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x5.c-stp.5.s-do.5x15-lvl.1-dexp.1_init.r10-basic.b"
+
+    # 3-channel DO -- for STP vs. predxc analysis
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x3.c-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x3.c-stp.3.s-do.3x15-lvl.1-dexp.1_init.r10-basic.b"
+
+    # 4-channel DO
+    modelname0 = "env.fs100-ld-sev_dlog-wc.2x4.c-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+    modelname = "env.fs100-ld-sev_dlog-wc.2x4.c-stp.4.s-do.4x15-lvl.1-dexp.1_init.r10-basic.b"
+
     fileprefix="fig6.SPN"
 
 elif 1:
@@ -86,38 +107,73 @@ if modelname0 is not None:
                                                 meta=['r_test', 'r_fit', 'se_test', 'r_ceiling'],
                                                 stats_keys=[], multi='first')
 
+df_ceil = nd.batch_comp(batch, [modelname0, modelname], stat='r_ceiling')
 df_r = nd.batch_comp(batch, [modelname0, modelname], stat='r_test')
 df_e = nd.batch_comp(batch, [modelname0, modelname], stat='se_test')
 
 u_bounds = np.array([-0.6, 2.1])
 tau_bounds = np.array([-0.1, 1.5])
 str_bounds = np.array([-0.25, 0.55])
-amp_bounds = np.array([-1, 1.5])
-amp0_bounds = np.array([-0.5, 0.75])
+amp_bounds = np.array([-2, 2])
+amp0_bounds = np.array([-2, 2])
 
 indices = list(d.index)
 
+fir_index = None
+do_index = None
 for ind in indices:
     if '--u' in ind:
         u_index = ind
-    elif '--tau' in ind:
+    elif ('--stp' in ind) and ('--tau' in ind):
         tau_index = ind
     elif '--fir' in ind:
         fir_index = ind
+    elif ('--do' in ind) and ('gains' in ind):
+        do_index = ind
 
 u = d.loc[u_index]
 tau = d.loc[tau_index]
-fir = d.loc[fir_index]
+if fir_index:
+    fir = d.loc[fir_index]
+elif do_index:
+    fir = d.loc[do_index]
+    delay_index = do_index.replace('gains','delays')
+    f1s_index = do_index.replace('gains','f1s')
+    taus_index = do_index.replace('gains','taus')
+    for cellid in fir.index:
+        print(cellid)
+        c = da_coefficients(f1s=d.loc[f1s_index,cellid], taus=d.loc[taus_index,cellid],
+                            delays=d.loc[delay_index,cellid], gains=d.loc[do_index,cellid],
+                            n_coefs=10)
+        fir[cellid]=c
+else:
+    raise ValueError('FIR/DO index not found')
+
 r_test = d.loc['meta--r_test']
 se_test = d.loc['meta--se_test']
 r_ceiling = d.loc['meta--r_ceiling']
 
 if modelname0 is not None:
     indices0 = list(d0.index)
+    fir0_index = None
     for ind in indices0:
         if '--fir' in ind:
             fir0_index = ind
-    fir0 = d0.loc[fir0_index]
+        if ('--do' in ind) and ('gains' in ind):
+            do0_index = ind
+    if fir0_index:
+        fir0 = d0.loc[fir0_index]
+    else:
+        fir0 = d0.loc[do0_index]
+        delay_index = do0_index.replace('gains','delays')
+        f1s_index = do0_index.replace('gains','f1s')
+        taus_index = do0_index.replace('gains','taus')
+        for cellid in fir0.index:
+            print(cellid)
+            c = da_coefficients(f1s=d0.loc[f1s_index,cellid], taus=d0.loc[taus_index,cellid],
+                                delays=d0.loc[delay_index,cellid], gains=d0.loc[do0_index,cellid],
+                                n_coefs=10)
+            fir0[cellid] = c
     r0_test = d0.loc['meta--r_test']
     se0_test = d0.loc['meta--se_test']
     r_ceiling0 = d0.loc['meta--r_ceiling']
@@ -135,6 +191,7 @@ se0_test_mtx = np.zeros(len(u))
 r_ceiling_mtx = np.zeros(len(u))
 r0_ceiling_mtx = np.zeros(len(u))
 str_mtx = np.zeros_like(u_mtx)
+str_mtx_avg = np.zeros(len(u))
 
 r_test_mtx_p = np.zeros(len(u))
 r0_test_mtx_p = np.zeros(len(u))
@@ -156,10 +213,13 @@ for cellid in u.index:
 
     print("{} ln std: {:.3f} stp std: {:.3f}".format(
             cellid, np.std(fir0[cellid]), np.std(fir[cellid])))
-
+    #if fir_index:
     fir[cellid] = fir[cellid] / np.std(fir[cellid])
     t_fir = fir[cellid]
     x = np.mean(t_fir, axis=1) # / np.std(t_fir)
+    #else:
+    #    x = fir[cellid][:, 0]
+
     mn, = np.where(x == np.min(x))
     mx, = np.where(x == np.max(x))
     xidx = np.array([mx[0], mn[0]])
@@ -167,12 +227,12 @@ for cellid in u.index:
 
     u_mtx[i, :] = u[cellid][xidx]
     tau_mtx[i, :] = np.abs(tau[cellid][xidx])
-    str_mtx[i, :] = nmet.stp_magnitude(tau_mtx[i, :], u_mtx[i, :], fs=100)[0]
-
+    str_mtx[i, :] = nmet.stp_magnitude(tau_mtx[i, :], u_mtx[i, :], fs=100, A=1.5)[0]
+    str_mtx_avg[i] = np.mean(np.abs(nmet.stp_magnitude(np.abs(tau[cellid]), u[cellid], fs=100, A=1.5)[0]))
+    #if fir0_index:
     fir0[cellid] = fir0[cellid] / np.std(fir0[cellid])
     t_fir0 = fir0[cellid]
     x = np.mean(t_fir0[:, :-3], axis=1) / np.std(t_fir0[:, :-3])
-    #x = np.mean(t_fir0[:, :-3], axis=1) #  / np.std(t_fir0[:, :-3])
     if np.max(x) < 0:
         x = -x
     mn, = np.where(x == np.min(x))
@@ -183,8 +243,8 @@ for cellid in u.index:
     i += 1
 
 # print(m_fir0)
-two_chan = np.logical_and(np.abs(m_fir0[:, 0])/np.abs(m_fir0[:, 1]) < 10,
-                          np.abs(m_fir0[:, 0])/np.abs(m_fir0[:, 1]) > 0.1)
+two_chan = ((np.abs(m_fir0[:, 0])/np.abs(m_fir0[:, 1]) < 10) &
+            (np.abs(m_fir0[:, 0])/np.abs(m_fir0[:, 1]) > 0.1))
 
 # EI_units = (m_fir[:,0]>0) & (m_fir[:,1]<0)
 EI_units = (m_fir[:,1] < 0)
@@ -195,6 +255,7 @@ good_pred = ((r_test_mtx > se_test_mtx*3) |
 mod_units = (r_test_mtx-se_test_mtx) > (r0_test_mtx+se0_test_mtx)
 
 show_units = mod_units & good_pred
+nshow_units = ~mod_units & good_pred
 
 u_mtx[u_mtx < u_bounds[0]] = u_bounds[0]
 u_mtx[u_mtx > u_bounds[1]] = u_bounds[1]
@@ -260,6 +321,8 @@ stateplots.beta_comp(r0_test_mtx[good_pred], r_test_mtx[good_pred],
                      n1='LN STRF', n2='RW3 STP STRF',
                      hist_range=[0.0, 1.0], ax=ax)
 
+
+"""
 ax = fh0.add_subplot(3,2,5)
 F0=np.concatenate(fir0,axis=0)
 plt.hist(F0.flatten())
@@ -267,6 +330,41 @@ plt.hist(F0.flatten())
 ax = fh0.add_subplot(3,2,6)
 F=np.concatenate(fir,axis=0)
 plt.hist(F.flatten())
+"""
+#plt.close('all'); fh0 = plt.figure(figsize=(6,8))
+
+rceil_diff = r_ceiling_mtx - r0_ceiling_mtx
+rt_diff = r_test_mtx - r0_test_mtx
+vgood_pred = (((r_test_mtx > se_test_mtx*3) |
+              (r0_test_mtx > se0_test_mtx*3)) &
+              (rceil_diff>-0.1))
+#vgood_pred = good_pred
+mod_units = (r_test_mtx-se_test_mtx) > (r0_test_mtx+se0_test_mtx)
+
+vshow_units = mod_units & vgood_pred
+nshow_units = ~mod_units & vgood_pred
+
+ax = fh0.add_subplot(3,2,5)
+a = np.mean(np.abs(str_mtx[:,1:2]),axis=1)
+b = rceil_diff
+cc,pp = ss.pearsonr(a[vgood_pred],b[vgood_pred])
+
+plt.plot(np.array([0-0.1, str_bounds[1]]), [0, 0], 'k--', lw=0.5)
+plt.plot(np.zeros(2), np.array([-0.1, 0.4]), 'k--', lw=0.5)
+plt.plot(a[nshow_units], b[nshow_units], '.', color=dotcolor_ns)
+plt.plot(a[vshow_units], b[vshow_units], '.', color=dotcolor)
+plt.title('E str v pred change: {:.3f} (p<{:.3})'.format(cc,pp))
+
+ax = fh0.add_subplot(3,2,6)
+a = np.mean(np.abs(str_mtx[:,0:2]),axis=1)
+b = rceil_diff
+cc,pp = ss.pearsonr(a[vgood_pred],b[vgood_pred])
+
+plt.plot(np.array([0-0.1, str_bounds[1]]), [0, 0], 'k--', lw=0.5)
+plt.plot(np.zeros(2), np.array([-0.1, 0.4]), 'k--', lw=0.5)
+plt.plot(a[nshow_units], b[nshow_units], '.', color=dotcolor_ns)
+plt.plot(a[vshow_units], b[vshow_units], '.', color=dotcolor)
+plt.title('E str v pred change: {:.3f} (p<{:.3})'.format(cc,pp))
 
 
 fh = plt.figure(figsize=(8, 5))

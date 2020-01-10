@@ -20,13 +20,15 @@ from scipy.signal import convolve2d
 import nems
 from nems import signal
 from nems.modules.nonlinearity import _dlog
+from nems.modules.fir import _offset_coefficients
 
 log = logging.getLogger(__name__)
 
 
 def make_contrast_signal(rec, name='contrast', source_name='stim', ms=500,
                          bins=None, bands=1, dlog=False, continuous=False,
-                         normalize=False, percentile=50, ignore_zeros=True):
+                         normalize=False, percentile=50, ignore_zeros=True,
+                         offset=1):
     '''
     Creates a new signal whose values represent the degree of variability
     in each channel of the source signal. Each value is based on the
@@ -86,6 +88,14 @@ def make_contrast_signal(rec, name='contrast', source_name='stim', ms=500,
         If true, and continuous is false, "columns" containing zeros for all
         spectral channels (i.e no stimulus) will be ignored when determining
         the percentile-based cutoff value for contrast rectification.
+    offset : int
+        Number of bins to offset the center of the kernel by.
+        For default offset value of 1, the 'ones' portion of the kernel
+        will be offset from the center by 1 bin.
+        Ex: using a history=3, offset=1
+                [0, 0, 0, 0, 1, 1, 1]
+            versus history=3, offset=2
+                [0, 0, 0, 0, 0, 0, 1, 1, 1]
 
     Returns
     -------
@@ -137,7 +147,7 @@ def make_contrast_signal(rec, name='contrast', source_name='stim', ms=500,
     # confined to each frequency channel
     array = source_signal.as_continuous().copy()
     array[np.isnan(array)] = 0
-    contrast = contrast_calculation(array, history, bands, 'same')
+    contrast = contrast_calculation(array, history, bands, offset, 'same')
 
     # Cropped time binds need to be filled in, otherwise convolution for
     # missing spectral bands will end up with empty 'corners'
@@ -159,13 +169,13 @@ def make_contrast_signal(rec, name='contrast', source_name='stim', ms=500,
         # Replace top
         top_replacement = contrast_calculation(array[:reduced_bands, :],
                                                history, reduced_bands,
-                                               'valid')
+                                               offset, 'valid')
         contrast[i][cropped_time:-cropped_time] = top_replacement
 
         # Replace bottom
         bottom_replacement = contrast_calculation(array[-reduced_bands:, :],
                                                   history, reduced_bands,
-                                                  'valid')
+                                                  offset, 'valid')
         contrast[-(i+1)][cropped_time:-cropped_time] = bottom_replacement
 
         i += 1
@@ -195,7 +205,7 @@ def make_contrast_signal(rec, name='contrast', source_name='stim', ms=500,
     return rec
 
 
-def contrast_calculation(array, history, bands, mode):
+def contrast_calculation(array, history, bands, offset, mode):
     '''
     Parameters
     ----------
@@ -207,10 +217,16 @@ def contrast_calculation(array, history, bands, mode):
         history + 1 zeros will be padded onto the second dimension.
     bands : int
         The number of bins in the first dimension of the convolution filter.
+    offset : int
+        The number of bins to offset the center of the kernel by
+        (see docs for make_contrast_signal).
     mode : str
         See scipy.signal.conolve2d
         Generally, 'valid' to drop rows/columns that would require padding,
         'same' to pad those rows/columns with nans.
+
+    filt : 2d ndarray
+        Overrides the default filter construction.
 
     Returns
     -------
@@ -219,8 +235,10 @@ def contrast_calculation(array, history, bands, mode):
 
     '''
     array = copy.deepcopy(array)
-    filt = np.concatenate((np.zeros([bands, history+1]),
-                           np.ones([bands, history])), axis=1)/(bands*history)
+    filt = np.concatenate((np.zeros([bands, history + (offset*2 - 1)]),
+                           np.ones([bands, history])), axis=1)
+    filt /= bands*history
+
     mn = convolve2d(array, filt, mode=mode, fillvalue=np.nan)
 
     var = convolve2d(array ** 2, filt, mode=mode, fillvalue=np.nan) - mn**2
@@ -228,6 +246,30 @@ def contrast_calculation(array, history, bands, mode):
     contrast = np.sqrt(var) / (mn*.99 + np.nanmax(mn)*0.01)
 
     return contrast
+
+
+def sum_contrast(rec, name='ctpred', source_name='contrast', offsets=20,
+                 IsReload=False, **context):
+    if IsReload:
+        return {}
+
+    if type(offsets) is int:
+        offsets = np.array([[offsets]])
+
+    rec = rec.copy()
+    fs = rec[source_name].fs
+    def fn(x):
+        summed = np.expand_dims(np.sum(x, axis=0), axis=0)
+        if not np.all(offsets == 0):
+            summed = _offset_coefficients(summed, offsets=offsets, fs=fs,
+                                          pad_bins=False)
+        summed /= np.nanmax(summed)
+
+        return summed
+
+    summed = rec[source_name].transform(fn, name)
+    rec[name] = summed
+    return {'rec': rec}
 
 
 def add_contrast(rec, name='contrast', source_name='stim', ms=500, bins=None,

@@ -210,12 +210,11 @@ def reformat_RDT_recording(rec):
     m = ~np.isfinite(x_mapped)
     x_mapped[m] = 0
     x_mapped = x_mapped.astype('i')
-
     rec['target_id_map'] = target_id._modified_copy(x_mapped)
     rec['target_id_map'].meta = {'target_map': target_map}
     rec.meta = {'n_targets': len(targets)}
 
-    resp = rec['resp']
+    resp = rec['resp'].rasterize()
     rec['resp'] = resp._modified_copy(resp._data[..., :-1])
 
     rec['dual_stream'] = state.loc['dual_stream']
@@ -258,7 +257,7 @@ def load_recording(batch=None, cellid=None, reformat=True, by_sequence=True, rec
     if by_sequence:
         rec = average_away_epoch_occurrences(rec, '^SEQUENCE')
 
-    return {'rec': rec}
+    return {'rec': rec, 'input_name': 'fg+bg', 'output_name': 'resp'}
 
 
 def remove_nan(rec):

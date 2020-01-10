@@ -79,7 +79,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
 
 def pop_selector(recording_uri_list, batch=None, cellid=None,
                  rand_match=False, cell_count=20, best_cells=False,
-                 whiten=True, **context):
+                 whiten=True, meta={}, **context):
 
     rec = load_recording(recording_uri_list[0])
     cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
@@ -101,12 +101,13 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
 
     # preserve "actual" cellids for saving to database
     rec.meta['cellid'] = cellid
-    
-    return {'rec': rec}
+    del meta['cellid']
+    meta['cellids'] = cellid
+    return {'rec': rec, 'meta': meta}
 
 
 def split_pop_rec_by_mask(rec, **contex):
-    
+
     emask = rec['mask_est']
     emask.name = 'mask'
     vmask = emask._modified_copy(1-emask._data)
@@ -114,7 +115,7 @@ def split_pop_rec_by_mask(rec, **contex):
     est.add_signal(emask)
     val=rec.copy()
     val.add_signal(vmask)
-    
+
     return {'est': est, 'val': val}
 
 
@@ -123,8 +124,9 @@ def pop_file(stimfmt='ozgf', batch=None,
 
     if siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']:
         subsetstr = "NAT1"
-    elif siteid in ['AMT003c','AMT005c','bbl099g','bbl104h','BRT026c',
-            'BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
+    elif siteid in ['AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
+                    'bbl099g','bbl104h',
+                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
         subsetstr = "NAT3"
     else:
         raise ValueError('site not known for popfile')
@@ -154,7 +156,10 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     """
 
     # remove any preprocessing keywords in the loader string.
-    loader = nems.utils.escaped_split(loadkey, '-')[0]
+    if '-' in loadkey:
+        loader = nems.utils.escaped_split(loadkey, '-')[0]
+    else:
+        loader = loadkey
     log.info('loader=%s',loader)
 
     ops = loader.split(".")
@@ -179,9 +184,10 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['chancount'] = int(op[2:])
 
         elif op=='pup':
-            options.update({'pupil': True, 'pupil_deblink': True,
-                            'pupil_deblink_dur': 1,
-                            'pupil_median': 0, 'rem': 1})
+            options.update({'pupil': True, 'rem': 1})
+            #options.update({'pupil': True, 'pupil_deblink': True,
+            #                'pupil_deblink_dur': 1,
+            #                'pupil_median': 0, 'rem': 1})
         elif op=='rem':
             options['rem'] = True
 
@@ -189,6 +195,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['pupil_eyespeed'] = True
         elif op.startswith('pop'):
             load_pop_file = True
+        elif op == 'voc':
+            options.update({'runclass': 'VOC'})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, psth, parm, env, evt) not specified in loader='+loader)
@@ -216,11 +224,15 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
     # check for special pop signal code
-    cc=cellid.split("_")
     pc_idx = None
-    if (len(cc) > 1) and (cc[1][0]=="P"):
-        pc_idx=[int(cc[1][1:])]
-        cellid=cc[0]
+    if type(cellid) is str:
+        cc=cellid.split("_")
+        if (len(cc) > 1) and (cc[1][0]=="P"):
+            pc_idx=[int(cc[1][1:])]
+            cellid=cc[0]
+        elif (len(cellid.split('+')) > 1):
+            # list of cellids (specified in model queue by separating with '_')
+            cellid = cellid.split('+')
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
@@ -233,6 +245,7 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
     #log.info('cellid: {}, recording_uri: {}'.format(cellid, recording_uri))
 
     return context
+
 
 
 def fit_model_xforms_baphy(cellid, batch, modelname,

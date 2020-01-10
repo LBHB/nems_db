@@ -7,6 +7,11 @@ def _global_gain_spec(n_targets):
     template = {
         'fn': 'nems_lbhb.rdt.modules.global_gain',
         'fn_kwargs': {},
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems.plots.api.spectrogram',
+                     'nems.plots.api.spectrogram_output',
+                     'nems.plots.api.mod_output'
+                    ],
         'prior': {
             'gain': ('Normal', {'mean': gain_mean, 'sd': gain_sd}),
         }
@@ -21,7 +26,9 @@ def _relative_gain_spec(n_targets):
         'fn': 'nems_lbhb.rdt.modules.relative_gain',
         'fn_kwargs': {},
         'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram'
+                     'nems.plots.api.spectrogram',
+                     'nems.plots.api.spectrogram_output',
+                     'nems.plots.api.mod_output'
                     ],
         'plot_fn_idx': 0,
         'prior': {
@@ -35,12 +42,15 @@ def _relative_gain_spec(n_targets):
 
 def _relative_gain_spec_generic(n_targets):
     gain_mean = np.zeros(n_targets)
-    gain_sd = np.ones(n_targets)
+    gain_sd = np.ones(n_targets)*0.2
     template = {
         'fn': 'nems_lbhb.rdt.modules.rdt_gain',
         'fn_kwargs': {},
         'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram'],
+                     'nems.plots.api.spectrogram',
+                     'nems.plots.api.spectrogram_output',
+                     'nems.plots.api.mod_output'
+                    ],
         'plot_fn_idx': 1,
         'prior': {
             'fg_gain': ('Normal', {'mean': gain_mean, 'sd': gain_sd}),
@@ -70,15 +80,18 @@ def rdtmerge(kw):
 
     for op in ops:
         if op == 'stim':
-            i = 'fg+bg'
+            i = 'pred'  # will be overridden by rdt loader
         elif op == 'resp':
             i = 'fg_pred+bg_pred'
 
     template = {
         'fn': 'nems_lbhb.rdt.modules.apply_gain',
         'fn_kwargs': {'i': i, 'o': 'pred'},
-        'plot_fns': ['nems.plots.api.mod_output',
-                     'nems.plots.api.spectrogram_output'],
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems.plots.api.spectrogram',
+                     'nems.plots.api.spectrogram_output',
+                     'nems.plots.api.mod_output'
+                    ],
         'plot_fn_idx': 1,
         'prior': {'offset': ('Normal', {
                 'mean': np.zeros((chans, 1)),

@@ -18,14 +18,23 @@ def rdtsev(key):
     ops = key.split(".")
     njacks=5
     jackknifed_fit = False
+    val_dual_only = False
+    val_rep_only = False
+
     for op in ops[1:]:
         if op.startswith('j'):
             jackknifed_fit = True
+        elif op == 'ns':
+            val_dual_only = True
+        elif op == 'rep':
+            val_rep_only = True
         else:
             njacks = int(op)
 
     xfspec = [['nems_lbhb.rdt.preprocessing.split_est_val',
-               {'njacks': njacks, 'jackknifed_fit': jackknifed_fit}]]
+               {'njacks': njacks, 'jackknifed_fit': jackknifed_fit,
+                'val_rep_only': val_rep_only,
+                'val_dual_only': val_dual_only}]]
     return xfspec
 
 

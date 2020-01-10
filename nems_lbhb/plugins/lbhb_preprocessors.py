@@ -7,6 +7,8 @@ several functions migrated out of old loader keywords
 import logging
 import re
 
+import numpy as np
+
 log = logging.getLogger(__name__)
 
 
@@ -141,6 +143,12 @@ def st(loadkey):
             this_sig = ['prw']
         elif l.startswith('pxprw'):
             this_sig = ['pup_x_prw']
+        elif l.startswith("pop"):
+            this_sig = ["population"]
+        elif l.startswith("pxp"):
+            this_sig = ["pupil_x_population"]
+        elif l.startswith("bxp"):
+            this_sig = ["active_x_population"]
         else:
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
@@ -152,6 +160,30 @@ def st(loadkey):
                {'state_signals': state_signals,
                 'permute_signals': permute_signals,
                 'new_signalname': 'state'}]]
+    return xfspec
+
+
+def inp(loadkey):
+    """
+    inp = 'input signal'
+    add the following signal as new channel(s) in the input signal
+    """
+    pattern = re.compile(r'^inp\.([a-zA-Z0-9\.]*)$')
+    parsed = re.match(pattern, loadkey)
+    loader = parsed.group(1)
+
+    input_signals = []
+
+    loadset = loader.split(".")
+    for l in loadset:
+        if l.startswith("pup"):
+            this_sig = ["pupil"]
+        elif l.startswith("pbs"):
+            this_sig = ["pupil_bs"]
+        input_signals.extend(this_sig)
+    xfspec = [['nems.xforms.concatenate_input_channels',
+               {'input_signals': input_signals}]]
+
     return xfspec
 
 
@@ -178,7 +210,7 @@ def mod(loadkey):
 
 def pca(loadkey):
     """
-    computer pca (or some other state-space) on response
+    compute pca (or some other state-space) on response
     """
 
     ops = loadkey.split(".")
@@ -186,6 +218,7 @@ def pca(loadkey):
     overwrite_resp = True
     pc_count=None
     pc_idx=None
+    compute_power = 'no'
     for op in ops:
         if op == "psth":
             pc_source = "psth"
@@ -201,21 +234,23 @@ def pca(loadkey):
         elif op.startswith("n"):
             pc_count=int(op[1:])+1
             pc_idx=[int(op[1:])]
+        elif op.startswith("p"):
+            compute_power = "single_trial"
+
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'computer_power': compute_power}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count}]]
+                    'pc_count': pc_count, 'computer_power': compute_power}]]
 
     return xfspec
 
 def popev(loadkey):
     return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
-    
-    
+
 
 def contrast(loadkey):
     ops = loadkey.split('.')[1:]
@@ -238,8 +273,21 @@ def contrast(loadkey):
             kwargs['continuous'] = True
         elif op.startswith('b'):
             kwargs['bands'] = int(op[1:])
+        elif op.startswith('off'):
+            kwargs['offset'] = int(op[3:])
 
     return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
+
+
+def csum(loadkey):
+    ops = loadkey.split('.')[1:]
+    kwargs = {}
+    for op in ops:
+        if op.startswith('off'):
+            offsets = int(op[3:])
+            kwargs['offsets'] = np.array([[offsets]])
+
+    return [['nems_lbhb.gcmodel.contrast.sum_contrast', kwargs]]
 
 
 def onoff(loadkey):
@@ -251,10 +299,76 @@ def hrc(load_key):
     Mask only data during stimuli that were repeated 10 or greater times.
     hrc = high rep count
     """
+
     xfspec = [['nems_lbhb.preprocessing.mask_high_repetion_stims',
-               {'epoch_regex':'^STIM_'}, ['rec'], ['rec']]]
+               {'epoch_regex':'^STIM_'},
+                 ['rec'], ['rec']]]
 
     return xfspec
+
+
+def pbal(load_key):
+    """
+    Mask only epochs that are presented equally between large/small pupil conditions
+    """
+    xfspec = [['nems_lbhb.preprocessing.mask_pupil_balanced_epochs',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+def ev(load_key):
+    """
+    Mask only evoked data
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.mask_evoked', {}, ['rec'], ['rec']]]
+    
+    return xfspec
+
+def apm(load_key):
+    """
+    Add a mask signal ('p_mask') for pupil that can be used later on in fitting. 
+    Doesn't go in "true" mask signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_pupil_mask',
+            {},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
+def pm(load_key):
+    """
+    pm = pupil mask
+    pm.b = mask only big pupil trials
+    pm.s = mask only small pupil trials
+    pm.s.bv = mask small pupil and balance big/small ref epochs for val set
+            (bv is important for the nems.metrics that get calculated at the end)
+    performs an AND mask (so will only create mask inside the existing current
+        mask. If mask is None, creates mask with: rec = rec.create_mask(True))
+    """
+    raise DeprecationWarning("Is anyone using this??")
+    options = load_key.split('.')
+    if len(options)>1:
+        if options[1] == 'b':
+            condition='large'
+        elif options[1] == 's':
+            condition = 'small'
+        else:
+            log.info("unknown option passed to pupil mask...")
+
+    balance = False
+    if len(options)>2:
+        if options[2] == 'bv':
+            balance = True
+
+    xfspec = [['nems_lbhb.preprocessing.pupil_mask',
+            {'condition': condition, 'balance': balance},
+            ['est', 'val'], ['est', 'val']]]
+
+    return xfspec
+
 
 def rc(load_key):
     """
@@ -301,16 +415,25 @@ def subset(load_key):
 
 def psthfr(load_key):
     """
-    Generate psth from resp
+    Generate psth signal from resp psth.opt1.opt2 etc. By default, set model input_name to
+    'psth' (unless ni option specified!).
+
+    options:
+    s : smooth
+    hilo : call hi_lo_psth
+    j : call generate_psth_from_est_for_both_est_and_val_nfold
+    ni : don't set input_name to 'psth'.
     """
     options = load_key.split('.')[1:]
     smooth = ('s' in options)
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
+    use_as_input = ('ni' not in options)
     if 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
+
     if hilo:
         if jackknife:
              xfspec=[['nems_lbhb.preprocessing.hi_lo_psth_jack',
@@ -324,7 +447,29 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
-                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
+    return xfspec
+
+def sm(load_key):
+    """
+    Smooth a signal using preproc.smooth_epoch_segments
+    options:
+    pop : smooth population signal (default??)
+
+    """
+    options = load_key.split('.')[1:]
+
+    if 'pop' in options:
+        smooth_signal = 'population'
+    else:
+        smooth_signal = 'resp'
+    if 'stimtar' not in options:
+        epoch_regex = '^STIM_'
+    else:
+        epoch_regex = ['^STIM_', '^TAR_']
+
+    xfspec=[['nems.preprocessing.smooth_signal_epochs',
+            {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
 
@@ -354,4 +499,62 @@ def rscsw(load_key, cellid, batch):
 
 def stSPO(load_key):
     #add SPO state signal
-    return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{}]]
+    permute=False
+    options = load_key.split('.')[1:]
+    permute = ('0' in options)
+    baseline = ('nb' not in options)
+    return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{'permute':permute,'baseline':baseline}]]
+
+def stimenv(load_key):
+    return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
+            ['rec'], ['rec']]]
+
+def residual(load_key):
+    """
+    Add residual signal to be used for pupil latent variable creation. 
+    Because LV creation happens dynamically during the fit,
+    want to create this signal first so that shuffling 
+    (if specified) only happens one time on the outside.
+    """
+    options = load_key.split('.')
+    
+    shuffle = False
+    cutoff = None
+
+    for op in options:
+        if op.endswith('0'):
+            shuffle = True
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',','.'))
+
+    xfspec = [['nems_lbhb.preprocessing.create_residual',
+            {'shuffle': shuffle, 
+            'cutoff': cutoff},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
+def epsig(load_key):
+    """
+    Create epoch signal from epochs so that cost function has access to 
+    stim epoch times 
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_epoch_signal',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+
+def addmeta(load_key):
+    """
+    Add meta data to recording that can be used later on in the fit. For example,
+    information about epochs could be useful.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_meta',
+                {}, 
+                ['rec'], ['rec']]]
+
+    return xfspec
