@@ -15,21 +15,27 @@ from scipy.stats import wilcoxon, ttest_ind, pearsonr
 from nems.plots.utils import ax_remove_box
 import seaborn as sns
 
-#outpath='/auto/users/svd/docs/current/RDT/nems/'
+outpath='/auto/users/svd/docs/current/RDT/nems/'
 #outpath='/auto/users/bburan/'
-outpath='/tmp/'
+#outpath='/tmp/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+
+
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
-
-# 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
-
 loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
+
+# new, rep only
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10.ns.rep-rdtfmt']
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+
 label0 = ['{}_RS', '{}_S', '{}']   #, '{}_R'
 sxticks = ['rep+str', 'rep', 'noshuff'] # 'str',
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
