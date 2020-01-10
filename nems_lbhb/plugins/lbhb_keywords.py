@@ -375,7 +375,7 @@ def slogsig(kw):
     except TypeError:
         raise ValueError("Got TypeError when parsing stategain keyword.\n"
                          "Make sure keyword is of the form: \n"
-                         "sdexp.{n_state_variables} \n"
+                         "slogsig.{n_state_variables} \n"
                          "keyword given: %s" % kw)
     
     if 'd' in options[2:]:
@@ -438,7 +438,7 @@ def sexp(kw):
     except TypeError:
         raise ValueError("Got TypeError when parsing stategain keyword.\n"
                          "Make sure keyword is of the form: \n"
-                         "sdexp.{n_state_variables} \n"
+                         "slogsig.{n_state_variables} \n"
                          "keyword given: %s" % kw)
 
     zeros = np.zeros([n_chans, n_vars])
@@ -630,7 +630,7 @@ def sdexp(kw):
     parsed = re.match(pattern, options[1])
     if parsed is None:
         # backward compatible parsing if R not specified
-        pattern = re.compile(r'^sdexp\.?(\d{1,})$')
+        pattern = re.compile(r'^(\d{1,})$')
         parsed = re.match(pattern, options[1])
     try:
         n_vars = int(parsed.group(1))
