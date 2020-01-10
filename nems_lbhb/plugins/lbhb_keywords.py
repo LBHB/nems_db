@@ -357,6 +357,70 @@ def _one_zz(zerocount=1):
     """ vector of 1 followed by zerocount 0s """
     return np.concatenate((np.ones(1), np.zeros(zerocount)))
 
+
+def slogsig(kw):
+    '''
+    Generate and register modelspec for linear state gain model with rectification
+    CRH 12/6/2019
+    '''
+    options = kw.split('.')
+    pattern = re.compile(r'^slogsig\.?(\d{1,})x(\d{1,})$')
+    parsed = re.match(pattern, '.'.join(options[0:2]))
+    try:
+        n_vars = int(parsed.group(1))
+        if len(parsed.groups())>1:
+            n_chans = int(parsed.group(2))
+        else:
+            n_chans = 1
+    except TypeError:
+        raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "sdexp.{n_state_variables} \n"
+                         "keyword given: %s" % kw)
+    
+    if 'd' in options[2:]:
+        zeros = np.zeros([n_chans, n_vars])
+        ones = 0.01 * np.ones([n_chans, n_vars])
+        baseline_u = np.zeros([n_chans, 1])
+        baseline_sd = np.ones([n_chans, 1])
+        amplitude = 2 * np.ones([n_chans, 2])
+        amp_sd = 0.01 * np.ones([n_chans, 2])
+        template = {
+        'fn': 'nems_lbhb.modules.state.state_logsig_dcgain',
+        'fn_kwargs': {'i': 'pred',
+                    'o': 'pred',
+                    's': 'state'},
+        'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+                'd': ('Normal', {'mean': zeros, 'sd': ones}),
+                'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+                'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
+        'plot_fns': ['nems_lbhb.plots.state_logsig_plot'],
+            'plot_fn_idx': 0,
+        'bounds': {'g': (None, None)}
+        }
+    else:
+        zeros = np.zeros([n_chans, n_vars])
+        ones = 0.01 * np.ones([n_chans, n_vars])
+        baseline_u = np.zeros([n_chans, 1])
+        baseline_sd = np.ones([n_chans, 1])
+        amplitude = 2 * np.ones([n_chans, 1])
+        amp_sd = 0.01 * np.ones([n_chans, 1])
+        template = {
+        'fn': 'nems_lbhb.modules.state.state_logsig',
+        'fn_kwargs': {'i': 'pred',
+                    'o': 'pred',
+                    's': 'state'},
+        'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+                'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+                'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
+        'plot_fns': ['nems_lbhb.plots.state_logsig_plot'],
+            'plot_fn_idx': 0,
+        'bounds': {'g': (None, None)}
+        }
+
+    return template
+
+
 def sexp(kw):
     '''
     Generate and register modulespec for the state_exp
@@ -378,7 +442,7 @@ def sexp(kw):
                          "keyword given: %s" % kw)
 
     zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
     'fn': 'nems_lbhb.modules.state.state_exp',
@@ -392,15 +456,14 @@ def sexp(kw):
     return template
 
 
-def slv(kw):
+def lvexp(kw):
     '''
-    Generate and register modelspec for state_latent_variable
-        (for fitting a state-dependent lv)
+    Generate and register modelspec for fitting gain parms
+        for the latent variable signal. (need to create LV first)
 
     CRH 12/4/2019
     '''
-    #pattern = re.compile(r'^slv\.?(\d{1,})x(\d{1,})$')
-    #parsed = re.match(pattern, kw)
+
     parsed = kw.split('.')[1]
 
     n_vars = int(parsed.split('x')[0])
@@ -409,23 +472,137 @@ def slv(kw):
     else:
         n_chans = 1
 
-    shuffle = False
-    ops = kw.split('.')[2:]
-    for o in ops:
-        if o == 'shuf':
-            shuffle = True
-
     zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
+    ones = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
-    'fn': 'nems_lbhb.modules.state.state_latent_variable',
+    'fn': 'nems_lbhb.modules.state.state_exp',
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
-                  'shuffle': shuffle},
+                  's': 'lv'},
     'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones})},
     'bounds': {'g': (None, 10)}
     }
+
+    return template
+
+
+def lvlogsig(kw):
+    '''
+    Generate and register modelspec for linear state gain model with rectification
+        for latent variable
+    CRH 12/6/2019
+    '''
+    parsed = kw.split('.')[1]
+
+    n_vars = int(parsed.split('x')[0])
+    if len(parsed.split('x'))>1:
+        n_chans = int(parsed.split('x')[1])
+    else:
+        n_chans = 1
+
+    options = kw.split('.')
+
+    in_sig = 'pred'
+    for op in options:
+        if op == 'ipsth':
+            # make input signal the psth
+            in_sig = 'psth'
+
+    if 'd' in options[2:]:
+        zeros = np.zeros([n_chans, n_vars])
+        ones = 0.01 * np.ones([n_chans, n_vars])
+        baseline_u = np.zeros([n_chans, 1])
+        baseline_sd = np.ones([n_chans, 1])
+        amplitude = 2 * np.ones([n_chans, 2])
+        amp_sd = 0.01 * np.ones([n_chans, 2])
+        template = {
+        'fn': 'nems_lbhb.modules.state.state_logsig_dcgain',
+        'fn_kwargs': {'i': in_sig,
+                    'o': 'pred',
+                    's': 'lv'},
+        'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+                'd': ('Normal', {'mean': zeros, 'sd': ones}),
+                'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+                'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems_lbhb.plots.lv_logsig_plot'],
+            'plot_fn_idx': 0,
+        'bounds': {'g': (None, None)}
+        }
+    else:
+        zeros = np.zeros([n_chans, n_vars])
+        ones = 0.01 * np.ones([n_chans, n_vars])
+        baseline_u = np.zeros([n_chans, 1])
+        baseline_sd = np.ones([n_chans, 1])
+        amplitude = 2 * np.ones([n_chans, 1])
+        amp_sd = 0.01 * np.ones([n_chans, 1])
+        template = {
+        'fn': 'nems_lbhb.modules.state.state_logsig',
+        'fn_kwargs': {'i': in_sig,
+                    'o': 'pred',
+                    's': 'lv'},
+        'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
+                'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
+                'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems_lbhb.plots.lv_logsig_plot'],
+            'plot_fn_idx': 0,
+        'bounds': {'g': (None, None)}
+        }
+
+    return template
+
+
+def lv(kw):
+    '''
+    Generate and register modelspec for create_lv
+        1) Find the encoding (projection) weights for a lv model
+        2) Add this lv to the list of rec signals
+
+    CRH 12/4/2019
+    '''
+    parsed = kw.split('.')[1]
+
+    n_vars = int(parsed.split('x')[0])
+    if len(parsed.split('x'))>1:
+        n_chans = int(parsed.split('x')[1])
+    else:
+        n_chans = 1
+
+    options = kw.split('.')
+    lv_names = []
+    for op in options:
+        if op.startswith('f'):
+            if len(op)>1:
+                nfast = int(op[1:])
+                for i in range(nfast):
+                    if i!=0:
+                        lv_names.append('fast{}'.format(i))
+                    else:
+                        lv_names.append('fast')
+            else:
+                lv_names.append('fast')
+        elif op == 's': 
+            lv_names.append('slow')
+
+    mean = 0.01 * np.ones([n_chans, n_vars])
+    sd = 0.01 * np.ones([n_chans, n_vars])
+
+    template = {
+    'fn': 'nems_lbhb.modules.state.add_lv',
+    'fn_kwargs': {'i': 'pred',
+                  'o': 'pred',
+                  'n': lv_names},
+    'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                 'nems_lbhb.plots.lv_quickplot'],
+        'plot_fn_idx': 0,
+    'prior': {'e': ('Normal', {'mean': mean, 'sd': sd})},
+    'bounds': {'e': (None, None)}
+    }
+
+    if len(lv_names) == 0:
+        log.info("WARNING: No LV names specified, so will just minimize MSE")
 
     return template
 
@@ -447,25 +624,35 @@ def sdexp(kw):
     -------
     None
     '''
-    pattern = re.compile(r'^sdexp\.?(\d{1,})x(\d{1,})$')
-    parsed = re.match(pattern, kw)
+    options = kw.split('.')
+    #pattern = re.compile(r'^sdexp\.?(\d{1,})x(\d{1,})$')
+    pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+    parsed = re.match(pattern, options[1])
     if parsed is None:
         # backward compatible parsing if R not specified
         pattern = re.compile(r'^sdexp\.?(\d{1,})$')
-        parsed = re.match(pattern, kw)
+        parsed = re.match(pattern, options[1])
     try:
         n_vars = int(parsed.group(1))
         if len(parsed.groups())>1:
             n_chans = int(parsed.group(2))
         else:
             n_chans = 1
+
     except TypeError:
         raise ValueError("Got TypeError when parsing stategain keyword.\n"
                          "Make sure keyword is of the form: \n"
                          "sdexp.{n_state_variables} \n"
                          "keyword given: %s" % kw)
     if n_chans > 1:
-        raise ValueError("sdexp R>1 not supported")
+        pass
+        # why was this here?
+        #raise ValueError("sdexp R>1 not supported")
+
+    state = 'state'
+    for o in options[2:]:
+        if o == 'lv':
+            state = 'lv'
 
     zeros = np.zeros([n_chans, n_vars])
     ones = np.ones([n_chans, n_vars])
@@ -489,7 +676,7 @@ def sdexp(kw):
         'fn': 'nems_lbhb.modules.state.state_dexp',
         'fn_kwargs': {'i': 'pred',
                       'o': 'pred',
-                      's': 'state'},
+                      's': state},
         'plot_fns': ['nems.plots.api.mod_output',
                      'nems.plots.api.before_and_after',
                      'nems.plots.api.pred_resp',

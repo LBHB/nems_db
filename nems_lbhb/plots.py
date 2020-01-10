@@ -22,6 +22,7 @@ import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.fir import da_coefficients
+from nems.gui.decorators import scrollable
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -1342,3 +1343,177 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     nplt.ax_remove_box(ax)
 
     return ax, b_ceiling
+
+
+@scrollable
+def lv_timeseries(rec, modelspec, ax=None, **options):
+    r = rec.apply_mask(reset_epochs=True)
+    t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+    nrows = len(r['lv'].chans[1:])
+    for i in range(nrows):
+        ax.plot(t, r['lv']._data[i+1, :].T)
+
+@scrollable
+def lv_quickplot(rec, modelspec, ax=None, **options):
+    """
+    quick view of latent variable and the "encoding" weights
+    """
+    #r = rec.apply_mask(reset_epochs=True)
+    r = rec.copy()
+    nrows = len(r['lv'].chans[1:])
+    f = plt.figure(figsize=(12, 8))
+    pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
+    weights = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    if 'lv_slow' in r['lv'].chans:
+        scatter = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+        # scatter slow lv vs pupil
+        lv_slow = r['lv'].extract_channels(['lv_slow'])._data.squeeze()
+        p = r['pupil']._data.squeeze()
+        scatter.scatter(p, lv_slow, s=30, edgecolor='white')
+        scatter.set_xlabel('pupil size', fontsize=8)
+        scatter.set_ylabel('lv_slow', fontsize=8)
+        scatter.set_title("corr coef: {}".format(round(np.corrcoef(p, lv_slow)[0, 1], 3)), fontsize=8)
+    for i in range(nrows):
+        lv = plt.subplot2grid((nrows+1, 3), (i, 0), colspan=2)
+        if 'lv_fast' in r['lv'].chans[i+1]:
+            # color by pupil size
+            time = np.arange(0, r['lv'].shape[-1])
+            lv_series = r['lv']._data[i+1, :].squeeze()
+            p = r['pupil']._data.squeeze()
+            lv.scatter(time, lv_series, c=p, s=20)
+            #lv.gray()
+        else:
+            lv.plot(r['lv']._data[i+1, :].T)
+            t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+            ax.plot(t, r['lv']._data[i+1, :].T)
+        lv.legend([r['lv'].chans[i+1]], fontsize=6, frameon=False)
+        lv.axhline(0, linestyle='--', color='grey')
+        lv.set_xlabel('Time')
+
+    pup.plot(r['pupil']._data.T, color='purple')
+    pup.legend(['pupil'], fontsize=6)
+    pup.set_xlabel('Time')
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.add_lv' in modelspec.modules[i]['fn']][0]
+
+    lim = np.max(abs(modelspec.phi[idx]['e'].squeeze()))
+    bins = np.linspace(-lim, lim, 11)
+    nLVs = modelspec.phi[idx]['e'].shape[-1]
+    for i in range(nLVs):
+        weights.hist(modelspec.phi[idx]['e'][:, i], bins=bins, alpha=0.5, edgecolor='k', label=r['lv'].chans[i+1])
+    weights.legend(fontsize=8)
+    weights.axvline(0, linestyle='--', color='r')
+    weights.set_xlabel('Encoding weights')
+
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
+    #f.tight_layout()
+
+    return ax
+
+
+def state_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    quick view of first order model fit weight(s). Show fit for 
+    'best' first order prediction.
+    """
+
+    r = rec.apply_mask()
+
+    f = plt.figure()
+    rp_fig = plt.subplot2grid((2, 3), (0, 0), colspan=2)
+    state_plot = plt.subplot2grid((2, 3), (1, 0), colspan=2)
+    sig = plt.subplot2grid((2, 3), (0, 2), colspan=1)
+    weights = plt.subplot2grid((2, 3), (1, 2), colspan=1)
+
+    # figure out module index
+    idx = [i for i in range(0, len(modelspec.modules)) if 'nems_lbhb.modules.state.state_logsig' in modelspec.modules[i]['fn']][0]
+
+    best = np.argmax(modelspec.phi[idx]['g'][:, 1])
+    best2 = np.argmin(modelspec.phi[idx]['g'][:, 1])
+    cellid = r['resp'].chans[best]
+    cellid2 = r['resp'].chans[best2]
+
+    # prediction of "best" first order cell (biggest state effect, based on model fit)
+    rp_fig.plot(r['resp']._data[best, :], color='grey', label='resp')
+    rp_fig.plot(r['pred']._data[best, :], color='k', label='pred')
+    rp_fig.legend()
+    rp_fig.set_title(cellid)
+
+    # plot state timeseries
+    state_plot.plot(r['state']._data.T)
+    state_plot.set_xlabel('Time')
+    state_plot.set_title('state signals')
+    
+    # gain applied as function of pupil for this "best" cell
+    s = r['state']._data
+    g = modelspec.phi[idx]['g'][best, :]
+    a = modelspec.phi[idx]['a'][best, 0]
+    sg = g @ s
+    sg = a / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='k')
+    sig.set_xlabel('state')
+    sig.set_ylabel('linear gain applied')
+    
+
+    g = modelspec.phi[idx]['g'][best2, :]
+    a = modelspec.phi[idx]['a'][best2, 0]
+    sg = g @ s
+    sg = a / (1 + np.exp(-sg))
+    sig.plot(s[1, :], sg, '.', color='r')
+
+    sig.legend(['{0} state gain (phi): {1}'.format(cellid, round(modelspec.phi[idx]['g'][best, 1], 3)), 
+                '{0} state gain (phi): {1}'.format(cellid2, round(modelspec.phi[idx]['g'][best2, 1], 3))])
+    sig.axhline(1, linestyle='--', color='grey')
+    sig.axvline(0, linestyle='--', color='grey')
+    
+
+    # all model weights (pupil gain weights)
+    lim = np.max(abs(modelspec.phi[idx]['g'][:, 1]))
+    bins = np.linspace(-lim, lim, 11)
+    weights.hist(modelspec.phi[idx]['g'][:, 1], bins=bins, color='lightgrey', edgecolor='k')
+    weights.set_xlabel('state gain (phi)')
+    weights.set_ylabel('n neurons')
+    weights.axvline(0, linestyle='--', color='r')
+
+    modelspecs = modelspec.modelspecname.split('-')
+    f.suptitle(modelspecs[idx])
+    f.tight_layout()
+
+
+def lv_logsig_plot(rec, modelspec, ax=None, **options):
+    """
+    Quick view of latent variable model fit. 
+    Compare encoding and decoding phi. 
+    Encoding weights are purely linear weightings,
+    decoding weights allow lv to pass through sigmoid first.
+    """
+
+    r = rec.apply_mask()
+
+    f, ax = plt.subplots(1, 1)
+
+    # simple scatter plot of encoding vs. decoding weights
+    modelspecs = modelspec.modelspecname.split('-')
+    idx = [i for i in range(0, len(modelspecs)) if 'lv.' in modelspecs[i]][0]
+    e = modelspec.phi[idx]['e']
+    idx = [i for i in range(0, len(modelspecs)) if 'lvlogsig.' in modelspecs[i]][0]
+    g = modelspec.phi[idx]['g'][:, 1:]
+
+    for i in range(e.shape[-1]):
+        _e = e[:, i]
+        _g = g[:, i]
+        ulim = np.max(np.concatenate((e, g)))
+        llim = np.min(np.concatenate((e, g)))
+        ax.scatter(_e, _g, s=30, edgecolor='white', label=r['lv'].chans[i+1])
+
+    ax.legend(fontsize=8)
+    ax.plot([-1, 1], [-1, 1], color='grey', linestyle='--')
+    ax.axhline(0, linestyle='--', color='grey')
+    ax.axvline(0, linestyle='--', color='grey')
+    ax.set_xlabel('Encoding weight')
+    ax.set_ylabel('Decoding weight')
+    ax.set_title(modelspecs[idx])
+
+    f.tight_layout()

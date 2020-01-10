@@ -5,6 +5,7 @@ functions for applying state-related transformations
 """
 
 import numpy as np
+import nems_lbhb.preprocessing as preproc
 
 def _state_dexp(x, s, g, d, base, amplitude, kappa):
    # Apparently, numpy is VERY slow at taking the exponent of a negative number
@@ -56,8 +57,6 @@ def state_exp(rec, i, o, s, g):
     o: output
     s: state signal(s)
     g: weight(s)
-    (b = baseline -- first dim on state signal is baseline,
-        so first dim of g are the baseline weights)
 
     CRH 12/3/2019
     '''
@@ -67,28 +66,113 @@ def state_exp(rec, i, o, s, g):
     return [rec[i].transform(fn, o)]
 
 
-def state_latent_variable(rec, i, o, g, shuffle):
+def _state_logsig(x, s, g, b, a):
+    '''
+    Gain is fixed to a max of 50 (this could be a free param)
+    '''
+    def fn(x):
+        sig = a / (1 + np.exp(-x))
+        return sig
+
+    sg = fn(g @ s)
+
+    return sg * x + b
+
+
+def state_logsig(rec, i, o, s, g, b, a):
+    '''
+    State gain model with sigmoidal expansions/compression.
+    r[o] = r[i] * sig(g * r[s])
+
+    i: intput
+    o: output
+    s: state signal(s)
+    g: weight(s)
+    a: amplitude
+    '''
+
+    fn = lambda x: _state_logsig(x, rec[s]._data, g, b, a)
+
+    return [rec[i].transform(fn, o)]
+
+def _state_logsig_dcgain(x, s, g, d, b, a):
+    '''
+    Gain is fixed to a max of 50 (this could be a free param)
+    '''
+    def fn(x, a):
+        sig = a / (1 + np.exp(-x))
+        return sig
+
+    sg = fn(g @ s, a[:, 0][:, np.newaxis])
+    sd = fn(d @ s, a[:, 1][:, np.newaxis])
+
+    return sg * x + sd + b
+
+def state_logsig_dcgain(rec, i, o, s, g, d, b, a):
+    '''
+    State gain model with sigmoidal expansions/compression.
+    r[o] = r[i] * sig(g * r[s])
+
+    i: intput
+    o: output
+    s: state signal(s)
+    g: weight(s)
+    a: amplitude
+    '''
+
+    fn = lambda x: _state_logsig_dcgain(x, rec[s]._data, g, d, b, a)
+
+    return [rec[i].transform(fn, o)]
+
+
+def add_lv(rec, i, o, n, e):
     """
-    Fit LV to the residuals of the preceding module prediction.
-        For example, if first module is pupil stategain, subtract 
-        this model prediction, then project the residuals onto 'g'
-        to create the latent variable. Then latent variable is used 
-        to predict response just like a state signal.
+    Compute latent variable and add to state signals:
+        projection of residual responses (resp minus current pred)
+        onto encoding weights (e). Add a channel  of all 1's to the
+        lv signal. This will be for offset in state models.
     
-    CRH 12/4/2019
-    """
-    res = rec['resp'].rasterize()._data - rec['pred']._data
-    lv = g.T @ res
-    # standardize lv (zscore)
-    lv -= lv.mean(axis=-1, keepdims=True)
-    if np.sum(lv==0) != lv.shape[-1]:
-        lv /= lv.std(axis=-1, keepdims=True)
+    i: 'resp'
+    o: 'lv'
+    e: encoding weights
+    shuffle: bool (should you shuffle LV or not)
+    """ 
+    newrec = rec.copy()
+    # CRH (12-13-2019) removing below code. 
+    # Residual signal now gets created
+    # (and shuffled) in preprocessing step
+    #if cutoff is not None:
+    #    # high pass filter resp before creating LV
+    #    newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
 
-    lv_sig = rec['resp'].rasterize()._modified_copy(lv)
+    #res = newrec['resp'].rasterize()._data - newrec['pred']._data
+    res = newrec['residual']._data
+    lv = e.T @ res
+
+    lv = np.concatenate((np.ones((1, lv.shape[-1])), lv), axis=0)
+
+    # z-score lv? (to avoid pred blowing up)
+    #lv = lv - lv.mean(axis=-1, keepdims=True)
+    #if ~np.any(lv.std(axis=-1) == 0):
+    #    lv = lv / lv.std(axis=-1, keepdims=True)
+
+    lv_sig = newrec['resp'].rasterize()._modified_copy(lv)
     lv_sig.name = 'lv'
-    if shuffle:
-        lv = lv_sig.shuffle_time(rand_seed=1)._data
+    nchans = e.shape[-1]
+    lv_chans = []
+    lv_chans.append('lv0')
+    for c in range(nchans):
+        lv_chans.append('lv{0}'.format(c+1))
+    
+    if len(n) > 0:
+        if len(n) != nchans:
+            raise ValueError("number of lv names must match number of LV chans!")
+        for i, c in enumerate(lv_chans):
+            if i != 0:
+                # first chan is DC term, leave as lv0
+                lv_chans[i] = 'lv_' + n[i-1]
 
-    fn = lambda x : _state_exp(x, lv, g)
+    
+    lv_sig.chans = lv_chans
 
-    return  [rec[i].transform(fn, o), lv_sig]
+    return [lv_sig]
