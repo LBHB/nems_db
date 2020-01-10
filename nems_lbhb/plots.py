@@ -22,6 +22,7 @@ import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
 from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.fir import da_coefficients
+from nems.gui.decorators import scrollable
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -1344,13 +1345,21 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     return ax, b_ceiling
 
 
+@scrollable
+def lv_timeseries(rec, modelspec, ax=None, **options):
+    r = rec.apply_mask(reset_epochs=True)
+    t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+    nrows = len(r['lv'].chans[1:])
+    for i in range(nrows):
+        ax.plot(t, r['lv']._data[i+1, :].T)
 
+@scrollable
 def lv_quickplot(rec, modelspec, ax=None, **options):
     """
     quick view of latent variable and the "encoding" weights
     """
-    r = rec.apply_mask()
-    
+    #r = rec.apply_mask(reset_epochs=True)
+    r = rec.copy()
     nrows = len(r['lv'].chans[1:])
     f = plt.figure(figsize=(12, 8))
     pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
@@ -1375,6 +1384,8 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
             #lv.gray()
         else:
             lv.plot(r['lv']._data[i+1, :].T)
+            t = np.arange(0, r['lv'].shape[-1] / r['lv'].fs, 1 / r['lv'].fs)
+            ax.plot(t, r['lv']._data[i+1, :].T)
         lv.legend([r['lv'].chans[i+1]], fontsize=6, frameon=False)
         lv.axhline(0, linestyle='--', color='grey')
         lv.set_xlabel('Time')
@@ -1398,6 +1409,8 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     modelspecs = modelspec.modelspecname.split('-')
     f.suptitle(modelspecs[idx])
     #f.tight_layout()
+
+    return ax
 
 
 def state_logsig_plot(rec, modelspec, ax=None, **options):

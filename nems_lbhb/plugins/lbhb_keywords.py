@@ -525,7 +525,8 @@ def lvlogsig(kw):
                 'd': ('Normal', {'mean': zeros, 'sd': ones}),
                 'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
                 'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
-        'plot_fns': ['nems_lbhb.plots.lv_logsig_plot'],
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems_lbhb.plots.lv_logsig_plot'],
             'plot_fn_idx': 0,
         'bounds': {'g': (None, None)}
         }
@@ -544,7 +545,8 @@ def lvlogsig(kw):
         'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
                 'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
                 'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
-        'plot_fns': ['nems_lbhb.plots.lv_logsig_plot'],
+        'plot_fns': ['nems.plots.api.pred_resp',
+                     'nems_lbhb.plots.lv_logsig_plot'],
             'plot_fn_idx': 0,
         'bounds': {'g': (None, None)}
         }
@@ -592,7 +594,8 @@ def lv(kw):
     'fn_kwargs': {'i': 'pred',
                   'o': 'pred',
                   'n': lv_names},
-    'plot_fns': ['nems_lbhb.plots.lv_quickplot'],
+    'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                 'nems_lbhb.plots.lv_quickplot'],
         'plot_fn_idx': 0,
     'prior': {'e': ('Normal', {'mean': mean, 'sd': sd})},
     'bounds': {'e': (None, None)}
