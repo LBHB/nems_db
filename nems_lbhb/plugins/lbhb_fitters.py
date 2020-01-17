@@ -423,3 +423,4 @@ def _parse_pupLVbasic(options):
                      'slow_alpha': slow_alpha}
 
     return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation
+    

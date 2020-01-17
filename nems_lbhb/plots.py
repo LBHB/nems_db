@@ -1360,6 +1360,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     """
     #r = rec.apply_mask(reset_epochs=True)
     r = rec.copy()
+    r = r.apply_mask()
     nrows = len(r['lv'].chans[1:])
     f = plt.figure(figsize=(12, 8))
     pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
