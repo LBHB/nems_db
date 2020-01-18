@@ -90,7 +90,6 @@ def state_logsig(rec, i, o, s, g, b, a):
     g: weight(s)
     a: amplitude
     '''
-
     fn = lambda x: _state_logsig(x, rec[s]._data, g, b, a)
 
     return [rec[i].transform(fn, o)]
@@ -132,21 +131,19 @@ def add_lv(rec, i, o, n, e):
         onto encoding weights (e). Add a channel  of all 1's to the
         lv signal. This will be for offset in state models.
     
-    i: 'resp'
+    i: signal to subtract from resp (pred or psth)
     o: 'lv'
     e: encoding weights
     shuffle: bool (should you shuffle LV or not)
     """ 
     newrec = rec.copy()
-    # CRH (12-13-2019) removing below code. 
-    # Residual signal now gets created
-    # (and shuffled) in preprocessing step
-    #if cutoff is not None:
-    #    # high pass filter resp before creating LV
-    #    newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
 
-    #res = newrec['resp'].rasterize()._data - newrec['pred']._data
-    res = newrec['residual']._data
+    # input can be pred, or psth.
+    # If psth, subtract psth (use residual signal)
+    # if pred, subtract pred to create residual
+    # Any signal that you wish
+    # to project down to your LV
+    res = newrec['resp'].rasterize()._data - newrec[i].rasterize()._data
     lv = e.T @ res
 
     lv = np.concatenate((np.ones((1, lv.shape[-1])), lv), axis=0)
@@ -157,7 +154,7 @@ def add_lv(rec, i, o, n, e):
     #    lv = lv / lv.std(axis=-1, keepdims=True)
 
     lv_sig = newrec['resp'].rasterize()._modified_copy(lv)
-    lv_sig.name = 'lv'
+    lv_sig.name = o
     nchans = e.shape[-1]
     lv_chans = []
     lv_chans.append('lv0')
