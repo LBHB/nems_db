@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import pandas as pd
+import copy
 import logging
 
 log = logging.getLogger(__name__)
@@ -149,6 +150,8 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
     For purely LV model. Constrain first LV (lv_slow) to correlate with pupil,
     second LV (lv_fast) to have variance that correlates with pupil.
     Weigh these constraints vs. minimizing nsme.
+
+    Will also work if only have one or the other of the two LVs
     '''
     result = result.apply_mask()
     lv_chans = result['lv'].chans
@@ -190,7 +193,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         p = np.mean(p, axis=-1)
         for c in fast_lv_chans:
             lv_fast = result['lv'].extract_channels([c])._data.reshape(-1, ref_len)
-            lv_fast = np.var(lv_fast, axis=-1)
+            lv_fast = np.std(lv_fast, axis=-1)
 
             if signed_correlation:
                 cc = lv_corr_pupil(p, lv_fast)
@@ -216,7 +219,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         lv_fast = result['lv'].extract_channels(['lv_fast'])._data.reshape(-1, ref_len)
         
         p = np.mean(p, axis=-1)
-        lv_fast = np.var(lv_fast, axis=-1)
+        lv_fast = np.std(lv_fast, axis=-1)
         if signed_correlation:
             fast_cc = lv_corr_pupil(p, lv_fast)
         else:
@@ -366,3 +369,41 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
 
     return {'modelspec': modelspec}
+
+
+def test_lv_model(rec, i, o, pg, lvg, d):
+
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels('pupil'))._data
+
+    pupil -= pupil.mean()
+    pupil /= pupil.std()
+
+    # define residual
+    if i == 'psth':
+        residual = resp - psth
+    elif i == 'pred':
+        # do first order prediction first
+        pred1 = (pg @ pupil) + psth
+        residual = resp - pred1
+
+    # compute latent variable
+    lv = lvg.T @ residual
+
+    #lv -= lv.mean()
+    #if lv.std() > 0:
+    #    lv /= lv.std()
+
+    # compute full prediction
+    pred = psth + pg @ pupil #+ lvg @ lv + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]

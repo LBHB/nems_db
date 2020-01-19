@@ -174,7 +174,7 @@ for batch, bs in zip(batches, batstring):
     ax_remove_box(ax)
     ax.set_xlabel('deltaR')
     ax.set_ylabel('deltaG')
-    ax.set_title('R={:.3f} p={:.3f}'.format(r,p))
+    ax.set_title('R={:.3f} p={:.4e}'.format(r, p))
 
     ax = axes[1, 0]
     beta_comp(b_S, f_S, n1='bg_S', n2='fg_S', ax=ax, hist_range=[-bound, bound],

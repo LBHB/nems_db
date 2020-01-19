@@ -375,7 +375,7 @@ def slogsig(kw):
     except TypeError:
         raise ValueError("Got TypeError when parsing stategain keyword.\n"
                          "Make sure keyword is of the form: \n"
-                         "sdexp.{n_state_variables} \n"
+                         "slogsig.{n_state_variables} \n"
                          "keyword given: %s" % kw)
     
     if 'd' in options[2:]:
@@ -438,7 +438,7 @@ def sexp(kw):
     except TypeError:
         raise ValueError("Got TypeError when parsing stategain keyword.\n"
                          "Make sure keyword is of the form: \n"
-                         "sdexp.{n_state_variables} \n"
+                         "slogsig.{n_state_variables} \n"
                          "keyword given: %s" % kw)
 
     zeros = np.zeros([n_chans, n_vars])
@@ -556,7 +556,7 @@ def lvlogsig(kw):
 
 def lv(kw):
     '''
-    Generate and register modelspec for create_lv
+    Generate and register modelspec for add_lv
         1) Find the encoding (projection) weights for a lv model
         2) Add this lv to the list of rec signals
 
@@ -585,14 +585,19 @@ def lv(kw):
                 lv_names.append('fast')
         elif op == 's': 
             lv_names.append('slow')
+        
+        elif op.startswith('psth'):
+            sig_in = 'psth'
+        elif op.startswith('pred'):
+            sig_in = 'pred'
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
     'fn': 'nems_lbhb.modules.state.add_lv',
-    'fn_kwargs': {'i': 'pred',
-                  'o': 'pred',
+    'fn_kwargs': {'i': sig_in,
+                  'o': 'lv',
                   'n': lv_names},
     'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                  'nems_lbhb.plots.lv_quickplot'],
@@ -605,6 +610,48 @@ def lv(kw):
         log.info("WARNING: No LV names specified, so will just minimize MSE")
 
     return template
+
+
+def testpuplvmodel(kw):
+    """
+    register modelspec for pupil dependent latent variable model.
+
+    Not very 'modular'. Meant as a place to test different LV model 
+    architectures w/o making a ton of test modules
+    """
+
+    params = kw.split('.')
+
+    sub_sig = 'psth'
+    for op in params:
+        if op.startswith('psth'):
+            sub_sig = 'psth'
+        elif op.startswith('pred'):
+            # subtract 1st order pred to get residuals
+            sub_sig = 'pred'
+        
+    n_chans = int(params[-1]) # number of neurons
+    mean = 0.00 * np.ones([n_chans, 1])
+    sd = 0.01 * np.ones([n_chans, 1])
+
+    template = {
+    'fn': 'nems_lbhb.lv_helpers.test_lv_model',
+    'fn_kwargs': {'i': sub_sig,
+                  'o': ['lv', 'residual', 'pred'],
+                  },
+    'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                 'nems_lbhb.plots.lv_quickplot'],
+        'plot_fn_idx': 0,
+    'prior': {'pg': ('Normal', {'mean': mean, 'sd': sd}),
+              'lvg': ('Normal', {'mean': mean, 'sd': sd}),
+              'd': ('Normal', {'mean': mean, 'sd': sd})},
+    'bounds': {'pg': (None, None),
+               'lvg': (None, None),
+               'd': (None, None)}
+    }
+
+    return template
+
 
 
 def sdexp(kw):
@@ -630,7 +677,7 @@ def sdexp(kw):
     parsed = re.match(pattern, options[1])
     if parsed is None:
         # backward compatible parsing if R not specified
-        pattern = re.compile(r'^sdexp\.?(\d{1,})$')
+        pattern = re.compile(r'^(\d{1,})$')
         parsed = re.match(pattern, options[1])
     try:
         n_vars = int(parsed.group(1))
