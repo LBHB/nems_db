@@ -225,6 +225,9 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         else:
             fast_cc = -abs(lv_corr_pupil(p, lv_fast))
 
+        if np.sum(lv_fast)==0:
+            fast_cc = 0
+
         cost = (fast_alpha * fast_cc) + ((1 - fast_alpha) * nmse)
         return cost
 
@@ -371,32 +374,105 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
     return {'modelspec': modelspec}
 
 
-def test_lv_model(rec, i, o, pg, lvg, d):
+def dc_lv_model(rec, ss, o, p_only, flvw, pd, lvd, d, lve):
 
     resp = rec['resp'].rasterize()._data
-    psth = rec['psth_sp'].rasterize()._data
-    pupil = copy.deepcopy(rec['state'].extract_channels('pupil'))._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
 
-    pupil -= pupil.mean()
-    pupil /= pupil.std()
-
+    pred1 = (pd @ pupil) + psth + d
     # define residual
-    if i == 'psth':
-        residual = resp - psth
-    elif i == 'pred':
+    if ss == 'psth':
+        residual = resp - psth_sp
+    elif ss == 'pred':
         # do first order prediction first
-        pred1 = (pg @ pupil) + psth
+        residual = resp - pred1
+
+
+    # compute latent variable
+    if flvw:
+        lv = lvd.T @ residual
+    else:
+        lv = lve.T @ residual
+    
+    if p_only:
+        pred = pred1
+    else:
+        # compute full prediction
+        pred = psth + (pd @ pupil) + (lvd @ lv) + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]
+
+def gain_lv_model(rec, ss, o, g, p_only, flvw, pg, lvg, d, lve):
+
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
+
+    pred1 = (g * psth) + ((pg @ pupil) * psth) + d
+    # define residual
+    if ss == 'psth':
+        residual = resp - psth_sp
+    elif ss == 'pred':       
         residual = resp - pred1
 
     # compute latent variable
-    lv = lvg.T @ residual
-
-    #lv -= lv.mean()
-    #if lv.std() > 0:
-    #    lv /= lv.std()
+    if flvw:
+        lv = lvg.T @ residual
+    else:
+        lv = lve.T @ residual
 
     # compute full prediction
-    pred = psth + pg @ pupil #+ lvg @ lv + d
+    if p_only:
+        pred = pred1
+    else:
+        pred = (g * psth) + ((pg @ pupil) * psth) + ((lvg @ lv) * psth) + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]
+
+def full_lv_model(rec, ss, o, p_only, g, pg, lvg, pd, lvd, d, lve):
+
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
+
+    pred1 = (g * psth) + ((pg @ pupil) * psth) + (pd @ pupil) + d
+    # define residual
+    if ss == 'psth':
+        residual = resp - psth_sp
+    elif ss == 'pred':
+        residual = resp - pred1
+
+    # compute latent variable
+    lv = lve.T @ residual
+
+    # compute full prediction
+    if p_only:
+        pred = pred1
+    else:
+        predg = (g * psth) + ((pg @ pupil) * psth) + ((lvg @ lv) * psth) + d
+        preddc = (pd @ pupil) + (lvd @ lv)
+
+        pred = predg + preddc
 
     lv = rec['pupil']._modified_copy(lv)
     lv.name = 'lv'

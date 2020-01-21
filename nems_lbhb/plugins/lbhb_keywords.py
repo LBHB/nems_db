@@ -612,7 +612,7 @@ def lv(kw):
     return template
 
 
-def testpuplvmodel(kw):
+def puplvmodel(kw):
     """
     register modelspec for pupil dependent latent variable model.
 
@@ -623,32 +623,94 @@ def testpuplvmodel(kw):
     params = kw.split('.')
 
     sub_sig = 'psth'
+    gain = False
+    dc = False # default to dc only
+    pupil_only = False
+    fix_lv_weights = False
     for op in params:
         if op.startswith('psth'):
             sub_sig = 'psth'
         elif op.startswith('pred'):
             # subtract 1st order pred to get residuals
             sub_sig = 'pred'
+        elif op.startswith('dc'):
+            dc = True 
+        elif op.startswith('g'):
+            gain = True
+        elif op.startswith('pupOnly'):
+            pupil_only = True
+        elif op.startswith('flvw'):
+            fix_lv_weights = True
         
     n_chans = int(params[-1]) # number of neurons
-    mean = 0.00 * np.ones([n_chans, 1])
+    mean = 0.01 * np.ones([n_chans, 1])
     sd = 0.01 * np.ones([n_chans, 1])
+    mean0 = 0 * np.ones([n_chans, 1])
+    meang = 1 * np.ones([n_chans, 1])
 
-    template = {
-    'fn': 'nems_lbhb.lv_helpers.test_lv_model',
-    'fn_kwargs': {'i': sub_sig,
-                  'o': ['lv', 'residual', 'pred'],
-                  },
-    'plot_fns': ['nems_lbhb.plots.lv_timeseries',
-                 'nems_lbhb.plots.lv_quickplot'],
-        'plot_fn_idx': 0,
-    'prior': {'pg': ('Normal', {'mean': mean, 'sd': sd}),
-              'lvg': ('Normal', {'mean': mean, 'sd': sd}),
-              'd': ('Normal', {'mean': mean, 'sd': sd})},
-    'bounds': {'pg': (None, None),
-               'lvg': (None, None),
-               'd': (None, None)}
-    }
+
+    if dc & ~gain:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.dc_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only,
+                    'flvw': fix_lv_weights
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'pd': ('Normal', {'mean': mean, 'sd': sd}),
+                'lvd': ('Normal', {'mean': mean, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+        'bounds': {'pd': (None, None),
+                'lvd': (None, None),
+                'd': (None, None)}
+        }
+
+    elif gain & ~dc:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.gain_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only,
+                    'flvw': fix_lv_weights
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'g': ('Normal', {'mean': meang, 'sd': sd}),
+                'pg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+        'bounds': {'pg': (None, None),
+                'lvg': (None, None),
+                'd': (None, None)}
+        }
+
+    elif gain & dc:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.full_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'g': ('Normal', {'mean': meang, 'sd': sd}),
+                'pg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'pd': ('Normal', {'mean': mean, 'sd': sd}),
+                'lvd': ('Normal', {'mean': mean, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+        'bounds': {'pg': (None, None),
+                'lvg': (None, None),
+                'd': (None, None)}
+        }
 
     return template
 

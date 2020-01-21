@@ -845,3 +845,15 @@ def add_meta(rec):
     rec.meta['ref_len'] = ref_len
 
     return rec
+
+def zscore_resp(rec):
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    zscore = r['resp']._data
+    zscore = (zscore.T - zscore.mean()).T
+    zscore = (zscore.T / zscore.std(axis=-1)).T
+
+    r['resp_raw'] = rec['resp']
+    r['resp'] = r['resp']._modified_copy(zscore)
+
+    return r

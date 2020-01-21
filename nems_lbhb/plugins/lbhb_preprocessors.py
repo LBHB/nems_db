@@ -558,3 +558,14 @@ def addmeta(load_key):
                 ['rec'], ['rec']]]
 
     return xfspec
+
+def rz(load_key):
+    """
+    Transform resp into zscore. Add signal 'raw_resp' for original resp
+    signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.zscore_resp', 
+                {}, ['rec'], ['rec']]]
+    
+    return xfspec
