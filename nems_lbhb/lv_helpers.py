@@ -43,6 +43,25 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
                     e, modelspec, fit_kwargs=fit_kwargs,
                     metric=metric_fn, fitter=fitter_fn)
     '''
+    if modelspec[0]['fn_kwargs']['p_only'] == False:
+        modelspec[0]['fn_kwargs']['p_only'] = True
+        tfit_kwargs = fit_kwargs.copy()
+        tfit_kwargs['tolerance'] = 1e-5
+        modelspec = nems.analysis.api.fit_basic(
+            est, modelspec, fit_kwargs=tfit_kwargs,
+            metric=metric_fn, fitter=fitter_fn)
+        modelspec[0]['fn_kwargs']['p_only'] = False
+
+    # option to freeze first-order pupil:
+    """
+    modelspec[0]['fn_kwargs']['pd'] = modelspec.phi[0]['pd']
+    del modelspec.phi[0]['pd']
+    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+        metric=metric_fn, fitter=fitter_fn)
+    modelspec.phi[0]['pd'] = modelspec[0]['fn_kwargs']['pd']
+    del modelspec.phi[0]['fn_kwargs']['pd']
+    """
+
     modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
         metric=metric_fn, fitter=fitter_fn)
 
@@ -375,20 +394,35 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
 
 def dc_lv_model(rec, ss, o, p_only, flvw, pd, lvd, d, lve):
-
+    """
+    fit lv model for N neurons
+    :param rec:
+    :param ss: subtracting signal name ('psth' or 'pred')
+    :param o: name of output (typically 'pred')
+    :param p_only: (if True) only fit first-order pupil
+    :param flvw: (if True) force encoding and decoding weights for lv to be the same
+    :param pd: first-order pupil weights (dc shift) - N x 1
+    :param lvd: free parameter - latent variable decoding weights, also encoding
+                weights if flvw==True
+    :param d: free parameter - offset of first-order pred (N x 1)
+    :param lve: free parameter - latent variable encoding weights (if flvw==False),
+                otherwise not used
+    :return: [lv, pred, residual] (residual= signal used to fit lv component)
+    """
     resp = rec['resp'].rasterize()._data
     psth = rec['psth'].rasterize()._data
     psth_sp = rec['psth_sp'].rasterize()._data
     pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
 
     pred1 = (pd @ pupil) + psth + d
+
     # define residual
     if ss == 'psth':
         residual = resp - psth_sp
+
     elif ss == 'pred':
         # do first order prediction first
         residual = resp - pred1
-
 
     # compute latent variable
     if flvw:
