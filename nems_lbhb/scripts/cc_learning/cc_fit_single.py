@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 batch=315
 
 # uncomment cell to analyze
-#cellid = "NMK003c-16-1"
-cellid = "NMK020c-29-1"
+cellid = "NMK003c-16-1"
+#cellid = "NMK020c-29-1"
 
 # uncomment modelname to run
 
@@ -48,7 +48,7 @@ file_epochs = r.epochs.loc[r.epochs.name.str.startswith("FILE")]
 modelspec[0]['plot_fn_idx'] = 5
 
 if browse_results:
-    ex =gui.browse_xform_fit(ctx, xfspec)
+    ex = gui.browse_xform_fit(ctx, xfspec)
 else:
     modelspec.quickplot()
 
