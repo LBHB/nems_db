@@ -399,6 +399,13 @@ def baphy_load_dataset(parmfilepath, **options):
     else:
         active_BVT = False
 
+    # Figure out how to handle "false alarm" trials. Truncate after first lick
+    # if not passive or classical conditioning
+    if exptparams['BehaveObjectClass'] in ['Passive','ClassicalConditioning']:
+        remove_post_lick = False
+    else:
+        remove_post_lick = True
+
     # pre-process event list (event_times) to only contain useful events
     # extract each trial
     log.info('Creating trial events')
@@ -422,7 +429,7 @@ def baphy_load_dataset(parmfilepath, **options):
     log.info('Setting end for {} events from {} to {}'.format(
         np.sum(end_events), final_trial_end0, final_trial_end))
     # set first True to False (the start of the first trial)
-    first_true = np.argwhere(ffstop==True)[0][0]
+    first_true = np.argwhere(ffstop == True)[0][0]
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
@@ -433,42 +440,49 @@ def baphy_load_dataset(parmfilepath, **options):
     event_times['name'] = "TRIAL"
     event_times = event_times.drop(columns=['index'])
 
-    log.info('Removing post-response stimuli')
-    keepevents = np.full(len(exptevents), True, dtype=bool)
-    for trialidx in range(1, TrialCount+1):
-        # remove stimulus events after TRIALSTOP or STIM,OFF event
-        fftrial_stop = (exptevents['Trial'] == trialidx) & \
-            ((exptevents['name'] == "STIM,OFF") |
-             (exptevents['name'] == "OUTCOME,VEARLY") |
-             (exptevents['name'] == "OUTCOME,EARLY") |
-             (exptevents['name'] == "TRIALSTOP"))
-        if np.sum(fftrial_stop):
-            trialstoptime = np.min(exptevents[fftrial_stop]['start'])
+    if remove_post_lick:
+        # during most baphy behaviors, the trial terminates following an early lick
+        # (false alarm), but events may be listed after that time.
+        # this code removes post-FA events and truncates any epochs interupted by
+        # by the lick. Exception is classical conditioning, where licks are recorded
+        # but don't affect stimulus presentation
+        log.info('Removing post-response stimuli')
+        keepevents = np.full(len(exptevents), True, dtype=bool)
 
-            fflate = (exptevents['Trial'] == trialidx) & \
-                exptevents['name'].str.startswith('Stim , ') & \
-                (exptevents['start'] > trialstoptime)
-            fftrunc = (exptevents['Trial'] == trialidx) & \
-                exptevents['name'].str.startswith('Stim , ') & \
-                (exptevents['start'] <= trialstoptime) & \
-                (exptevents['end'] > trialstoptime)
+        for trialidx in range(1, TrialCount+1):
+            # remove stimulus events after TRIALSTOP or STIM,OFF event
+            fftrial_stop = (exptevents['Trial'] == trialidx) & \
+                ((exptevents['name'] == "STIM,OFF") |
+                 (exptevents['name'] == "OUTCOME,VEARLY") |
+                 (exptevents['name'] == "OUTCOME,EARLY") |
+                 (exptevents['name'] == "TRIALSTOP"))
+            if np.sum(fftrial_stop):
+                trialstoptime = np.min(exptevents[fftrial_stop]['start'])
 
-        for i, d in exptevents.loc[fflate].iterrows():
-            # print("{0}: {1} - {2} - {3}>{4}"
-            #       .format(i, d['Trial'], d['name'], d['end'], start))
-            # remove Pre- and PostStimSilence as well
-            keepevents[(i-1):(i+2)] = False
+                fflate = (exptevents['Trial'] == trialidx) & \
+                    exptevents['name'].str.startswith('Stim , ') & \
+                    (exptevents['start'] > trialstoptime)
+                fftrunc = (exptevents['Trial'] == trialidx) & \
+                    exptevents['name'].str.startswith('Stim , ') & \
+                    (exptevents['start'] <= trialstoptime) & \
+                    (exptevents['end'] > trialstoptime)
 
-        for i, d in exptevents.loc[fftrunc].iterrows():
-            log.debug("Truncating event %d early at %.3f", i, trialstoptime)
-            exptevents.loc[i, 'end'] = trialstoptime
-            # also trim post stim silence
-            exptevents.loc[i + 1, 'start'] = trialstoptime
-            exptevents.loc[i + 1, 'end'] = trialstoptime
+            for i, d in exptevents.loc[fflate].iterrows():
+                # print("{0}: {1} - {2} - {3}>{4}"
+                #       .format(i, d['Trial'], d['name'], d['end'], start))
+                # remove Pre- and PostStimSilence as well
+                keepevents[(i-1):(i+2)] = False
 
-    print("Keeping {0}/{1} events that precede responses"
-          .format(np.sum(keepevents), len(keepevents)))
-    exptevents = exptevents[keepevents].reset_index()
+            for i, d in exptevents.loc[fftrunc].iterrows():
+                log.debug("Truncating event %d early at %.3f", i, trialstoptime)
+                exptevents.loc[i, 'end'] = trialstoptime
+                # also trim post stim silence
+                exptevents.loc[i + 1, 'start'] = trialstoptime
+                exptevents.loc[i + 1, 'end'] = trialstoptime
+
+        print("Keeping {0}/{1} events that precede responses"
+              .format(np.sum(keepevents), len(keepevents)))
+        exptevents = exptevents[keepevents].reset_index()
 
     # add event characterizing outcome of each behavioral
     # trial (if behavior)
@@ -481,8 +495,6 @@ def baphy_load_dataset(parmfilepath, **options):
                 'BEHAVIOR,PUMPON,Pump': 'HIT_TRIAL'}
     this_event_times = event_times.copy()
     any_behavior = False
-    #import pdb
-    #pdb.set_trace()
 
     if active_BVT:
         # CRH - using the labeled soundTrial events in exptevents
@@ -518,7 +530,7 @@ def baphy_load_dataset(parmfilepath, **options):
                 this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
                 any_behavior = True
 
-    # CRH add check, just incase user messed up when doing experiment
+    # CRH add check, just in case user messed up when doing experiment
     # and selected: physiology yes, passive, but set behavior control to active
     # in this case, behavior didn't run, file got created with _p_, but baphy
     # still tried to label trials.
@@ -549,9 +561,9 @@ def baphy_load_dataset(parmfilepath, **options):
 
     stim_dict = {}
 
-    if 'pertrial' in options and options['pertrial']:
+    if options.get('pertrial', 0):
         # NOT COMPLETE!
-
+        raise ValueError('pertrial not supported')
         # make stimulus events unique to each trial
         this_event_times = event_times.copy()
         for eventidx in range(0, TrialCount):
@@ -622,9 +634,14 @@ def baphy_load_dataset(parmfilepath, **options):
             keepevents = np.ones(len(this_event_times)) == 1
             keeppostevents = np.ones(len(this_event_times)) == 1
             for i, d in this_event_times.iterrows():
-                fdur = ((ff_tar_dur | ff_lick_dur)
-                        & (exptevents['start'] < d['end'] - 0.001)
-                        & (exptevents['end'] > d['start'] + 0.001))
+                if remove_post_lick:
+                    fdur = ((ff_tar_dur | ff_lick_dur)
+                            & (exptevents['start'] < d['end'] - 0.001)
+                            & (exptevents['end'] > d['start'] + 0.001))
+                else:
+                    fdur = (ff_tar_dur
+                            & (exptevents['start'] < d['end'] - 0.001)
+                            & (exptevents['end'] > d['start'] + 0.001))
 
                 if np.sum(fdur) and \
                    (exptevents['start'][fdur].min() < d['start'] + 0.5):
@@ -723,6 +740,8 @@ def baphy_load_dataset(parmfilepath, **options):
         #         [event_times, this_event_times2, this_event_times3]
         #         )
 
+    #import pdb; pdb.set_trace()
+
     # add behavior events
     if exptparams['runclass'] == 'PTD' and any_behavior:
         # special events for tone in noise task
@@ -747,7 +766,7 @@ def baphy_load_dataset(parmfilepath, **options):
         event_times = event_times.append(te, ignore_index=True)
         # event_times=pd.concat([event_times, te])
 
-    # sort by when the event occured in experiment time
+    # sort by when the event occurred in experiment time
 
     event_times = event_times.sort_values(
             by=['start', 'end'], ascending=[1, 0]

@@ -212,9 +212,12 @@ for batch, bs in zip(batches, batstring):
     figure.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
     rgdf[batch].to_csv(outpath+'strf_rg_summary_'+bs+'.csv')
 
+    print("Mean rep gain batch {}: {:.3f}".format(batch,np.mean(np.concatenate((f_S,b_S)))))
+    print("Std rep gain batch {}: {:.3f}".format(batch, np.std(np.concatenate((f_S, b_S)))/np.sqrt(len(f_S)*2)))
 ttest_result = ttest_ind(rg[269], rg[273])
 
 
-print("Mean A1={:.3f} PEG={:.3f} p<{:.4f}".format(
-    np.mean(rg[269]), np.mean(rg[273]), ttest_result.pvalue))
+print("Mean A1={:.3f}+{:.4f} PEG={:.3f}+{:.4f} p<{:.4f}".format(
+    np.mean(rg[269]), np.std(rg[269])/np.sqrt(len(rg[269])),
+    np.mean(rg[273]), np.std(rg[273])/np.sqrt(len(rg[273])),ttest_result.pvalue))
 
