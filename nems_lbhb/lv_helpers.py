@@ -294,7 +294,7 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
     results = {'lv_power_vs_pupil': cc}
 
-    modelspec[0]['meta']['extra_results'] = json.dumps(results)
+    modelspec.meta['extra_results'] = json.dumps(results)
 
     return {'modelspec': modelspec}
 
