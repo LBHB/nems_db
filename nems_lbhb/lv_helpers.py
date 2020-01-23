@@ -30,27 +30,19 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
     fitter_fn = getattr(nems.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
-    '''
-    for fit_idx in range(modelspec.fit_count):
-        for jack_idx, e in enumerate(est.views()):
-            modelspec.jack_index = jack_idx
-            modelspec.fit_index = fit_idx
-            log.info("----------------------------------------------------")
-            log.info("Fitting: fit %d/%d, fold %d/%d",
-                     fit_idx + 1, modelspec.fit_count,
-                     jack_idx + 1, modelspec.jack_count)
-            modelspec = nems.analysis.api.fit_basic(
-                    e, modelspec, fit_kwargs=fit_kwargs,
-                    metric=metric_fn, fitter=fitter_fn)
-    '''
-    if modelspec[0]['fn_kwargs']['p_only'] == False:
+    if modelspec[0]['fn_kwargs']['step'] == True:
         modelspec[0]['fn_kwargs']['p_only'] = True
         tfit_kwargs = fit_kwargs.copy()
         tfit_kwargs['tolerance'] = 1e-5
+        log.info('Fit first order pupil')
+        a = context['alpha']
+        context['alpha'] = 0.0
+        metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, **context)
         modelspec = nems.analysis.api.fit_basic(
             est, modelspec, fit_kwargs=tfit_kwargs,
             metric=metric_fn, fitter=fitter_fn)
         modelspec[0]['fn_kwargs']['p_only'] = False
+        context['alpha'] = a
 
     # option to freeze first-order pupil:
     """
@@ -213,7 +205,6 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         for c in fast_lv_chans:
             lv_fast = result['lv'].extract_channels([c])._data.reshape(-1, ref_len)
             lv_fast = np.std(lv_fast, axis=-1)
-
             if signed_correlation:
                 cc = lv_corr_pupil(p, lv_fast)
             else:
@@ -293,107 +284,22 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
     return modelspec
     """
+    r = val.copy()
+    r = r.apply_mask(reset_epochs=True)
+    ref_len = r['resp'].extract_epoch('REFERENCE').shape[-1]
+    p = r['pupil']._data.reshape(-1, ref_len).mean(axis=-1)
+    lv = r['lv']._data.reshape(-1, ref_len).std(axis=-1)
 
-    # save noise correlation statistics
-    import charlieTools.noise_correlations as nc
-    import charlieTools.preprocessing as cpreproc
-    r = val.apply_mask(reset_epochs=True)
+    cc = np.corrcoef(p, lv)[0, 1]
 
-    # regress out model pred method 1
-    log.info("regress out model prediction using method 1, compute noise correlations")
-    r12 = r.copy()
-    if 'lv' in r12.signals.keys():
-        r12['lv'] = r12['lv']._modified_copy(r12['lv']._data[1, :][np.newaxis, :])
-        r12 = cpreproc.regress_state(r12, state_sigs=['pupil', 'lv'], regress=['pupil', 'lv'])
-    else:
-        r12 = cpreproc.regress_state(r12, state_sigs=['pupil'], regress=['pupil'])
+    results = {'lv_power_vs_pupil': cc}
 
-    # mask pupil
-    big = r12.copy()
-    big['mask'] = big['p_mask']
-    small = r12.copy()
-    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
-    
-    big = big.apply_mask(reset_epochs=True)
-    small = small.apply_mask(reset_epochs=True)
-
-    epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
-    r_dict = r12['resp'].extract_epochs(epochs)
-    big_dict = big['resp'].extract_epochs(epochs)
-    small_dict = small['resp'].extract_epochs(epochs)
-
-    all_df1 = nc.compute_rsc(r_dict)
-    big_df1 = nc.compute_rsc(big_dict)
-    small_df1 = nc.compute_rsc(small_dict)   
-    
-    # per stim
-    perstim_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    big_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    small_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    for e in epochs:
-        r_dict = r12['resp'].extract_epochs(e)
-        big_dict = big['resp'].extract_epochs(e)
-        small_dict = small['resp'].extract_epochs(e)
-
-        perstim_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
-        big_perstim.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
-        small_perstim.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
-
-    # =========== regress out model pred method 2 ==================
-    log.info("regress out model prediction using method 2, compute noise correlations")
-    r12 = r.copy()
-    mod_data = r12['resp']._data - r12['pred']._data + r12['psth_sp']._data
-    r12['resp'] = r12['resp']._modified_copy(mod_data)
-
-    # mask pupil
-    big = r12.copy()
-    big['mask'] = big['p_mask']
-    small = r12.copy()
-    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
-
-    big = big.apply_mask(reset_epochs=True)
-    small = small.apply_mask(reset_epochs=True)
-
-    epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
-    r_dict = r12['resp'].extract_epochs(epochs)
-    big_dict = big['resp'].extract_epochs(epochs)
-    small_dict = small['resp'].extract_epochs(epochs)
-
-    all_df2 = nc.compute_rsc(r_dict)
-    big_df2 = nc.compute_rsc(big_dict)
-    small_df2 = nc.compute_rsc(small_dict) 
-
-    # per stim
-    perstim2_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    big_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    small_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    for e in epochs:
-        r_dict = r12['resp'].extract_epochs(e)
-        big_dict = big['resp'].extract_epochs(e)
-        small_dict = small['resp'].extract_epochs(e)
-
-        perstim2_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
-        big_perstim2.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
-        small_perstim2.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
-
-    results = {'rsc_all': all_df1['rsc'].mean(), 'rsc_all_sem': all_df1['rsc'].sem(),
-               'rsc_big': big_df1['rsc'].mean(), 'rsc_big_sem': big_df1['rsc'].sem(),
-               'rsc_small': small_df1['rsc'].mean(), 'rsc_small_sem': small_df1['rsc'].sem(),
-               'rsc_all2': all_df2['rsc'].mean(), 'rsc_all_sem2': all_df2['rsc'].sem(),
-               'rsc_big2': big_df2['rsc'].mean(), 'rsc_big_sem2': big_df2['rsc'].sem(),
-               'rsc_small2': small_df2['rsc'].mean(), 'rsc_small_sem2': small_df2['rsc'].sem(),
-               'rsc_perstim_small': small_perstim['rsc'].mean(), 'rsc_perstim_small_sem': np.nan,
-               'rsc_perstim_big': big_perstim['rsc'].mean(), 'rsc_perstim_big_sem': np.nan,
-               'rsc_perstim_small2': small_perstim2['rsc'].mean(), 'rsc_perstim_small_sem2': np.nan,
-               'rsc_perstim_big2': big_perstim2['rsc'].mean(), 'rsc_perstim_big_sem2': np.nan}
-
-    modelspec['meta']['extra_results'] = json.dumps(results)
-
+    modelspec[0]['meta']['extra_results'] = json.dumps(results)
 
     return {'modelspec': modelspec}
 
 
-def dc_lv_model(rec, ss, o, p_only, flvw, pd, lvd, d, lve):
+def dc_lv_model(rec, ss, o, p_only, flvw, step, pd, lvd, d, lve):
     """
     fit lv model for N neurons
     :param rec:
@@ -401,6 +307,7 @@ def dc_lv_model(rec, ss, o, p_only, flvw, pd, lvd, d, lve):
     :param o: name of output (typically 'pred')
     :param p_only: (if True) only fit first-order pupil
     :param flvw: (if True) force encoding and decoding weights for lv to be the same
+    :param step: (if True) intialize fit with first order weights, then fit full model
     :param pd: first-order pupil weights (dc shift) - N x 1
     :param lvd: free parameter - latent variable decoding weights, also encoding
                 weights if flvw==True
@@ -446,7 +353,7 @@ def dc_lv_model(rec, ss, o, p_only, flvw, pd, lvd, d, lve):
 
     return [lv, residual, pred]
 
-def gain_lv_model(rec, ss, o, g, p_only, flvw, pg, lvg, d, lve):
+def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pg, lvg, d, lve):
 
     resp = rec['resp'].rasterize()._data
     psth = rec['psth'].rasterize()._data
@@ -482,7 +389,7 @@ def gain_lv_model(rec, ss, o, g, p_only, flvw, pg, lvg, d, lve):
 
     return [lv, residual, pred]
 
-def full_lv_model(rec, ss, o, p_only, g, pg, lvg, pd, lvd, d, lve):
+def full_lv_model(rec, ss, o, p_only, step, g, pg, lvg, pd, lvd, d, lve):
 
     resp = rec['resp'].rasterize()._data
     psth = rec['psth'].rasterize()._data

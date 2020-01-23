@@ -627,6 +627,7 @@ def puplvmodel(kw):
     dc = False # default to dc only
     pupil_only = False
     fix_lv_weights = False
+    step = False
     for op in params:
         if op.startswith('psth'):
             sub_sig = 'psth'
@@ -641,6 +642,10 @@ def puplvmodel(kw):
             pupil_only = True
         elif op.startswith('flvw'):
             fix_lv_weights = True
+        elif op.startswith('step'):
+            # intialize full fit with first order only fit
+            # see lv_helpers.fit_pupil_lv for usage.
+            step = True
         
     n_chans = int(params[-1]) # number of neurons
     mean = 0.01 * np.ones([n_chans, 1])
@@ -655,18 +660,20 @@ def puplvmodel(kw):
         'fn_kwargs': {'ss': sub_sig,
                     'o': ['lv', 'residual', 'pred'],
                     'p_only': pupil_only,
-                    'flvw': fix_lv_weights
+                    'flvw': fix_lv_weights,
+                    'step': step
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
             'plot_fn_idx': 0,
-        'prior': {'pd': ('Normal', {'mean': mean, 'sd': sd}),
-                'lvd': ('Normal', {'mean': mean, 'sd': sd}),
+        'prior': {'pd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvd': ('Normal', {'mean': mean0, 'sd': sd}),
                 'd': ('Normal', {'mean': mean0, 'sd': sd}),
-                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+                'lve': ('Normal', {'mean': mean0, 'sd': sd})},
         'bounds': {'pd': (None, None),
                 'lvd': (None, None),
-                'd': (None, None)}
+                'd': (None, None),
+                'lve': (None, None)}
         }
 
     elif gain & ~dc:
@@ -675,7 +682,8 @@ def puplvmodel(kw):
         'fn_kwargs': {'ss': sub_sig,
                     'o': ['lv', 'residual', 'pred'],
                     'p_only': pupil_only,
-                    'flvw': fix_lv_weights
+                    'flvw': fix_lv_weights,
+                    'step': step
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
@@ -695,7 +703,8 @@ def puplvmodel(kw):
         'fn': 'nems_lbhb.lv_helpers.full_lv_model',
         'fn_kwargs': {'ss': sub_sig,
                     'o': ['lv', 'residual', 'pred'],
-                    'p_only': pupil_only
+                    'p_only': pupil_only,
+                    'step': step
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
