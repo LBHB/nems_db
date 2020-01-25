@@ -576,7 +576,10 @@ def baphy_load_dataset(parmfilepath, **options):
     else:
         # generate stimulus events unique to each distinct stimulus
         log.info('Aligning events between stim and response')
-        ff_tar_events = exptevents['name'].str.endswith('Target')
+        ff_tar_events = exptevents['name'].str.endswith('Target') | \
+                        exptevents['name'].str.endswith('Target+NoLight') | \
+                        exptevents['name'].str.endswith('Target+Light')
+
         ff_tar_pre = exptevents['name'].str.startswith('Pre') & ff_tar_events
         ff_tar_dur = exptevents['name'].str.startswith('Stim') & ff_tar_events
         ff_lick_dur = (exptevents['name'] == 'LICK')
@@ -722,7 +725,7 @@ def baphy_load_dataset(parmfilepath, **options):
             if elements[0] == "PreStimSilence":
                 name="PreStimSilence"
             elif elements[0] == "Stim":
-                name="TAR_" + elements[1]
+                name="STIM_" + elements[1]
                 e['start'] = exptevents.loc[i-1]['start']
                 e['end'] = exptevents.loc[i+1]['end']
             elif elements[0] == "PostStimSilence":

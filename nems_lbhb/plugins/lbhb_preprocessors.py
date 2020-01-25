@@ -43,6 +43,23 @@ def ref(kw):
               'include_incorrect': include_incorrect,
               'generate_evoked_mask': generate_evoked_mask}]]
 
+def tar(kw):
+    ops = kw.split('.')[1:]
+
+    balance_rep_count = False
+    include_incorrect = False
+    generate_evoked_mask = False
+    for op in ops:
+        if op.startswith('b'):
+            balance_rep_count = True
+        if op.startswith('a'):
+            include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
+
+    return [['nems.xforms.mask_all_but_targets',
+             {'include_incorrect': include_incorrect}]]
+
 
 def evs(loadkey):
     """
@@ -429,7 +446,10 @@ def psthfr(load_key):
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
-    if 'stimtar' not in options:
+    if 'tar' in options:
+        epoch_regex = ['^STIM_', '^TAR_']
+        #epoch_regex='^TAR_'
+    elif 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
