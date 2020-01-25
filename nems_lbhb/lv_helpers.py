@@ -38,24 +38,32 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
         a = context['alpha']
         context['alpha'] = 0.0
         metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, **context)
+        # fit pupil only
         modelspec = nems.analysis.api.fit_basic(
             est, modelspec, fit_kwargs=tfit_kwargs,
             metric=metric_fn, fitter=fitter_fn)
         modelspec[0]['fn_kwargs']['p_only'] = False
+        # fit LV with no pupil constraint
+        log.info('initialize latent variable fit with alpha=0')
+        modelspec = nems.analysis.api.fit_basic(
+            est, modelspec, fit_kwargs=tfit_kwargs,
+            metric=metric_fn, fitter=fitter_fn)
+        # reset true alpha for final fit
         context['alpha'] = a
 
     # option to freeze first-order pupil:
-    """
-    modelspec[0]['fn_kwargs']['pd'] = modelspec.phi[0]['pd']
-    del modelspec.phi[0]['pd']
-    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
-        metric=metric_fn, fitter=fitter_fn)
-    modelspec.phi[0]['pd'] = modelspec[0]['fn_kwargs']['pd']
-    del modelspec.phi[0]['fn_kwargs']['pd']
-    """
-
-    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
-        metric=metric_fn, fitter=fitter_fn)
+    if modelspec[0]['fn_kwargs']['pfix'] == True:
+        log.info('Freezing first order pupil weights')
+        modelspec[0]['fn_kwargs']['pd'] = modelspec.phi[0]['pd']
+        del modelspec.phi[0]['pd']
+        modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+            metric=metric_fn, fitter=fitter_fn)
+        modelspec.phi[0]['pd'] = modelspec[0]['fn_kwargs']['pd']
+        del modelspec[0]['fn_kwargs']['pd']
+    
+    else:
+        modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+            metric=metric_fn, fitter=fitter_fn)
 
     return {'modelspec': modelspec}
 
@@ -299,7 +307,7 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
     return {'modelspec': modelspec}
 
 
-def dc_lv_model(rec, ss, o, p_only, flvw, step, pd, lvd, d, lve):
+def dc_lv_model(rec, ss, o, p_only, flvw, step, pfix, pd, lvd, d, lve):
     """
     fit lv model for N neurons
     :param rec:
@@ -308,6 +316,7 @@ def dc_lv_model(rec, ss, o, p_only, flvw, step, pd, lvd, d, lve):
     :param p_only: (if True) only fit first-order pupil
     :param flvw: (if True) force encoding and decoding weights for lv to be the same
     :param step: (if True) intialize fit with first order weights, then fit full model
+    :param pfix: (if True) fix first order pupil weights
     :param pd: first-order pupil weights (dc shift) - N x 1
     :param lvd: free parameter - latent variable decoding weights, also encoding
                 weights if flvw==True

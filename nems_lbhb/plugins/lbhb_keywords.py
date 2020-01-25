@@ -628,6 +628,7 @@ def puplvmodel(kw):
     pupil_only = False
     fix_lv_weights = False
     step = False
+    pfix = False
     for op in params:
         if op.startswith('psth'):
             sub_sig = 'psth'
@@ -646,6 +647,9 @@ def puplvmodel(kw):
             # intialize full fit with first order only fit
             # see lv_helpers.fit_pupil_lv for usage.
             step = True
+        elif op.startswith('pfix'):
+            # fix pupil weights after intial fit(s)
+            pfix = True
         
     n_chans = int(params[-1]) # number of neurons
     mean = 0.01 * np.ones([n_chans, 1])
@@ -661,7 +665,8 @@ def puplvmodel(kw):
                     'o': ['lv', 'residual', 'pred'],
                     'p_only': pupil_only,
                     'flvw': fix_lv_weights,
-                    'step': step
+                    'step': step,
+                    'pfix': pfix
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
