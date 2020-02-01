@@ -521,9 +521,10 @@
             </button>
                 <script>
                     var saveselect = document.getElementById('saveselect');
-                    saveselect.style.display = 'none'
                 {% if username %}
                     saveselect.style.display = 'block'
+                {% else %}
+                    saveselect.style.display = 'none'
                 {% endif %}
                 </script>
             <!-- buttons for manually testing saved user selections -->
