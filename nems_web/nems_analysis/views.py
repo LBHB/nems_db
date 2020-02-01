@@ -458,7 +458,7 @@ def update_results():
                 .limit(rowlimit).statement,
                 session.bind
                 )
-        with pd.option_context('display.max_colwidth', -1):
+        with pd.option_context('display.max_colwidth', None):
             resultstable = results.to_html(
                     index=False, classes="table-hover table-condensed",
                     )
