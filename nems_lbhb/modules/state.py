@@ -176,3 +176,53 @@ def add_lv(rec, i, o, n, e):
     lv_sig.chans = lv_chans
 
     return [lv_sig]
+
+
+def _population_mod(x, r, s, g, d, gs, ds):
+
+    if g is not None:
+        #import pdb; pdb.set_trace()
+        _rat = (r-x)/(x+(x==0))
+        _rat[_rat>1]=1
+        _rat[_rat<-0.5]=-0.5
+        
+        _g = g.copy()
+        np.fill_diagonal(_g, 0)
+        gd = _g.T @ _rat
+        
+        if gs is not None:
+            y = x * (gs@s) * np.exp(gd)
+        else:
+            y = x * np.exp(gd)
+    else:
+        y = x.copy()
+
+    if d is not None:
+        _diff = r-x
+        _d = d.copy()
+        np.fill_diagonal(_d, 0)
+        dd = _d.T @ _diff
+        if ds is not None:
+            y += (ds@s) * dd
+        else:
+            y += dd
+
+    return y
+
+
+def population_mod(rec, i, o, s=None, g=None, d=None, gs=None, ds=None):
+    '''
+    Parameters
+    ----------
+    i name of input
+    o name of output signal
+    s name of state signal
+    g - gain to scale s by
+    d - dc to offset by
+    base, amplitude, kappa - parameters for dexp applied to each state channel
+    '''
+
+    r = 'resp'
+    fn = lambda x : _population_mod(x, rec[r]._data, rec[s]._data, g, d, gs, ds)
+
+    return [rec[i].transform(fn, o)]
