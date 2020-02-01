@@ -364,11 +364,11 @@ class Scatter(PlotGenerator):
                     .format(modelY, y_mean, y_median)
                     )
 
-            data = pd.DataFrame({
+            data = {
                     'x_values':dataX[self.measure[0]],
                     'y_values':dataY[self.measure[0]],
                     'cellid':cells,
-                    })
+                    }
             dat_source = ColumnDataSource(data)
 
             p = figure(
