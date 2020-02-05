@@ -236,6 +236,13 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         iv = events.Trial.isin(following_trials)
         iv_trials = iv | iv_trials
 
+    # Mark any REFs that occur in an invalid target slot as invalid sounds
+    # so that they won't be used for DI / RT calculations
+    # find the earliest target presentation
+    targetstart_min = events[events.name.str.contains('Target')].start.min()
+    iv = (events.soundTrial != 'NULL') & (events.start < targetstart_min)
+    iv_sound_trials = iv | iv_sound_trials
+
     # Finally, make sure that soundTrials labeled as NULL are marked as invalidSoundTrials
     iv = events.soundTrial == 'NULL'
     iv_sound_trials = iv | iv_sound_trials
@@ -492,7 +499,7 @@ def _get_reference_RTs(exptparams, exptevents):
     "private" function to get RTs for references. Separate from targets because logic is slightly different
     """
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
-
+    resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] - early_win
     allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
     validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
                                     (exptevents.invalidSoundTrial==False) & \
@@ -506,12 +513,15 @@ def _get_reference_RTs(exptparams, exptevents):
     for t in validTrialList:
         tdf = validTrialdf[validTrialdf.Trial == t]
         # get only FALSE_ALARM_TRIALS or EARLY_TRIALS with invalidSoundTrial is also False
-        sound_onsets = tdf[tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])]['start'].values
+        sound_onsets = tdf[(tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])) & \
+                            (tdf.invalidSoundTrial==False)]['start'].values
         fl = tdf[tdf.name=='LICK']['start'].values[0]
         resp_window_start = sound_onsets + early_win
 
         for s in resp_window_start:
-            rts.append(fl - s)
+            rt = fl - s
+            if rt < resp_win_len:
+                rts.append(rt)
 
     return np.array(rts)
 
