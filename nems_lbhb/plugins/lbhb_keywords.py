@@ -778,8 +778,6 @@ def sdexp(kw):
         if o == 'lv':
             state = 'lv'
 
-    import pdb; pdb.set_trace()
-
     zeros = np.zeros([n_chans, n_vars])
     ones = np.ones([n_chans, n_vars])
     g_mean = zeros.copy()

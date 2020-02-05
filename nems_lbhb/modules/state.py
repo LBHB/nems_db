@@ -14,8 +14,8 @@ def _state_dexp(x, s, g, d, base, amplitude, kappa):
     # https://software.intel.com/en-us/distribution-for-python
     sg = g @ s
     sd = d @ s
-    sg = base[0] + amplitude[0] * np.exp(-np.exp(np.array(-np.exp(kappa[0])) * sg))
-    sd = base[1] + amplitude[1] * np.exp(-np.exp(np.array(-np.exp(kappa[1])) * sd))
+    sg = base[[0]].T + amplitude[[0]].T * np.exp(-np.exp(np.array(-np.exp(kappa[[0]].T)) * sg))
+    sd = base[[1]].T + amplitude[[1]].T * np.exp(-np.exp(np.array(-np.exp(kappa[[1]].T)) * sd))
 
     return sg * x + sd
 
@@ -31,7 +31,7 @@ def state_dexp(rec, i, o, s, g, d, base, amplitude, kappa):
     d - dc to offset by
     base, amplitude, kappa - parameters for dexp applied to each state channel
     '''
-    import pdb; pdb.set_trace()
+
     fn = lambda x : _state_dexp(x, rec[s]._data, g, d, base, amplitude, kappa)
 
     return [rec[i].transform(fn, o)]
