@@ -895,6 +895,79 @@ def stategainchan(kw):
 
     return template
 
+def pmod(kw):
+    """
+    latent-variable style modulation of predicted response by weighted sum of
+    other simultaneous neurons.  typically pmod.R so that it knows how many
+    neurons/channels to weigh
+    TODO : add pupil state support
+    :param fn:
+    :param kw:
+    :return:
+    """
+    options = kw.split('.')
+    in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+
+    try:
+        parsed = re.match(in_out_pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            n_chans = int(options[1])
+            n_states = 0
+
+        else:
+            n_chans = int(parsed.group(1))
+            if len(parsed.groups())>1:
+                n_states = int(parsed.group(2))
+            else:
+                n_states = 0
+    except TypeError:
+        raise ValueError("Got TypeError when parsing pmod keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "pmod.R or pmod.RxS \n"
+                         "keyword given: %s" % kw)
+
+    plot_fns = ['nems.plots.api.mod_output_all',
+                'nems.plots.api.mod_output',
+                'nems.plots.api.before_and_after',
+                'nems.plots.api.pred_resp']
+
+    g_mean = np.ones([n_chans, n_chans])/n_chans
+    g_sd = np.ones([n_chans, n_chans])/n_chans
+    np.fill_diagonal(g_mean, 0)
+    #np.fill_diagonal(g_sd, 0)
+    d_mean = np.zeros([n_chans, n_chans])
+    d_sd = np.ones([n_chans, n_chans])
+
+    if 'g' in options:
+        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd})}
+    elif 'd' in options:
+        prior = {'d': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+    else:
+        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
+                 'd': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+
+    if n_states>0:
+        s_mean = np.zeros([1, n_states])
+        s_mean[0,:] = 1
+        s_sd = np.ones([1, n_states])
+
+        if 'd' in prior.keys():
+            prior['ds'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
+        if 'g' in prior.keys():
+            prior['gs'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
+
+    template = {
+        'fn': 'nems_lbhb.modules.state.population_mod',
+        'fn_kwargs': {'i': 'pred',
+                      'o': 'pred',
+                      's': 'state'},
+        'plot_fns': plot_fns,
+        'plot_fn_idx': 3,
+        'prior': prior
+        }
+
+    return template
 
 def _aliased_keyword(fn, kw):
     '''Forces the keyword fn to use the given kw. Used for implementing
