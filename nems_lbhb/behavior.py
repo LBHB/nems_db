@@ -40,15 +40,17 @@ def create_trial_labels(exptparams, exptevents):
     all_trials = np.unique(exptevents['Trial'])
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
-    refCountDist = exptparams['TrialObject'][1]['ReferenceCountFreq']
+    #refCountDist = exptparams['TrialObject'][1]['ReferenceCountFreq']
     refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
     refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
     refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
     tarPreStim = exptparams['TrialObject'][1]['TargetHandle'][1]['PreStimSilence']
     tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
-    invalidRefSlots = np.append(0, np.argwhere(refCountDist==0)[:-1]+1)
-    min_time = len(invalidRefSlots) * (refPreStim + refDuration + refPostStim) + refPreStim + early_win
+    #invalidRefSlots = np.append(0, np.argwhere(refCountDist==0)[:-1]+1)
+    #min_time = len(invalidRefSlots) * (refPreStim + refDuration + refPostStim) + refPreStim + early_win
+    # invalid target slots now handled in mark_invalid_trials function
+    #min_time = refPreStim + early_win
 
     if pump_dur.shape == ():
         pump_dur = np.tile(pump_dur, [len(tar_names)])
@@ -71,10 +73,10 @@ def create_trial_labels(exptparams, exptevents):
                 
                 elif 'Reference' in name:
                     ref_start = r['start']
-                    if (fl < min_time):
-                        sID.append('EARLY_TRIAL')
-                        trial_outcome = 'EARLY_TRIAL'
-                    elif ((fl >= ref_start) & (fl < (ref_start + early_win))):
+                    #if (fl < min_time):
+                    #    sID.append('EARLY_TRIAL')
+                    #    trial_outcome = 'EARLY_TRIAL'
+                    if ((fl >= ref_start) & (fl < (ref_start + early_win))):
                         sID.append('EARLY_TRIAL')
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
@@ -200,7 +202,7 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     if 'soundTrial' not in events.columns:
         log.info('Trials have not been labeled. Labeling trials in order to compute metrics... ')
         events = create_trial_labels(exptparams, exptevents)
-
+    
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
     keep_cue_trials = options.get('keep_cue_trials', False)
@@ -222,10 +224,11 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         # mark cue trials as invalid
         # same for single sounds and overall trials
         nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
-        cue_hit_trials = events[events.name.str.contains('HIT_TRIAL')]['Trial'][:nCueTrials+1].values
-        iv = events.Trial.isin(np.arange(1, cue_hit_trials.max()))
-        iv_sound_trials = iv | iv_sound_trials
-        iv_trials = iv | iv_trials
+        if nCueTrials > 0:
+            cue_hit_trials = events[events.name.str.contains('HIT_TRIAL')]['Trial'][:(nCueTrials+1)].values
+            iv = events.Trial.isin(np.arange(1, cue_hit_trials.max()))
+            iv_sound_trials = iv | iv_sound_trials
+            iv_trials = iv | iv_trials
 
     if keep_following_incorrect_trial == False:
         # mark trials following an incorrect trial as invalid
@@ -235,6 +238,13 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         following_trials = incorrect_trials + 1
         iv = events.Trial.isin(following_trials)
         iv_trials = iv | iv_trials
+
+    # Mark any REFs that occur in an invalid target slot as invalid sounds
+    # so that they won't be used for DI / RT calculations
+    # find the earliest target presentation
+    targetstart_min = events[events.name.str.contains('Target')].start.min()
+    iv = (events.soundTrial != 'NULL') & (events.start < targetstart_min)
+    iv_sound_trials = iv | iv_sound_trials
 
     # Finally, make sure that soundTrials labeled as NULL are marked as invalidSoundTrials
     iv = events.soundTrial == 'NULL'
@@ -333,7 +343,7 @@ def _compute_metrics(exptparams, exptevents):
                                         (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
         validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
         nTrials = sum((validTrialdf.invalidSoundTrial==False) & (validTrialdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])))
-        nFA = ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL')).sum()
+        nFA = ((validTrialdf.invalidSoundTrial==False) & ((validTrialdf.soundTrial=='FALSE_ALARM_TRIAL') | (validTrialdf.soundTrial=='EARLY_TRIAL'))).sum()
         R['RR']['Reference'] = nFA / nTrials
         R['nTrials']['Reference'] = nTrials
 
@@ -492,26 +502,30 @@ def _get_reference_RTs(exptparams, exptevents):
     "private" function to get RTs for references. Separate from targets because logic is slightly different
     """
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
-
+    resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] - early_win
     allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
     validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
-                                    (exptevents.invalidSoundTrial==False) & \
                                     (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL']))]['Trial'].unique()
     validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
 
     # NOTE: for each trial, could have multiple RTs for the same lick (if lick is in window of more than one
     # ref)
-
     rts = []
     for t in validTrialList:
         tdf = validTrialdf[validTrialdf.Trial == t]
         # get only FALSE_ALARM_TRIALS or EARLY_TRIALS with invalidSoundTrial is also False
-        sound_onsets = tdf[tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])]['start'].values
+        sound_onsets = tdf[(tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])) & \
+                            (tdf.invalidSoundTrial==False)]['start'].values
         fl = tdf[tdf.name=='LICK']['start'].values[0]
         resp_window_start = sound_onsets + early_win
 
         for s in resp_window_start:
-            rts.append(fl - s)
+            rt = fl - s
+            # exlucde rt if outside resp window for this stim,
+            # or if negative (this would mean that baphy saved
+            # sound events that never played. Happens on early trials)
+            if (rt < resp_win_len) & (rt > 0):
+                rts.append(rt)
 
     return np.array(rts)
 
