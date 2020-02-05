@@ -520,16 +520,19 @@ def residual(load_key):
     
     shuffle = False
     cutoff = None
-
+    signal = 'psth_sp'
     for op in options:
         if op.endswith('0'):
             shuffle = True
         elif op.startswith('hp'):
             cutoff = np.float(op[2:].replace(',','.'))
+        elif op.startswith('pred'):
+            signal = 'pred'
 
     xfspec = [['nems_lbhb.preprocessing.create_residual',
             {'shuffle': shuffle, 
-            'cutoff': cutoff},
+            'cutoff': cutoff,
+            'signal': signal},
             ['rec'], ['rec']]]
 
     return xfspec

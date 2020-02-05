@@ -572,6 +572,7 @@ def lv(kw):
 
     options = kw.split('.')
     lv_names = []
+    sig_in = 'psth_sp' 
     for op in options:
         if op.startswith('f'):
             if len(op)>1:
@@ -588,8 +589,6 @@ def lv(kw):
         
         elif op.startswith('psth'):
             sig_in = 'psth'
-        elif op.startswith('pred'):
-            sig_in = 'pred'
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
@@ -688,7 +687,8 @@ def puplvmodel(kw):
                     'o': ['lv', 'residual', 'pred'],
                     'p_only': pupil_only,
                     'flvw': fix_lv_weights,
-                    'step': step
+                    'step': step, 
+                    'pfix': pfix
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
@@ -709,7 +709,8 @@ def puplvmodel(kw):
         'fn_kwargs': {'ss': sub_sig,
                     'o': ['lv', 'residual', 'pred'],
                     'p_only': pupil_only,
-                    'step': step
+                    'step': step, 
+                    'pfix': pfix
                     },
         'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                     'nems_lbhb.plots.lv_quickplot'],
@@ -776,6 +777,8 @@ def sdexp(kw):
     for o in options[2:]:
         if o == 'lv':
             state = 'lv'
+
+    import pdb; pdb.set_trace()
 
     zeros = np.zeros([n_chans, n_vars])
     ones = np.ones([n_chans, n_vars])

@@ -803,12 +803,12 @@ def add_pupil_mask(rec):
     r['p_mask'] = bp['mask']
     return r
 
-def create_residual(rec, cutoff=None, shuffle=False):
-
+def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):
+    
     r = rec.copy()
     r['resp'] = r['resp'].rasterize()
-    r['residual'] = r['resp']._modified_copy(r['resp']._data - r['psth_sp']._data)
-
+    r['residual'] = r['resp']._modified_copy(r['resp']._data - r[signal]._data)
+    
     if cutoff is not None:
         r = bandpass_filter_resp(r, low_c=cutoff, high_c=None, signal='residual')
 
@@ -826,11 +826,21 @@ def add_epoch_signal(rec):
     r['resp'] = r['resp'].rasterize()
     epochs = [e for e in r.epochs.name.unique() if 'STIM' in e]
     resp = r['resp']._data
-    epoch_signal = np.zeros((len(epochs), resp.shape[-1]))
-
-    for i, e in enumerate(epochs):
-        s = r['resp'].epoch_to_signal(e)
-        epoch_signal[i, :] = s._data.squeeze()
+    bins = r['resp'].extract_epoch(epochs[0]).shape[-1]
+    epoch_signal = np.zeros((len(epochs) * bins, resp.shape[-1]))
+    idx = 0
+    for e in epochs:
+        for b in range(bins):
+            sig = r['resp'].epoch_to_signal(e)
+            data = sig.extract_epoch(e)
+        
+            ran = np.arange(0, bins)
+            data[:, :, (ran<b) | (ran>b)] = 0
+            data[:, :, b] = 1 
+            sig = sig._modified_copy(np.zeros((1, sig._data.shape[-1])))
+            sig = sig.replace_epochs({e: data})
+            epoch_signal[idx, :] = sig._data.squeeze()
+            idx+=1
 
     r['stim_epochs'] = r['resp']._modified_copy(epoch_signal)
     r['stim_epochs'].name = 'stim_epochs'
@@ -839,12 +849,28 @@ def add_epoch_signal(rec):
 
 
 def add_meta(rec):
+    from nems.signal import RasterizedSignal
+    if type(rec['resp']) is not RasterizedSignal:
+        rec['resp'] = rec['resp'].rasterize()
 
     ref_len = rec.apply_mask(reset_epochs=True)['resp'].extract_epoch('REFERENCE').shape[-1]
 
     rec.meta['ref_len'] = ref_len
 
+    import charlieTools.noise_correlations as nc
+    epochs = [e for e in rec.apply_mask(reset_epochs=True).epochs.name.unique() if 'STIM' in e]
+    resp_dict = rec['resp'].extract_epochs(epochs)
+    nc = nc.compute_rsc(resp_dict)
+    idx = nc[nc['pval'] < 0.05].index
+    idx = [(int(x.split('_')[0]), int(x.split('_')[1])) for x in idx]
+    arr = np.zeros((rec['resp'].shape[0], rec['resp'].shape[0]))
+    for i in idx:
+        arr[i[0], i[1]] = 1
+
+    rec.meta['sig_corr_pairs'] = arr
+    
     return rec
+
 
 def zscore_resp(rec):
     r = rec.copy()

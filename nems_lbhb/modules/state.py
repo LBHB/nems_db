@@ -31,7 +31,7 @@ def state_dexp(rec, i, o, s, g, d, base, amplitude, kappa):
     d - dc to offset by
     base, amplitude, kappa - parameters for dexp applied to each state channel
     '''
-
+    import pdb; pdb.set_trace()
     fn = lambda x : _state_dexp(x, rec[s]._data, g, d, base, amplitude, kappa)
 
     return [rec[i].transform(fn, o)]
@@ -67,9 +67,7 @@ def state_exp(rec, i, o, s, g):
 
 
 def _state_logsig(x, s, g, b, a):
-    '''
-    Gain is fixed to a max of 50 (this could be a free param)
-    '''
+
     def fn(x):
         sig = a / (1 + np.exp(-x))
         return sig
@@ -143,7 +141,9 @@ def add_lv(rec, i, o, n, e):
     # if pred, subtract pred to create residual
     # Any signal that you wish
     # to project down to your LV
+    
     res = newrec['resp'].rasterize()._data - newrec[i].rasterize()._data
+    
     lv = e.T @ res
 
     lv = np.concatenate((np.ones((1, lv.shape[-1])), lv), axis=0)

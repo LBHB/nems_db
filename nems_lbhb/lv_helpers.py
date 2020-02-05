@@ -30,40 +30,8 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
     fitter_fn = getattr(nems.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
-    if modelspec[0]['fn_kwargs']['step'] == True:
-        modelspec[0]['fn_kwargs']['p_only'] = True
-        tfit_kwargs = fit_kwargs.copy()
-        tfit_kwargs['tolerance'] = 1e-5
-        log.info('Fit first order pupil')
-        a = context['alpha']
-        context['alpha'] = 0.0
-        metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, **context)
-        # fit pupil only
-        modelspec = nems.analysis.api.fit_basic(
-            est, modelspec, fit_kwargs=tfit_kwargs,
-            metric=metric_fn, fitter=fitter_fn)
-        modelspec[0]['fn_kwargs']['p_only'] = False
-        # fit LV with no pupil constraint
-        log.info('initialize latent variable fit with alpha=0')
-        modelspec = nems.analysis.api.fit_basic(
-            est, modelspec, fit_kwargs=tfit_kwargs,
-            metric=metric_fn, fitter=fitter_fn)
-        # reset true alpha for final fit
-        context['alpha'] = a
-
-    # option to freeze first-order pupil:
-    if modelspec[0]['fn_kwargs']['pfix'] == True:
-        log.info('Freezing first order pupil weights')
-        modelspec[0]['fn_kwargs']['pd'] = modelspec.phi[0]['pd']
-        del modelspec.phi[0]['pd']
-        modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
-            metric=metric_fn, fitter=fitter_fn)
-        modelspec.phi[0]['pd'] = modelspec[0]['fn_kwargs']['pd']
-        del modelspec[0]['fn_kwargs']['pd']
-    
-    else:
-        modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
-            metric=metric_fn, fitter=fitter_fn)
+    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+        metric=metric_fn, fitter=fitter_fn)
 
     return {'modelspec': modelspec}
 
@@ -108,8 +76,8 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', **context):
 def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     """
     When alpha = 0, this is just standard nmse of pred vs. resp.
-    When alpha > 0, we add a pupil constraint on the variance of the
-    latent variable. Alpha is a hyperparam, can range from 0 to 1
+    When alpha > 0, we add a pupil constraint to minimize diff in nc
+    between large and small pupil per stimulus.
     """
     # standard nmse (following nems.metrics.mse.nmse)
     X1 = result[pred_name].as_continuous()
@@ -126,35 +94,32 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     p_mask = result['p_mask'].as_continuous().squeeze()
     residual_big = X2[:, p_mask] - X1[:, p_mask]
     residual_small = X2[:, ~p_mask] - X1[:, ~p_mask]
-    
-    if 'stim_epochs' in result.signals.keys():
-        # for minimizing per stimulus
-        epochs = result['stim_epochs']._data
-        idx = np.argwhere(epochs.sum(axis=-1) != 0)
-        epochs = epochs[idx, :].squeeze()
-        if len(epochs.shape)==1:
-            epochs = epochs[np.newaxis, :]
-        delta_nc = []
-        for i in range(epochs.shape[0]):
-            s_mask = epochs[i, :].astype(np.bool)
-            rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
-            rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
-            nc_big = np.corrcoef(rb)
-            nc_small = np.corrcoef(rs)
-            delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
-        pup_cost = np.mean(delta_nc)
+    if alpha != 0:
+        if 'stim_epochs' in result.signals.keys():
+            # for minimizing per stimulus
+            epochs = result['stim_epochs']._data
+            idx = np.argwhere(epochs.sum(axis=-1) != 0)
+            epochs = epochs[idx, :].squeeze()
+            if len(epochs.shape)==1:
+                epochs = epochs[np.newaxis, :]
+            delta_nc = []
+            for i in range(epochs.shape[0]):
+                s_mask = epochs[i, :].astype(np.bool)
+                rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
+                rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
+                nc_big = np.corrcoef(rb)[result.meta['sig_corr_pairs'].astype(np.bool)]
+                nc_small = np.corrcoef(rs)[result.meta['sig_corr_pairs'].astype(np.bool)]
+                delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
+            pup_cost = np.nanmean(delta_nc)
+
+        else:
+            # for minimizing over ALL stimuli
+            nc_big = np.corrcoef(residual_big)
+            nc_small = np.corrcoef(residual_small)
+            pup_cost = abs(nc_big - nc_small).mean()
 
     else:
-        # for minimizing over ALL stimuli
-        nc_big = np.corrcoef(residual_big)
-        nc_small = np.corrcoef(residual_small)
-        pup_cost = abs(nc_big - nc_small).mean()
-
-    # additional pupil constraint to set first order mod index to zero
-    #residual_big = X2[:, p_mask] - X3[:, p_mask]
-    #residual_small = X2[:, ~p_mask] - X3[:, ~p_mask]
-    #mi_mean = np.nanmean((residual_big - residual_small / residual_big + residual_small))
-    #pup_cost2 = mi_mean
+        pup_cost = 0
 
     cost = (alpha * pup_cost) + ((1 - alpha) * nmse)
 
@@ -362,14 +327,15 @@ def dc_lv_model(rec, ss, o, p_only, flvw, step, pfix, pd, lvd, d, lve):
 
     return [lv, residual, pred]
 
-def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pg, lvg, d, lve):
+def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pfix, pg, lvg, d, lve):
 
     resp = rec['resp'].rasterize()._data
     psth = rec['psth'].rasterize()._data
     psth_sp = rec['psth_sp'].rasterize()._data
     pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
 
-    pred1 = (g * psth) + ((pg @ pupil) * psth) + d
+    gain = g + (pg @ pupil)
+    pred1 = (gain * psth) + d
     # define residual
     if ss == 'psth':
         residual = resp - psth_sp
@@ -386,7 +352,8 @@ def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pg, lvg, d, lve):
     if p_only:
         pred = pred1
     else:
-        pred = (g * psth) + ((pg @ pupil) * psth) + ((lvg @ lv) * psth) + d
+        gain = g + (pg @ pupil) + (lvg @ lv)
+        pred = (gain * psth) + d
 
     lv = rec['pupil']._modified_copy(lv)
     lv.name = 'lv'
@@ -398,14 +365,15 @@ def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pg, lvg, d, lve):
 
     return [lv, residual, pred]
 
-def full_lv_model(rec, ss, o, p_only, step, g, pg, lvg, pd, lvd, d, lve):
+def full_lv_model(rec, ss, o, p_only, step, pfix, g, pg, lvg, pd, lvd, d, lve):
 
     resp = rec['resp'].rasterize()._data
     psth = rec['psth'].rasterize()._data
     psth_sp = rec['psth_sp'].rasterize()._data
     pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
 
-    pred1 = (g * psth) + ((pg @ pupil) * psth) + (pd @ pupil) + d
+    gain = g + (pg @ pupil)
+    pred1 = (gain * psth) + (pd @ pupil) + d
     # define residual
     if ss == 'psth':
         residual = resp - psth_sp
@@ -419,10 +387,7 @@ def full_lv_model(rec, ss, o, p_only, step, g, pg, lvg, pd, lvd, d, lve):
     if p_only:
         pred = pred1
     else:
-        predg = (g * psth) + ((pg @ pupil) * psth) + ((lvg @ lv) * psth) + d
-        preddc = (pd @ pupil) + (lvd @ lv)
-
-        pred = predg + preddc
+        pred = (gain * psth) + (pd @ pupil) + (lvd @ lv) + d
 
     lv = rec['pupil']._modified_copy(lv)
     lv.name = 'lv'
