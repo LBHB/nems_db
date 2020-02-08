@@ -787,8 +787,8 @@ def sdexp(kw):
     d_sd = ones
 
     n_dims = 2 # one for gain, one for dc
-    base_mean = np.zeros([n_dims, n_chans])
-    base_sd = np.ones([n_dims, n_chans])
+    base_mean = np.zeros([n_chans, n_dims])
+    base_sd = np.ones([n_chans, n_dims])
     amp_mean = base_mean + 0.2
     amp_sd = base_mean + 0.1
     #shift_mean = base_mean
