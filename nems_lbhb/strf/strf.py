@@ -29,7 +29,7 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     if rec is None:
         if fs is None:
             fs=1000
-        rec = nb.baphy_load_recording_file(mfilename=mfilename, cellid=cellid,fs=fs, stim=False)
+        rec = nb.baphy_load_recording_file(mfilename=mfilename, siteid=site,fs=fs, stim=False)
     else:
         if fs is None:
             fs=rec['resp'].fs
@@ -38,7 +38,7 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     else:
         exptparams = mfilename
 
-    signal = rec['resp'].rasterize(fs=fs)
+    signal = rec['resp'].extract_channels([cellid]).rasterize(fs=fs)
 
     # Pick only TORC epochs, find them, extract them
     epoch_regex = "^STIM_TORC_.*"         #pick all epochs that have STIM_TORC
@@ -181,7 +181,7 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
 
     # Plot code
     if plot:
-        fig,axs = plt.subplots(1,3)
+        fig, axs = plt.subplots(1, 3, figsize=(8, 4))
 
         [freqticks,_] = strfplot(strf0, StimParams['lfreq'], StimParams['basep'], 1, StimParams['octaves'], axs=axs[0])
 
@@ -196,6 +196,8 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
         axs[0].vlines(durbin,0,yhigh,linestyle='dashed')
         axs[0].set_title('%s - BF %d Hz' % (cellid,bf),fontweight='bold')
         axs[0].set_xlabel('SNR %.2f linxc %.2f' % (snr,linpred))
+        asp = np.diff(axs[0].get_xlim())[0] / np.diff(axs[0].get_ylim())[0]
+        axs[0].set_aspect(asp)
 
         #move to next subplot
         axs[1].set_ylim(np.min(irsmooth),np.max(irsmooth))
@@ -208,6 +210,8 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
         axs[1].vlines(latbin,0,(np.max(irsmooth)+np.max(irempsmooth)),linestyle='dashed')
         axs[1].vlines(durbin,0,(np.max(irsmooth)+np.max(irempsmooth)),linestyle='dashed')
         axs[1].set_title('On/Off Lat %d/%d ms' % (lat, offlat),fontweight='bold')
+        asp = np.diff(axs[1].get_xlim())[0] / np.diff(axs[1].get_ylim())[0]
+        axs[1].set_aspect(asp)
 
         #move to next subplot
         [u,s,v] = np.linalg.svd(strfsmooth)
@@ -218,6 +222,10 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
         axs[2].set_title('Frequency Tuning',fontweight='bold')
         axs[2].set_xlabel('Frequency (Hz)')
         axs[2].set_ylabel('Gain (a.u.)')
+        asp = np.diff(axs[2].get_xlim())[0] / np.diff(axs[2].get_ylim())[0]
+        axs[2].set_aspect(asp)
+
+        fig.tight_layout()
 
     tor_tuning_output = collections.namedtuple('STRF_Data',['STRF','STRF_error','Best_Frequency_Hz','Signal_to_Noise','Onset_Latency_ms','Offset_Latency_ms','StimParams'])
 
