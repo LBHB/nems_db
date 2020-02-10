@@ -122,7 +122,7 @@ def state_logsig_dcgain(rec, i, o, s, g, d, b, a):
     return [rec[i].transform(fn, o)]
 
 
-def add_lv(rec, i, o, n, e):
+def add_lv(rec, i, o, n, cutoff, e):
     """
     Compute latent variable and add to state signals:
         projection of residual responses (resp minus current pred)
@@ -143,6 +143,10 @@ def add_lv(rec, i, o, n, e):
     # to project down to your LV
     
     res = newrec['resp'].rasterize()._data - newrec[i].rasterize()._data
+
+    if cutoff is not None:
+        # highpass filter residuals
+        res = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None, data=res)
     
     lv = e.T @ res
 

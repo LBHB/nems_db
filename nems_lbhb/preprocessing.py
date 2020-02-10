@@ -709,7 +709,7 @@ def create_pupil_mask(rec, **options):
         return newrec
 
 
-def bandpass_filter_resp(rec, low_c, high_c, signal='resp'):
+def bandpass_filter_resp(rec, low_c, high_c, data=None, signal='resp'):
     '''
     Bandpass filter resp. Return new recording with filtered resp.
     '''
@@ -719,11 +719,15 @@ def bandpass_filter_resp(rec, low_c, high_c, signal='resp'):
     if high_c is None:
         high_c = rec['resp'].fs
 
-    newrec = rec.copy()
-    #newrec = newrec.apply_mask(reset_epochs=True)
     fs = rec[signal].fs
-    newrec[signal] = rec[signal].rasterize()
-    resp = newrec[signal]._data
+    if data is None:
+        newrec = rec.copy()
+        #newrec = newrec.apply_mask(reset_epochs=True)
+        newrec[signal] = rec[signal].rasterize()
+        resp = newrec[signal]._data
+    else:
+        resp = data
+    
     resp_filt = resp.copy()
     for n in range(resp.shape[0]):
         s = resp[n, :]
@@ -738,9 +742,11 @@ def bandpass_filter_resp(rec, low_c, high_c, signal='resp'):
         resp_cut = resp_fft * m
         resp_filt[n, :] = fp.ifft(resp_cut)
 
-    newrec[signal] = newrec[signal]._modified_copy(resp_filt)
-
-    return newrec
+    if data is None:
+        newrec[signal] = newrec[signal]._modified_copy(resp_filt)
+        return newrec
+    else:
+        return resp_filt
 
 def get_pupil_balanced_epochs(rec, rec_sp=None, rec_bp=None):
     """

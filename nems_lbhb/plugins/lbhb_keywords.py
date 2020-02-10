@@ -573,6 +573,7 @@ def lv(kw):
     options = kw.split('.')
     lv_names = []
     sig_in = 'psth_sp' 
+    cutoff = None
     for op in options:
         if op.startswith('f'):
             if len(op)>1:
@@ -590,6 +591,12 @@ def lv(kw):
         elif op.startswith('psth'):
             sig_in = 'psth'
 
+        elif op.startswith('pred'):
+            sig_in = 'pred'
+        
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',', '.'))
+
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
 
@@ -597,7 +604,8 @@ def lv(kw):
     'fn': 'nems_lbhb.modules.state.add_lv',
     'fn_kwargs': {'i': sig_in,
                   'o': 'lv',
-                  'n': lv_names},
+                  'n': lv_names,
+                  'cutoff': cutoff},
     'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                  'nems_lbhb.plots.lv_quickplot'],
         'plot_fn_idx': 0,
