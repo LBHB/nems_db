@@ -162,10 +162,11 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
         if smooth == 1:
             smooth = [100, 250]
         strfdata = interpft(interpft(strf0, smooth[0], 0), smooth[1], 1)
+
     else:
         strfdata = strf0
 
-    axs.imshow(strf0, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
+    axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower')
 
     if lfreq:
         freqappend = lfreq
