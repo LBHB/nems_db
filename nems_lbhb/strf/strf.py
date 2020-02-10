@@ -29,7 +29,7 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     if rec is None:
         if fs is None:
             fs=1000
-        rec = nb.baphy_load_recording_file(mfilename=mfilename, siteid=site,fs=fs, stim=False)
+        rec = nb.baphy_load_recording_file(mfilename=mfilename, cellid=cellid,fs=fs, stim=False)
     else:
         if fs is None:
             fs=rec['resp'].fs
