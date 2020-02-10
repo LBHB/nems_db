@@ -1360,7 +1360,7 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
     """
     #r = rec.apply_mask(reset_epochs=True)
     r = rec.copy()
-    r = r.apply_mask()
+    r = r.apply_mask(reset_epochs=True)
     nrows = len(r['lv'].chans[1:])
     f = plt.figure(figsize=(12, 8))
     pup = plt.subplot2grid((nrows+1, 3), (nrows, 0), colspan=2)
@@ -1381,7 +1381,8 @@ def lv_quickplot(rec, modelspec, ax=None, **options):
             time = np.arange(0, r['lv'].shape[-1])
             lv_series = r['lv']._data[i+1, :].squeeze()
             p = r['pupil']._data.squeeze()
-            lv.scatter(time, lv_series, c=p, s=20)
+            vmin = p.min()-1
+            lv.scatter(time, lv_series, c=p, s=20, cmap='Purples', vmin=vmin)
             #lv.gray()
         else:
             lv.plot(r['lv']._data[i+1, :].T)

@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import pandas as pd
+import copy
 import logging
 
 log = logging.getLogger(__name__)
@@ -29,19 +30,6 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
     fitter_fn = getattr(nems.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
-    '''
-    for fit_idx in range(modelspec.fit_count):
-        for jack_idx, e in enumerate(est.views()):
-            modelspec.jack_index = jack_idx
-            modelspec.fit_index = fit_idx
-            log.info("----------------------------------------------------")
-            log.info("Fitting: fit %d/%d, fold %d/%d",
-                     fit_idx + 1, modelspec.fit_count,
-                     jack_idx + 1, modelspec.jack_count)
-            modelspec = nems.analysis.api.fit_basic(
-                    e, modelspec, fit_kwargs=fit_kwargs,
-                    metric=metric_fn, fitter=fitter_fn)
-    '''
     modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
         metric=metric_fn, fitter=fitter_fn)
 
@@ -88,8 +76,8 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', **context):
 def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     """
     When alpha = 0, this is just standard nmse of pred vs. resp.
-    When alpha > 0, we add a pupil constraint on the variance of the
-    latent variable. Alpha is a hyperparam, can range from 0 to 1
+    When alpha > 0, we add a pupil constraint to minimize diff in nc
+    between large and small pupil per stimulus.
     """
     # standard nmse (following nems.metrics.mse.nmse)
     X1 = result[pred_name].as_continuous()
@@ -106,35 +94,32 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     p_mask = result['p_mask'].as_continuous().squeeze()
     residual_big = X2[:, p_mask] - X1[:, p_mask]
     residual_small = X2[:, ~p_mask] - X1[:, ~p_mask]
-    
-    if 'stim_epochs' in result.signals.keys():
-        # for minimizing per stimulus
-        epochs = result['stim_epochs']._data
-        idx = np.argwhere(epochs.sum(axis=-1) != 0)
-        epochs = epochs[idx, :].squeeze()
-        if len(epochs.shape)==1:
-            epochs = epochs[np.newaxis, :]
-        delta_nc = []
-        for i in range(epochs.shape[0]):
-            s_mask = epochs[i, :].astype(np.bool)
-            rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
-            rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
-            nc_big = np.corrcoef(rb)
-            nc_small = np.corrcoef(rs)
-            delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
-        pup_cost = np.mean(delta_nc)
+    if alpha != 0:
+        if 'stim_epochs' in result.signals.keys():
+            # for minimizing per stimulus
+            epochs = result['stim_epochs']._data
+            idx = np.argwhere(epochs.sum(axis=-1) != 0)
+            epochs = epochs[idx, :].squeeze()
+            if len(epochs.shape)==1:
+                epochs = epochs[np.newaxis, :]
+            delta_nc = []
+            for i in range(epochs.shape[0]):
+                s_mask = epochs[i, :].astype(np.bool)
+                rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
+                rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
+                nc_big = np.corrcoef(rb)[result.meta['sig_corr_pairs'].astype(np.bool)]
+                nc_small = np.corrcoef(rs)[result.meta['sig_corr_pairs'].astype(np.bool)]
+                delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
+            pup_cost = np.nanmean(delta_nc)
+
+        else:
+            # for minimizing over ALL stimuli
+            nc_big = np.corrcoef(residual_big)
+            nc_small = np.corrcoef(residual_small)
+            pup_cost = abs(nc_big - nc_small).mean()
 
     else:
-        # for minimizing over ALL stimuli
-        nc_big = np.corrcoef(residual_big)
-        nc_small = np.corrcoef(residual_small)
-        pup_cost = abs(nc_big - nc_small).mean()
-
-    # additional pupil constraint to set first order mod index to zero
-    #residual_big = X2[:, p_mask] - X3[:, p_mask]
-    #residual_small = X2[:, ~p_mask] - X3[:, ~p_mask]
-    #mi_mean = np.nanmean((residual_big - residual_small / residual_big + residual_small))
-    #pup_cost2 = mi_mean
+        pup_cost = 0
 
     cost = (alpha * pup_cost) + ((1 - alpha) * nmse)
 
@@ -149,6 +134,8 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
     For purely LV model. Constrain first LV (lv_slow) to correlate with pupil,
     second LV (lv_fast) to have variance that correlates with pupil.
     Weigh these constraints vs. minimizing nsme.
+
+    Will also work if only have one or the other of the two LVs
     '''
     result = result.apply_mask()
     lv_chans = result['lv'].chans
@@ -190,8 +177,7 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         p = np.mean(p, axis=-1)
         for c in fast_lv_chans:
             lv_fast = result['lv'].extract_channels([c])._data.reshape(-1, ref_len)
-            lv_fast = np.var(lv_fast, axis=-1)
-
+            lv_fast = np.std(lv_fast, axis=-1)
             if signed_correlation:
                 cc = lv_corr_pupil(p, lv_fast)
             else:
@@ -216,11 +202,14 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
         lv_fast = result['lv'].extract_channels(['lv_fast'])._data.reshape(-1, ref_len)
         
         p = np.mean(p, axis=-1)
-        lv_fast = np.var(lv_fast, axis=-1)
+        lv_fast = np.std(lv_fast, axis=-1)
         if signed_correlation:
             fast_cc = lv_corr_pupil(p, lv_fast)
         else:
             fast_cc = -abs(lv_corr_pupil(p, lv_fast))
+
+        if np.sum(lv_fast)==0:
+            fast_cc = 0
 
         cost = (fast_alpha * fast_cc) + ((1 - fast_alpha) * nmse)
         return cost
@@ -268,101 +257,144 @@ def add_summary_statistics(est, val, modelspec, fn='standard_correlation',
 
     return modelspec
     """
+    r = val.copy()
+    r = r.apply_mask(reset_epochs=True)
+    ref_len = r['resp'].extract_epoch('REFERENCE').shape[-1]
+    p = r['pupil']._data.reshape(-1, ref_len).mean(axis=-1)
+    lv = r['lv']._data.reshape(-1, ref_len).std(axis=-1)
 
-    # save noise correlation statistics
-    import charlieTools.noise_correlations as nc
-    import charlieTools.preprocessing as cpreproc
-    r = val.apply_mask(reset_epochs=True)
+    cc = np.corrcoef(p, lv)[0, 1]
 
-    # regress out model pred method 1
-    log.info("regress out model prediction using method 1, compute noise correlations")
-    r12 = r.copy()
-    if 'lv' in r12.signals.keys():
-        r12['lv'] = r12['lv']._modified_copy(r12['lv']._data[1, :][np.newaxis, :])
-        r12 = cpreproc.regress_state(r12, state_sigs=['pupil', 'lv'], regress=['pupil', 'lv'])
-    else:
-        r12 = cpreproc.regress_state(r12, state_sigs=['pupil'], regress=['pupil'])
+    results = {'lv_power_vs_pupil': cc}
 
-    # mask pupil
-    big = r12.copy()
-    big['mask'] = big['p_mask']
-    small = r12.copy()
-    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
-    
-    big = big.apply_mask(reset_epochs=True)
-    small = small.apply_mask(reset_epochs=True)
-
-    epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
-    r_dict = r12['resp'].extract_epochs(epochs)
-    big_dict = big['resp'].extract_epochs(epochs)
-    small_dict = small['resp'].extract_epochs(epochs)
-
-    all_df1 = nc.compute_rsc(r_dict)
-    big_df1 = nc.compute_rsc(big_dict)
-    small_df1 = nc.compute_rsc(small_dict)   
-    
-    # per stim
-    perstim_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    big_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    small_perstim = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    for e in epochs:
-        r_dict = r12['resp'].extract_epochs(e)
-        big_dict = big['resp'].extract_epochs(e)
-        small_dict = small['resp'].extract_epochs(e)
-
-        perstim_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
-        big_perstim.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
-        small_perstim.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
-
-    # =========== regress out model pred method 2 ==================
-    log.info("regress out model prediction using method 2, compute noise correlations")
-    r12 = r.copy()
-    mod_data = r12['resp']._data - r12['pred']._data + r12['psth_sp']._data
-    r12['resp'] = r12['resp']._modified_copy(mod_data)
-
-    # mask pupil
-    big = r12.copy()
-    big['mask'] = big['p_mask']
-    small = r12.copy()
-    small['mask'] = small['p_mask']._modified_copy(~small['p_mask']._data)
-
-    big = big.apply_mask(reset_epochs=True)
-    small = small.apply_mask(reset_epochs=True)
-
-    epochs = np.unique([e for e in r12.epochs.name if 'STIM' in e]).tolist()
-    r_dict = r12['resp'].extract_epochs(epochs)
-    big_dict = big['resp'].extract_epochs(epochs)
-    small_dict = small['resp'].extract_epochs(epochs)
-
-    all_df2 = nc.compute_rsc(r_dict)
-    big_df2 = nc.compute_rsc(big_dict)
-    small_df2 = nc.compute_rsc(small_dict) 
-
-    # per stim
-    perstim2_df = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    big_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    small_perstim2 = pd.DataFrame(index=epochs, columns=['rsc', 'sem'])
-    for e in epochs:
-        r_dict = r12['resp'].extract_epochs(e)
-        big_dict = big['resp'].extract_epochs(e)
-        small_dict = small['resp'].extract_epochs(e)
-
-        perstim2_df.loc[e, 'rsc'] = nc.compute_rsc(r_dict)['rsc'].mean()
-        big_perstim2.loc[e, 'rsc'] = nc.compute_rsc(big_dict)['rsc'].mean()
-        small_perstim2.loc[e, 'rsc'] = nc.compute_rsc(small_dict)['rsc'].mean()
-
-    results = {'rsc_all': all_df1['rsc'].mean(), 'rsc_all_sem': all_df1['rsc'].sem(),
-               'rsc_big': big_df1['rsc'].mean(), 'rsc_big_sem': big_df1['rsc'].sem(),
-               'rsc_small': small_df1['rsc'].mean(), 'rsc_small_sem': small_df1['rsc'].sem(),
-               'rsc_all2': all_df2['rsc'].mean(), 'rsc_all_sem2': all_df2['rsc'].sem(),
-               'rsc_big2': big_df2['rsc'].mean(), 'rsc_big_sem2': big_df2['rsc'].sem(),
-               'rsc_small2': small_df2['rsc'].mean(), 'rsc_small_sem2': small_df2['rsc'].sem(),
-               'rsc_perstim_small': small_perstim['rsc'].mean(), 'rsc_perstim_small_sem': np.nan,
-               'rsc_perstim_big': big_perstim['rsc'].mean(), 'rsc_perstim_big_sem': np.nan,
-               'rsc_perstim_small2': small_perstim2['rsc'].mean(), 'rsc_perstim_small_sem2': np.nan,
-               'rsc_perstim_big2': big_perstim2['rsc'].mean(), 'rsc_perstim_big_sem2': np.nan}
-
-    modelspec['meta']['extra_results'] = json.dumps(results)
-
+    modelspec.meta['extra_results'] = json.dumps(results)
 
     return {'modelspec': modelspec}
+
+
+def dc_lv_model(rec, ss, o, p_only, flvw, step, pfix, pd, lvd, d, lve):
+    """
+    fit lv model for N neurons
+    :param rec:
+    :param ss: subtracting signal name ('psth' or 'pred')
+    :param o: name of output (typically 'pred')
+    :param p_only: (if True) only fit first-order pupil
+    :param flvw: (if True) force encoding and decoding weights for lv to be the same
+    :param step: (if True) intialize fit with first order weights, then fit full model
+    :param pfix: (if True) fix first order pupil weights
+    :param pd: first-order pupil weights (dc shift) - N x 1
+    :param lvd: free parameter - latent variable decoding weights, also encoding
+                weights if flvw==True
+    :param d: free parameter - offset of first-order pred (N x 1)
+    :param lve: free parameter - latent variable encoding weights (if flvw==False),
+                otherwise not used
+    :return: [lv, pred, residual] (residual= signal used to fit lv component)
+    """
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
+
+    pred1 = (pd @ pupil) + psth + d
+
+    # define residual
+    if ss == 'psth':
+        residual = resp - psth_sp
+
+    elif ss == 'pred':
+        # do first order prediction first
+        residual = resp - pred1
+
+    # compute latent variable
+    if flvw:
+        lv = lvd.T @ residual
+    else:
+        lv = lve.T @ residual
+    
+    if p_only:
+        pred = pred1
+    else:
+        # compute full prediction
+        pred = psth + (pd @ pupil) + (lvd @ lv) + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]
+
+def gain_lv_model(rec, ss, o, g, p_only, flvw, step, pfix, pg, lvg, d, lve):
+
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
+
+    gain = g + (pg @ pupil)
+    pred1 = (gain * psth) + d
+    # define residual
+    if ss == 'psth':
+        residual = resp - psth_sp
+    elif ss == 'pred':       
+        residual = resp - pred1
+
+    # compute latent variable
+    if flvw:
+        lv = lvg.T @ residual
+    else:
+        lv = lve.T @ residual
+
+    # compute full prediction
+    if p_only:
+        pred = pred1
+    else:
+        gain = g + (pg @ pupil) + (lvg @ lv)
+        pred = (gain * psth) + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]
+
+def full_lv_model(rec, ss, o, p_only, step, pfix, g, pg, lvg, pd, lvd, d, lve):
+
+    resp = rec['resp'].rasterize()._data
+    psth = rec['psth'].rasterize()._data
+    psth_sp = rec['psth_sp'].rasterize()._data
+    pupil = copy.deepcopy(rec['state'].extract_channels(['pupil']))._data
+
+    gain = g + (pg @ pupil)
+    pred1 = (gain * psth) + (pd @ pupil) + d
+    # define residual
+    if ss == 'psth':
+        residual = resp - psth_sp
+    elif ss == 'pred':
+        residual = resp - pred1
+
+    # compute latent variable
+    lv = lve.T @ residual
+
+    # compute full prediction
+    if p_only:
+        pred = pred1
+    else:
+        pred = (gain * psth) + (pd @ pupil) + (lvd @ lv) + d
+
+    lv = rec['pupil']._modified_copy(lv)
+    lv.name = 'lv'
+    lv.chans = ['lv_fast']
+    residual = rec['pupil']._modified_copy(residual)
+    residual.name = 'residual'
+    pred = rec['resp'].rasterize()._modified_copy(pred)
+    pred.name = 'pred'
+
+    return [lv, residual, pred]
