@@ -16,7 +16,7 @@ from nems_lbhb.strf.torc_subfunctions import interpft, strfplot, strf_torc_pred,
 # cellid = 'AMT005c-12-1'
 ###################################
 
-def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
+def tor_tuning(cellid, mfilename=None, rec=None,fs=1000,plot=False):
     '''
     Creates STRF from stimulus and response
     :param mfilename: File with your data in it
@@ -26,6 +26,9 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     :return: named tuple with important data that would be found in plot (strf, bestfreq, snr, onset/offset latency)
     '''
 
+    if (rec is None) and (mfilename is None):
+        raise ValueError("Must either specify a nems recording or an mfile")
+
     if rec is None:
         if fs is None:
             fs=1000
@@ -33,7 +36,11 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     else:
         if fs is None:
             fs=rec['resp'].fs
+    
     if type(mfilename) is str:
+        _, exptparams, _ = nio.baphy_parm_read(mfilename)
+    elif mfilename is None:
+        mfilename = rec.meta['files'][0]
         _, exptparams, _ = nio.baphy_parm_read(mfilename)
     else:
         exptparams = mfilename
@@ -66,7 +73,17 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
     stacked = stacked[PreStimbin:(numbin-PostStimbin),:,:]
 
     INC1stCYCLE = 0
-    [strf0,snr,stim,strfemp,StimParams] = strf_est_core(stacked, TorcObject, exptparams, fs, INC1stCYCLE, 16)
+
+    # filter TorcObject to make sure it only includes Torcs that are
+    # included in the recording. For example, you may have masked some
+    # data so that not all Torcs in the trial object actually get played on 
+    # this set of data. crh 2/10/2020
+    ete = [e.replace('STIM_', '') for e in epochs_to_extract]
+    keep_tor = [np.argwhere(np.array(TorcObject['Names'])==n)[0][0]+1 for n in ete]
+    TorcObject['Params'] = {k: v for (k, v) in TorcObject['Params'].items() if int(k) in keep_tor}
+    TorcObject['Names'] = {n for n in TorcObject['Names'] if n in ete}
+
+    [strf0,snr,stim,strfemp,StimParams] = strf_est_core(stacked, TorcObject, fs, INC1stCYCLE, 16)
 
     pred = strf_torc_pred(stim, strf0)
     basep = StimParams['basep']
@@ -105,7 +122,7 @@ def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
         tr = np.expand_dims(np.nanmean(stackeduse[:,estidx,:], 1),axis=1)
         trval = np.nanmean(stackeduse[:,validx,:],1)
 
-        [jstrf[:,:,jj],_,_,_,_] = strf_est_core(tr,TorcObject,exptparams,fs,1)
+        [jstrf[:,:,jj],_,_,_,_] = strf_est_core(tr,TorcObject,fs,1)
         jpred = strf_torc_pred(stim,jstrf[:,:,jj])
 
         trval2 = np.zeros(pred.shape)
