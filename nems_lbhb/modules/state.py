@@ -201,6 +201,7 @@ def _population_mod(x, r, s, g, d, gs, ds):
     if d is not None:
         _diff = r-x
         _d = d.copy()
+        do = np.diag(_d)
         np.fill_diagonal(_d, 0)
         dd = _d.T @ _diff
         if ds is not None:
@@ -208,6 +209,12 @@ def _population_mod(x, r, s, g, d, gs, ds):
         else:
             y += dd
 
+    """
+    sg = g @ s
+    sd = d @ s
+    sg = base[0] + amplitude[0] * np.exp(-np.exp(np.array(-np.exp(kappa[0])) * sg))
+    sd = base[1] + amplitude[1] * np.exp(-np.exp(np.array(-np.exp(kappa[1])) * sd))
+    """
     return y
 
 
