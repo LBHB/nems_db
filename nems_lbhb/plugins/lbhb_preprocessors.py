@@ -43,6 +43,23 @@ def ref(kw):
               'include_incorrect': include_incorrect,
               'generate_evoked_mask': generate_evoked_mask}]]
 
+def tar(kw):
+    ops = kw.split('.')[1:]
+
+    balance_rep_count = False
+    include_incorrect = False
+    generate_evoked_mask = False
+    for op in ops:
+        if op.startswith('b'):
+            balance_rep_count = True
+        if op.startswith('a'):
+            include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
+
+    return [['nems.xforms.mask_all_but_targets',
+             {'include_incorrect': include_incorrect}]]
+
 
 def evs(loadkey):
     """
@@ -59,16 +76,24 @@ def evs(loadkey):
     # TODO: implement better parser for more flexibility
     loadset = loader.split(".")
 
-    if loader == ("tar.lic"):
+    if loadset[0]=='tar':
+        epoch_regex='^TAR_'
+    elif loadset[0]=='cct':
+        epoch_regex = '^[A-Za-z]+_[0-9]+$'
+    else:
+        raise ValueError('unknown stim spec')
+
+
+    if loadset[1] == "lic":
         epoch2_shuffle = False
-    elif loader == ("tar.lic0"):
+    elif loadset[1] == "lic0":
         epoch2_shuffle = True
     else:
-        raise ValueError("unknown signals for alt-stimulus initializer")
+        raise ValueError("unknown lic spec")
 
     xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                {'new_signal_name': 'stim',
-                'epoch_regex': '^TAR_', 'epoch_shift': 5,
+                'epoch_regex': epoch_regex, 'epoch_shift': 5,
                 'epoch2_regex': 'LICK', 'epoch2_shift': -5,
                 'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
                ['rec'], ['rec']],
@@ -429,7 +454,10 @@ def psthfr(load_key):
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
-    if 'stimtar' not in options:
+    if 'tar' in options:
+        epoch_regex = ['^STIM_', '^TAR_']
+        #epoch_regex='^TAR_'
+    elif 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
@@ -520,16 +548,19 @@ def residual(load_key):
     
     shuffle = False
     cutoff = None
-
+    signal = 'psth_sp'
     for op in options:
         if op.endswith('0'):
             shuffle = True
         elif op.startswith('hp'):
             cutoff = np.float(op[2:].replace(',','.'))
+        elif op.startswith('pred'):
+            signal = 'pred'
 
     xfspec = [['nems_lbhb.preprocessing.create_residual',
             {'shuffle': shuffle, 
-            'cutoff': cutoff},
+            'cutoff': cutoff,
+            'signal': signal},
             ['rec'], ['rec']]]
 
     return xfspec
@@ -557,4 +588,15 @@ def addmeta(load_key):
                 {}, 
                 ['rec'], ['rec']]]
 
+    return xfspec
+
+def rz(load_key):
+    """
+    Transform resp into zscore. Add signal 'raw_resp' for original resp
+    signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.zscore_resp', 
+                {}, ['rec'], ['rec']]]
+    
     return xfspec

@@ -556,7 +556,7 @@ def lvlogsig(kw):
 
 def lv(kw):
     '''
-    Generate and register modelspec for create_lv
+    Generate and register modelspec for add_lv
         1) Find the encoding (projection) weights for a lv model
         2) Add this lv to the list of rec signals
 
@@ -572,6 +572,8 @@ def lv(kw):
 
     options = kw.split('.')
     lv_names = []
+    sig_in = 'psth_sp' 
+    cutoff = None
     for op in options:
         if op.startswith('f'):
             if len(op)>1:
@@ -585,15 +587,25 @@ def lv(kw):
                 lv_names.append('fast')
         elif op == 's': 
             lv_names.append('slow')
+        
+        elif op.startswith('psth'):
+            sig_in = 'psth'
+
+        elif op.startswith('pred'):
+            sig_in = 'pred'
+        
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',', '.'))
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])
 
     template = {
     'fn': 'nems_lbhb.modules.state.add_lv',
-    'fn_kwargs': {'i': 'pred',
-                  'o': 'pred',
-                  'n': lv_names},
+    'fn_kwargs': {'i': sig_in,
+                  'o': 'lv',
+                  'n': lv_names,
+                  'cutoff': cutoff},
     'plot_fns': ['nems_lbhb.plots.lv_timeseries',
                  'nems_lbhb.plots.lv_quickplot'],
         'plot_fn_idx': 0,
@@ -605,6 +617,126 @@ def lv(kw):
         log.info("WARNING: No LV names specified, so will just minimize MSE")
 
     return template
+
+
+def puplvmodel(kw):
+    """
+    register modelspec for pupil dependent latent variable model.
+
+    Not very 'modular'. Meant as a place to test different LV model 
+    architectures w/o making a ton of test modules
+    """
+
+    params = kw.split('.')
+
+    sub_sig = 'psth'
+    gain = False
+    dc = False # default to dc only
+    pupil_only = False
+    fix_lv_weights = False
+    step = False
+    pfix = False
+    for op in params:
+        if op.startswith('psth'):
+            sub_sig = 'psth'
+        elif op.startswith('pred'):
+            # subtract 1st order pred to get residuals
+            sub_sig = 'pred'
+        elif op.startswith('dc'):
+            dc = True 
+        elif op.startswith('g'):
+            gain = True
+        elif op.startswith('pupOnly'):
+            pupil_only = True
+        elif op.startswith('flvw'):
+            fix_lv_weights = True
+        elif op.startswith('step'):
+            # intialize full fit with first order only fit
+            # see lv_helpers.fit_pupil_lv for usage.
+            step = True
+        elif op.startswith('pfix'):
+            # fix pupil weights after intial fit(s)
+            pfix = True
+        
+    n_chans = int(params[-1]) # number of neurons
+    mean = 0.01 * np.ones([n_chans, 1])
+    sd = 0.01 * np.ones([n_chans, 1])
+    mean0 = 0 * np.ones([n_chans, 1])
+    meang = 1 * np.ones([n_chans, 1])
+
+
+    if dc & ~gain:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.dc_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only,
+                    'flvw': fix_lv_weights,
+                    'step': step,
+                    'pfix': pfix
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'pd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean0, 'sd': sd})},
+        'bounds': {'pd': (None, None),
+                'lvd': (None, None),
+                'd': (None, None),
+                'lve': (None, None)}
+        }
+
+    elif gain & ~dc:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.gain_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only,
+                    'flvw': fix_lv_weights,
+                    'step': step, 
+                    'pfix': pfix
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'g': ('Normal', {'mean': meang, 'sd': sd}),
+                'pg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+        'bounds': {'pg': (None, None),
+                'lvg': (None, None),
+                'd': (None, None)}
+        }
+
+    elif gain & dc:
+        template = {
+        'fn': 'nems_lbhb.lv_helpers.full_lv_model',
+        'fn_kwargs': {'ss': sub_sig,
+                    'o': ['lv', 'residual', 'pred'],
+                    'p_only': pupil_only,
+                    'step': step, 
+                    'pfix': pfix
+                    },
+        'plot_fns': ['nems_lbhb.plots.lv_timeseries',
+                    'nems_lbhb.plots.lv_quickplot'],
+            'plot_fn_idx': 0,
+        'prior': {'g': ('Normal', {'mean': meang, 'sd': sd}),
+                'pg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lvg': ('Normal', {'mean': mean0, 'sd': sd}),
+                'pd': ('Normal', {'mean': mean, 'sd': sd}),
+                'lvd': ('Normal', {'mean': mean, 'sd': sd}),
+                'd': ('Normal', {'mean': mean0, 'sd': sd}),
+                'lve': ('Normal', {'mean': mean, 'sd': sd})},
+        'bounds': {'pg': (None, None),
+                'lvg': (None, None),
+                'd': (None, None)}
+        }
+
+    return template
+
 
 
 def sdexp(kw):
@@ -663,8 +795,8 @@ def sdexp(kw):
     d_sd = ones
 
     n_dims = 2 # one for gain, one for dc
-    base_mean = np.zeros([n_dims, n_chans])
-    base_sd = np.ones([n_dims, n_chans])
+    base_mean = np.zeros([n_chans, n_dims])
+    base_sd = np.ones([n_chans, n_dims])
     amp_mean = base_mean + 0.2
     amp_sd = base_mean + 0.1
     #shift_mean = base_mean
@@ -769,6 +901,79 @@ def stategainchan(kw):
 
     return template
 
+def pmod(kw):
+    """
+    latent-variable style modulation of predicted response by weighted sum of
+    other simultaneous neurons.  typically pmod.R so that it knows how many
+    neurons/channels to weigh
+    TODO : add pupil state support
+    :param fn:
+    :param kw:
+    :return:
+    """
+    options = kw.split('.')
+    in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+
+    try:
+        parsed = re.match(in_out_pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            n_chans = int(options[1])
+            n_states = 0
+
+        else:
+            n_chans = int(parsed.group(1))
+            if len(parsed.groups())>1:
+                n_states = int(parsed.group(2))
+            else:
+                n_states = 0
+    except TypeError:
+        raise ValueError("Got TypeError when parsing pmod keyword.\n"
+                         "Make sure keyword is of the form: \n"
+                         "pmod.R or pmod.RxS \n"
+                         "keyword given: %s" % kw)
+
+    plot_fns = ['nems.plots.api.mod_output_all',
+                'nems.plots.api.mod_output',
+                'nems.plots.api.before_and_after',
+                'nems.plots.api.pred_resp']
+
+    g_mean = np.ones([n_chans, n_chans])/n_chans
+    g_sd = np.ones([n_chans, n_chans])/n_chans
+    np.fill_diagonal(g_mean, 0)
+    #np.fill_diagonal(g_sd, 0)
+    d_mean = np.zeros([n_chans, n_chans])
+    d_sd = np.ones([n_chans, n_chans])
+
+    if 'g' in options:
+        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd})}
+    elif 'd' in options:
+        prior = {'d': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+    else:
+        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
+                 'd': ('Normal', {'mean': d_mean, 'sd': d_sd})}
+
+    if n_states>0:
+        s_mean = np.zeros([1, n_states])
+        s_mean[0,:] = 1
+        s_sd = np.ones([1, n_states])
+
+        if 'd' in prior.keys():
+            prior['ds'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
+        if 'g' in prior.keys():
+            prior['gs'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
+
+    template = {
+        'fn': 'nems_lbhb.modules.state.population_mod',
+        'fn_kwargs': {'i': 'pred',
+                      'o': 'pred',
+                      's': 'state'},
+        'plot_fns': plot_fns,
+        'plot_fn_idx': 3,
+        'prior': prior
+        }
+
+    return template
 
 def _aliased_keyword(fn, kw):
     '''Forces the keyword fn to use the given kw. Used for implementing

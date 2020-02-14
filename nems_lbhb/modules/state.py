@@ -14,8 +14,8 @@ def _state_dexp(x, s, g, d, base, amplitude, kappa):
     # https://software.intel.com/en-us/distribution-for-python
     sg = g @ s
     sd = d @ s
-    sg = base[0] + amplitude[0] * np.exp(-np.exp(np.array(-np.exp(kappa[0])) * sg))
-    sd = base[1] + amplitude[1] * np.exp(-np.exp(np.array(-np.exp(kappa[1])) * sd))
+    sg = base[:, [0]] + amplitude[:, [0]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [0]])) * sg))
+    sd = base[:, [1]] + amplitude[:, [1]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [1]])) * sd))
 
     return sg * x + sd
 
@@ -67,9 +67,7 @@ def state_exp(rec, i, o, s, g):
 
 
 def _state_logsig(x, s, g, b, a):
-    '''
-    Gain is fixed to a max of 50 (this could be a free param)
-    '''
+
     def fn(x):
         sig = a / (1 + np.exp(-x))
         return sig
@@ -90,7 +88,6 @@ def state_logsig(rec, i, o, s, g, b, a):
     g: weight(s)
     a: amplitude
     '''
-
     fn = lambda x: _state_logsig(x, rec[s]._data, g, b, a)
 
     return [rec[i].transform(fn, o)]
@@ -125,28 +122,32 @@ def state_logsig_dcgain(rec, i, o, s, g, d, b, a):
     return [rec[i].transform(fn, o)]
 
 
-def add_lv(rec, i, o, n, e):
+def add_lv(rec, i, o, n, cutoff, e):
     """
     Compute latent variable and add to state signals:
         projection of residual responses (resp minus current pred)
         onto encoding weights (e). Add a channel  of all 1's to the
         lv signal. This will be for offset in state models.
     
-    i: 'resp'
+    i: signal to subtract from resp (pred or psth)
     o: 'lv'
     e: encoding weights
     shuffle: bool (should you shuffle LV or not)
     """ 
     newrec = rec.copy()
-    # CRH (12-13-2019) removing below code. 
-    # Residual signal now gets created
-    # (and shuffled) in preprocessing step
-    #if cutoff is not None:
-    #    # high pass filter resp before creating LV
-    #    newrec = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None)
 
-    #res = newrec['resp'].rasterize()._data - newrec['pred']._data
-    res = newrec['residual']._data
+    # input can be pred, or psth.
+    # If psth, subtract psth (use residual signal)
+    # if pred, subtract pred to create residual
+    # Any signal that you wish
+    # to project down to your LV
+    
+    res = newrec['resp'].rasterize()._data - newrec[i].rasterize()._data
+
+    if cutoff is not None:
+        # highpass filter residuals
+        res = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None, data=res)
+    
     lv = e.T @ res
 
     lv = np.concatenate((np.ones((1, lv.shape[-1])), lv), axis=0)
@@ -157,7 +158,7 @@ def add_lv(rec, i, o, n, e):
     #    lv = lv / lv.std(axis=-1, keepdims=True)
 
     lv_sig = newrec['resp'].rasterize()._modified_copy(lv)
-    lv_sig.name = 'lv'
+    lv_sig.name = o
     nchans = e.shape[-1]
     lv_chans = []
     lv_chans.append('lv0')
@@ -176,3 +177,60 @@ def add_lv(rec, i, o, n, e):
     lv_sig.chans = lv_chans
 
     return [lv_sig]
+
+
+def _population_mod(x, r, s, g, d, gs, ds):
+
+    if g is not None:
+        #import pdb; pdb.set_trace()
+        _rat = (r-x)/(x+(x==0))
+        _rat[_rat>1]=1
+        _rat[_rat<-0.5]=-0.5
+        
+        _g = g.copy()
+        np.fill_diagonal(_g, 0)
+        gd = _g.T @ _rat
+        
+        if gs is not None:
+            y = x * (gs@s) * np.exp(gd)
+        else:
+            y = x * np.exp(gd)
+    else:
+        y = x.copy()
+
+    if d is not None:
+        _diff = r-x
+        _d = d.copy()
+        do = np.diag(_d)
+        np.fill_diagonal(_d, 0)
+        dd = _d.T @ _diff
+        if ds is not None:
+            y += (ds@s) * dd
+        else:
+            y += dd
+
+    """
+    sg = g @ s
+    sd = d @ s
+    sg = base[0] + amplitude[0] * np.exp(-np.exp(np.array(-np.exp(kappa[0])) * sg))
+    sd = base[1] + amplitude[1] * np.exp(-np.exp(np.array(-np.exp(kappa[1])) * sd))
+    """
+    return y
+
+
+def population_mod(rec, i, o, s=None, g=None, d=None, gs=None, ds=None):
+    '''
+    Parameters
+    ----------
+    i name of input
+    o name of output signal
+    s name of state signal
+    g - gain to scale s by
+    d - dc to offset by
+    base, amplitude, kappa - parameters for dexp applied to each state channel
+    '''
+
+    r = 'resp'
+    fn = lambda x : _population_mod(x, rec[r]._data, rec[s]._data, g, d, gs, ds)
+
+    return [rec[i].transform(fn, o)]
