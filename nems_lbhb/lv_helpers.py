@@ -150,8 +150,9 @@ def pup_dep_LVs(result, pred_name='pred', resp_name='resp', **context):
     signed_correlation = context['signed_correlation']
 
     if len(lv_chans) > 3:
-        raise ValueError("Not set up to handle greater than 2 LVs right now due to \
-                        complications with hyperparameter specification")
+        log.info("WARNING: Not set up to handle greater than 2 LVs right now due to \
+                        complications with hyperparameter specification. Could have issues \
+                        here if sum of alpha's greater than 1")
 
     if type(alpha) is dict:
         # passed different hyperparameters for each of the LVs
