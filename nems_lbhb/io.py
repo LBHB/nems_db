@@ -31,8 +31,8 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
-from . import OpenEphys as oe
-from . import SettingXML as oes
+from nems_lbhb import OpenEphys as oe
+from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -906,6 +906,63 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
+
+
+def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
+
+    TrialCount = np.max(exptevents['Trial'])
+
+    TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
+
+    def _get_start_time(x):
+        d = x.split(",")
+        if len(d)>2:
+            time = datetime.datetime.strptime(d[1].strip()+" "+d[2], '%Y-%m-%d %H:%M:%S.%f')
+        else:
+            time = datetime.datetime(2000,1,1)
+        return time
+
+    def _get_time_diff_seconds(x):
+        d = x.split(",")
+        if len(d)>2:
+            time = datetime.datetime.strptime(d[1].strip()+" "+d[2], '%Y-%m-%d %H:%M:%S.%f')
+        else:
+            time = datetime.datetime(2000,1,1)
+        return time
+
+    TrialStartDateTime = TrialStarts.apply(_get_start_time)
+
+    # time first trial started, all epoch times will be measured in seconds from this time
+    timezero = TrialStartDateTime.iloc[0]
+
+    def _get_time_diff_seconds(x, timezero=0):
+
+        return (x-timezero).total_seconds()
+
+    TrialStartSeconds = TrialStartDateTime.apply(_get_time_diff_seconds, timezero=timezero)
+
+    Offset_sec = TrialStartSeconds.values
+
+    exptevents['start']=exptevents['start'].astype(float)
+    exptevents['end']=exptevents['end'].astype(float)
+
+    # adjust times in exptevents to approximate time since experiment started
+    # rather than time since trial started (native format)
+    for Trialidx in range(1, TrialCount+1):
+        # print("Adjusting trial {0} by {1} sec"
+        #       .format(Trialidx,Offset_sec[Trialidx-1]))
+        ff = (exptevents['Trial'] == Trialidx)
+        exptevents.loc[ff, ['start', 'end']] = (
+                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
+                )
+
+    if finalfs:
+       exptevents['start'] = np.round(exptevents['start']*finalfs)/finalfs
+       exptevents['end'] = np.round(exptevents['end']*finalfs)/finalfs
+
+    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+
+    return exptevents
 
 
 def set_default_pupil_options(options):
