@@ -40,6 +40,7 @@ import nems.recording
 import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
+from nems_lbhb.baphy import baphy_load_recording_file
 
 log = logging.getLogger(__name__)
 
@@ -97,16 +98,44 @@ class BAPHYExperiment:
 
         return cls(parmfile)
 
-    def __init__(self, parmfile):
+    def __init__(self, parmfile=None, batch=None, siteid=None, rawid=None):
         # Make sure that the '.m' suffix is present! In baphy_load data I see
         # that there's care to make sure it's present so I assume not all
         # functions are careful about the suffix.
-        self.parmfile = Path(parmfile).with_suffix('.m')
-        if not self.parmfile.exists():
-            raise IOError(f'{self.parmfile} not found')
-        self.folder = self.parmfile.parent
-        self.experiment = self.parmfile.name.split('_', 1)[0]
-        self.experiment_with_runclass = self.parmfile.stem
+
+        # New init options. CRH 2/15/2020. Want to be able to load 
+        #   1) multiple parmfiles into single baphy experiment
+        #   2) find parmfiles using batch/siteid
+
+        # if don't pass parmfile, must pass both batch and siteid (can 
+        # extract individual cellids later if needed). rawid is optional
+
+        if parmfile is None:
+            self.batch = batch
+            self.siteid = siteid
+            self.rawid = rawid
+            d = db.get_batch_cell_data(batch=batch, cellid=siteid, label='parm',
+                                   rawid=rawid)
+            files = list(set(list(d['parm'])))
+            files.sort()
+            self.parmfile = [Path(f) for f in files]
+
+        elif type(parmfile) is list:
+            self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
+        
+        else:
+            self.parmfile = [Path(parmfile).with_suffix('.m')]
+           
+        if np.any([not p.exists() for p in self.parmfile]):
+            raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+
+        # we can assume all parmfiles come from same folder/experiment (site)
+        self.folder = self.parmfile[0].parent
+        self.experiment = self.parmfile[0].name.split('_', 1)[0]
+
+        # full file name will be unique though, so this is a list
+        self.experiment_with_runclass = [p.stem for p in self.parmfile]
+    
 
     @property
     @lru_cache(maxsize=128)
@@ -146,13 +175,16 @@ class BAPHYExperiment:
     @property
     @lru_cache(maxsize=128)
     def pupilfile(self):
-        return self.parmfile.with_suffix('.pup.mat')
+        return [p.with_suffix('.pup.mat') for p in self.parmfile]
 
     @property
     @lru_cache(maxsize=128)
     def spikefile(self):
-        filename = self.folder / 'sorted' / self.experiment_with_runclass
-        return filename.with_suffix('.spk.mat')
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not Path(f).exists() for f in filenames]):
+            raise IOError("Spike file doesn't exist") 
+        else:
+            return [f.with_suffix('.spk.mat') for f in filenames]
 
     @lru_cache(maxsize=128)
     def get_trial_starts(self, method='openephys'):
@@ -162,9 +194,11 @@ class BAPHYExperiment:
 
     @lru_cache(maxsize=128)
     def get_baphy_events(self, correction_method='openephys', **kw):
-        baphy_events = self._get_baphy_parameters()[-1]
+        baphy_events = [ev[-1] for ev in self._get_baphy_parameters()]
         if correction_method is None:
             return baphy_events
+        if correction_method == 'baphy':
+            return baphy_align_time_baphyparm(baphy_events)
         if correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
             return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
@@ -174,6 +208,32 @@ class BAPHYExperiment:
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
+
+    @lru_cache(maxsize=128)
+    def get_baphy_exptparams(self):
+        _, exptparams, _ = self._get_baphy_parameters(userdef_convert=False)
+        return exptparams
+
+    @lru_cache(maxsize=128)
+    def get_baphy_globalparams(self):
+        globalparams, _, _ = self._get_baphy_parameters(userdef_convert=False)
+        return globalparams
+
+    @lru_cache(maxsize=128)
+    def get_recording(self, **kwargs):
+        """
+        Return a nems recording using options specified in kwargs.
+
+        Place holder function right now...
+            Just outsource heavy to lifting to nems_lbhb.baphy, but
+        that code should probably be modularized and incorporate using the
+        baphy experiment.
+        """
+        kwargs.update({'mfilename': [str(p) for p in self.parmfile],
+                       'siteid': self.siteid,
+                       'batch': self.batch})
+        rec = baphy_load_recording_file(**kwargs)
+        return rec
 
     def get_pupil_trace(self, *args, **kwargs):
         return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
@@ -189,9 +249,9 @@ class BAPHYExperiment:
             :func:`baphy_convert_user_definable_fields` for example.
         '''
         # Returns tuple of global, expt and events
-        result = baphy_parm_read(self.parmfile)
+        result = [baphy_parm_read(p) for p in self.parmfile]
         if userdef_convert:
-            baphy_convert_user_definable_fields(result)
+            [baphy_convert_user_definable_fields(r) for r in result]
         return result
 
     def _get_spikes(self):
