@@ -76,16 +76,24 @@ def evs(loadkey):
     # TODO: implement better parser for more flexibility
     loadset = loader.split(".")
 
-    if loader == ("tar.lic"):
+    if loadset[0]=='tar':
+        epoch_regex='^TAR_'
+    elif loadset[0]=='cct':
+        epoch_regex = '^[A-Za-z]+_[0-9]+$'
+    else:
+        raise ValueError('unknown stim spec')
+
+
+    if loadset[1] == "lic":
         epoch2_shuffle = False
-    elif loader == ("tar.lic0"):
+    elif loadset[1] == "lic0":
         epoch2_shuffle = True
     else:
-        raise ValueError("unknown signals for alt-stimulus initializer")
+        raise ValueError("unknown lic spec")
 
     xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                {'new_signal_name': 'stim',
-                'epoch_regex': '^TAR_', 'epoch_shift': 5,
+                'epoch_regex': epoch_regex, 'epoch_shift': 5,
                 'epoch2_regex': 'LICK', 'epoch2_shift': -5,
                 'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
                ['rec'], ['rec']],
@@ -540,16 +548,19 @@ def residual(load_key):
     
     shuffle = False
     cutoff = None
-
+    signal = 'psth_sp'
     for op in options:
         if op.endswith('0'):
             shuffle = True
         elif op.startswith('hp'):
             cutoff = np.float(op[2:].replace(',','.'))
+        elif op.startswith('pred'):
+            signal = 'pred'
 
     xfspec = [['nems_lbhb.preprocessing.create_residual',
             {'shuffle': shuffle, 
-            'cutoff': cutoff},
+            'cutoff': cutoff,
+            'signal': signal},
             ['rec'], ['rec']]]
 
     return xfspec
@@ -577,4 +588,15 @@ def addmeta(load_key):
                 {}, 
                 ['rec'], ['rec']]]
 
+    return xfspec
+
+def rz(load_key):
+    """
+    Transform resp into zscore. Add signal 'raw_resp' for original resp
+    signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.zscore_resp', 
+                {}, ['rec'], ['rec']]]
+    
     return xfspec

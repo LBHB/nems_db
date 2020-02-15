@@ -32,8 +32,6 @@ import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
-#from nems_lbhb.io import (baphy_parm_read, baphy_align_time, baphy_stim_cachefile, load_pupil_trace,
-#                          get_rem, load_rem_options, set_default_pupil_options)
 import nems_lbhb.io as io
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
@@ -280,42 +278,50 @@ def baphy_load_data(parmfilepath, **options):
     print("Spike file: {0}".format(spkfilepath))
 
     # load spike times
-    sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+    if options['resp']:
+        sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
 
-    # adjust spike and event times to be in seconds since experiment started
-    exptevents, spiketimes, unit_names = io.baphy_align_time(
-            exptevents, sortinfo, spikefs, options['rasterfs']
-            )
+        # adjust spike and event times to be in seconds since experiment started
+        exptevents, spiketimes, unit_names = baphy_align_time(
+                exptevents, sortinfo, spikefs, options['rasterfs']
+                )
 
-    # assign cellids to each unit
-    siteid = globalparams['SiteID']
-    unit_names = [(siteid + "-" + x) for x in unit_names]
-    # print(unit_names)
+        # assign cellids to each unit
+        siteid = globalparams['SiteID']
+        unit_names = [(siteid + "-" + x) for x in unit_names]
+        # print(unit_names)
 
-    # test for special case where psuedo cellid suffix has been added to
-    # cellid by stripping anything after a "_" underscore in the cellid (list)
-    # provided
-    pcellids = options['cellid'] if (type(options['cellid']) is list) \
-       else [options['cellid']]
-    cellids = []
-    pcellidmap = {}
-    for pcellid in pcellids:
-        t = pcellid.split("_")
-        t[0] = t[0].lower()
-        cellids.append(t[0])
-        pcellidmap[t[0]] = pcellid
-    print(pcellidmap)
-    # pull out a single cell if 'all' not specified
-    spike_dict = {}
-    for i, x in enumerate(unit_names):
-        if (cellids[0] == 'all'):
-            spike_dict[x] = spiketimes[i]
-        elif (x.lower() in cellids):
-            spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
-    #import pdb
-    #pdb.set_trace()
-    if not spike_dict:
-        raise ValueError('No matching cellid in baphy spike file')
+        # test for special case where psuedo cellid suffix has been added to
+        # cellid by stripping anything after a "_" underscore in the cellid (list)
+        # provided
+        pcellids = options['cellid'] if (type(options['cellid']) is list) \
+           else [options['cellid']]
+        cellids = []
+        pcellidmap = {}
+        for pcellid in pcellids:
+            t = pcellid.split("_")
+            t[0] = t[0].lower()
+            cellids.append(t[0])
+            pcellidmap[t[0]] = pcellid
+        print(pcellidmap)
+        # pull out a single cell if 'all' not specified
+        spike_dict = {}
+        for i, x in enumerate(unit_names):
+            if (cellids[0] == 'all'):
+                spike_dict[x] = spiketimes[i]
+            elif (x.lower() in cellids):
+                spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
+        #import pdb
+        #pdb.set_trace()
+        if not spike_dict:
+            raise ValueError('No matching cellid in baphy spike file')
+    else:
+        # no spike data, use baphy-recorded timestamps.
+        # TODO: get this working with old baphy files that don't record explicit timestamps
+        # in that case, just assume real time is the sum of trial durations.
+        spike_dict = {}
+        #import pdb; pdb.set_trace()
+        exptevents = io.baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
 
     state_dict = {}
     if options['pupil']:
@@ -394,7 +400,7 @@ def baphy_load_dataset(parmfilepath, **options):
     # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
     # with this loading procedure.
     # CRH 12/10/2019
-    if (exptparams['runclass'] == 'BVT') & ('_a_' in parmfilepath):
+    if (exptparams['runclass'] == 'BVT') & (exptparams['BehaveObjectClass'] != 'Passive'):
         exptevents = beh.create_trial_labels(exptparams, exptevents)
         active_BVT = True
     else:
@@ -535,7 +541,7 @@ def baphy_load_dataset(parmfilepath, **options):
     # and selected: physiology yes, passive, but set behavior control to active
     # in this case, behavior didn't run, file got created with _p_, but baphy
     # still tried to label trials.
-    any_behavior = any_behavior & ('_a_' in parmfilepath)
+    any_behavior = any_behavior & (exptparams['BehaveObjectClass'] != 'Passive')
 
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
@@ -1357,7 +1363,13 @@ def baphy_load_recording(**options):
     if type(cellid) is list:
         cell_list = cellid
 
-    if cell_list is not None:
+    if not options.get('resp', True):
+        # eg, load training + pupil data
+        if mfilename is None:
+            raise ValueError("must specify mfilename if resp==False")
+        rec_name = siteid
+
+    elif cell_list is not None:
         cellid = cell_list[0]
         siteid = cellid.split("-")[0]
         rec_name = siteid

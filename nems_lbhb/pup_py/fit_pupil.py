@@ -61,6 +61,8 @@ class queue_pupil_job:
 
 
     def start_fit(self):
+        # get video name from dialog box (in case didn't import with button)
+        self.video_file = self.filename_value.get()
         fn = self.video_file
         modeldate = self.fitDate_value.get()
         py_path = self.executable_path_value.get()

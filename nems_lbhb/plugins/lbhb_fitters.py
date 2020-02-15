@@ -351,7 +351,8 @@ def pupLVbasic(fitkey):
     if choose_best:
         xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn, 
                                                                        'alpha': alpha, 
-                                                                       'signed_correlation': signed_correlation}])
+                                                                       'signed_correlation': signed_correlation
+                                                                       }])
 
     return xfspec
 

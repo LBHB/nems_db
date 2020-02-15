@@ -171,6 +171,12 @@ for batch, bs in zip(batches, batstring):
     ax.plot(rdiff[nsi], gdiff[nsi], 'o', color='gray', mec='w', mew=1)
     ax.plot(rdiff[si], gdiff[si], 'o', color='#83428c', mec='w', mew=1)
     r,p = pearsonr(rdiff[nsi+si], gdiff[nsi+si])
+
+    x=np.polyfit(rdiff,gdiff,1)
+    x0 = np.array(ax.get_xlim())
+    y0 = x0*x[0]+x[1]
+
+    ax.plot(x0,y0,'k--')
     ax_remove_box(ax)
     ax.set_xlabel('deltaR')
     ax.set_ylabel('deltaG')
@@ -214,6 +220,7 @@ for batch, bs in zip(batches, batstring):
 
     print("Mean rep gain batch {}: {:.3f}".format(batch,np.mean(np.concatenate((f_S,b_S)))))
     print("Std rep gain batch {}: {:.3f}".format(batch, np.std(np.concatenate((f_S, b_S)))/np.sqrt(len(f_S)*2)))
+
 ttest_result = ttest_ind(rg[269], rg[273])
 
 

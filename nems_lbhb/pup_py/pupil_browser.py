@@ -133,20 +133,9 @@ class PupilBrowser:
 
         # get predictions
         filename = self.video_name.get()
-        animal = self.animal_name.get()
+        predictions_folder = (os.path.sep).join(self.processed_video.split(os.path.sep)[:-1])
 
-        predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, filename[:6])
-
-        if os.path.isdir(predictions_folder) != True:
-            folders = []
-            folders.append('/auto/data/daq/' + animal + '/training2019/sorted/')
-            folders.append('/auto/data/daq/' + animal + '/training2018/sorted/')
-
-            for f in folders:
-                if os.path.isdir(f) == True:
-                    predictions_folder = f
-
-        with open(predictions_folder + filename + '_pred.pickle', 'rb') as fp:
+        with open(os.path.join(predictions_folder, filename + '_pred.pickle'), 'rb') as fp:
             self.parms = pickle.load(fp)
 
         a = self.parms['cnn']['a'][fn]
@@ -177,20 +166,9 @@ class PupilBrowser:
 
     def plot_trace(self, params_file, exclude=False):
 
-        animal = self.animal_name.get()
+        predictions_folder = (os.path.sep).join(self.processed_video.split(os.path.sep)[:-1])
 
-        predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, params_file[:6])
-
-        if os.path.isdir(predictions_folder) != True:
-            folders = []
-            folders.append('/auto/data/daq/' + animal + '/training2019/sorted/')
-            folders.append('/auto/data/daq/' + animal + '/training2018/sorted/')
-
-            for f in folders:
-                if os.path.isdir(f) == True:
-                    predictions_folder = f
-
-        params_file = predictions_folder + params_file + '_pred.pickle'
+        params_file = os.path.join(predictions_folder, params_file + '_pred.pickle')
         with open(params_file, 'rb') as fp:
             ellipse_preds = pickle.load(fp)
 
@@ -331,10 +309,10 @@ class PupilBrowser:
         params_file = self.video_name.get()
         # get raw video -- try to use the exisiting path from raw video
         fp = os.path.split(self.raw_video)[0]
+        
         self.processed_video = os.path.join(fp, 'sorted', params_file)
 
         # reset raw video attribute
-        parts = self.raw_video.split('.')
         ext = self.raw_video.split('.')[-1]
         if len(self.raw_video.split('.')) > 2:
             ext2 = self.raw_video.split('.')[-2]

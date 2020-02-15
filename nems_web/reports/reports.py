@@ -106,7 +106,7 @@ class Fit_Report():
         p = plt.figure(figsize=(len(cols), len(rows)/4))
         img = plt.imshow(
                 array, aspect='auto', origin='lower',
-                cmap=plt.get_cmap('RdBu'), interpolation='none',
+                cmap=plt.get_cmap('RdBu', 7), interpolation='none',
                 extent=extent,
                 )
         img.set_clim(0, 0.6)
@@ -125,7 +125,8 @@ class Fit_Report():
         ax.grid(b=False)
         ax.grid(which='minor', color='w', linestyle='-', linewidth=0.75)
         cbar = plt.colorbar()
-        cbar.set_ticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+        tick_locs = (np.arange(0, 0.7, 0.1) + 0.05) * (7 - 1) / 7
+        cbar.set_ticks(tick_locs)
         cbar.set_ticklabels([
                 'Dead', '', '', 'Missing', 'In Progress', 'Not Started',
                 'Complete',

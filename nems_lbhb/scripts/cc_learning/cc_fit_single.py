@@ -16,7 +16,7 @@ import nems.plots.api as nplt
 import nems.epoch as epoch
 import matplotlib.pyplot as plt
 
-TORC_MODEL = False
+TORC_MODEL = True
 
 if TORC_MODEL:
     batch = 315
