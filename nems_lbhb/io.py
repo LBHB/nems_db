@@ -40,7 +40,7 @@ import nems.recording
 import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
-from nems_lbhb.baphy import baphy_load_recording_file
+from nems_lbhb.baphy import baphy_load_recording_file, fill_default_options
 
 log = logging.getLogger(__name__)
 
@@ -198,7 +198,7 @@ class BAPHYExperiment:
         if correction_method is None:
             return baphy_events
         if correction_method == 'baphy':
-            return baphy_align_time_baphyparm(baphy_events)
+            return [baphy_align_time_baphyparm(ev) for ev in baphy_events]
         if correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
             return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
@@ -235,8 +235,75 @@ class BAPHYExperiment:
         rec = baphy_load_recording_file(**kwargs)
         return rec
 
-    def get_pupil_trace(self, *args, **kwargs):
-        return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
+    @lru_cache(maxsize=128)
+    def get_recording2(self, correction_method=None, **kwargs):
+        '''
+            "Real" fn. Work in progress. But this is meant to replace the 
+            baphy code that gets called in the fn above.
+
+        Steps to building a recording:
+            1) Figure out which signals to load
+            2) For each parmfile
+                load the (correctly aligned events)
+                load the appropriate time series (signals)
+                create signals
+                append time for each parmfile
+            3) Package all signals into recording
+        '''
+        
+        rec_name = self.experiment      
+        
+        # figure out signals to load, then load them (as lists)
+        resp = kwargs.get('resp', False)
+        pupil = kwargs.get('pupil', False)
+        # stim, lfp, photometry etc.
+
+        # load aligned baphy events
+        baphy_events = self.get_baphy_events(correction_method=correction_method)
+
+        # clean up events for nems recording
+        baphy_events = self.extpevents_to_epochs(baphy_events)
+                
+        signals = {}
+        if resp:
+            # TODO write function `get_spike_data`
+            spike_dicts = self.get_spike_data()
+
+            resp_sigs = [nems.signal.PointProcess(
+                         fs=kwargs['rasterfs'], data=sp,
+                         name='resp', recording=rec_name, chans=list(spp.keys()),
+                         epochs=baphy_events[i]) 
+                         for i, sp in enumerate(spike_dicts)]
+            
+            signals['resp'] = resp_sigs[0]
+            if len(resp_sigs) > 1:
+                signals['resp'] = [signals['resp'].append_time(r) for r in resp_sigs[1:]][0]
+
+        if pupil:
+            p_traces = self.get_pupil_trace(exptevents=baphy_events, **kwargs)
+            pupil_sigs = [nems.signal.RasterizedSignal(
+                          fs=kwargs['rasterfs'], data=p[0],
+                          name='pupil', recording=rec_name, chans=['pupil'],
+                          epochs=baphy_events[i])
+                          for (i, p) in enumerate(p_traces)]
+
+            signals['pupil'] = pupil_sigs[0]
+            if len(pupil_sigs) > 1:
+                signals['pupil'] = [signals['pupil'].append_time(p) for p in pupil_sigs[1:]][0]
+
+    
+        meta = kwargs
+        meta['files'] = [str(p) for p in self.parmfile]
+        rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
+
+        return rec
+            
+
+    def get_pupil_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [load_pupil_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.pupilfile)]
+        else:
+            return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
 
     # Methods below this line just pass through to the functions for now.
     def _get_baphy_parameters(self, userdef_convert=False):
@@ -969,7 +1036,6 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
-
     TrialCount = np.max(exptevents['Trial'])
 
     TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
