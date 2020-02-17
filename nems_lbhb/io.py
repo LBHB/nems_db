@@ -562,8 +562,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     new_tags = [t.split(',')[0].replace(' ', '') for t in sil_events.name]
     sil_events.at[:, 'name'] = new_tags
 
+    # lick events
+    lick_events = exptevents[exptevents.name=='LICK']
+
     # concatenate events together
-    stim_events = pd.concat([ref_events, tar_events, sil_events], ignore_index=True)
+    stim_events = pd.concat([ref_events, tar_events, sil_events, lick_events], ignore_index=True)
 
     if remove_post_lick:
         stim_events = _remove_post_lick(stim_events, exptevents)

@@ -149,7 +149,7 @@ def create_trial_labels(exptparams, exptevents):
                                             (trial_outcome != 'EARLY_TRIAL')):
                     ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
                     ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
-                     ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
+                    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
                     # if this is the case, also update the last soundTrial
                     soundIDX = ev[ev.soundTrial != 'NULL'].index[-1]
                     ev.at[soundIDX, 'soundTrial'] = 'EARLY_TRIAL'
