@@ -612,12 +612,15 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     model4: GC+STP
 
     '''
+    # NOTE: The comparison of max(gc, stp) to gc/stp should be
+    #       ignored. They're known to be different by definition
+    #       and there's a bug in the scipy code that causes the
+    #       W-statistic to be reported as 0.
+    #       This happens because all of the differences are one-sided
+    #       and the scipy code takes the minimum of either positive
+    #       or negative differences, one of which will always be 0
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-#    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
-#                                                          LN, combined,
-#                                                          se_filter,
-#                                                          LN_filter)
     e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
                                            se_filter=se_filter,
                                            LN_filter=LN_filter)
@@ -640,20 +643,20 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
             # for each model
             series_one = models[m_one]
             series_two = models[m_two]
+            # TODO: no reason to convert these to lists anymore?
+            first = series_one.tolist()
+            second = series_two.tolist()
+            w, p = st.wilcoxon(first, second)
             if j == i:
                 # if indices equal, on diagonal so no comparison
                 array[i][j] = 0.00
             elif j > i:
                 # if j is larger, below diagonal so get mean difference
-                mean_one = np.mean(series_one)
-                mean_two = np.mean(series_two)
-                array[i][j] = abs(mean_one - mean_two)
+                array[i][j] = w
             else:
                 # if j is smaller, above diagonal so run t-test and
                 # get p-value
-                first = series_one.tolist()
-                second = series_two.tolist()
-                array[i][j] = st.wilcoxon(first, second)[1]
+                array[i][j] = p
 
     xticks = range(len(modelnames))
     yticks = xticks
@@ -687,9 +690,10 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
         if j == i:
             # don't draw text for diagonal
             continue
-        formatting = '{:.04f}'
-        if z <= 0.0001:
-            formatting = '{:.2E}'
+#        formatting = '{:.04f}'
+#        if z <= 0.0001:
+#            formatting = '{:.2E}'
+        formatting = '{:.2E}'
         ax.text(
                 j, i, formatting.format(z), ha='center', va='center',
                 )
@@ -709,7 +713,7 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
 
     if include_legend:
         blue_patch = mpatch.Patch(
-                color='#368DFF', label='Mean Difference', edgecolor='black'
+                color='#368DFF', label='W statistic', edgecolor='black'
                 )
         p001_patch = mpatch.Patch(
                 color='#74E572', label='P < 0.001', edgecolor='black'

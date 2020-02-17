@@ -1,13 +1,16 @@
 import copy
+import pickle
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 from nems.initializers import from_keywords
-from nems.utils import find_module
+from nems.utils import find_module, ax_remove_box
 import nems.xform_helper as xhelp
 from nems.analysis.fit_basic import fit_basic
 import nems.xforms as xforms
 
-import matplotlib.pyplot as plt
-import numpy as np
+from nems_lbhb.gcmodel.figures.definitions import *
 
 
 # Default modelnames for fitting to sims, rank2
@@ -77,7 +80,7 @@ def _set_nonlinearity(modelspec):
     shift = np.array([0.275])
     kappa = np.array([2.5])
 
-    dexp_idx = find_module('dexp', modelspec)
+    dexp_idx = find_module('double_exponential', modelspec)
     if dexp_idx is None:
         # no dexp, assume dsig for gc instead
         dexp_idx = find_module('dynamic_sigmoid', modelspec)
@@ -165,33 +168,73 @@ def fit_to_simulation(fit_model, simulation_spec):
     return ctx
 
 
-def compare_sim_fits(simulation_spec):
-    stp_ctx = fit_to_simulation(stp, simulation_spec)
-    gc_ctx = fit_to_simulation(gc, simulation_spec)
-    LN_ctx = fit_to_simulation(LN, simulation_spec)
+def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
+                     save_path=None, tag='', ext_start=1.1):
+    if load_path is None:
+        if simulation_spec is None:
+            raise ValueError("simulation_spec required unless loading previous"
+                              " result")
+        stp_ctx = fit_to_simulation(stp, simulation_spec)
+        gc_ctx = fit_to_simulation(gc, simulation_spec)
+        LN_ctx = fit_to_simulation(LN, simulation_spec)
+
+        if save_path is not None:
+            results = {'simulation': simulation_spec,
+                       'contexts': [stp_ctx, gc_ctx, LN_ctx]}
+            pickle.dump(results, open(save_path, 'wb'))
+    else:
+        results = pickle.load(open(load_path, 'rb'))
+        simulation_spec = results['simulation']
+        stp_ctx, gc_ctx, LN_ctx = results['contexts']
 
     simulation = stp_ctx['val']['resp'].as_continuous().flatten()
     stp_pred = stp_ctx['val']['pred'].as_continuous().flatten()
     gc_pred = gc_ctx['val']['pred'].as_continuous().flatten()
     LN_pred = LN_ctx['val']['pred'].as_continuous().flatten()
 
-    return simulation, stp_pred, gc_pred, LN_pred
+    stim = stp_ctx['val']['stim'].as_continuous()
+    if end is None:
+        end = stim.shape[-1]
+
+    fig1 = plt.figure(figsize=wide_fig)
+    if end is None:
+        end = stim.shape[-1]
+    ext_stop = 1.25*(ext_start+0.1)
+    plt.imshow(stim, aspect='auto', cmap='Greys',
+               origin='lower', extent=(0, stim.shape[-1], ext_start, ext_stop))
+    lw = 0.75
+    plt.plot(simulation, color='gray', alpha=0.65, linewidth=lw*2)
+    t = np.linspace(0, simulation.shape[-1]-1, simulation.shape[-1])
+    plt.fill_between(t, simulation, color='gray', alpha=0.15)
+    plt.plot(LN_pred, color='black', alpha=0.55, linewidth=lw)
+    plt.plot(gc_pred, color=model_colors['gc'], linewidth=lw*1.25)
+    plt.plot(stp_pred, color=model_colors['stp'], alpha=0.75,
+             linewidth=lw*1.25)
+    plt.ylim(-0.1, ext_stop)
+    plt.xlim(start, end)
+    ax = plt.gca()
+    ax_remove_box(ax)
+
+    fig2 = plt.figure(figsize=text_fig)
+    text = ("simulation_spec: %s\n"
+            "cellid: %s\n"
+            "tag: %s\n"
+            "stp_r_test: %.4f\n"
+            "gc_r_test: %.4f\n"
+            "LN_r_test: %.4f"
+            % (simulation_spec.meta['modelname'],
+               simulation_spec.meta['cellid'],
+               tag,
+               stp_ctx['modelspec'].meta['r_test'],
+               gc_ctx['modelspec'].meta['r_test'],
+               LN_ctx['modelspec'].meta['r_test']
+               ))
+    plt.text(0.1, 0.5, text)
+
+    return fig1, fig2
 
 
-#def compare_to_sim(simulation, stp_pred, gc_pred, LN_pred,
-#                   start=None, stop=None):
-#    fig = plt.figure()
-#    plt.plot(simulation)
-#    plt.plot(stp_pred)
-#    plt.plot(gc_pred)
-#    plt.plot(LN_pred)
-#    plt.xlim(start, stop)
-#    plt.legend(["sim", "stp", "gc", "LN"])
-#
-#    return fig
-
-
-def compare_sims(start=None, stop=None):
+def compare_sims(start=0, end=None):
     # TODO: set up to compare on synthetic stimuli
     xfspec, ctx = xhelp.load_model_xform(_DEFAULT_CELL, _DEFAULT_BATCH,
                                          _DEFAULT_MODEL)
@@ -202,7 +245,6 @@ def compare_sims(start=None, stop=None):
     LN_sim = build_toy_LN_cell()
 
     stim = val['stim'].as_continuous()
-    #resp = val['resp'].as_continuous().flatten()
     gc_val = gc_sim.evaluate(val)
     gc_sim.recording = gc_val
     gc_psth = gc_val['pred'].as_continuous().flatten()
@@ -213,14 +255,19 @@ def compare_sims(start=None, stop=None):
     LN_sim.recording = LN_val
     LN_psth = LN_val['pred'].as_continuous().flatten()
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=wide_fig)
+    if end is None:
+        end = stim.shape[-1]
     plt.imshow(stim, aspect='auto', cmap='Greys',
-               origin='lower', extent=(0, 1650, 2.0, 3.0))
-    #plt.plot(resp, alpha=0.4, color='gray')
-    plt.plot(LN_psth)
-    plt.plot(gc_psth)
-    plt.plot(stp_psth)
-    plt.xlim(start,stop)
-    plt.legend(['LN','GC','STP'])
+               origin='lower', extent=(0, stim.shape[-1], 2.1, 3.4))
+    lw = 0.75
+    plt.plot(LN_psth, color='black', alpha=0.55, linewidth=lw)
+    plt.plot(gc_psth, color=model_colors['gc'], linewidth=lw*1.25)
+    plt.plot(stp_psth, color=model_colors['stp'], alpha=0.75,
+             linewidth=lw*1.25)
+    plt.ylim(-0.1, 3.4)
+    plt.xlim(start, end)
+    ax = plt.gca()
+    ax_remove_box(ax)
 
     return fig
