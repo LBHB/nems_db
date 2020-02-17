@@ -40,7 +40,6 @@ import nems.recording
 import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
-from nems_lbhb.baphy import baphy_load_recording_file, fill_default_options
 import nems_lbhb.behavior as behavior
 
 log = logging.getLogger(__name__)
@@ -201,7 +200,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def behavior(self):
         exptparams = self.get_baphy_exptparams()
-        behavior = np.any([e['BehaveObjectClass'] != 'passive' for e in exptparams])
+        behavior = np.any([e['BehaveObjectClass'] != 'Passive' for e in exptparams])
         return behavior
 
     @property
@@ -210,7 +209,7 @@ class BAPHYExperiment:
         # figure out appropriate time correction method
         try:
             # TODO add check for openephys files. For now,
-            # just use spikes
+            # just use spikes if a spikefile exists
             self.spikefile
             method = 'spikes'
         except IOError:
@@ -250,7 +249,7 @@ class BAPHYExperiment:
             try:
                 behavior_events.append(behavior.create_trial_labels(ep, ev))
             except KeyError:
-                #passive file, just return df
+                # passive file, just return exptevents df
                 behavior_events.append(ev)
 
         return behavior_events
@@ -338,52 +337,9 @@ class BAPHYExperiment:
         meta['files'] = [str(p) for p in self.parmfile]
         rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
 
-        return rec         
+        return rec
 
-    def get_spike_data(self, exptevents, **kw):
-        for i, f in enumerate(self.parmfile):
-            fn = str(f).split('/')[-1]
-            exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
-        spikes_fs = self._get_spikes()
-        if self.correction_method == 'spikes':
-            spikedicts = [baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
-                                    in zip(exptevents, spikes_fs)]
-
-            spike_dict = []
-            for sd in spikedicts:
-                units = sd[1]
-                spiketimes = sd[0]
-                d = {}
-                for i, unit in enumerate(units):
-                    d[unit] = spiketimes[i]
-                spike_dict.append(d)
-
-        return spike_dict
-
-    def get_pupil_trace(self, exptevents=None, **kwargs):
-        if exptevents is not None:
-            return [load_pupil_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.pupilfile)]
-        else:
-            return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
-
-    # Methods below this line just pass through to the functions for now.
-    def _get_baphy_parameters(self, userdef_convert=False):
-        '''
-        Parameters
-        ----------
-        userdef_convert : bool
-            If True, find all instances of the `UserDefinableFields` key in the
-            BAPHY parms data and convert them to dictionaries. See
-            :func:`baphy_convert_user_definable_fields` for example.
-        '''
-        # Returns tuple of global, expt and events
-        result = [baphy_parm_read(p) for p in self.parmfile]
-        if userdef_convert:
-            [baphy_convert_user_definable_fields(r) for r in result]
-        return result
-
-    def _get_spikes(self):
-        return [baphy_load_spike_data_raw(str(s)) for s in self.spikefile]
+    # ==================== DATA EXTRACTION METHODS =====================
 
     def get_continuous_data(self, chans):
         '''
@@ -434,7 +390,111 @@ class BAPHYExperiment:
 
         continuous_data = np.concatenate(continuous_data, axis=0)
 
-        return continuous_data
+        return continuous_data         
+
+    def get_spike_data(self, exptevents, **kw):
+        for i, f in enumerate(self.parmfile):
+            fn = str(f).split('/')[-1]
+            exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
+        spikes_fs = self._get_spikes()
+        if self.correction_method == 'spikes':
+            spikedicts = [baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
+                                    in zip(exptevents, spikes_fs)]
+            spike_dict = []
+            for sd in spikedicts:
+                units = sd[1]
+                spiketimes = sd[0]
+                d = {}
+                for i, unit in enumerate(units):
+                    d[unit] = spiketimes[i]
+                spike_dict.append(d)
+        else:
+            raise NotImplementedError
+
+        return spike_dict
+
+    def get_pupil_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [load_pupil_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.pupilfile)]
+        else:
+            return [load_pupil_trace(str(p), **kwargs) for p in self.pupilfile]
+
+    # ===================================================================
+
+    # ==================== BEHAVIOR METRIC METHODS ======================
+    def get_behavior_performance(self, trials=None, tokens=None, **kwargs):
+        """
+        Return dictionary of behavior performance metrics
+            If trial is not None, only compute behavior metrics
+            over specified BAPHY trials (counting from first active parmfile)
+
+            If tokens is not None, only compute metrics 
+            over specified sound tokens (counting from first active parmfile)
+
+            Use kwargs to specify valid trials (see behavior.compute_metrics 
+                for docs). Also, make sure includes sampling rate, otherwise
+                won't know how to align time stamps
+        """
+        if not self.behavior:
+            raise ValueError("No behavior detected in this experiment")
+        
+        # get aligned exptevents for behavior files
+        events = self.get_behavior_events(correction_method=self.correction_method, **kwargs)
+        params = self.get_baphy_exptparams()
+        behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
+        events = np.array(events)[behave_file]
+        # assume params same for all files. This is a bit kludgy... Think it
+        # should work?
+        beh_params = np.array(params)[behave_file][0]
+        
+        # stack events
+        events = self._stack_events(events)
+
+        # run behavior analysis
+        kwargs.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
+        metrics = behavior.compute_metrics(beh_params, events, **kwargs)    
+
+        return metrics
+
+    def _stack_events(self, exptevents):
+        """
+        Merge list of exptevents into single df for behavior calculations
+        """
+        offset = 0
+        trial_offset = 0
+        token_offset = 0
+        epochs = []
+        for ev in exptevents:
+            ev['end'] += offset
+            ev['start'] += offset
+            ev['Trial'] += trial_offset
+            ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += token_offset
+            offset += ev['end'].max()
+            trial_offset += ev['Trial'].max()
+            token_offset += ev['soundTrialidx'].max()
+            epochs.append(ev)
+        return pd.concat(epochs, ignore_index=True)
+
+
+    # ===================================================================
+    # Methods below this line just pass through to the functions for now.
+    def _get_baphy_parameters(self, userdef_convert=False):
+        '''
+        Parameters
+        ----------
+        userdef_convert : bool
+            If True, find all instances of the `UserDefinableFields` key in the
+            BAPHY parms data and convert them to dictionaries. See
+            :func:`baphy_convert_user_definable_fields` for example.
+        '''
+        # Returns tuple of global, expt and events
+        result = [baphy_parm_read(p) for p in self.parmfile]
+        if userdef_convert:
+            [baphy_convert_user_definable_fields(r) for r in result]
+        return result
+
+    def _get_spikes(self):
+        return [baphy_load_spike_data_raw(str(s)) for s in self.spikefile]
 
 
 # ==============  epoch manipulation functions  ================
