@@ -4,30 +4,11 @@
 import numpy as np
 from scipy.stats import norm
 import pandas as pd
-import nems_lbhb.io
 from itertools import combinations
 import matplotlib.pyplot as plt
 import logging
 
 log = logging.getLogger(__name__)
-
-def load_behavior(parmfile, classify_trials=True):
-    """
-    Load behavior events/params for the given parmfile using 
-    baphy parmread. By default, add trial labels to the event
-    dataframe using behavior.create_trial_labels
-    To load raw event/params from baphy_parm_read, set classify=False
-    """
-
-    _, exptparams, exptevents = nems_lbhb.io.baphy_parm_read(parmfile)
-
-    if classify_trials == False:
-        pass    
-    else:
-        exptevents = create_trial_labels(exptparams, exptevents)
-    
-    return exptparams, exptevents
-
 
 def create_trial_labels(exptparams, exptevents):
     """

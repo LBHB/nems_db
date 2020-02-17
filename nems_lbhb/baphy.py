@@ -32,7 +32,7 @@ import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
-import nems_lbhb.io
+import nems_lbhb.io as io
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -191,15 +191,15 @@ def baphy_load_data(parmfilepath, **options):
         parmfilepath += ".m"
     # load parameter file
     log.info('Loading parameters: %s', parmfilepath)
-    globalparams, exptparams, exptevents = nems_lbhb.io.baphy_parm_read(parmfilepath)
+    globalparams, exptparams, exptevents = io.baphy_parm_read(parmfilepath)
     # TODO: use paths that match LBHB filesystem? new s3 filesystem?
     #       or make s3 match LBHB?
 
     # figure out stimulus cachefile to load
     if 'stim' in options.keys() and options['stim']:
         if exptparams['runclass']=='VOC_VOC':
-            stimfilepath1 = nems_lbhb.io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
-            stimfilepath2 = nems_lbhb.io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+            stimfilepath1 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+            stimfilepath2 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
             print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
             # load stimulus spectrogram
             stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
@@ -223,7 +223,7 @@ def baphy_load_data(parmfilepath, **options):
 
             stimparam = stimparam1
         else:
-            stimfilepath = nems_lbhb.io.baphy_stim_cachefile(exptparams, parmfilepath, **options)
+            stimfilepath = io.baphy_stim_cachefile(exptparams, parmfilepath, **options)
             print("Cached stim: {0}".format(stimfilepath))
             # load stimulus spectrogram
             stim, tags, stimparam = baphy_load_specgram(stimfilepath)
@@ -283,7 +283,7 @@ def baphy_load_data(parmfilepath, **options):
         fn = parmfilepath.split('/')[-1]
         exptevents.to_pickle('/auto/users/hellerc/code/scratch/exptevents_baphy_{}.pickle'.format(fn))
         # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = nems_lbhb.io.baphy_align_time(
+        exptevents, spiketimes, unit_names = io.baphy_align_time(
                 exptevents, sortinfo, spikefs, options['rasterfs']
                 )
 
@@ -322,7 +322,7 @@ def baphy_load_data(parmfilepath, **options):
         # in that case, just assume real time is the sum of trial durations.
         spike_dict = {}
         #import pdb; pdb.set_trace()
-        exptevents = nems_lbhb.io.baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
+        exptevents = io.baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
 
     state_dict = {}
     if options['pupil']:
@@ -341,7 +341,7 @@ def baphy_load_data(parmfilepath, **options):
                     state_dict['pupiltrace'] = pupildata
 
             else:
-                pupiltrace, ptrialidx = nems_lbhb.io.load_pupil_trace(
+                pupiltrace, ptrialidx = io.load_pupil_trace(
                         pupilfilepath, exptevents, **options
                         )
                 state_dict['pupiltrace'] = pupiltrace
@@ -351,7 +351,7 @@ def baphy_load_data(parmfilepath, **options):
 
     if options['rem']:
         try:
-            rem_options = nems_lbhb.io.load_rem_options(pupilfilepath)
+            rem_options = io.load_rem_options(pupilfilepath)
             rem_options['verbose'] = False
             #rem_options['rasterfs'] = options['rasterfs']
             is_rem, rem_options = io.get_rem(pupilfilepath=pupilfilepath,
@@ -1286,7 +1286,7 @@ def fill_default_options(options):
     options['rem'] = int(options.get('rem', False))
     options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
-        options = nems_lbhb.io.set_default_pupil_options(options)
+        options = io.set_default_pupil_options(options)
         
     #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
