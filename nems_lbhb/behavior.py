@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.stats import norm
 import pandas as pd
-import nems_lbhb.io as io
+import nems_lbhb.io
 from itertools import combinations
 import matplotlib.pyplot as plt
 import logging
@@ -19,7 +19,7 @@ def load_behavior(parmfile, classify_trials=True):
     To load raw event/params from baphy_parm_read, set classify=False
     """
 
-    _, exptparams, exptevents = io.baphy_parm_read(parmfile)
+    _, exptparams, exptevents = nems_lbhb.io.baphy_parm_read(parmfile)
 
     if classify_trials == False:
         pass    

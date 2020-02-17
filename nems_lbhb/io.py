@@ -49,6 +49,16 @@ log = logging.getLogger(__name__)
 stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
+# special decorator that returns copies of cached objects.
+# this is useful for cases where you don't want to accidentally
+# mutate the native object returned by a cache function
+def copying_lru_cache(maxsize=10, typed=False):
+    def decorator(f):
+        cached_func = lru_cache(maxsize=maxsize, typed=typed)(f)
+        def wrapper(*args, **kwargs):
+            return copy.deepcopy(cached_func(*args, **kwargs))
+        return wrapper
+    return decorator
 
 ###############################################################################
 # Main entry-point for BAPHY experiments
@@ -215,7 +225,7 @@ class BAPHYExperiment:
 
     @lru_cache(maxsize=128)
     def get_baphy_events(self, correction_method='openephys', **kw):
-        baphy_events = [ev[-1] for ev in self._get_baphy_parameters()]
+        baphy_events = self.get_baphy_exptevents()
         if correction_method is None:
             return baphy_events
         if correction_method == 'baphy':
@@ -245,6 +255,11 @@ class BAPHYExperiment:
 
         return behavior_events
 
+    @copying_lru_cache(maxsize=128)
+    def get_baphy_exptevents(self):
+        exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
+        return exptevents
+
     @lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
         exptparams = [ep[1] for ep in self._get_baphy_parameters(userdef_convert=False)]
@@ -257,26 +272,7 @@ class BAPHYExperiment:
 
     @lru_cache(maxsize=128)
     def get_recording(self, **kwargs):
-        """
-        Return a nems recording using options specified in kwargs.
-
-        Place holder function right now...
-            Just outsource heavy to lifting to nems_lbhb.baphy, but
-        that code should probably be modularized and incorporate using the
-        baphy experiment.
-        """
-        kwargs.update({'mfilename': [str(p) for p in self.parmfile],
-                       'siteid': self.siteid,
-                       'batch': self.batch})
-        rec = baphy_load_recording_file(**kwargs)
-        return rec
-
-    @lru_cache(maxsize=128)
-    def get_recording2(self, **kwargs):
         '''
-            "Real" fn. Work in progress. But this is meant to replace the 
-            baphy code that gets called in the fn above.
-
         Steps to building a recording:
             1) Figure out which signals to load
             2) For each parmfile
@@ -297,6 +293,9 @@ class BAPHYExperiment:
         # get correction method
         correction_method = self.correction_method
 
+        # get raw exptevents
+        raw_exptevents = self.get_baphy_exptevents()
+        
         # load aligned baphy events
         if self.behavior:
             exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
@@ -309,8 +308,7 @@ class BAPHYExperiment:
     
         signals = {}
         if resp:
-            spike_dicts = self.get_spike_data(exptevents, **kwargs)
-            import pdb; pdb.set_trace()
+            spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)
             spike_dicts = [dict(zip([self.siteid + "-" + x for x in d.keys()], d.values())) for
                                     d in spike_dicts]
             resp_sigs = [nems.signal.PointProcess(
@@ -343,6 +341,9 @@ class BAPHYExperiment:
         return rec         
 
     def get_spike_data(self, exptevents, **kw):
+        for i, f in enumerate(self.parmfile):
+            fn = str(f).split('/')[-1]
+            exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
         spikes_fs = self._get_spikes()
         if self.correction_method == 'spikes':
             spikedicts = [baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
