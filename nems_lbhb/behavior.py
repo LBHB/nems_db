@@ -85,7 +85,9 @@ def create_trial_labels(exptparams, exptevents):
                         else:
                             trial_outcome = 'EARLY_TRIAL'
                     elif (fl < ref_start):
+                        # sound never played because of an early lick
                         sID.append('NULL')
+                        trial_outcome = 'EARLY_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
                         trial_outcome = 'FALSE_ALARM_TRIAL'
@@ -110,7 +112,7 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                                trial_outcome = 'FALSE_ALARM'
+                                trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
@@ -127,7 +129,7 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                                trial_outcome = 'FALSE_ALARM'
+                                trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
@@ -137,18 +139,27 @@ def create_trial_labels(exptparams, exptevents):
                     sID.append('NULL')
 
             ev.insert(4, 'soundTrial', sID)
+
             if trial_outcome is not None:  
                 baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
                 # add a check here to override things labeled as HITS if 
                 # baphy called it FA. If baphy called it FA, then sound
                 # stopped, so the trial outcome should be a FALSE_ALARM
-                if ('FALSEALARM' in baphy_outcome) & (trial_outcome != 'FALSE_ALARM_TRIAL'):
+                if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') & \
+                                            (trial_outcome != 'EARLY_TRIAL')):
                     ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
+                    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+                     ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
                     # if this is the case, also update the last soundTrial
                     soundIDX = ev[ev.soundTrial != 'NULL'].index[-1]
                     ev.at[soundIDX, 'soundTrial'] = 'EARLY_TRIAL'
                 else:
                     ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
+                # and update the time to span whole trial
+                ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+                ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
+            else:
+                import pdb; pdb.set_trace()
             trial_dfs.append(ev)
 
         else:
@@ -171,18 +182,21 @@ def create_trial_labels(exptparams, exptevents):
                         trial_outcome = 'CORRECT_REJECT_TRIAL'
                 else:
                     sID.append('NULL')
-
+            if trial_outcome is None:
+                import pdb; pdb.set_trace()
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
+            # and update the time to span whole trial
+            ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+            ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
             ev.insert(4, 'soundTrial', sID)
 
             trial_dfs.append(ev)
 
     new_events = pd.concat(trial_dfs)
 
-    # finally, number the (non NULL) sound trials
+    # Number the (non NULL) sound trials
     new_events['soundTrialidx'] = 0
     trialidx = np.arange(1, (new_events.soundTrial!='NULL').sum()+1)
-    #new_events['soundTrialidx'][new_events.soundTrial!='NULL'] = trialidx
     new_events.at[new_events.soundTrial!='NULL', 'soundTrialidx'] = trialidx
 
     return new_events

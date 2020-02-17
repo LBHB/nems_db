@@ -41,6 +41,7 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems_lbhb.baphy import baphy_load_recording_file, fill_default_options
+import nems_lbhb.behavior as behavior
 
 log = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class BAPHYExperiment:
         self.experiment = self.parmfile[0].name.split('_', 1)[0]
 
         # full file name will be unique though, so this is a list
-        self.experiment_with_runclass = [p.stem for p in self.parmfile]
+        self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
     
 
     @property
@@ -181,10 +182,30 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def spikefile(self):
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
-        if np.any([not Path(f).exists() for f in filenames]):
+        if np.any([not f.with_suffix('.spk.mat').exists() for f in filenames]):
             raise IOError("Spike file doesn't exist") 
         else:
             return [f.with_suffix('.spk.mat') for f in filenames]
+    
+    @property
+    @lru_cache(maxsize=128)
+    def behavior(self):
+        exptparams = self.get_baphy_exptparams()
+        behavior = np.any([e['BehaveObjectClass'] != 'passive' for e in exptparams])
+        return behavior
+
+    @property
+    @lru_cache(maxsize=128)
+    def correction_method(self):
+        # figure out appropriate time correction method
+        try:
+            # TODO add check for openephys files. For now,
+            # just use spikes
+            self.spikefile
+            method = 'spikes'
+        except IOError:
+            method = 'baphy'
+        return method
 
     @lru_cache(maxsize=128)
     def get_trial_starts(self, method='openephys'):
@@ -203,15 +224,30 @@ class BAPHYExperiment:
             trial_starts = self.get_trial_starts('openephys')
             return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
         if correction_method == 'spikes':
-            spikes, fs = self._get_spikes()
-            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
+            spikes_fs = self._get_spikes()
+            exptevents = [baphy_align_time(ev, sp, fs, kw['rasterfs'])[0] for (ev, (sp, fs)) 
+                                in zip(baphy_events, spikes_fs)]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
 
     @lru_cache(maxsize=128)
+    def get_behavior_events(self, correction_method='openephys', **kw):
+        exptparams = self.get_baphy_exptparams()
+        exptevents = self.get_baphy_events(correction_method=correction_method, **kw)
+        behavior_events = []
+        for ep, ev in zip(exptparams, exptevents):
+            try:
+                behavior_events.append(behavior.create_trial_labels(ep, ev))
+            except KeyError:
+                #passive file, just return df
+                behavior_events.append(ev)
+
+        return behavior_events
+
+    @lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
-        _, exptparams, _ = self._get_baphy_parameters(userdef_convert=False)
+        exptparams = [ep[1] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return exptparams
 
     @lru_cache(maxsize=128)
@@ -236,7 +272,7 @@ class BAPHYExperiment:
         return rec
 
     @lru_cache(maxsize=128)
-    def get_recording2(self, correction_method=None, **kwargs):
+    def get_recording2(self, **kwargs):
         '''
             "Real" fn. Work in progress. But this is meant to replace the 
             baphy code that gets called in the fn above.
@@ -258,38 +294,42 @@ class BAPHYExperiment:
         pupil = kwargs.get('pupil', False)
         # stim, lfp, photometry etc.
 
-        # load aligned baphy events
-        baphy_events = self.get_baphy_events(correction_method=correction_method)
+        # get correction method
+        correction_method = self.correction_method
 
-        # clean up events for nems recording
-        baphy_events = self.extpevents_to_epochs(baphy_events)
-                
+        # load aligned baphy events
+        if self.behavior:
+            exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
+        else:
+            exptevents = self.get_baphy_events(correction_method=correction_method, **kwargs)
+
+        # trim epoch names, remove behavior columns labels etc.
+        exptparams = self.get_baphy_exptparams()
+        baphy_events = [baphy_events_to_epochs(bev, parm, **kwargs) for (bev, parm) in zip(exptevents, exptparams)]
+    
         signals = {}
+        resp = False
         if resp:
             # TODO write function `get_spike_data`
             spike_dicts = self.get_spike_data()
 
             resp_sigs = [nems.signal.PointProcess(
                          fs=kwargs['rasterfs'], data=sp,
-                         name='resp', recording=rec_name, chans=list(spp.keys()),
+                         name='resp', recording=rec_name, chans=list(sp.keys()),
                          epochs=baphy_events[i]) 
                          for i, sp in enumerate(spike_dicts)]
             
-            signals['resp'] = resp_sigs[0]
-            if len(resp_sigs) > 1:
-                signals['resp'] = [signals['resp'].append_time(r) for r in resp_sigs[1:]][0]
+            signals['resp'] = nems.signal.PointProcess.append_time(resp_sigs)
 
         if pupil:
-            p_traces = self.get_pupil_trace(exptevents=baphy_events, **kwargs)
+            p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             pupil_sigs = [nems.signal.RasterizedSignal(
                           fs=kwargs['rasterfs'], data=p[0],
                           name='pupil', recording=rec_name, chans=['pupil'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(p_traces)]
 
-            signals['pupil'] = pupil_sigs[0]
-            if len(pupil_sigs) > 1:
-                signals['pupil'] = [signals['pupil'].append_time(p) for p in pupil_sigs[1:]][0]
+            signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
     
         meta = kwargs
@@ -322,7 +362,7 @@ class BAPHYExperiment:
         return result
 
     def _get_spikes(self):
-        return baphy_load_spike_data_raw(str(self.spikefile))
+        return [baphy_load_spike_data_raw(str(s)) for s in self.spikefile]
 
     def get_continuous_data(self, chans):
         '''
@@ -375,6 +415,226 @@ class BAPHYExperiment:
 
         return continuous_data
 
+
+# ==============  epoch manipulation functions  ================
+
+def baphy_events_to_epochs(exptevents, exptparams, **options):
+    """
+    Modify exptevents dataframe for nems epochs.
+    This includes cleaning up event names and moving behavior
+    labels to name columnn, if they exist. This is basically
+    just a (slightly) cleaned up version of baphy_load_dataset.
+    """
+
+    epochs = []
+    
+    log.info('Creating trial epochs')
+    trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
+    epochs.append(trial_epochs)
+
+    log.info('Creating stim epochs')
+    stim_epochs = _make_stim_epochs(exptevents, exptparams, **options)
+    epochs.append(stim_epochs)
+
+    # this step includes removing post lick events for 
+    # active files
+    behavior = False
+    if exptparams['BehaveObjectClass'] not in ['ClassicalConditioning', 'Passive']:
+        log.info('Creating behavior epochs')
+        behavior = True
+        behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
+        epochs.append(behavior_epochs)
+
+    epochs = pd.concat(epochs, ignore_index=True)
+    file_start_time = epochs['start'].min()
+    file_end_time = epochs['end'].max()
+    te = pd.DataFrame(index=[0], columns=(epochs.columns))
+    if behavior:
+        # append ACTIVE epoch
+        te.loc[0, 'start'] = file_start_time
+        te.loc[0, 'end'] = file_end_time
+        te.loc[0, 'name']= 'ACTIVE_EXPERIMENT'
+
+    else:
+        # append PASSIVE epoch
+        te.loc[0, 'start'] = file_start_time
+        te.loc[0, 'end'] = file_end_time
+        te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
+
+    epochs = epochs.append(te, ignore_index=True)
+    
+    epochs = epochs.sort_values(by=['start', 'end'], 
+                    ascending=[1, 0]).reset_index()
+    epochs = epochs.drop(columns=['index'])
+
+    epochs = _trim_epoch_columns(epochs)
+
+    # touch up last trial
+    # edit end values to make round according to rasterfs
+    final_trial_end = np.floor(epochs[epochs.name=='TRIAL'].end.max() * options['rasterfs']) / options['rasterfs']
+    end_events = (epochs['end'] >= final_trial_end)
+    epochs.loc[end_events, 'end'] = final_trial_end
+    
+    return epochs
+
+
+def _make_trial_epochs(exptevents, exptparams, **options):
+    """
+    Define baphy trial epochs
+    """
+    # sort of hacky. This means that if behavior classification 
+    # was run and it's NOT classical conditioning, you should truncate
+    # trials after licks
+    remove_post_lick = ('soundTrial' in exptevents.columns) & \
+                            (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
+    
+
+    trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
+    end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
+    trial_events.at[:, 'end'] = end_events['start'].values
+    trial_events.at[:, 'name'] = 'TRIAL'
+
+    if remove_post_lick:
+       trial_events =  _remove_post_lick(trial_events, exptevents)
+
+    trial_events = trial_events.sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
+    trial_events = trial_events.drop(columns=['index'])
+
+    return trial_events
+
+
+def _make_stim_epochs(exptevents, exptparams, **options):
+    """
+    Define epochs for each unique stimulus that was played (if FA trial,
+    stim might not play so we should truncate that epoch  at STIM,OFF /
+    TRIALSTOP / OUTCOME,VEARLY(?) / OUTCOME,EARLY(?)
+    if that's the case)
+    """
+    # sort of hacky. This means that if behavior classification 
+    # was run and it's NOT classical conditioning, you should truncate
+    # trials after licks
+    remove_post_lick = ('soundTrial' in exptevents.columns) & \
+                            (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
+
+    # reference events (including spont)
+    ref_tags = exptevents[exptevents.name.str.contains('Reference') & \
+                            ~exptevents.name.str.contains('Silence')].name.unique()
+    ref_s_tags = exptevents[exptevents.name.str.contains('Reference') & \
+                            exptevents.name.str.contains('PreStimSilence')].name.unique()
+    ref_e_tags = exptevents[exptevents.name.str.contains('Reference') & \
+                            exptevents.name.str.contains('PostStimSilence')].name.unique()
+    ref_starts = exptevents[exptevents.name.isin(ref_s_tags)].copy()
+    ref_ends = exptevents[exptevents.name.isin(ref_e_tags)].copy()
+
+    ref_events = exptevents[exptevents.name.isin(ref_tags)].copy()
+    new_tags = [t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    ref_events.at[:, 'name'] = new_tags
+    ref_events.at[:, 'start'] = ref_starts.start.values
+    ref_events.at[:, 'end'] = ref_ends.end.values
+    ref_events2 = ref_events.copy()
+    ref_events2.at[:, 'name'] = 'REFERENCE'
+    ref_events = pd.concat([ref_events, ref_events2], ignore_index=True)
+
+    # target events (including spont)
+    tar_tags = exptevents[exptevents.name.str.contains('Target') & \
+                            ~exptevents.name.str.contains('Silence')].name.unique()
+    tar_s_tags = exptevents[exptevents.name.str.contains('Target') & \
+                            exptevents.name.str.contains('PreStimSilence')].name.unique()
+    tar_e_tags = exptevents[exptevents.name.str.contains('Target') & \
+                            exptevents.name.str.contains('PostStimSilence')].name.unique()
+    tar_starts = exptevents[exptevents.name.isin(tar_s_tags)].copy()
+    tar_ends = exptevents[exptevents.name.isin(tar_e_tags)].copy()
+    
+    tar_events = exptevents[exptevents.name.isin(tar_tags)].copy()
+    new_tags = ['TAR_' + t.split(',')[1].replace(' ', '') for t in tar_events.name]
+    tar_events.at[:, 'name'] = new_tags
+    tar_events.at[:, 'start'] = tar_starts.start.values
+    tar_events.at[:, 'end'] = tar_ends.end.values
+    tar_events2 = tar_events.copy()
+    tar_events2.at[:, 'name'] = 'TARGET'
+    tar_events = pd.concat([tar_events, tar_events2], ignore_index=True)
+
+    # pre/post stim events
+    sil_tags = exptevents[exptevents.name.str.contains('Silence')].name.unique()
+    sil_events = exptevents[exptevents.name.isin(sil_tags)].copy()
+    new_tags = [t.split(',')[0].replace(' ', '') for t in sil_events.name]
+    sil_events.at[:, 'name'] = new_tags
+
+    # concatenate events together
+    stim_events = pd.concat([ref_events, tar_events, sil_events], ignore_index=True)
+
+    if remove_post_lick:
+        stim_events = _remove_post_lick(stim_events, exptevents)
+
+    stim_events = stim_events.sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
+    stim_events = stim_events.drop(columns=['index'])
+
+    return stim_events
+
+
+def _make_behavior_epochs(exptevents, exptparams, **options):
+    """
+    Add soundTrial events to the epochs dataframe. i.e. move them into 
+    the name column so that they stick around when these columns get
+    stripped later for nems packaging.
+    """
+
+    if 'soundTrial' not in exptevents.columns:
+        raise KeyError("soundTrial not in exptevents. Behavior analysis code \
+                        has not been run yet, shouldn't be making \
+                            behavior epochs")
+    baphy_outcomes = ['HIT_TRIAL', 
+                      'MISS_TRIAL', 
+                      'CORRECT_REJECT_TRIAL',
+                      'INCORRECT_HIT_TRIAL',
+                      'EARLY_TRIAL',
+                      'FALSE_ALARM_TRIAL']
+    baphy_outcomes_tf = exptevents.name.isin(baphy_outcomes)
+    baphy_behavior_events = exptevents[baphy_outcomes_tf].copy()
+
+    behavior_events = exptevents[(exptevents.soundTrial != 'NULL')].copy()
+    tokens = [t.replace('_TRIAL', '_TOKEN') for t in behavior_events.soundTrial]
+    behavior_events.loc[:, 'name'] = tokens
+
+    behavior_events = pd.concat([baphy_behavior_events,
+                                behavior_events], ignore_index=True)
+
+    behavior_events = _remove_post_lick(behavior_events, exptevents)
+
+    behavior_events = behavior_events.sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
+    behavior_events = behavior_events.drop(columns=['index'])
+
+    return behavior_events
+
+
+def _remove_post_lick(events, exptevents):
+    # screen for FA / Early trials in which we need to truncate / chop out references
+    trunc_trials = exptevents[exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
+    lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
+
+    if len(lick_time) != len(trunc_trials):
+        raise ValueError('More than one lick recorded on a FA trial, whats up??')
+    
+    for fl, t in zip(lick_time, trunc_trials):
+        e = events[events.Trial==t]
+        # truncate events that overlapped with lick
+        events.at[e[e.end > fl].index, 'end'] = fl
+        # remove events that started after the lick completely
+        events = events.drop(e[(e.start.values > fl) & (e.end.values > fl)].index)
+    
+    return events
+
+def _trim_epoch_columns(epochs):
+    cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]
+    return epochs.drop(columns=cols)
+
+# =================================================================
 
 def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
     '''

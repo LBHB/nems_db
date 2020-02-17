@@ -282,7 +282,7 @@ def baphy_load_data(parmfilepath, **options):
         sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
 
         # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = baphy_align_time(
+        exptevents, spiketimes, unit_names = io.baphy_align_time(
                 exptevents, sortinfo, spikefs, options['rasterfs']
                 )
 
