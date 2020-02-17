@@ -308,19 +308,23 @@ class BAPHYExperiment:
         baphy_events = [baphy_events_to_epochs(bev, parm, **kwargs) for (bev, parm) in zip(exptevents, exptparams)]
     
         signals = {}
-        resp = False
         if resp:
-            # TODO write function `get_spike_data`
-            spike_dicts = self.get_spike_data()
-
+            spike_dicts = self.get_spike_data(exptevents, **kwargs)
+            import pdb; pdb.set_trace()
+            spike_dicts = [dict(zip([self.siteid + "-" + x for x in d.keys()], d.values())) for
+                                    d in spike_dicts]
             resp_sigs = [nems.signal.PointProcess(
                          fs=kwargs['rasterfs'], data=sp,
                          name='resp', recording=rec_name, chans=list(sp.keys()),
                          epochs=baphy_events[i]) 
                          for i, sp in enumerate(spike_dicts)]
             
-            signals['resp'] = nems.signal.PointProcess.append_time(resp_sigs)
-
+            for i, r in enumerate(resp_sigs):
+                if i == 0:
+                    signals['resp'] = r
+                else:
+                    signals['resp'] = signals['resp'].append_time(r)
+            
         if pupil:
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             pupil_sigs = [nems.signal.RasterizedSignal(
@@ -336,8 +340,24 @@ class BAPHYExperiment:
         meta['files'] = [str(p) for p in self.parmfile]
         rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
 
-        return rec
-            
+        return rec         
+
+    def get_spike_data(self, exptevents, **kw):
+        spikes_fs = self._get_spikes()
+        if self.correction_method == 'spikes':
+            spikedicts = [baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
+                                    in zip(exptevents, spikes_fs)]
+
+            spike_dict = []
+            for sd in spikedicts:
+                units = sd[1]
+                spiketimes = sd[0]
+                d = {}
+                for i, unit in enumerate(units):
+                    d[unit] = spiketimes[i]
+                spike_dict.append(d)
+
+        return spike_dict
 
     def get_pupil_trace(self, exptevents=None, **kwargs):
         if exptevents is not None:
