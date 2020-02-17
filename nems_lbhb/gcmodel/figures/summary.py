@@ -601,8 +601,7 @@ def relative_bar_comparison(batch1, batch2, gc, stp, LN, combined,
 
 
 
-def significance(batch, gc, stp, LN, combined, se_filter=True,
-                 LN_filter=False, ratio_filter=False, threshold=2.5,
+def significance(batch, gc, stp, LN, combined,
                  manual_cellids=None, plot_stat='r_ceiling',
                  include_legend=True, only_improvements=False):
     '''
@@ -621,9 +620,7 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     #       or negative differences, one of which will always be 0
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                           se_filter=se_filter,
-                                           LN_filter=LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
     cellids = a
 
     gc_test = df_r[gc][cellids]
