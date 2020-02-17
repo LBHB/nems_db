@@ -60,7 +60,7 @@ def gc2(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -332,7 +332,7 @@ def pupLVbasic(fitkey):
     #    xfspec = []
     xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
                   {'max_iter': max_iter,
-                   'fitter': fitter, 'tolerance': tolerance, 
+                   'fitter': fitter, 'tolerance': tolerance,
                    'alpha': alpha}])
     if choose_best:
         xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
