@@ -29,6 +29,7 @@ def global_gain(rec, gain):
 
 
 def _get_relative_gain_sf(rec, fg_gain, bg_gain, single_gain):
+
     is_repeating = rec['repeating'].as_continuous()[0].astype('bool')
     dual_stream = rec['dual_stream'].as_continuous()[0].astype('bool')
     t_map = rec['target_id_map'].as_continuous()[0].astype('i')
@@ -101,9 +102,13 @@ def apply_gain(rec, i='fg+bg', o='pred', offset=0):
 
         bg = np.log((bg + d)/d)
         fg = np.log((fg + d)/d)
-
         pred = bg * bg_sf + fg * fg_sf
+
+        bg_comp = rec['bg']._modified_copy(bg, name='bg_comp')
+        fg_comp = rec['fg']._modified_copy(fg, name='fg_comp')
         pred_signal = rec['bg']._modified_copy(pred, name='pred')
+
+        return [bg_comp, fg_comp, pred_signal]
 
     elif i == 'fg_pred+bg_pred':
         bg = rec['bg_pred'].as_continuous()

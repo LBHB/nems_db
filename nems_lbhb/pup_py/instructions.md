@@ -7,6 +7,11 @@ under `default_trained_model`. Old model fits are stored in `old_model_fits` alo
 is collected, one might wish to retrain the model to incorporate new training data. This structure makes this possible and the 
 procedure for doing this is discussed below.
 
+## Requirements
+
+  * tensorflowg (or tensorflow)
+  * ffmpeg
+
 ## Analyzing pupil
 
 ### Start a pupil analysis

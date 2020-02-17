@@ -162,10 +162,11 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
         if smooth == 1:
             smooth = [100, 250]
         strfdata = interpft(interpft(strf0, smooth[0], 0), smooth[1], 1)
+
     else:
         strfdata = strf0
 
-    axs.imshow(strf0, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
+    axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower')
 
     if lfreq:
         freqappend = lfreq
@@ -362,21 +363,22 @@ def torcmaker(TORC,Params):
 
 
 
-def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
+def strf_est_core(stacked, TorcObject, fs, INC1stCYCLE=0, jackN=0):
     '''
     Estimate STRF from TORCs: main subfunction, with options to plot and compare to matlab values
     :param stacked: spike raster, time (sound start to stop) x torcidx x repetition
     :param TorcObject: torc parameter data
-    :param exptparams: certain necessary experiment parameters from initial extraction
     :param fs: bin rate of stacked (stacked will be rebinned to match max sampling rate of torcs)
     :param INC1stCYCLE: default 0, if 1, include first 250ms of stacked in STRF estimation (0 removes transient reponse)
     :param jackN: default 0, if >1, computer jackknifes on strfest to measure error bars
     :return: strfest, snr (usually >0.2 is good), stim (taken from Scaled Torcs, collapses torc dict to matrix),strfemp,StimParams (some useful params)
     '''
 
-    referencecount = TorcObject['MaxIndex']
-    TorcNames = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Names"]
+    #referencecount = TorcObject['MaxIndex']
+    #TorcNames = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Names"]
+    TorcNames = TorcObject['Names']
     RefDuration = TorcObject['Duration']
+    referencecount = len(TorcNames)
 
     numrecs = referencecount
     mf = int(fs/1000)  # used to be int(fs/1000)
@@ -389,8 +391,9 @@ def strf_est_core(stacked,TorcObject,exptparams,fs,INC1stCYCLE=0,jackN=0):
     all_hfreq = list()
     all_lfreq = list()
 
-    for tt, torc in enumerate(TorcNames):
-        TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]     #insert Params 1-30 to torcs 1-30 now TORCs(Params(...)) nested other way
+    for tt, torc in zip(TorcObject['Params'].keys(), TorcNames):
+        #TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]     #insert Params 1-30 to torcs 1-30 now TORCs(Params(...)) nested other way
+        TorcParams[torc] = TorcObject['Params'][tt]
         freqs = TorcParams[torc]['Scales']
         velos = TorcParams[torc]['Rates']
         all_freqs.append(freqs)

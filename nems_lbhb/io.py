@@ -31,8 +31,8 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
-from . import OpenEphys as oe
-from . import SettingXML as oes
+from nems_lbhb import OpenEphys as oe
+from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -179,9 +179,20 @@ class BAPHYExperiment:
         return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
 
     # Methods below this line just pass through to the functions for now.
-    def _get_baphy_parameters(self):
+    def _get_baphy_parameters(self, userdef_convert=False):
+        '''
+        Parameters
+        ----------
+        userdef_convert : bool
+            If True, find all instances of the `UserDefinableFields` key in the
+            BAPHY parms data and convert them to dictionaries. See
+            :func:`baphy_convert_user_definable_fields` for example.
+        '''
         # Returns tuple of global, expt and events
-        return baphy_parm_read(self.parmfile)
+        result = baphy_parm_read(self.parmfile)
+        if userdef_convert:
+            baphy_convert_user_definable_fields(result)
+        return result
 
     def _get_spikes(self):
         return baphy_load_spike_data_raw(str(self.spikefile))
@@ -419,7 +430,8 @@ def baphy_mat2py(s):
 
     s4 = re.sub(r'\(([0-9]*)\)', r'[\g<1>]', s3)
 
-    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s4)
+    s5 = re.sub(r'\.wav', r"", s4) # MLE eliminates .wav file sufix to not confuse with field ToDo: elimiate .wav from param files ?
+    s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
 
     s6 = re.sub(r'([0-9]+) ', r"\g<0>,", s5)
     s6 = re.sub(r'NaN ', r"np.nan,", s6)
@@ -508,7 +520,7 @@ def baphy_parm_read(filepath):
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
            exptparams['TrialObject'][1]['ReferenceHandle'][1]['descriptor']
-    # CPP special case, deletes added commas
+    # CPP special case, deletes added commas ToDo this might be unecesary, the task is done in MLE code.
     if exptparams['TrialObject'][1]['ReferenceClass'] == 'ContextProbe':
         tags = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']  # gets the list of tags
         tag_map = {oldtag: re.sub(r' , ', r'  ', oldtag)
@@ -525,6 +537,39 @@ def baphy_parm_read(filepath):
         exptevents.replace(epoch_map, inplace=True)
 
     return globalparams, exptparams, exptevents
+
+
+def baphy_convert_user_definable_fields(x):
+    '''
+    Converts all occurances of the `'UserDefinableFields'` list to a
+    dictionary. This is recursive, so it will scan the full dataset returned by
+    `baphy_parm_read`.
+
+    Example
+    ------
+    >>> data = {
+            'descriptor': 'NoiseSample',
+            'UserDefinableFields': ['PreStimSilence', 'edit', 0,
+                                    'PostStimSilence', 'edit', 0,
+                                    'Duration', 'edit', 0.3,]
+        }
+
+    >>> baphy_convert_user_definable_fields(data)
+    >>> print(data)
+    {'descriptor': 'NoiseSample',
+     'UserDefinableFields': {'PreStimSilence': 0, 'PostStimSilence': 0, 'Duration': 0.3}
+    '''
+    if isinstance(x, dict) and 'UserDefinableFields' in x:
+        userdef = x.pop('UserDefinableFields')
+        keys = userdef[::3]
+        values = userdef[2::3]
+        x['UserDefinableFields'] = dict(zip(keys, values))
+    if isinstance(x, dict):
+        for v in x.values():
+            baphy_convert_user_definable_fields(v)
+    elif isinstance(x, (tuple, list)):
+        for v in x:
+            baphy_convert_user_definable_fields(v)
 
 
 def baphy_load_specgram(stimfilepath):
@@ -861,6 +906,63 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
+
+
+def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
+
+    TrialCount = np.max(exptevents['Trial'])
+
+    TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
+
+    def _get_start_time(x):
+        d = x.split(",")
+        if len(d)>2:
+            time = datetime.datetime.strptime(d[1].strip()+" "+d[2], '%Y-%m-%d %H:%M:%S.%f')
+        else:
+            time = datetime.datetime(2000,1,1)
+        return time
+
+    def _get_time_diff_seconds(x):
+        d = x.split(",")
+        if len(d)>2:
+            time = datetime.datetime.strptime(d[1].strip()+" "+d[2], '%Y-%m-%d %H:%M:%S.%f')
+        else:
+            time = datetime.datetime(2000,1,1)
+        return time
+
+    TrialStartDateTime = TrialStarts.apply(_get_start_time)
+
+    # time first trial started, all epoch times will be measured in seconds from this time
+    timezero = TrialStartDateTime.iloc[0]
+
+    def _get_time_diff_seconds(x, timezero=0):
+
+        return (x-timezero).total_seconds()
+
+    TrialStartSeconds = TrialStartDateTime.apply(_get_time_diff_seconds, timezero=timezero)
+
+    Offset_sec = TrialStartSeconds.values
+
+    exptevents['start']=exptevents['start'].astype(float)
+    exptevents['end']=exptevents['end'].astype(float)
+
+    # adjust times in exptevents to approximate time since experiment started
+    # rather than time since trial started (native format)
+    for Trialidx in range(1, TrialCount+1):
+        # print("Adjusting trial {0} by {1} sec"
+        #       .format(Trialidx,Offset_sec[Trialidx-1]))
+        ff = (exptevents['Trial'] == Trialidx)
+        exptevents.loc[ff, ['start', 'end']] = (
+                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx-1]
+                )
+
+    if finalfs:
+       exptevents['start'] = np.round(exptevents['start']*finalfs)/finalfs
+       exptevents['end'] = np.round(exptevents['end']*finalfs)/finalfs
+
+    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+
+    return exptevents
 
 
 def set_default_pupil_options(options):

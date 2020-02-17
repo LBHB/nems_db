@@ -15,21 +15,27 @@ from scipy.stats import wilcoxon, ttest_ind, pearsonr
 from nems.plots.utils import ax_remove_box
 import seaborn as sns
 
-#outpath='/auto/users/svd/docs/current/RDT/nems/'
+outpath='/auto/users/svd/docs/current/RDT/nems/'
 #outpath='/auto/users/bburan/'
-outpath='/tmp/'
+#outpath='/tmp/'
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+
+
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
-
-# 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
-
 loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
            'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
+
+# new, rep only
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10.ns.rep-rdtfmt']
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
+
 label0 = ['{}_RS', '{}_S', '{}']   #, '{}_R'
 sxticks = ['rep+str', 'rep', 'noshuff'] # 'str',
 modelnames = [l + "_" + keywordstring + "_init-basic" for l in loaders]
@@ -165,10 +171,16 @@ for batch, bs in zip(batches, batstring):
     ax.plot(rdiff[nsi], gdiff[nsi], 'o', color='gray', mec='w', mew=1)
     ax.plot(rdiff[si], gdiff[si], 'o', color='#83428c', mec='w', mew=1)
     r,p = pearsonr(rdiff[nsi+si], gdiff[nsi+si])
+
+    x=np.polyfit(rdiff,gdiff,1)
+    x0 = np.array(ax.get_xlim())
+    y0 = x0*x[0]+x[1]
+
+    ax.plot(x0,y0,'k--')
     ax_remove_box(ax)
     ax.set_xlabel('deltaR')
     ax.set_ylabel('deltaG')
-    ax.set_title('R={:.3f} p={:.3f}'.format(r,p))
+    ax.set_title('R={:.3f} p={:.4e}'.format(r, p))
 
     ax = axes[1, 0]
     beta_comp(b_S, f_S, n1='bg_S', n2='fg_S', ax=ax, hist_range=[-bound, bound],
@@ -206,9 +218,13 @@ for batch, bs in zip(batches, batstring):
     figure.savefig(outpath+'gain_comp_'+keywordstring+'_'+bs+'.pdf')
     rgdf[batch].to_csv(outpath+'strf_rg_summary_'+bs+'.csv')
 
+    print("Mean rep gain batch {}: {:.3f}".format(batch,np.mean(np.concatenate((f_S,b_S)))))
+    print("Std rep gain batch {}: {:.3f}".format(batch, np.std(np.concatenate((f_S, b_S)))/np.sqrt(len(f_S)*2)))
+
 ttest_result = ttest_ind(rg[269], rg[273])
 
 
-print("Mean A1={:.3f} PEG={:.3f} p<{:.4f}".format(
-    np.mean(rg[269]), np.mean(rg[273]), ttest_result.pvalue))
+print("Mean A1={:.3f}+{:.4f} PEG={:.3f}+{:.4f} p<{:.4f}".format(
+    np.mean(rg[269]), np.std(rg[269])/np.sqrt(len(rg[269])),
+    np.mean(rg[273]), np.std(rg[273])/np.sqrt(len(rg[273])),ttest_result.pvalue))
 

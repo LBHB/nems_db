@@ -14,6 +14,8 @@ import numpy as np
 import copy
 import nems.epoch as ep
 import nems.signal as signal
+import scipy.fftpack as fp
+import scipy.signal as ss
 
 log = logging.getLogger(__name__)
 
@@ -705,3 +707,185 @@ def create_pupil_mask(rec, **options):
             newrec['mask'] = newrec['mask']._modified_copy(mask_trace)
 
         return newrec
+
+
+def bandpass_filter_resp(rec, low_c, high_c, data=None, signal='resp'):
+    '''
+    Bandpass filter resp. Return new recording with filtered resp.
+    '''
+
+    if low_c is None:
+        low_c = 0
+    if high_c is None:
+        high_c = rec['resp'].fs
+
+    fs = rec[signal].fs
+    if data is None:
+        newrec = rec.copy()
+        #newrec = newrec.apply_mask(reset_epochs=True)
+        newrec[signal] = rec[signal].rasterize()
+        resp = newrec[signal]._data
+    else:
+        resp = data
+    
+    resp_filt = resp.copy()
+    for n in range(resp.shape[0]):
+        s = resp[n, :]
+        resp_fft = fp.fft(s)
+        w = fp.fftfreq(s.size, 1 / fs)
+        inds = np.argwhere((w >= low_c) & (w <= high_c))
+        inds2 = np.argwhere((w <= -low_c) & (w >= -high_c))
+        m = np.zeros(w.shape)
+        alpha = 0.1
+        m[inds] = ss.tukey(len(inds), alpha)[:, np.newaxis]
+        m[inds2] = ss.tukey(len(inds2), alpha)[:, np.newaxis]
+        resp_cut = resp_fft * m
+        resp_filt[n, :] = fp.ifft(resp_cut)
+
+    if data is None:
+        newrec[signal] = newrec[signal]._modified_copy(resp_filt)
+        return newrec
+    else:
+        return resp_filt
+
+def get_pupil_balanced_epochs(rec, rec_sp=None, rec_bp=None):
+    """
+    Given big/small pupil recordings return list of
+    epochs that are balanced between the two.
+    """
+    all_epochs = np.unique([str(ep) for ep in rec.epochs.name if 'STIM_00' in ep]).tolist()
+
+    if (rec_sp is None) | (rec_bp is None):
+        pup_ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True}
+        rec_bp = create_pupil_mask(rec.copy(), **pup_ops)
+        pup_ops['state']='small'
+        rec_sp = create_pupil_mask(rec.copy(), **pup_ops)
+
+        rec_bp = rec_bp.apply_mask(reset_epochs=True)
+        rec_sp = rec_sp.apply_mask(reset_epochs=True)
+
+    # get rid of pre/post stim silence
+    #rec_bp = rec_bp.and_mask(['PostStimSilence'], invert=True)
+    #rec_sp = rec_sp.and_mask(['PostStimSilence'], invert=True)
+    #rec = rec.and_mask(['PostStimSilence'], invert=True)
+    #rec_bp = rec_bp.apply_mask(reset_epochs=True)
+    #rec_sp = rec_sp.apply_mask(reset_epochs=True)
+    #rec = rec.apply_mask(reset_epochs=True)
+
+    # find pupil matched epochs
+    balanced_eps = []
+    for ep in all_epochs:
+        sp = rec_sp['resp'].extract_epoch(ep).shape[0]
+        bp = rec_bp['resp'].extract_epoch(ep).shape[0]
+        if len(all_epochs)==3:
+            if abs(sp - bp) < 3:
+                balanced_eps.append(ep)
+        else:
+            if sp==bp:
+                balanced_eps.append(ep)
+
+    if len(balanced_eps)==0:
+        log.info("no balanced epochs at site {}".format(rec.name))
+
+    else:
+        log.info("found {0} balanced epochs:".format(len(balanced_eps)))
+
+    return balanced_eps
+
+def mask_pupil_balanced_epochs(rec):
+    r = rec.copy()
+    balanced_epochs = get_pupil_balanced_epochs(r)
+    r = r.and_mask(balanced_epochs)
+    return r
+
+def add_pupil_mask(rec):
+    '''
+    Simply add a p_mask signal that's true where p > median.
+    Does this on a "per ref" basis so that epochs aren't chopped up.
+    '''
+    r = rec.copy()
+    ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True} 
+    bp = create_pupil_mask(r, **ops)
+    r['p_mask'] = bp['mask']
+    return r
+
+def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):
+    
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    r['residual'] = r['resp']._modified_copy(r['resp']._data - r[signal]._data)
+    
+    if cutoff is not None:
+        r = bandpass_filter_resp(r, low_c=cutoff, high_c=None, signal='residual')
+
+    if shuffle:
+        r['residual'] = r['residual'].shuffle_time(rand_seed=1)
+
+    return r
+
+def add_epoch_signal(rec):
+    """
+    Add new signal to recording with each channel being the 
+    True/False mask for each STIM epoch
+    """
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    epochs = [e for e in r.epochs.name.unique() if 'STIM' in e]
+    resp = r['resp']._data
+    bins = r['resp'].extract_epoch(epochs[0]).shape[-1]
+    epoch_signal = np.zeros((len(epochs) * bins, resp.shape[-1]))
+    idx = 0
+    for e in epochs:
+        for b in range(bins):
+            sig = r['resp'].epoch_to_signal(e)
+            data = sig.extract_epoch(e)
+        
+            ran = np.arange(0, bins)
+            data[:, :, (ran<b) | (ran>b)] = 0
+            data[:, :, b] = 1 
+            sig = sig._modified_copy(np.zeros((1, sig._data.shape[-1])))
+            sig = sig.replace_epochs({e: data})
+            epoch_signal[idx, :] = sig._data.squeeze()
+            idx+=1
+
+    r['stim_epochs'] = r['resp']._modified_copy(epoch_signal)
+    r['stim_epochs'].name = 'stim_epochs'
+
+    return r 
+
+
+def add_meta(rec):
+    from nems.signal import RasterizedSignal
+    if type(rec['resp']) is not RasterizedSignal:
+        rec['resp'] = rec['resp'].rasterize()
+
+    ref_len = rec.apply_mask(reset_epochs=True)['resp'].extract_epoch('REFERENCE').shape[-1]
+
+    rec.meta['ref_len'] = ref_len
+
+    import charlieTools.noise_correlations as nc
+    epochs = [e for e in rec.apply_mask(reset_epochs=True).epochs.name.unique() if 'STIM' in e]
+    resp_dict = rec['resp'].extract_epochs(epochs)
+    nc = nc.compute_rsc(resp_dict)
+    idx = nc[nc['pval'] < 0.05].index
+    idx = [(int(x.split('_')[0]), int(x.split('_')[1])) for x in idx]
+    arr = np.zeros((rec['resp'].shape[0], rec['resp'].shape[0]))
+    for i in idx:
+        arr[i[0], i[1]] = 1
+
+    rec.meta['sig_corr_pairs'] = arr
+    
+    return rec
+
+
+def zscore_resp(rec):
+    r = rec.copy()
+    r['resp'] = r['resp'].rasterize()
+    zscore = r['resp']._data
+    zscore = (zscore.T - zscore.mean()).T
+    zscore = (zscore.T / zscore.std(axis=-1)).T
+
+    r['resp_raw'] = rec['resp']
+    r['resp'] = r['resp']._modified_copy(zscore)
+
+    return r

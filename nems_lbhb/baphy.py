@@ -33,7 +33,8 @@ from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
 from nems_lbhb.io import (baphy_parm_read, baphy_align_time, baphy_stim_cachefile, load_pupil_trace,
-                          get_rem, load_rem_options, set_default_pupil_options)
+                          get_rem, load_rem_options, set_default_pupil_options,
+                          baphy_align_time_baphyparm)
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -279,42 +280,50 @@ def baphy_load_data(parmfilepath, **options):
     print("Spike file: {0}".format(spkfilepath))
 
     # load spike times
-    sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+    if options['resp']:
+        sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
 
-    # adjust spike and event times to be in seconds since experiment started
-    exptevents, spiketimes, unit_names = baphy_align_time(
-            exptevents, sortinfo, spikefs, options['rasterfs']
-            )
+        # adjust spike and event times to be in seconds since experiment started
+        exptevents, spiketimes, unit_names = baphy_align_time(
+                exptevents, sortinfo, spikefs, options['rasterfs']
+                )
 
-    # assign cellids to each unit
-    siteid = globalparams['SiteID']
-    unit_names = [(siteid + "-" + x) for x in unit_names]
-    # print(unit_names)
+        # assign cellids to each unit
+        siteid = globalparams['SiteID']
+        unit_names = [(siteid + "-" + x) for x in unit_names]
+        # print(unit_names)
 
-    # test for special case where psuedo cellid suffix has been added to
-    # cellid by stripping anything after a "_" underscore in the cellid (list)
-    # provided
-    pcellids = options['cellid'] if (type(options['cellid']) is list) \
-       else [options['cellid']]
-    cellids = []
-    pcellidmap = {}
-    for pcellid in pcellids:
-        t = pcellid.split("_")
-        t[0] = t[0].lower()
-        cellids.append(t[0])
-        pcellidmap[t[0]] = pcellid
-    print(pcellidmap)
-    # pull out a single cell if 'all' not specified
-    spike_dict = {}
-    for i, x in enumerate(unit_names):
-        if (cellids[0] == 'all'):
-            spike_dict[x] = spiketimes[i]
-        elif (x.lower() in cellids):
-            spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
-    #import pdb
-    #pdb.set_trace()
-    if not spike_dict:
-        raise ValueError('No matching cellid in baphy spike file')
+        # test for special case where psuedo cellid suffix has been added to
+        # cellid by stripping anything after a "_" underscore in the cellid (list)
+        # provided
+        pcellids = options['cellid'] if (type(options['cellid']) is list) \
+           else [options['cellid']]
+        cellids = []
+        pcellidmap = {}
+        for pcellid in pcellids:
+            t = pcellid.split("_")
+            t[0] = t[0].lower()
+            cellids.append(t[0])
+            pcellidmap[t[0]] = pcellid
+        print(pcellidmap)
+        # pull out a single cell if 'all' not specified
+        spike_dict = {}
+        for i, x in enumerate(unit_names):
+            if (cellids[0] == 'all'):
+                spike_dict[x] = spiketimes[i]
+            elif (x.lower() in cellids):
+                spike_dict[pcellidmap[x.lower()]] = spiketimes[i]
+        #import pdb
+        #pdb.set_trace()
+        if not spike_dict:
+            raise ValueError('No matching cellid in baphy spike file')
+    else:
+        # no spike data, use baphy-recorded timestamps.
+        # TODO: get this working with old baphy files that don't record explicit timestamps
+        # in that case, just assume real time is the sum of trial durations.
+        spike_dict = {}
+        #import pdb; pdb.set_trace()
+        exptevents = baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
 
     state_dict = {}
     if options['pupil']:
@@ -393,11 +402,18 @@ def baphy_load_dataset(parmfilepath, **options):
     # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
     # with this loading procedure.
     # CRH 12/10/2019
-    if (exptparams['runclass'] == 'BVT') & ('_a_' in parmfilepath):
+    if (exptparams['runclass'] == 'BVT') & (exptparams['BehaveObjectClass'] != 'Passive'):
         exptevents = beh.create_trial_labels(exptparams, exptevents)
         active_BVT = True
     else:
         active_BVT = False
+
+    # Figure out how to handle "false alarm" trials. Truncate after first lick
+    # if not passive or classical conditioning
+    if exptparams['BehaveObjectClass'] in ['Passive','ClassicalConditioning']:
+        remove_post_lick = False
+    else:
+        remove_post_lick = True
 
     # pre-process event list (event_times) to only contain useful events
     # extract each trial
@@ -422,7 +438,7 @@ def baphy_load_dataset(parmfilepath, **options):
     log.info('Setting end for {} events from {} to {}'.format(
         np.sum(end_events), final_trial_end0, final_trial_end))
     # set first True to False (the start of the first trial)
-    first_true = np.argwhere(ffstop==True)[0][0]
+    first_true = np.argwhere(ffstop == True)[0][0]
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
@@ -433,42 +449,49 @@ def baphy_load_dataset(parmfilepath, **options):
     event_times['name'] = "TRIAL"
     event_times = event_times.drop(columns=['index'])
 
-    log.info('Removing post-response stimuli')
-    keepevents = np.full(len(exptevents), True, dtype=bool)
-    for trialidx in range(1, TrialCount+1):
-        # remove stimulus events after TRIALSTOP or STIM,OFF event
-        fftrial_stop = (exptevents['Trial'] == trialidx) & \
-            ((exptevents['name'] == "STIM,OFF") |
-             (exptevents['name'] == "OUTCOME,VEARLY") |
-             (exptevents['name'] == "OUTCOME,EARLY") |
-             (exptevents['name'] == "TRIALSTOP"))
-        if np.sum(fftrial_stop):
-            trialstoptime = np.min(exptevents[fftrial_stop]['start'])
+    if remove_post_lick:
+        # during most baphy behaviors, the trial terminates following an early lick
+        # (false alarm), but events may be listed after that time.
+        # this code removes post-FA events and truncates any epochs interupted by
+        # by the lick. Exception is classical conditioning, where licks are recorded
+        # but don't affect stimulus presentation
+        log.info('Removing post-response stimuli')
+        keepevents = np.full(len(exptevents), True, dtype=bool)
 
-            fflate = (exptevents['Trial'] == trialidx) & \
-                exptevents['name'].str.startswith('Stim , ') & \
-                (exptevents['start'] > trialstoptime)
-            fftrunc = (exptevents['Trial'] == trialidx) & \
-                exptevents['name'].str.startswith('Stim , ') & \
-                (exptevents['start'] <= trialstoptime) & \
-                (exptevents['end'] > trialstoptime)
+        for trialidx in range(1, TrialCount+1):
+            # remove stimulus events after TRIALSTOP or STIM,OFF event
+            fftrial_stop = (exptevents['Trial'] == trialidx) & \
+                ((exptevents['name'] == "STIM,OFF") |
+                 (exptevents['name'] == "OUTCOME,VEARLY") |
+                 (exptevents['name'] == "OUTCOME,EARLY") |
+                 (exptevents['name'] == "TRIALSTOP"))
+            if np.sum(fftrial_stop):
+                trialstoptime = np.min(exptevents[fftrial_stop]['start'])
 
-        for i, d in exptevents.loc[fflate].iterrows():
-            # print("{0}: {1} - {2} - {3}>{4}"
-            #       .format(i, d['Trial'], d['name'], d['end'], start))
-            # remove Pre- and PostStimSilence as well
-            keepevents[(i-1):(i+2)] = False
+                fflate = (exptevents['Trial'] == trialidx) & \
+                    exptevents['name'].str.startswith('Stim , ') & \
+                    (exptevents['start'] > trialstoptime)
+                fftrunc = (exptevents['Trial'] == trialidx) & \
+                    exptevents['name'].str.startswith('Stim , ') & \
+                    (exptevents['start'] <= trialstoptime) & \
+                    (exptevents['end'] > trialstoptime)
 
-        for i, d in exptevents.loc[fftrunc].iterrows():
-            log.debug("Truncating event %d early at %.3f", i, trialstoptime)
-            exptevents.loc[i, 'end'] = trialstoptime
-            # also trim post stim silence
-            exptevents.loc[i + 1, 'start'] = trialstoptime
-            exptevents.loc[i + 1, 'end'] = trialstoptime
+            for i, d in exptevents.loc[fflate].iterrows():
+                # print("{0}: {1} - {2} - {3}>{4}"
+                #       .format(i, d['Trial'], d['name'], d['end'], start))
+                # remove Pre- and PostStimSilence as well
+                keepevents[(i-1):(i+2)] = False
 
-    print("Keeping {0}/{1} events that precede responses"
-          .format(np.sum(keepevents), len(keepevents)))
-    exptevents = exptevents[keepevents].reset_index()
+            for i, d in exptevents.loc[fftrunc].iterrows():
+                log.debug("Truncating event %d early at %.3f", i, trialstoptime)
+                exptevents.loc[i, 'end'] = trialstoptime
+                # also trim post stim silence
+                exptevents.loc[i + 1, 'start'] = trialstoptime
+                exptevents.loc[i + 1, 'end'] = trialstoptime
+
+        print("Keeping {0}/{1} events that precede responses"
+              .format(np.sum(keepevents), len(keepevents)))
+        exptevents = exptevents[keepevents].reset_index()
 
     # add event characterizing outcome of each behavioral
     # trial (if behavior)
@@ -481,8 +504,6 @@ def baphy_load_dataset(parmfilepath, **options):
                 'BEHAVIOR,PUMPON,Pump': 'HIT_TRIAL'}
     this_event_times = event_times.copy()
     any_behavior = False
-    #import pdb
-    #pdb.set_trace()
 
     if active_BVT:
         # CRH - using the labeled soundTrial events in exptevents
@@ -518,11 +539,11 @@ def baphy_load_dataset(parmfilepath, **options):
                 this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
                 any_behavior = True
 
-    # CRH add check, just incase user messed up when doing experiment
+    # CRH add check, just in case user messed up when doing experiment
     # and selected: physiology yes, passive, but set behavior control to active
     # in this case, behavior didn't run, file got created with _p_, but baphy
     # still tried to label trials.
-    any_behavior = any_behavior & ('_a_' in parmfilepath)
+    any_behavior = any_behavior & (exptparams['BehaveObjectClass'] != 'Passive')
 
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
@@ -549,9 +570,9 @@ def baphy_load_dataset(parmfilepath, **options):
 
     stim_dict = {}
 
-    if 'pertrial' in options and options['pertrial']:
+    if options.get('pertrial', 0):
         # NOT COMPLETE!
-
+        raise ValueError('pertrial not supported')
         # make stimulus events unique to each trial
         this_event_times = event_times.copy()
         for eventidx in range(0, TrialCount):
@@ -564,7 +585,10 @@ def baphy_load_dataset(parmfilepath, **options):
     else:
         # generate stimulus events unique to each distinct stimulus
         log.info('Aligning events between stim and response')
-        ff_tar_events = exptevents['name'].str.endswith('Target')
+        ff_tar_events = exptevents['name'].str.endswith('Target') | \
+                        exptevents['name'].str.endswith('Target+NoLight') | \
+                        exptevents['name'].str.endswith('Target+Light')
+
         ff_tar_pre = exptevents['name'].str.startswith('Pre') & ff_tar_events
         ff_tar_dur = exptevents['name'].str.startswith('Stim') & ff_tar_events
         ff_lick_dur = (exptevents['name'] == 'LICK')
@@ -622,9 +646,14 @@ def baphy_load_dataset(parmfilepath, **options):
             keepevents = np.ones(len(this_event_times)) == 1
             keeppostevents = np.ones(len(this_event_times)) == 1
             for i, d in this_event_times.iterrows():
-                fdur = ((ff_tar_dur | ff_lick_dur)
-                        & (exptevents['start'] < d['end'] - 0.001)
-                        & (exptevents['end'] > d['start'] + 0.001))
+                if remove_post_lick:
+                    fdur = ((ff_tar_dur | ff_lick_dur)
+                            & (exptevents['start'] < d['end'] - 0.001)
+                            & (exptevents['end'] > d['start'] + 0.001))
+                else:
+                    fdur = (ff_tar_dur
+                            & (exptevents['start'] < d['end'] - 0.001)
+                            & (exptevents['end'] > d['start'] + 0.001))
 
                 if np.sum(fdur) and \
                    (exptevents['start'][fdur].min() < d['start'] + 0.5):
@@ -705,7 +734,7 @@ def baphy_load_dataset(parmfilepath, **options):
             if elements[0] == "PreStimSilence":
                 name="PreStimSilence"
             elif elements[0] == "Stim":
-                name="TAR_" + elements[1]
+                name="STIM_" + elements[1]
                 e['start'] = exptevents.loc[i-1]['start']
                 e['end'] = exptevents.loc[i+1]['end']
             elif elements[0] == "PostStimSilence":
@@ -722,6 +751,8 @@ def baphy_load_dataset(parmfilepath, **options):
         # event_times = pd.concat(
         #         [event_times, this_event_times2, this_event_times3]
         #         )
+
+    #import pdb; pdb.set_trace()
 
     # add behavior events
     if exptparams['runclass'] == 'PTD' and any_behavior:
@@ -747,7 +778,7 @@ def baphy_load_dataset(parmfilepath, **options):
         event_times = event_times.append(te, ignore_index=True)
         # event_times=pd.concat([event_times, te])
 
-    # sort by when the event occured in experiment time
+    # sort by when the event occurred in experiment time
 
     event_times = event_times.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -1334,7 +1365,13 @@ def baphy_load_recording(**options):
     if type(cellid) is list:
         cell_list = cellid
 
-    if cell_list is not None:
+    if not options.get('resp', True):
+        # eg, load training + pupil data
+        if mfilename is None:
+            raise ValueError("must specify mfilename if resp==False")
+        rec_name = siteid
+
+    elif cell_list is not None:
         cellid = cell_list[0]
         siteid = cellid.split("-")[0]
         rec_name = siteid
