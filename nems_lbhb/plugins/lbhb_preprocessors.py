@@ -348,12 +348,12 @@ def ev(load_key):
     """
 
     xfspec = [['nems_lbhb.preprocessing.mask_evoked', {}, ['rec'], ['rec']]]
-    
+
     return xfspec
 
 def apm(load_key):
     """
-    Add a mask signal ('p_mask') for pupil that can be used later on in fitting. 
+    Add a mask signal ('p_mask') for pupil that can be used later on in fitting.
     Doesn't go in "true" mask signal.
     """
 
@@ -539,13 +539,13 @@ def stimenv(load_key):
 
 def residual(load_key):
     """
-    Add residual signal to be used for pupil latent variable creation. 
+    Add residual signal to be used for pupil latent variable creation.
     Because LV creation happens dynamically during the fit,
-    want to create this signal first so that shuffling 
+    want to create this signal first so that shuffling
     (if specified) only happens one time on the outside.
     """
     options = load_key.split('.')
-    
+
     shuffle = False
     cutoff = None
     signal = 'psth_sp'
@@ -558,7 +558,7 @@ def residual(load_key):
             signal = 'pred'
 
     xfspec = [['nems_lbhb.preprocessing.create_residual',
-            {'shuffle': shuffle, 
+            {'shuffle': shuffle,
             'cutoff': cutoff,
             'signal': signal},
             ['rec'], ['rec']]]
@@ -567,12 +567,12 @@ def residual(load_key):
 
 def epsig(load_key):
     """
-    Create epoch signal from epochs so that cost function has access to 
-    stim epoch times 
+    Create epoch signal from epochs so that cost function has access to
+    stim epoch times
     """
 
     xfspec = [['nems_lbhb.preprocessing.add_epoch_signal',
-                {}, 
+                {},
                 ['rec'], ['rec']]]
 
     return xfspec
@@ -585,7 +585,7 @@ def addmeta(load_key):
     """
 
     xfspec = [['nems_lbhb.preprocessing.add_meta',
-                {}, 
+                {},
                 ['rec'], ['rec']]]
 
     return xfspec
@@ -596,7 +596,13 @@ def rz(load_key):
     signal.
     """
 
-    xfspec = [['nems_lbhb.preprocessing.zscore_resp', 
+    xfspec = [['nems_lbhb.preprocessing.zscore_resp',
                 {}, ['rec'], ['rec']]]
-    
+
     return xfspec
+
+def esth1(kw):
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1}]]
+
+def esth2(kw):
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2}]]
