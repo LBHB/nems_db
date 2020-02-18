@@ -27,6 +27,7 @@ import nems.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+from nems import get_setting
 
 import logging
 log = logging.getLogger(__name__)
@@ -131,10 +132,18 @@ def pop_file(stimfmt='ozgf', batch=None,
     else:
         raise ValueError('site not known for popfile')
 
+    use_API = get_setting('USE_NEMS_BAPHY_API')
+
     uri_path = '/auto/data/nems_db/recordings/'
     recname="{}_{}.fs{}.ch{}".format(subsetstr, stimfmt, rasterfs, chancount)
+    data_file = '{}{}/{}.tgz'.format(uri_path, batch, recname)
 
-    recording_uri = '{}{}/{}.tgz'.format(uri_path, batch, recname)
+    if use_API:
+        p, f = os.path.split(data_file)
+        host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+        recording_uri = host + '/recordings/' + str(batch) + '/' + f
+    else:
+        recording_uri = data_file
 
     return recording_uri
 

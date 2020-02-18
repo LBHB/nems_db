@@ -232,6 +232,8 @@ class BAPHYExperiment:
         behavior_events = []
         for ep, ev in zip(exptparams, exptevents):
             try:
+                # TODO support for different Behavior Objects
+                # consider also finding invalid trials and epochs within trials
                 behavior_events.append(behavior.create_trial_labels(ep, ev))
             except KeyError:
                 # passive file, just return exptevents df
@@ -663,6 +665,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
 
     # add column for invalid baphy trials
     exptevents = behavior.mark_invalid_trials(exptparams, exptevents, **options)
+    # TODO : make sure this works for different Behavior Objects (eg, ClassicalConditioning)
 
     baphy_outcomes = ['HIT_TRIAL', 
                       'MISS_TRIAL', 
