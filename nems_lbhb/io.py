@@ -40,6 +40,7 @@ import nems.recording
 import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
+import nems_lbhb.behavior as behavior
 
 log = logging.getLogger(__name__)
 
@@ -47,207 +48,7 @@ log = logging.getLogger(__name__)
 stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
-
-###############################################################################
-# Main entry-point for BAPHY experiments
-###############################################################################
-class BAPHYExperiment:
-    '''
-    Facilitates managing the various files and datasets associated with a
-    single BAPHY experiment:
-
-        >>> parmfile = '/auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.m'
-        >>> manager = BAPHYExperiment(parmfile)
-        >>> print(manager.pupilfile)
-        /auto/data/daq/Nameko/NMK004/NMK004e06_p_NON.pup.mat
-        >>> print(manager.spikefile)
-        /auto/data/daq/Nameko/NMK004/sorted/NMK004e06_p_NON.spk.mat
-        >>> manager.get_trial_starts()
-        array([ 31.87386667,  44.28406667,  56.64683333,  68.99676667,
-                81.3689    , 102.33266667, 114.70163333, 127.0711    ,
-               139.4586    , 151.82203333, 167.28496667, 179.64786667,
-               192.05813333, 204.47266667, 216.8878    , 230.98546667,
-               243.3703    , 255.7584    , 268.1709    , 280.60616667])
-    '''
-    @classmethod
-    def from_spikefile(cls, spikefile):
-        '''
-        Initialize class from a spike filename.
-
-        Useful if you are debugging code so that you don't have to manually
-        edit the filename to arrive at the parmfilename.
-        '''
-        spikefile = Path(spikefile)
-        folder = spikefile.parent.parent
-        parmfile = folder / spikefile.name.rsplit('.', 2)[0]
-        parmfile = parmfile.with_suffix('.m')
-        return cls(parmfile)
-
-    @classmethod
-    def from_pupilfile(cls, pupilfile):
-        if 'sorted' in pupilfile:
-            # using new pupil analysis, which is save in sorted dir
-            pp, bb = os.path.split(pupilfile)
-            fn = bb.split('.')[0]
-            path = os.path.split(pp)[0]
-            parmfile = Path(os.path.join(path, fn)).with_suffix('.m')
-        else:
-            parmfile = Path(str(pupilfile).rsplit('.', 2)[0])
-            parmfile = parmfile.with_suffix('.m')
-
-        return cls(parmfile)
-
-    def __init__(self, parmfile):
-        # Make sure that the '.m' suffix is present! In baphy_load data I see
-        # that there's care to make sure it's present so I assume not all
-        # functions are careful about the suffix.
-        self.parmfile = Path(parmfile).with_suffix('.m')
-        if not self.parmfile.exists():
-            raise IOError(f'{self.parmfile} not found')
-        self.folder = self.parmfile.parent
-        self.experiment = self.parmfile.name.split('_', 1)[0]
-        self.experiment_with_runclass = self.parmfile.stem
-
-    @property
-    @lru_cache(maxsize=128)
-    def openephys_folder(self):
-        path = self.folder / 'raw' / self.experiment
-        candidates = list(path.glob(self.experiment_with_runclass + '*'))
-        if len(candidates) > 1:
-            raise ValueError('More than one candidate found')
-        if len(candidates) == 0:
-            raise ValueError('No candidates found')
-        return candidates[0]
-
-    @property
-    @lru_cache(maxsize=128)
-    def openephys_tarfile(self):
-        '''
-        Return path to OpenEphys tarfile containing recordings
-        '''
-        path = self.folder / 'raw' / self.experiment
-        return path.with_suffix('.tgz')
-
-    @property
-    @lru_cache(maxsize=128)
-    def openephys_tarfile_relpath(self):
-        '''
-        Return relative path in OpenEphys tarfile that represents the "parent"
-        of all files (e.g., *.continuous) stored within, e.g.:
-
-            filename = manager.openephys_tarfile_relpath / '126_CH1.continuous'
-            import tarfile
-            with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
-                fh.open(filename)
-        '''
-        parent = self.openephys_tarfile.parent
-        return self.openephys_folder.relative_to(parent)
-
-    @property
-    @lru_cache(maxsize=128)
-    def pupilfile(self):
-        return self.parmfile.with_suffix('.pup.mat')
-
-    @property
-    @lru_cache(maxsize=128)
-    def spikefile(self):
-        filename = self.folder / 'sorted' / self.experiment_with_runclass
-        return filename.with_suffix('.spk.mat')
-
-    @lru_cache(maxsize=128)
-    def get_trial_starts(self, method='openephys'):
-        if method == 'openephys':
-            return load_trial_starts_openephys(self.openephys_folder)
-        raise ValueError(f'Method "{method}" not supported')
-
-    @lru_cache(maxsize=128)
-    def get_baphy_events(self, correction_method='openephys', **kw):
-        baphy_events = self._get_baphy_parameters()[-1]
-        if correction_method is None:
-            return baphy_events
-        if correction_method == 'openephys':
-            trial_starts = self.get_trial_starts('openephys')
-            return baphy_align_time_openephys(baphy_events, trial_starts, **kw)
-        if correction_method == 'spikes':
-            spikes, fs = self._get_spikes()
-            exptevents, _, _ = baphy_align_time(baphy_events, spikes, fs)
-            return exptevents
-        mesg = 'Unsupported correction method "{correction_method}"'
-        raise ValueError(mesg)
-
-    def get_pupil_trace(self, *args, **kwargs):
-        return load_pupil_trace(str(self.pupilfile), *args, **kwargs)
-
-    # Methods below this line just pass through to the functions for now.
-    def _get_baphy_parameters(self, userdef_convert=False):
-        '''
-        Parameters
-        ----------
-        userdef_convert : bool
-            If True, find all instances of the `UserDefinableFields` key in the
-            BAPHY parms data and convert them to dictionaries. See
-            :func:`baphy_convert_user_definable_fields` for example.
-        '''
-        # Returns tuple of global, expt and events
-        result = baphy_parm_read(self.parmfile)
-        if userdef_convert:
-            baphy_convert_user_definable_fields(result)
-        return result
-
-    def _get_spikes(self):
-        return baphy_load_spike_data_raw(str(self.spikefile))
-
-    def get_continuous_data(self, chans):
-        '''
-        WARNING: This is a beta method. The interface and return value may
-        change.
-        chans (list or numpy slice): which electrodes to load data from
-        '''
-        # get filenames (TODO: can this be sped up?)
-        #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-        #    log.info("Finding filenames in tarfile...")
-        #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
-        #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
-
-        # Use xml settings instead of the tar file. Much faster. Also, takes care
-        # of channel mapping (I think)
-        recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
-        connector = [i for i in recChans.keys()][0]
-        #import pdb; pdb.set_trace()
-        # handle channel remapping
-        info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
-        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
-        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
-        for k in mapping_keys:
-            ch_num = mapping[k].get('Number')
-            if ch_num in recChans[connector]:
-                recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
-
-        recChans = [recChans[connector][i]['name_mapped'] \
-                            for i in recChans[connector].keys()]
-        data_files = [connector + '_' + c + '.continuous' for c in recChans]
-        all_chans = np.arange(len(data_files))
-        idx = all_chans[chans].tolist()
-        selected_data = np.take(data_files, idx)
-        continuous_data = []
-        for filename in selected_data:
-            full_filename = self.openephys_folder / filename
-            if os.path.isfile(full_filename):
-                log.info('%s already extracted, load faster...', filename)
-                data = load_continuous_openephys(str(full_filename))
-                continuous_data.append(data['data'][np.newaxis, :])
-            else:
-                with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-                    log.info("Extracting / loading %s...", filename)
-                    full_filename = self.openephys_tarfile_relpath / filename
-                    with tar_fh.extractfile(str(full_filename)) as fh:
-                        data = load_continuous_openephys(fh)
-                        continuous_data.append(data['data'][np.newaxis, :])
-
-        continuous_data = np.concatenate(continuous_data, axis=0)
-
-        return continuous_data
-
+# =================================================================
 
 def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
     '''
@@ -909,7 +710,6 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
-
     TrialCount = np.max(exptevents['Trial'])
 
     TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
