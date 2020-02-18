@@ -413,6 +413,8 @@ def _compute_metrics(exptparams, exptevents):
         # cummalative FAR
         tar_RTs = _get_target_RTs(exptparams, exptevents)
         ref_RTs = _get_reference_RTs(exptparams, exptevents)
+        if len(ref_RTs) != nFA:
+            raise ValueError("Number of ref RTs should match the number of FAs!")
         resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
         for tar in tar_keys:
             R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
@@ -554,7 +556,7 @@ def _get_target_RTs(exptparams, exptevents):
                 fl.append(tdf[tdf.name=='LICK']['start'].values[0])
                 tar_start.append(tdf[tdf.name==tar]['start'].values[0])
             
-            RTs[tar_key] = np.array(fl) - (np.array(tar_start) + early_win)
+            RTs[tar_key] = np.array(fl) - (np.array(tar_start)) - early_win
 
     return RTs
 
@@ -564,7 +566,7 @@ def _get_reference_RTs(exptparams, exptevents):
     "private" function to get RTs for references. Separate from targets because logic is slightly different
     """
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
-    resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] - early_win
+    resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] + early_win
     allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
     validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
                                     (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL']))]['Trial'].unique()
@@ -579,9 +581,8 @@ def _get_reference_RTs(exptparams, exptevents):
         sound_onsets = tdf[(tdf.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])) & \
                             (tdf.invalidSoundTrial==False)]['start'].values
         fl = tdf[tdf.name=='LICK']['start'].values[0]
-        resp_window_start = sound_onsets + early_win
 
-        for s in resp_window_start:
+        for s in sound_onsets:
             rt = fl - s
             # exlucde rt if outside resp window for this stim,
             # or if negative (this would mean that baphy saved
