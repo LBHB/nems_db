@@ -17,6 +17,8 @@ def create_trial_labels(exptparams, exptevents):
         - For example, each REF can be CORRECT_REJECT or FALSE_ALARM etc.
         - For sounds that weren't played (for ex because of lick early on causing a FA),
             label them NULL and dont give them a trial number.
+    TODO: make this function specific to the BehaviorObject (ie, RewardTargetLBHB,
+          ClassicalConditioning)
     """
 
     all_trials = np.unique(exptevents['Trial'])
@@ -403,7 +405,7 @@ def _compute_metrics(exptparams, exptevents):
         # Calculate the RT vectors for each target and for References, then compute DI
         # - Yin, Fritz, & Shamma, 2010 JASA
         # DI is the area under the ROC curve defined by plotting cummulative HR against 
-        # cummalative FAR
+        # cummulative FAR
         tar_RTs = _get_target_RTs(exptparams, exptevents)
         ref_RTs = _get_reference_RTs(exptparams, exptevents)
         if len(ref_RTs) != nFA:
