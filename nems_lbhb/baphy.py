@@ -280,8 +280,7 @@ def baphy_load_data(parmfilepath, **options):
     # load spike times
     if options['resp']:
         sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
-        fn = parmfilepath.split('/')[-1]
-        exptevents.to_pickle('/auto/users/hellerc/code/scratch/exptevents_baphy_{}.pickle'.format(fn))
+
         # adjust spike and event times to be in seconds since experiment started
         exptevents, spiketimes, unit_names = io.baphy_align_time(
                 exptevents, sortinfo, spikefs, options['rasterfs']
