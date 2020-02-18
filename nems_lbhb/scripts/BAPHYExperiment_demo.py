@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from nems_lbhb.io import BAPHYExperiment
+from nems_lbhb.baphy_experiment import BAPHYExperiment
 
 batch = 307
 siteid = 'TAR010c'

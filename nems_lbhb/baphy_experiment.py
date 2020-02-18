@@ -422,12 +422,16 @@ class BAPHYExperiment:
         """
         if not self.behavior:
             raise ValueError("No behavior detected in this experiment")
-        
+
         # get aligned exptevents for behavior files
         events = self.get_behavior_events(correction_method=self.correction_method, **kwargs)
         params = self.get_baphy_exptparams()
         behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
-        events = np.array(events)[behave_file]
+        if len(behave_file) > 1:
+            events = np.array(events)[behave_file]
+        elif behave_file[0] == True:
+            events = events
+
         # assume params same for all files. This is a bit kludgy... Think it
         # should work?
         beh_params = np.array(params)[behave_file][0]
@@ -656,6 +660,10 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
         raise KeyError("soundTrial not in exptevents. Behavior analysis code \
                         has not been run yet, shouldn't be making \
                             behavior epochs")
+
+    # add column for invalid baphy trials
+    exptevents = behavior.mark_invalid_trials(exptparams, exptevents, **options)
+
     baphy_outcomes = ['HIT_TRIAL', 
                       'MISS_TRIAL', 
                       'CORRECT_REJECT_TRIAL',
@@ -669,8 +677,13 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     tokens = [t.replace('_TRIAL', '_TOKEN') for t in behavior_events.soundTrial]
     behavior_events.loc[:, 'name'] = tokens
 
+    # invalid baphy trial events
+    invalid_trials = exptevents[exptevents.invalidTrial].Trial.unique()
+    invalid_events = exptevents[baphy_outcomes_tf & exptevents.Trial.isin(invalid_trials)].copy()
+    invalid_events.loc[:, 'name'] = 'INVALID_BAPHY_TRIAL'
+
     behavior_events = pd.concat([baphy_behavior_events,
-                                behavior_events], ignore_index=True)
+                                behavior_events, invalid_events], ignore_index=True)
 
     behavior_events = _remove_post_lick(behavior_events, exptevents)
 
@@ -684,7 +697,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
 
 def _remove_post_lick(events, exptevents):
     # screen for FA / Early trials in which we need to truncate / chop out references
-    trunc_trials = exptevents[exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
+    trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
     lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
 
     if len(lick_time) != len(trunc_trials):
