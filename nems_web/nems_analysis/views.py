@@ -193,7 +193,7 @@ def main_view():
     # Returns all columns in the format 'NarfResults.columnName,'
     # then removes the leading 'NarfResults.' from each string
     collist = ['%s'%(s) for s in NarfResults.__table__.columns]
-    collist = [s.replace('NarfResults.', '') for s in collist]
+    collist = [s.replace('Results.', '') for s in collist]
     sortlist = copy.deepcopy(collist)
     # Remove cellid and modelname from options toggles- make them required.
     required_cols = n_ui.required_cols
