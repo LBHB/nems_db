@@ -514,8 +514,8 @@ def baphy_events_to_epochs(exptevents, exptparams, **options):
         behavior = True
         behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
         epochs.append(behavior_epochs)
-
-    epochs = pd.concat(epochs, ignore_index=True)
+        
+    epochs = pd.concat(epochs, ignore_index=True, sort=False)
     file_start_time = epochs['start'].min()
     file_end_time = epochs['end'].max()
     te = pd.DataFrame(index=[0], columns=(epochs.columns))
