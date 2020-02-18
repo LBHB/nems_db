@@ -213,7 +213,6 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     keep_following_incorrect_trial = options.get('keep_following_incorrect_trial', False)
     trial_numbers = options.get('trial_numbers', None)
     sound_trial_numbers = options.get('sound_trial_numbers', None)
-    time = options.get('time', None)
 
     iv_trials = False * np.ones(events.shape[0]).astype(np.bool)
     iv_sound_trials = False * np.ones(events.shape[0]).astype(np.bool)
@@ -260,12 +259,6 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     if sound_trial_numbers is not None:
         # mark all trial not in trial_numbers as invalid
         iv = (events.soundTrialidx.isin(sound_trial_numbers) == False)
-        iv_sound_trials = iv | iv_sound_trials
-
-    if time is not None:
-        # mark all trials (sound tokens) not in time window as invalid
-        iv = ((events.start > time.min()) & (events.end < time.max()))
-        iv_trials = iv | iv_trials
         iv_sound_trials = iv | iv_sound_trials
 
     # Mark any REFs that occur in an invalid target slot as invalid sounds
