@@ -408,6 +408,7 @@ def _compute_metrics(exptparams, exptevents):
         # cummulative FAR
         tar_RTs = _get_target_RTs(exptparams, exptevents)
         ref_RTs = _get_reference_RTs(exptparams, exptevents)
+      
         if len(ref_RTs) != nFA:
             raise ValueError("Number of ref RTs should match the number of FAs!")
         resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
@@ -582,7 +583,7 @@ def _get_reference_RTs(exptparams, exptevents):
             # exlucde rt if outside resp window for this stim,
             # or if negative (this would mean that baphy saved
             # sound events that never played. Happens on early trials)
-            if (rt < resp_win_len) & (rt > 0):
+            if (rt <= resp_win_len) & (rt > 0):
                 rts.append(rt)
 
     return np.array(rts)
