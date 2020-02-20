@@ -1291,6 +1291,7 @@ def fill_default_options(options):
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
     #options['pupil_median'] = options.get('pupil_median', 0)
     #options["pupil_offset"] = options.get('pupil_offset', 0.75)
+    options['resp'] = int(options.get('resp', True))
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['cellid'] = options.get('cellid', cellid)
