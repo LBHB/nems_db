@@ -63,7 +63,7 @@ def queue_batch_file(job_file_loc):
 
     :return: Returns tuple of stdout, stderr.
     """
-    ret = subprocess.run(['sbatch', str(job_file_loc)], capture_output=True)
+    ret = subprocess.run(['sbatch', str(job_file_loc)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     print(f'STDOUT: {ret.stdout}')
     return ret.stdout, ret.stderr
 

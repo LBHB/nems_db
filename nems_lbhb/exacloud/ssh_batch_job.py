@@ -109,7 +109,7 @@ def submit_exacloud_job(*, user, cellid='', batch='', modelname='', exec_path=No
         script_path = Path(r'/home/exacloud/lustre1/LBHB/code/NEMS/scripts/fit_single.py')
 
     # default srun params for now
-    batch_maker = Path(r'/home/exacloud/lustre1/LBHB/code/nems_lbhb/exacloud/batch_job.py')
+    batch_maker = Path(r'/home/exacloud/lustre1/LBHB/code/nems_db/nems_lbhb/exacloud/batch_job.py')
 
     command = ' '.join([str(exec_path),
                         str(batch_maker),
