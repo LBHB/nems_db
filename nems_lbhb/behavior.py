@@ -582,7 +582,7 @@ def _get_reference_RTs(exptparams, exptevents):
             # exlucde rt if outside resp window for this stim,
             # or if negative (this would mean that baphy saved
             # sound events that never played. Happens on early trials)
-            if (rt < resp_win_len) & (rt > 0):
+            if (rt <= resp_win_len) & (rt >= 0):
                 rts.append(rt)
 
     return np.array(rts)
