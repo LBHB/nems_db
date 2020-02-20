@@ -66,13 +66,14 @@ def queue_batch_file(job_file_loc):
     :return: Returns tuple of stdout, stderr.
     """
     ret = subprocess.run(['sbatch', str(job_file_loc)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stdout = ret.stdout.decode()  # stdout is a bytes object
 
     try:
-        jobid = re.match(r'^Submitted batch job (\d*)$', ret.stdout).group(1)
+        jobid = re.match(r'^Submitted batch job (\d*)$', str(stdout)).group(1)
     except (IndexError, AttributeError):
         jobid = None
 
-    return jobid, ret.stdout
+    return jobid, stdout
 
 
 if __name__ == '__main__':
