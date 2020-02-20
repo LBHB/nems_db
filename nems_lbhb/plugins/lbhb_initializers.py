@@ -5,7 +5,7 @@ should occur intermingled with fitter keywords
 import logging
 import re
 
-from nems.plugins.default_initializers import init as nems_init
+from nems.plugins.default_fitters import init as nems_init
 from nems_lbhb.lnp_helpers import _lnp_metric
 
 log = logging.getLogger(__name__)
