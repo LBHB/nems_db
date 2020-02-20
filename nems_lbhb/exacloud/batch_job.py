@@ -1,5 +1,7 @@
 import argparse
+import re
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -57,15 +59,20 @@ def write_batch_file(job_arguments, queueid=None):
 
 
 def queue_batch_file(job_file_loc):
-    """Calls sbatch on the job file.
+    """Calls sbatch on the job file. Searches for jobid to return.
 
     :param job_file_loc: Location of the job file.
 
     :return: Returns tuple of stdout, stderr.
     """
-    ret = subprocess.run(['sbatch', str(job_file_loc)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print(f'STDOUT: {ret.stdout}')
-    return ret.stdout, ret.stderr
+    ret = subprocess.run(['sbatch', str(job_file_loc)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    try:
+        jobid = re.match(r'^Submitted batch job (\d*)$', ret.stdout).group(1)
+    except (IndexError, AttributeError):
+        jobid = None
+
+    return jobid, ret.stdout
 
 
 if __name__ == '__main__':
@@ -83,4 +90,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     job_file_loc = write_batch_file(args.arguments, args.queueid)
-    queue_batch_file(job_file_loc)
+    jobid, stdout = queue_batch_file(job_file_loc)
+
+    if jobid is not None:
+        print(jobid)
+        sys.exit(0)
+    else:
+        sys.exit(stdout)
