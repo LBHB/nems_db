@@ -47,18 +47,20 @@ def create_trial_labels(exptparams, exptevents):
             fl = ev[ev.name=='LICK']['start'].values[0]
             # decide what each sound is, then use this to classify the trial
             sID = []
+            # add reaction time for each sound (measured from sound onset). 
+            # If no lick, set to np.inf.
+            # if NULL sound trial, set to np.nan (prestim silence, sound never played etc.)
+            rt = []
             for _, r in ev.iterrows():
                 name = r['name']
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
-                
+                    rt.append(np.nan)
                 elif 'Reference' in name:
                     ref_start = r['start']
-                    #if (fl < min_time):
-                    #    sID.append('EARLY_TRIAL')
-                    #    trial_outcome = 'EARLY_TRIAL'
                     if ((fl >= ref_start) & (fl < (ref_start + early_win))):
                         sID.append('EARLY_TRIAL')
+                        rt.append(fl - ref_start)
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
                             trial_outcome = 'FALSE_ALARM_TRIAL'
@@ -67,13 +69,17 @@ def create_trial_labels(exptparams, exptevents):
                     elif (fl < ref_start):
                         # sound never played because of an early lick
                         sID.append('NULL')
+                        rt.append(np.nan)
                         trial_outcome = 'EARLY_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + early_win + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
+                        rt.append(fl - ref_start)
                         trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif ((fl > ref_start) & (fl > ref_start + early_win + resp_win)):
+                        rt.append(fl - ref_start)
                         sID.append('CORRECT_REJECT_TRIAL')
                     else:
+                        rt.append(np.nan)
                         sID.append('UNKNOWN')
 
                 elif 'Target' in name:
@@ -82,42 +88,54 @@ def create_trial_labels(exptparams, exptevents):
                     if rewarded:
                         if fl <= tar_start:
                             sID.append('NULL')
+                            rt.append(np.nan)
                         elif (fl > (tar_start + early_win)) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('HIT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'HIT_TRIAL'
                         elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('MISS_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'MISS_TRIAL'
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
+                            rt.append(fl - tar_start)
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
+                            rt.append(np.nan)
                             sID.append('UNKNOWN')
                     else:
                         if fl <= tar_start:
                             sID.append('NULL')
+                            rt.append(np.nan)
                         elif (fl > tar_start + early_win) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('INCORRECT_HIT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'INCORRECT_HIT_TRIAL'
                         elif ((fl > tar_start + early_win) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('CORRECT_REJECT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'CORRECT_REJECT_TRIAL'
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
+                            rt.append(fl - tar_start)
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
+                            rt.append(np.nan)
                             sID.append('UNKNOWN')
                 
                 else:
+                    rt.append(np.nan)
                     sID.append('NULL')
 
             ev.insert(4, 'soundTrial', sID)
+            ev.insert(5, 'RT', rt)
 
             if trial_outcome is not None:  
                 baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
@@ -145,6 +163,7 @@ def create_trial_labels(exptparams, exptevents):
             # no licks, MISS_TRIAL
             outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
             sID = []
+            rt = []
             for name in ev.name:
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
@@ -161,6 +180,9 @@ def create_trial_labels(exptparams, exptevents):
                         trial_outcome = 'CORRECT_REJECT_TRIAL'
                 else:
                     sID.append('NULL')
+
+                rt.append(np.inf)
+
             if trial_outcome is None:
                 import pdb; pdb.set_trace()
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
@@ -168,6 +190,7 @@ def create_trial_labels(exptparams, exptevents):
             ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
             ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
             ev.insert(4, 'soundTrial', sID)
+            ev.insert(5, 'RT', rt)
 
             trial_dfs.append(ev)
 
