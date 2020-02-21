@@ -354,7 +354,7 @@ def create_pupil_mask(rec, **options):
     =========================================================================
         state: what pupil state to return ("big" or "small" or "rem")
             default: "big"
-        method: how to divide states - mean, median, K-nearest-neighbors, fraction etc.
+        method: how to divide states - mean, median, fraction etc.
             default: "median"
         fraction: tuple desribing which fraction of pupil (ex: (0, 20)) would be 0 to 20 percent
             default: None
@@ -366,6 +366,8 @@ def create_pupil_mask(rec, **options):
             default: False
         rm_rem: If true, find (if file exists) period with rem and remove these from the mask
             default: True
+        cutoff: used if method ==  'user_def_value'. Force the division to be greater than (or less
+            than cutoff)
     """
 
     state = options.get('state', 'big')
@@ -466,247 +468,134 @@ def create_pupil_mask(rec, **options):
     #newrec = newrec.apply_mask(reset_epochs=True)  # why wasn't this here before? CRH 1/30/19
     #newrec = newrec.create_mask(True)
 
-    if use_cache == False:
-        # process/classify pupil here, based on mean/median/abs size
-        # Go through each of the binning options and create the mask
-        if (collapse == False) & (epoch is not None):
-            log.info('binning pupil at fs: {0} within epochs: {1}'.format(fs, epoch))
+    # process/classify pupil here, based on mean/median/abs size
+    # Go through each of the binning options and create the mask
+    if (collapse == False) & (epoch is not None):
+        log.info('binning pupil at fs: {0} within epochs: {1}'.format(fs, epoch))
 
-            # In this case, fold pupil first based on the epoch(s)
-            folded_pupil = r['pupil'].extract_epochs(epoch)
+        # In this case, fold pupil first based on the epoch(s)
+        folded_pupil = r['pupil'].extract_epochs(epoch)
 
-            # Now, repeat the mean of each bin w/in the epoch over the length
-            # of that bin (resampling pupil within epochs to give more "coarse" classification
-            for e in epoch:
-                reps = folded_pupil[e].shape[0]
-                samps = folded_pupil[e].shape[-1]
-                nbins = int(round(samps / (rec['resp'].fs / fs)))
-                bin_len = int(round(samps / nbins))
-                for rep in np.arange(0, reps):
-                    for b in np.arange(0, nbins+1):
-                        if b == nbins:
-                            start = int(b * bin_len)
-                            if not folded_pupil[e][rep, :, start:]:
-                                # check for empty slice
-                                pass
-                            else:
-                                mean_pup = np.nanmean(folded_pupil[e][rep, :, start:])
-                                folded_pupil[e][rep, :, start:] = mean_pup
-                        else:
-                            start = int(b * bin_len)
-                            stop = start + bin_len
-                            mean_pup = np.nanmean(folded_pupil[e][rep, :, start:stop])
-                            folded_pupil[e][rep, :, start:stop] = mean_pup
-
-            # rebuild pupil signal
-            r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
-
-        elif (collapse is True) & (epoch is not None):
-            log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
-
-            # In this case, fold pupil first based on the epoch(s)
-            folded_pupil = r['pupil'].extract_epochs(epoch)
-
-            # Now, repeat the mean of each epoch over the whole epoch
-            for e in epoch:
-                reps = folded_pupil[e].shape[0]
-                for rep in np.arange(0, reps):
-                    mean_pup = np.mean(folded_pupil[e][rep, :, :])
-                    folded_pupil[e][rep, :, :] = mean_pup
-
-            # rebuild pupil signal
-            r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
-
-        elif (fs == rec['resp'].fs) & (epoch is None):
-            log.info('classifying pupil continuously (at each time point)')
-
-
-        elif (fs != rec['resp'].fs) & (epoch is None):
-            log.info('WARNING - this could lead to weird edge effects later on')
-            # Don't know which epoch to collapse over, so just rebin on the
-            # continuous trace
-            samps = r['pupil'].as_continuous().shape[-1]
+        # Now, repeat the mean of each bin w/in the epoch over the length
+        # of that bin (resampling pupil within epochs to give more "coarse" classification
+        for e in epoch:
+            reps = folded_pupil[e].shape[0]
+            samps = folded_pupil[e].shape[-1]
             nbins = int(round(samps / (rec['resp'].fs / fs)))
             bin_len = int(round(samps / nbins))
-            pupil_trace = r['pupil'].as_continuous()
-            for b in np.arange(0, nbins+1):
-                        if b == nbins:
-                            start = int(b * bin_len)
-                            if not pupil_trace[0, start:]:
-                                # check for empty slice
-                                pass
-                            else:
-                                mean_pup = np.mean(pupil_trace[0, start:])
-                                pupil_trace[0, start:] = mean_pup
+            for rep in np.arange(0, reps):
+                for b in np.arange(0, nbins+1):
+                    if b == nbins:
+                        start = int(b * bin_len)
+                        if not folded_pupil[e][rep, :, start:]:
+                            # check for empty slice
+                            pass
                         else:
-                            start = int(b * bin_len)
-                            stop = start + bin_len
-                            mean_pup = np.mean(pupil_trace[0, start:stop])
-                            pupil_trace[0, start:stop] = mean_pup
-
-            # rebuild pupil signal
-            r['pupil'] = r['pupil']._modified_copy(pupil_trace)
-
-        
-        # get pupil divider based on new pupil signal
-        if method == 'median':
-            pupil_divider = np.median(r['pupil'].as_continuous())
-        elif method == 'mean':
-            pupil_divider = np.mean(r['pupil'].as_continuous())
-        elif method == 'cache':
-            use_cache = True
-            log.info('using cached pupil classifications')
-        elif method == 'fraction':
-            pupil_max = get_max_pupil(r['resp'].chans[0][:7])
-            if np.isnan(pupil_max):
-                pupil_max = r['pupil'].as_continuous().max()
-            upper_lim = fraction[1]
-            lower_lim = fraction[0]
-            # normalize pupil
-            r['pupil'] = r['pupil']._modified_copy(r['pupil'].as_continuous() / pupil_max)
-            state = None
-
-        # create short mask (on the masked data - for ex, because of rem exclusion)
-        if state == 'big':
-            short_mask = r['pupil'].as_continuous() >= pupil_divider
-        elif state == 'small':
-            short_mask = r['pupil'].as_continuous() < pupil_divider
-        elif method == 'fraction':
-            short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
-        else:
-            raise ValueError
-
-        # Now, go through the short mask and make it the correct length using
-        # newrec's mask. short_mask size should be equal to current_mask sum
-        current_mask = newrec['mask'].as_continuous().squeeze()  # this is the long mask (which has rem excluded)
-
-        final_mask = np.zeros(current_mask.shape).astype(np.bool)
-
-        j = 0
-        # loop over the current mask (with the mask set to False when rem is True). 
-        # only copy over the pupil mask (the short_mask) for periods when current mask is True
-        for i, m in enumerate(current_mask):
-
-            if m == True:
-                if short_mask[0, j] == True:
-                    final_mask[i] = True
-                j += 1
-
-        final_mask = final_mask[np.newaxis, :]
-
-        # Add the new mask to the recording
-        newrec['mask'] = newrec['mask']._modified_copy(final_mask)
-
-        return newrec
-
-    elif use_cache:
-        # load cached pupil classifiers and use these to make pupil mask
-
-        # load mask
-        mask = pcu.load_pupil_labels(batch, rec.name[:7], rec['resp'].fs, state, True)
-
-        # and mask with the current mask
-        mask = (mask & newrec['mask']._data.squeeze())
-        newrec['mask'] = newrec['mask']._modified_copy(mask[np.newaxis, :])
-
-        # go through all the different epoch options for how to apply the mask
-        if (collapse == False) & (epoch is not None):
-            log.info('binning pupil at fs: {0} within epochs: {1}'.format(fs, epoch))
-            # In this case, fold pupil first based on the epoch(s)
-            folded_mask = newrec['mask'].extract_epochs(epoch)
-
-            # Now, repeat the mean of each bin w/in the epoch over the length
-            # of that bin (1 if greater than 0.5)
-            for e in epoch:
-                reps = folded_mask[e].shape[0]
-                samps = folded_mask[e].shape[-1]
-                nbins = int(round(samps / (rec['resp'].fs / fs)))
-                bin_len = int(round(samps / nbins))
-                for rep in np.arange(0, reps):
-                    for b in np.arange(0, nbins+1):
-                        if b == nbins:
-                            start = int(b * bin_len)
-                            if not folded_mask[e][rep, :, start:]:
-                                # check for empty slice
-                                pass
-                            else:
-                                mean_m = np.mean(folded_mask[e][rep, :, start:])
-                                if mean_m >= 0.5:
-                                    folded_mask[e][rep, :, start:] = 1
-                                else:
-                                    folded_mask[e][rep, :, start:] = 0
-
-                        else:
-                            start = int(b * bin_len)
-                            stop = start + bin_len
-                            mean_m = np.mean(folded_mask[e][rep, :, start:stop])
-                            if mean_m >= 0.5:
-                                folded_mask[e][rep, :, start:stop] = 1
-                            else:
-                                folded_mask[e][rep, :, start:stop] = 0
-
-                # rebuild mask
-                newrec['mask'] = newrec['mask'].replace_epochs(folded_mask)
-
-        elif (collapse==True) & (epoch is not None):
-            log.info('collapsing over all {0} epochs'.format(epoch))
-
-            # In this case, fold mask first based on the epoch(s)
-            folded_mask = newrec['mask'].extract_epochs(epoch)
-
-            # Now, repeat the mean of each epoch over the whole epoch
-            for e in epoch:
-                reps = folded_mask[e].shape[0]
-                for rep in np.arange(0, reps):
-                    mean_m = np.mean(folded_mask[e][rep, :, :])
-                    if mean_m >= 0.5:
-                        folded_mask[e][rep, :, :] = 1
+                            mean_pup = np.nanmean(folded_pupil[e][rep, :, start:])
+                            folded_pupil[e][rep, :, start:] = mean_pup
                     else:
-                        folded_mask[e][rep, :, :] = 0
+                        start = int(b * bin_len)
+                        stop = start + bin_len
+                        mean_pup = np.nanmean(folded_pupil[e][rep, :, start:stop])
+                        folded_pupil[e][rep, :, start:stop] = mean_pup
 
-            # rebuild pupil signal
-            newrec['mask'] = newrec['mask'].replace_epochs(folded_mask)
+        # rebuild pupil signal
+        r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
+
+    elif (collapse is True) & (epoch is not None):
+        log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
+
+        # In this case, fold pupil first based on the epoch(s)
+        folded_pupil = r['pupil'].extract_epochs(epoch)
+
+        # Now, repeat the mean of each epoch over the whole epoch
+        for e in epoch:
+            reps = folded_pupil[e].shape[0]
+            for rep in np.arange(0, reps):
+                mean_pup = np.mean(folded_pupil[e][rep, :, :])
+                folded_pupil[e][rep, :, :] = mean_pup
+
+        # rebuild pupil signal
+        r['pupil'] = r['pupil'].replace_epochs(folded_pupil)
+
+    elif (fs == rec['resp'].fs) & (epoch is None):
+        log.info('classifying pupil continuously (at each time point)')
 
 
-        elif (fs == rec['resp'].fs) & (epoch is None):
-            log.info('classifying pupil continuously (at each time point)')
-            # in this case, the loaded mask &'ed with the existing mask is all we need
-            pass
-
-        elif (fs != rec['resp'].fs) & (epoch is None):
-            log.info('WARNING - this could lead to weird edge effects later on')
-
-            # Don't know which epoch to collapse over, so just rebin on the
-            # continuous trace
-            samps = r['pupil']._data.shape[-1]
-            nbins = int(round(samps / (rec['resp'].fs / fs)))
-            bin_len = int(round(samps / nbins))
-            mask_trace = newrec['mask']._data
-            for b in np.arange(0, nbins+1):
-                        if b == nbins:
-                            start = int(b * bin_len)
-                            if not mask_trace[0, start:]:
-                                # check for empty slice
-                                pass
-                            else:
-                                mean_m = np.mean(mask_trace[0, start:])
-                                if mean_m >= 0.5:
-                                    mask_trace[0, start:] = 1
-                                else:
-                                    mask_trace[0, start:] = 0
+    elif (fs != rec['resp'].fs) & (epoch is None):
+        log.info('WARNING - this could lead to weird edge effects later on')
+        # Don't know which epoch to collapse over, so just rebin on the
+        # continuous trace
+        samps = r['pupil'].as_continuous().shape[-1]
+        nbins = int(round(samps / (rec['resp'].fs / fs)))
+        bin_len = int(round(samps / nbins))
+        pupil_trace = r['pupil'].as_continuous()
+        for b in np.arange(0, nbins+1):
+                    if b == nbins:
+                        start = int(b * bin_len)
+                        if not pupil_trace[0, start:]:
+                            # check for empty slice
+                            pass
                         else:
-                            start = int(b * bin_len)
-                            stop = start + bin_len
-                            mean_m = np.mean(mask_trace[0, start:stop])
-                            if mean_m >= 0.5:
-                                mask_trace[0, start:stop] = 1
-                            else:
-                                mask_trace[0, start:stop] = 0
+                            mean_pup = np.mean(pupil_trace[0, start:])
+                            pupil_trace[0, start:] = mean_pup
+                    else:
+                        start = int(b * bin_len)
+                        stop = start + bin_len
+                        mean_pup = np.mean(pupil_trace[0, start:stop])
+                        pupil_trace[0, start:stop] = mean_pup
 
-            # rebuild mask signal
-            newrec['mask'] = newrec['mask']._modified_copy(mask_trace)
+        # rebuild pupil signal
+        r['pupil'] = r['pupil']._modified_copy(pupil_trace)
 
-        return newrec
+    
+    # get pupil divider based on new pupil signal
+    if method == 'median':
+        pupil_divider = np.median(r['pupil'].as_continuous())
+    elif method == 'mean':
+        pupil_divider = np.mean(r['pupil'].as_continuous())
+    elif method == 'user_def_value':
+        pupil_divider = options['cutoff']
+    elif method == 'fraction':
+        pupil_max = np.max(r['pupil'].as_continuous())
+        upper_lim = fraction[1]
+        lower_lim = fraction[0]
+        # normalize pupil
+        r['pupil'] = r['pupil']._modified_copy(r['pupil'].as_continuous() / pupil_max)
+        state = None
+
+    # create short mask (on the masked data - for ex, because of rem exclusion)
+    if state == 'big':
+        short_mask = r['pupil'].as_continuous() >= pupil_divider
+    elif state == 'small':
+        short_mask = r['pupil'].as_continuous() < pupil_divider
+    elif method == 'fraction':
+        short_mask = (r['pupil'].as_continuous() > lower_lim) & (r['pupil'].as_continuous() < upper_lim)
+    else:
+        raise ValueError
+
+    # Now, go through the short mask and make it the correct length using
+    # newrec's mask. short_mask size should be equal to current_mask sum
+    current_mask = newrec['mask'].as_continuous().squeeze()  # this is the long mask (which has rem excluded)
+
+    final_mask = np.zeros(current_mask.shape).astype(np.bool)
+
+    j = 0
+    # loop over the current mask (with the mask set to False when rem is True). 
+    # only copy over the pupil mask (the short_mask) for periods when current mask is True
+    for i, m in enumerate(current_mask):
+
+        if m == True:
+            if short_mask[0, j] == True:
+                final_mask[i] = True
+            j += 1
+
+    final_mask = final_mask[np.newaxis, :]
+
+    # Add the new mask to the recording
+    newrec['mask'] = newrec['mask']._modified_copy(final_mask)
+
+    return newrec
 
 
 def bandpass_filter_resp(rec, low_c, high_c, data=None, signal='resp'):
