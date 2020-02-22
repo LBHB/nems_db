@@ -234,7 +234,8 @@ class BAPHYExperiment:
             try:
                 # TODO support for different Behavior Objects
                 # consider also finding invalid trials and epochs within trials
-                behavior_events.append(behavior.create_trial_labels(ep, ev))
+                ev = behavior.create_trial_labels(ep, ev)
+                behavior_events.append(behavior.mark_invalid_trials(ep, ev, **kw))
             except KeyError:
                 # passive file, just return exptevents df
                 behavior_events.append(ev)
@@ -253,7 +254,7 @@ class BAPHYExperiment:
 
     @lru_cache(maxsize=128)
     def get_baphy_globalparams(self):
-        globalparams, _, _ = self._get_baphy_parameters(userdef_convert=False)
+        globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
     @lru_cache(maxsize=128)
@@ -290,7 +291,8 @@ class BAPHYExperiment:
 
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, **kwargs) for (bev, parm) in zip(exptevents, exptparams)]
+        globalparams = self.get_baphy_globalparams()
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
     
         signals = {}
         if resp:
@@ -430,7 +432,7 @@ class BAPHYExperiment:
         params = self.get_baphy_exptparams()
         behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
         if len(behave_file) > 1:
-            events = np.array(events)[behave_file]
+            events = [e for i, e in enumerate(events) if behave_file[i]]
         elif behave_file[0] == True:
             events = events
 
@@ -456,13 +458,18 @@ class BAPHYExperiment:
         token_offset = 0
         epochs = []
         for ev in exptevents:
-            ev['end'] += offset
-            ev['start'] += offset
-            ev['Trial'] += trial_offset
-            ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += token_offset
-            offset += ev['end'].max()
-            trial_offset += ev['Trial'].max()
-            token_offset += ev['soundTrialidx'].max()
+            if (ev['start'].min() == offset) & (offset != 0):
+                offset += ev['end'].max()
+                trial_offset += ev['Trial'].max()
+                token_offset += ev['soundTrialidx'].max()
+            else:
+                ev['end'] += offset
+                ev['start'] += offset
+                ev['Trial'] += trial_offset
+                ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += token_offset
+                offset += ev['end'].max()
+                trial_offset += ev['Trial'].max()
+                token_offset += ev['soundTrialidx'].max()
             epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
 
@@ -490,7 +497,7 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
@@ -532,6 +539,13 @@ def baphy_events_to_epochs(exptevents, exptparams, **options):
         te.loc[0, 'start'] = file_start_time
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
+
+    # append file name epoch
+    mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
+
+    te.loc[0, 'start'] = file_start_time
+    te.loc[0, 'end'] = file_end_time
+    te.loc[0, 'name'] = 'FILE_'+mfilename
 
     epochs = epochs.append(te, ignore_index=True)
     

@@ -296,8 +296,10 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     iv = events.soundTrial == 'NULL'
     iv_sound_trials = iv | iv_sound_trials
 
-    events.insert(events.shape[-1], 'invalidSoundTrial', iv_sound_trials)
-    events.insert(events.shape[-1], 'invalidTrial', iv_trials)    
+    #events.insert(events.shape[-1], 'invalidSoundTrial', iv_sound_trials)
+    #events.insert(events.shape[-1], 'invalidTrial', iv_trials)    
+    events['invalidSoundTrial'] = iv_sound_trials
+    events['invalidTrial'] = iv_trials
 
     # double check that any trials where all the sounds were invalid are
     # also marked as invalid
