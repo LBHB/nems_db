@@ -78,6 +78,7 @@ def create_trial_labels(exptparams, exptevents):
                     elif ((fl > ref_start) & (fl > ref_start + early_win + resp_win)):
                         rt.append(fl - ref_start)
                         sID.append('CORRECT_REJECT_TRIAL')
+                        trial_outcome = 'CORRECT_REJECT_TRIAL'
                     else:
                         rt.append(np.nan)
                         sID.append('UNKNOWN')
@@ -142,16 +143,13 @@ def create_trial_labels(exptparams, exptevents):
                 # add a check here to override things labeled as HITS if 
                 # baphy called it FA. If baphy called it FA, then sound
                 # stopped, so the trial outcome should be a FALSE_ALARM
-                if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') & \
-                                            (trial_outcome != 'EARLY_TRIAL')):
-                    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
-                    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
-                    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
-                    # if this is the case, also update the last soundTrial
-                    soundIDX = ev[ev.soundTrial != 'NULL'].index[-1]
-                    ev.at[soundIDX, 'soundTrial'] = 'EARLY_TRIAL'
-                else:
-                    ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
+                #if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') | \
+                #                            (trial_outcome != 'EARLY_TRIAL')):
+                #    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
+                #    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+                #    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
+                #else:
+                ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
                 # and update the time to span whole trial
                 ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
                 ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
@@ -164,6 +162,7 @@ def create_trial_labels(exptparams, exptevents):
             outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
             sID = []
             rt = []
+            trial_outcome = None
             for name in ev.name:
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
@@ -348,12 +347,12 @@ def compute_metrics(exptparams, exptevents, **options):
     events = mark_invalid_trials(exptparams, events, **options)
 
     # 2) calculate metrics
-    metrics = _compute_metrics(exptparams, events)
+    metrics = _compute_metrics(exptparams, events, **options)
 
     return metrics
 
 
-def _compute_metrics(exptparams, exptevents):
+def _compute_metrics(exptparams, exptevents, **options):
     """
     "private" function called by nems_lbhb.behavior.compute_metrics(). See latter function for docs.
     """
@@ -371,7 +370,7 @@ def _compute_metrics(exptparams, exptevents):
         tar = 'Stim , {} , Target'.format(tar_key)
         if rewarded:
             # looking for "HIT_TRIALS" and "MISS_TRIALS"
-            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
             validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
                                         (exptevents.invalidSoundTrial==False) & \
                                         (exptevents.invalidTrial==False) & \
@@ -385,14 +384,15 @@ def _compute_metrics(exptparams, exptevents):
                 R['RR'][tar_key] = nHits / nTrials
         else:
             # looking for "INCORRECT_HIT_TRIALS" and "CORRECT_REJECT_TRIALS"
-            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
+            # only for trials where the target was not null (not played because of early lick)
+            allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
             validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
                                         (exptevents.invalidSoundTrial==False) & \
                                         (exptevents.invalidTrial==False) & \
-                                        (exptevents.soundTrial.isin(['CORRECT_REJECT_TRIAL', 'INCORRECT_HIT_TRIAL']))]['Trial']
+                                        (exptevents.soundTrial.isin(['CORRECT_REJECT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL']))]['Trial']
             nTrials = len(np.unique(validTrialList))
             validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-            nHits = (validTrialdf.name=='INCORRECT_HIT_TRIAL').sum()
+            nHits = (validTrialdf.name.isin(['INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
             if nTrials == 0:
                 R['RR'][tar_key] = np.nan
             else:
@@ -418,32 +418,111 @@ def _compute_metrics(exptparams, exptevents):
 
         R['nTrials']['Reference'] = nTrials
 
+    # Use the HRs above to compute d' values
+    # for each target
+    tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
+    for tar in tar_keys:
+        R['dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
+    
+    # Calculate the RT vectors for each target and for References, then compute DI
+    # - Yin, Fritz, & Shamma, 2010 JASA
+    # DI is the area under the ROC curve defined by plotting cummulative HR against 
+    # cummulative FAR
 
-        # Use the HRs above to compute d' values
-        # for each target
-        tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
-        for tar in tar_keys:
-            R['dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
-        
-        # Calculate the RT vectors for each target and for References, then compute DI
-        # - Yin, Fritz, & Shamma, 2010 JASA
-        # DI is the area under the ROC curve defined by plotting cummulative HR against 
-        # cummulative FAR
-        tar_RTs = _get_target_RTs(exptparams, exptevents)
-        ref_RTs = _get_reference_RTs(exptparams, exptevents)
-        if len(ref_RTs) != nFA:
-            raise ValueError("Number of ref RTs should match the number of FAs!")
-        resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
-        for tar in tar_keys:
-            R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
-                                       ref_RTs, R['RR']['Reference'], 
-                                       resp_window)
-        
+    # new procedure to replace the one below. Now RTs (all of them) are saved in
+    # events dataframe, so don't need to compute them here.
+    resp_window = exptparams['BehaveObject'][1]['ResponseWindow'] # TODO make user def. param.
+    early_window = exptparams['BehaveObject'][1]['EarlyWindow'] # TODO make user def. param.
+    R['DI'] = _compute_DI(exptparams, exptevents, resp_window, early_window) 
+
+    '''
+    tar_RTs = _get_target_RTs(exptparams, exptevents)
+    ref_RTs = _get_reference_RTs(exptparams, exptevents)
+    if len(ref_RTs) != nFA:
+        raise ValueError("Number of ref RTs should match the number of FAs!")
+    resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
+    for tar in tar_keys:
+        R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
+                                    ref_RTs, R['RR']['Reference'], 
+                                    resp_window)
+    '''
 
     return R
 
 
-def _compute_DI(tar_RTs, tarHR, ref_RTs, FAR, resp_window, dx=0.1):
+def _compute_DI(exptparams, exptevents, resp_window, early_window, dx=0.1, **options):
+    """
+    Compute discrimination index (DI) between a given target and and reference -- Yin, Fritz, & Shamma, 2010 JASA
+
+    This metric combines HR, FAR, and reaction time to produce a metric between 0 and 1 describing the 
+    animal's behavioral performance. DI=1 corresponds to perfect performance, DI=0.5 corresponds to chance performance.
+    Less than 0.5 would indicate a preference for the Reference over target sounds.
+    """
+    # create set of rt bins
+    bins = np.arange(early_window, early_window + resp_window, dx)
+    RTs = get_reaction_times(exptparams, exptevents, **options)
+    
+    # compute response probability in each bin for REFs
+    ref_counts, _ = np.histogram(RTs['Reference'], bins=bins)
+    
+    if sum(ref_counts) > 0:
+        FAR = sum(ref_counts) / len(RTs['Reference'])
+        ref_prob = (np.cumsum(ref_counts) / sum(ref_counts)) * FAR
+    else:
+        ref_prob = np.nan
+
+    ref_RT_prob = np.append(ref_prob, 1)
+
+    # now do the same for each target
+    tar_RT_prob = {}
+    auc = {}
+    for t in RTs['Target'].keys():
+        tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
+        if sum(tar_counts) > 0:
+            HR = sum(tar_counts) / len(RTs['Target'][t])
+            tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
+        else:
+            tar_prob = np.nan
+
+        # force the area bounded by the ROC curve to end at (1, 1)
+        tar_RT_prob[t] = np.append(tar_prob, 1)
+
+        # finally compute area under the curve using trapezoid approximation (DI)
+        # for each target
+        auc[t] = np.trapz(tar_RT_prob[t], ref_RT_prob)
+
+    return auc
+
+def get_reaction_times(exptparams, exptevents, **options):
+    events = exptevents.copy()
+    targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    if 'RT' not in events.columns:
+        events = create_trial_labels(exptparams, events)
+    if 'invalidSoundTrial' not in events.columns:
+        events = mark_invalid_trials(exptparams, events, **options)
+    
+    tar_mask = events.name.str.contains('Target') & \
+               ~events.name.str.contains('Silence') & \
+               ~events.invalidSoundTrial & \
+               ~events.invalidTrial
+    ref_mask = events.name.str.contains('Reference') & \
+               ~events.name.str.contains('Silence') & \
+               ~events.invalidSoundTrial & \
+               ~events.invalidTrial
+
+    ref_RTs = events[ref_mask]['RT'].values
+
+    # for each unique target, get RTs
+    unique_targets = events[tar_mask].name.unique()
+    tar_RTs = {}
+    for tar, tar_key in zip(unique_targets, targets):
+        mask = tar_mask & (events.name == tar)
+        tar_RTs[tar_key] = events[mask]['RT'].values
+
+    return {'Target': tar_RTs, 'Reference': ref_RTs} 
+
+
+def _compute_DI_deprecated(tar_RTs, tarHR, ref_RTs, FAR, resp_window, dx=0.1):
     """
     Compute discrimination index (DI) between a given target and and reference -- Yin, Fritz, & Shamma, 2010 JASA
 
@@ -514,7 +593,7 @@ def compute_RTs(exptparams, exptevents, **options):
                 default, exclude trials that follow incorrect trials e.g. miss of rewarded target, false alarm, hit of unrewarded target.
                 If True, treat each trial as normal.
     """
-
+    raise DeprecationWarning
     events = exptevents.copy()
 
     # check to see if trials have been labeled as valid or not
@@ -533,7 +612,7 @@ def _get_target_RTs(exptparams, exptevents):
     """
     "private" function to get RTs for targets. Separate from refs because logic is slightly different
     """
-
+    raise DeprecationWarning
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
@@ -583,6 +662,7 @@ def _get_reference_RTs(exptparams, exptevents):
     """
     "private" function to get RTs for references. Separate from targets because logic is slightly different
     """
+    raise DeprecationWarning
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] + early_win
     allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
