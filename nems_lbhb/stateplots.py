@@ -619,9 +619,13 @@ def epochs_per_time(cellid, batch=307, modelname=None,
     xf, ctx = xhelp.load_model_xform(cellid, batch, modelname,
                                      eval_model=False)
     ctx, l = xforms.evaluate(xf, ctx, start=0, stop=-2)
+    if plot_halves:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_half'], new_signalname='state_f')
+    else:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_file'], new_signalname='state_f')
 
-    ctx['val'] = preproc.make_state_signal(
-        ctx['val'], state_signals=['each_half'], new_signalname='state_f')
     modelspec = ctx['modelspec']
     rec = ctx['val'].apply_mask()
     rec = ms.evaluate(rec, modelspec)
@@ -636,9 +640,10 @@ def epochs_per_time(cellid, batch=307, modelname=None,
     nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
                                  rec=rec, sig_name='pupil', ax=axs[0])
     axs[0].set_title('{} {}'.format(cellid, modelname))
-
-    nplt.state_vars_timeseries(rec, modelspec, ax=axs[1])
-
+    try:
+        nplt.state_vars_timeseries(rec, modelspec, ax=axs[1])
+    except:
+        print('Error with state_vars_timeseries')
     ylims = np.zeros((len(epoch_list),2))
     for i, epoch in enumerate(epoch_list):
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
@@ -651,7 +656,11 @@ def epochs_per_time(cellid, batch=307, modelname=None,
         axs[i+2].set_xticks([])
         ff = np.where([c==epoch for c in rec['stim'].chans])[0]
         if len(ff)>0:
-            print(epoch, np.round(modelspec.phi[0]['g'][ff,2:6],3))
+            if plot_halves:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,2:6],3))
+            else:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,:],3))
+
 
     for i, epoch in enumerate(epoch_list):
         axs[i+2].set_ylim((np.min(ylims[:,0]), np.max(ylims[:,1])))
