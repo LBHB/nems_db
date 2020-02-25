@@ -29,7 +29,15 @@ def is_job_alive(job_state):
         'R',   # running
         'RQ',  # requeued
     ]
-    return job_state in alive_codes
+
+    dead_codes = ['BF', 'CA', 'DL', 'F', 'NF', 'OOM', 'PR', 'RS', 'RV', 'S', 'TO']
+
+    if job_state in alive_codes:
+        return True
+    elif job_state in dead_codes:
+        return False
+    else:
+        raise AttributeError(f'Job state "{job_state}" not recognized. Error occurred.')
 
 
 if __name__ == '__main__':
@@ -38,5 +46,9 @@ if __name__ == '__main__':
     parser.add_argument('jobid', help='The job ID of the desired job.')
 
     args = parser.parse_args()
-    job_state = get_job_state(args.jobid)
-    sys.exit(int(is_job_alive(job_state)))
+    try:
+        job_state = get_job_state(args.jobid)
+        print(int(is_job_alive(job_state)))
+        sys.exit(0)
+    except:
+        sys.exit(1)
