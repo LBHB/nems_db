@@ -13,6 +13,8 @@ def get_job_state(jobid):
     # use squeue, limiting to just the jobid and state options, with no header
     ret = subprocess.run(['squeue', '-j', jobid, '-h', '-o', '%t'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout = ret.stdout.decode()  # stdout is a bytes object
+    if not stdout:
+        raise ValueError(f'Did not get anything from stdout for jobid "{jobid}".')
     return stdout
 
 
