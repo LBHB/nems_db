@@ -234,7 +234,7 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     # delete invalid columns if they already exists as a safeguard against weird conflicts
     if 'invalidTrial' in events.columns:
         events = events.drop(columns=['invalidTrial', 'invalidSoundTrial'])
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
     
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
@@ -375,35 +375,22 @@ def _compute_metrics(exptparams, exptevents, **options):
     for pud, tar_key in zip(pump_dur, targets):
         rewarded = pud > 0
         tar = 'Stim , {} , Target'.format(tar_key)
-        if rewarded:
-            # looking for "HIT_TRIALS" and "MISS_TRIALS"
-            allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
-            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
-                                        (exptevents.invalidSoundTrial==False) & \
-                                        (exptevents.invalidTrial==False) & \
-                                        (exptevents.soundTrial.isin(['HIT_TRIAL', 'MISS_TRIAL', 'CUE_TRIAL']))]['Trial']
-            nTrials = len(np.unique(validTrialList))
-            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-            nHits = (validTrialdf.name=='HIT_TRIAL').sum()
-            if nTrials == 0:
-                R['RR'][tar_key] = np.nan
-            else:
-                R['RR'][tar_key] = nHits / nTrials
+
+        # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
+        # either a HIT or INCORRECT hit. For the purposes of response rate, we don't care which
+        allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
+        validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                    (exptevents.invalidSoundTrial==False) & \
+                                    (exptevents.invalidTrial==False) & \
+                                    (exptevents.soundTrial.isin(['HIT_TRIAL', 'MISS_TRIAL', 'CUE_TRIAL', \
+                                            'INCORRECT_HIT_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
+        nTrials = len(np.unique(validTrialList))
+        validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+        nHits = (validTrialdf.name.isin(['HIT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
+        if nTrials == 0:
+            R['RR'][tar_key] = np.nan
         else:
-            # looking for "INCORRECT_HIT_TRIALS" and "CORRECT_REJECT_TRIALS"
-            # only for trials where the target was not null (not played because of early lick)
-            allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
-            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
-                                        (exptevents.invalidSoundTrial==False) & \
-                                        (exptevents.invalidTrial==False) & \
-                                        (exptevents.soundTrial.isin(['CORRECT_REJECT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL']))]['Trial']
-            nTrials = len(np.unique(validTrialList))
-            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-            nHits = (validTrialdf.name.isin(['INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
-            if nTrials == 0:
-                R['RR'][tar_key] = np.nan
-            else:
-                R['RR'][tar_key] = nHits / nTrials
+            R['RR'][tar_key] = nHits / nTrials
 
         R['nTrials'][tar_key] = nTrials
 
@@ -441,18 +428,6 @@ def _compute_metrics(exptparams, exptevents, **options):
     resp_window = exptparams['BehaveObject'][1]['ResponseWindow'] # TODO make user def. param.
     early_window = exptparams['BehaveObject'][1]['EarlyWindow'] # TODO make user def. param.
     R['DI'] = _compute_DI(exptparams, exptevents, resp_window, early_window) 
-
-    '''
-    tar_RTs = _get_target_RTs(exptparams, exptevents)
-    ref_RTs = _get_reference_RTs(exptparams, exptevents)
-    if len(ref_RTs) != nFA:
-        raise ValueError("Number of ref RTs should match the number of FAs!")
-    resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
-    for tar in tar_keys:
-        R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
-                                    ref_RTs, R['RR']['Reference'], 
-                                    resp_window)
-    '''
 
     return R
 

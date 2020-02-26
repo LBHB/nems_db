@@ -225,7 +225,7 @@ class BAPHYExperiment:
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
 
-    @lru_cache(maxsize=128)
+    @copying_lru_cache(maxsize=128)
     def get_behavior_events(self, correction_method=None, **kw):
 
         if correction_method is None:
@@ -251,12 +251,12 @@ class BAPHYExperiment:
         exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return exptevents
 
-    @lru_cache(maxsize=128)
+    @copying_lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
         exptparams = [ep[1] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return exptparams
 
-    @lru_cache(maxsize=128)
+    @copying_lru_cache(maxsize=128)
     def get_baphy_globalparams(self):
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
@@ -458,6 +458,7 @@ class BAPHYExperiment:
 
         # run behavior analysis
         kwargs.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
+
         metrics = behavior.compute_metrics(beh_params, events, **kwargs)    
 
         return metrics
