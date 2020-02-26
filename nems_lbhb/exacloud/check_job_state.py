@@ -26,13 +26,13 @@ def is_job_alive(job_state):
     :return: A bool of whether alive or not.
     """
     alive_codes = [
-        'CD',  # completed
-        'PD',  # pending
-        'R',   # running
-        'RQ',  # requeued
+        'PENDING',
+        'RUNNING',
+        'REQUEUED',
     ]
 
-    dead_codes = ['BF', 'CA', 'DL', 'F', 'NF', 'OOM', 'PR', 'RS', 'RV', 'S', 'TO']
+    dead_codes = ['BOOT_FAIL', 'CANCELLED', 'COMPLETED', 'DEADLINE', 'FAILED', 'NODE_FAIL', 'OUT_OF_MEMORY',
+                  'PREEMPTED', 'RESIZING', 'REVOKED', 'SUSPENDED', 'TIMEOUT']
 
     if job_state in alive_codes:
         return True
