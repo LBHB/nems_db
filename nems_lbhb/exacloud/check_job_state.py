@@ -16,7 +16,7 @@ def get_job_state(jobid):
     stdout = ret.stdout.decode()  # stdout is a bytes object
     if not stdout:
         raise ValueError(f'Did not get anything from stdout for jobid "{jobid}".')
-    return stdout.strip()
+    return stdout.strip().split(' ')[0]  # CANCELLED job state includes pid of process which killed it
 
 
 def is_job_alive(job_state):
