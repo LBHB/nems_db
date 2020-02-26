@@ -143,7 +143,7 @@ class UploadResults(Resource):
         data = request.data
         print('data received: len: {}'.format(len(data)))
         fullpath = os.path.join(nems_results_dir, batch, cellid, path)
-        filename = os.path.join(fullpath, file)
+        filename = os.path.abspath(os.path.join(fullpath, file))
         print('save to : ' + filename)
         if not os.path.exists(fullpath):
            os.makedirs(fullpath, 0o777)
