@@ -15,7 +15,7 @@ def get_job_state(jobid):
     stdout = ret.stdout.decode()  # stdout is a bytes object
     if not stdout:
         raise ValueError(f'Did not get anything from stdout for jobid "{jobid}".')
-    return stdout
+    return stdout.strip()
 
 
 def is_job_alive(job_state):
