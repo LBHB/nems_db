@@ -21,7 +21,7 @@ def write_batch_file(job_arguments, queueid=None):
     job_dir.mkdir(exist_ok=True, parents=True)
 
     dt_string = datetime.now().strftime('%Y-%m-%d-T%H%M%S')
-    job_file_name = dt_string + 'slurmjob.sh'
+    job_file_name = dt_string + '_slurmjob.sh'
     job_file_loc = job_dir / job_file_name
 
     job_log_name = dt_string + '_jobid'
