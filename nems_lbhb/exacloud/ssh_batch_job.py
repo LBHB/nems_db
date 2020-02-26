@@ -19,6 +19,8 @@ class ExacloudConnection:
         $ scancel <jobid>
     - Cancel all jobs by user:
         $ scancel -u <user>
+    - Cancel all pending jobs by user:
+        $ scancel -u <user> --state=pending
     """
     def __init__(self, user, ssh_key=None, password=None):
         """Prepares the SSH connection paramters.
