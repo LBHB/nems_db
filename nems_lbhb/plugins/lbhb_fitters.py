@@ -232,8 +232,8 @@ def popiter(fitkey):
         flip_pcs = True
     else:
         flip_pcs = False
-    xfspec = [['nems_lbhb.fit_wrappers.init_pop_pca', {'flip_pcs': flip_pcs}],
-              ['nems_lbhb.fit_wrappers.fit_population_iteratively',
+    xfspec = [['nems.analysis.fit_pop_model.init_pop_pca', {'flip_pcs': flip_pcs}],
+              ['nems.analysis.fit_pop_model.fit_population_iteratively',
                {'module_sets': module_sets, 'fitter': fitter,
                 'tolerances': tolerances, 'tol_iter': tol_iter,
                 'fit_iter': fit_iter}]]
