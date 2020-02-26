@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Jun 14 09:33:47 2017
@@ -400,6 +401,10 @@ def baphy_load_dataset(parmfilepath, **options):
     # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
     # with this loading procedure.
     # CRH 12/10/2019
+    if (exptparams['runclass'] == 'BVT'):
+        BVT = True
+    else:
+        BVT = False
     if (exptparams['runclass'] == 'BVT') & (exptparams['BehaveObjectClass'] != 'Passive'):
         exptevents = beh.create_trial_labels(exptparams, exptevents)
         active_BVT = True
@@ -725,6 +730,7 @@ def baphy_load_dataset(parmfilepath, **options):
         this_event_times['name'] = "TARGET"
         event_times = event_times.append(this_event_times, ignore_index=True)
 
+        #import pdb; pdb.set_trace()
         for i,e in exptevents[ff_tar_events | ff_lick_dur].iterrows():
             name = e['name']
             elements = name.split(" , ")
@@ -732,7 +738,10 @@ def baphy_load_dataset(parmfilepath, **options):
             if elements[0] == "PreStimSilence":
                 name="PreStimSilence"
             elif elements[0] == "Stim":
-                name="STIM_" + elements[1]
+                if BVT:
+                    name="TAR_" + elements[1]
+                else:
+                    name="STIM_" + elements[1]
                 e['start'] = exptevents.loc[i-1]['start']
                 e['end'] = exptevents.loc[i+1]['end']
             elif elements[0] == "PostStimSilence":

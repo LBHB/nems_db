@@ -24,6 +24,16 @@ def pas(loadkey):
     return xfspec
 
 
+def cor(kw):
+    """
+    create mask that removes incorrect trials
+    :param kw:
+    :return:
+    """
+    ops = kw.split('.')[1:]
+
+    return [['nems.xforms.mask_incorrect', {}]]
+
 def ref(kw):
     ops = kw.split('.')[1:]
 
@@ -83,21 +93,30 @@ def evs(loadkey):
     else:
         raise ValueError('unknown stim spec')
 
-
-    if loadset[1] == "lic":
-        epoch2_shuffle = False
-    elif loadset[1] == "lic0":
-        epoch2_shuffle = True
+    lick = False
+    if len(loadset)>=2:
+        if loadset[1] == "lic":
+            epoch2_shuffle = False
+            lick = True
+        elif loadset[1] == "lic0":
+            epoch2_shuffle = True
+            lick = True
+        else:
+            raise ValueError('evs option 2 not known')
+    if lick:
+        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+                   {'new_signal_name': 'stim',
+                    'epoch_regex': epoch_regex, 'epoch_shift': 5,
+                    'epoch2_regex': 'LICK', 'epoch2_shift': -5,
+                    'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
+                   ['rec'], ['rec']],
+                  ['nems.xforms.mask_all_but_targets', {}]]
     else:
-        raise ValueError("unknown lic spec")
-
-    xfspec = [['nems.preprocessing.generate_stim_from_epochs',
-               {'new_signal_name': 'stim',
-                'epoch_regex': epoch_regex, 'epoch_shift': 5,
-                'epoch2_regex': 'LICK', 'epoch2_shift': -5,
-                'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
-               ['rec'], ['rec']],
-              ['nems.xforms.mask_all_but_targets', {}]]
+        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+                   {'new_signal_name': 'stim',
+                    'epoch_regex': epoch_regex, 'epoch_shift': 0,
+                    'onsets_only': True},
+                   ['rec'], ['rec']]]
 
     return xfspec
 
@@ -454,6 +473,7 @@ def psthfr(load_key):
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
+    channel_per_stim = ('sep' in options)
     if 'tar' in options:
         epoch_regex = ['^STIM_', '^TAR_']
         #epoch_regex='^TAR_'
@@ -475,7 +495,8 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
-                     {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'use_as_input': use_as_input,
+                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim}]]
     return xfspec
 
 def sm(load_key):

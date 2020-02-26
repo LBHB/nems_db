@@ -321,7 +321,17 @@ class BAPHYExperiment:
 
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
-    
+        if len(signals)==0:
+            # make a dummy signal
+            fs = kwargs['rasterfs']
+            #import pdb; pdb.set_trace()
+            file_sigs = [nems.signal.RasterizedSignal(
+                          fs=fs, data=np.zeros((1,int(np.max(baphy_events[i]['end'])*fs)))+i,
+                          name='fileidx', recording=rec_name, chans=['fileidx'],
+                          epochs=baphy_events[i])
+                          for (i, p) in enumerate(baphy_events)]
+            signals['fileidx'] = nems.signal.RasterizedSignal.concatenate_time(file_sigs)
+
         meta = kwargs
         meta['files'] = [str(p) for p in self.parmfile]
         rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
@@ -435,10 +445,9 @@ class BAPHYExperiment:
             events = [e for i, e in enumerate(events) if behave_file[i]]
         elif behave_file[0] == True:
             events = events
-
         # assume params same for all files. This is a bit kludgy... Think it
         # should work?
-        beh_params = np.array(params)[behave_file][0]
+        beh_params = params[np.min(np.where(behave_file)[0])]
         
         # stack events
         events = self._stack_events(events)
@@ -716,11 +725,14 @@ def _remove_post_lick(events, exptevents):
     # screen for FA / Early trials in which we need to truncate / chop out references
     trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
     lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
+    lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.values
 
-    if len(lick_time) != len(trunc_trials):
-        raise ValueError('More than one lick recorded on a FA trial, whats up??')
+    #if len(lick_time) != len(trunc_trials):
+    #    import pdb;pdb.set_trace()
+    #   raise ValueError('More than one lick recorded on a FA trial, whats up??')
     
-    for fl, t in zip(lick_time, trunc_trials):
+    for t in trunc_trials:
+        fl = lick_time.iloc[lick_trial==t].iloc[0]
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
         events.at[e[e.end > fl].index, 'end'] = fl
