@@ -226,7 +226,11 @@ class BAPHYExperiment:
         raise ValueError(mesg)
 
     @lru_cache(maxsize=128)
-    def get_behavior_events(self, correction_method='openephys', **kw):
+    def get_behavior_events(self, correction_method=None, **kw):
+
+        if correction_method is None:
+            correction_method = self.correction_method
+
         exptparams = self.get_baphy_exptparams()
         exptevents = self.get_baphy_events(correction_method=correction_method, **kw)
         behavior_events = []
@@ -462,6 +466,18 @@ class BAPHYExperiment:
         """
         Merge list of exptevents into single df for behavior calculations
         """
+        epochs = []
+        for i, ev in enumerate(exptevents):
+            if i == 0 :
+                epochs.append(ev)
+            else:
+                ev['end'] += epochs[-1]['end'].max()
+                ev['start'] += epochs[-1]['end'].max()
+                ev['Trial'] += epochs[-1]['Trial'].max()
+                ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
+                epochs.append(ev)
+        return pd.concat(epochs, ignore_index=True)
+        '''
         offset = 0
         trial_offset = 0
         token_offset = 0
@@ -481,7 +497,7 @@ class BAPHYExperiment:
                 token_offset += ev['soundTrialidx'].max()
             epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
-
+        '''
 
     # ===================================================================
     # Methods below this line just pass through to the functions for now.

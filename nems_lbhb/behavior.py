@@ -231,6 +231,11 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         log.info('Trials have not been labeled. Labeling trials in order to compute metrics... ')
         events = create_trial_labels(exptparams, exptevents)
     
+    # delete invalid columns if they already exists as a safeguard against weird conflicts
+    if 'invalidTrial' in events.columns:
+        events = events.drop(columns=['invalidTrial', 'invalidSoundTrial'])
+        import pdb; pdb.set_trace()
+    
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
     keep_cue_trials = options.get('keep_cue_trials', False)
@@ -347,7 +352,7 @@ def compute_metrics(exptparams, exptevents, **options):
     
     # 1) mark invalid trials
     events = mark_invalid_trials(exptparams, events, **options)
-
+    
     # 2) calculate metrics
     metrics = _compute_metrics(exptparams, events, **options)
 
