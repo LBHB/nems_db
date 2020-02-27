@@ -1104,6 +1104,7 @@ $(document).ready(function(){
         var useKamiak = 0;
         var loadKamiak = 0;
         var useGPU = 0;
+        var useExacloud = 0;
         var exaOHSU = $("#exaOHSU").val();
         var exaExec = $("#exaExec").val();
         var exaScript = $("#exaScript").val();
