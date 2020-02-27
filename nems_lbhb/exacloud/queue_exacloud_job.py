@@ -39,7 +39,6 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     :param time_limit: How long the job will run for. Jobs will terminated if not complete by the end of the time limit.
     :param useGPU: Whether or not to be GPU job. Currently unused.
     """
-    log.info('Got this far')
     # if batch_path in [None, 'None', 'NONE', '']:
     #     batch_path = Path(r'/home/exacloud/lustre1/LBHB/code/nems_db/nems_lbhb/exacloud/batch_job.py')
 
@@ -71,7 +70,6 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
 
         queue_items.append(queue_item)
 
-    log.info(queue_items)
     with db_session() as session:
         session.add_all(queue_items)
 
