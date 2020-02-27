@@ -56,7 +56,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     for cell, b, model in combined:
 
         progname = ' '.join([extra_options, executable_path, script_path, cell, b, model])
-        note = ' '.join([cell, b, model])
+        note = '/'.join([cell, b, model])
 
         queue_item = tQueue(
             progname=progname,
