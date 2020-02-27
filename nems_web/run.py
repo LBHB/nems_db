@@ -34,6 +34,6 @@ from nems_web.nems_analysis import app #socketio
 port = int(nems_web.get_setting('PORT'))
 debug = (str(nems_web.get_setting('DEBUG')).lower() in ("yes", "true", "1", True))
 print('Starting nems_web server on port {}, debug={}'.format(port,debug))
-app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)
+app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
 #http_server = WSGIServer(('', 8000), app)
 #http_server.serve_forever()
