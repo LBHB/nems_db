@@ -2,7 +2,7 @@ import argparse
 import re
 import subprocess
 import sys
-from datetime import datetime
+import datetime
 from pathlib import Path
 
 
@@ -21,7 +21,7 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10):
     # create job dir if doesn't exist
     job_dir.mkdir(exist_ok=True, parents=True)
 
-    dt_string = datetime.now().strftime('%Y-%m-%d-T%H%M%S')
+    dt_string = datetime.datetime.now().strftime('%Y-%m-%d-T%H%M%S')
     job_file_name = dt_string + '_slurmjob.sh'
     job_file_loc = job_dir / job_file_name
 
