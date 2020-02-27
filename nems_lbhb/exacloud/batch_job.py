@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # parse arguments in order to collect all args into list, except for QUEUEID
     parser = argparse.ArgumentParser(description='Run jobs on exacloud!')
     parser.add_argument('--queueid', default=None, help='The tQueue QID.')
-    parser.add_argument('--time_limit', default=10, help='The time limit for the job in hours.')
+    parser.add_argument('--time_limit', type=float, default=10, help='The time limit for the job in hours.')
 
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
 
