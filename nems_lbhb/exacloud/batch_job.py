@@ -40,10 +40,14 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10):
 
     job_comment = ' '.join(job_arguments[2:])
 
+    time_mins = round(time_limit * 60)
+    time_hours = time_mins // 60
+    time_mins -= time_hours * 60
+
     with open(job_file_loc, 'w') as f:
         f.write('#!/bin/bash\n')
         f.write('#SBATCH --account=lbhb\n')
-        f.write(f'#SBATCH --time={str(datetime.timedelta(minutes=round(time_limit * 60)))}\n')
+        f.write(f'#SBATCH --time={time_hours:02d}:{time_mins:02d}:00\n')
         f.write('#SBATCH --partition=gpu\n')
         f.write('#SBATCH --cpus-per-task=1')
         f.write('#SBATCH --mem=4G\n')
