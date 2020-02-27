@@ -1,6 +1,7 @@
 import re
 import os
 import io
+from pathlib import Path
 
 from flask import abort, Response, request
 from flask_restful import Resource
@@ -148,6 +149,35 @@ class UploadResults(Resource):
         if not os.path.exists(fullpath):
            os.makedirs(fullpath, 0o777)
         f = os.open(filename, os.O_RDWR|os.O_CREAT)
+        os.write(f, data)
+        os.close(f)
+
+    def delete(self, batch, file):
+        abort(400, 'Not yet Implemented')
+
+
+class UploadQueueLog(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    def __init__(self, **kwargs):
+        pass
+
+    def get(self, batch, cellid, path, file):
+       abort(400, 'Not yet implemented')
+
+    def put(self, queueid):
+        data = request.data
+        print('data received: len: {}'.format(len(data)))
+        log_dir = Path('/auto/data/web/celldb/queue')
+        rounded_queueid = int(queueid) // 1000 * 1000
+        log_dir /= str(rounded_queueid)
+        if not log_dir.exists():
+            log_dir.mkdir(parents=True)
+        log_loc = log_dir / (str(queueid) + '.out')
+
+        print('save to : ' + str(log_loc))
+        f = os.open(log_loc, os.O_RDWR|os.O_CREAT)
         os.write(f, data)
         os.close(f)
 
