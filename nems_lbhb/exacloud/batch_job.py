@@ -6,13 +6,14 @@ from datetime import datetime
 from pathlib import Path
 
 
-def write_batch_file(job_arguments, queueid=None):
+def write_batch_file(job_arguments, queueid=None, time_limit=10):
     """Parses the arguments and creates the slurm sbatch file.
 
     Batch files are saved in the users home directory in "job_history".
 
     :param job_arguments: Arguments to srun.
     :param queueid: Queueid for updating queuemaster.
+    :param time_limit: Hours that the job will run for. Hard cap, after which the job will be terminated.
 
     :return: The file location of the batch file.
     """
@@ -42,7 +43,7 @@ def write_batch_file(job_arguments, queueid=None):
     with open(job_file_loc, 'w') as f:
         f.write('#!/bin/bash\n')
         f.write('#SBATCH --account=lbhb\n')
-        f.write('#SBATCH --time=10:00:00\n')
+        f.write(f'#SBATCH --time={str(datetime.timedelta(minutes=round(time_limit * 60)))}\n')
         f.write('#SBATCH --partition=gpu\n')
         f.write('#SBATCH --cpus-per-task=1')
         f.write('#SBATCH --mem=4G\n')
@@ -79,18 +80,20 @@ def queue_batch_file(job_file_loc):
 if __name__ == '__main__':
     """Creates and runs a slurm batch file. 
     
-    If queueid is passed in, it MUST be the first named argument. Ex:
+    Named arguments must be passed in before unnamed arguments. 
     
-    $ python batch_job.py --queueid=1234567 python fit_single.py cellid batch modelname
+    Ex:
+    $ python batch_job.py --queueid=1234567 --time_limit=10 python fit_single.py cellid batch modelname
     """
     # parse arguments in order to collect all args into list, except for QUEUEID
     parser = argparse.ArgumentParser(description='Run jobs on exacloud!')
     parser.add_argument('--queueid', default=None, help='The tQueue QID.')
+    parser.add_argument('--time_limit', default=10, help='The time limit for the job in hours.')
 
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
-    job_file_loc = write_batch_file(args.arguments, args.queueid)
+    job_file_loc = write_batch_file(args.arguments, args.queueid, args.time_limit)
     jobid, stdout = queue_batch_file(job_file_loc)
 
     if jobid is not None:
