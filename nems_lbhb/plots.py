@@ -1152,7 +1152,7 @@ def LN_pop_plot(ctx):
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
         ax = fig.add_subplot(filter_count, 6, chanidx*6+1)
-        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,3),
+        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,5),
                           show_factorized=False, fs=fs, ax=ax, show_cbar=False)
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
@@ -1164,8 +1164,8 @@ def LN_pop_plot(ctx):
 
     ax = fig.add_subplot(2, 3, 2)
 
-    trec = ms.evaluate(rec.apply_mask(), modelspec, stop=wc_idx[-2])
-    fcc_std = np.std(trec['pred'].as_continuous(),axis=1, keepdims=True)
+    _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-2])
+    fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
 
     wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
     wcc *= fcc_std
@@ -1176,8 +1176,9 @@ def LN_pop_plot(ctx):
     nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(2, 3, 3)
-    trec = ms.evaluate(rec.apply_mask(), modelspec, stop=wc_idx[-1])
-    fcc_std = np.std(trec['pred'].as_continuous(), axis=1, keepdims=True)
+
+    _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-1])
+    fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
 
     wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
     wcc *= fcc_std
