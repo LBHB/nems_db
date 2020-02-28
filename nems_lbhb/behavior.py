@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.stats import norm
 import pandas as pd
-from itertools import combinations
+from itertools import combinations, permutations
 import matplotlib.pyplot as plt
 import logging
 
@@ -234,7 +234,6 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     # delete invalid columns if they already exists as a safeguard against weird conflicts
     if 'invalidTrial' in events.columns:
         events = events.drop(columns=['invalidTrial', 'invalidSoundTrial'])
-        #import pdb; pdb.set_trace()
     
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
@@ -500,31 +499,31 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     rew_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]>0]
     nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
 
-    if (len(rew_tars) != 0) & (len(nr_tars) != 0):
-        tar_names.append('_'.join(rew_tars))
-        tar_names.append('_'.join(nr_tars))
+    if (len(rew_tars) > 1):
+         tar_names.append('+'.join(rew_tars))
+    elif (len(nr_tars) > 1):
+        tar_names.append('+'.join(nr_tars))
 
     tar_RT_prob = {}
     auc = {}
-    import pdb; pdb.set_trace()
     for t in tar_names:
-        if '_' not in t:
+        if '+' not in t:
             # normal case, single target
             tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
             if sum(tar_counts) > 0:
                 HR = sum(tar_counts) / len(RTs['Target'][t])
                 tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
             else:
-                tar_prob = np.nan
+                tar_prob = 0
         else:
             # case for multiple targets being grouped
             ntrials = 0
-            for i, tar in enumerate(t.split('_')):
+            for i, tar in enumerate(t.split('+')):
                 tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
                 if i == 0:
-                    tar_counts = tc
+                    tar_counts = tc[:, np.newaxis]
                 else:
-                    tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis==1)
+                    tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis=1)
                 ntrials += len(RTs['Target'][tar])
             
             tar_counts = np.sum(tar_counts, axis=-1)
@@ -532,14 +531,16 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
                 HR = np.sum(tar_counts) / ntrials
                 tar_prob = (np.cumsum(tar_counts) / np.sum(tar_counts)) * HR
             else:
-                tar_prob = np.nan                
+                tar_prob = 0               
 
         # force the area bounded by the ROC curve to end at (1, 1)
         tar_RT_prob[t] = np.append(tar_prob, 1)
 
     # for each pair of tar/ref comparisons
     # compute area under the curve using trapezoid approximation (DI)
-    tar_groups = list(combinations(tar_RT_prob.keys(), 2))
+    tar_groups = list(permutations(tar_RT_prob.keys(), 2))
+    # strip permutations where targets w/in the group, are being compared to themselves
+    tar_groups = [t for t in tar_groups if (t[0] not in t[1].split('+') and (t[1] not in t[0].split('+')))]
     tar_group_keys = [t[0]+'_'+t[1] for t in tar_groups]
     auc = {}
     for t, tk in zip(tar_groups, tar_group_keys):
