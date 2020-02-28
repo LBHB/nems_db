@@ -12,8 +12,7 @@ tQueue = db.Tables()['tQueue']
 @contextmanager
 def db_session():
     """Context manager to handle database connections."""
-    engine = db.Engine()
-    session = db.sessionmaker(bind=engine)()
+    session = db.Session()
 
     try:
         yield session
@@ -22,7 +21,6 @@ def db_session():
         session.rollback()
     finally:
         session.close()
-        engine.dispose()
 
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path,
@@ -45,7 +43,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     # extra parameters for future
     time_limit = f'--time_limit={time_limit}'
     use_gpu = '--use_gpu' if useGPU else ''
-    extra_options = ' '.join([time_limit])
+    extra_options = ' '.join([time_limit, use_gpu])
 
     # Convert to list of tuples b/c product object only useable once.
     combined = list(itertools.product(cellist, [batch], modellist))
@@ -77,6 +75,6 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
 def enqueue_single_exacloud_model(cell, batch, model, user, linux_user, executable_path,
                                   script_path, time_limit=10, useGPU=False):
     """Enqueues a single model. See `enqueue_exacloud_models` for parameter information."""
-    enqueue_exacloud_models(celllist=[cell], batch=batch, modellist=[model], user=user, linux_user=linux_user,
+    enqueue_exacloud_models(cellist=[cell], batch=batch, modellist=[model], user=user, linux_user=linux_user,
                             executable_path=executable_path, script_path=script_path, time_limit=time_limit,
                             useGPU=useGPU)
