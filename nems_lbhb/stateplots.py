@@ -613,7 +613,7 @@ def epochs_per_time(cellid, batch=307, modelname=None,
     if plot_halves:
         files_only = True
     else:
-        files_only = False
+        files_only = True
 
     # load the model and evaluate almost to end
     xf, ctx = xhelp.load_model_xform(cellid, batch, modelname,
@@ -665,6 +665,8 @@ def epochs_per_time(cellid, batch=307, modelname=None,
     for i, epoch in enumerate(epoch_list):
         axs[i+2].set_ylim((np.min(ylims[:,0]), np.max(ylims[:,1])))
     #plt.tight_layout()
+
+    return f, modelspec
 
 
 def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
