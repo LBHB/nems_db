@@ -1146,8 +1146,11 @@ def LN_pop_plot(ctx):
         tmodelspec=copy.deepcopy(modelspec[:(fir_idx+1)])
         tmodelspec[fir_idx]['fn_kwargs']['bank_count']=1
         rr=slice(chanidx*chan_per_bank, (chanidx+1)*chan_per_bank)
-        tmodelspec[wc_idx[0]]['phi']['mean'] = tmodelspec[wc_idx[0]]['phi']['mean'][rr]
-        tmodelspec[wc_idx[0]]['phi']['sd'] = tmodelspec[wc_idx[0]]['phi']['sd'][rr]
+        if 'mean' in tmodelspec[wc_idx[0]]['phi']:
+            tmodelspec[wc_idx[0]]['phi']['mean'] = tmodelspec[wc_idx[0]]['phi']['mean'][rr]
+            tmodelspec[wc_idx[0]]['phi']['sd'] = tmodelspec[wc_idx[0]]['phi']['sd'][rr]
+        else:
+            tmodelspec[wc_idx[0]]['phi']['coefficients']=tmodelspec[wc_idx[0]]['phi']['coefficients'][rr,:]
         tmodelspec[fir_idx]['phi']['coefficients'] = \
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
@@ -1162,18 +1165,20 @@ def LN_pop_plot(ctx):
             plt.ylabel(str(chanidx))
             plt.title(None)
 
-    ax = fig.add_subplot(2, 3, 2)
+    #import pdb; pdb.set_trace()
+    if len(wc_idx)>2:
+        ax = fig.add_subplot(2, 3, 2)
 
-    _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-2])
-    fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
+        _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-2])
+        fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
 
-    wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
-    wcc *= fcc_std
-    mm = np.std(wcc)*2.5
-    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
-    #plt.colorbar(im)
-    plt.title('L2')
-    nplt.ax_remove_box(ax)
+        wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
+        wcc *= fcc_std
+        mm = np.std(wcc)*2.5
+        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+        #plt.colorbar(im)
+        plt.title('L2')
+        nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(2, 3, 3)
 
@@ -1184,7 +1189,7 @@ def LN_pop_plot(ctx):
     wcc *= fcc_std
     mm = np.std(wcc)*2.5
     im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
-    #plt.colorbar(im)
+    plt.colorbar(im)
     plt.title('L3')
     nplt.ax_remove_box(ax)
 
@@ -1196,7 +1201,7 @@ def LN_pop_plot(ctx):
 
     epoch_regex = '^STIM_'
     epochs_to_extract = ep.epoch_names_matching(rec.epochs, epoch_regex)
-    epoch=epochs_to_extract[0]
+    epoch=epochs_to_extract[1]
 
     # or just plot the PSTH for an example stimulus
     raster = resp.extract_epoch(epoch)
