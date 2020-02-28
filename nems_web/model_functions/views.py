@@ -27,6 +27,7 @@ from nems.db import enqueue_models
 from nems.modelspec import _lookup_fn_at
 from nems_web.account_management.views import get_current_user
 from nems_lbhb.kamiak import kamiak_to_database
+from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 log = logging.getLogger(__name__)
 
@@ -45,16 +46,29 @@ def enqueue_models_view():
     codeHash = request.args.get('codeHash')
     execPath = request.args.get('execPath')
     scriptPath = request.args.get('scriptPath')
+    force_rerun = request.args.get('forceRerun', type=int)
     useKamiak = request.args.get('useKamiak', type=int)
     kamiakFunction = request.args.get('kamiakFunction')  # fn to generate scripts
     kamiakPath = request.args.get('kamiakPath')  # path to store output in
     loadKamiak = request.args.get('loadKamiak', type=int)  # check to load results
     kamiakResults = request.args.get('kamiakResults')  # path to results
     useGPU = request.args.get('useGPU', type=int)  # path to results
+    useExacloud = request.args.get('useExacloud', type=int)
+    exaOHSU = request.args.get('exaOHSU')
+    exaExec = request.args.get('exaExec')
+    exaScript = request.args.get('exaScript')
+    exaLimit = request.args.get('exaLimit')
 
     if loadKamiak:
         kamiak_to_database(cSelected, bSelected, mSelected, kamiakResults,
                            execPath, scriptPath)
+        return jsonify(data=True)
+
+    elif useExacloud:
+        log.info('Starting exacloud jobs!')
+        enqueue_exacloud_models(cellist=cSelected, batch=bSelected, modellist=mSelected, user=user.username,
+                                linux_user=exaOHSU, executable_path=exaExec, script_path=exaScript,
+                                time_limit=exaLimit, useGPU=useGPU)
         return jsonify(data=True)
 
     elif useKamiak:
@@ -77,7 +91,6 @@ def enqueue_models_view():
         if not scriptPath:
             scriptPath = None
 
-        force_rerun = request.args.get('forceRerun', type=int)
         enqueue_models(
                 cSelected, bSelected, mSelected,
                 force_rerun=bool(force_rerun), user=user.username,
