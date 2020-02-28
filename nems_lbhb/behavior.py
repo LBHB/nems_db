@@ -373,7 +373,6 @@ def _compute_metrics(exptparams, exptevents, **options):
     # hit rate / miss rate 
     R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
     for pud, tar_key in zip(pump_dur, targets):
-        rewarded = pud > 0
         tar = 'Stim , {} , Target'.format(tar_key)
 
         # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
@@ -428,6 +427,10 @@ def _compute_metrics(exptparams, exptevents, **options):
     resp_window = exptparams['BehaveObject'][1]['ResponseWindow'] # TODO make user def. param.
     early_window = exptparams['BehaveObject'][1]['EarlyWindow'] # TODO make user def. param.
     R['DI'] = _compute_DI(exptparams, exptevents, resp_window, early_window) 
+    
+    # if multiple targets exist, compute the discriminability between targets too
+    if len(R['dprime'].keys()) > 1:
+        R['LI'] = _compute_LI(exptparams, exptevents, resp_window, early_window)
 
     return R
 
@@ -474,6 +477,76 @@ def _compute_DI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
         auc[t] = np.trapz(tar_RT_prob[t], ref_RT_prob)
 
     return auc
+
+
+def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **options):
+    '''
+    Exact same as DI, but this compute the discrimination between targets (if there are multiple
+    targets). Also, if there is an unrewarded target, this will group all rewarded targets
+    and compute a rew. vs. n. rew. LI. This is really a speciality function for BVT/rewardLearning data. 
+    crh 2/28/2020
+    '''
+    # create set of rt bins
+    bins = np.arange(early_window, early_window + resp_window, dx)
+    RTs = get_reaction_times(exptparams, exptevents, **options)
+    if len(RTs['Target'].keys()) == 1:
+        raise ValueError("only one target. Can't compute LI")
+
+    # compute resp probs for each RT for each target
+    # if there are rew. targets and not rew. targets, add a key that groups
+    # those categories
+    tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    rew_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]>0]
+    nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
+
+    if (len(rew_tars) != 0) & (len(nr_tars) != 0):
+        tar_names.append('_'.join(rew_tars))
+        tar_names.append('_'.join(nr_tars))
+
+    tar_RT_prob = {}
+    auc = {}
+    import pdb; pdb.set_trace()
+    for t in tar_names:
+        if '_' not in t:
+            # normal case, single target
+            tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
+            if sum(tar_counts) > 0:
+                HR = sum(tar_counts) / len(RTs['Target'][t])
+                tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
+            else:
+                tar_prob = np.nan
+        else:
+            # case for multiple targets being grouped
+            ntrials = 0
+            for i, tar in enumerate(t.split('_')):
+                tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
+                if i == 0:
+                    tar_counts = tc
+                else:
+                    tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis==1)
+                ntrials += len(RTs['Target'][tar])
+            
+            tar_counts = np.sum(tar_counts, axis=-1)
+            if sum(tar_counts) > 0:
+                HR = np.sum(tar_counts) / ntrials
+                tar_prob = (np.cumsum(tar_counts) / np.sum(tar_counts)) * HR
+            else:
+                tar_prob = np.nan                
+
+        # force the area bounded by the ROC curve to end at (1, 1)
+        tar_RT_prob[t] = np.append(tar_prob, 1)
+
+    # for each pair of tar/ref comparisons
+    # compute area under the curve using trapezoid approximation (DI)
+    tar_groups = list(combinations(tar_RT_prob.keys(), 2))
+    tar_group_keys = [t[0]+'_'+t[1] for t in tar_groups]
+    auc = {}
+    for t, tk in zip(tar_groups, tar_group_keys):
+        auc[tk] = np.trapz(tar_RT_prob[t[0]], tar_RT_prob[t[1]])
+
+    return auc
+    
 
 def get_reaction_times(exptparams, exptevents, **options):
     events = exptevents.copy()
