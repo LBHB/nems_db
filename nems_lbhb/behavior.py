@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.stats import norm
 import pandas as pd
-from itertools import combinations
+from itertools import combinations, permutations
 import matplotlib.pyplot as plt
 import logging
 
@@ -234,7 +234,6 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     # delete invalid columns if they already exists as a safeguard against weird conflicts
     if 'invalidTrial' in events.columns:
         events = events.drop(columns=['invalidTrial', 'invalidSoundTrial'])
-        #import pdb; pdb.set_trace()
     
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
@@ -372,7 +371,7 @@ def _compute_metrics(exptparams, exptevents, **options):
     # for each target, decide if rewarded / unrewarded the get the 
     # hit rate / miss rate 
     R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
-    for pud, tar_key in zip(pump_dur, targets):
+    for tar_key in targets:
         tar = 'Stim , {} , Target'.format(tar_key)
 
         # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
@@ -399,6 +398,7 @@ def _compute_metrics(exptparams, exptevents, **options):
         allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
         validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
                                         (exptevents.invalidSoundTrial==False) & \
+                                        (exptevents.invalidTrial==False) & \
                                         (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
         validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
         
@@ -444,7 +444,7 @@ def _compute_DI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     Less than 0.5 would indicate a preference for the Reference over target sounds.
     """
     # create set of rt bins
-    bins = np.arange(early_window, early_window + resp_window, dx)
+    bins = np.arange(early_window, early_window + resp_window + dx, dx)
     RTs = get_reaction_times(exptparams, exptevents, **options)
     
     # compute response probability in each bin for REFs
@@ -487,10 +487,10 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     crh 2/28/2020
     '''
     # create set of rt bins
-    bins = np.arange(early_window, early_window + resp_window, dx)
+    bins = np.arange(early_window, early_window + resp_window + dx, dx)
     RTs = get_reaction_times(exptparams, exptevents, **options)
     if len(RTs['Target'].keys()) == 1:
-        raise ValueError("only one target. Can't compute LI")
+        print("only one target. Can't compute LI between categories")
 
     # compute resp probs for each RT for each target
     # if there are rew. targets and not rew. targets, add a key that groups
@@ -500,46 +500,62 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     rew_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]>0]
     nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
 
-    if (len(rew_tars) != 0) & (len(nr_tars) != 0):
-        tar_names.append('_'.join(rew_tars))
-        tar_names.append('_'.join(nr_tars))
+    if (len(rew_tars) > 1):
+         tar_names.append('+'.join(rew_tars))
+    elif (len(nr_tars) > 1):
+        tar_names.append('+'.join(nr_tars))
 
     tar_RT_prob = {}
     auc = {}
-    import pdb; pdb.set_trace()
     for t in tar_names:
-        if '_' not in t:
+        if '+' not in t:
             # normal case, single target
-            tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
-            if sum(tar_counts) > 0:
-                HR = sum(tar_counts) / len(RTs['Target'][t])
-                tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
-            else:
+            try:
+                tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
+                if sum(tar_counts) > 0:
+                    HR = sum(tar_counts) / len(RTs['Target'][t])
+                    tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
+                else:
+                    tar_prob = np.nan
+            except:
+                # this should catch cases where the given target doesn't exist in the 
+                # events you've masked for this computation. In this case, the target
+                # is in exptparams, but there aren't any reaction times bc it was never 
+                # presented
                 tar_prob = np.nan
         else:
             # case for multiple targets being grouped
             ntrials = 0
-            for i, tar in enumerate(t.split('_')):
-                tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
-                if i == 0:
-                    tar_counts = tc
-                else:
-                    tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis==1)
-                ntrials += len(RTs['Target'][tar])
+            for i, tar in enumerate(t.split('+')):
+                try:
+                    tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
+                    if i == 0:
+                        tar_counts = tc[:, np.newaxis]
+                    else:
+                        tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis=1)
+                    ntrials += len(RTs['Target'][tar])
+                except: 
+                    # see try/catch above for explanation
+                    pass
             
-            tar_counts = np.sum(tar_counts, axis=-1)
-            if sum(tar_counts) > 0:
-                HR = np.sum(tar_counts) / ntrials
-                tar_prob = (np.cumsum(tar_counts) / np.sum(tar_counts)) * HR
-            else:
-                tar_prob = np.nan                
+            try:
+                tar_counts = np.nansum(tar_counts, axis=-1)
+                if sum(tar_counts) > 0:
+                    HR = np.sum(tar_counts) / ntrials
+                    tar_prob = (np.cumsum(tar_counts) / np.sum(tar_counts)) * HR
+                else:
+                    tar_prob = np.nan     
+            except:
+                tar_prob = np.nan        
 
         # force the area bounded by the ROC curve to end at (1, 1)
         tar_RT_prob[t] = np.append(tar_prob, 1)
 
     # for each pair of tar/ref comparisons
     # compute area under the curve using trapezoid approximation (DI)
-    tar_groups = list(combinations(tar_RT_prob.keys(), 2))
+    tar_groups = list(permutations(tar_RT_prob.keys(), 2))
+    # strip permutations where targets w/in the group, are being compared to themselves
+    tar_groups = [t for t in tar_groups if (t[0] not in t[1].split('+') and (t[1] not in t[0].split('+')))]
     tar_group_keys = [t[0]+'_'+t[1] for t in tar_groups]
     auc = {}
     for t, tk in zip(tar_groups, tar_group_keys):
@@ -550,7 +566,6 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
 
 def get_reaction_times(exptparams, exptevents, **options):
     events = exptevents.copy()
-    targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     if 'RT' not in events.columns:
         events = create_trial_labels(exptparams, events)
     if 'invalidSoundTrial' not in events.columns:
@@ -569,6 +584,8 @@ def get_reaction_times(exptparams, exptevents, **options):
 
     # for each unique target, get RTs
     unique_targets = events[tar_mask].name.unique()
+    targets = [t.strip('Stim , ') for t in unique_targets]
+    targets = [t.strip(' , Target') for t in targets]
     tar_RTs = {}
     for tar, tar_key in zip(unique_targets, targets):
         mask = tar_mask & (events.name == tar)
