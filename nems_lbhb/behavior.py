@@ -398,6 +398,7 @@ def _compute_metrics(exptparams, exptevents, **options):
         allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
         validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
                                         (exptevents.invalidSoundTrial==False) & \
+                                        (exptevents.invalidTrial==False) & \
                                         (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
         validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
         
