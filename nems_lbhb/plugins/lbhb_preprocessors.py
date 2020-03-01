@@ -88,8 +88,10 @@ def evs(loadkey):
 
     if loadset[0]=='tar':
         epoch_regex='^TAR_'
+        epoch_shift = 5
     elif loadset[0]=='cct':
         epoch_regex = '^[A-Za-z]+_[0-9]+$'
+        epoch_shift = 0
     else:
         raise ValueError('unknown stim spec')
 
@@ -106,7 +108,7 @@ def evs(loadkey):
     if lick:
         xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
-                    'epoch_regex': epoch_regex, 'epoch_shift': 5,
+                    'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'epoch2_regex': 'LICK', 'epoch2_shift': -5,
                     'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
                    ['rec'], ['rec']],
@@ -114,7 +116,7 @@ def evs(loadkey):
     else:
         xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
-                    'epoch_regex': epoch_regex, 'epoch_shift': 0,
+                    'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'onsets_only': True},
                    ['rec'], ['rec']]]
 
