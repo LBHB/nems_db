@@ -517,7 +517,7 @@ def model_per_time_wrapper(cellid, batch=307,
                            fitter = "_jk.nf20-basic",
                            basemodel = "-ref-psthfr_stategain.S",
                            state_list=None, plot_halves=True,
-                           colors=None):
+                           colors=None, epoch="REFERENCE"):
     """
     batch = 307  # A1 SUA and MUA
     batch = 309  # IC SUA and MUA
@@ -567,14 +567,18 @@ def model_per_time_wrapper(cellid, batch=307,
 
         rec = ctx['val'].apply_mask()
         modelspec = ctx['modelspec']
-        epoch="REFERENCE"
         rec = ms.evaluate(rec, modelspec)
         if i == len(contexts)-1:
-            ax = plt.subplot(len(contexts)+1, 1, 1)
-            nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+
+            ax = plt.subplot(len(contexts)+2, 1, 1)
+            nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
+                                         rec=rec, sig_name='pupil')
             ax.set_title('{} {}'.format(cellid, modelnames[-1]))
 
-        ax = plt.subplot(len(contexts)+1, 1, 2+i)
+            ax = plt.subplot(len(contexts)+2, 1, 2)
+            nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+
+        ax = plt.subplot(len(contexts)+2, 1, 3+i)
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
                             psth_name2='pred', state_sig='state_f',
                             colors=colors, channel=None, decimate_by=1,
@@ -583,7 +587,87 @@ def model_per_time_wrapper(cellid, batch=307,
         ax.set_xticks([])
 
     #plt.tight_layout()
-    
+
+
+def epochs_per_time(cellid, batch=307, modelname=None,
+                           plot_halves=True,
+                           colors=None, epoch_list=None):
+    """
+    batch = 307  # A1 SUA and MUA
+    batch = 309  # IC SUA and MUA
+
+    alternatives:
+        basemodels = ["-ref-psthfr.s_stategain.S",
+                      "-ref-psthfr.s_sdexp.S",
+                      "-ref.a-psthfr.s_sdexp.S"]
+        state_list = ['st.pup0.hlf0','st.pup0.hlf','st.pup.hlf0','st.pup.hlf']
+        state_list = ['st.pup0.far0.hit0.hlf0','st.pup0.far0.hit0.hlf',
+                      'st.pup.far.hit.hlf0','st.pup.far.hit.hlf']
+        state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+
+    """
+    if epoch_list is None:
+        epoch_list_regex = ["REFERENCE", "TARGET"]
+    else:
+        epoch_list_regex = epoch_list.copy()
+    if plot_halves:
+        files_only = True
+    else:
+        files_only = True
+
+    # load the model and evaluate almost to end
+    xf, ctx = xhelp.load_model_xform(cellid, batch, modelname,
+                                     eval_model=False)
+    ctx, l = xforms.evaluate(xf, ctx, start=0, stop=-2)
+    if plot_halves:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_half'], new_signalname='state_f')
+    else:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_file'], new_signalname='state_f')
+
+    modelspec = ctx['modelspec']
+    rec = ctx['val'].apply_mask()
+    rec = ms.evaluate(rec, modelspec)
+
+    epoch_list = []
+    for e in epoch_list_regex:
+        epoch_list.extend(ep.epoch_names_matching(rec.epochs, e))
+    print('epoch_list: ', epoch_list)
+
+    f, axs = plt.subplots(len(epoch_list) + 2, 1, figsize=(8,10))
+
+    nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
+                                 rec=rec, sig_name='pupil', ax=axs[0])
+    axs[0].set_title('{} {}'.format(cellid, modelname))
+    try:
+        nplt.state_vars_timeseries(rec, modelspec, ax=axs[1])
+    except:
+        print('Error with state_vars_timeseries')
+    ylims = np.zeros((len(epoch_list),2))
+    for i, epoch in enumerate(epoch_list):
+        nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
+                                 psth_name2='pred', state_sig='state_f',
+                                 colors=colors, channel=None, decimate_by=1,
+                                 ax=axs[i+2], files_only=files_only,
+                                 modelspec=modelspec)
+        ylims[i] = axs[i+2].get_ylim()
+        axs[i+2].set_ylabel(epoch)
+        axs[i+2].set_xticks([])
+        ff = np.where([c==epoch for c in rec['stim'].chans])[0]
+        if len(ff)>0:
+            if plot_halves:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,2:6],3))
+            else:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,:],3))
+
+
+    for i, epoch in enumerate(epoch_list):
+        axs[i+2].set_ylim((np.min(ylims[:,0]), np.max(ylims[:,1])))
+    #plt.tight_layout()
+
+    return f, modelspec
+
 
 def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
     """

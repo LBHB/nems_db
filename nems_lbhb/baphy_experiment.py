@@ -225,8 +225,12 @@ class BAPHYExperiment:
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
 
-    @lru_cache(maxsize=128)
-    def get_behavior_events(self, correction_method='openephys', **kw):
+    @copying_lru_cache(maxsize=128)
+    def get_behavior_events(self, correction_method=None, **kw):
+
+        if correction_method is None:
+            correction_method = self.correction_method
+
         exptparams = self.get_baphy_exptparams()
         exptevents = self.get_baphy_events(correction_method=correction_method, **kw)
         behavior_events = []
@@ -234,7 +238,8 @@ class BAPHYExperiment:
             try:
                 # TODO support for different Behavior Objects
                 # consider also finding invalid trials and epochs within trials
-                behavior_events.append(behavior.create_trial_labels(ep, ev))
+                ev = behavior.create_trial_labels(ep, ev)
+                behavior_events.append(behavior.mark_invalid_trials(ep, ev, **kw))
             except KeyError:
                 # passive file, just return exptevents df
                 behavior_events.append(ev)
@@ -246,14 +251,14 @@ class BAPHYExperiment:
         exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return exptevents
 
-    @lru_cache(maxsize=128)
+    @copying_lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
         exptparams = [ep[1] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return exptparams
 
-    @lru_cache(maxsize=128)
+    @copying_lru_cache(maxsize=128)
     def get_baphy_globalparams(self):
-        globalparams, _, _ = self._get_baphy_parameters(userdef_convert=False)
+        globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
     @lru_cache(maxsize=128)
@@ -290,7 +295,8 @@ class BAPHYExperiment:
 
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, **kwargs) for (bev, parm) in zip(exptevents, exptparams)]
+        globalparams = self.get_baphy_globalparams()
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
     
         signals = {}
         if resp:
@@ -319,7 +325,17 @@ class BAPHYExperiment:
 
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
-    
+        if len(signals)==0:
+            # make a dummy signal
+            fs = kwargs['rasterfs']
+            #import pdb; pdb.set_trace()
+            file_sigs = [nems.signal.RasterizedSignal(
+                          fs=fs, data=np.zeros((1,int(np.max(baphy_events[i]['end'])*fs)))+i,
+                          name='fileidx', recording=rec_name, chans=['fileidx'],
+                          epochs=baphy_events[i])
+                          for (i, p) in enumerate(baphy_events)]
+            signals['fileidx'] = nems.signal.RasterizedSignal.concatenate_time(file_sigs)
+
         meta = kwargs
         meta['files'] = [str(p) for p in self.parmfile]
         rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
@@ -430,19 +446,19 @@ class BAPHYExperiment:
         params = self.get_baphy_exptparams()
         behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
         if len(behave_file) > 1:
-            events = np.array(events)[behave_file]
+            events = [e for i, e in enumerate(events) if behave_file[i]]
         elif behave_file[0] == True:
             events = events
-
         # assume params same for all files. This is a bit kludgy... Think it
         # should work?
-        beh_params = np.array(params)[behave_file][0]
+        beh_params = params[np.min(np.where(behave_file)[0])]
         
         # stack events
         events = self._stack_events(events)
 
         # run behavior analysis
         kwargs.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
+
         metrics = behavior.compute_metrics(beh_params, events, **kwargs)    
 
         return metrics
@@ -451,21 +467,38 @@ class BAPHYExperiment:
         """
         Merge list of exptevents into single df for behavior calculations
         """
+        epochs = []
+        for i, ev in enumerate(exptevents):
+            if i == 0 :
+                epochs.append(ev)
+            else:
+                ev['end'] += epochs[-1]['end'].max()
+                ev['start'] += epochs[-1]['end'].max()
+                ev['Trial'] += epochs[-1]['Trial'].max()
+                ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
+                epochs.append(ev)
+        return pd.concat(epochs, ignore_index=True)
+        '''
         offset = 0
         trial_offset = 0
         token_offset = 0
         epochs = []
         for ev in exptevents:
-            ev['end'] += offset
-            ev['start'] += offset
-            ev['Trial'] += trial_offset
-            ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += token_offset
-            offset += ev['end'].max()
-            trial_offset += ev['Trial'].max()
-            token_offset += ev['soundTrialidx'].max()
+            if (ev['start'].min() == offset) & (offset != 0):
+                offset += ev['end'].max()
+                trial_offset += ev['Trial'].max()
+                token_offset += ev['soundTrialidx'].max()
+            else:
+                ev['end'] += offset
+                ev['start'] += offset
+                ev['Trial'] += trial_offset
+                ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += token_offset
+                offset += ev['end'].max()
+                trial_offset += ev['Trial'].max()
+                token_offset += ev['soundTrialidx'].max()
             epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
-
+        '''
 
     # ===================================================================
     # Methods below this line just pass through to the functions for now.
@@ -490,7 +523,7 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
@@ -532,6 +565,13 @@ def baphy_events_to_epochs(exptevents, exptparams, **options):
         te.loc[0, 'start'] = file_start_time
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
+
+    # append file name epoch
+    mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
+
+    te.loc[0, 'start'] = file_start_time
+    te.loc[0, 'end'] = file_end_time
+    te.loc[0, 'name'] = 'FILE_'+mfilename
 
     epochs = epochs.append(te, ignore_index=True)
     
@@ -702,11 +742,14 @@ def _remove_post_lick(events, exptevents):
     # screen for FA / Early trials in which we need to truncate / chop out references
     trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
     lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
+    lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.values
 
-    if len(lick_time) != len(trunc_trials):
-        raise ValueError('More than one lick recorded on a FA trial, whats up??')
+    #if len(lick_time) != len(trunc_trials):
+    #    import pdb;pdb.set_trace()
+    #   raise ValueError('More than one lick recorded on a FA trial, whats up??')
     
-    for fl, t in zip(lick_time, trunc_trials):
+    for t in trunc_trials:
+        fl = lick_time.iloc[lick_trial==t].iloc[0]
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
         events.at[e[e.end > fl].index, 'end'] = fl

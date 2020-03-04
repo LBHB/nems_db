@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.stats import norm
 import pandas as pd
-from itertools import combinations
+from itertools import combinations, permutations
 import matplotlib.pyplot as plt
 import logging
 
@@ -47,18 +47,20 @@ def create_trial_labels(exptparams, exptevents):
             fl = ev[ev.name=='LICK']['start'].values[0]
             # decide what each sound is, then use this to classify the trial
             sID = []
+            # add reaction time for each sound (measured from sound onset). 
+            # If no lick, set to np.inf.
+            # if NULL sound trial, set to np.nan (prestim silence, sound never played etc.)
+            rt = []
             for _, r in ev.iterrows():
                 name = r['name']
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
-                
+                    rt.append(np.nan)
                 elif 'Reference' in name:
                     ref_start = r['start']
-                    #if (fl < min_time):
-                    #    sID.append('EARLY_TRIAL')
-                    #    trial_outcome = 'EARLY_TRIAL'
                     if ((fl >= ref_start) & (fl < (ref_start + early_win))):
                         sID.append('EARLY_TRIAL')
+                        rt.append(fl - ref_start)
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
                             trial_outcome = 'FALSE_ALARM_TRIAL'
@@ -67,13 +69,18 @@ def create_trial_labels(exptparams, exptevents):
                     elif (fl < ref_start):
                         # sound never played because of an early lick
                         sID.append('NULL')
+                        rt.append(np.nan)
                         trial_outcome = 'EARLY_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + early_win + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
+                        rt.append(fl - ref_start)
                         trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif ((fl > ref_start) & (fl > ref_start + early_win + resp_win)):
+                        rt.append(fl - ref_start)
                         sID.append('CORRECT_REJECT_TRIAL')
+                        trial_outcome = 'CORRECT_REJECT_TRIAL'
                     else:
+                        rt.append(np.nan)
                         sID.append('UNKNOWN')
 
                 elif 'Target' in name:
@@ -82,58 +89,67 @@ def create_trial_labels(exptparams, exptevents):
                     if rewarded:
                         if fl <= tar_start:
                             sID.append('NULL')
+                            rt.append(np.nan)
                         elif (fl > (tar_start + early_win)) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('HIT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'HIT_TRIAL'
                         elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('MISS_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'MISS_TRIAL'
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
+                            rt.append(fl - tar_start)
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
+                            rt.append(np.nan)
                             sID.append('UNKNOWN')
                     else:
                         if fl <= tar_start:
                             sID.append('NULL')
+                            rt.append(np.nan)
                         elif (fl > tar_start + early_win) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('INCORRECT_HIT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'INCORRECT_HIT_TRIAL'
                         elif ((fl > tar_start + early_win) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('CORRECT_REJECT_TRIAL')
+                            rt.append(fl - tar_start)
                             trial_outcome = 'CORRECT_REJECT_TRIAL'
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
+                            rt.append(fl - tar_start)
                             if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                             else:
                                 trial_outcome = 'EARLY_TRIAL'
                         else:
+                            rt.append(np.nan)
                             sID.append('UNKNOWN')
                 
                 else:
+                    rt.append(np.nan)
                     sID.append('NULL')
 
             ev.insert(4, 'soundTrial', sID)
+            ev.insert(5, 'RT', rt)
 
             if trial_outcome is not None:  
                 baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
                 # add a check here to override things labeled as HITS if 
                 # baphy called it FA. If baphy called it FA, then sound
                 # stopped, so the trial outcome should be a FALSE_ALARM
-                if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') & \
-                                            (trial_outcome != 'EARLY_TRIAL')):
-                    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
-                    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
-                    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
-                    # if this is the case, also update the last soundTrial
-                    soundIDX = ev[ev.soundTrial != 'NULL'].index[-1]
-                    ev.at[soundIDX, 'soundTrial'] = 'EARLY_TRIAL'
-                else:
-                    ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
+                #if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') | \
+                #                            (trial_outcome != 'EARLY_TRIAL')):
+                #    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
+                #    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+                #    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
+                #else:
+                ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
                 # and update the time to span whole trial
                 ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
                 ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
@@ -145,6 +161,8 @@ def create_trial_labels(exptparams, exptevents):
             # no licks, MISS_TRIAL
             outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
             sID = []
+            rt = []
+            trial_outcome = None
             for name in ev.name:
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
@@ -161,6 +179,9 @@ def create_trial_labels(exptparams, exptevents):
                         trial_outcome = 'CORRECT_REJECT_TRIAL'
                 else:
                     sID.append('NULL')
+
+                rt.append(np.inf)
+
             if trial_outcome is None:
                 import pdb; pdb.set_trace()
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
@@ -168,6 +189,7 @@ def create_trial_labels(exptparams, exptevents):
             ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
             ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
             ev.insert(4, 'soundTrial', sID)
+            ev.insert(5, 'RT', rt)
 
             trial_dfs.append(ev)
 
@@ -208,6 +230,10 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     if 'soundTrial' not in events.columns:
         log.info('Trials have not been labeled. Labeling trials in order to compute metrics... ')
         events = create_trial_labels(exptparams, exptevents)
+    
+    # delete invalid columns if they already exists as a safeguard against weird conflicts
+    if 'invalidTrial' in events.columns:
+        events = events.drop(columns=['invalidTrial', 'invalidSoundTrial'])
     
     # set default options
     keep_early_trials = options.get('keep_early_trials', False)
@@ -274,8 +300,10 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     iv = events.soundTrial == 'NULL'
     iv_sound_trials = iv | iv_sound_trials
 
-    events.insert(events.shape[-1], 'invalidSoundTrial', iv_sound_trials)
-    events.insert(events.shape[-1], 'invalidTrial', iv_trials)    
+    #events.insert(events.shape[-1], 'invalidSoundTrial', iv_sound_trials)
+    #events.insert(events.shape[-1], 'invalidTrial', iv_trials)    
+    events['invalidSoundTrial'] = iv_sound_trials
+    events['invalidTrial'] = iv_trials
 
     # double check that any trials where all the sounds were invalid are
     # also marked as invalid
@@ -323,14 +351,14 @@ def compute_metrics(exptparams, exptevents, **options):
     
     # 1) mark invalid trials
     events = mark_invalid_trials(exptparams, events, **options)
-
+    
     # 2) calculate metrics
-    metrics = _compute_metrics(exptparams, events)
+    metrics = _compute_metrics(exptparams, events, **options)
 
     return metrics
 
 
-def _compute_metrics(exptparams, exptevents):
+def _compute_metrics(exptparams, exptevents, **options):
     """
     "private" function called by nems_lbhb.behavior.compute_metrics(). See latter function for docs.
     """
@@ -343,37 +371,24 @@ def _compute_metrics(exptparams, exptevents):
     # for each target, decide if rewarded / unrewarded the get the 
     # hit rate / miss rate 
     R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
-    for pud, tar_key in zip(pump_dur, targets):
-        rewarded = pud > 0
+    for tar_key in targets:
         tar = 'Stim , {} , Target'.format(tar_key)
-        if rewarded:
-            # looking for "HIT_TRIALS" and "MISS_TRIALS"
-            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
-            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
-                                        (exptevents.invalidSoundTrial==False) & \
-                                        (exptevents.invalidTrial==False) & \
-                                        (exptevents.soundTrial.isin(['HIT_TRIAL', 'MISS_TRIAL', 'CUE_TRIAL']))]['Trial']
-            nTrials = len(np.unique(validTrialList))
-            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-            nHits = (validTrialdf.name=='HIT_TRIAL').sum()
-            if nTrials == 0:
-                R['RR'][tar_key] = np.nan
-            else:
-                R['RR'][tar_key] = nHits / nTrials
+
+        # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
+        # either a HIT or INCORRECT hit. For the purposes of response rate, we don't care which
+        allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
+        validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
+                                    (exptevents.invalidSoundTrial==False) & \
+                                    (exptevents.invalidTrial==False) & \
+                                    (exptevents.soundTrial.isin(['HIT_TRIAL', 'MISS_TRIAL', 'CUE_TRIAL', \
+                                            'INCORRECT_HIT_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
+        nTrials = len(np.unique(validTrialList))
+        validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
+        nHits = (validTrialdf.name.isin(['HIT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
+        if nTrials == 0:
+            R['RR'][tar_key] = np.nan
         else:
-            # looking for "INCORRECT_HIT_TRIALS" and "CORRECT_REJECT_TRIALS"
-            allTarTrials = exptevents[(exptevents.name==tar)]['Trial']
-            validTrialList = exptevents[exptevents.Trial.isin(allTarTrials) & \
-                                        (exptevents.invalidSoundTrial==False) & \
-                                        (exptevents.invalidTrial==False) & \
-                                        (exptevents.soundTrial.isin(['CORRECT_REJECT_TRIAL', 'INCORRECT_HIT_TRIAL']))]['Trial']
-            nTrials = len(np.unique(validTrialList))
-            validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-            nHits = (validTrialdf.name=='INCORRECT_HIT_TRIAL').sum()
-            if nTrials == 0:
-                R['RR'][tar_key] = np.nan
-            else:
-                R['RR'][tar_key] = nHits / nTrials
+            R['RR'][tar_key] = nHits / nTrials
 
         R['nTrials'][tar_key] = nTrials
 
@@ -383,6 +398,7 @@ def _compute_metrics(exptparams, exptevents):
         allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
         validTrialList = exptevents[exptevents.Trial.isin(allRefTrials) & \
                                         (exptevents.invalidSoundTrial==False) & \
+                                        (exptevents.invalidTrial==False) & \
                                         (exptevents.soundTrial.isin(['FALSE_ALARM_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
         validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
         
@@ -395,32 +411,190 @@ def _compute_metrics(exptparams, exptevents):
 
         R['nTrials']['Reference'] = nTrials
 
+    # Use the HRs above to compute d' values
+    # for each target
+    tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
+    for tar in tar_keys:
+        R['dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
+    
+    # Calculate the RT vectors for each target and for References, then compute DI
+    # - Yin, Fritz, & Shamma, 2010 JASA
+    # DI is the area under the ROC curve defined by plotting cummulative HR against 
+    # cummulative FAR
 
-        # Use the HRs above to compute d' values
-        # for each target
-        tar_keys = [k for k in R['RR'].keys() if k != 'Reference']
-        for tar in tar_keys:
-            R['dprime'][tar] = _compute_dprime(R['RR'][tar], R['RR']['Reference'])
-        
-        # Calculate the RT vectors for each target and for References, then compute DI
-        # - Yin, Fritz, & Shamma, 2010 JASA
-        # DI is the area under the ROC curve defined by plotting cummulative HR against 
-        # cummulative FAR
-        tar_RTs = _get_target_RTs(exptparams, exptevents)
-        ref_RTs = _get_reference_RTs(exptparams, exptevents)
-        if len(ref_RTs) != nFA:
-            raise ValueError("Number of ref RTs should match the number of FAs!")
-        resp_window = exptparams['BehaveObject'][1]['ResponseWindow']
-        for tar in tar_keys:
-            R['DI'][tar] = _compute_DI(tar_RTs[tar], R['RR'][tar], 
-                                       ref_RTs, R['RR']['Reference'], 
-                                       resp_window)
-        
+    # new procedure to replace the one below. Now RTs (all of them) are saved in
+    # events dataframe, so don't need to compute them here.
+    resp_window = exptparams['BehaveObject'][1]['ResponseWindow'] # TODO make user def. param.
+    early_window = exptparams['BehaveObject'][1]['EarlyWindow'] # TODO make user def. param.
+    R['DI'] = _compute_DI(exptparams, exptevents, resp_window, early_window) 
+    
+    # if multiple targets exist, compute the discriminability between targets too
+    if len(R['dprime'].keys()) > 1:
+        R['LI'] = _compute_LI(exptparams, exptevents, resp_window, early_window)
 
     return R
 
 
-def _compute_DI(tar_RTs, tarHR, ref_RTs, FAR, resp_window, dx=0.1):
+def _compute_DI(exptparams, exptevents, resp_window, early_window, dx=0.1, **options):
+    """
+    Compute discrimination index (DI) between a given target and and reference -- Yin, Fritz, & Shamma, 2010 JASA
+
+    This metric combines HR, FAR, and reaction time to produce a metric between 0 and 1 describing the 
+    animal's behavioral performance. DI=1 corresponds to perfect performance, DI=0.5 corresponds to chance performance.
+    Less than 0.5 would indicate a preference for the Reference over target sounds.
+    """
+    # create set of rt bins
+    bins = np.arange(early_window, early_window + resp_window + dx, dx)
+    RTs = get_reaction_times(exptparams, exptevents, **options)
+    
+    # compute response probability in each bin for REFs
+    ref_counts, _ = np.histogram(RTs['Reference'], bins=bins)
+    
+    if sum(ref_counts) > 0:
+        FAR = sum(ref_counts) / len(RTs['Reference'])
+        ref_prob = (np.cumsum(ref_counts) / sum(ref_counts)) * FAR
+    else:
+        ref_prob = np.nan
+
+    ref_RT_prob = np.append(ref_prob, 1)
+
+    # now do the same for each target
+    tar_RT_prob = {}
+    auc = {}
+    for t in RTs['Target'].keys():
+        tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
+        if sum(tar_counts) > 0:
+            HR = sum(tar_counts) / len(RTs['Target'][t])
+            tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
+        else:
+            tar_prob = np.nan
+
+        # force the area bounded by the ROC curve to end at (1, 1)
+        tar_RT_prob[t] = np.append(tar_prob, 1)
+
+        # finally compute area under the curve using trapezoid approximation (DI)
+        # for each target
+        auc[t] = np.trapz(tar_RT_prob[t], ref_RT_prob)
+
+    return auc
+
+
+def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **options):
+    '''
+    Exact same as DI, but this compute the discrimination between targets (if there are multiple
+    targets). Also, if there is an unrewarded target, this will group all rewarded targets
+    and compute a rew. vs. n. rew. LI. This is really a speciality function for BVT/rewardLearning data. 
+    crh 2/28/2020
+    '''
+    # create set of rt bins
+    bins = np.arange(early_window, early_window + resp_window + dx, dx)
+    RTs = get_reaction_times(exptparams, exptevents, **options)
+    if len(RTs['Target'].keys()) == 1:
+        print("only one target. Can't compute LI between categories")
+
+    # compute resp probs for each RT for each target
+    # if there are rew. targets and not rew. targets, add a key that groups
+    # those categories
+    tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
+    pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    rew_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]>0]
+    nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
+
+    if (len(rew_tars) > 1):
+         tar_names.append('+'.join(rew_tars))
+    elif (len(nr_tars) > 1):
+        tar_names.append('+'.join(nr_tars))
+
+    tar_RT_prob = {}
+    auc = {}
+    for t in tar_names:
+        if '+' not in t:
+            # normal case, single target
+            try:
+                tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
+                if sum(tar_counts) > 0:
+                    HR = sum(tar_counts) / len(RTs['Target'][t])
+                    tar_prob = (np.cumsum(tar_counts) / sum(tar_counts)) * HR
+                else:
+                    tar_prob = np.nan
+            except:
+                # this should catch cases where the given target doesn't exist in the 
+                # events you've masked for this computation. In this case, the target
+                # is in exptparams, but there aren't any reaction times bc it was never 
+                # presented
+                tar_prob = np.nan
+        else:
+            # case for multiple targets being grouped
+            ntrials = 0
+            for i, tar in enumerate(t.split('+')):
+                try:
+                    tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
+                    if i == 0:
+                        tar_counts = tc[:, np.newaxis]
+                    else:
+                        tar_counts = np.concatenate((tar_counts, tc[:, np.newaxis]), axis=1)
+                    ntrials += len(RTs['Target'][tar])
+                except: 
+                    # see try/catch above for explanation
+                    pass
+            
+            try:
+                tar_counts = np.nansum(tar_counts, axis=-1)
+                if sum(tar_counts) > 0:
+                    HR = np.sum(tar_counts) / ntrials
+                    tar_prob = (np.cumsum(tar_counts) / np.sum(tar_counts)) * HR
+                else:
+                    tar_prob = np.nan     
+            except:
+                tar_prob = np.nan        
+
+        # force the area bounded by the ROC curve to end at (1, 1)
+        tar_RT_prob[t] = np.append(tar_prob, 1)
+
+    # for each pair of tar/ref comparisons
+    # compute area under the curve using trapezoid approximation (DI)
+    tar_groups = list(permutations(tar_RT_prob.keys(), 2))
+    # strip permutations where targets w/in the group, are being compared to themselves
+    tar_groups = [t for t in tar_groups if (t[0] not in t[1].split('+') and (t[1] not in t[0].split('+')))]
+    tar_group_keys = [t[0]+'_'+t[1] for t in tar_groups]
+    auc = {}
+    for t, tk in zip(tar_groups, tar_group_keys):
+        auc[tk] = np.trapz(tar_RT_prob[t[0]], tar_RT_prob[t[1]])
+
+    return auc
+    
+
+def get_reaction_times(exptparams, exptevents, **options):
+    events = exptevents.copy()
+    if 'RT' not in events.columns:
+        events = create_trial_labels(exptparams, events)
+    if 'invalidSoundTrial' not in events.columns:
+        events = mark_invalid_trials(exptparams, events, **options)
+    
+    tar_mask = events.name.str.contains('Target') & \
+               ~events.name.str.contains('Silence') & \
+               ~events.invalidSoundTrial & \
+               ~events.invalidTrial
+    ref_mask = events.name.str.contains('Reference') & \
+               ~events.name.str.contains('Silence') & \
+               ~events.invalidSoundTrial & \
+               ~events.invalidTrial
+
+    ref_RTs = events[ref_mask]['RT'].values
+
+    # for each unique target, get RTs
+    unique_targets = events[tar_mask].name.unique()
+    targets = [t.strip('Stim , ') for t in unique_targets]
+    targets = [t.strip(' , Target') for t in targets]
+    tar_RTs = {}
+    for tar, tar_key in zip(unique_targets, targets):
+        mask = tar_mask & (events.name == tar)
+        tar_RTs[tar_key] = events[mask]['RT'].values
+
+    return {'Target': tar_RTs, 'Reference': ref_RTs} 
+
+
+def _compute_DI_deprecated(tar_RTs, tarHR, ref_RTs, FAR, resp_window, dx=0.1):
     """
     Compute discrimination index (DI) between a given target and and reference -- Yin, Fritz, & Shamma, 2010 JASA
 
@@ -491,7 +665,7 @@ def compute_RTs(exptparams, exptevents, **options):
                 default, exclude trials that follow incorrect trials e.g. miss of rewarded target, false alarm, hit of unrewarded target.
                 If True, treat each trial as normal.
     """
-
+    raise DeprecationWarning
     events = exptevents.copy()
 
     # check to see if trials have been labeled as valid or not
@@ -510,7 +684,7 @@ def _get_target_RTs(exptparams, exptevents):
     """
     "private" function to get RTs for targets. Separate from refs because logic is slightly different
     """
-
+    raise DeprecationWarning
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
@@ -560,6 +734,7 @@ def _get_reference_RTs(exptparams, exptevents):
     """
     "private" function to get RTs for references. Separate from targets because logic is slightly different
     """
+    raise DeprecationWarning
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     resp_win_len = exptparams['BehaveObject'][1]['ResponseWindow'] + early_win
     allRefTrials = np.unique(exptevents[(exptevents.name.str.contains('Reference'))]['Trial'].values)
