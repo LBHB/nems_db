@@ -111,14 +111,16 @@ def evs(loadkey):
                     'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'epoch2_regex': 'LICK', 'epoch2_shift': -5,
                     'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
-                   ['rec'], ['rec']],
-                  ['nems.xforms.mask_all_but_targets', {}]]
+                   ['rec'], ['rec']]]
     else:
         xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
                     'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'onsets_only': True},
                    ['rec'], ['rec']]]
+
+    if loadset[0]=='tar':
+        xfspec.append(['nems.xforms.mask_all_but_targets', {}])
 
     return xfspec
 
