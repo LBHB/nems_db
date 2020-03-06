@@ -49,7 +49,7 @@ for batch in batches:
     d.to_csv('d_'+str(batch)+'_fil.csv')
 
 # pup+fil only
-state_list = ['st.pup.fil0','st.pup.fil']
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_sdexp.S"
 loader = "psth.fs20.pup-ld-"
 batches = [307, 309]
