@@ -38,9 +38,13 @@ def tor_tuning(cellid, mfilename=None, rec=None,fs=1000,plot=False):
             fs=rec['resp'].fs
     
     if type(mfilename) is str:
+        if mfilename.endswith('.m') != True:
+            mfilename = mfilename + '.m'
         _, exptparams, _ = nio.baphy_parm_read(mfilename)
     elif mfilename is None:
         mfilename = rec.meta['files'][0]
+        if mfilename.endswith('.m') != True:
+            mfilename = mfilename + '.m'
         _, exptparams, _ = nio.baphy_parm_read(mfilename)
     else:
         exptparams = mfilename
