@@ -448,7 +448,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     if state_list is None:
         state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 
-    plt.figure(figsize=(4,6))
+    f = plt.figure(figsize=(4,6))
 
     da = df[df['state_chan']=='active']
 
@@ -465,7 +465,8 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
         dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+             (dp['r_se'][state_list[3]]+
+              dp['r_se'][state_list[0]]))
 
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
         dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
@@ -482,7 +483,8 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
 
         dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[1]]+dp['r_se'][state_list[0]]))
+             (dp['r_se'][state_list[1]]+
+              dp['r_se'][state_list[0]]))
 
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
         dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
@@ -549,7 +551,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     #plt.ylabel('mean r2')
 
     plt.tight_layout()
-    return ax1, ax2, ax3
+    return f
 
 
 def aud_vs_state_wrapper(batches=None, pupil=True):

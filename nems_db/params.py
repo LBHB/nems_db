@@ -110,6 +110,7 @@ def _get_modelspecs(cellids, batch, modelname, multi='mean'):
     speclists = []
     for path in filepaths:
         mspaths = []
+        path = path.replace('http://hyrax.ohsu.edu:3003/','/auto/data/nems_db/')
         for file in os.listdir(path):
             if file.startswith("modelspec"):
                 mspaths.append(os.path.join(path, file))
