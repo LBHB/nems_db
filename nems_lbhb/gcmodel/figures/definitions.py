@@ -27,6 +27,7 @@ standard_fig = [2.25, 2.25]
 small_fig = [1.75, 1.75]
 short_fig = [2.25, 1.75]
 text_fig = [6, 6]
+wide_fig = [4, 1.9]
 
 params = {  # small version for screens
         #'font.weight': 'bold',
@@ -163,7 +164,19 @@ load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
                       '289': ss_289,
                       '263': ss_263
                       },
-
+              'simulations': {
+                      'stp_cell': {
+                              'stp': '/auto/users/jacob/notes/gc_rank3/simulations/stp_AMT005c-20-1.pickle',
+                              'gc': '/auto/users/jacob/notes/gc_rank3/simulations/gc_AMT005c-20-1.pickle',
+                              },
+                      'gc_cell': {
+                              'gc': '/auto/users/jacob/notes/gc_rank3/simulations/gc_TAR009d-22-1.pickle',
+                              'stp': '/auto/users/jacob/notes/gc_rank3/simulations/stp_TAR009d-22-1.pickle'
+                              },
+                      'LN_cell': {
+                              'LN': '/auto/users/jacob/notes/gc_rank3/simulations/LN_TAR010c-40-1.pickle'
+                              }
+                      }
               }
 
 save_paths = {'CF': cf_save_path, 'sigmoid_shapes': sigmoid_shapes,

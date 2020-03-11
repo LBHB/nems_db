@@ -16,9 +16,9 @@ import nems.epoch as ep
 #import nems.baphy as nb
 import nems_lbhb.xform_wrappers as nw
 import nems_lbhb.stateplots as sp
-import common
+from nems_lbhb.pupil_behavior_scripts import common
 
-from mod_per_state import *
+from nems_lbhb.pupil_behavior_scripts.mod_per_state import *
 
 batch = 309  # IC SUA and MUA
 batch = 295  # old (Slee) IC data
@@ -48,6 +48,36 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_fil.csv')
 
+# pup+fil only
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20.pup-ld-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_pup_fil.csv')
+
+# pup+fil only
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20.pup-ld-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv')                                  
+
+# batch 295 behavior only
+state_list = ['st.fil','st.fil0']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20-ld-"
+batches = [295]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_fil_stategain.csv')                                  
+
 # beh only
 state_list = ['st.beh0','st.beh']
 basemodel2 = "-ref-psthfr.s_stategain.S"
@@ -56,7 +86,7 @@ fitter = "_jk.nf20-basic"
 #batch = 307  # DS A1+MU
 #batch = 311  # A1 old (SVD) data -- on BF
 #batch = 313  # IC PTD data SU + MU
-batches = [307, 311, 313]
+batches = [307, 311, 312, 313]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
@@ -75,6 +105,7 @@ d_pb309 = pd.read_csv('d_309_pb.csv')
 d_pb307 = d_pb307.drop(['Unnamed: 0'], axis=1)
 
 # Add extra metadata columns
+d_pb307['r'] = d_pb307['r'].str.strip(to_strip="[]").astype(float)
 d_pb307['R2'] = d_pb307['r']**2 * np.sign(d_pb307['r'])
 d_pb307['area'] = 'A1'
 d_pb307['sign'] = 'TBD'
@@ -162,11 +193,11 @@ for cellid in df['cellid'].unique():
     r_pup_beh = active_full.iloc[0]['r']
     r_pup_beh0 = active_part_pup.iloc[0]['r']
     r_pup0_beh = active_part_beh.iloc[0]['r']
-    rse_pup_beh = active_full.iloc[0]['r_se']
-    rse_pup_beh0 = active_part_pup.iloc[0]['r_se']
-    rse_pup0_beh = active_part_beh.iloc[0]['r_se']
+    rse_pup_beh = active_full['r_se'].str.strip(to_strip='[]').astype(float).values[0]
+    rse_pup_beh0 = active_part_pup['r_se'].str.strip(to_strip='[]').astype(float).values[0]
+    rse_pup0_beh = active_part_beh['r_se'].str.strip(to_strip='[]').astype(float).values[0]
     r_pup0_beh0 = active_null.iloc[0]['r']
-    rse_pup0_beh0 = active_null.iloc[0]['r_se']
+    rse_pup0_beh0 = active_null['r_se'].str.strip(to_strip='[]').astype(float).values[0]
 
     # units that had significant unique behavior
     df.loc[mask_for_cellid, 'sig_ubeh'] = (r_pup_beh - r_pup_beh0) > (rse_pup_beh + rse_pup_beh0)
@@ -185,6 +216,7 @@ df.to_csv('pup_beh_processed'+basemodel+'.csv')
 
 d_b307 = pd.read_csv('d_307_beh.csv')
 d_b311 = pd.read_csv('d_311_beh.csv')
+d_b312 = pd.read_csv('d_312_beh.csv')
 d_b313 = pd.read_csv('d_313_beh.csv')
 
 d_b307['R2'] = d_b307['r']**2 * np.sign(d_b307['r'])
@@ -193,7 +225,7 @@ d_b307['sign'] = 'TBD'
 d_b307['experimenter'] = 'DS'
 d_b307['onBF'] = 'TBD'
 d_b307['SU'] = False
-d_b307.loc[d_pb307['isolation']>=90.0, 'SU'] = True
+d_b307.loc[d_b307['isolation']>=90.0, 'SU'] = True
 d_b307['animal'] = d_b307['cellid'].map(lambda x: x[:3])
 d_b307['task'] = 'TIN'
 
@@ -201,11 +233,21 @@ d_b311['R2'] = d_b311['r']**2 * np.sign(d_b311['r'])
 d_b311['area'] = 'A1'
 d_b311['sign'] = 'TBD'
 d_b311['experimenter'] = 'DS'
-d_b311['onBF'] = 'TBD'
+d_b311['onBF'] = True
 d_b311['SU'] = False
-d_b311.loc[d_pb307['isolation']>=90.0, 'SU'] = True
+d_b311.loc[d_b307['isolation']>=90.0, 'SU'] = True
 d_b311['animal'] = d_b311['cellid'].map(lambda x: x[:3])
 d_b311['task'] = 'TIN'
+
+d_b312['R2'] = d_b312['r']**2 * np.sign(d_b312['r'])
+d_b312['area'] = 'A1'
+d_b312['sign'] = 'TBD'
+d_b312['experimenter'] = 'DS'
+d_b312['onBF'] = False
+d_b312['SU'] = False
+d_b312.loc[d_b307['isolation']>=90.0, 'SU'] = True
+d_b312['animal'] = d_b312['cellid'].map(lambda x: x[:3])
+d_b312['task'] = 'TIN'
 
 d_b313 = d_b313.drop(['Unnamed: 0'], axis=1)
 
@@ -221,7 +263,7 @@ d_b313.loc[d_b313['animal']=='ley', 'task'] = 'TvN'
 d_b313['SU'] = False
 d_b313.loc[d_b313['isolation']>=90.0, 'SU'] = True
 
-dfb = pd.concat([d_b307, d_b311, d_b313], sort=False)
+dfb = pd.concat([d_b307, d_b311, d_b312, d_b313], sort=False)  # d_b312,
 dfb.sort_values(by=['area','cellid','state_chan','state_sig'], inplace=True)
 
 # creating subdf with only rows that match conditions

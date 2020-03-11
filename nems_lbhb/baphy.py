@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Jun 14 09:33:47 2017
@@ -32,9 +33,7 @@ import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
-from nems_lbhb.io import (baphy_parm_read, baphy_align_time, baphy_stim_cachefile, load_pupil_trace,
-                          get_rem, load_rem_options, set_default_pupil_options,
-                          baphy_align_time_baphyparm)
+import nems_lbhb.io as io
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -193,15 +192,15 @@ def baphy_load_data(parmfilepath, **options):
         parmfilepath += ".m"
     # load parameter file
     log.info('Loading parameters: %s', parmfilepath)
-    globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
+    globalparams, exptparams, exptevents = io.baphy_parm_read(parmfilepath)
     # TODO: use paths that match LBHB filesystem? new s3 filesystem?
     #       or make s3 match LBHB?
 
     # figure out stimulus cachefile to load
     if 'stim' in options.keys() and options['stim']:
         if exptparams['runclass']=='VOC_VOC':
-            stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
-            stimfilepath2 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+            stimfilepath1 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+            stimfilepath2 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
             print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
             # load stimulus spectrogram
             stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
@@ -225,7 +224,7 @@ def baphy_load_data(parmfilepath, **options):
 
             stimparam = stimparam1
         else:
-            stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
+            stimfilepath = io.baphy_stim_cachefile(exptparams, parmfilepath, **options)
             print("Cached stim: {0}".format(stimfilepath))
             # load stimulus spectrogram
             stim, tags, stimparam = baphy_load_specgram(stimfilepath)
@@ -284,7 +283,7 @@ def baphy_load_data(parmfilepath, **options):
         sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
 
         # adjust spike and event times to be in seconds since experiment started
-        exptevents, spiketimes, unit_names = baphy_align_time(
+        exptevents, spiketimes, unit_names = io.baphy_align_time(
                 exptevents, sortinfo, spikefs, options['rasterfs']
                 )
 
@@ -323,7 +322,7 @@ def baphy_load_data(parmfilepath, **options):
         # in that case, just assume real time is the sum of trial durations.
         spike_dict = {}
         #import pdb; pdb.set_trace()
-        exptevents = baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
+        exptevents = io.baphy_align_time_baphyparm(exptevents, finalfs=options['rasterfs'])
 
     state_dict = {}
     if options['pupil']:
@@ -331,7 +330,7 @@ def baphy_load_data(parmfilepath, **options):
             pupilfilepath = re.sub(r"\.m$", ".pup.mat", parmfilepath)
             options['verbose'] = False
             if options['pupil_eyespeed']:
-                pupildata, ptrialidx = load_pupil_trace(
+                pupildata, ptrialidx = imo.load_pupil_trace(
                         pupilfilepath, exptevents, **options
                         )
                 try:
@@ -342,7 +341,7 @@ def baphy_load_data(parmfilepath, **options):
                     state_dict['pupiltrace'] = pupildata
 
             else:
-                pupiltrace, ptrialidx = load_pupil_trace(
+                pupiltrace, ptrialidx = io.load_pupil_trace(
                         pupilfilepath, exptevents, **options
                         )
                 state_dict['pupiltrace'] = pupiltrace
@@ -352,10 +351,10 @@ def baphy_load_data(parmfilepath, **options):
 
     if options['rem']:
         try:
-            rem_options = load_rem_options(pupilfilepath)
+            rem_options = io.load_rem_options(pupilfilepath)
             rem_options['verbose'] = False
             #rem_options['rasterfs'] = options['rasterfs']
-            is_rem, rem_options = get_rem(pupilfilepath=pupilfilepath,
+            is_rem, rem_options = io.get_rem(pupilfilepath=pupilfilepath,
                               exptevents=exptevents, **rem_options)
             is_rem = is_rem.astype(float)
             new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
@@ -396,12 +395,16 @@ def baphy_load_dataset(parmfilepath, **options):
     # get the relatively un-pre-processed data
     exptevents, stim, spike_dict, state_dict, tags, stimparam, exptparams = \
         baphy_load_data(parmfilepath, **options)
-    
+
     # if runclass is BVT, add behavior outcome column (to be used later)
     # very kludgy
     # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
     # with this loading procedure.
     # CRH 12/10/2019
+    if (exptparams['runclass'] == 'BVT'):
+        BVT = True
+    else:
+        BVT = False
     if (exptparams['runclass'] == 'BVT') & (exptparams['BehaveObjectClass'] != 'Passive'):
         exptevents = beh.create_trial_labels(exptparams, exptevents)
         active_BVT = True
@@ -426,7 +429,7 @@ def baphy_load_dataset(parmfilepath, **options):
     ffstop = exptevents['name'].str.startswith(tag_mask_start)
 
     # end at the end of last trial
-    final_trial = np.argwhere((exptevents['name'] == tag_mask_stop)==True)[-1][0]
+    final_trial = np.argwhere(((exptevents['name'] == tag_mask_stop)==True).values)[-1][0]
     ffstop.iloc[final_trial] = True
     # "start" of last TRIALSTOP event
     final_trial_end0 = exptevents["end"].max()
@@ -438,7 +441,7 @@ def baphy_load_dataset(parmfilepath, **options):
     log.info('Setting end for {} events from {} to {}'.format(
         np.sum(end_events), final_trial_end0, final_trial_end))
     # set first True to False (the start of the first trial)
-    first_true = np.argwhere(ffstop == True)[0][0]
+    first_true = np.argwhere((ffstop == True).values)[0][0]
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
@@ -519,7 +522,7 @@ def baphy_load_dataset(parmfilepath, **options):
             except:
                 # was labeled as NULL, since sound never played
                 this_event_times.loc[trialidx-1, 'name'] = 'EARLY_TRIAL'
-        
+
         any_behavior = True
     else:
         for trialidx in range(1, TrialCount+1):
@@ -727,6 +730,7 @@ def baphy_load_dataset(parmfilepath, **options):
         this_event_times['name'] = "TARGET"
         event_times = event_times.append(this_event_times, ignore_index=True)
 
+        #import pdb; pdb.set_trace()
         for i,e in exptevents[ff_tar_events | ff_lick_dur].iterrows():
             name = e['name']
             elements = name.split(" , ")
@@ -734,7 +738,10 @@ def baphy_load_dataset(parmfilepath, **options):
             if elements[0] == "PreStimSilence":
                 name="PreStimSilence"
             elif elements[0] == "Stim":
-                name="STIM_" + elements[1]
+                if BVT:
+                    name="TAR_" + elements[1]
+                else:
+                    name="STIM_" + elements[1]
                 e['start'] = exptevents.loc[i-1]['start']
                 e['end'] = exptevents.loc[i+1]['end']
             elif elements[0] == "PostStimSilence":
@@ -1287,12 +1294,13 @@ def fill_default_options(options):
     options['rem'] = int(options.get('rem', False))
     options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
-        options = set_default_pupil_options(options)
-        
+        options = io.set_default_pupil_options(options)
+
     #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
     #options['pupil_median'] = options.get('pupil_median', 0)
     #options["pupil_offset"] = options.get('pupil_offset', 0.75)
+    options['resp'] = int(options.get('resp', True))
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['cellid'] = options.get('cellid', cellid)

@@ -46,11 +46,15 @@ sig_state = df['sig_state']==True
 sig_obeh = df['sig_obeh']==True
 sig_oubeh = sig_ubeh | sig_obeh
 
+df['r_se'] = df['r_se'].str.strip(to_strip="[]").astype(float)
+
 # 6A
-aud_vs_state(df.loc[A1], nb=5, colors=common.color_list, title='A1')
+f = aud_vs_state(df.loc[A1], nb=5, colors=common.color_list, title='A1')
+f.savefig('/tmp/Fig6_A1_tuning_vs_pup_beh.pdf')
 
 # 6B
-aud_vs_state(df.loc[ICC | ICX], nb=5, colors=common.color_list, title='IC')
+f = aud_vs_state(df.loc[ICC | ICX], nb=5, colors=common.color_list, title='IC')
+f.savefig('/tmp/Fig6_IC_tuning_vs_pup_beh.pdf')
 
 
 # Figures 6C-D  - beh only effects, bigger set of cells
@@ -65,7 +69,7 @@ full_model = (dfb['state_sig'] == 'st.beh')
 null_model = (dfb['state_sig'] == 'st.beh0')
 
 #xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
-xsubset = df.cellid.str.startswith('AMT')
+xsubset = dfb.cellid.str.startswith('AMT')
 #xsubset = dfb.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df
@@ -81,7 +85,12 @@ sig_oubeh = sig_ubeh | sig_obeh
 
 print((dfb.loc[full_model & is_active & A1 & sig_state, 'MIbeh_only']).median())
 
-aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='A1')
-aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='IC')
+#dfb['r_se'] = dfb['r_se'].str.strip(to_strip="[]").astype(float)
+
+f = aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='A1')
+f.savefig('/tmp/Fig6_A1_beh_only.pdf')
+
+f = aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='IC')
+f.savefig('/tmp/Fig6_IC_beh_only.pdf')
 
 

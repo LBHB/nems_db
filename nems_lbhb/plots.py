@@ -1139,50 +1139,69 @@ def LN_pop_plot(ctx):
     bank_count = modelspec[fir_idx]['fn_kwargs']['bank_count']
     chan_per_bank = int(filter_count/bank_count)
 
+
     fig = plt.figure()
-    for chanidx in range(chan_count):
+    for chanidx in range(filter_count):
 
         tmodelspec=copy.deepcopy(modelspec[:(fir_idx+1)])
         tmodelspec[fir_idx]['fn_kwargs']['bank_count']=1
         rr=slice(chanidx*chan_per_bank, (chanidx+1)*chan_per_bank)
-        tmodelspec[wc_idx[0]]['phi']['mean'] = tmodelspec[wc_idx[0]]['phi']['mean'][rr]
-        tmodelspec[wc_idx[0]]['phi']['sd'] = tmodelspec[wc_idx[0]]['phi']['sd'][rr]
+        if 'mean' in tmodelspec[wc_idx[0]]['phi']:
+            tmodelspec[wc_idx[0]]['phi']['mean'] = tmodelspec[wc_idx[0]]['phi']['mean'][rr]
+            tmodelspec[wc_idx[0]]['phi']['sd'] = tmodelspec[wc_idx[0]]['phi']['sd'][rr]
+        else:
+            tmodelspec[wc_idx[0]]['phi']['coefficients']=tmodelspec[wc_idx[0]]['phi']['coefficients'][rr,:]
         tmodelspec[fir_idx]['phi']['coefficients'] = \
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
-        ax = fig.add_subplot(chan_count, 3, chanidx*3+1)
-        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,3),
-                          show_factorized=False, fs=fs, ax=ax)
+        ax = fig.add_subplot(filter_count, 6, chanidx*6+1)
+        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,5),
+                          show_factorized=False, fs=fs, ax=ax, show_cbar=False)
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
             plt.xticks([])
             plt.yticks([])
-            plt.xlabel('')
-            plt.ylabel('')
+            plt.xlabel(None)
+            plt.ylabel(str(chanidx))
+            plt.title(None)
 
-    ax = fig.add_subplot(2, 3, 2)
-    fcc = modelspec[fir_idx]['phi']['coefficients'].copy()
-    fcc = np.reshape(fcc, (chan_per_bank, bank_count, -1))
-    fcc = np.mean(fcc,axis=0)
-    fcc_std = np.std(fcc,axis=1,keepdims=True)
-    wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
-    wcc *= fcc_std
-    mm = np.std(wcc)*3
-    im = ax.imshow(wcc, aspect='auto', clim=[-mm, mm], cmap='bwr')
-    #plt.colorbar(im)
-    plt.title(modelspec.meta['cellid'])
-    nplt.ax_remove_box(ax)
+    #import pdb; pdb.set_trace()
+    if len(wc_idx)>2:
+        ax = fig.add_subplot(2, 3, 2)
+
+        _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-2])
+        fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
+
+        wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
+        wcc *= fcc_std
+        mm = np.std(wcc)*2.5
+        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+        #plt.colorbar(im)
+        plt.title('L2')
+        nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(2, 3, 3)
+
+    _est = ms.evaluate(ctx['est'].apply_mask(), modelspec, stop=wc_idx[-1])
+    fcc_std = np.std(_est['pred'].as_continuous(),axis=1, keepdims=True)
+
+    wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
+    wcc *= fcc_std
+    mm = np.std(wcc)*2.5
+    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+    plt.colorbar(im)
+    plt.title('L3')
+    nplt.ax_remove_box(ax)
+
+    ax = fig.add_subplot(6, 6, 21)
     plt.plot(modelspec.meta['r_test'])
     plt.xlabel('cell')
     plt.ylabel('r test')
     nplt.ax_remove_box(ax)
 
-
     epoch_regex = '^STIM_'
     epochs_to_extract = ep.epoch_names_matching(rec.epochs, epoch_regex)
-    epoch=epochs_to_extract[0]
+    epoch=epochs_to_extract[1]
 
     # or just plot the PSTH for an example stimulus
     raster = resp.extract_epoch(epoch)
@@ -1190,7 +1209,7 @@ def LN_pop_plot(ctx):
     praster = pred.extract_epoch(epoch)
     ppsth = np.mean(praster, axis=0)
     spec = stim.extract_epoch(epoch)[0,:,:]
-    trimbins=50
+    trimbins=0
     if trimbins > 0:
         ppsth=ppsth[:,trimbins:]
         psth=psth[:,trimbins:]
@@ -1207,7 +1226,7 @@ def LN_pop_plot(ctx):
     plt.colorbar(im)
 
     ax = plt.subplot(6, 2, 10)
-    clim=(np.nanmin(psth),np.nanmax(psth)*.6)
+    clim=(np.nanmin(psth),np.nanmax(psth)*.7)
     #nplt.plot_spectrogram(psth, fs=resp.fs, ax=ax, title="resp",
     #                      cmap='gray_r', clim=clim)
     #fig.colorbar(im, cax=ax, orientation='vertical')
@@ -1220,7 +1239,7 @@ def LN_pop_plot(ctx):
     plt.colorbar(im)
 
     ax = plt.subplot(6, 2, 12)
-    clim=(np.nanmin(psth),np.nanmax(ppsth))
+    clim=(np.nanmin(psth),np.nanmax(ppsth)*.8)
     im=ax.imshow(ppsth, origin='lower', interpolation='none',
                  aspect='auto', extent=extent,
                  cmap='gray_r', clim=clim)
