@@ -51,13 +51,16 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
         f.write(f'#SBATCH --time={time_hours:02d}:{time_mins:02d}:00\n')
         f.write(f'#SBATCH --cpus-per-task=1')
         f.write(f'#SBATCH --mem=4G\n')
-        f.write(f'#SBATCH --gres=disk:5\n')
         f.write(f'#SBATCH --job-name={job_name}\n')
         f.write(f'#SBATCH --comment="{job_comment}"\n')
         f.write(f'#SBATCH --output={str(job_log_loc)}%j_log.out\n')
 
         if use_gpu:
             f.write('#SBATCH --partition=gpu\n')
+            f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
+        else:
+            f.write(f'#SBATCH --gres=disk:5\n')
+
         if queueid is not None:  # to work with queuemaster need to add in queueid env
             f.write(f'#SBATCH --export=ALL,QUEUEID={queueid}\n')
 
