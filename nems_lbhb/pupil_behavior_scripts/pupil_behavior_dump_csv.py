@@ -58,6 +58,26 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_pup_fil.csv')
 
+# pup+fil only
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20.pup-ld-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv')                                  
+
+# batch 295 behavior only
+state_list = ['st.fil','st.fil0']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20-ld-"
+batches = [295]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_fil_stategain.csv')                                  
+
 # beh only
 state_list = ['st.beh0','st.beh']
 basemodel2 = "-ref-psthfr.s_stategain.S"

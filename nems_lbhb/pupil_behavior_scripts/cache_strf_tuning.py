@@ -20,6 +20,7 @@ fs = 1000
 
 # data frame cache
 path = '/auto/users/hellerc/code/nems_db/nems_lbhb/pupil_behavior_scripts/'
+df_295_filename = path + 'd_295_tuning.csv'
 df_307_filename = path + 'd_307_tuning.csv'
 df_309_filename = path + 'd_309_tuning.csv'
 
@@ -103,5 +104,42 @@ for j, page in enumerate(page_starts):
             pass
 
     f.tight_layout()
-    f.savefig(pdf_path+'309_strfs_{}.pdf'.format(j))
+    f.savefig(pdf_path+'309_strfs_{}.png'.format(j))
+plt.close('all')
+
+# ================================= batch 295 ===================================
+cells_295 = nd.get_batch_cells(295).cellid
+df_295 = pd.DataFrame(index=cells_295, columns=['BF', 'SNR', 'STRF', 'StimParms'])
+for cellid in cells_295:
+    print('analyzing cell: {0}, batch {1}'.format(cellid, 295))
+    ops = {'batch': 295, 'pupil': 0, 'rasterfs': fs, 'cellid': cellid, 'stim': 0}
+    uri = nb.baphy_load_recording_uri(**ops)
+    rec = Recording.load(uri)
+    r = rec.copy()
+
+    # get strf and save results
+    out = strf.tor_tuning(cellid, rec=r, plot=False)
+    df_295.loc[cellid] = [out.Best_Frequency_Hz, out.Signal_to_Noise, [out.STRF], [out.StimParams]]
+
+# cache bf / snr results
+df_295[['BF', 'SNR']].to_csv(df_295_filename)
+
+# plot results, 16 strfs per page
+page_starts = np.arange(0, len(cells_295), 16) 
+for j, page in enumerate(page_starts):
+    f, ax = plt.subplots(4, 4, figsize=(16, 12))
+
+    results = df_295.iloc[page:(page+16)]
+    tleng = 0.75
+    for i, a in enumerate(ax.flatten()):
+        try:
+            strfplot(results.iloc[i]['STRF'][0], results.iloc[i]['StimParms'][0]['lfreq'], tleng, axs=a, smooth=True)
+            bf = results.iloc[i]['BF']
+            snr = np.round(results.iloc[i]['SNR'], 3)
+            a.set_title(results.iloc[i].name + '\n BF: {0}, SNR: {1}'.format(bf, snr), fontsize=8)
+        except:
+            pass
+
+    f.tight_layout()
+    f.savefig(pdf_path+'295_strfs_{}.png'.format(j))
 plt.close('all')
