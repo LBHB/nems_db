@@ -1283,9 +1283,19 @@ def parse_cellid(options):
         cells_to_extract = cell_list
         
     elif siteid is not None:
-        # siteid was passed
+        # siteid was passed, figure out if electrode numbers were specified.
+        chan_nums = None
+        if '.e' in siteid:
+            args = siteid.split('.')
+            siteid = args[0]
+            chan_lims = args[1].replace('e', '').split(':')
+            chan_nums = np.arange(int(chan_lims[0]), int(chan_lims[1])+1)
+
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                              rawid=rawid)
+        if chan_nums is not None:
+            cell_list = [c for c in cell_list if int(c.split('-')[1]) in chan_nums]
+            
         options['cellid'] = cell_list
         options['rawid'] = rawid
         options['siteid'] = siteid

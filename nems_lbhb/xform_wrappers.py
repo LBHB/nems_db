@@ -231,8 +231,6 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
-    import pdb; pdb.set_trace()
-
     # check for special pop signal code
     pc_idx = None
     if type(cellid) is str:
