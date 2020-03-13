@@ -163,7 +163,6 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     very baphy-specific. Needs to be coordinated with loader processing
     in nems.xform_helper
     """
-
     # remove any preprocessing keywords in the loader string.
     if '-' in loadkey:
         loader = nems.utils.escaped_split(loadkey, '-')[0]
@@ -232,6 +231,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
 
+    import pdb; pdb.set_trace()
+
     # check for special pop signal code
     pc_idx = None
     if type(cellid) is str:
@@ -242,19 +243,22 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
         elif (len(cellid.split('+')) > 1):
             # list of cellids (specified in model queue by separating with '_')
             cellid = cellid.split('+')
-
+    
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
 
-    context = {'recording_uri_list': [recording_uri]}
+    # update the cellid in context so that we don't have to parse the cellid
+    # again in xforms
+    t_ops = options.copy()
+    t_ops['cellid'] = cellid
+    t_ops['batch'] = batch
+    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
     if pc_idx is not None:
         context['pc_idx'] = pc_idx
 
-    #log.info('cellid: {}, recording_uri: {}'.format(cellid, recording_uri))
-
     return context
-
 
 
 def fit_model_xforms_baphy(cellid, batch, modelname,

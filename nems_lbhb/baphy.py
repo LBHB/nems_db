@@ -1225,6 +1225,84 @@ def dict_to_signal(stim_dict, fs=100, event_times=None, signal_name='stim',
     return stim
 
 
+def parse_cellid(options):
+    """
+    figure out if cellid is 
+        1) single cellid
+        2) list of cellids
+        3) a siteid
+    
+    using this, add the field 'siteid' to the options dictionary. If siteid was passed,
+    define cellid as a list of all cellids recorded at this site, for this batch.
+
+    options: dictionary
+            batch - (int) batch number
+            cellid - single cellid string, list of cellids, or siteid
+                If siteid is passed, return superset of cells. i.e. if some
+                cells aren't present in one of the files that is found for this batch, 
+                don't load that file. To override this behavior, pass rawid list.
+
+    returns updated options dictionary and the cellid to extract from the recording
+        NOTE: The reason we keep "cellid to extract" distinct from the options dictionary
+        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze 
+        cell1 from a site where you recorded cells1-4, you don't want a different recording
+        cached for each cell.
+    """
+    options = options.copy()
+
+    mfilename = options.get('mfilename', None)
+    cellid = options.get('cellid', None)
+    batch = options.get('batch', None)
+    rawid = options.get('rawid', None)
+    cells_to_extract = None
+
+    if ((cellid is None) | (batch is None)) & (mfilename is None):
+        raise ValueError("must provide cellid and batch or mfilename")
+
+    siteid = None
+    cell_list = None
+    if type(cellid) is list:
+        cell_list = cellid
+    elif (type(cellid) is str) & ('-' not in cellid):
+        siteid = cellid 
+
+    if mfilename is not None:
+        # simple, db-free case. Just a pass through.
+        pass
+        if batch is None:
+            options['batch'] = 0
+
+    elif cell_list is not None:
+        # list of cells was passed
+        siteid = cellid.split('-')[0]
+        cell_list_all, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
+                                             rawid=rawid)
+        options['cellid'] = cell_list_all
+        options['rawid'] = rawid
+        options['siteid'] = cell_list[0].split('-')[0]
+        cells_to_extract = cell_list
+        
+    elif siteid is not None:
+        # siteid was passed
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                             rawid=rawid)
+        options['cellid'] = cell_list
+        options['rawid'] = rawid
+        options['siteid'] = siteid
+        cells_to_extract = cell_list
+
+    elif cellid is not None:
+        # single cellid was passed
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
+                                                     rawid=rawid)
+        options['cellid'] = cell_list
+        options['rawid'] = rawid
+        options['siteid'] = cell_list[0].split('-')[0]
+        cells_to_extract = [cellid]
+
+    return list(cells_to_extract), options
+
+
 def fill_default_options(options):
     """
     fill in default options. use options after adding defaults to specify
@@ -1232,57 +1310,6 @@ def fill_default_options(options):
     """
 
     options = options.copy()
-
-    mfilename = options.get('mfilename', None)
-    cellid = options.get('cellid', None)
-    batch = options.get('batch', None)
-    cell_list = options.get('cell_list', None)
-    siteid = options.get('siteid', None)
-    rawid = options.get('rawid', None)
-
-    if (cellid is None) and (cell_list is None) and (siteid is None):
-        raise ValueError("must provide cellid, cell_list or siteid")
-    if (batch is None) and (mfilename is None):
-        raise ValueError("must provide batch or mfilename")
-
-    if type(cellid) is list:
-        cell_list = cellid
-
-    # No matter what the cell_list is, always want to set cell_list to be all
-    # stable cells at the site/rawids. No point in caching different recs for
-    # [cell1, cell2] and [cell3, cell4] if all four come from same recording
-    if mfilename is not None:
-        # simple, db-free case
-        pass
-        if batch is None:
-            batch=0
-    elif cell_list is not None:
-        cellid = cell_list[0]
-        siteid = cellid.split('-')[0]
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
-                                             rawid=rawid)
-        options['rawid'] = rawid
-        options['cellid'] = cell_list
-
-    elif siteid is not None:
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
-                                             rawid=rawid)
-        cellid = cell_list[0]
-        options['cellid'] = cell_list
-        options['rawid'] = rawid
-
-    elif cellid is not None:
-        # figure out the rawids that this cell was stable across for this batch
-        # return the list of cells that meet these criteria so that we load from
-        # the correct cache
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
-                                                     rawid=rawid)
-        if options.get('runclass')=="RDT":
-            log.info(cell_list)
-            #options['cellid'] = cell_list[0]
-        else:
-            options['cellid'] = cell_list
-        options['rawid'] = rawid
 
     # set default options if missing
     options['rasterfs'] = int(options.get('rasterfs', 100))
@@ -1303,8 +1330,6 @@ def fill_default_options(options):
     options['resp'] = int(options.get('resp', True))
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
-    options['cellid'] = options.get('cellid', cellid)
-    options['batch'] = int(batch)
     options['rawid'] = options.get('rawid', None)
 
     if options['stimfmt'] in ['envelope', 'parm']:
@@ -1740,10 +1765,10 @@ def baphy_load_recording_uri(recache=False, **options):
 
         required fields:
             batch - (int) batch number
-            cellid (single string or list of cellids) or siteid
-            TODO: confirm this is valid:
-               if only siteid is specifified, only load cells that are stable
-               across files for that site.
+            cellid - single cellid string, list of cellids, or siteid
+                If siteid is passed, return superset of cells. i.e. if some
+                cells aren't present in one of the files that is found for this batch, 
+                don't load that file. To override this behavior, pass rawid list.
 
     return:
         data_file : string
@@ -1756,19 +1781,20 @@ def baphy_load_recording_uri(recache=False, **options):
 
     mfilename = options.get('mfilename', None)
     batch = options.get('batch', None)
-    siteid = options.get('siteid', None)
     cellid = options.get('cellid', None)
 
-    if siteid is None and cellid is not None:
-        if type(cellid) == list:
-            siteid = cellid[0].split('-')[0]
-        elif type(cellid) == str:
-            siteid = cellid.split('-')[0]
+    if options.get('siteid') is not None:
+        raise DeprecationWarning("Use cellid to specify recording site. e.g. options['cellid']='DRX005c'")
 
-    if (batch is None or siteid is None) and (mfilename is None):
+    if ((cellid is None) | (batch is None)) & (mfilename is None):
         raise ValueError("options dict must include (siteid, batch) or mfilename")
 
-    # fill in default options
+    # parse cellid. Update cellid, siteid, rawid in options dictionary
+    # if cellid/batch not specified, find them based on mfile.
+    _, options = parse_cellid(options)
+    siteid = options['siteid']
+
+    # fill in remaining default options
     options = fill_default_options(options)
 
     use_API = get_setting('USE_NEMS_BAPHY_API')
@@ -1776,14 +1802,12 @@ def baphy_load_recording_uri(recache=False, **options):
     data_file = recording_filename_hash(
         siteid, options, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
     if use_API:
-        p, f = os.path.split(data_file)
+        _, f = os.path.split(data_file)
         host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
         data_uri = host + '/recordings/' + str(batch) + '/' + f
     else:
         data_uri = data_file
 
-    #log.info(data_file)
-    #log.info(options)
 
     if not use_API and (not os.path.exists(data_file) or recache == True):
         log.info("Generating recording")
