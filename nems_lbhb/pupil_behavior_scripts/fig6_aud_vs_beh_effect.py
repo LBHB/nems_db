@@ -21,6 +21,7 @@ import common
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 basemodel = "-ref-psthfr.s_sdexp.S"
+basemodel2= "-ref-psthfr.s_stategain.S"
 
 #
 # Figures 6A-B  - separate pup and beh effects
@@ -61,15 +62,15 @@ f.savefig('/tmp/Fig6_IC_tuning_vs_pup_beh.pdf')
 # later figure -- beh only (ignore pupil, can use larger stim set)
 
 #dfb = pd.read_csv('beh_only_processed.csv')
-dfb = pd.read_csv('beh_only_processed'+basemodel+'.csv')
+dfb = pd.read_csv('beh_only_processed'+basemodel2+'.csv')
 
 # creating subdf with only rows that match conditions
 is_active = (dfb['state_chan'] == 'active')
 full_model = (dfb['state_sig'] == 'st.beh')
 null_model = (dfb['state_sig'] == 'st.beh0')
 
-#xsubset = df.cellid.str.startswith('AMT018') | df.cellid.str.startswith('AMT020')
-xsubset = dfb.cellid.str.startswith('AMT')
+#xsubset = dfb.cellid.str.startswith('AMT018') | dfb.cellid.str.startswith('AMT020') | dfb.cellid.str.startswith('oni015b-b1')
+xsubset = dfb.cellid.str.startswith('AMT') | dfb.cellid.str.startswith('oni015b-b1')
 #xsubset = dfb.cellid.str.startswith('XXXXXX')
 
 # creating list of booleans to mask A1, IC, onBF and offBF out of big df

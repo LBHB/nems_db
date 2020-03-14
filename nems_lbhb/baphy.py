@@ -35,6 +35,7 @@ from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
 import nems_lbhb.io as io
+import nems.epoch as ep
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,
 #       or add some other way to help with debugging them.
@@ -621,6 +622,7 @@ def baphy_load_dataset(parmfilepath, **options):
     # add event characterizing outcome of each behavioral
     # trial (if behavior)
     log.info('Creating trial outcome events')
+    ff_lick_dur = (exptevents['name'] == 'LICK')
     note_map = {'OUTCOME,FALSEALARM': 'FA_TRIAL',
                 'OUTCOME,EARLY': 'FA_TRIAL',
                 'OUTCOME,VEARLY': 'FA_TRIAL',
@@ -661,8 +663,16 @@ def baphy_load_dataset(parmfilepath, **options):
             for i, d in exptevents.loc[ff].iterrows():
                 # print("{0}: {1} - {2} - {3}"
                 #       .format(i, d['Trial'], d['name'], d['end']))
+                dtrial = this_event_times.loc[trialidx-1]
                 this_event_times.loc[trialidx-1, 'name'] = note_map[d['name']]
                 any_behavior = True
+                fdur = (ff_lick_dur
+                        & (exptevents['start'] < dtrial['start'] + 0.5)
+                        & (exptevents['end'] > dtrial['start'] + 0.001))
+                if np.sum(fdur) & (note_map[d['name']]=='HIT_TRIAL') & \
+                        (exptevents.loc[fdur,'start'].min() < dtrial['start'] + 0.5):
+                    log.info(f'Erroneous early lick in HIT trial {trialidx}, deleting')
+                    exptevents.loc[fdur,'name']='MISSEDLICK'
 
     # CRH add check, just in case user messed up when doing experiment
     # and selected: physiology yes, passive, but set behavior control to active
@@ -716,9 +726,9 @@ def baphy_load_dataset(parmfilepath, **options):
 
         ff_tar_pre = exptevents['name'].str.startswith('Pre') & ff_tar_events
         ff_tar_dur = exptevents['name'].str.startswith('Stim') & ff_tar_events
-        ff_lick_dur = (exptevents['name'] == 'LICK')
         ff_tar_post = exptevents['name'].str.startswith('Post') & ff_tar_events
 
+        ff_lick_dur = (exptevents['name'] == 'LICK')
         ff_pre_all = exptevents['name'] == ""
         ff_post_all = ff_pre_all.copy()
 
@@ -1205,14 +1215,27 @@ def baphy_load_recording(**options):
 
     if goodtrials.size > np.sum(goodtrials):
         log.info(goodtrials)
+        # remove epochs from bad trials (not goodtrials), avoid a
+        #log.info(goodtrials)
+        bad_bounds = rec['resp'].get_epoch_bounds('TRIAL')[~goodtrials]
+        all_bounds = rec['resp'].epochs[['start','end']].values
+
+        bad_epochs = ep.epoch_contained(all_bounds, bad_bounds)
+        rec['resp'].epochs.loc[bad_epochs]
+        new_epochs = rec['resp'].epochs.drop(rec['resp'].epochs.index[bad_epochs])
+
+        #import pdb; pdb.set_trace()
+        for key, s in rec.signals.items():
+            s.epochs = new_epochs
+            
         # mask out trials outside of goodtrials range, specified in celldb
         # usually during meska save
-        trial_epochs = rec['resp'].get_epoch_indices('TRIAL')
-        good_epochs = trial_epochs[goodtrials]
-        good_epochs[:, 1] += 1
-        rec = rec.create_mask(good_epochs)
-        log.info('masking and resetting epochs for good trials')
-        rec = rec.apply_mask(reset_epochs=True)
+        #trial_epochs = rec['resp'].get_epoch_indices('TRIAL')
+        #good_epochs = trial_epochs[goodtrials]
+        #good_epochs[:, 1] += 1
+        #rec = rec.create_mask(good_epochs)
+        #log.info('masking and resetting epochs for good trials')
+        #rec = rec.apply_mask(reset_epochs=True)
 
     return rec
     

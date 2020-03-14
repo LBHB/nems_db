@@ -86,7 +86,7 @@ fitter = "_jk.nf20-basic"
 #batch = 307  # DS A1+MU
 #batch = 311  # A1 old (SVD) data -- on BF
 #batch = 313  # IC PTD data SU + MU
-batches = [307, 311, 312, 313]
+batches = [295, 307, 311, 312, 313]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
@@ -214,10 +214,21 @@ for cellid in df['cellid'].unique():
 #df.to_csv('pup_beh_processed.csv')
 df.to_csv('pup_beh_processed'+basemodel+'.csv')
 
+d_b295 = pd.read_csv('d_295_beh.csv')
 d_b307 = pd.read_csv('d_307_beh.csv')
 d_b311 = pd.read_csv('d_311_beh.csv')
 d_b312 = pd.read_csv('d_312_beh.csv')
 d_b313 = pd.read_csv('d_313_beh.csv')
+
+d_b295['R2'] = d_b295['r']**2 * np.sign(d_b295['r'])
+d_b295['area'] = 'IC'
+d_b295['sign'] = 'TBD'
+d_b295['experimenter'] = 'SS'
+d_b295['onBF'] = 'TBD'
+d_b295['SU'] = False
+d_b295.loc[d_b295['isolation']>=90.0, 'SU'] = True
+d_b295['animal'] = d_b295['cellid'].map(lambda x: x[:3])
+d_b295['task'] = 'PTD'
 
 d_b307['R2'] = d_b307['r']**2 * np.sign(d_b307['r'])
 d_b307['area'] = 'A1'
@@ -232,7 +243,7 @@ d_b307['task'] = 'TIN'
 d_b311['R2'] = d_b311['r']**2 * np.sign(d_b311['r'])
 d_b311['area'] = 'A1'
 d_b311['sign'] = 'TBD'
-d_b311['experimenter'] = 'DS'
+d_b311['experimenter'] = 'SD'
 d_b311['onBF'] = True
 d_b311['SU'] = False
 d_b311.loc[d_b307['isolation']>=90.0, 'SU'] = True
@@ -242,12 +253,12 @@ d_b311['task'] = 'TIN'
 d_b312['R2'] = d_b312['r']**2 * np.sign(d_b312['r'])
 d_b312['area'] = 'A1'
 d_b312['sign'] = 'TBD'
-d_b312['experimenter'] = 'DS'
+d_b312['experimenter'] = 'SD'
 d_b312['onBF'] = False
 d_b312['SU'] = False
 d_b312.loc[d_b307['isolation']>=90.0, 'SU'] = True
 d_b312['animal'] = d_b312['cellid'].map(lambda x: x[:3])
-d_b312['task'] = 'TIN'
+d_b312['task'] = 'PTD'
 
 d_b313 = d_b313.drop(['Unnamed: 0'], axis=1)
 
@@ -258,12 +269,12 @@ d_b313['onBF'] = 'TBD'
 d_b313['experimenter'] = 'DS'
 d_b313['sign'] = 'TBD'
 d_b313['animal'] = d_b313['cellid'].map(lambda x: x[:3])
-d_b313['task'] = 'TIN'
-d_b313.loc[d_b313['animal']=='ley', 'task'] = 'TvN'
+d_b313['task'] = 'PTD'
+d_b313.loc[d_b313['animal']=='ley', 'task'] = 'TIN'
 d_b313['SU'] = False
 d_b313.loc[d_b313['isolation']>=90.0, 'SU'] = True
 
-dfb = pd.concat([d_b307, d_b311, d_b312, d_b313], sort=False)  # d_b312,
+dfb = pd.concat([d_b295, d_b307, d_b311, d_b312, d_b313], sort=False)  # d_b312,
 dfb.sort_values(by=['area','cellid','state_chan','state_sig'], inplace=True)
 
 # creating subdf with only rows that match conditions
@@ -304,5 +315,5 @@ for cellid in dfb['cellid'].unique():
     dfb.loc[mask_for_cellid, 'sig_upup'] = False
     dfb.loc[mask_for_cellid, 'sig_obeh'] = False
 
-dfb.to_csv('beh_only_processed'+basemodel+'.csv')
+dfb.to_csv('beh_only_processed'+basemodel2+'.csv')
 #dfb.to_csv('beh_only_processed.csv')

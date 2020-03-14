@@ -485,11 +485,18 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
              (dp['r_se'][state_list[1]]+
               dp['r_se'][state_list[0]]))
-
+        dr['cellid'] = dp['r'][state_list[1]].index
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
+        dm = dr.loc[:,['cellid','null','full','bp_common','b_unique','p_unique','sig']]
         dm = dm.sort_values(['null'])
         mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
+        cellids=dm['cellid'].to_list()
+
+        big_idx = mfull[:,1]-mfull[:,0]>0.2
+        for i,b in enumerate(big_idx):
+            if b:
+                print('{} : {:.3f} - {:.3f}'.format(cellids[i],mfull[i,0],mfull[i,1]))
+
 
     if nb > 0:
         stepsize = mfull.shape[0]/nb
@@ -535,9 +542,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    d=(mfull[:,1]-mfull[:,0])#/(1-np.abs(mfull[:,0]))
     stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
-                     ax=ax3, highlight=dm['sig'], hist_range=[-0.3, 1])
+                     ax=ax3, highlight=dm['sig'], hist_range=[-0.1, 1], markersize=4)
+    ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
     r, p = st.pearsonr(mfull[:,0],d)
     plt.title('cc={:.3} p={:.4}'.format(r,p))
 
