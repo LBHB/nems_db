@@ -170,7 +170,7 @@ def parse_cellid(options):
         cached for each cell.
     """
     options = options.copy()
-
+    
     mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
@@ -224,12 +224,17 @@ def parse_cellid(options):
         options['siteid'] = siteid
 
     elif cellid is not None:
-        # single cellid was passed
+        # single cellid was passed, want list of all cellids. First, get rawids
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
                                                      rawid=rawid)
+        # now, use rawid to get all stable cellids across these files
+        siteid = cell_list[0].split('-')[0]
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                                     rawid=rawid)
+        
         options['cellid'] = cell_list
         options['rawid'] = rawid
-        options['siteid'] = cell_list[0].split('-')[0]
+        options['siteid'] = siteid
         cells_to_extract = [cellid]
 
     if (len(cells_to_extract) == 0) & (mfilename is None):
