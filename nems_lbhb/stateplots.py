@@ -74,7 +74,8 @@ fill_colors = {'actual_psth': (.8,.8,.8),
 
 def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
               hist_range=[-1, 1], title=None,
-              highlight=None, ax=None, click_fun=None):
+              highlight=None, ax=None, click_fun=None,
+              markersize=6):
     """
     beta1, beta2 are T x 1 vectors
     scatter plot comparing beta1 vs. beta2
@@ -141,12 +142,17 @@ def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     ax.plot(zz, hist_range, 'k--',linewidth=0.5)
     ax.plot(hist_range,hist_range, 'k--',linewidth=0.5)
 
-    ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=6,
-            markeredgecolor='white', markeredgewidth=0.5)
-    ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
-            markeredgewidth=0.5, markersize=6)
-    ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=10,
-            markeredgecolor='white', markeredgewidth=0.5)
+    if markersize>=5:
+        ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
+                markeredgewidth=0.25, markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+    else:
+        ax.plot(beta1[set2], beta2[set2], '.', color='gray', markersize=markersize)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize)
 
     ax.set_aspect('equal', 'box')
     #plt.ylim(hist_range)

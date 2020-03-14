@@ -601,9 +601,16 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     # but since recordings are longer than the "official"
     # trial end time reported by baphy, this method preserves extra spikes
     TrialCount = np.max(exptevents['Trial'])
+
+    hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
+    max_event_times = exptevents.groupby('Trial')['end'].max().values
+
     TrialLen_sec = np.array(
             exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
             )
+    if len(hit_trials):
+        TrialLen_sec[hit_trials-1]=max_event_times[hit_trials-1]
+
     TrialLen_spikefs = np.concatenate(
             (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis]*spikefs), axis=0
             )
