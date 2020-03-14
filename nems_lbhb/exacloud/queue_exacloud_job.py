@@ -46,7 +46,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     extra_options = ' '.join([time_limit, use_gpu])
 
     # Convert to list of tuples b/c product object only useable once.
-    combined = list(itertools.product(cellist, [batch], modellist))
+    combined = list(itertools.product(cellist, [str(batch)], modellist))
     log.info(combined)
 
     queue_items = []

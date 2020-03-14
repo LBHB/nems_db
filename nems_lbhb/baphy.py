@@ -396,7 +396,7 @@ def baphy_load_dataset(parmfilepath, **options):
     # get the relatively un-pre-processed data
     exptevents, stim, spike_dict, state_dict, tags, stimparam, exptparams = \
         baphy_load_data(parmfilepath, **options)
-    
+
     # if runclass is BVT, add behavior outcome column (to be used later)
     # very kludgy
     # TODO - Figure out nice way to interfact BAPHYExperiment with nems_lbhb.behavior
@@ -430,7 +430,7 @@ def baphy_load_dataset(parmfilepath, **options):
     ffstop = exptevents['name'].str.startswith(tag_mask_start)
 
     # end at the end of last trial
-    final_trial = np.argwhere((exptevents['name'] == tag_mask_stop)==True)[-1][0]
+    final_trial = np.argwhere(((exptevents['name'] == tag_mask_stop)==True).values)[-1][0]
     ffstop.iloc[final_trial] = True
     # "start" of last TRIALSTOP event
     final_trial_end0 = exptevents["end"].max()
@@ -442,7 +442,7 @@ def baphy_load_dataset(parmfilepath, **options):
     log.info('Setting end for {} events from {} to {}'.format(
         np.sum(end_events), final_trial_end0, final_trial_end))
     # set first True to False (the start of the first trial)
-    first_true = np.argwhere(ffstop == True)[0][0]
+    first_true = np.argwhere((ffstop == True).values)[0][0]
     ffstop.iloc[first_true] = False
 
     TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
@@ -524,7 +524,7 @@ def baphy_load_dataset(parmfilepath, **options):
             except:
                 # was labeled as NULL, since sound never played
                 this_event_times.loc[trialidx-1, 'name'] = 'EARLY_TRIAL'
-        
+
         any_behavior = True
     else:
         for trialidx in range(1, TrialCount+1):
@@ -1305,7 +1305,7 @@ def fill_default_options(options):
     options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
         options = io.set_default_pupil_options(options)
-        
+
     #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
     #options['pupil_median'] = options.get('pupil_median', 0)
