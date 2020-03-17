@@ -215,13 +215,15 @@ def parse_cellid(options):
 
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                              rawid=rawid)
+
         if chan_nums is not None:
             cells_to_extract = [c for c in cell_list if int(c.split('-')[1]) in chan_nums]
         else:
             cells_to_extract = cell_list
 
         options['cellid'] = cell_list
-        options['rawid'] = rawid
+        if len(rawid) != 0:
+            options['rawid'] = rawid
         options['siteid'] = siteid
 
     elif cellid is not None:
