@@ -227,7 +227,6 @@ def get_model_results(batch=307, state_list=None,
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
-            import pdb; pdb.set_trace()
             for j, sc in enumerate(state_chans):
                 ii = ((d['cellid'] == c) & (d['state_chan'] == sc))
                 if np.sum(ii) == 0:

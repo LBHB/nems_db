@@ -14,8 +14,8 @@ for batch in batches:
     # load MI data
     dMI = pd.read_csv('nems_lbhb/pupil_behavior_scripts/d_{}_fil_stategain.csv'.format(batch), index_col=0)
 
-    file_merge = dMI[dMI['state_sig']=='st.beh'][['cellid', 'state_chan_alt', 'MI']].merge(\
-                    dMI[dMI['state_sig']=='st.beh0'][['cellid', 'state_chan_alt', 'MI']], on=['cellid', 'state_chan_alt'])
+    file_merge = dMI[dMI['state_sig']=='st.fil'][['cellid', 'state_chan_alt', 'MI']].merge(\
+                    dMI[dMI['state_sig']=='st.fil0'][['cellid', 'state_chan_alt', 'MI']], on=['cellid', 'state_chan_alt'])
     file_merge['file_unique'] = file_merge['MI_x'] - file_merge['MI_y']
     dMI = dMI.merge(file_merge, on=['cellid'])
 
