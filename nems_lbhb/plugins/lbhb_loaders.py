@@ -57,7 +57,6 @@ def parm(loadkey, cellid=None, batch=None):
 
 
 def ns(loadkey, cellid=None, batch=None):
-
     d = _load_dict(loadkey, cellid, batch)
     xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec

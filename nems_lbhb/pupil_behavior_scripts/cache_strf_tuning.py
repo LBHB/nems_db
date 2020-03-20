@@ -19,13 +19,13 @@ import nems.db as nd
 fs = 1000
 
 # data frame cache
-path = '/auto/users/hellerc/code/nems_db/nems_lbhb/pupil_behavior_scripts/'
+path = '/home/charlie/Desktop/lbhb/code/nems_db/nems_lbhb/pupil_behavior_scripts/'
 df_295_filename = path + 'd_295_tuning.csv'
 df_307_filename = path + 'd_307_tuning.csv'
 df_309_filename = path + 'd_309_tuning.csv'
 
 # pdf figure cache
-pdf_path = '/auto/users/hellerc/code/nems_db/nems_lbhb/pupil_behavior_scripts/strf_tuning/'
+pdf_path = '/home/charlie/Desktop/lbhb/code/nems_db/nems_lbhb/pupil_behavior_scripts/strf_tuning/'
 
 # ================================= batch 307 ==================================
 cells_307 = nd.get_batch_cells(307).cellid
@@ -112,7 +112,7 @@ cells_295 = nd.get_batch_cells(295).cellid
 df_295 = pd.DataFrame(index=cells_295, columns=['BF', 'SNR', 'STRF', 'StimParms'])
 for cellid in cells_295:
     print('analyzing cell: {0}, batch {1}'.format(cellid, 295))
-    ops = {'batch': 295, 'pupil': 0, 'rasterfs': fs, 'cellid': cellid, 'stim': 0}
+    ops = {'batch': 295, 'pupil': 0, 'rasterfs': fs, 'cellid': cellid, 'stim': 0, 'recache': True}
     uri = nb.baphy_load_recording_uri(**ops)
     rec = Recording.load(uri)
     r = rec.copy()
