@@ -212,3 +212,4 @@ nems_web/configs/*
 !nems_web/configs/__init__.py
 
 */notebooks/pupil-behavior-notebooks-DS/*pdf
+.idea/
