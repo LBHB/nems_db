@@ -151,12 +151,20 @@ def get_model_results_per_state_model(batch=307, state_list=None,
             gain = modelspec[0]['phi']['g']
             
             if 'sdexp' in basemodel:
-                g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
-                g_base = modelspec[0]['phi']['base'][0, 0]
-                g_kappa = modelspec[0]['phi']['kappa'][0, 0]
-                d_amplitude = modelspec[0]['phi']['amplitude'][0, 1]
-                d_base = modelspec[0]['phi']['base'][0, 1]
-                d_kappa = modelspec[0]['phi']['kappa'][0, 1]
+                try:
+                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
+                    g_base = modelspec[0]['phi']['base'][0, 0]
+                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
+                    d_amplitude = modelspec[0]['phi']['amplitude'][0, 1]
+                    d_base = modelspec[0]['phi']['base'][0, 1]
+                    d_kappa = modelspec[0]['phi']['kappa'][0, 1]
+                except:
+                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
+                    g_base = modelspec[0]['phi']['base'][0, 0]
+                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
+                    d_amplitude = modelspec[0]['phi']['amplitude'][1, 0]
+                    d_base = modelspec[0]['phi']['base'][1, 0]
+                    d_kappa = modelspec[0]['phi']['kappa'][1, 0]
 
             sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
             if dc.ndim > 1:
