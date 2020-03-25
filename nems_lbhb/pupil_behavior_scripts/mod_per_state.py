@@ -149,6 +149,23 @@ def get_model_results_per_state_model(batch=307, state_list=None,
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
+            
+            if 'sdexp' in basemodel:
+                try:
+                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
+                    g_base = modelspec[0]['phi']['base'][0, 0]
+                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
+                    d_amplitude = modelspec[0]['phi']['amplitude'][0, 1]
+                    d_base = modelspec[0]['phi']['base'][0, 1]
+                    d_kappa = modelspec[0]['phi']['kappa'][0, 1]
+                except:
+                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
+                    g_base = modelspec[0]['phi']['base'][0, 0]
+                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
+                    d_amplitude = modelspec[0]['phi']['amplitude'][1, 0]
+                    d_base = modelspec[0]['phi']['base'][1, 0]
+                    d_kappa = modelspec[0]['phi']['kappa'][1, 0]
+
             sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
             if dc.ndim > 1:
                 dc = dc[0, :]
@@ -156,6 +173,7 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                 sp = sp[0, :]
             a_count = 0
             p_count = 0
+
             for j, sc in enumerate(state_chans):
                 r = {'cellid': c, 'state_chan': sc, 'modelname': m,
                      'isolation': iso,
@@ -163,6 +181,10 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                      'g': gain[j], 'd': dc[j], 'sp': sp[j],
                      'MI': state_mod[j],
                      'r': meta['r_test'][0], 'r_se': meta['se_test'][0]}
+                if 'sdexp' in basemodel:
+                    r.update({'g_amplitude': g_amplitude, 'g_base': g_base, 'g_kappa': g_kappa,
+                                'd_amplitude': d_amplitude, 'd_base': d_base, 'd_kappa': d_kappa})
+
                 d = d.append(r, ignore_index=True)
                 l = len(d) - 1
 
