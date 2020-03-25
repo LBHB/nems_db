@@ -543,6 +543,10 @@ def baphy_load_dataset(parmfilepath, **options):
         remove_post_lick = False
     else:
         remove_post_lick = True
+    if exptparams['BehaveObjectClass'] in ['ClassicalConditioning']:
+        active_CC=True
+    else:
+        active_CC=False
 
     # pre-process event list (event_times) to only contain useful events
     # extract each trial
@@ -873,7 +877,7 @@ def baphy_load_dataset(parmfilepath, **options):
             if elements[0] == "PreStimSilence":
                 name="PreStimSilence"
             elif elements[0] == "Stim":
-                if BVT:
+                if not active_CC:
                     name="TAR_" + elements[1]
                 else:
                     name="STIM_" + elements[1]
