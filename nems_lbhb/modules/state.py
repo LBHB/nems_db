@@ -7,7 +7,7 @@ functions for applying state-related transformations
 import numpy as np
 import nems_lbhb.preprocessing as preproc
 
-def _state_dexp(x, s, g, d, base_g, amplitude_g, kappa_g, base_d, amplitude_d, kappa_d):
+def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
     '''
      Apparently, numpy is VERY slow at taking the exponent of a negative number
      https://github.com/numpy/numpy/issues/8233
@@ -17,12 +17,9 @@ def _state_dexp(x, s, g, d, base_g, amplitude_g, kappa_g, base_d, amplitude_d, k
      "current" version of sdexp. separate kappa/amp/base phis for gain/dc. 
      So all parameters (g, d, base_g, etc.) are the same shape.
      '''
-
-    sg = g @ s
-    sd = d @ s
     
-    sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * sg))
-    sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * sd))
+    sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * (s - offset_g.T)))
+    sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * (s - offset_d.T)))
     
     return sg.sum(axis=0)[np.newaxis, :] * x + sd.sum(axis=0)[np.newaxis, :]
 
@@ -44,9 +41,9 @@ def _state_dexp_old(x, s, g, d, base, amplitude, kappa):
     return sg * x + sd
 
 
-def state_dexp(rec, i, o, s, g, d, base=None, amplitude=None, kappa=None, 
-                                    base_g=None, amplitude_g=None, kappa_g=None,
-                                    base_d=None, amplitude_d=None, kappa_d=None):
+def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None, 
+                                    base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
+                                    base_d=None, amplitude_d=None, kappa_d=None, offset_d=None):
     '''
     Parameters
     ----------
@@ -61,7 +58,8 @@ def state_dexp(rec, i, o, s, g, d, base=None, amplitude=None, kappa=None,
     if (base_d is None) & (amplitude_d is None) & (kappa_d is None):
         fn = lambda x : _state_dexp_old(x, rec[s]._data, g, d, base, amplitude, kappa)
     else:
-        fn = lambda x : _state_dexp(x, rec[s]._data, g, d, base_g, amplitude_g, kappa_g, base_d, amplitude_d, kappa_d)
+        fn = lambda x : _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
+                                 base_d, amplitude_d, kappa_d, offset_d)
 
     return [rec[i].transform(fn, o)]
 

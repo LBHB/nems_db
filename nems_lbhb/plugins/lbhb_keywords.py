@@ -784,14 +784,6 @@ def sdexp(kw):
             # only reason this is an option is to allow comparison with old models
             nl_state_chans = n_vars
 
-    zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
-    g_mean = zeros.copy()
-    g_mean[:, 0] = 1
-    g_sd = ones.copy()
-    d_mean = zeros
-    d_sd = ones
-
     # init gain params
     zeros = np.zeros([n_chans, nl_state_chans])
     ones = np.ones([n_chans, nl_state_chans])
@@ -802,6 +794,8 @@ def sdexp(kw):
     amp_mean_g[:, 0] = 1 / np.exp(-np.exp(-np.exp(0)))  # so that gain = 1 for baseline chan
     kappa_mean_g = zeros.copy()
     kappa_sd_g = ones.copy() * 0.1
+    offset_mean_g = zeros.copy()
+    offset_sd_g = ones.copy() * 0.1
 
     # init dc params
     base_mean_d = zeros.copy()
@@ -810,6 +804,8 @@ def sdexp(kw):
     amp_sd_d = ones.copy() * 0.1
     kappa_mean_d = zeros.copy()
     kappa_sd_d = ones.copy() * 0.1
+    offset_mean_d = zeros.copy()
+    offset_sd_d = ones.copy() * 0.1
 
     template = {
         'fn': 'nems_lbhb.modules.state.state_dexp',
@@ -822,14 +818,14 @@ def sdexp(kw):
                      'nems.plots.api.state_vars_timeseries',
                      'nems.plots.api.state_vars_psth_all'],
         'plot_fn_idx': 3,
-        'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
-                  'd': ('Normal', {'mean': d_mean, 'sd': d_sd}),
-                  'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
+        'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
                   'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
                   'kappa_g': ('Normal', {'mean': kappa_mean_g, 'sd': kappa_sd_g}),
+                  'offset_g': ('Normal', {'mean': offset_mean_g, 'sd': offset_sd_g}),
                   'base_d': ('Normal', {'mean': base_mean_d, 'sd': base_sd_d}),
                   'amplitude_d': ('Normal', {'mean': amp_mean_d, 'sd': amp_sd_d}),
-                  'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d})}
+                  'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d}),
+                  'offset_d': ('Normal', {'mean': offset_mean_d, 'sd': offset_sd_d})}
         }
 
     return template
