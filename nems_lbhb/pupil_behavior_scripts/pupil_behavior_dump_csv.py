@@ -73,7 +73,7 @@ state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_sdexp.S.snl"
 loader = "psth.fs20.pup-ld-"
 fitter = "_jk.nf20-basic.t7"
-batches = [309] #[307, 309]
+batches = [307, 309]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader, fitter=fitter)
