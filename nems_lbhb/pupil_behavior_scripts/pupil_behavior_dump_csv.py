@@ -48,7 +48,7 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_fil.csv')
 
-# pup+fil only
+# pup+fil only, sdexp
 state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_sdexp.S"
 loader = "psth.fs20.pup-ld-"
@@ -58,7 +58,7 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_pup_fil.csv')
 
-# pup+fil only
+# pup+fil only stategain
 state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20.pup-ld-"
@@ -66,7 +66,18 @@ batches = [307, 309]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
-    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv')                                  
+    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv') 
+
+# pup+fil only stategain (with independent NL for each state chan)
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_sdexp.S.snl"
+loader = "psth.fs20.pup-ld-"
+fitter = "_jk.nf20-basic.t7"
+batches = [309] #[307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv('d_'+str(batch)+'_pup_fil_sdexp_snl.csv') 
 
 # batch 295 behavior only
 state_list = ['st.fil','st.fil0']
