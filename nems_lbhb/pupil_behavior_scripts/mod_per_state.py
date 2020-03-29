@@ -147,43 +147,51 @@ def get_model_results_per_state_model(batch=307, state_list=None,
             state_mod = meta['state_mod']
             state_mod_se = meta['se_state_mod']
             state_chans = meta['state_chans']
-            dc = modelspec[0]['phi']['d']
-            gain = modelspec[0]['phi']['g']
-            
-            if 'sdexp' in basemodel:
-                try:
-                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
-                    g_base = modelspec[0]['phi']['base'][0, 0]
-                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
-                    d_amplitude = modelspec[0]['phi']['amplitude'][0, 1]
-                    d_base = modelspec[0]['phi']['base'][0, 1]
-                    d_kappa = modelspec[0]['phi']['kappa'][0, 1]
-                except:
-                    g_amplitude = modelspec[0]['phi']['amplitude'][0, 0]
-                    g_base = modelspec[0]['phi']['base'][0, 0]
-                    g_kappa = modelspec[0]['phi']['kappa'][0, 0]
-                    d_amplitude = modelspec[0]['phi']['amplitude'][1, 0]
-                    d_base = modelspec[0]['phi']['base'][1, 0]
-                    d_kappa = modelspec[0]['phi']['kappa'][1, 0]
+            try:
+                dc = modelspec[0]['phi']['d']
+                gain = modelspec[0]['phi']['g']
+            except:
+                dc = None
+                gain = None
 
-            sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
-            if dc.ndim > 1:
-                dc = dc[0, :]
-                gain = gain[0, :]
-                sp = sp[0, :]
+            if 'sdexp.S.snl' in basemodel:
+                g_amplitude = modelspec[0]['phi']['amplitude_g']
+                g_base = modelspec[0]['phi']['base_g']
+                g_kappa = modelspec[0]['phi']['kappa_g']
+                g_offset = modelspec[0]['phi']['offset_g']
+                d_amplitude = modelspec[0]['phi']['amplitude_d']
+                d_base = modelspec[0]['phi']['base_d']
+                d_kappa = modelspec[0]['phi']['kappa_d']
+                d_offset = modelspec[0]['phi']['offset_d']
+
+            if dc is not None:
+                sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
+                if dc.ndim > 1:
+                    dc = dc[0, :]
+                    gain = gain[0, :]
+                    sp = sp[0, :]
+
             a_count = 0
             p_count = 0
 
             for j, sc in enumerate(state_chans):
+                if gain is not None:
+                    gain_val = g[j]
+                    dc_val = dc[j]
+                    sp_val = sp[j]
+                else:
+                    gain_val = None
+                    dc_val = None
+                    sp_val = None
                 r = {'cellid': c, 'state_chan': sc, 'modelname': m,
                      'isolation': iso,
                      'state_sig': state_list[mod_i],
-                     'g': gain[j], 'd': dc[j], 'sp': sp[j],
+                     'g': gain_val, 'd': dc_val, 'sp': sp_val,
                      'MI': state_mod[j],
                      'r': meta['r_test'][0], 'r_se': meta['se_test'][0]}
-                if 'sdexp' in basemodel:
-                    r.update({'g_amplitude': g_amplitude, 'g_base': g_base, 'g_kappa': g_kappa,
-                                'd_amplitude': d_amplitude, 'd_base': d_base, 'd_kappa': d_kappa})
+                if 'sdexp.S.snl' in basemodel:
+                    r.update({'g_amplitude': g_amplitude[0, j], 'g_base': g_base[0, j], 'g_kappa': g_kappa[0, j], 'g_offset': g_offset[0, j],
+                                'd_amplitude': d_amplitude[0, j], 'd_base': d_base[0, j], 'd_kappa': d_kappa[0, j], 'd_offset': d_offset[0, j]})
 
                 d = d.append(r, ignore_index=True)
                 l = len(d) - 1
@@ -202,8 +210,6 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                         d.loc[l,'state_chan_alt'] = "PASSIVE_{}".format(p_count)
                 else:
                     d.loc[l,'state_chan_alt'] = d.loc[l,'state_chan']
-
-
 
     #d['r_unique'] = d['r'] - d['r0']
     #d['MI_unique'] = d['MI'] - d['MI0']

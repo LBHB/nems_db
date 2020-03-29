@@ -750,14 +750,11 @@ def sdexp(kw):
         e.g., "sdexp.SxR" or "sdexp.S":
             S : number of state channels (required)
             R : number of channels to modulate (default = 1)
-            currently not supported. R=1
-        TODO add support for R>1, copy from stategain
     Options
     -------
     None
     '''
     options = kw.split('.')
-    #pattern = re.compile(r'^sdexp\.?(\d{1,})x(\d{1,})$')
     pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
     parsed = re.match(pattern, options[1])
     if parsed is None:
@@ -776,33 +773,39 @@ def sdexp(kw):
                          "Make sure keyword is of the form: \n"
                          "sdexp.{n_state_variables} \n"
                          "keyword given: %s" % kw)
-    if n_chans > 1:
-        pass
-        # why was this here?
-        #raise ValueError("sdexp R>1 not supported")
 
     state = 'state'
+    nl_state_chans = 1
     for o in options[2:]:
         if o == 'lv':
             state = 'lv'
+        if o == 'snl':
+            # state-specific non linearities (snl)
+            # only reason this is an option is to allow comparison with old models
+            nl_state_chans = n_vars
 
-    zeros = np.zeros([n_chans, n_vars])
-    ones = np.ones([n_chans, n_vars])
-    g_mean = zeros.copy()
-    g_mean[:, 0] = 1
-    g_sd = ones.copy()
-    d_mean = zeros
-    d_sd = ones
+    # init gain params
+    zeros = np.zeros([n_chans, nl_state_chans])
+    ones = np.ones([n_chans, nl_state_chans])
+    base_mean_g = zeros.copy()
+    base_sd_g = ones.copy()
+    amp_mean_g = zeros.copy() + 0.1 
+    amp_sd_g = ones.copy() * 0.1
+    amp_mean_g[:, 0] = 1 / np.exp(-np.exp(-np.exp(0)))  # so that gain = 1 for baseline chan
+    kappa_mean_g = zeros.copy()
+    kappa_sd_g = ones.copy() * 0.1
+    offset_mean_g = zeros.copy()
+    offset_sd_g = ones.copy() * 0.1
 
-    n_dims = 2 # one for gain, one for dc
-    base_mean = np.zeros([n_chans, n_dims])
-    base_sd = np.ones([n_chans, n_dims])
-    amp_mean = base_mean + 0.2
-    amp_sd = base_mean + 0.1
-    #shift_mean = base_mean
-    #shift_sd = base_sd
-    kappa_mean = base_mean
-    kappa_sd = amp_sd
+    # init dc params
+    base_mean_d = zeros.copy()
+    base_sd_d = ones.copy() 
+    amp_mean_d = zeros.copy() + 0.1
+    amp_sd_d = ones.copy() * 0.1
+    kappa_mean_d = zeros.copy()
+    kappa_sd_d = ones.copy() * 0.1
+    offset_mean_d = zeros.copy()
+    offset_sd_d = ones.copy() * 0.1
 
     template = {
         'fn': 'nems_lbhb.modules.state.state_dexp',
@@ -815,11 +818,14 @@ def sdexp(kw):
                      'nems.plots.api.state_vars_timeseries',
                      'nems.plots.api.state_vars_psth_all'],
         'plot_fn_idx': 3,
-        'prior': {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
-                  'd': ('Normal', {'mean': d_mean, 'sd': d_sd}),
-                  'base': ('Normal', {'mean': base_mean, 'sd': base_sd}),
-                  'amplitude': ('Normal', {'mean': amp_mean, 'sd': amp_sd}),
-                  'kappa': ('Normal', {'mean': kappa_mean, 'sd': kappa_sd})}
+        'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
+                  'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
+                  'kappa_g': ('Normal', {'mean': kappa_mean_g, 'sd': kappa_sd_g}),
+                  'offset_g': ('Normal', {'mean': offset_mean_g, 'sd': offset_sd_g}),
+                  'base_d': ('Normal', {'mean': base_mean_d, 'sd': base_sd_d}),
+                  'amplitude_d': ('Normal', {'mean': amp_mean_d, 'sd': amp_sd_d}),
+                  'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d}),
+                  'offset_d': ('Normal', {'mean': offset_mean_d, 'sd': offset_sd_d})}
         }
 
     return template
