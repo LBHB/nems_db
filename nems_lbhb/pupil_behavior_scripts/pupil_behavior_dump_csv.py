@@ -20,11 +20,13 @@ from nems_lbhb.pupil_behavior_scripts import common
 
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import *
 
+"""
 batch = 309  # IC SUA and MUA
 batch = 295  # old (Slee) IC data
 batch = 311  # A1 old (SVD) data -- on BF
 batch = 312  # A1 old (SVD) data -- off BF
 batch = 307  # A1 SUA and MUA
+"""
 
 # pup vs. active/passive
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
@@ -103,7 +105,9 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_beh.csv')
 
+###
 ### do a bunch of grouping/preprocessing
+###
 
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
