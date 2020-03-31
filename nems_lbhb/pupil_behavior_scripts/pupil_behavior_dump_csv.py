@@ -50,7 +50,7 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_fil.csv')
 
-# pup+fil only
+# pup+fil only, sdexp
 state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_sdexp.S"
 loader = "psth.fs20.pup-ld-"
@@ -60,7 +60,7 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv('d_'+str(batch)+'_pup_fil.csv')
 
-# pup+fil only
+# pup+fil only stategain
 state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
 basemodel2 = "-ref-psthfr.s_stategain.S"
 loader = "psth.fs20.pup-ld-"
@@ -68,7 +68,18 @@ batches = [307, 309]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
-    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv')                                  
+    d.to_csv('d_'+str(batch)+'_pup_fil_stategain.csv')
+
+# pup+fil only stategain (with independent NL for each state chan)
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_sdexp.S.snl"
+loader = "psth.fs20.pup-ld-"
+fitter = "_jk.nf20-basic.t7"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader, fitter=fitter)
+    d.to_csv('d_'+str(batch)+'_pup_fil_sdexp_snl.csv')
 
 # batch 295 behavior only
 state_list = ['st.fil','st.fil0']
@@ -78,7 +89,7 @@ batches = [295]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
-    d.to_csv('d_'+str(batch)+'_fil_stategain.csv')                                  
+    d.to_csv('d_'+str(batch)+'_fil_stategain.csv')
 
 # beh only
 state_list = ['st.beh0','st.beh']
@@ -197,11 +208,17 @@ for cellid in df['cellid'].unique():
     r_pup_beh = active_full.iloc[0]['r']
     r_pup_beh0 = active_part_pup.iloc[0]['r']
     r_pup0_beh = active_part_beh.iloc[0]['r']
+    r_pup0_beh0 = active_null.iloc[0]['r']
+
     rse_pup_beh = active_full['r_se'].str.strip(to_strip='[]').astype(float).values[0]
     rse_pup_beh0 = active_part_pup['r_se'].str.strip(to_strip='[]').astype(float).values[0]
     rse_pup0_beh = active_part_beh['r_se'].str.strip(to_strip='[]').astype(float).values[0]
-    r_pup0_beh0 = active_null.iloc[0]['r']
     rse_pup0_beh0 = active_null['r_se'].str.strip(to_strip='[]').astype(float).values[0]
+    if np.isnan(rse_pup0_beh0):
+        rse_pup_beh = active_full.iloc[0]['r_se']
+        rse_pup_beh0 = active_part_pup.iloc[0]['r_se']
+        rse_pup0_beh = active_part_beh.iloc[0]['r_se']
+        rse_pup0_beh0 = active_null.iloc[0]['r_se']
 
     # units that had significant unique behavior
     df.loc[mask_for_cellid, 'sig_ubeh'] = (r_pup_beh - r_pup_beh0) > (rse_pup_beh + rse_pup_beh0)
