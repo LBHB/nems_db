@@ -176,7 +176,7 @@ def get_model_results_per_state_model(batch=307, state_list=None,
 
             for j, sc in enumerate(state_chans):
                 if gain is not None:
-                    gain_val = g[j]
+                    gain_val = gain[j]
                     dc_val = dc[j]
                     sp_val = sp[j]
                 else:
@@ -627,7 +627,7 @@ def aud_vs_state_wrapper(batches=None, pupil=True):
                                      state_list=state_list)
         ax2.set_ylim([0,.1])
         ax3.set_ylim([0,.1])
-        
+
 
 
 def beh_only_plot(batch=311):

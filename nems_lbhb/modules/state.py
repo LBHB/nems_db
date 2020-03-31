@@ -14,13 +14,13 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
      The correct way to avoid this problem is to install the Intel Python Packages:
      https://software.intel.com/en-us/distribution-for-python
 
-     "current" version of sdexp. separate kappa/amp/base phis for gain/dc. 
+     "current" version of sdexp. separate kappa/amp/base phis for gain/dc.
      So all parameters (g, d, base_g, etc.) are the same shape.
      '''
-    
+
     sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * (s - offset_g.T)))
     sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * (s - offset_d.T)))
-    
+
     return sg.sum(axis=0)[np.newaxis, :] * x + sd.sum(axis=0)[np.newaxis, :]
 
 
@@ -35,13 +35,15 @@ def _state_dexp_old(x, s, g, d, base, amplitude, kappa):
      '''
     sg = g @ s
     sd = d @ s
-    sg = base[:, [0]] + amplitude[:, [0]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [0]])) * sg))
-    sd = base[:, [1]] + amplitude[:, [1]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [1]])) * sd))
+    #sg = base[:, [0]] + amplitude[:, [0]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [0]])) * sg))
+    #sd = base[:, [1]] + amplitude[:, [1]] * np.exp(-np.exp(np.array(-np.exp(kappa[:, [1]])) * sd))
+    sg = base[[0], :] + amplitude[[0], :] * np.exp(-np.exp(np.array(-np.exp(kappa[[0], :])) * sg))
+    sd = base[[1], :] + amplitude[[1], :] * np.exp(-np.exp(np.array(-np.exp(kappa[[1], :])) * sd))
 
     return sg * x + sd
 
 
-def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None, 
+def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None,
                                     base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
                                     base_d=None, amplitude_d=None, kappa_d=None, offset_d=None):
     '''
@@ -65,21 +67,21 @@ def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=No
 
 
 def _state_exp(x, s, g):
-    
+
     if g.shape[-1] > 1:
         sg = np.exp(g[:, 1:] @ s[1:, :])
         base = g[:, 0][:, np.newaxis] @ s[0, :][np.newaxis, :]
         return (sg * x) + base
     else:
         sg = np.exp(g @ s)
-        return sg * x 
+        return sg * x
 
 
 def state_exp(rec, i, o, s, g):
     '''
-    pure state gain model with exp (following Rabinowitz 2015) 
+    pure state gain model with exp (following Rabinowitz 2015)
     r[o] = r[i] * exp(g * r[s] + b)
-    
+
     i: input
     o: output
     s: state signal(s)
@@ -87,7 +89,7 @@ def state_exp(rec, i, o, s, g):
 
     CRH 12/3/2019
     '''
-    
+
     fn = lambda x : _state_exp(x, rec[s]._data, g)
 
     return [rec[i].transform(fn, o)]
@@ -155,12 +157,12 @@ def add_lv(rec, i, o, n, cutoff, e):
         projection of residual responses (resp minus current pred)
         onto encoding weights (e). Add a channel  of all 1's to the
         lv signal. This will be for offset in state models.
-    
+
     i: signal to subtract from resp (pred or psth)
     o: 'lv'
     e: encoding weights
     shuffle: bool (should you shuffle LV or not)
-    """ 
+    """
     newrec = rec.copy()
 
     # input can be pred, or psth.
@@ -168,13 +170,13 @@ def add_lv(rec, i, o, n, cutoff, e):
     # if pred, subtract pred to create residual
     # Any signal that you wish
     # to project down to your LV
-    
+
     res = newrec['resp'].rasterize()._data - newrec[i].rasterize()._data
 
     if cutoff is not None:
         # highpass filter residuals
         res = preproc.bandpass_filter_resp(newrec, low_c=cutoff, high_c=None, data=res)
-    
+
     lv = e.T @ res
 
     lv = np.concatenate((np.ones((1, lv.shape[-1])), lv), axis=0)
@@ -191,7 +193,7 @@ def add_lv(rec, i, o, n, cutoff, e):
     lv_chans.append('lv0')
     for c in range(nchans):
         lv_chans.append('lv{0}'.format(c+1))
-    
+
     if len(n) > 0:
         if len(n) != nchans:
             raise ValueError("number of lv names must match number of LV chans!")
@@ -200,7 +202,7 @@ def add_lv(rec, i, o, n, cutoff, e):
                 # first chan is DC term, leave as lv0
                 lv_chans[i] = 'lv_' + n[i-1]
 
-    
+
     lv_sig.chans = lv_chans
 
     return [lv_sig]
@@ -213,11 +215,11 @@ def _population_mod(x, r, s, g, d, gs, ds):
         _rat = (r-x)/(x+(x==0))
         _rat[_rat>1]=1
         _rat[_rat<-0.5]=-0.5
-        
+
         _g = g.copy()
         np.fill_diagonal(_g, 0)
         gd = _g.T @ _rat
-        
+
         if gs is not None:
             y = x * (gs@s) * np.exp(gd)
         else:
