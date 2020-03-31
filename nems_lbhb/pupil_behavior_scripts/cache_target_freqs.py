@@ -51,7 +51,7 @@ for cellid in cells_309:
             _df = pd.DataFrame({'cellid': cellid, 'tar_freq': tf, 'state_chan_alt': pf_labels[i]}, index=[0])
             df_309 = df_309.append(_df)
     else:
-        pass
+        import pdb; pdb.set_trace()
 
 df_309.to_csv(fpath + 'd_309_tar_freqs.csv')
 
