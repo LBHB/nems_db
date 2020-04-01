@@ -173,6 +173,8 @@ def st(loadkey):
             this_sig = ["each_passive"]
         elif l.startswith("fil"):
             this_sig = ["each_file"]
+        elif l.startswith("afl"):
+            this_sig = ["each_active"]
         elif l.startswith("hlf"):
             this_sig = ["each_half"]
         elif l.startswith("r1"):
