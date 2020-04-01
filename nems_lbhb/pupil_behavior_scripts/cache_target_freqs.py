@@ -12,11 +12,14 @@ perfile_df = pd.read_csv('nems_lbhb/pupil_behavior_scripts/d_307_fil.csv', index
 df_307 = pd.DataFrame()
 cells_307 = nd.get_batch_cells(307).cellid
 for cellid in cells_307:
-    sql = "SELECT sCellFile.stimfile, gData.svalue, gData.value from sCellFile INNER JOIN \
+    sql = "SELECT sCellFile.stimfile, gData.svalue, gData.value, sCellFile.rawid from sCellFile INNER JOIN \
                 gData on (sCellFile.rawid=gData.rawid AND gData.name='Tar_Frequencies') \
                 INNER JOIN gDataRaw on sCellFile.rawid=gDataRaw.id WHERE gDataRaw.behavior='active' \
                 AND sCellFile.cellid=%s order by sCellFile.rawid"
     d = nd.pd_query(sql, params=(cellid,))
+    _, rawid = nd.get_stable_batch_cells(batch=307, cellid=cellid)
+    d = d[d.rawid.isin(rawid)]
+
     pf_labels = np.unique([l for l in perfile_df[perfile_df['cellid']==cellid]['state_chan_alt'] if 'ACTIVE' in l])
 
     if len(pf_labels) != 0:
@@ -36,11 +39,13 @@ perfile_df = pd.read_csv('nems_lbhb/pupil_behavior_scripts/d_309_fil.csv', index
 df_309 = pd.DataFrame()
 cells_309 = nd.get_batch_cells(309).cellid
 for cellid in cells_309:
-    sql = "SELECT sCellFile.stimfile, gData.svalue, gData.value from sCellFile INNER JOIN \
+    sql = "SELECT sCellFile.stimfile, gData.svalue, gData.value, sCellFile.rawid from sCellFile INNER JOIN \
                 gData on (sCellFile.rawid=gData.rawid AND gData.name='Tar_Frequencies') \
                 INNER JOIN gDataRaw on sCellFile.rawid=gDataRaw.id WHERE gDataRaw.behavior='active' \
                 AND sCellFile.cellid=%s order by sCellFile.rawid"
     d = nd.pd_query(sql, params=(cellid,))
+    _, rawid = nd.get_stable_batch_cells(batch=309, cellid=cellid)
+    d = d[d.rawid.isin(rawid)]
     pf_labels = np.unique([l for l in perfile_df[perfile_df['cellid']==cellid]['state_chan_alt'] if 'ACTIVE' in l])
 
     if (len(pf_labels) != 0) & (len(pf_labels)==d.shape[0]):
@@ -51,7 +56,7 @@ for cellid in cells_309:
             _df = pd.DataFrame({'cellid': cellid, 'tar_freq': tf, 'state_chan_alt': pf_labels[i]}, index=[0])
             df_309 = df_309.append(_df)
     else:
-        pass
+        import pdb; pdb.set_trace()
 
 df_309.to_csv(fpath + 'd_309_tar_freqs.csv')
 
