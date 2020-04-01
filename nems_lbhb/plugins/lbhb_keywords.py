@@ -775,23 +775,24 @@ def sdexp(kw):
                          "keyword given: %s" % kw)
 
     state = 'state'
-    nl_state_chans = 1
+    #nl_state_chans = 1
+    nl_state_chans = n_vars
     for o in options[2:]:
         if o == 'lv':
             state = 'lv'
-        if o == 'snl':
+        #if o == 'snl':
             # state-specific non linearities (snl)
             # only reason this is an option is to allow comparison with old models
-            nl_state_chans = n_vars
+            # nl_state_chans = n_vars
 
     # init gain params
     zeros = np.zeros([n_chans, nl_state_chans])
     ones = np.ones([n_chans, nl_state_chans])
     base_mean_g = zeros.copy()
     base_sd_g = ones.copy()
-    amp_mean_g = zeros.copy() + 0.1 
+    amp_mean_g = zeros.copy() + 0 
     amp_sd_g = ones.copy() * 0.1
-    amp_mean_g[:, 0] = 1 / np.exp(-np.exp(-np.exp(0)))  # so that gain = 1 for baseline chan
+    amp_mean_g[:, 0] = 1 # (1 / np.exp(-np.exp(-np.exp(0)))) # so that gain = 1 for baseline chan
     kappa_mean_g = zeros.copy()
     kappa_sd_g = ones.copy() * 0.1
     offset_mean_g = zeros.copy()
@@ -800,7 +801,7 @@ def sdexp(kw):
     # init dc params
     base_mean_d = zeros.copy()
     base_sd_d = ones.copy() 
-    amp_mean_d = zeros.copy() + 0.1
+    amp_mean_d = zeros.copy() + 0
     amp_sd_d = ones.copy() * 0.1
     kappa_mean_d = zeros.copy()
     kappa_sd_d = ones.copy() * 0.1
