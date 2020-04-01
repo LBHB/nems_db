@@ -136,25 +136,26 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                               'state_chan', 'MI', 'isolation',
                               'r', 'r_se', 'd', 'g', 'sp', 'state_chan_alt'])
 
+    new_sdexp = False
     for mod_i, m in enumerate(modelnames):
         print('Loading modelname: ', m)
         modelspecs = nems_db.params._get_modelspecs(cellids, batch, m, multi='mean')
 
         for modelspec in modelspecs:
             meta = ms.get_modelspec_metadata(modelspec)
+            phi = list(modelspec[0]['phi'].keys())
             c = meta['cellid']
             iso = isolation[cellids.index(c)]
             state_mod = meta['state_mod']
             state_mod_se = meta['se_state_mod']
             state_chans = meta['state_chans']
-            try:
+            if 'g' in phi:
                 dc = modelspec[0]['phi']['d']
                 gain = modelspec[0]['phi']['g']
-            except:
+            elif ('amplitude_g' in phi) & ('amplitude_d' in phi):
+                new_sdexp = True
                 dc = None
                 gain = None
-
-            if 'sdexp.S.snl' in basemodel:
                 g_amplitude = modelspec[0]['phi']['amplitude_g']
                 g_base = modelspec[0]['phi']['base_g']
                 g_kappa = modelspec[0]['phi']['kappa_g']
@@ -189,7 +190,7 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                      'g': gain_val, 'd': dc_val, 'sp': sp_val,
                      'MI': state_mod[j],
                      'r': meta['r_test'][0], 'r_se': meta['se_test'][0]}
-                if 'sdexp.S.snl' in basemodel:
+                if new_sdexp:
                     r.update({'g_amplitude': g_amplitude[0, j], 'g_base': g_base[0, j], 'g_kappa': g_kappa[0, j], 'g_offset': g_offset[0, j],
                                 'd_amplitude': d_amplitude[0, j], 'd_base': d_base[0, j], 'd_kappa': d_kappa[0, j], 'd_offset': d_offset[0, j]})
 
