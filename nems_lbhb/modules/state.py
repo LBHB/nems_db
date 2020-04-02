@@ -68,7 +68,9 @@ def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=No
     
     # kludgy backwards compatibility
     try:
-        pred, gain, dc = rec[i].transform(fn, o)
+        pred, gain, dc = fn(rec[i]._data)
+        pred = rec[i]._modified_copy(pred)
+        pred.name = o
         gain = pred._modified_copy(gain)
         gain.name = 'gain'
         dc = pred._modified_copy(dc)
