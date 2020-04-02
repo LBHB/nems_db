@@ -21,7 +21,10 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
     sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * (s - offset_g.T)))
     sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * (s - offset_d.T)))
 
-    return sg.sum(axis=0)[np.newaxis, :] * x + sd.sum(axis=0)[np.newaxis, :]
+    sg = sg.sum(axis=0)[np.newaxis, :]
+    sd = sd.sum(axis=0)[np.newaxis, :]
+
+    return sg * x + sd, sg, sd
 
 
 def _state_dexp_old(x, s, g, d, base, amplitude, kappa):
@@ -62,8 +65,17 @@ def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=No
     else:
         fn = lambda x : _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
                                  base_d, amplitude_d, kappa_d, offset_d)
-
-    return [rec[i].transform(fn, o)]
+    
+    # kludgy backwards compatibility
+    try:
+        pred, gain, dc = rec[i].transform(fn, o)
+        gain = pred._modified_copy(gain)
+        gain.name = 'gain'
+        dc = pred._modified_copy(dc)
+        dc.name = 'dc'
+        return [pred, gain, dc]
+    except:
+        return [rec[i].transform(fn, o)]
 
 
 def _state_exp(x, s, g):
