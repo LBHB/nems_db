@@ -165,6 +165,12 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                 d_kappa = modelspec[0]['phi']['kappa_d']
                 d_offset = modelspec[0]['phi']['offset_d']
 
+            gain_mod = None
+            dc_mod = None
+            if 'state_mod_gain' in meta.keys():
+                gain_mod = meta['state_mod_gain']
+                dc_mod = meta['state_mod_dc']
+
             if dc is not None:
                 sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
                 if dc.ndim > 1:
@@ -193,6 +199,8 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                 if new_sdexp:
                     r.update({'g_amplitude': g_amplitude[0, j], 'g_base': g_base[0, j], 'g_kappa': g_kappa[0, j], 'g_offset': g_offset[0, j],
                                 'd_amplitude': d_amplitude[0, j], 'd_base': d_base[0, j], 'd_kappa': d_kappa[0, j], 'd_offset': d_offset[0, j]})
+                if gain_mod is not None:
+                    r.update({'gain_mod': gain_mod[j], 'dc_mod': dc_mod[j]})
 
                 d = d.append(r, ignore_index=True)
                 l = len(d) - 1
