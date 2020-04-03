@@ -327,10 +327,10 @@ def baphy_load_data(parmfilepath, **options):
         if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
             import nems_lbhb.strf.torc_subfunctions as tsf
             TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
-            stim, tags, stimparam = tsf.generate_torc_spectrograms(TorcObject,
-                               fs=options['rasterfs'], single_cycle=False)
+            stim, tags, stimparam = tsf.generate_torc_spectrograms(
+                      TorcObject, rasterfs=options['rasterfs'], single_cycle=False)
             # NB stim is a dict rather than a 3-d array
-            
+
         elif exptparams['runclass']=='VOC_VOC':
             stimfilepath1 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
             stimfilepath2 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)

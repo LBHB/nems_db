@@ -317,7 +317,7 @@ def get_snr(spdata,stim,basep,mf,allrates):
     return snr
 
 
-def generate_torc_spectrograms(TorcObject, fs=None, single_cycle=True):
+def generate_torc_spectrograms(TorcObject, rasterfs=None, single_cycle=True):
     """
     soundobject should be the parameters for a Torc object from baphy (eg,
       exptparams['TrialObject'][1]['ReferenceHandle'][1]
@@ -330,6 +330,7 @@ def generate_torc_spectrograms(TorcObject, fs=None, single_cycle=True):
        tags - baphy stimulus names associated with each index
        StimParams - important parameters of the Torc
     """
+    fs=1000 # hard code fs since it seems to have to be 1000 to actually work
 
     TorcNames = TorcObject['Names']
     RefDuration = TorcObject['Duration']
@@ -417,13 +418,15 @@ def generate_torc_spectrograms(TorcObject, fs=None, single_cycle=True):
 
     if not single_cycle:
         # Process response signal to eliminate bins of silence before and after stimulus
-        PreStimBins = int(TorcObject['PreStimSilence']*fs)
-        PostStimBins = int(TorcObject['PostStimSilence']*fs)
+        if rasterfs is None:
+            rasterfs=saf # Nyquist rate for catching TORC modulations
+        PreStimBins = int(TorcObject['PreStimSilence']*rasterfs)
+        PostStimBins = int(TorcObject['PostStimSilence']*rasterfs)
         num_cycles = int(np.ceil(stdur/StimParams['basep']))
 
         for k in TorcValues.keys():
             t = np.matlib.repmat(TorcValues[k],1,num_cycles)
-            final_samples=int(t.shape[1]*fs/saf)
+            final_samples=int(t.shape[1]*rasterfs/saf)
             t=sp.signal.resample(t, final_samples, axis=1)
 
             TorcValues[k]=np.concatenate([np.zeros((numcomp,PreStimBins)), t,
