@@ -317,6 +317,120 @@ def get_snr(spdata,stim,basep,mf,allrates):
     return snr
 
 
+def generate_torc_spectrograms(TorcObject, fs=None, single_cycle=True):
+    """
+    soundobject should be the parameters for a Torc object from baphy (eg,
+      exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    default rasterfs is native max modulation rate of torc_subfunctions
+    single_cycle - don't generate full stimulus. If false repeat as needed and
+        Pre-/Post- Silence
+
+    return:
+       TorcValues - dict of 2d arrays, one per TORC
+       tags - baphy stimulus names associated with each index
+       StimParams - important parameters of the Torc
+    """
+
+    TorcNames = TorcObject['Names']
+    RefDuration = TorcObject['Duration']
+    referencecount = len(TorcNames)
+
+    numrecs = referencecount
+    mf = int(fs/1000)  # used to be int(fs/1000)
+    stdur = int(RefDuration*1000)
+
+    # change nesting to TORCs(StimParam(...))
+    TorcParams = dict.fromkeys(TorcNames)
+    all_freqs = list()
+    all_velos = list()
+    all_hfreq = list()
+    all_lfreq = list()
+
+    for tt, torc in zip(TorcObject['Params'].keys(), TorcNames):
+        #TorcParams[torc] = exptparams["TrialObject"][1]["ReferenceHandle"][1]["Params"][tt + 1]     #insert Params 1-30 to torcs 1-30 now TORCs(Params(...)) nested other way
+        TorcParams[torc] = TorcObject['Params'][tt]
+        freqs = TorcParams[torc]['Scales']
+        velos = TorcParams[torc]['Rates']
+        all_freqs.append(freqs)
+        all_velos.append(velos)
+        highestfreqs = TorcParams[torc]['HighestFrequency']
+        lowestfreqs = TorcParams[torc]['LowestFrequency']
+        all_hfreq.append(highestfreqs)
+        all_lfreq.append(lowestfreqs)
+
+    frqs = np.unique(np.concatenate(all_freqs))
+    vels = np.unique(np.concatenate(all_velos))
+    HighestFrequency = int(np.unique(all_hfreq))
+    LowestFrequency = int(np.unique(all_lfreq))
+    Octaves = np.log2(HighestFrequency/LowestFrequency)
+
+    StimParams = dict()
+    StimParams['lfreq'] = LowestFrequency
+    StimParams['hfreq'] = HighestFrequency
+    StimParams['octaves'] = int(Octaves)
+
+    Params = dict()
+    N = np.size(frqs) * np.size(vels)        #aka nrips
+    W = vels                                 #array of ripple velocities
+    T = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))
+    Params['T'] = T
+
+    Ompos = [x for x in frqs if x >= 0]
+    Omnegzero = np.flip([x for x in frqs if x <= 0])
+
+    Omega = np.swapaxes(np.stack((Ompos,Omnegzero)),0,1)
+
+    numvels = len(W)
+    numfrqs = np.size(Omega,0)
+    numstim = len(TorcNames)
+
+    waveParams = np.empty([2,numvels,numfrqs,2,numstim])
+
+    ##This part in MATLAB makes T, octaves, maxv, maxf, saf, numcomp
+    basep = int(np.round(fs/min(np.abs(np.diff(np.unique([x for x in W if x != 0]))))))
+    StimParams['basep'] = basep
+    maxvel = np.max(np.abs(W))
+    maxfrq = np.max(np.abs(Omega))
+    saf = int(np.ceil(maxvel*2 + 1000/basep))
+    numcomp = int(np.ceil(maxfrq*2*Octaves + 1))
+    Params['numcomp'] = numcomp
+
+    ##function [ststims,freqs]=stimprofile(waveParams,W,Omega,lfreq,hfreq,numcomp,T,saf);
+    [_,Ws,Omegas,lr,numstim] = waveParams.shape
+    [a,b] = Omega.shape
+    [d] = W.shape
+
+    if a*b*d != Omegas*Ws*lr:
+        print('Omega and.or W do not match waveParams')
+
+    sffact = saf/1000                                                        #lower sample rate
+    leng = int(np.round(T*sffact))
+    Params['leng'] = leng
+
+    # Create dictionary of TORCs
+    TorcValues = dict()
+    for key,value in TorcParams.items():
+        y_sum = torcmaker(value, Params)
+        TorcValues[key] = y_sum
+
+    tags = list(TorcValues.keys())
+
+    if not single_cycle:
+        # Process response signal to eliminate bins of silence before and after stimulus
+        PreStimBins = int(TorcObject['PreStimSilence']*fs)
+        PostStimBins = int(TorcObject['PostStimSilence']*fs)
+        num_cycles = int(np.ceil(stdur/StimParams['basep']))
+
+        for k in TorcValues.keys():
+            t = np.matlib.repmat(TorcValues[k],1,num_cycles)
+            final_samples=int(t.shape[1]*fs/saf)
+            t=sp.signal.resample(t, final_samples, axis=1)
+
+            TorcValues[k]=np.concatenate([np.zeros((numcomp,PreStimBins)), t,
+                                          np.zeros((numcomp,PostStimBins))], axis=1)
+
+    return TorcValues, tags, StimParams
+
 
 def torcmaker(TORC,Params):
     '''

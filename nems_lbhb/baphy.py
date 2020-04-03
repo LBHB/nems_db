@@ -47,13 +47,13 @@ spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 log = logging.getLogger(__name__)
 
 # ===================== Loading a baphy experiment into a recording object =======================
-# standard pipeline is: 
+# standard pipeline is:
 #   baphy_load_recording_file  - load the cached .tgz file based on options dictionary
-#   baphy_load_recording_uri   - caches a .tgz recording file *entry point for nems 
+#   baphy_load_recording_uri   - caches a .tgz recording file *entry point for nems
 #   baphy_load_recording       - packages baphy data into experiment
 #       baphy_load_dataset     - does most of the epoch processing / naming based on exptevents
 #       baphy_load_data        - basically just loads data from mfiles
-# TODO - consider how / where behavior.py code and BAPHYExperiment can be used to streamline 
+# TODO - consider how / where behavior.py code and BAPHYExperiment can be used to streamline
 # this pipeline and improve labeling of behavior trials etc.
 # ===============================================================================================
 
@@ -91,7 +91,7 @@ def baphy_load_recording_uri(recache=False, **options):
             batch - (int) batch number
             cellid - single cellid string, list of cellids, or siteid
                 If siteid is passed, return superset of cells. i.e. if some
-                cells aren't present in one of the files that is found for this batch, 
+                cells aren't present in one of the files that is found for this batch,
                 don't load that file. To override this behavior, pass rawid list.
 
     return:
@@ -149,11 +149,11 @@ def baphy_load_recording_uri(recache=False, **options):
 # ============================ baphy loading "utils" ==================================
 def parse_cellid(options):
     """
-    figure out if cellid is 
+    figure out if cellid is
         1) single cellid
         2) list of cellids
         3) a siteid
-    
+
     using this, add the field 'siteid' to the options dictionary. If siteid was passed,
     define cellid as a list of all cellids recorded at this site, for this batch.
 
@@ -161,24 +161,24 @@ def parse_cellid(options):
             batch - (int) batch number
             cellid - single cellid string, list of cellids, or siteid
                 If siteid is passed, return superset of cells. i.e. if some
-                cells aren't present in one of the files that is found for this batch, 
+                cells aren't present in one of the files that is found for this batch,
                 don't load that file. To override this behavior, pass rawid list.
 
     returns updated options dictionary and the cellid to extract from the recording
         NOTE: The reason we keep "cellid to extract" distinct from the options dictionary
-        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze 
+        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze
         cell1 from a site where you recorded cells1-4, you don't want a different recording
         cached for each cell.
     """
 
     options = options.copy()
-    
+
     mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
     batch = options.get('batch', None)
     rawid = options.get('rawid', None)
     cells_to_extract = None
-    
+
     if ((cellid is None) | (batch is None)) & (mfilename is None):
         raise ValueError("must provide cellid and batch or mfilename")
 
@@ -187,8 +187,8 @@ def parse_cellid(options):
     if type(cellid) is list:
         cell_list = cellid
     elif (type(cellid) is str) & ('-' not in cellid):
-        siteid = cellid 
-   
+        siteid = cellid
+
     if mfilename is not None:
         # simple, db-free case. Just a pass through.
         pass
@@ -204,7 +204,7 @@ def parse_cellid(options):
         options['rawid'] = rawid
         options['siteid'] = cell_list[0].split('-')[0]
         cells_to_extract = cell_list
-        
+
     elif siteid is not None:
         # siteid was passed, figure out if electrode numbers were specified.
         chan_nums = None
@@ -235,7 +235,7 @@ def parse_cellid(options):
         siteid = cell_list[0].split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                                      rawid=rawid)
-        
+
         options['cellid'] = cell_list
         options['rawid'] = rawid
         options['siteid'] = siteid
@@ -323,8 +323,15 @@ def baphy_load_data(parmfilepath, **options):
     #       or make s3 match LBHB?
 
     # figure out stimulus cachefile to load
-    if 'stim' in options.keys() and options['stim']:
-        if exptparams['runclass']=='VOC_VOC':
+    if options['stim']:
+        if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
+            import nems_lbhb.strf.torc_subfunctions as tsf
+            TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+            stim, tags, stimparam = tsf.generate_torc_spectrograms(TorcObject,
+                               fs=options['rasterfs'], single_cycle=False)
+            # NB stim is a dict rather than a 3-d array
+            
+        elif exptparams['runclass']=='VOC_VOC':
             stimfilepath1 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
             stimfilepath2 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
             print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
@@ -750,7 +757,10 @@ def baphy_load_dataset(parmfilepath, **options):
 
             if options['stim']:
                 # save stimulus for this event as separate dictionary entry
-                stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+                if type(stim) is dict:
+                    stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[tags[eventidx]]
+                else:
+                    stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
             else:
                 stim_dict["STIM_" + tags[eventidx] + snr_suff] = np.array([[]])
             # complicated experiment-specific part
@@ -939,7 +949,7 @@ def baphy_load_recording(**options):
     CRH 03-13-2020
 
     This function should only be called from baphy_generate_recording_uri!
-    It should NOT be called directly. It now assumes that cellid has been 
+    It should NOT be called directly. It now assumes that cellid has been
     parsed and that cellid/siteid/batch/rawid/mfilename etc. are all taken care
     of already. Given this information, it generates a nems recording using
     the options dictionary.
@@ -1234,7 +1244,7 @@ def baphy_load_recording(**options):
         #import pdb; pdb.set_trace()
         for key, s in rec.signals.items():
             s.epochs = new_epochs
-            
+
         # mask out trials outside of goodtrials range, specified in celldb
         # usually during meska save
         #trial_epochs = rec['resp'].get_epoch_indices('TRIAL')
@@ -1245,7 +1255,7 @@ def baphy_load_recording(**options):
         #rec = rec.apply_mask(reset_epochs=True)
 
     return rec
-    
+
 
 def baphy_load_recording_rasterized(**options):
     """
