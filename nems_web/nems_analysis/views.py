@@ -104,22 +104,22 @@ def main_view():
     user = get_current_user()
     session = Session()
     db_tables = Tables()
-    NarfResults = db_tables['NarfResults']
-    NarfAnalysis = db_tables['NarfAnalysis']
-    NarfBatches = db_tables['NarfBatches']
+    Results = db_tables['Results']
+    Analysis = db_tables['Analysis']
+    Batches = db_tables['Batches']
     sBatch = db_tables['sBatch']
 
     # .all() returns a list of tuples, so it's necessary to pull the
     # name elements out into a list by themselves.
     analyses = (
-            session.query(NarfAnalysis)
+            session.query(Analysis)
             .filter(or_(
                     int(user.sec_lvl) == 9,
-                    NarfAnalysis.public == '1',
-                    NarfAnalysis.labgroup.ilike('%{0}%'.format(user.labgroup)),
-                    NarfAnalysis.username == user.username,
+                    Analysis.public == '1',
+                    Analysis.labgroup.ilike('%{0}%'.format(user.labgroup)),
+                    Analysis.username == user.username,
                     ))
-            .order_by(asc(NarfAnalysis.id))
+            .order_by(asc(Analysis.id))
             .all()
             )
     analysislist = [
@@ -131,13 +131,13 @@ def main_view():
 
     batchids = [
             i[0] for i in
-            session.query(NarfBatches.batch)
+            session.query(Batches.batch)
             .distinct()
             #.filter(or_(
             #        int(user.sec_lvl) == 9,
-            #        NarfBatches.public == '1',
-            #        NarfBatches.labgroup.ilike('%{0}%'.format(user.labgroup)),
-            #        NarfBatches.username == user.username,
+            #        Batches.public == '1',
+            #        Batches.labgroup.ilike('%{0}%'.format(user.labgroup)),
+            #        Batches.username == user.username,
             #        ))
             .all()
             ]
@@ -168,16 +168,16 @@ def main_view():
     measurelist = n_ui.measurelist
     statuslist = [
             i[0] for i in
-            session.query(NarfAnalysis.status)
-            .filter(NarfAnalysis.name.in_(analysislist))
+            session.query(Analysis.status)
+            .filter(Analysis.name.in_(analysislist))
             .distinct().all()
             ]
 
     # Separate tags into list of lists of strings.
     tags = [
             i[0].split(",") for i in
-            session.query(NarfAnalysis.tags)
-            .filter(NarfAnalysis.name.in_(analysislist))
+            session.query(Analysis.tags)
+            .filter(Analysis.name.in_(analysislist))
             .distinct().all()
             ]
     # Flatten list of lists into a single list of all tag strings
@@ -190,9 +190,9 @@ def main_view():
     taglist = [t for t in taglistbl if t != '']
     taglist.sort()
 
-    # Returns all columns in the format 'NarfResults.columnName,'
-    # then removes the leading 'NarfResults.' from each string
-    collist = ['%s'%(s) for s in NarfResults.__table__.columns]
+    # Returns all columns in the format 'Results.columnName,'
+    # then removes the leading 'Results.' from each string
+    collist = ['%s'%(s) for s in Results.__table__.columns]
     collist = [s.replace('Results.', '') for s in collist]
     sortlist = copy.deepcopy(collist)
     # Remove cellid and modelname from options toggles- make them required.
@@ -223,13 +223,13 @@ def update_batch():
     """Update current batch selection after an analysis is selected."""
 
     session = Session()
-    NarfAnalysis = Tables()['NarfAnalysis']
+    Analysis = Tables()['Analysis']
     blank = 0
 
     aSelected = request.args.get('aSelected', type=str)
     batch = (
-            session.query(NarfAnalysis.batch)
-            .filter(NarfAnalysis.name == aSelected)
+            session.query(Analysis.batch)
+            .filter(Analysis.name == aSelected)
             .first()
             )
     try:
@@ -253,7 +253,7 @@ def update_models():
     """
 
     session = Session()
-    NarfAnalysis = Tables()['NarfAnalysis']
+    Analysis = Tables()['Analysis']
 
     aSelected = request.args.get('aSelected', type=str)
     extraModels = request.args.get('extraModels', type=str)
@@ -269,11 +269,11 @@ def update_models():
         model_list = pM
     else:
         modeltree = (
-                session.query(NarfAnalysis.modeltree)
-                .filter(NarfAnalysis.name == aSelected)
+                session.query(Analysis.modeltree)
+                .filter(Analysis.name == aSelected)
                 .first()
                 )
-        # Pass modeltree string from NarfAnalysis to a ModelFinder constructor,
+        # Pass modeltree string from Analysis to a ModelFinder constructor,
         # which will use a series of internal methods to convert the tree string
         # to a list of model names.
         # Then add any additional models specified in extraModels, and add
@@ -285,8 +285,8 @@ def update_models():
             model_list.extend(extraModels)
             if extraAnalyses:
                 analyses = (
-                        session.query(NarfAnalysis.modeltree)
-                        .filter(NarfAnalysis.name.in_(extraAnalyses))
+                        session.query(Analysis.modeltree)
+                        .filter(Analysis.name.in_(extraAnalyses))
                         .all()
                         )
                 for t in [a.modeltree for a in analyses]:
@@ -328,15 +328,15 @@ def update_cells():
     """Update the list of cells in the cell selector after a batch
     is selected (this will cascade from an analysis selection).
 
-    Also updates current batch in NarfAnalysis for current analysis.
+    Also updates current batch in Analysis for current analysis.
 
     """
 
     session = Session()
     db_tables = Tables()
-    NarfBatches = db_tables['NarfBatches']
+    Batches = db_tables['Batches']
     sBatch = db_tables['sBatch']
-    NarfAnalysis = db_tables['NarfAnalysis']
+    Analysis = db_tables['Analysis']
 
     # Only get the numerals for the selected batch, not the description.
     bSelected = request.args.get('bSelected')
@@ -350,8 +350,8 @@ def update_cells():
     else:
         celllist = [
                 i[0] for i in
-                session.query(NarfBatches.cellid)
-                .filter(NarfBatches.batch == bSelected[:3])
+                session.query(Batches.cellid)
+                .filter(Batches.batch == bSelected[:3])
                 .all()
                 ]
         _previous_update_cells = (bSelected, celllist)
@@ -366,8 +366,8 @@ def update_cells():
     else:
         batch = bSelected
     analysis = (
-            session.query(NarfAnalysis)
-            .filter(NarfAnalysis.name == aSelected)
+            session.query(Analysis)
+            .filter(Analysis.name == aSelected)
             .first()
             )
     # don't change batch association if batch is blank
@@ -397,7 +397,7 @@ def update_results():
 
     user = get_current_user()
     session = Session()
-    NarfResults = Tables()['NarfResults']
+    Results = Tables()['Results']
 
     nullselection = """
             MUST SELECT A BATCH AND ONE OR MORE CELLS AND
@@ -434,19 +434,19 @@ def update_results():
         # Always add cellid and modelname to column lists,
         # since they are required for selection behavior.
         cols = [
-                getattr(NarfResults, 'cellid'),
-                getattr(NarfResults, 'modelname'),
+                getattr(Results, 'cellid'),
+                getattr(Results, 'modelname'),
                 ]
         cols += [
-                getattr(NarfResults, c) for c in colSelected
-                if hasattr(NarfResults, c)
+                getattr(Results, c) for c in colSelected
+                if hasattr(Results, c)
                 ]
 
         # Package query results into a DataFrame
         results = psql.read_sql_query(
                 Query(cols, session)
-                .filter(NarfResults.batch == bSelected)
-                .filter(NarfResults.cellid.in_(cSelected))
+                .filter(Results.batch == bSelected)
+                .filter(Results.cellid.in_(cSelected))
                 .filter(NarfResults.modelname.in_(mSelected))
                 .filter(or_(
                         int(user.sec_lvl) == 9,
