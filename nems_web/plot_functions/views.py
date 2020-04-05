@@ -2,7 +2,7 @@
 
 Query database with batch, cell and model selection.
 Filter out cells that don't meet minimum SNR/Iso/SNRi criteria.
-Pass the returned NarfResults dataframe - along with measure, onlyFair and
+Pass the returned Results dataframe - along with measure, onlyFair and
 includeOutliers criterio - to a PlotGenerator subclass based on the selected
 plot type.
 Use that PlotGenerator's generate_plot() method to generate <script> and <div>
