@@ -193,14 +193,14 @@ class QueryInterface(Resource):
         uris = [self.results_uri + r for r in results]
         js = json.dumps(uris)
 
-        # TODO: A better way would be to use NarfResults and MySQL
+        # TODO: A better way would be to use Results and MySQL
         # filters = []
         # for key, val in kwargs.items():
-        #     col = getattr(NarfResults, key)
+        #     col = getattr(Results, key)
         #     if isinstance(val, str):
         #         filters.append(col.ilike(val))
         #
-        # objs = self.session.query(NarfResults).filter(and_(*filters)).all()
+        # objs = self.session.query(Results).filter(and_(*filters)).all()
         #
         # results = [(r.recording, r.modelanme, r.fitter, r.date) for r in objs]
 

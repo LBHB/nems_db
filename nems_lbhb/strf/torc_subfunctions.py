@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.matlib import repmat
 import scipy as sp
 from matplotlib import pyplot as plt
 
@@ -425,7 +426,7 @@ def generate_torc_spectrograms(TorcObject, rasterfs=None, single_cycle=True):
         num_cycles = int(np.ceil(stdur/StimParams['basep']))
 
         for k in TorcValues.keys():
-            t = np.matlib.repmat(TorcValues[k],1,num_cycles)
+            t = repmat(TorcValues[k],1,num_cycles)
             final_samples=int(t.shape[1]*rasterfs/saf)
             t=sp.signal.resample(t, final_samples, axis=1)
 

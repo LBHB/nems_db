@@ -1004,7 +1004,7 @@ def baphy_load_recording(**options):
         dni = None
 
     if len(files) == 0:
-       raise ValueError('NarfData not found for cell {0}/batch {1}'.format(
+       raise ValueError('Data not found for cell {0}/batch {1}'.format(
                cellid,batch))
 
     # STEP 2: LOOP THROUGH FILES, LOAD RELEVANT SIGNALS FOR EACH

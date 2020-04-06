@@ -47,7 +47,7 @@ class Model(Atom):
 class ModelBrowser(Atom):
     """
     For a given batch, list all cellids and modelnames matching in
-    NarfResults. Clicking view will call view_model_recording for the
+    Results. Clicking view will call view_model_recording for the
     currently selected model.
 
     """
@@ -125,7 +125,7 @@ class ModelBrowser(Atom):
         d = nd.get_batch_cells(batchmask, cellid=cellmask)
         self.cell_list =  [Cell(cellid=c) for c in list(d['cellid'])]
 
-        d = nd.pd_query("SELECT DISTINCT modelname FROM NarfResults" +
+        d = nd.pd_query("SELECT DISTINCT modelname FROM Results" +
                         " WHERE batch=%s AND modelname like %s" +
                         " ORDER BY modelname",
                         (batchmask, modelmask))
