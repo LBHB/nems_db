@@ -82,7 +82,7 @@ for batch in batches:
     d.to_csv('d_'+str(batch)+'_pup_fil_sdexp_new.csv')
 
 # pup+afl only sdexp models 
-state_list = ['st.pup.afl', 'st.pup0.afl', 'st.pup.afl0']
+state_list = ['st.pup.afl', 'st.pup0.afl', 'st.pup.afl0', 'st.pup0.afl0']
 basemodel2 = '-ref-psthfr.s_sdexp.S'
 loader = 'psth.fs20.pup-ld-'
 fitter = '_jk.nf20-basic'
