@@ -76,7 +76,7 @@ class PlotGenerator():
         data.replace(models, self.abbr, inplace=True)
         log.debug("Replaced modelnames with abbreviations.")
         self.models = self.abbr
-        log.info("Forming data array inside PlotGenerator...")
+        log.info(f"Forming data array inside PlotGenerator... data.shape={data.shape}")
         self.data = self.form_data_array(data)
 
         # Use this inside views function to check whether generate_plot

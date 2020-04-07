@@ -26,15 +26,17 @@ from nems.registry import xform, xmodule
 log = logging.getLogger(__name__)
 
 
-dbase_dir = "/tf/data/"
-dbase_name = "out_045_052_058_059_063_highgamma_legacy.mat"
+#dbase_dir = "/tf/data/"
+#dbase_name = "out_045_052_058_059_063_highgamma_legacy.mat"
+dbase_dir = "/auto/users/svd/projects/pop_models/ecog/"
+dbase_name = "out_highgamma_Stephen.mat"
 
 
 def to_recording(X, Y, trials, fs, labels, locs=None, before=1.0, after=1.0, recname="ecog"):
     # Mask inter-trial silence
     for i in range(len(Y)):
         Y[i][:, :100], Y[i][:, -100:] = np.nan, np.nan
-    
+
     # Create epochs based on trials
     epoch, offset = [], 0
     for i, name in enumerate(trials):
@@ -45,12 +47,12 @@ def to_recording(X, Y, trials, fs, labels, locs=None, before=1.0, after=1.0, rec
         epoch.append([offset+length-after, offset+length, "SILENCE_POST"])
         offset += length
     epoch = pd.DataFrame(epoch, columns=('start', 'end', 'name'))
-    
+
     # Concatenate all trials
     X = np.concatenate(X, 1)
     Y = np.concatenate(Y, 1)
     Y = Y.mean(-1) if Y.ndim == 3 else Y
-    
+
     # Create NEMS-format recording
     return nems.recording.Recording({
         "stim": nems.signal.RasterizedSignal(
@@ -70,7 +72,7 @@ def load_data(path, downsample=4, compress=1/3, merge_reps=True):
     hank_stories  = mdata["out"][0]["hank_stories"][0]   # 19 trials with different lengths, used for estimation
     short_stories = mdata["out"][0]["short_stories"][0]  # 35 trials with different lengths, used for estimation
     repetitions   = mdata["out"][0]["repetitions"][0]    # 8 trials with same length, repeated 5 or 6 times, used for validation
-    
+
     # Group estimation and validation trials
     est = [t for s in (hank_stories, short_stories) for t in s]
     val = [t for s in (repetitions,) for t in s]
@@ -93,11 +95,11 @@ def load_data(path, downsample=4, compress=1/3, merge_reps=True):
     else:
         Y_val = ([t["resp"][..., 0] for t in val],
                  [t["resp"][..., 1] for t in val])
-    
+
     # Compress and downsample stimuli
     X_est = [x**compress if downsample==1 else x[::downsample]**compress for x in X_est]
     X_val = [x**compress if downsample==1 else x[::downsample]**compress for x in X_val]
-    
+
     # Convert to NEMS-format recordings
     est = to_recording(X_est, Y_est, trial_est, fs, labels, locs=groups, recname="ecog_est")
     if merge_reps:
@@ -109,7 +111,7 @@ def load_data(path, downsample=4, compress=1/3, merge_reps=True):
     return groups, labels, est, val
 
 
-@xform
+@xform()
 def ldcol(loadkey, recording_uri=None, cellid=None):
     '''
     Keyword for loading Columbia ecog data.
@@ -152,8 +154,10 @@ def load_columbia_data(recording_uri_list=None, cellid=None, downsample=4, **opt
     # load Matlab data files
     groups, labels, est, val = load_data(recording_uri, downsample)
 
+
     # check if cellid exists in recording
     if cellid not in labels:
+        print("Labels available: ", labels)
         raise ValueError("cellid not found")
 
     print(f"Selecting channel {cellid}")
@@ -163,8 +167,5 @@ def load_columbia_data(recording_uri_list=None, cellid=None, downsample=4, **opt
                                     "resp": est.signals["resp"].extract_channels([cellid])})
     val = nems.recording.Recording({"stim": val.signals["stim"],
                                     "resp": val.signals["resp"].extract_channels([cellid])})
-    
+
     return {'est': est, 'val': val}
-
-
-
