@@ -23,6 +23,17 @@ def pas(loadkey):
 
     return xfspec
 
+def ap1(loadkey):
+    """
+    ap1 = "first passive only"
+    mask out everything that doesn't fall in an active for first passive FILE_ epoch
+    """
+
+    xfspec = [['nems.preprocessing.mask_late_passives',
+               {}, ['rec'], ['rec']]]
+
+    return xfspec
+
 
 def cor(kw):
     """
