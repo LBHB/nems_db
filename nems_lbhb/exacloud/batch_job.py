@@ -55,14 +55,15 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
         f.write(f'#SBATCH --comment="{job_comment}"\n')
         f.write(f'#SBATCH --output={str(job_log_loc)}%j_log.out\n')
 
-        if use_gpu:
-            f.write('#SBATCH --partition=gpu\n')
-            f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
-        else:
-            f.write(f'#SBATCH --gres=disk:5\n')
-
         if queueid is not None:  # to work with queuemaster need to add in queueid env
             f.write(f'#SBATCH --export=ALL,QUEUEID={queueid}\n')
+
+        if use_gpu:
+            f.write(f'#SBATCH --partition=gpu\n')
+            f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
+            f.write(f'module add /home/exacloud/software/modules/cuda/10.1.243')
+        else:
+            f.write(f'#SBATCH --gres=disk:5\n')
 
         f.write(' '.join(['srun'] + job_arguments))
         f.write('\n')
