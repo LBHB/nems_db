@@ -60,10 +60,9 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
 
         if use_gpu:
             f.write(f'#SBATCH --partition=gpu\n')
-            #f.write(f'#SBATCH --gres=disk:5,gpu:2\n')
             f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
-            #f.write(f'#SBATCH --exclusive\n')
             f.write(f'module add /home/exacloud/software/modules/cuda/10.1.243\n')
+            f.write(f'module add /home/exacloud/software/modules/cudnn/7.6-10.1\n')
         else:
             f.write(f'#SBATCH --gres=disk:5\n')
 
