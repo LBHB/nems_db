@@ -42,6 +42,8 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         all_cells = alt_cells_available
     else:
         all_cells = list(single_perf.index)
+    log.info("Batch: %d", batch)
+    log.info("Per-cell modelname: %s", pmodelname)
     cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
@@ -81,7 +83,10 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
 def pop_selector(recording_uri_list, batch=None, cellid=None,
                  rand_match=False, cell_count=20, best_cells=False,
                  whiten=True, meta={}, **context):
-
+    if type(cellid) is list:
+        # convert back to siteid
+        cellid=cellid[0].split("-")[0]
+    log.info('pop_selector: %s', cellid)
     rec = load_recording(recording_uri_list[0])
     cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
         batch=batch, siteid=cellid, alt_cells_available=rec['resp'].chans,
