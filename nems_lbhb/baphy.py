@@ -72,9 +72,9 @@ def baphy_load_recording_file(**options):
     model fit use case options includes
     :return:
     """
-    uri = baphy_load_recording_uri(**options)
+    uri, cells_to_extract = baphy_load_recording_uri(**options)
 
-    return load_recording(uri)
+    return load_recording(uri, resp_chans=cells_to_extract)
 
 def baphy_load_recording_uri(recache=False, **options):
     """
@@ -115,7 +115,7 @@ def baphy_load_recording_uri(recache=False, **options):
 
     # parse cellid. Update cellid, siteid, rawid in options dictionary
     # if cellid/batch not specified, find them based on mfile.
-    _, options = parse_cellid(options)
+    cells_to_extract, options = parse_cellid(options)
     siteid = options['siteid']
 
     # fill in remaining default options
@@ -143,7 +143,7 @@ def baphy_load_recording_uri(recache=False, **options):
     else:
         log.info('Cached recording found: %s', data_uri)
 
-    return data_uri
+    return data_uri, cells_to_extract
 
 
 # ============================ baphy loading "utils" ==================================
