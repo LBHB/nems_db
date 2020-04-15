@@ -74,7 +74,10 @@ def baphy_load_recording_file(**options):
     """
     uri, cells_to_extract = baphy_load_recording_uri(**options)
 
-    return load_recording(uri, resp_chans=cells_to_extract)
+    rec = load_recording(uri)
+    rec.meta['cells_to_extract'] = cells_to_extract
+
+    return rec
 
 def baphy_load_recording_uri(recache=False, **options):
     """
