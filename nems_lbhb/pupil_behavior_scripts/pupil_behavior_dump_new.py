@@ -56,6 +56,41 @@ for batch in batches:
     d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_pxf_stategain.csv'))
 
 
+# ======================= stategain with ap1 only ===========================
+# fil models
+log.info('Saving stategain fil models with ap1... ')
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_fil_stategain_ap1.csv'))
+
+
+# afl models
+log.info('Saving stategain afl models with ap1... ')
+state_list = ['st.pup0.afl0','st.pup0.afl','st.pup.afl0','st.pup.afl']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_stategain_ap1.csv'))
+
+
+# afl + pxf models
+log.info('Saving stategain afl+pxf models with ap1... ')
+state_list = ['st.pup0.afl0.pxf0','st.pup0.afl.pxf0','st.pup.afl0.pxf0','st.pup.afl.pxf']
+basemodel2 = "-ref-psthfr.s_stategain.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_pxf_stategain_ap1.csv'))
 
 # ============================ sdexp models =================================
 
@@ -91,5 +126,41 @@ for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)
     d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_pxf_sdexp.csv'))
+
+
+# ======================== sdexp models with ap1 =============================
+
+# fil models
+log.info('Saving sdexp fil models with ap1... ')
+state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_fil_sdexp_ap1.csv'))
+
+# afl models
+log.info('Saving sdexp afl models with ap1... ')
+state_list = ['st.pup0.afl0','st.pup0.afl','st.pup.afl0','st.pup.afl']
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_sdexp_ap1.csv'))
+
+# afl + pxf models
+log.info('Saving sdexp afl+pxf models with ap1... ')
+state_list = ['st.pup0.afl0.pxf0','st.pup0.afl.pxf0','st.pup.afl0.pxf0','st.pup.afl.pxf']
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20.pup-ld-ap1-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_pxf_sdexp_ap1.csv'))
 
 
