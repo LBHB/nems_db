@@ -20,10 +20,10 @@ class UsernameAvailable():
 
     def __call__(self, form, field):
         session = Session()
-        NarfUsers = Tables()['NarfUsers']
+        Users = Tables()['Users']
         exists = (
-                session.query(NarfUsers)
-                .filter(NarfUsers.username == field.data)
+                session.query(Users)
+                .filter(Users.username == field.data)
                 .first()
                 )
         if exists:
@@ -42,10 +42,10 @@ class EmailAvailable():
 
     def __call__(self, form, field):
         session = Session()
-        NarfUsers = Tables()['NarfUsers']
+        Users = Tables()['Users']
         exists = (
-                session.query(NarfUsers)
-                .filter(NarfUsers.email == field.data)
+                session.query(Users)
+                .filter(Users.email == field.data)
                 .first()
                 )
         if exists:

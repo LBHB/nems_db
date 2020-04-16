@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 class ModelFinder():
-    """Converts a modeltree string from NarfAnalysis into a list of modelnames.
+    """Converts a modeltree string from Analysis into a list of modelnames.
 
     Invokes a series of internal methods on any modeltree string passed to
     its constructor.
@@ -25,12 +25,12 @@ class ModelFinder():
     Arguments:
     ----------
     modelstring : string
-        A model tree specified in a NarfAnalysis entry, resembling a nested
+        A model tree specified in a Analysis entry, resembling a nested
         list, ex: {'an','example',{'tree','string'}}
 
     See Also:
     ---------
-    Narf_Analysis : rebuild_model_tree, keyword_combos
+    _Analysis : rebuild_model_tree, keyword_combos
 
     """
 
@@ -90,7 +90,7 @@ class ModelFinder():
                 \n\n ast.literal_eval has issues with the string format for
                 this modeltree:\n\n
                 %s\n\n
-                Or modelstring was not present in NarfAnalysis
+                Or modelstring was not present in Analysis
                 """ % self.modelstring
                 )
             return ([

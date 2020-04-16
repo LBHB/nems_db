@@ -979,7 +979,7 @@ $(document).ready(function(){
 
     $("#strf").on('click',function(){
         py_console_log("STRF Function not yet implemented");
-        //return strf plots ala narf_analysis
+        //return strf plots ala _analysis
         //low priority
     });
 

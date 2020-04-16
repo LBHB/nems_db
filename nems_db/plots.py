@@ -76,7 +76,7 @@ class PlotGenerator():
         data.replace(models, self.abbr, inplace=True)
         log.debug("Replaced modelnames with abbreviations.")
         self.models = self.abbr
-        log.info("Forming data array inside PlotGenerator...")
+        log.info(f"Forming data array inside PlotGenerator... data.shape={data.shape}")
         self.data = self.form_data_array(data)
 
         # Use this inside views function to check whether generate_plot
@@ -124,7 +124,7 @@ class PlotGenerator():
     def form_data_array(self, data):
         """Formats data into a multi-indexed DataFrame for plotting.
 
-        Takes a DataFrame (built from a full NarfResults query) and converts it
+        Takes a DataFrame (built from a full Results query) and converts it
         to a new multi-indexed DataFrame (cellid level 0, modelname level 1)
         with a column for each performance measure, plus any other columns
         needed for specific plots.
@@ -141,7 +141,7 @@ class PlotGenerator():
 
         See Also:
         ---------
-        Narf_Analysis : compute_data_matrix
+        _Analysis : compute_data_matrix
 
         """
 
@@ -205,7 +205,7 @@ class PlotGenerator():
                         # measure and if a check fails, step out of the loop.
 
                         # Comments for each check are copied from
-                        # from Narf_Analysis : compute_data_matrix
+                        # from _Analysis : compute_data_matrix
 
                         # "Drop r_test values below threshold"
                         a1 = (meas == 'r_test')
