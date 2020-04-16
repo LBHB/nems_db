@@ -6,7 +6,7 @@ import datetime
 from pathlib import Path
 
 
-def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
+def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False, high_mem=False):
     """Parses the arguments and creates the slurm sbatch file.
 
     Batch files are saved in the users home directory in "job_history".
@@ -14,6 +14,7 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
     :param job_arguments: Arguments to srun.
     :param queueid: Queueid for updating queuemaster.
     :param time_limit: Hours that the job will run for. Hard cap, after which the job will be terminated.
+    :param high_mem: Whether or not the job requires a GPU with a larger amount of memory. See ACC docs for GPU .
 
     :return: The file location of the batch file.
     """
@@ -60,7 +61,11 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False):
 
         if use_gpu:
             f.write(f'#SBATCH --partition=gpu\n')
-            f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
+            if high_mem:
+                f.write(f'#SBATCH --gres=disk:5,gpu:1\n')
+            else:
+                f.write(f'#SBATCH --gres=disk:5,gpu:v100:1\n')
+
             f.write(f'module add /home/exacloud/software/modules/cuda/10.1.243\n')
             f.write(f'module add /home/exacloud/software/modules/cudnn/7.6-10.1\n')
         else:
@@ -103,6 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--queueid', default=None, help='The tQueue QID.')
     parser.add_argument('--time_limit', type=float, default=10, help='The time limit for the job in hours.')
     parser.add_argument('--use_gpu', action='store_true', help='Whether to start a CPU or GPU job.')
+    parser.add_argument('--high_mem', action='store_true', help='Whether to use GPU with more memory.')
 
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
 
