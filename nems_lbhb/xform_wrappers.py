@@ -228,7 +228,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
     else:
-        recording_uri = nb.baphy_load_recording_uri(**options)
+        recording_uri, _ = nb.baphy_load_recording_uri(**options)
 
     return recording_uri
 
