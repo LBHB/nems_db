@@ -1,0 +1,31 @@
+from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
+from nems_lbhb.stateplots import pb_model_plot
+
+"""
+batch = 307  # A1 SUA and MUA
+batch = 309  # IC SUA and MUA
+
+basemodels = ["-ref-psthfr.s_stategain.S",
+              "-ref-psthfr.s_sdexp.S",
+              "-ref.a-psthfr.s_sdexp.S"]
+state_list = ['st.pup0.far0.hit0.hlf0', 'st.pup0.far0.hit0.hlf',
+              'st.pup.far.hit.hlf0', 'st.pup.far.hit.hlf']
+state_list = ['st.pup0.fil0', 'st.pup0.fil', 'st.pup.fil0', 'st.pup.fil']
+"""
+state_list = ['st.pup0.hlf0', 'st.pup0.hlf', 'st.pup.hlf0', 'st.pup.hlf']
+
+cellids = ["TAR010c-06-1", "TAR010c-27-2"]
+batch = 307
+
+for cellid in cellids:
+    model_per_time_wrapper(cellid, batch=307,
+                               loader= "psth.fs20.pup-ld-",
+                               fitter = "_jk.nf20-basic",
+                               basemodel = "-ref-psthfr_stategain.S",
+                               state_list=None, plot_halves=True)
+
+
+for cellid in cellids:
+    pb_model_plot(cellid=cellid, batch=batch,
+                  loader="psth.fs20.pup", basemodel="ref-psthfr_stategain.S",
+                  fitter="jk.nf20-basic")
