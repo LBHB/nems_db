@@ -62,7 +62,7 @@ df = pd.concat([A1, IC])
 if group_files & ('beh' not in model_string):
     area = df['area']
     df = df.groupby(by=['cellid', 'ON_BF']).mean()
-    df['area'] = [area.loc[c][0] for c in df.index.get_level_values('cellid')]
+    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
 # Create figure
 
