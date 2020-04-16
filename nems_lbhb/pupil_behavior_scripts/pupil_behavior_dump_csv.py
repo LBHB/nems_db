@@ -12,6 +12,7 @@ import nems.utils
 import nems.db as nd
 import nems.recording as recording
 import nems.epoch as ep
+from nems import get_setting
 
 #import nems.baphy as nb
 import nems_lbhb.xform_wrappers as nw

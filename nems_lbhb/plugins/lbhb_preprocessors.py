@@ -23,6 +23,17 @@ def pas(loadkey):
 
     return xfspec
 
+def ap1(loadkey):
+    """
+    ap1 = "first passive only"
+    mask out everything that doesn't fall in an active for first passive FILE_ epoch
+    """
+
+    xfspec = [['nems.preprocessing.mask_late_passives',
+               {}, ['rec'], ['rec']]]
+
+    return xfspec
+
 
 def cor(kw):
     """
@@ -96,20 +107,31 @@ def evs(loadkey):
         raise ValueError('unknown stim spec')
 
     lick = False
-    if len(loadset)>=2:
+    if len(loadset) >= 2:
         if loadset[1] == "lic":
             epoch2_shuffle = False
             lick = True
+            epoch2_shift = -5
         elif loadset[1] == "lic0":
             epoch2_shuffle = True
             lick = True
+            epoch2_shift = -5
+        elif loadset[1] == "l20":
+            epoch2_shuffle = False
+            lick = True
+            epoch2_shift = -20
+        elif loadset[1] == "l20x0":
+            epoch2_shuffle = True
+            lick = True
+            epoch2_shift = -20
+
         else:
             raise ValueError('evs option 2 not known')
     if lick:
         xfspec = [['nems.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
                     'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
-                    'epoch2_regex': 'LICK', 'epoch2_shift': -5,
+                    'epoch2_regex': 'LICK', 'epoch2_shift': epoch2_shift,
                     'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
                    ['rec'], ['rec']]]
     else:
