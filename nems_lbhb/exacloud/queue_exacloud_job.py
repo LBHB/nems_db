@@ -24,7 +24,7 @@ def db_session():
 
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path,
-                            script_path, time_limit=10, useGPU=False):
+                            script_path, time_limit=10, useGPU=False, high_mem=False):
     """Enqueues models similarly to nems.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param celllist: List of cells to include in analysis.
@@ -35,7 +35,8 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     :param executable_path: Executable used to run script.
     :param script_path: Script to run.
     :param time_limit: How long the job will run for. Jobs will terminated if not complete by the end of the time limit.
-    :param useGPU: Whether or not to be GPU job. Currently unused.
+    :param useGPU: Whether or not to be GPU job.
+    :param high_mem: Whether or not GPU should be a higher memory one.
     """
     # if batch_path in [None, 'None', 'NONE', '']:
     #     batch_path = Path(r'/home/exacloud/lustre1/LBHB/code/nems_db/nems_lbhb/exacloud/batch_job.py')
@@ -43,7 +44,8 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     # extra parameters for future
     time_limit = f'--time_limit={time_limit}'
     use_gpu = '--use_gpu' if useGPU else ''
-    extra_options = ' '.join([time_limit, use_gpu])
+    high_mem = '--high_mem' if high_mem else ''
+    extra_options = ' '.join([time_limit, use_gpu, high_mem])
 
     # Convert to list of tuples b/c product object only useable once.
     combined = list(itertools.product(cellist, [str(batch)], modellist))
@@ -73,8 +75,8 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
 
 
 def enqueue_single_exacloud_model(cell, batch, model, user, linux_user, executable_path,
-                                  script_path, time_limit=10, useGPU=False):
+                                  script_path, time_limit=10, useGPU=False, high_mem=False):
     """Enqueues a single model. See `enqueue_exacloud_models` for parameter information."""
     enqueue_exacloud_models(cellist=[cell], batch=batch, modellist=[model], user=user, linux_user=linux_user,
                             executable_path=executable_path, script_path=script_path, time_limit=time_limit,
-                            useGPU=useGPU)
+                            useGPU=useGPU, high_mem=high_mem)

@@ -30,7 +30,7 @@ from nems_gui.recording_browser import (browse_recording)
 class model_browser(qw.QWidget):
     """
     For a given batch, list all cellids and modelnames matching in
-    NarfResults. Clicking view will call view_model_recording for the
+    Results. Clicking view will call view_model_recording for the
     currently selected model.
 
     """
@@ -120,7 +120,7 @@ class model_browser(qw.QWidget):
             self.batchLE.setText(str(self.batch))
 
         self.d_cells = nd.get_batch_cells(self.batch, cellid=cellmask)
-        self.d_models = nd.pd_query("SELECT DISTINCT modelname FROM NarfResults" +
+        self.d_models = nd.pd_query("SELECT DISTINCT modelname FROM Results" +
                                " WHERE batch=%s AND modelname like %s" +
                                " ORDER BY modelname",
                                (self.batch, modelmask))

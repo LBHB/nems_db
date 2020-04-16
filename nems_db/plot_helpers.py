@@ -22,13 +22,13 @@ def plot_filtered_batch(batch, models, measure, plot_type,
 def get_plot(cells, models, batch, measure, plot_type, only_fair=True,
              include_outliers=False, display=True):
     session = Session()
-    NarfResults = Tables()['NarfResults']
+    Results = Tables()['Results']
 
     results_df = psql.read_sql_query(
-            session.query(NarfResults)
-            .filter(NarfResults.batch == batch)
-            .filter(NarfResults.cellid.in_(cells))
-            .filter(NarfResults.modelname.in_(models))
+            session.query(Results)
+            .filter(Results.batch == batch)
+            .filter(Results.cellid.in_(cells))
+            .filter(Results.modelname.in_(models))
             .statement, session.bind
             )
     results_models = [
@@ -51,19 +51,19 @@ def get_plot(cells, models, batch, measure, plot_type, only_fair=True,
 def get_filtered_cells(cells, batch, snr=0.0, iso=0.0, snr_idx=0.0):
     """Removes cellids from list if they do not meet snr/iso criteria."""
     session = Session()
-    NarfBatches = Tables()['NarfBatches']
+    Batches = Tables()['Batches']
 
     snr = max(snr, 0)
     iso = max(iso, 0)
     snr_idx = max(snr_idx, 0)
 
     db_criteria = psql.read_sql_query(
-            session.query(NarfBatches)
-            .filter(NarfBatches.cellid.in_(cells))
-            .filter(NarfBatches.min_snr_index >= snr_idx)
-            .filter(NarfBatches.min_isolation >= iso)
-            .filter(NarfBatches.est_snr >= snr)
-            .filter(NarfBatches.val_snr >= snr)
+            session.query(Batches)
+            .filter(Batches.cellid.in_(cells))
+            .filter(Batches.min_snr_index >= snr_idx)
+            .filter(Batches.min_isolation >= iso)
+            .filter(Batches.est_snr >= snr)
+            .filter(Batches.val_snr >= snr)
             .statement, session.bind
             )
 
