@@ -541,7 +541,7 @@ def baphy_load_dataset(parmfilepath, **options):
         BVT = True
     else:
         BVT = False
-    if (exptparams['runclass'] == 'BVT') & (exptparams['BehaveObjectClass'] != 'Passive'):
+    if (exptparams['runclass'] == 'BVT') & (exptparams.get('BehaveObjectClass','DMS') != 'Passive'):
         exptevents = beh.create_trial_labels(exptparams, exptevents)
         active_BVT = True
     else:
@@ -549,11 +549,11 @@ def baphy_load_dataset(parmfilepath, **options):
 
     # Figure out how to handle "false alarm" trials. Truncate after first lick
     # if not passive or classical conditioning
-    if exptparams['BehaveObjectClass'] in ['Passive','ClassicalConditioning']:
+    if exptparams.get('BehaveObjectClass','DMS') in ['Passive', 'ClassicalConditioning']:
         remove_post_lick = False
     else:
         remove_post_lick = True
-    if exptparams['BehaveObjectClass'] in ['ClassicalConditioning']:
+    if exptparams.get('BehaveObjectClass','DMS') in ['ClassicalConditioning']:
         active_CC=True
     else:
         active_CC=False
@@ -695,7 +695,7 @@ def baphy_load_dataset(parmfilepath, **options):
     # and selected: physiology yes, passive, but set behavior control to active
     # in this case, behavior didn't run, file got created with _p_, but baphy
     # still tried to label trials.
-    any_behavior = any_behavior & (exptparams['BehaveObjectClass'] != 'Passive')
+    any_behavior = any_behavior & (exptparams.get('BehaveObjectClass','DMS') != 'Passive')
 
     # figure out length of entire experiment
     file_start_time = np.min(event_times['start'])
