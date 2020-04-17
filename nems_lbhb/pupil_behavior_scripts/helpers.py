@@ -10,9 +10,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.signal as ss
 import scipy.stats as st
+from itertools import product
 
 import nems_lbhb.stateplots as stateplots
 import nems.plots.api as nplt
+import common
 
 
 def preprocess_stategain_dump(df_name, batch, full_model=None, p0=None, b0=None, shuf_model=None, octave_cutoff=0.5, r0_threshold=0,
@@ -607,3 +609,109 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     f.tight_layout()
 
     return f
+
+
+def hlf_analysis(df, state_list, title=None, norm_sign=True, sig_cells_only=False, states=None):
+    """
+    Copy of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
+    """
+    # figure out what cells show significant state effect. Can just use
+    # pupil for this, so that there's one entry per cell (rtest is the same for all states)
+    da = df[df['state_chan']=='pupil']
+    dp = pd.pivot_table(da, index='cellid',columns='state_sig',values=['r','r_se'])
+
+    sig = (dp.loc[:, pd.IndexSlice['r', state_list[3]]] - dp.loc[:, pd.IndexSlice['r', state_list[0]]]) > \
+            (dp.loc[:, pd.IndexSlice['r_se', state_list[3]]] + dp.loc[:, pd.IndexSlice['r_se', state_list[0]]])
+    sig_cells = sig[sig].index
+
+    dfull = df[df['state_sig']==state_list[3]]
+    dpup = df[df['state_sig']==state_list[2]] 
+    dp = pd.pivot_table(dfull, index='cellid',columns='state_chan',values=['MI'])
+    dp0 = pd.pivot_table(dpup, index='cellid',columns='state_chan',values=['MI'])
+
+    if states is not None:
+        states = ['ACTIVE_1','PASSIVE_1', 'ACTIVE_2', 'PASSIVE_2']
+    
+    dMI = dp.loc[:, pd.IndexSlice['MI', states]]
+    dMI0 = dp0.loc[:, pd.IndexSlice['MI', states]]
+    dMIu = dMI - dMI0
+    
+    # add zeros for "PASSIVE_0" col
+    dMI.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+    dMI0.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+    dMIu.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+
+    active_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'ACTIVE' in c]
+    passive_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'PASSIVE' in c]
+
+    # force reorder the columns of all dataframes for the plot
+    new_col_order = sorted(dMI.columns.get_level_values('state_chan'), key=lambda x: x[-1])
+    new_cols = pd.MultiIndex.from_product([['MI'], new_col_order], names=[None, 'state_chan'])
+    dMI = dMI.reindex(columns=new_cols, fill_value=0)
+    dMI0 = dMI0.reindex(columns=new_cols, fill_value=0)
+    dMIu = dMIu.reindex(columns=new_cols, fill_value=0)
+
+    if norm_sign:
+        b = dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1).fillna(0)
+        dMI = dMI.subtract(b, axis=0)
+        dMIu = dMIu.subtract(b, axis=0)
+        dMI0 = dMI0.subtract(b, axis=0)
+        sg = dMI.loc[:, pd.IndexSlice['MI', active_idx]].mean(axis=1) - \
+                    dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1)
+        sg = sg.apply(np.sign)
+        dMI = dMI.multiply(sg, axis=0)
+        dMIu = dMIu.multiply(sg, axis=0)
+        dMI0 = dMI0.multiply(sg, axis=0)
+
+    # plot only significant state cells, with data for all state_chan conditions
+    state_mask = (dMI.isna().sum(axis=1) == 0)
+    cell_mask = dMI.index.isin(sig_cells)
+    if sig_cells_only:
+        dMI = dMI.loc[cell_mask & state_mask, :]
+        dMI0 = dMI0.loc[cell_mask & state_mask, :]
+        dMIu = dMIu.loc[cell_mask & state_mask, :]
+    else:
+        dMI = dMI.loc[state_mask, :]
+        dMI0 = dMI0.loc[state_mask, :]
+        dMIu = dMIu.loc[state_mask, :]
+
+    total_cells = len(df.cellid.unique())
+    sig_state_cells = len(sig_cells)
+    stable_cells = state_mask.sum()
+
+    f, ax = plt.subplots(3, 1, figsize=(8, 8))
+
+    # plot all cells raw MI
+    ax[0].set_title('total cells: {0}, state cells: {1}, stable across all blocks: {2}'.format(total_cells, sig_state_cells, stable_cells),
+                fontsize=8)
+    ax[0].plot(dMI.values.T, lw=0.5)
+    ax[0].set_ylabel('raw MI per cell')
+    ax[0].set_xticks(range(dMI.shape[1]))
+    ax[0].set_xticklabels(dMI.columns.get_level_values('state_chan'))
+    if title is not None:
+        pass
+    else:
+        pass
+
+    # plot all cells task unique MI
+    ax[1].plot(dMIu.values.T, lw=0.5)
+    ax[1].set_ylabel('unique task MI per cell')
+    ax[1].set_xticks(range(dMI.shape[1]))
+    ax[1].set_xticklabels(dMI.columns.get_level_values('state_chan'))
+
+    # plot mean MI over cells for pupil, task unique, and overall state
+    ax[2].set_title('Total cells going into average: {0}'.format(dMI.shape[0]))
+    ax[2].plot(dMIu.mean(axis=0).values, '-', lw=2, color=common.color_b, marker='o', label='unique task')
+    ax[2].plot(dMI.mean(axis=0).values, '--', lw=2, color=common.color_b, marker='o', label='overall')
+    ax[2].plot(dMI0.mean(axis=0).values, '--', color=common.color_p, lw=2, marker='o', label='pupil')
+    ax[2].legend()
+
+    ax[2].axhline(0, linestyle='--', color='grey', lw=2)
+    ax[2].set_ylabel('mean MI')
+    ax[2].set_xticks(np.arange(dMI.shape[1]))
+    ax[2].set_xticklabels(dMI.columns.get_level_values('state_chan'))
+    ax[2].set_xlabel('behavioral block')
+
+    f.tight_layout()
+
+    return dMI, dMI0

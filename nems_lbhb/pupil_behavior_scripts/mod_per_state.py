@@ -473,7 +473,7 @@ def hlf_wrapper(use_hlf=True):
             df = get_model_results_per_state_model(
                     batch=batch, state_list=state_list, basemodel=basemodel)
             title = "{} {} batch {} keep sgn".format(basemodel,state_list[-1],batch)
-            hlf_analysis(df, state_list, title=title, norm_sign=True, states=states);
+            hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
 
 
 def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']):
