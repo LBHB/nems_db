@@ -611,9 +611,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     return f
 
 
-def hlf_analysis(df, state_list, title=None, norm_sign=True, sig_cells_only=False, states=None):
+def hlf_analysis(df, state_list, norm_sign=True, sig_cells_only=False, states=None, scatter_sig_cells=None):
     """
-    Copy of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
+    Copied/modified version of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
     """
     # figure out what cells show significant state effect. Can just use
     # pupil for this, so that there's one entry per cell (rtest is the same for all states)
@@ -651,6 +651,9 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, sig_cells_only=Fals
     dMI0 = dMI0.reindex(columns=new_cols, fill_value=0)
     dMIu = dMIu.reindex(columns=new_cols, fill_value=0)
 
+    dMI_all = dMI.copy()
+    dMIu_all = dMIu.copy()
+
     if norm_sign:
         b = dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1).fillna(0)
         dMI = dMI.subtract(b, axis=0)
@@ -679,38 +682,53 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, sig_cells_only=Fals
     sig_state_cells = len(sig_cells)
     stable_cells = state_mask.sum()
 
-    f, ax = plt.subplots(3, 1, figsize=(8, 8))
+    f, ax = plt.subplots(2, 1, figsize=(8, 8))
 
-    # plot all cells raw MI
-    ax[0].set_title('total cells: {0}, state cells: {1}, stable across all blocks: {2}'.format(total_cells, sig_state_cells, stable_cells),
-                fontsize=8)
-    ax[0].plot(dMI.values.T, lw=0.5)
-    ax[0].set_ylabel('raw MI per cell')
-    ax[0].set_xticks(range(dMI.shape[1]))
-    ax[0].set_xticklabels(dMI.columns.get_level_values('state_chan'))
-    if title is not None:
+    # scatter plot of raw post passive MI vs. unique post passive MI
+    # e.g. does pupil account for some persistent effects?
+    ax[0].scatter(dMI_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], 
+                        dMIu_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], color='lightgrey', edgecolor='white', s=40, label='all cells')
+    if scatter_sig_cells is None:
         pass
     else:
-        pass
+        # if sig cells, overlay colors on sig cells
+        for category in scatter_sig_cells:
+            sig_cells = scatter_sig_cells[category]
+            if category == 'task_only':
+                color = common.color_b
+            elif category == 'pupil_only':
+                color = common.color_p
+            elif category == 'both':
+                color = common.color_both
+            elif category == 'task_or_pupil':
+                color = common.color_either
+            else:
+                color = 'k'
+            ax[0].scatter(dMI_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], 
+                        dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color, edgecolor='white', s=50, label=category)
 
-    # plot all cells task unique MI
-    ax[1].plot(dMIu.values.T, lw=0.5)
-    ax[1].set_ylabel('unique task MI per cell')
-    ax[1].set_xticks(range(dMI.shape[1]))
-    ax[1].set_xticklabels(dMI.columns.get_level_values('state_chan'))
+    ax[0].legend()
+    ax[0].set_xlabel('Full model post-passive')
+    ax[0].set_ylabel('Unique task post-passive')
+    ax[0].plot([-1, 1], [-1, 1], 'k--')
+    ax[0].axhline(0, linestyle='--', color='k')
+    ax[0].axvline(0, linestyle='--', color='k')
+    ax[0].axis('square')
 
     # plot mean MI over cells for pupil, task unique, and overall state
-    ax[2].set_title('Total cells going into average: {0}'.format(dMI.shape[0]))
-    ax[2].plot(dMIu.mean(axis=0).values, '-', lw=2, color=common.color_b, marker='o', label='unique task')
-    ax[2].plot(dMI.mean(axis=0).values, '--', lw=2, color=common.color_b, marker='o', label='overall')
-    ax[2].plot(dMI0.mean(axis=0).values, '--', color=common.color_p, lw=2, marker='o', label='pupil')
-    ax[2].legend()
+    ax[1].set_title('total cells: {0}, \n state cells: {1}, \n stable across all blocks: {2}'.format(total_cells, sig_state_cells, stable_cells),
+            fontsize=8)
+    ax[1].set_title('Total cells going into average: {0}'.format(dMI.shape[0]))
+    ax[1].plot(dMIu.mean(axis=0).values, '-', lw=2, color=common.color_b, marker='o', label='unique task')
+    ax[1].plot(dMI.mean(axis=0).values, '--', lw=2, color=common.color_b, marker='o', label='overall')
+    ax[1].plot(dMI0.mean(axis=0).values, '--', color=common.color_p, lw=2, marker='o', label='pupil')
+    ax[1].legend()
 
-    ax[2].axhline(0, linestyle='--', color='grey', lw=2)
-    ax[2].set_ylabel('mean MI')
-    ax[2].set_xticks(np.arange(dMI.shape[1]))
-    ax[2].set_xticklabels(dMI.columns.get_level_values('state_chan'))
-    ax[2].set_xlabel('behavioral block')
+    ax[1].axhline(0, linestyle='--', color='grey', lw=2)
+    ax[1].set_ylabel('mean MI')
+    ax[1].set_xticks(np.arange(dMI.shape[1]))
+    ax[1].set_xticklabels(dMI.columns.get_level_values('state_chan'))
+    ax[1].set_xlabel('behavioral block')
 
     f.tight_layout()
 
