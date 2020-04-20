@@ -113,6 +113,50 @@ else:
                 pass
         IC_pas = IC_pas[~IC_pas.cellid.str.contains('AMT')]
 
+        # change task significance to be determined with the PAS model
+        dump_results = 'd_pup_pas_sdexp.csv'
+        model_string = 'st.pup.pas'
+        p0_model = 'st.pup0.pas'
+        b0_model = 'st.pup.pas0'
+        shuf_model = 'st.pup0.pas0'
+        octave_cutoff = 0.5
+        r0_threshold = 0
+        A1_afl = helper.preprocess_sdexp_dump(dump_results,
+                                        batch=307,
+                                        full_model=model_string,
+                                        p0=p0_model,
+                                        b0=b0_model,
+                                        shuf_model=shuf_model,
+                                        r0_threshold=r0_threshold,
+                                        octave_cutoff=octave_cutoff,
+                                        pas_model=True,
+                                        path=dump_path)
+
+        task_only = A1_afl[A1_afl['sig_utask'] & ~A1_afl['sig_upupil']].index.unique().tolist()
+        pupil_only = A1_afl[~A1_afl['sig_utask'] & A1_afl['sig_upupil']].index.unique().tolist()
+        both = A1_afl[A1_afl['sig_utask'] & A1_afl['sig_upupil']].index.unique().tolist()
+        task_or_pupil = [c for c in A1_afl[A1_afl['sig_state']].index.unique() if \
+                                (c not in task_only) & (c not in pupil_only) & (c not in both)] 
+        A1_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
+
+        IC_afl = helper.preprocess_sdexp_dump(dump_results,
+                                        batch=309,
+                                        full_model=model_string,
+                                        p0=p0_model,
+                                        b0=b0_model,
+                                        shuf_model=shuf_model,
+                                        r0_threshold=r0_threshold,
+                                        octave_cutoff=octave_cutoff,
+                                        pas_model=True,
+                                        path=dump_path)
+        task_only = IC_afl[IC_afl['sig_utask'] & ~IC_afl['sig_upupil']].index.unique().tolist()
+        pupil_only = IC_afl[~IC_afl['sig_utask'] & IC_afl['sig_upupil']].index.unique().tolist()
+        both = IC_afl[IC_afl['sig_utask'] & IC_afl['sig_upupil']].index.unique().tolist()
+        task_or_pupil = [c for c in IC_afl[IC_afl['sig_state']].index.unique() if \
+                                (c not in task_only) & (c not in pupil_only) & (c not in both)] 
+        IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
+
+
         _ = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
 
         _ = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
