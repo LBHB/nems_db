@@ -16,8 +16,8 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 from nems import get_setting
-import helpers as helper
-import common
+import nems_lbhb.pupil_behavior_scripts.common as common
+import nems_lbhb.pupil_behavior_scripts.helpers as helper
 
 PAS_ONLY = True
 dump_path = get_setting('NEMS_RESULTS_DIR')
