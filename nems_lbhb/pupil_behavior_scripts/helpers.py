@@ -208,12 +208,17 @@ def preprocess_stategain_dump(df_name, batch, full_model=None, p0=None, b0=None,
     
     
 def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shuf_model=None, octave_cutoff=0.5, r0_threshold=0,
-                                 path='/auto/data/nems_db/results/'):
+                                 pas_model=False, path='/auto/data/nems_db/results/'):
     db_path = path
     cutoff = octave_cutoff
     
     # load model results data
     dMI = pd.read_csv(os.path.join(db_path, str(batch), df_name), index_col=0)
+
+    if pas_model:
+        task_regex = 'PASSIVE'
+    else:
+        task_regex = 'ACTIVE|active'
 
     try:
         dMI['r'] = [np.float(r.strip('[]')) for r in dMI['r'].values]
@@ -226,8 +231,8 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     
     # ========================== get sig overall state cells ==============================
     cols = ['cellid', 'state_chan_alt', 'r', 'r_se', 'isolation']
-    state_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols].merge(\
-                    dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols], \
+    state_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
+                    dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
                     on=['cellid', 'state_chan_alt'])    
     state_merge['sig_state'] = [True if ((state_merge.iloc[i]['r_x'] - state_merge.iloc[i]['r_y']) > 
                                            (state_merge.iloc[i]['r_se_x'] + state_merge.iloc[i]['r_se_y'])) else False for i in range(state_merge.shape[0])]
@@ -243,8 +248,8 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     # =================== get unique task model params / MI ===============================
     cols = ['cellid', 'state_chan_alt', 'MI', 'gain_mod', 'dc_mod', 'r', 'r_se']
-    utask_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols].merge(\
-                    dMI[(dMI['state_sig']==b0) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols], \
+    utask_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
+                    dMI[(dMI['state_sig']==b0) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
                     on=['cellid', 'state_chan_alt'])
 
     utask_merge['gain_task_unique'] = utask_merge['gain_mod_x'] - utask_merge['gain_mod_y']
@@ -263,8 +268,8 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     # =================== get overall task model params / MI ===============================
     if p0 is not None:
         cols = ['cellid', 'state_chan_alt', 'MI', 'gain_mod', 'dc_mod', 'r', 'r_se']
-        task_merge = dMI[(dMI['state_sig']==p0) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols].merge(\
-                        dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains('ACTIVE|active', regex=True))][cols], \
+        task_merge = dMI[(dMI['state_sig']==p0) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
+                        dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
                         on=['cellid', 'state_chan_alt'])
 
         task_merge['gain_task'] = task_merge['gain_mod_x'] - task_merge['gain_mod_y']
@@ -328,7 +333,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     psth_cells = dMI[(dMI.state_sig==shuf_model) & (dMI.r > r0_threshold)].cellid.unique()
 
     # merge results into single df
-    if 'beh' in full_model:
+    if ('beh' in full_model) | pas_model:
         # "target freq is meaningless because could change between files"
         df = task_merge.merge(utask_merge, on=['cellid', 'state_chan_alt'])
         df = df.merge(state_merge, on=['cellid', 'state_chan_alt'])
@@ -339,7 +344,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         df.index = df.cellid
         df = df.drop(columns=['cellid'])
 
-        df = df.merge(dBF, left_index=True, right_index=True)
+        # df = df.merge(dBF, left_index=True, right_index=True)
 
         df['oct_diff'] = np.nan
         df['ON_BF'] = True
