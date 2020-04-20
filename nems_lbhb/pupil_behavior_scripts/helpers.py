@@ -612,12 +612,16 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     return f
 
 
-def hlf_analysis(df, state_list, norm_sign=True, sig_cells_only=False, states=None, scatter_sig_cells=None):
+def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=False, states=None, scatter_sig_cells=None):
     """
     Copied/modified version of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
     """
     # figure out what cells show significant state effect. Can just use
     # pupil for this, so that there's one entry per cell (rtest is the same for all states)
+
+    if states is None:
+        states = ['ACTIVE_1','PASSIVE_1', 'ACTIVE_2', 'PASSIVE_2']
+    
     da = df[df['state_chan']=='pupil']
     dp = pd.pivot_table(da, index='cellid',columns='state_sig',values=['r','r_se'])
 
@@ -630,12 +634,20 @@ def hlf_analysis(df, state_list, norm_sign=True, sig_cells_only=False, states=No
     dp = pd.pivot_table(dfull, index='cellid',columns='state_chan',values=['MI'])
     dp0 = pd.pivot_table(dpup, index='cellid',columns='state_chan',values=['MI'])
 
-    if states is not None:
-        states = ['ACTIVE_1','PASSIVE_1', 'ACTIVE_2', 'PASSIVE_2']
-    
     dMI = dp.loc[:, pd.IndexSlice['MI', states]]
     dMI0 = dp0.loc[:, pd.IndexSlice['MI', states]]
     dMIu = dMI - dMI0
+    
+    if pas_df is not None:
+        dfull_pas = pas_df[pas_df['state_sig']=='st.pup.pas']
+        dpup_pas = pas_df[pas_df['state_sig']=='st.pup.pas0'] 
+        dp_pas = pd.pivot_table(dfull_pas, index='cellid',columns='state_chan_alt',values=['MI'])
+        dp0_pas = pd.pivot_table(dpup_pas, index='cellid',columns='state_chan_alt',values=['MI'])
+
+        dMI_pas = dp_pas.loc[:, pd.IndexSlice['MI', states]]
+        dMI0_pas = dp0_pas.loc[:, pd.IndexSlice['MI', states]]
+        dMIu_pas = dMI_pas - dMI0_pas
+
     
     # add zeros for "PASSIVE_0" col
     dMI.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
@@ -652,8 +664,13 @@ def hlf_analysis(df, state_list, norm_sign=True, sig_cells_only=False, states=No
     dMI0 = dMI0.reindex(columns=new_cols, fill_value=0)
     dMIu = dMIu.reindex(columns=new_cols, fill_value=0)
 
-    dMI_all = dMI.copy()
-    dMIu_all = dMIu.copy()
+    # define data to use for scatter plot
+    if pas_df is not None:
+        dMI_all = dMI_pas.copy()
+        dMIu_all = dMIu_pas.copy()
+    else:
+        dMI_all = dMI.copy()
+        dMIu_all = dMIu.copy()
 
     if norm_sign:
         b = dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1).fillna(0)

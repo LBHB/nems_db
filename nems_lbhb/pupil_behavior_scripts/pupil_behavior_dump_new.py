@@ -219,3 +219,16 @@ for batch in batches:
     d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_afl_pxf_sdexp_ap1.csv'))
 
 
+
+# ======================== sdexp pas only models =============================
+
+# pup + pas models
+log.info('Saving sdexp pup pas only models... ')
+state_list = ['st.pup0.pas0','st.pup0.pas','st.pup.pas0','st.pup.pas']
+basemodel2 = "-ref-pas-psthfr.s_sdexp.S"
+loader = "psth.fs20.pup-ld-"
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_pup_pas_sdexp.csv'))
