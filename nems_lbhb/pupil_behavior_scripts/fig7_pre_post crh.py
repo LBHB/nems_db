@@ -19,6 +19,7 @@ from nems import get_setting
 import helpers as helper
 import common
 
+PAS_ONLY = True
 dump_path = get_setting('NEMS_RESULTS_DIR')
 basemodel = "-ref-psthfr.s_sdexp.S"
 state_list = ['st.pup0.fil0', 'st.pup0.fil', 'st.pup.fil0', 'st.pup.fil']
@@ -70,8 +71,6 @@ task_or_pupil = [c for c in A1_afl[A1_afl['sig_state']].index.unique() if \
                         (c not in task_only) & (c not in pupil_only) & (c not in both)] 
 A1_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
-helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
-
 IC_afl = helper.preprocess_sdexp_dump(dump_results,
                                   batch=309,
                                   full_model=model_string,
@@ -88,4 +87,32 @@ task_or_pupil = [c for c in IC_afl[IC_afl['sig_state']].index.unique() if \
                         (c not in task_only) & (c not in pupil_only) & (c not in both)] 
 IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
-helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
+if not PAS_ONLY:
+        _ = helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
+
+        _ = helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
+
+else:
+        # load pas only models
+        batch=307
+        A1_pas = pd.read_csv(os.path.join(dump_path, str(batch), 'd_pup_pas_sdexp.csv'))
+        # convert r values to numeric
+        try:
+                A1_pas['r'] = [np.float(r.strip('[]')) for r in A1_pas['r'].values]
+                A1_pas['r_se'] = [np.float(r.strip('[]')) for r in A1_pas['r_se'].values]
+        except:
+                pass
+        A1_pas = A1_pas[~A1_pas.cellid.str.contains('AMT')]
+        batch=309
+        IC_pas = pd.read_csv(os.path.join(dump_path, str(batch), 'd_pup_pas_sdexp.csv'))
+        # convert r values to numeric
+        try:
+                IC_pas['r'] = [np.float(r.strip('[]')) for r in IC_pas['r'].values]
+                IC_pas['r_se'] = [np.float(r.strip('[]')) for r in IC_pas['r_se'].values]
+        except:
+                pass
+        IC_pas = IC_pas[~IC_pas.cellid.str.contains('AMT')]
+
+        _ = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
+
+        _ = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
