@@ -20,6 +20,7 @@ import helpers as helper
 import common
 
 PAS_ONLY = True
+sig_cells_only = True # if true, for the line plot, only average over cells with sig. state effects
 dump_path = get_setting('NEMS_RESULTS_DIR')
 basemodel = "-ref-psthfr.s_sdexp.S"
 state_list = ['st.pup0.fil0', 'st.pup0.fil', 'st.pup.fil0', 'st.pup.fil']
@@ -88,9 +89,9 @@ task_or_pupil = [c for c in IC_afl[IC_afl['sig_state']].index.unique() if \
 IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
 if not PAS_ONLY:
-        _ = helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
+        _ = helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
 
-        _ = helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
+        _ = helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
 
 else:
         # load pas only models
@@ -157,6 +158,6 @@ else:
         IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
 
-        _ = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=A1_sig)
+        _ = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
 
-        _ = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=True, states=states, scatter_sig_cells=IC_sig)
+        _ = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)

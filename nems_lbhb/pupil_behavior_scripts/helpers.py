@@ -216,7 +216,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     dMI = pd.read_csv(os.path.join(db_path, str(batch), df_name), index_col=0)
 
     if pas_model:
-        task_regex = 'PASSIVE'
+        task_regex = 'PASSIVE_1'
     else:
         task_regex = 'ACTIVE|active'
 
@@ -228,7 +228,6 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     # remove AMT cells
     dMI = dMI[~dMI.cellid.str.contains('AMT')]
-    
     # ========================== get sig overall state cells ==============================
     cols = ['cellid', 'state_chan_alt', 'r', 'r_se', 'isolation']
     state_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
@@ -331,7 +330,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     # =========================== get sig sensory cells ============================
     psth_cells = dMI[(dMI.state_sig==shuf_model) & (dMI.r > r0_threshold)].cellid.unique()
-
+    
     # merge results into single df
     if ('beh' in full_model) | pas_model:
         # "target freq is meaningless because could change between files"
@@ -363,6 +362,11 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
             df = task_merge.merge(dTF, on=['cellid', 'state_chan_alt'])
             df = df.merge(utask_merge, on=['cellid', 'state_chan_alt'])
             df = df.merge(state_merge, on=['cellid', 'state_chan_alt'])
+            try: 
+                difficulty = pd.read_csv(os.path.join(db_path, str(batch), 'd_difficulty.csv'), index_col=0)
+                df = df.merge(difficulty, on=['cellid', 'state_chan_alt'])
+            except:
+                pass
             df = df.merge(pupil_merge, on=['cellid'])
             df = df.merge(upupil_merge, on=['cellid'])
             df.index = df.cellid
@@ -397,11 +401,17 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     return df
 
 
-def stripplot_df(df, fix_ylims=False, group_files=True):
+def stripplot_df(df, fix_ylims=False, hue='ON_BF', group_files=True):
 
     if group_files:
         data = df.groupby(by=['cellid', 'ON_BF']).mean().copy()
         data['ON_BF'] = data.index.get_level_values('ON_BF')
+        dtypes = {'ON_BF': bool, 
+                  'OFF_BF': bool,
+                  'sig_upupil': bool, 
+                  'sig_utask': bool,
+                  'difficulty': bool}
+        data = data.astype(dtypes)
     else:
         data = df.copy()
 
@@ -409,57 +419,57 @@ def stripplot_df(df, fix_ylims=False, group_files=True):
 
     # BEHAVIOR results
     # MI
-    sns.stripplot(x='sig_task', y='MI_task', hue='ON_BF', data=data, dodge=True, ax=ax[0, 0])
+    sns.stripplot(x='sig_utask', y='MI_task', hue=hue, data=data, dodge=True, ax=ax[0, 0])
     ax[0, 0].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_task'] & data['ON_BF']]['MI_task'], data[data['sig_task'] & data['OFF_BF']]['MI_task']).pvalue, 3)
-    on_median = np.round(data[data['sig_task'] & data['ON_BF']]['MI_task'].median(), 3)
-    off_median = np.round(data[data['sig_task'] & data['OFF_BF']]['MI_task'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_utask'] & data['ON_BF']]['MI_task'], data[data['sig_utask'] & data['OFF_BF']]['MI_task']).pvalue, 3)
+    on_median = np.round(data[data['sig_utask'] & data['ON_BF']]['MI_task'].median(), 3)
+    off_median = np.round(data[data['sig_utask'] & data['OFF_BF']]['MI_task'].median(), 3)
     ax[0, 0].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
     # Gain
-    sns.stripplot(x='sig_task', y='gain_task', hue='ON_BF', data=data, dodge=True, ax=ax[0, 1])
+    sns.stripplot(x='sig_utask', y='gain_task', hue=hue, data=data, dodge=True, ax=ax[0, 1])
     ax[0, 1].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_task'] & data['ON_BF']]['gain_task'], data[data['sig_task'] & data['OFF_BF']]['gain_task']).pvalue, 3)
-    on_median = np.round(data[data['sig_task'] & data['ON_BF']]['gain_task'].median(), 3)
-    off_median = np.round(data[data['sig_task'] & data['OFF_BF']]['gain_task'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_utask'] & data['ON_BF']]['gain_task'], data[data['sig_utask'] & data['OFF_BF']]['gain_task']).pvalue, 3)
+    on_median = np.round(data[data['sig_utask'] & data['ON_BF']]['gain_task'].median(), 3)
+    off_median = np.round(data[data['sig_utask'] & data['OFF_BF']]['gain_task'].median(), 3)
     ax[0, 1].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
     # DC
-    sns.stripplot(x='sig_task', y='dc_task', hue='ON_BF', data=data, dodge=True, ax=ax[0, 2])
+    sns.stripplot(x='sig_utask', y='dc_task', hue=hue, data=data, dodge=True, ax=ax[0, 2])
     ax[0, 2].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_task'] & data['ON_BF']]['dc_task'], data[data['sig_task'] & data['OFF_BF']]['dc_task']).pvalue, 3)
-    on_median = np.round(data[data['sig_task'] & data['ON_BF']]['dc_task'].median(), 3)
-    off_median = np.round(data[data['sig_task'] & data['OFF_BF']]['dc_task'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_utask'] & data['ON_BF']]['dc_task'], data[data['sig_utask'] & data['OFF_BF']]['dc_task']).pvalue, 3)
+    on_median = np.round(data[data['sig_utask'] & data['ON_BF']]['dc_task'].median(), 3)
+    off_median = np.round(data[data['sig_utask'] & data['OFF_BF']]['dc_task'].median(), 3)
     ax[0, 2].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
     # PUPIL results
     # MI
-    sns.stripplot(x='sig_pupil', y='MI_pupil', hue='ON_BF', data=data, dodge=True, ax=ax[1, 0])
+    sns.stripplot(x='sig_upupil', y='MI_pupil', hue=hue, data=data, dodge=True, ax=ax[1, 0])
     ax[1, 0].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_pupil'] & data['ON_BF']]['MI_pupil'], data[data['sig_pupil'] & data['OFF_BF']]['MI_pupil']).pvalue, 3)
-    on_median = np.round(data[data['sig_pupil'] & data['ON_BF']]['MI_pupil'].median(), 3)
-    off_median = np.round(data[data['sig_pupil'] & data['OFF_BF']]['MI_pupil'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_upupil'] & data['ON_BF']]['MI_pupil'], data[data['sig_upupil'] & data['OFF_BF']]['MI_pupil']).pvalue, 3)
+    on_median = np.round(data[data['sig_upupil'] & data['ON_BF']]['MI_pupil'].median(), 3)
+    off_median = np.round(data[data['sig_upupil'] & data['OFF_BF']]['MI_pupil'].median(), 3)
     ax[1, 0].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
     # Gain
-    sns.stripplot(x='sig_pupil', y='gain_pupil', hue='ON_BF', data=data, dodge=True, ax=ax[1, 1])
+    sns.stripplot(x='sig_upupil', y='gain_pupil', hue=hue, data=data, dodge=True, ax=ax[1, 1])
     ax[1, 1].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_pupil'] & data['ON_BF']]['gain_pupil'], data[data['sig_pupil'] & data['OFF_BF']]['gain_pupil']).pvalue, 3)
-    on_median = np.round(data[data['sig_pupil'] & data['ON_BF']]['gain_pupil'].median(), 3)
-    off_median = np.round(data[data['sig_pupil'] & data['OFF_BF']]['gain_pupil'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_upupil'] & data['ON_BF']]['gain_pupil'], data[data['sig_upupil'] & data['OFF_BF']]['gain_pupil']).pvalue, 3)
+    on_median = np.round(data[data['sig_upupil'] & data['ON_BF']]['gain_pupil'].median(), 3)
+    off_median = np.round(data[data['sig_upupil'] & data['OFF_BF']]['gain_pupil'].median(), 3)
     ax[1, 1].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
     # DC
-    sns.stripplot(x='sig_pupil', y='dc_pupil', hue='ON_BF', data=data, dodge=True, ax=ax[1, 2])
+    sns.stripplot(x='sig_upupil', y='dc_pupil', hue=hue, data=data, dodge=True, ax=ax[1, 2])
     ax[1, 2].axhline(0, linestyle='--', color='k')
-    pval = np.round(st.ranksums(data[data['sig_pupil'] & data['ON_BF']]['dc_pupil'], data[data['sig_pupil'] & data['OFF_BF']]['dc_pupil']).pvalue, 3)
-    on_median = np.round(data[data['sig_pupil'] & data['ON_BF']]['dc_pupil'].median(), 3)
-    off_median = np.round(data[data['sig_pupil'] & data['OFF_BF']]['dc_pupil'].median(), 3)
+    pval = np.round(st.ranksums(data[data['sig_upupil'] & data['ON_BF']]['dc_pupil'], data[data['sig_upupil'] & data['OFF_BF']]['dc_pupil']).pvalue, 3)
+    on_median = np.round(data[data['sig_upupil'] & data['ON_BF']]['dc_pupil'].median(), 3)
+    off_median = np.round(data[data['sig_upupil'] & data['OFF_BF']]['dc_pupil'].median(), 3)
     ax[1, 2].set_title('sig ON vs. OFF, pval: {0} \n'
                         'ON median: {1}, OFF median: {2}'.format(pval, on_median, off_median))
 
@@ -635,22 +645,28 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
 
     dfull = df[df['state_sig']==state_list[3]]
     dpup = df[df['state_sig']==state_list[2]] 
+    dbeh = df[df['state_sig']==state_list[1]] 
     dp = pd.pivot_table(dfull, index='cellid',columns='state_chan',values=['MI'])
+    dp_beh = pd.pivot_table(dbeh, index='cellid',columns='state_chan',values=['MI'])
     dp0 = pd.pivot_table(dpup, index='cellid',columns='state_chan',values=['MI'])
 
     dMI = dp.loc[:, pd.IndexSlice['MI', states]]
+    dMIbeh = dp_beh.loc[:, pd.IndexSlice['MI', states]]
     dMI0 = dp0.loc[:, pd.IndexSlice['MI', states]]
     dMIu = dMI - dMI0
     
     if pas_df is not None:
         dfull_pas = pas_df[pas_df['state_sig']=='st.pup.pas']
+        dbeh_pas = pas_df[pas_df['state_sig']=='st.pup0.pas']
         dpup_pas = pas_df[pas_df['state_sig']=='st.pup.pas0'] 
         dp_pas = pd.pivot_table(dfull_pas, index='cellid',columns='state_chan_alt',values=['MI'])
+        dp_beh_pas = pd.pivot_table(dbeh_pas, index='cellid',columns='state_chan_alt',values=['MI'])
         dp0_pas = pd.pivot_table(dpup_pas, index='cellid',columns='state_chan_alt',values=['MI'])
 
         dMI_pas = dp_pas.loc[:, pd.IndexSlice['MI', states]]
         dMI0_pas = dp0_pas.loc[:, pd.IndexSlice['MI', states]]
         dMIu_pas = dMI_pas - dMI0_pas
+        dMI_pas = dp_beh_pas.loc[:, pd.IndexSlice['MI', states]]
 
     
     # add zeros for "PASSIVE_0" col
@@ -673,7 +689,8 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
         dMI_all = dMI_pas.copy()
         dMIu_all = dMIu_pas.copy()
     else:
-        dMI_all = dMI.copy()
+        # dMI_all = dMI.copy()
+        dMI_all = dMIbeh.copy()
         dMIu_all = dMIu.copy()
 
     if norm_sign:
@@ -730,8 +747,8 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
                         dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color, edgecolor='white', s=50, label=category)
 
     ax[0].legend()
-    ax[0].set_xlabel('Full model post-passive')
-    ax[0].set_ylabel('Unique task post-passive')
+    ax[0].set_xlabel('Pre vs. post MI, task only')
+    ax[0].set_ylabel('Pre vs. post MI, task unique')
     ax[0].plot([-1, 1], [-1, 1], 'k--')
     ax[0].axhline(0, linestyle='--', color='k')
     ax[0].axvline(0, linestyle='--', color='k')
