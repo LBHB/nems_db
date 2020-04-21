@@ -14,7 +14,8 @@ from itertools import product
 
 import nems_lbhb.stateplots as stateplots
 import nems.plots.api as nplt
-import common
+import nems_lbhb.pupil_behavior_scripts.common as common
+
 
 
 def preprocess_stategain_dump(df_name, batch, full_model=None, p0=None, b0=None, shuf_model=None, octave_cutoff=0.5, r0_threshold=0,

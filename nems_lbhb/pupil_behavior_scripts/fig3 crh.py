@@ -15,8 +15,8 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
-import common
-import helpers as helper
+import nems_lbhb.pupil_behavior_scripts.common as common
+import nems_lbhb.pupil_behavior_scripts.helpers as helper
 from nems import get_setting
 
 # set path to dump file
