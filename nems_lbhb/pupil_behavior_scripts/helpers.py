@@ -329,6 +329,25 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         upupil_merge = upupil_merge.drop(columns=[c for c in upupil_merge.columns if ('_x' in c) | ('_y' in c)])
         upupil_merge = upupil_merge.drop(columns=['state_chan_alt'])
 
+        # =================== get pupil/task interaction model params / MI ===============================
+        cols = ['cellid', 'state_chan_alt', 'MI', 'gain_mod', 'dc_mod', 'r', 'r_se']
+        task_pupil_merge = dMI[(dMI['state_sig']==full_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
+                        dMI[(dMI['state_sig']==p0) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
+                        on=['cellid', 'state_chan_alt'])
+
+        task_pupil_merge['gain_pxf_unique'] = task_pupil_merge['gain_mod_x'] - task_pupil_merge['gain_mod_y']
+        task_pupil_merge['MI_pxf_unique'] = task_pupil_merge['MI_x'] - task_pupil_merge['MI_y']
+        task_pupil_merge['dc_pxf_unique'] = task_pupil_merge['dc_mod_x'] - task_pupil_merge['dc_mod_y']
+
+        task_pupil_merge['sig_upxf'] = [True if ((task_pupil_merge.iloc[i]['r_x'] - task_pupil_merge.iloc[i]['r_y']) > 
+                                            (task_pupil_merge.iloc[i]['r_se_x'] + task_pupil_merge.iloc[i]['r_se_y'])) else False for i in range(task_pupil_merge.shape[0])]
+
+        # add unique task rpred
+        task_pupil_merge['r_pxf_unique'] = task_pupil_merge['r_x'].pow(2) - task_pupil_merge['r_y'].pow(2)
+
+        # strip extraneous columns
+        task_pupil_merge = task_pupil_merge.drop(columns=[c for c in task_pupil_merge.columns if ('_x' in c) | ('_y' in c)])
+
     # =========================== get sig sensory cells ============================
     psth_cells = dMI[(dMI.state_sig==shuf_model) & (dMI.r > r0_threshold)].cellid.unique()
     
@@ -338,8 +357,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         df = task_merge.merge(utask_merge, on=['cellid', 'state_chan_alt'])
         df = df.merge(state_merge, on=['cellid', 'state_chan_alt'])
         if p0 is not None:
+            df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
             df = df.merge(pupil_merge, on=['cellid'])
             df = df.merge(upupil_merge, on=['cellid'])
+
 
         df.index = df.cellid
         df = df.drop(columns=['cellid'])
@@ -368,6 +389,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
                 df = df.merge(difficulty, on=['cellid', 'state_chan_alt'])
             except:
                 pass
+            df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
             df = df.merge(pupil_merge, on=['cellid'])
             df = df.merge(upupil_merge, on=['cellid'])
             df.index = df.cellid
