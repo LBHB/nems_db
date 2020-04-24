@@ -22,6 +22,9 @@ from nems import get_setting
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = False
+
 # ===================================================== pupil behavior data =======================================================
 # SPECIFY models
 USE_AFL = True
@@ -79,11 +82,13 @@ if group_files & ('beh' not in model_string):
 
 # 6A
 f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, colors=common.color_list, title='A1')
-# f.savefig('/tmp/Fig6_A1_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_A1.pdf'))
 
 # 6B
 f = helper.aud_vs_state(df.loc[df.area.isin(['ICC', 'ICX'])], nb=5, colors=common.color_list, title='IC')
-# f.savefig('/tmp/Fig6_IC_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
 
 
@@ -147,9 +152,10 @@ if group_files & ('beh' not in model_string):
 
 
 f = aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='A1')
-# f.savefig('/tmp/Fig6_A1_beh_only.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_A1.pdf'))
 
 f = aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='IC')
-# f.savefig('/tmp/Fig6_IC_beh_only.pdf')
-
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_IC.pdf'))
 

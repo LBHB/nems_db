@@ -19,6 +19,10 @@ from nems import get_setting
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
+
 PAS_ONLY = True
 sig_cells_only = True # if true, for the line plot, only average over cells with sig. state effects
 dump_path = get_setting('NEMS_RESULTS_DIR')
@@ -89,9 +93,9 @@ task_or_pupil = [c for c in IC_afl[IC_afl['sig_state']].index.unique() if \
 IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
 if not PAS_ONLY:
-        _ = helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
+        fA1, _1, _2 = helper.hlf_analysis(A1, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
 
-        _ = helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
+        fIC, _1, _2 = helper.hlf_analysis(IC, state_list, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
 
 else:
         # load pas only models
@@ -158,6 +162,11 @@ else:
         IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
 
-        _ = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
+        fA1, _1, _2 = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
 
-        _ = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
+        fIC, _1, _2 = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
+
+
+if save_fig:
+    fA1.savefig(os.path.join(save_path,'fig7_pre_post_A1.pdf'))
+    fIC.savefig(os.path.join(save_path,'fig7_pre_post_IC.pdf'))

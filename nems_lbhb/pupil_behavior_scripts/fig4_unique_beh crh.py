@@ -24,6 +24,9 @@ import nems_lbhb.pupil_behavior_scripts.helpers as helper
 dump_path = get_setting('NEMS_RESULTS_DIR')
 helper_path = os.path.dirname(helper.__file__)
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
 # SPECIFY models
 USE_AFL=True
 if USE_AFL:
@@ -73,12 +76,14 @@ df = pd.concat([A1, IC])
 if group_files & ('beh' not in model_string):
     area = df['area']
     df = df.groupby(by=['cellid', 'ON_BF']).mean()
-    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
+    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c].iloc[0] for c in df.index.get_level_values('cellid')]
+    df=df.reset_index()
     
-fh, axs = plt.subplots(3, 3, figsize=(12,12))
+fh, axs = plt.subplots(2, 2, figsize=(5,5))
 
 # Figure 4A
 # A1
+rr=(-0.55, 0.55)
 common.scat_states_crh(df, x_model='MI_task',
             y_model='MI_task_unique',
             area='A1',
@@ -86,9 +91,9 @@ common.scat_states_crh(df, x_model='MI_task',
             xlabel='MI task only (pupil ignored)',
             ylabel='MI task unique (pupil regressed out)',
             title='A1',
-            xlim=(-0.7,0.7),
-            ylim=(-0.7,0.7),
-                   ax=axs[0,0])
+            xlim=rr,
+            ylim=rr,
+            ax=axs[0,0])
 
 # ICC
 common.scat_states_crh(df, x_model='MI_task',
@@ -98,10 +103,10 @@ common.scat_states_crh(df, x_model='MI_task',
             xlabel='MI task only (pupil ignored)',
             ylabel='MI task unique (pupil regressed out)',
             title='ICC',
-            xlim=(-0.4,0.6),
-            ylim=(-0.4,0.6),
+            xlim=rr,
+            ylim=rr,
             marker='^',
-                   ax=axs[0,1])
+            ax=axs[0,1])
 
 # ICX
 common.scat_states_crh(df, x_model='MI_task',
@@ -110,11 +115,11 @@ common.scat_states_crh(df, x_model='MI_task',
             save=False,
             xlabel='MI task only (pupil ignored)',
             ylabel='MI task unique (pupil regressed out)',
-            title='ICC',
-            xlim=(-0.4,0.6),
-            ylim=(-0.4,0.6),
+            title='ICC+ICX',
+            xlim=rr,
+            ylim=rr,
             marker='o',
-                   ax=axs[0,2])
+            ax=axs[0,1])
 
 # Figure 4B
 
@@ -128,42 +133,24 @@ x_axis_ICX = np.arange(0, (df.area=='ICX').sum())
 x_axis_IC = np.arange(0, df.area.isin(['ICC', 'ICX']).sum())
 
 axs[1, 0].bar(x_axis_A1, df_MI_only_sorted.loc[df_MI_only_sorted.area=='A1', 'MI_task'], color = common.color_b, edgecolor = common.color_b)
+axs[1, 0].bar(x_axis_A1, df_MI_unique_sorted.loc[df_MI_unique_sorted.area=='A1', 'MI_task_unique'], color = common.color_b,
+        edgecolor = common.color_p, linewidth=0.5)
 axs[1, 0].set_ylim((-0.7,0.7))
 axs[1, 0].set_xlabel('A1 units')
-axs[1, 0].set_ylabel('MI_task only (pupil ignored)')
-axs[1, 0].set_title('MI_task only (A1)')
+axs[1, 0].set_ylabel('MI_task only/unique')
 #plt.savefig('MI_task_only_A1.pdf')
 nplt.ax_remove_box(axs[1,0])
 
 
-axs[2, 0].bar(x_axis_A1, df_MI_unique_sorted.loc[df_MI_unique_sorted.area=='A1', 'MI_task_unique'], color = common.color_b,
-        edgecolor = common.color_p, linewidth=0.5)
-axs[2, 0].set_ylim((-0.7,0.7))
-axs[2, 0].set_xlabel('A1 units')
-axs[2, 0].set_ylabel('MI_task unique (pupil regressed out)')
-axs[2, 0].set_title('MI_task unique (A1)')
-#plt.savefig('MI_task_unique_A1.pdf')
-nplt.ax_remove_box(axs[2,0])
-
-
-axs[1, 1].bar(x_axis_IC, df_MI_only_sorted.loc[df_MI_only_sorted.area.isin(['ICC', 'ICX']), 'MI_task'], 
+axs[1, 1].bar(x_axis_IC, df_MI_only_sorted.loc[df_MI_only_sorted.area.isin(['ICC', 'ICX']), 'MI_task'],
                                 color = common.color_b, edgecolor = common.color_b)
+axs[1, 1].bar(x_axis_IC, df_MI_unique_sorted.loc[df_MI_unique_sorted.area.isin(['ICC', 'ICX']), 'MI_task_unique'],
+                                color=common.color_b, edgecolor=common.color_p, linewidth=0.5)
 axs[1, 1].set_ylim((-0.7,0.7))
 axs[1, 1].set_xlabel('IC units')
-axs[1, 1].set_ylabel('MI_task only (pupil ignored)')
-axs[1, 1].set_title('MI_task only (IC)')
-#plt.savefig('MI_task_only_IC.pdf')
-nplt.ax_remove_box(axs[1, 1])
-
-
-axs[2, 1].bar(x_axis_IC, df_MI_unique_sorted.loc[df_MI_unique_sorted.area.isin(['ICC', 'ICX']), 'MI_task_unique'], 
-                                color=common.color_b, edgecolor=common.color_p, linewidth=0.5)
-axs[2, 1].set_ylim((-0.7,0.7))
-axs[2, 1].set_xlabel('IC units')
-axs[2, 1].set_ylabel('MI_task unique (pupil regressed out)')
-axs[2, 1].set_title('MI_task unique (IC)')
+axs[1, 1].set_ylabel('MI_task only/unique')
 #plt.savefig('MI_task_unique_IC.pdf')
-nplt.ax_remove_box(axs[2,1])
+nplt.ax_remove_box(axs[1,1])
 
 
 # ===================================== Stats stuff ==============================================
@@ -303,4 +290,6 @@ print(diff_IC.median())
 print(diff_A1_sig_state.median())
 print(diff_IC_sig_state.median())
 
+if save_fig:
+    fh.savefig(os.path.join(save_path, 'fig4_unique_beh.pdf'))
 

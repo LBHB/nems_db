@@ -1,3 +1,4 @@
+import os
 import helpers as helper
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -7,7 +8,11 @@ import nems.db as nd
 from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
-r0_threshold = 0.6
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
+
+r0_threshold = 0.5
 octave_cutoff = 0.5
 yaxis_task = 'MI_task_unique'
 AFL = True
@@ -93,3 +98,6 @@ if 0:
     f.canvas.set_window_title('IC')
 
 plt.show()
+
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig10_on_off_BF.pdf'))

@@ -4,12 +4,17 @@ Point is to highlight no substantial variance explained by pxf (no interaction b
 arousal effects and task condition)
 CRH 04/22/2020
 """
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-
+import scipy.stats as ss
 import nems.db as nd
+
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
 
 # load model results
 m = 'psth.fs20.pup-ld-st.pup.afl.pxf0-ref-psthfr.s_sdexp.S_jk.nf20-basic'
@@ -70,3 +75,5 @@ pval = ss.wilcoxon(rA1[mpxf], rA1[m_bp0]).pvalue
 print("A1 r_test: \n pxf: {0}, pxf0: {1}, pval: {2}".format(pxf, pxf0, pval))
 
 
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig8_pup_alf_pxf.pdf'))

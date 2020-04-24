@@ -16,6 +16,16 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 import nems.plots.api as nplt
 
+params = {'legend.fontsize': 6,
+          'figure.figsize': (8, 6),
+          'axes.labelsize': 6,
+          'axes.titlesize': 6,
+          'xtick.labelsize': 6,
+          'ytick.labelsize': 6,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+plt.rcParams.update(params)
+
 color_b = '#C768D8'
 color_p = '#47BF55'
 #color_p = '#4ED163'
@@ -172,7 +182,7 @@ def scat_states_crh(df,
                 title=None,
                 xlim=None,
                 ylim=None,
-                marker='o',
+                marker='o', marker_size=15,
                 ax=None):
     """
     This function makes a scatter plots of identified arguments.
@@ -235,56 +245,56 @@ def scat_states_crh(df,
         x_min = xlim[0]
         x_max = xlim[1]
         y_min, y_max = c, c + slope * (x_max - x_min)
-        plt.plot([x_min, x_max], [y_min, y_max], linewidth=0.5, linestyle='--', color='k')
+        plt.plot([x_min, x_max], [y_min, y_max], linewidth=0.5, linestyle='--', color='k', dashes=(4,2))
 
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
     plt.title(title)
 
-    plt.axvline(0, linestyle='--', linewidth=0.5, color='k')
-    plt.axhline(0, linestyle='--', linewidth=0.5, color='k')
+    plt.axvline(0, linestyle='--', linewidth=0.5, color='k', dashes=(4,2))
+    plt.axhline(0, linestyle='--', linewidth=0.5, color='k', dashes=(4,2))
 
     if hue:
         sns.scatterplot(x=df.loc[x_beh_state & area, x_column].tolist(),
                         y=df.loc[y_beh_state & area, y_column].tolist(),
-                        s=200, hue=df.loc[x_model & x_beh_state & area, hue],
+                        s=marker_size, hue=df.loc[x_model & x_beh_state & area, hue],
                         marker=marker, edgecolors='white', linewidth=0.5)
 
     elif pup_state:
         # plot not significant units
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[0], x_column].tolist(),
                     y=df.loc[y_model & x_beh_state & area & sig_list[0], y_column].tolist(),
-                    s=150, color=colors[0], marker=marker, edgecolors='white', linewidth=0.5)
+                    s=marker_size, color=colors[0], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant state units
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[1], x_column].tolist(),
                     y=df.loc[y_model & x_beh_state & area & sig_list[1], y_column].tolist(),
-                    s=200, color=colors[1], marker=marker, edgecolors='white', linewidth=0.5)
+                    s=marker_size, color=colors[1], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique behavior
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[2], x_column].tolist(),
                     y=df.loc[y_model & x_beh_state & area & sig_list[2], y_column].tolist(),
-                    s=200, color=colors[2], marker=marker, edgecolors='white', linewidth=0.5)
+                    s=marker_size, color=colors[2], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique pupil
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[3], x_column].tolist(),
                     y=df.loc[y_model & x_beh_state & area & sig_list[3], y_column].tolist(),
-                    s=200, color=colors[3], marker=marker, edgecolors='white', linewidth=0.5)
+                    s=marker_size, color=colors[3], marker=marker, edgecolors='white', linewidth=0.5)
 
         # plot significant unique both
         plt.scatter(x=df.loc[x_model & pup_state & area & sig_list[4], x_column].tolist(),
                     y=df.loc[y_model & x_beh_state & area & sig_list[4], y_column].tolist(),
-                    s=200, color=colors[4], marker=marker, edgecolors='white', linewidth=0.5)
+                    s=marker_size, color=colors[4], marker=marker, edgecolors='white', linewidth=0.5)
 
     else:
         # iterate: not significant units, sig state, sig u beh, sig u pup, sig u both
         for i, sig in enumerate(sig_list):
             x = df.loc[area & sig, x_model].values
             y = df.loc[area & sig, y_model].values
+            out_ix = (x <= xlim[0]) | (x >= xlim[1]) |  (y <= xlim[0]) | (y >= xlim[1])
+            x0, y0 = x, y
             x = np.clip(x, xlim[0], xlim[1])
             y = np.clip(y, ylim[0], ylim[1])
-            x_outlier = (x <= xlim[0]) | (x >= xlim[1])
-            y_outlier = (y <= xlim[0]) | (y >= xlim[1])
 
             if i == 0:
                 s = 75
@@ -292,8 +302,10 @@ def scat_states_crh(df,
                 s = 100
 
             # plot current group
-            plt.scatter(x=x, y=y, s=s,
-                        color=colors[i], marker=marker, edgecolors='white', linewidth=0.5)
+            plt.scatter(x=x, y=y, s=marker_size,
+                        color=colors[i], marker=marker, edgecolors='white', linewidth=0.25)
+            for _x,_y,_x0,_y0 in zip(x[out_ix], y[out_ix], x0[out_ix], y0[out_ix]):
+                plt.text(_x,_y,f'({_x0:.2f},{_y0:.2f})',fontsize=5, color=colors[i])
 
     # plot a cellid (e.g. TAR010c-27-2 (A1 behavior cell) or TAR010c-06-1 (A1 pupil cell)) with special color
 

@@ -1,4 +1,5 @@
-import numpy as np 
+import os
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -9,6 +10,9 @@ import helpers as helper
 from nems import get_setting
 
 dump_path = get_setting('NEMS_RESULTS_DIR')
+
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
 
 r0_threshold = 0
 octave_cutoff = 0.5
@@ -97,6 +101,8 @@ ax[1].set_title("IC")
 
 f.tight_layout()
 
+if save_fig:
+    f.savefig(os.path.join(save_path, 'fig9_difficulty_percell.pdf'))
 
 # only look at cells that were recorded in multiple conditions
 f, ax = plt.subplots(1, 1, figsize=(5, 6))
@@ -137,3 +143,7 @@ ax.axhline(0, linestyle='--', color='k')
 f.tight_layout()
 
 plt.show()
+
+if save_fig:
+    f.savefig(os.path.join(save_path, 'fig9_difficulty_sum.pdf'))
+
