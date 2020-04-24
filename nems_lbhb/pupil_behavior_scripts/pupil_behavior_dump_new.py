@@ -130,9 +130,9 @@ for batch in batches:
 # afl only models
 log.info('Saving sdexp afl only models... ')
 state_list = ['st.afl0','st.afl']
-basemodel2 = "-ref-psthfr.s_sdexp.S.new"
-loader = "psth.fs20.pup-ld-"
-batches = [295, 307, 309, 311, 312, 313]
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20-ld-"
+batches = [295, 307, 311, 312, 313]
 for batch in batches:
     d = get_model_results_per_state_model(batch=batch, state_list=state_list,
                                           basemodel=basemodel2, loader=loader)

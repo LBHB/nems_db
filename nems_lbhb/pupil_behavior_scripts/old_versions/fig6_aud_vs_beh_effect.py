@@ -19,7 +19,7 @@ import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
