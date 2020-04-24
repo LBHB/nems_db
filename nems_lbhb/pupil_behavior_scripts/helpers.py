@@ -744,12 +744,13 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     sig_state_cells = len(sig_cells)
     stable_cells = state_mask.sum()
 
-    f, ax = plt.subplots(2, 1, figsize=(8, 8))
+    f, ax = plt.subplots(2, 1, figsize=(3,6))
 
     # scatter plot of raw post passive MI vs. unique post passive MI
     # e.g. does pupil account for some persistent effects?
     ax[0].scatter(dMI_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], 
-                        dMIu_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], color='lightgrey', edgecolor='white', s=40, label='all cells')
+                  dMIu_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], color='lightgrey',
+                  linewidth=0.5, edgecolor='white', s=15, label='all cells')
     if scatter_sig_cells is None:
         pass
     else:
@@ -767,15 +768,17 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
             else:
                 color = 'k'
             ax[0].scatter(dMI_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], 
-                        dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color, edgecolor='white', s=50, label=category)
+                          dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color,
+                          linewidth=0.5, edgecolor='white', s=15, label=category)
 
-    ax[0].legend()
+    ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')
-    ax[0].plot([-1, 1], [-1, 1], 'k--')
-    ax[0].axhline(0, linestyle='--', color='k')
-    ax[0].axvline(0, linestyle='--', color='k')
+    ax[0].plot([-0.7, 0.7], [-0.7, 0.7], 'k--', linewidth=0.5, dashes=(4,2))
+    ax[0].axhline(0, linestyle='--', color='k', linewidth=0.5, dashes=(4,2))
+    ax[0].axvline(0, linestyle='--', color='k', linewidth=0.5, dashes=(4,2))
     ax[0].axis('square')
+    nplt.ax_remove_box(ax[0])
 
     # plot mean MI over cells for pupil, task unique, and overall state
     ax[1].set_title('total cells: {0}, \n state cells: {1}, \n stable across all blocks: {2}'.format(total_cells, sig_state_cells, stable_cells),
@@ -791,6 +794,7 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     ax[1].set_xticks(np.arange(dMI.shape[1]))
     ax[1].set_xticklabels(dMI.columns.get_level_values('state_chan'))
     ax[1].set_xlabel('behavioral block')
+    nplt.ax_remove_box(ax[1])
 
     f.tight_layout()
 
