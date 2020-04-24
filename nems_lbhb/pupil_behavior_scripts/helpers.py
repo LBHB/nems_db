@@ -389,9 +389,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
                 df = df.merge(difficulty, on=['cellid', 'state_chan_alt'])
             except:
                 pass
-            df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
-            df = df.merge(pupil_merge, on=['cellid'])
-            df = df.merge(upupil_merge, on=['cellid'])
+            if p0 is not None:
+                df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
+                df = df.merge(pupil_merge, on=['cellid'])
+                df = df.merge(upupil_merge, on=['cellid'])
             df.index = df.cellid
             df = df.drop(columns=['cellid'])
 
@@ -407,7 +408,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         except FileNotFoundError:
             print('WARNING. Did not find tuning file(s) for this batch')
             df = task_merge.merge(utask_merge, on=['cellid', 'state_chan_alt'])
+            df = df.merge(utask_merge, on=['cellid', 'state_chan_alt'])
+            df = df.merge(state_merge, on=['cellid', 'state_chan_alt'])
             if p0 is not None:
+                df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
                 df = df.merge(pupil_merge, on=['cellid'])
                 df = df.merge(upupil_merge, on=['cellid'])
 
@@ -573,31 +577,13 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         mfull = dr[['r_shuff', 'r_full', 'bp_common', 'r_task_unique', 'r_pupil_unique', 'sig_state']].values
 
     elif len(state_list)==2:
-        dr['bp_common'] = dr[state_list[1]]**2 - dr[state_list[0]]**2
+        dr['bp_common'] = dr['r_full'] - dr['r_shuff']
+        dr = dr.sort_values('r_shuff')
         dr['b_unique'] = dr['bp_common']*0
         dr['p_unique'] = dr['bp_common']*0
-
-        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
-        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
-        dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
-
-        dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[1]]+
-              dp['r_se'][state_list[0]]))
-        dr['cellid'] = dp['r'][state_list[1]].index
-        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['cellid','null','full','bp_common','b_unique','p_unique','sig']]
-        dm = dm.sort_values(['null'])
-        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
-        cellids=dm['cellid'].to_list()
-
-        big_idx = mfull[:,1]-mfull[:,0]>0.2
-        for i,b in enumerate(big_idx):
-            if b:
-                print('{} : {:.3f} - {:.3f}'.format(cellids[i],mfull[i,0],mfull[i,1]))
+        mfull=dr[['r_shuff', 'r_full', 'bp_common', 'b_unique', 'p_unique', 'sig_state']].values
 
     if nb > 0:
-        stepsize = mfull.shape[0]/nb
         mm=np.zeros((nb,mfull.shape[1]))
         for i in range(nb):
             x01=(mfull[:,0]>i/nb) & (mfull[:,0]<=(i+1)/nb)
@@ -621,14 +607,14 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     stateplots.beta_comp(mfull[:,0],mfull[:,1],n1='State independent',n2='Full state-dep',
                          ax=ax1, highlight=mfull[:, -1], hist_range=[-0.1, 1])
 
-    ax2 = plt.subplot(3,1,2)
+    plt.subplot(3,1,2)
     width=0.8
     mplots=np.concatenate((mall, mb), axis=0)
     ind = np.arange(mplots.shape[0])
 
-    p1 = plt.bar(ind, mplots[:,0], width=width, color=colors[1])
-    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
-    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
+    plt.bar(ind, mplots[:,0], width=width, color=colors[1])
+    plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
+    plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
     plt.legend(('common','b-unique','p_unique'))
     if title is not None:
         plt.title(title)
