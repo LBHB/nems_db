@@ -563,7 +563,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     if state_list is None:
         state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
     
-    f = plt.figure(figsize=(4,6))
+    f = plt.figure(figsize=(2.5,7.5))
 
     dr = df.copy()
 
@@ -794,4 +794,4 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
 
     f.tight_layout()
 
-    return dMI, dMI0
+    return f, dMI, dMI0
