@@ -287,7 +287,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         # if no pupil in model, task_unique == task overall
         task_merge = utask_merge.copy()
         task_merge.columns = [c.replace('_unique', '') for c in task_merge.columns]
-        task_merge.rename({'sig_utask': 'sig_task'})
+        task_merge = task_merge.rename(columns={'sig_utask': 'sig_task'})
         
     # ======================= get overal pupil model params / MI =========================
     if p0 is not None:

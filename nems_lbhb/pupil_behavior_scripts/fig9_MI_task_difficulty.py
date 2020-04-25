@@ -12,11 +12,11 @@ from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 r0_threshold = 0
 octave_cutoff = 0.5
-yaxis = 'MI_task_unique'
+yaxis = 'gain_task_unique'
 sig_task_only = False
 sig_pupil_only = False
 
