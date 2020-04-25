@@ -622,7 +622,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    d=(mfull[:,1]-mfull[:,0])
+    d=(mfull[:,1]-mfull[:,0])# /(1-np.abs(mfull[:,0]))
     stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
     ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
