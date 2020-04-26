@@ -1055,7 +1055,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
     frame_count = np.diff(firstframe)
 
-    if pupil_eyespeed & options['pupil']:
+    if loading_pcs:
+        l = ['pupil']
+    elif pupil_eyespeed & options['pupil']:
         l = ['pupil', 'pupil_eyespeed']
     elif pupil_eyespeed:
         l = ['pupil_eyespeed']
