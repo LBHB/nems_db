@@ -873,7 +873,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         log.info("Using CNN results for pupiltrace")
 
         pupil_diameter = pupildata['cnn']['a'] * 2
-
         # missing frames/frames that couldn't be decoded were saved as nans
         # pad them here
         nan_args = np.argwhere(np.isnan(pupil_diameter))
@@ -924,7 +923,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             except:
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
-
 
     fs_approximate = 30  # approx video framerate
     if pupil_deblink:

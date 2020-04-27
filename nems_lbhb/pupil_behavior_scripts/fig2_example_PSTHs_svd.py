@@ -1,6 +1,6 @@
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 from nems_lbhb.stateplots import pb_model_plot
-
+import os
 """
 batch = 307  # A1 SUA and MUA
 batch = 309  # IC SUA and MUA
@@ -17,15 +17,19 @@ state_list = ['st.pup0.hlf0', 'st.pup0.hlf', 'st.pup.hlf0', 'st.pup.hlf']
 cellids = ["TAR010c-06-1", "TAR010c-27-2"]
 batch = 307
 
+save_path = '/auto/users/svd/docs/current/pupil_behavior/eps'
+
 for cellid in cellids:
-    model_per_time_wrapper(cellid, batch=307,
+    f = model_per_time_wrapper(cellid, batch=307,
                                loader= "psth.fs20.pup-ld-",
                                fitter = "_jk.nf20-basic",
                                basemodel = "-ref-psthfr_stategain.S",
                                state_list=None, plot_halves=True)
+    f.savefig(os.path.join(save_path, f'fig2_model_per_time_{cellid}.pdf'))
 
 
 for cellid in cellids:
-    pb_model_plot(cellid=cellid, batch=batch,
+    fh, stats = pb_model_plot(cellid=cellid, batch=batch,
                   loader="psth.fs20.pup", basemodel="ref-psthfr_stategain.S",
                   fitter="jk.nf20-basic")
+    fh.savefig(os.path.join(save_path, f'fig2_pb_psths_{cellid}.pdf'))

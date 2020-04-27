@@ -135,7 +135,6 @@ def baphy_load_recording_uri(recache=False, **options):
     else:
         data_uri = data_file
 
-
     if not use_API and (not os.path.exists(data_file) or recache == True):
         log.info("Generating recording")
         # rec.meta is set = options in the following function
