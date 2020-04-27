@@ -4,12 +4,18 @@ Point is to highlight no substantial variance explained by pxf (no interaction b
 arousal effects and task condition)
 CRH 04/22/2020
 """
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-
+import scipy.stats as ss
 import nems.db as nd
+import nems.plots.api as nplt
+
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
 
 # load model results
 m = 'psth.fs20.pup-ld-st.pup.afl.pxf0-ref-psthfr.s_sdexp.S_jk.nf20-basic'
@@ -48,13 +54,14 @@ IC['area'] = 'IC'
 df = pd.concat([A1, IC])
 df = df.melt(value_vars=['upup', 'ubeh', 'upxf'], id_vars='area')
 
-f, ax = plt.subplots(1, 1)
+f, ax = plt.subplots(1, 1, figsize=(4,3))
 
 sns.barplot(data=df, x='variable', y='value', hue='area', errwidth=2, errcolor='k', edgecolor='k', lw=2, ax=ax)
 ax.set_ylabel(r'Unique $R^{2}$')
 ax.set_xticks(range(0, 3))
 ax.set_xticklabels(['pup', 'afl', 'pxf'])
 ax.set_xlabel('State channel')
+nplt.ax_remove_box(ax)
 
 plt.show()
 
@@ -70,3 +77,5 @@ pval = ss.wilcoxon(rA1[mpxf], rA1[m_bp0]).pvalue
 print("A1 r_test: \n pxf: {0}, pxf0: {1}, pval: {2}".format(pxf, pxf0, pval))
 
 
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig8_pup_alf_pxf.pdf'))

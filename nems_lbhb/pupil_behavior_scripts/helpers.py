@@ -287,7 +287,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         # if no pupil in model, task_unique == task overall
         task_merge = utask_merge.copy()
         task_merge.columns = [c.replace('_unique', '') for c in task_merge.columns]
-        task_merge.rename({'sig_utask': 'sig_task'})
+        task_merge = task_merge.rename(columns={'sig_utask': 'sig_task'})
         
     # ======================= get overal pupil model params / MI =========================
     if p0 is not None:
@@ -389,9 +389,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
                 df = df.merge(difficulty, on=['cellid', 'state_chan_alt'])
             except:
                 pass
-            df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
-            df = df.merge(pupil_merge, on=['cellid'])
-            df = df.merge(upupil_merge, on=['cellid'])
+            if p0 is not None:
+                df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
+                df = df.merge(pupil_merge, on=['cellid'])
+                df = df.merge(upupil_merge, on=['cellid'])
             df.index = df.cellid
             df = df.drop(columns=['cellid'])
 
@@ -407,7 +408,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         except FileNotFoundError:
             print('WARNING. Did not find tuning file(s) for this batch')
             df = task_merge.merge(utask_merge, on=['cellid', 'state_chan_alt'])
+            df = df.merge(utask_merge, on=['cellid', 'state_chan_alt'])
+            df = df.merge(state_merge, on=['cellid', 'state_chan_alt'])
             if p0 is not None:
+                df = df.merge(task_pupil_merge, on=['cellid', 'state_chan_alt'])
                 df = df.merge(pupil_merge, on=['cellid'])
                 df = df.merge(upupil_merge, on=['cellid'])
 
@@ -563,7 +567,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     if state_list is None:
         state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
     
-    f = plt.figure(figsize=(4,6))
+    f = plt.figure(figsize=(2.5,7.5))
 
     dr = df.copy()
 
@@ -573,31 +577,13 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         mfull = dr[['r_shuff', 'r_full', 'bp_common', 'r_task_unique', 'r_pupil_unique', 'sig_state']].values
 
     elif len(state_list)==2:
-        dr['bp_common'] = dr[state_list[1]]**2 - dr[state_list[0]]**2
+        dr['bp_common'] = dr['r_full'] - dr['r_shuff']
+        dr = dr.sort_values('r_shuff')
         dr['b_unique'] = dr['bp_common']*0
         dr['p_unique'] = dr['bp_common']*0
-
-        dr['bp_full'] = dr['b_unique'] + dr['p_unique'] + dr['bp_common']
-        dr['null']=dr[state_list[0]]**2 * np.sign(dr[state_list[0]])
-        dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
-
-        dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[1]]+
-              dp['r_se'][state_list[0]]))
-        dr['cellid'] = dp['r'][state_list[1]].index
-        #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['cellid','null','full','bp_common','b_unique','p_unique','sig']]
-        dm = dm.sort_values(['null'])
-        mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
-        cellids=dm['cellid'].to_list()
-
-        big_idx = mfull[:,1]-mfull[:,0]>0.2
-        for i,b in enumerate(big_idx):
-            if b:
-                print('{} : {:.3f} - {:.3f}'.format(cellids[i],mfull[i,0],mfull[i,1]))
+        mfull=dr[['r_shuff', 'r_full', 'bp_common', 'b_unique', 'p_unique', 'sig_state']].values
 
     if nb > 0:
-        stepsize = mfull.shape[0]/nb
         mm=np.zeros((nb,mfull.shape[1]))
         for i in range(nb):
             x01=(mfull[:,0]>i/nb) & (mfull[:,0]<=(i+1)/nb)
@@ -621,14 +607,14 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     stateplots.beta_comp(mfull[:,0],mfull[:,1],n1='State independent',n2='Full state-dep',
                          ax=ax1, highlight=mfull[:, -1], hist_range=[-0.1, 1])
 
-    ax2 = plt.subplot(3,1,2)
+    plt.subplot(3,1,2)
     width=0.8
     mplots=np.concatenate((mall, mb), axis=0)
     ind = np.arange(mplots.shape[0])
 
-    p1 = plt.bar(ind, mplots[:,0], width=width, color=colors[1])
-    p2 = plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
-    p3 = plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
+    plt.bar(ind, mplots[:,0], width=width, color=colors[1])
+    plt.bar(ind, mplots[:,1], width=width, bottom=mplots[:,0], color=colors[2])
+    plt.bar(ind, mplots[:,2], width=width, bottom=mplots[:,0]+mplots[:,1], color=colors[3])
     plt.legend(('common','b-unique','p_unique'))
     if title is not None:
         plt.title(title)
@@ -636,7 +622,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    d=(mfull[:,1]-mfull[:,0])
+    d=(mfull[:,1]-mfull[:,0])# /(1-np.abs(mfull[:,0]))
     stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
     ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
@@ -744,12 +730,13 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     sig_state_cells = len(sig_cells)
     stable_cells = state_mask.sum()
 
-    f, ax = plt.subplots(2, 1, figsize=(8, 8))
+    f, ax = plt.subplots(2, 1, figsize=(3,6))
 
     # scatter plot of raw post passive MI vs. unique post passive MI
     # e.g. does pupil account for some persistent effects?
     ax[0].scatter(dMI_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], 
-                        dMIu_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], color='lightgrey', edgecolor='white', s=40, label='all cells')
+                  dMIu_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']], color='lightgrey',
+                  linewidth=0.5, edgecolor='white', s=15, label='all cells')
     if scatter_sig_cells is None:
         pass
     else:
@@ -767,15 +754,17 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
             else:
                 color = 'k'
             ax[0].scatter(dMI_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], 
-                        dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color, edgecolor='white', s=50, label=category)
+                          dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color,
+                          linewidth=0.5, edgecolor='white', s=15, label=category)
 
-    ax[0].legend()
+    ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')
-    ax[0].plot([-1, 1], [-1, 1], 'k--')
-    ax[0].axhline(0, linestyle='--', color='k')
-    ax[0].axvline(0, linestyle='--', color='k')
+    ax[0].plot([-0.7, 0.7], [-0.7, 0.7], 'k--', linewidth=0.5, dashes=(4,2))
+    ax[0].axhline(0, linestyle='--', color='k', linewidth=0.5, dashes=(4,2))
+    ax[0].axvline(0, linestyle='--', color='k', linewidth=0.5, dashes=(4,2))
     ax[0].axis('square')
+    nplt.ax_remove_box(ax[0])
 
     # plot mean MI over cells for pupil, task unique, and overall state
     ax[1].set_title('total cells: {0}, \n state cells: {1}, \n stable across all blocks: {2}'.format(total_cells, sig_state_cells, stable_cells),
@@ -791,7 +780,8 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     ax[1].set_xticks(np.arange(dMI.shape[1]))
     ax[1].set_xticklabels(dMI.columns.get_level_values('state_chan'))
     ax[1].set_xlabel('behavioral block')
+    nplt.ax_remove_box(ax[1])
 
     f.tight_layout()
 
-    return dMI, dMI0
+    return f, dMI, dMI0

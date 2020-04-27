@@ -25,6 +25,8 @@ dump_path = get_setting('NEMS_RESULTS_DIR')
 
 helper_path = os.path.dirname(helper.__file__)
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
 
 # SPECIFY models
 USE_AFL=True
@@ -77,7 +79,7 @@ if group_files & ('beh' not in model_string):
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
 # generate the plot
-fh, axs = plt.subplots(1, 2, figsize=(8,4))
+fh, axs = plt.subplots(1, 2, figsize=(5,2.5))
 
 # common.color_list = [color_ns, color_either, color_b, color_p, color_both]
 common.scat_states_crh(df, x_model='MI_pupil_unique',
@@ -86,9 +88,9 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             save=False,
             xlabel='MI pupil unique',
             ylabel='MI task unique',
-            title='A1 (TODO: shrink axes, mark outlier)',
-            xlim=(-0.7,0.7),
-            ylim=(-0.7,0.7),
+            title='A1',
+            xlim=(-0.45,0.45),
+            ylim=(-0.45,0.45),
             ax=axs[0])
 
 common.scat_states_crh(df, x_model='MI_pupil_unique',
@@ -98,8 +100,8 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             xlabel='MI pupil unique',
             ylabel='MI task unique',
             title='IC',
-            xlim=(-0.5,0.5),
-            ylim=(-0.5,0.5),
+            xlim=(-0.45,0.45),
+            ylim=(-0.45,0.45),
             ax=axs[1])
 common.scat_states_crh(df, x_model='MI_pupil_unique',
             y_model='MI_task_unique',
@@ -108,7 +110,10 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             xlabel='MI pupil unique',
             ylabel='MI task unique',
             title='IC',
-            xlim=(-0.5,0.5),
-            ylim=(-0.5,0.5),
+            xlim=(-0.45,0.45),
+            ylim=(-0.45,0.45),
             marker='v',
             ax=axs[1])
+
+if save_fig:
+    fh.savefig(os.path.join(save_path, 'fig5_MI_unique.pdf'))

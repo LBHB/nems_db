@@ -22,6 +22,9 @@ from nems import get_setting
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
 # ===================================================== pupil behavior data =======================================================
 # SPECIFY models
 USE_AFL = True
@@ -79,11 +82,13 @@ if group_files & ('beh' not in model_string):
 
 # 6A
 f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, colors=common.color_list, title='A1')
-# f.savefig('/tmp/Fig6_A1_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_A1.pdf'))
 
 # 6B
 f = helper.aud_vs_state(df.loc[df.area.isin(['ICC', 'ICX'])], nb=5, colors=common.color_list, title='IC')
-# f.savefig('/tmp/Fig6_IC_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
 
 
@@ -116,40 +121,48 @@ else:
     preprocess_fn = helper.preprocess_sdexp_dump
 
 # import / preprocess model results
-A1 = preprocess_fn(dump_results,
-                    batch=307,
-                    full_model=model_string,
-                    p0=p0_model,
-                    b0=b0_model,
-                    shuf_model=shuf_model,
-                    r0_threshold=r0_threshold,
-                    octave_cutoff=octave_cutoff,
-                    path=dump_path)
-A1['area'] = 'A1'
-IC = preprocess_fn(dump_results,
-                    batch=309,
-                    full_model=model_string,
-                    p0=p0_model,
-                    b0=b0_model,
-                    shuf_model=shuf_model,
-                    r0_threshold=r0_threshold,
-                    octave_cutoff=octave_cutoff,
-                    path=dump_path)
-d_IC_area = pd.read_csv('IC_cells_area.csv', index_col=0)
-IC = IC.merge(d_IC_area, on=['cellid'])
+A1 = []
+for batch in [307, 311, 312]:
+    _A1 = preprocess_fn(dump_results,
+                        batch=batch,
+                        full_model=model_string,
+                        p0=p0_model,
+                        b0=b0_model,
+                        shuf_model=shuf_model,
+                        r0_threshold=r0_threshold,
+                        octave_cutoff=octave_cutoff,
+                        path=dump_path)
+    _A1['area'] = 'A1'
+    A1.append(_A1)
+A1 = pd.concat(A1)
+
+IC = []
+for batch in [295, 313]:
+    _IC = preprocess_fn(dump_results,
+                        batch=batch,
+                        full_model=model_string,
+                        p0=p0_model,
+                        b0=b0_model,
+                        shuf_model=shuf_model,
+                        r0_threshold=r0_threshold,
+                        octave_cutoff=octave_cutoff,
+                        path=dump_path)
+    _IC['area'] = 'IC'
+    IC.append(_IC)
+IC = pd.concat(IC)
 
 df = pd.concat([A1, IC])
 
 if group_files & ('beh' not in model_string):
     area = df['area']
-    df = df.groupby(by=['cellid', 'ON_BF']).mean()
+    df = df.groupby(by=['cellid']).mean()
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
+f = helper.aud_vs_state(df.loc[df.area=='IC'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='IC')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_IC.pdf'))
 
-f = aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='A1')
-# f.savefig('/tmp/Fig6_A1_beh_only.pdf')
-
-f = aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='IC')
-# f.savefig('/tmp/Fig6_IC_beh_only.pdf')
-
+f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='A1')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_A1.pdf'))
 

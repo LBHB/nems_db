@@ -139,3 +139,63 @@ for cellid in cells_309:
         pass
 
 df_309.to_csv(os.path.join(fpath, str(309), 'd_difficulty.csv'))
+
+# ================================= batch 313 ====================================
+perfile_df = pd.read_csv(os.path.join(fpath, str(313), 'd_afl_sdexp.csv'), index_col=0)
+df_313 = pd.DataFrame()
+cells_313 = nd.get_batch_cells(313).cellid
+for cellid in cells_313:
+    _, rawid = nd.get_stable_batch_cells(batch=313, cellid=cellid)
+    sql = "SELECT value, svalue, rawid from gData where name='Trial_TargetIdxFreq' and rawid in {}".format(tuple(rawid))
+    d = nd.pd_query(sql, params=())
+    sql =  "SELECT value, svalue, rawid from gData where name='Trial_RelativeTarRefdB' and rawid in {}".format(tuple(rawid))
+    d2 =  nd.pd_query(sql, params=())
+    sql = "SELECT behavior, id from gDataRaw where id in {0}".format(tuple(rawid))
+    da = nd.pd_query(sql)
+
+    d = d[d.rawid.isin([r for r in da.id if da[da.id==r]['behavior'].values=='active'])]
+    d2 = d2[d2.rawid.isin([r for r in da.id if da[da.id==r]['behavior'].values=='active'])]
+    d2.columns = [c+'_rel' for c in d2.columns]
+    d = pd.concat([d, d2], axis=1)
+
+    pf_labels = np.unique([l for l in perfile_df[perfile_df['cellid']==cellid]['state_chan_alt'] if 'ACTIVE' in l])
+
+    if len(pf_labels) != 0:
+        diff = None
+        for i in range(0, d.shape[0]):
+            tf = d.iloc[i]['svalue']
+            if (tf is not None):
+                tf = np.array([float(x) for x in d.iloc[i]['svalue'].strip('[]').split(' ')])
+                reltar = np.array([float(x) for x in d.iloc[i]['svalue_rel'].strip('[]').split(' ')])
+                tcount = len(tf)
+                if (tcount==5) & np.isinf(reltar[0]) & (tf[0]==0.8):
+                    diff = 0 # puretone                
+                elif (tcount==5) & (sum(tf==0.2)==5):
+                    diff = 2 # medium
+                elif (tcount==5) & (tf[0]==0.3):
+                    diff = 1 # easy
+                elif (tcount==5) & (tf[0]==0.1):
+                    diff = 3 # hard
+                elif (tcount==5) & (np.isinf(reltar[0])):
+                    diff = 0 # pure tone (or should this get marked as easy?)
+                elif d.iloc[i]['rawid'] in flipsetrawids:
+                    if reltar[1]<0.5:
+                        diff = 1
+                    else:
+                        diff = 3
+                elif d.iloc[i]['rawid'] in straddlesetrawids:
+                    if (reltar[0]>reltar[1]):
+                        diff = 1
+                    else:
+                        diff = 3
+            else:
+                diff = 0 # tone only
+
+            # figure out difficulty
+            
+            _df = pd.DataFrame({'cellid': cellid, 'difficulty': diff, 'state_chan_alt': pf_labels[i]}, index=[0])
+            df_313 = df_313.append(_df)
+    else:
+        pass
+
+df_313.to_csv(os.path.join(fpath, str(313), 'd_difficulty.csv'))

@@ -22,12 +22,24 @@ from nems import get_setting
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = False
+
 # SPECIFY models
-dump_results = 'd_pup_afl_sdexp.csv'
-model_string = 'st.pup.afl'
-p0_model = 'st.pup0.afl'
-b0_model = 'st.pup.afl0'
-shuf_model = 'st.pup0.afl0' 
+AFL = True
+if AFL:
+    dump_results = 'd_pup_afl_sdexp.csv'
+    #dump_results = 'd_pup_afl_sdexp_ap1.csv'
+    model_string = 'st.pup.afl'
+    p0_model = 'st.pup0.afl'
+    b0_model = 'st.pup.afl0'
+    shuf_model = 'st.pup0.afl0'
+else:
+    dump_results = 'd_pup_fil_sdexp.csv'
+    model_string = 'st.pup.fil'
+    p0_model = 'st.pup0.fil'
+    b0_model = 'st.pup.fil0'
+    shuf_model = 'st.pup0.fil0'
 
 # set params for BF characterization and sig. sensory response threshold
 octave_cutoff = 0.5
@@ -62,7 +74,7 @@ df = pd.concat([A1, IC])
 if group_files & ('beh' not in model_string):
     area = df['area']
     df = df.groupby(by=['cellid', 'ON_BF']).mean()
-    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
+    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c].iloc[0] for c in df.index.get_level_values('cellid')]
 
 # Create figure
 
@@ -111,7 +123,7 @@ IC_units = [IC_n_sig_ubeh, IC_n_sig_upup, IC_n_sig_both, IC_n_sig_either, IC_n_n
 colors = [common.color_b, common.color_p, common.color_both, common.color_either, common.color_ns]
 
 # Figure 3A
-fh, axs = plt.subplots(3, 2, figsize=(8,12))
+fh, axs = plt.subplots(3, 2, figsize=(5,7.5))
 
 plt.sca(axs[0,0])
 donut_plot('A1', A1_units, colors, savefigure=False)
@@ -170,4 +182,8 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             ylim=(-0.05,0.2),
             ax=axs[2,1])
 
+#plt.tight_layout()
+
+if save_fig:
+    fh.savefig(os.path.join(save_path, 'fig3_r2_summ.pdf'))
 

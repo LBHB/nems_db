@@ -15,8 +15,11 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
-import common
+import nems_lbhb.pupil_behavior_scripts.common as common
+import nems_lbhb.pupil_behavior_scripts.helpers as helper
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = False
 
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
@@ -51,11 +54,13 @@ df['r_se'] = df['r_se'].str.strip(to_strip="[]").astype(float)
 
 # 6A
 f = aud_vs_state(df.loc[A1], nb=5, colors=common.color_list, title='A1')
-f.savefig('/tmp/Fig6_A1_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_A1.pdf'))
 
 # 6B
 f = aud_vs_state(df.loc[ICC | ICX], nb=5, colors=common.color_list, title='IC')
-f.savefig('/tmp/Fig6_IC_tuning_vs_pup_beh.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
 
 # Figures 6C-D  - beh only effects, bigger set of cells
@@ -89,9 +94,11 @@ print((dfb.loc[full_model & is_active & A1 & sig_state, 'MIbeh_only']).median())
 #dfb['r_se'] = dfb['r_se'].str.strip(to_strip="[]").astype(float)
 
 f = aud_vs_state(dfb.loc[A1], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='A1')
-f.savefig('/tmp/Fig6_A1_beh_only.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_A1.pdf'))
 
 f = aud_vs_state(dfb.loc[IC], nb=5, state_list=['st.beh0','st.beh'], colors=common.color_list, title='IC')
-f.savefig('/tmp/Fig6_IC_beh_only.pdf')
+if save_fig:
+    f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_IC.pdf'))
 
 

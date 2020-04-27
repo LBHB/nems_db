@@ -138,9 +138,9 @@ def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     set1i = np.where(set1)
     evs = set1i[0]
 
-    ax.plot(hist_range, zz, 'k--',linewidth=0.5)
-    ax.plot(zz, hist_range, 'k--',linewidth=0.5)
-    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5)
+    ax.plot(hist_range, zz, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(zz, hist_range, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5, dashes=(4,2))
 
     if markersize>=5:
         ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=markersize,

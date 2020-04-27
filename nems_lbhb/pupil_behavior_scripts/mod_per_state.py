@@ -404,7 +404,7 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, states=None):
     MIu = MIu[ff,:]
     MI0 = MI0[ff,:]
 
-    plt.figure(figsize=(8,8))
+    f = plt.figure(figsize=(8,8))
     plt.subplot(3,1,1)
     plt.plot(MI.T, linewidth=0.5)
     plt.ylabel('raw MI per cell')
@@ -437,7 +437,7 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, states=None):
 
     plt.tight_layout()
 
-    return dMI, dMI0
+    return f, dMI, dMI0
 
 
 def hlf_wrapper(use_hlf=True):
