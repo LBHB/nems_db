@@ -775,11 +775,14 @@ def sdexp(kw):
                          "keyword given: %s" % kw)
 
     state = 'state'
+    set_bounds = False
     #nl_state_chans = 1
     nl_state_chans = n_vars
     for o in options[2:]:
         if o == 'lv':
             state = 'lv'
+        if o == 'bound':
+            set_bounds = True
         #if o == 'snl':
             # state-specific non linearities (snl)
             # only reason this is an option is to allow comparison with old models
@@ -828,6 +831,15 @@ def sdexp(kw):
                   'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d}),
                   'offset_d': ('Normal', {'mean': offset_mean_d, 'sd': offset_sd_d})}
         }
+    if set_bounds:
+        template['bounds'] = {'base_g': (0, 10),
+                              'amplitude_g': (0, 10),
+                              'kappa_g': (None, None),
+                              'offset_g': (None, None),
+                              'base_d': (-10, 10),
+                              'amplitude_d': (-10, 10),
+                              'kappa_d': (None, None),
+                              'offset_d': (None, None)}
 
     return template
 

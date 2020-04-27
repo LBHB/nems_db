@@ -13,8 +13,7 @@ save_fig = False
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
-yaxis_task = 'MI_task'
-all_IC_data = True # Don't worry about pupil - use batch 313
+yaxis_task = 'MI_task_unique'
 AFL = True
 if AFL:
     dump_results = 'd_pup_afl_sdexp.csv'
@@ -42,26 +41,13 @@ A1 = helper.preprocess_sdexp_dump(dump_results,
                                   octave_cutoff=octave_cutoff,
                                   path=dump_path)
 A1 = A1[A1.sig_psth]
-if all_IC_data:
-    ic_batch = 313
-    ic_dump = 'd_afl_sdexp.csv'
-    ic_model_string = 'st.afl'
-    ic_b0 = 'st.afl0'
-    ic_shuf_model = 'st.afl0'
-    ic_p0 = None
-else:
-    ic_batch = 309
-    ic_dump = dump_results
-    ic_model_string = model_string
-    ic_b0 = b0_model
-    ic_shuf_model = shuf_model
-    ic_p0 = p0_model
-IC = helper.preprocess_sdexp_dump(ic_dump,
-                                  batch=ic_batch,
-                                  full_model=ic_model_string,
-                                  p0=ic_p0,
-                                  b0=ic_b0,
-                                  shuf_model=ic_shuf_model,
+
+IC = helper.preprocess_sdexp_dump(dump_results,
+                                  batch=309,
+                                  full_model=model_string,
+                                  p0=p0_model,
+                                  b0=b0_model,
+                                  shuf_model=shuf_model,
                                   r0_threshold=r0_threshold,
                                   octave_cutoff=octave_cutoff,
                                   path=dump_path)
@@ -100,8 +86,6 @@ on_med_ns = round(IC[IC.ON_BF & ~IC.sig_utask][yaxis_task].median(), 3)
 ax[1].set_title('IC \n sig_cells: ON: {0}, OFF: {1}, pval: {2} \n'
                     'ns cells: ON: {3}, OFF: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
 f.tight_layout()
-
-
 
 if 0:
     # plot individual model results for gain, MI, dc pupil and task

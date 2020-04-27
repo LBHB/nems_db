@@ -127,6 +127,17 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader)
     d.to_csv(os.path.join(dump_path, str(batch), 'd_beh_sdexp.csv'))
 
+# fil only models
+log.info('Saving sdexp fil only models... ')
+state_list = ['st.fil0','st.fil']
+basemodel2 = "-ref-psthfr.s_sdexp.S"
+loader = "psth.fs20-ld-"
+batches = [295, 313]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader)
+    d.to_csv(os.path.join(dump_path, str(batch), 'd_fil_sdexp.csv'))
+
 # afl only models
 log.info('Saving sdexp afl only models... ')
 state_list = ['st.afl0','st.afl']
