@@ -24,7 +24,7 @@ def db_session():
 
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path,
-                            script_path, time_limit=10, useGPU=False, high_mem=False):
+                            script_path, time_limit=10, useGPU=False, high_mem=False, exclude=None):
     """Enqueues models similarly to nems.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param celllist: List of cells to include in analysis.
@@ -37,6 +37,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     :param time_limit: How long the job will run for. Jobs will terminated if not complete by the end of the time limit.
     :param useGPU: Whether or not to be GPU job.
     :param high_mem: Whether or not GPU should be a higher memory one.
+    :param exclude: List of nodes to exclude. Comma separated values, no spaces.
     """
     # if batch_path in [None, 'None', 'NONE', '']:
     #     batch_path = Path(r'/home/exacloud/lustre1/LBHB/code/nems_db/nems_lbhb/exacloud/batch_job.py')
@@ -45,7 +46,8 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     time_limit = f'--time_limit={time_limit}'
     use_gpu = '--use_gpu' if useGPU else ''
     high_mem = '--high_mem' if high_mem else ''
-    extra_options = ' '.join([time_limit, use_gpu, high_mem])
+    exclude = f'--exclude={exclude}' if exclude is not None else ''
+    extra_options = ' '.join([time_limit, use_gpu, high_mem, exclude])
 
     # Convert to list of tuples b/c product object only useable once.
     combined = list(itertools.product(cellist, [str(batch)], modellist))

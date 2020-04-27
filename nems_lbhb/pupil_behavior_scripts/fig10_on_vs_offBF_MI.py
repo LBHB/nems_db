@@ -6,10 +6,12 @@ import seaborn as sns
 import scipy.stats as ss
 import nems.db as nd
 from nems import get_setting
+import nems.plots.api as nplt
+
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = False
+save_fig = True
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
@@ -17,6 +19,7 @@ yaxis_task = 'MI_task_unique'
 AFL = True
 if AFL:
     dump_results = 'd_pup_afl_sdexp.csv'
+    #dump_results = 'd_pup_afl_sdexp_ap1.csv'
     model_string = 'st.pup.afl'
     p0_model = 'st.pup0.afl'
     b0_model = 'st.pup.afl0'
@@ -54,10 +57,10 @@ IC = helper.preprocess_sdexp_dump(dump_results,
 IC = IC[IC.sig_psth]
 
 
-f, ax = plt.subplots(1, 2, figsize=(8, 4), sharey='row')
+f, ax = plt.subplots(1, 2, figsize=(5,3), sharey='row')
 
-sns.stripplot(x='sig_utask', y=yaxis_task, data=A1, hue='ON_BF', dodge=True, edgecolor='white', linewidth=1,
-                        marker='o', size=8, ax=ax[0])
+sns.stripplot(x='sig_utask', y=yaxis_task, data=A1, hue='ON_BF', dodge=True, edgecolor='white', linewidth=0.5,
+                        marker='o', size=5, ax=ax[0])
 ax[0].axhline(0, linestyle='--', lw=2, color='grey')
 
 pval = round(ss.ranksums(A1[A1.ON_BF & A1.sig_utask][yaxis_task], A1[~A1.ON_BF & A1.sig_utask][yaxis_task]).pvalue, 3)
@@ -70,9 +73,11 @@ on_med_ns = round(A1[A1.ON_BF & ~A1.sig_utask][yaxis_task].median(), 3)
 
 ax[0].set_title('A1 \n sig_cells: ON: {0}, OFF: {1}, pval: {2} \n'
                     'ns cells: ON: {3}, OFF: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+nplt.ax_remove_box(ax[0])
 
-sns.stripplot(x='sig_utask', y=yaxis_task, data=IC, hue='ON_BF', dodge=True, edgecolor='white', linewidth=1,
-                        marker='o', size=8, ax=ax[1])
+
+sns.stripplot(x='sig_utask', y=yaxis_task, data=IC, hue='ON_BF', dodge=True, edgecolor='white', linewidth=0.5,
+                        marker='o', size=5, ax=ax[1])
 ax[1].axhline(0, linestyle='--', lw=2, color='grey')
 
 pval = round(ss.ranksums(IC[IC.ON_BF & IC.sig_utask][yaxis_task], IC[~IC.ON_BF & IC.sig_utask][yaxis_task]).pvalue, 3)
@@ -85,6 +90,7 @@ on_med_ns = round(IC[IC.ON_BF & ~IC.sig_utask][yaxis_task].median(), 3)
 
 ax[1].set_title('IC \n sig_cells: ON: {0}, OFF: {1}, pval: {2} \n'
                     'ns cells: ON: {3}, OFF: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+nplt.ax_remove_box(ax[1])
 f.tight_layout()
 
 if 0:

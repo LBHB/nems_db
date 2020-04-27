@@ -234,6 +234,7 @@ $(document).ready(function(){
         $("#exaExec").val(saved_selections.exaExec).change();
         $("#exaScript").val(saved_selections.exaScript).change();
         $("#exaLimit").val(saved_selections.exaLimit).change();
+        $("#exaExclude").val(saved_selections.exaExclude).change();
     }
 
 
@@ -312,6 +313,10 @@ $(document).ready(function(){
 
     $("#exaLimit").change(function(){
         saved_selections.exaLimit = $(this).val();
+    });
+
+    $("#exaExclude").change(function(){
+        saved_selections.exaExclude = $(this).val();
     });
 
     $("[name='extraModels']").change(function(){
@@ -1110,6 +1115,7 @@ $(document).ready(function(){
         var exaExec = $("#exaExec").val();
         var exaScript = $("#exaScript").val();
         var exaLimit = $("#exaLimit").val();
+        var exaExclude = $("#exaExclude").val();
 
         if (document.getElementById('forceRerun').checked){
             forceRerun = 1;
@@ -1171,7 +1177,7 @@ $(document).ready(function(){
                    kamiakResults:kamiakResults, useGPU:useGPU,
                    useExacloud:useExacloud, exaOHSU:exaOHSU,
                    exaExec:exaExec, exaScript:exaScript, exaLimit:exaLimit,
-                   exaHighMem:exaHighMem},
+                   exaExclude:exaExclude, exaHighMem:exaHighMem},
             // TODO: should POST be used in this case?
             type: 'GET',
             success: function(result){

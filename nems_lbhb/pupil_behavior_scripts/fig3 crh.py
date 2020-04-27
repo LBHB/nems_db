@@ -23,15 +23,23 @@ from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
-
+save_fig = False
 
 # SPECIFY models
-dump_results = 'd_pup_afl_sdexp.csv'
-model_string = 'st.pup.afl'
-p0_model = 'st.pup0.afl'
-b0_model = 'st.pup.afl0'
-shuf_model = 'st.pup0.afl0' 
+AFL = True
+if AFL:
+    dump_results = 'd_pup_afl_sdexp.csv'
+    #dump_results = 'd_pup_afl_sdexp_ap1.csv'
+    model_string = 'st.pup.afl'
+    p0_model = 'st.pup0.afl'
+    b0_model = 'st.pup.afl0'
+    shuf_model = 'st.pup0.afl0'
+else:
+    dump_results = 'd_pup_fil_sdexp.csv'
+    model_string = 'st.pup.fil'
+    p0_model = 'st.pup0.fil'
+    b0_model = 'st.pup.fil0'
+    shuf_model = 'st.pup0.fil0'
 
 # set params for BF characterization and sig. sensory response threshold
 octave_cutoff = 0.5

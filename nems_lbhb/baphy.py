@@ -135,7 +135,6 @@ def baphy_load_recording_uri(recache=False, **options):
     else:
         data_uri = data_file
 
-
     if not use_API and (not os.path.exists(data_file) or recache == True):
         log.info("Generating recording")
         # rec.meta is set = options in the following function
@@ -412,6 +411,7 @@ def baphy_load_data(parmfilepath, **options):
     # figure out spike file to load
     pp, bb = os.path.split(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
+    pcfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", "_motSVD.pickle", bb)
     print("Spike file: {0}".format(spkfilepath))
 
     # load spike times
@@ -500,6 +500,17 @@ def baphy_load_data(parmfilepath, **options):
             state_dict['rem'] = is_rem
         except:
             log.info("REM load failed. Skipping.")
+
+    if options.get('facemap', False):
+        try:
+            options['verbose'] = False
+            log.info("PC filepath: %s", pcfilepath)
+            pctrace, ptrialidx = io.load_pupil_trace(
+                    pcfilepath, exptevents, **options)
+            state_dict['facemap'] = pctrace
+
+        except ValueError:
+            raise ValueError("Error loading pupil data: " + pupilfilepath)
 
     return (exptevents, stim, spike_dict, state_dict,
             tags, stimparam, exptparams)
@@ -1104,6 +1115,44 @@ def baphy_load_recording(**options):
             max_all=pupil.epochs['end'].max()
             print('pupil max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
 
+        if options.get('facemap',False):
+
+            # create facemap signal if it exists
+            if i == 0:
+                rlen = int(t_resp.shape[1])
+            else:
+                rlen = int(resp.shape[1]) - int(pupil.shape[1])
+
+            pcount = state_dict['facemap'].shape[0]
+            plen = state_dict['facemap'].shape[1]
+            if plen > rlen:
+                state_dict['facemap'] = \
+                    state_dict['facemap'][:, 0:-(plen-rlen)]
+            elif rlen > plen:
+                state_dict['facemap'] = \
+                    np.append(state_dict['facemap'],
+                              np.ones([pcount, rlen - plen]) * np.nan,
+                              axis=1)
+
+            # generate pupil signals
+            t_fm = nems.signal.RasterizedSignal(
+                    fs=options['rasterfs'], data=state_dict['facemap'],
+                    name='facemap', recording=rec_name, chans=[str(n) for n in range(state_dict['facemap'].shape[0])],
+                    epochs=event_times)
+
+            if i == 0:
+                fm = t_fm
+            else:
+                fm = fm.concatenate_time([fm, t_fm])
+
+            print("rlen={} fmlen={}".format(resp.ntimes, fm.ntimes))
+            max_this=t_resp.epochs['end'].max()
+            max_all=resp.epochs['end'].max()
+            print('resp max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
+            max_this=t_fm.epochs['end'].max()
+            max_all=fm.epochs['end'].max()
+            print('fm max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
+
         if (options['pupil_eyespeed']) and ('pupil_eyespeed' in state_dict.keys()):
             # create pupil signal if it exists
             rlen = int(t_resp.ntimes)
@@ -1223,6 +1272,8 @@ def baphy_load_recording(**options):
         signals['pupil_eyespeed'] = pupil_speed
     if options['rem']:
         signals['rem'] = rem
+    if options['facemap']:
+        signals['facemap'] = fm
 
     if options['stim'] and options["runclass"] == "RDT":
         signals['fg'] = stim1

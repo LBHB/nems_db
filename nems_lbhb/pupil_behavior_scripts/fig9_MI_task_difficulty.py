@@ -8,24 +8,33 @@ import scipy.stats as ss
 import helpers as helper
 
 from nems import get_setting
+import nems.plots.api as nplt
 
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
 save_fig = False
 
-r0_threshold = 0
+r0_threshold = 0.5
 octave_cutoff = 0.5
 yaxis = 'MI_task_unique'  # MI_task_unique, MI_task (task only)
-sig_col = 'sig_state'     # sig_utask (sig unique task effect), sig_task (sig task only), sig_state (sig state effect)
-easy = [0, 1]             # pure-tone = 0, low SNR = 1, high SNR = 3
+sig_col = 'sig_utask'     # sig_utask (sig unique task effect), sig_task (sig task only), sig_state (sig state effect)
+easy = [0,1]             # pure-tone = 0, low SNR = 1, high SNR = 3
 hard = [3]
 
-dump_results = 'd_pup_afl_sdexp.csv'
-model_string = 'st.pup.afl'
-p0_model = 'st.pup0.afl'
-b0_model = 'st.pup.afl0'
-shuf_model = 'st.pup0.afl0'
+AFL = True
+if AFL:
+    dump_results = 'd_pup_afl_sdexp.csv'
+    model_string = 'st.pup.afl'
+    p0_model = 'st.pup0.afl'
+    b0_model = 'st.pup.afl0'
+    shuf_model = 'st.pup0.afl0'
+else:
+    dump_results = 'd_pup_fil_sdexp.csv'
+    model_string = 'st.pup.fil'
+    p0_model = 'st.pup0.fil'
+    b0_model = 'st.pup.fil0'
+    shuf_model = 'st.pup0.fil0'
 
 A1 = helper.preprocess_sdexp_dump(dump_results,
                                   batch=307,
@@ -54,10 +63,10 @@ A1['difficulty'] = [True if x in hard else False for x in A1.difficulty]
 IC['difficulty'] = [True if x in hard else False for x in IC.difficulty]
 
 # stripplot of MI split by difficulty and task significance
-f, ax = plt.subplots(1, 2, figsize=(8, 4), sharey='row')
+f, ax = plt.subplots(1, 2, figsize=(5, 3), sharey='row')
 
-sns.stripplot(x=sig_col, y=yaxis, data=A1, hue='difficulty', dodge=True, edgecolor='white', linewidth=1,
-                        marker='o', size=8, ax=ax[0])
+sns.stripplot(x=sig_col, y=yaxis, data=A1, hue='difficulty', dodge=True, edgecolor='white', linewidth=0.5,
+                        marker='o', size=5, ax=ax[0])
 ax[0].axhline(0, linestyle='--', lw=2, color='grey')
 
 pval = round(ss.ranksums(A1[A1.difficulty & A1[sig_col]][yaxis], A1[~A1.difficulty & A1[sig_col]][yaxis]).pvalue, 3)
@@ -68,11 +77,12 @@ pval_ns = round(ss.ranksums(A1[A1.difficulty & ~A1[sig_col]][yaxis], A1[~A1.diff
 off_med_ns = round(A1[~A1.difficulty & ~A1[sig_col]][yaxis].median(), 3)
 on_med_ns = round(A1[A1.difficulty & ~A1[sig_col]][yaxis].median(), 3)
 
-ax[0].set_title('A1 \n sig_cells: HARD: {0}, EASY: {1}, pval: {2} \n'
-                    'ns cells: HARD: {3}, EASY: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+ax[0].set_title('A1 \nsig_cells: HARD: {0}, EASY: {1}, p: {2}\n'
+                'ns cells: HARD: {3}, EASY: {4}, p: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+nplt.ax_remove_box(ax[0])
 
-sns.stripplot(x=sig_col, y=yaxis, data=IC, hue='difficulty', dodge=True, edgecolor='white', linewidth=1,
-                        marker='o', size=8, ax=ax[1])
+sns.stripplot(x=sig_col, y=yaxis, data=IC, hue='difficulty', dodge=True, edgecolor='white', linewidth=0.5,
+                        marker='o', size=5, ax=ax[1])
 ax[1].axhline(0, linestyle='--', lw=2, color='grey')
 
 pval = round(ss.ranksums(IC[IC.difficulty & IC[sig_col]][yaxis], IC[~IC.difficulty & IC[sig_col]][yaxis]).pvalue, 3)
@@ -83,8 +93,9 @@ pval_ns = round(ss.ranksums(IC[IC.difficulty & ~IC[sig_col]][yaxis], IC[~IC.diff
 off_med_ns = round(IC[~IC.difficulty & ~IC[sig_col]][yaxis].median(), 3)
 on_med_ns = round(IC[IC.difficulty & ~IC[sig_col]][yaxis].median(), 3)
 
-ax[1].set_title('IC \n sig_cells: HARD: {0}, EASY: {1}, pval: {2} \n'
-                    'ns cells: HARD: {3}, EASY: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+ax[1].set_title('IC \nsig_cells: HARD: {0}, EASY: {1}, p: {2}\n'
+                'ns cells: HARD: {3}, EASY: {4}, p: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+nplt.ax_remove_box(ax[1])
 f.tight_layout()
 
 

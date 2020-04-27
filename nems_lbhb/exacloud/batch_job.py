@@ -6,7 +6,12 @@ import datetime
 from pathlib import Path
 
 
-def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False, high_mem=False):
+def write_batch_file(job_arguments,
+                     queueid=None,
+                     time_limit=10,
+                     use_gpu=False,
+                     high_mem=False,
+                     exclude=None):
     """Parses the arguments and creates the slurm sbatch file.
 
     Batch files are saved in the users home directory in "job_history".
@@ -14,7 +19,8 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False, 
     :param job_arguments: Arguments to srun.
     :param queueid: Queueid for updating queuemaster.
     :param time_limit: Hours that the job will run for. Hard cap, after which the job will be terminated.
-    :param high_mem: Whether or not the job requires a GPU with a larger amount of memory. See ACC docs for GPU .
+    :param high_mem: Whether or not the job requires a GPU with a larger amount of memory. See ACC docs for GPU.
+    :param exclude: List of nodes to exclude. Comma separated values, no spaces.
 
     :return: The file location of the batch file.
     """
@@ -70,6 +76,9 @@ def write_batch_file(job_arguments, queueid=None, time_limit=10, use_gpu=False, 
             f.write(f'module add /home/exacloud/software/modules/cudnn/7.6-10.1\n')
         else:
             f.write(f'#SBATCH --gres=disk:5\n')
+
+        if exclude is not None:
+            f.write(f'#SBATCH --exclude={exclude}\n')
 
         f.write(' '.join(['srun'] + job_arguments))
         f.write('\n')

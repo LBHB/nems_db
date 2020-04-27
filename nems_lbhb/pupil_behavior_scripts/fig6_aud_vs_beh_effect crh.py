@@ -23,7 +23,7 @@ from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = False
+save_fig = True
 
 # ===================================================== pupil behavior data =======================================================
 # SPECIFY models

@@ -58,6 +58,7 @@ def enqueue_models_view():
     exaExec = request.args.get('exaExec')
     exaScript = request.args.get('exaScript')
     exaLimit = request.args.get('exaLimit')
+    exaExclude = request.args.get('exaExclude')
     exaHighMem = request.args.get('exaHighMem', type=int)
 
     if loadKamiak:
@@ -69,7 +70,7 @@ def enqueue_models_view():
         log.info('Starting exacloud jobs!')
         enqueue_exacloud_models(cellist=cSelected, batch=bSelected, modellist=mSelected, user=user.username,
                                 linux_user=exaOHSU, executable_path=exaExec, script_path=exaScript,
-                                time_limit=exaLimit, useGPU=useGPU, high_mem=exaHighMem)
+                                time_limit=exaLimit, useGPU=useGPU, high_mem=exaHighMem, exclude=exaExclude)
         return jsonify(data=True)
 
     elif useKamiak:
