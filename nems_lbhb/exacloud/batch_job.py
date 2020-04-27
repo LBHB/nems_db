@@ -118,6 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('--time_limit', type=float, default=10, help='The time limit for the job in hours.')
     parser.add_argument('--use_gpu', action='store_true', help='Whether to start a CPU or GPU job.')
     parser.add_argument('--high_mem', action='store_true', help='Whether to use GPU with more memory.')
+    parser.add_argument('--exclude', default=None, help='List of nodes to exclude. Comma separated values, no spaces.')
 
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
 
