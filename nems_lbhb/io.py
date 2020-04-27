@@ -869,17 +869,18 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         #        exptevents, sortinfo, spikefs, rasterfs
         #        )
 
-    loading_pcs = False
+    loading_pcs = 0
     if 'SVD.pickle' in pupilfilepath:
+        loading_pcs = options.get('facemap', 0)
 
+        log.info("SVD.pickle file, assuming single matrix: %s", pupilfilepath)
         with open(pupilfilepath, 'rb') as fp:
             pupildata = pickle.load(fp)
 
-        log.info("SVD.pickle file, assuming single matrix")
-        pupil_diameter = pupildata
+        pupil_diameter = pupildata[:, :loading_pcs]
 
-        log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
-        loading_pcs = True
+        log.info("pupil_diameter.shape: %s", str(pupildata.shape))
+        log.info("keeping %d channels: ", loading_pcs)
 
     elif '.pickle' in pupilfilepath:
         with open(pupilfilepath, 'rb') as fp:

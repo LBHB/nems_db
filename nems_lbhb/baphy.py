@@ -501,9 +501,10 @@ def baphy_load_data(parmfilepath, **options):
         except:
             log.info("REM load failed. Skipping.")
 
-    if options.get('facemap',False):
+    if options.get('facemap', False):
         try:
             options['verbose'] = False
+            log.info("PC filepath: %s", pcfilepath)
             pctrace, ptrialidx = io.load_pupil_trace(
                     pcfilepath, exptevents, **options)
             state_dict['facemap'] = pctrace
