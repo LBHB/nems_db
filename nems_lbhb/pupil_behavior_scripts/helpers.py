@@ -679,9 +679,9 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
 
     
     # add zeros for "PASSIVE_0" col
-    dMI.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
-    dMI0.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
-    dMIu.at[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+    dMI.loc[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+    dMI0.loc[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
+    dMIu.loc[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
 
     active_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'ACTIVE' in c]
     passive_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'PASSIVE' in c]
@@ -784,4 +784,5 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
 
     f.tight_layout()
 
-    return f, dMI, dMI0
+    #return f, dMI, dMI0
+    return f, dMIu_all, dMI_all

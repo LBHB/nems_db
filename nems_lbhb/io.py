@@ -528,15 +528,9 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
 
     # using the trial lengths, figure out adjustments to trial event times.
     if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
+        log.debug('rounding Trial offset spike times to even number of rasterfs bins')
         # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs*finalfs)
-                / finalfs*spikefs
-                )
-        # print(TrialLen_spikefs)
-
+        TrialLen_spikefs = np.ceil(TrialLen_spikefs / spikefs*finalfs) / finalfs*spikefs
     Offset_spikefs = np.cumsum(TrialLen_spikefs)
     Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
 
@@ -560,7 +554,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
         if len(sortinfo[c]) and sortinfo[c][0].size:
             s = sortinfo[c][0][0]['unitSpikes']
             comment = sortinfo[c][0][0][0][0][2][0]
-            log.debug('Comment: %s', comment)
+            log.info('Comment: %s', comment)
 
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
@@ -635,7 +629,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     # using the trial lengths, figure out adjustments to trial event times.
     if finalfs:
-        print('rounding Trial offset spike times'
+        log.info('rounding Trial offset spike times'
               ' to even number of rasterfs bins')
         # print(TrialLen_spikefs)
         TrialLen_spikefs = (
@@ -664,7 +658,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
         # print("{0} events past end of trial?".format(len(badevents)))
         # exptevents.drop(badevents)
 
-    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
     # convert spike times from samples since trial started to
     # (approximate) seconds since experiment started (matched to exptevents)
@@ -683,7 +677,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
                 if st.size:
-                    print("{} {}".format(u,str(st.shape)))
+                    log.debug("{} {}".format(u,str(st.shape)))
                     uniquetrials = np.unique(st[0, :])
                     # print('chan {0} unit {1}: {2} spikes {3} trials'
                     #       .format(c, u, st.shape[1], len(uniquetrials)))
@@ -775,7 +769,7 @@ def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
        exptevents['start'] = np.round(exptevents['start']*finalfs)/finalfs
        exptevents['end'] = np.round(exptevents['end']*finalfs)/finalfs
 
-    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
     return exptevents
 
@@ -888,8 +882,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         # hard code to use minor axis for now
         options['pupil_variable_name'] = 'minor_axis'
-        log.info("Using default pupil_variable_name: " +
-                 options['pupil_variable_name'])
+        log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         log.info("Using CNN results for pupiltrace")
 
         pupil_diameter = pupildata['cnn']['a'] * 2
@@ -925,11 +918,10 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         params = p['params']
         if 'pupil_variable_name' not in options:
             options['pupil_variable_name'] = params[0][0]['default_var'][0][0][0]
-            log.info("Using default pupil_variable_name: " +
-                     options['pupil_variable_name'])
+            log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         if 'pupil_algorithm' not in options:
             options['pupil_algorithm'] = params[0][0]['default'][0][0][0]
-            log.info("Using default pupil_algorithm: " + options['pupil_algorithm'])
+            log.debug("Using default pupil_algorithm: %s", options['pupil_algorithm'])
 
         results = p['results'][0][0][-1][options['pupil_algorithm']]
         pupil_diameter = np.array(results[0][options['pupil_variable_name']][0][0])
@@ -940,7 +932,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if pupil_eyespeed:
             try:
                 eye_speed = np.array(results[0]['eye_speed'][0][0])
-                log.info("loaded eye_speed")
+                log.debug("loaded eye_speed")
             except:
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
@@ -1518,7 +1510,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     exptevents, spiketimes, unit_names = baphy_align_time(
             exptevents, sortinfo, spikefs, options["rasterfs"])
-    print('Creating trial events')
+    log.info('Creating trial events')
     tag_mask_start = "TRIALSTART"
     tag_mask_stop = "TRIALSTOP"
     ffstart = exptevents['name'].str.startswith(tag_mask_start)
@@ -1574,6 +1566,7 @@ def load_raw_pupil(pupilfilepath, fs=None):
     pupil_diameter = pupil_diameter[:-1, np.newaxis]
 
     return pupil_diameter
+
 
 def load_raw_photometry(photofilepath, fs=None, framen=0):
     """

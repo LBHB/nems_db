@@ -336,7 +336,7 @@ def baphy_load_data(parmfilepath, **options):
         elif exptparams['runclass']=='VOC_VOC':
             stimfilepath1 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
             stimfilepath2 = io.baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
-            print("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
+            log.info("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
             # load stimulus spectrogram
             stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
             stim2, tags2, stimparam2 = baphy_load_specgram(stimfilepath2)
@@ -412,7 +412,7 @@ def baphy_load_data(parmfilepath, **options):
     pp, bb = os.path.split(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     pcfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", "_motSVD.pickle", bb)
-    print("Spike file: {0}".format(spkfilepath))
+    log.info("Spike file: {0}".format(spkfilepath))
 
     # load spike times
     if options['resp']:
@@ -440,7 +440,7 @@ def baphy_load_data(parmfilepath, **options):
             t[0] = t[0].lower()
             cellids.append(t[0])
             pcellidmap[t[0]] = pcellid
-        print(pcellidmap)
+        log.info(pcellidmap)
         # pull out a single cell if 'all' not specified
         spike_dict = {}
         for i, x in enumerate(unit_names):
@@ -495,8 +495,8 @@ def baphy_load_data(parmfilepath, **options):
             is_rem = is_rem.astype(float)
             new_len = int(len(is_rem) * options['rasterfs'] / rem_options['rasterfs'])
             is_rem = resample(is_rem, new_len)
-            is_rem[is_rem>0.01] = 1
-            is_rem[is_rem<=0.01] = 0
+            is_rem[is_rem > 0.01] = 1
+            is_rem[is_rem <= 0.01] = 0
             state_dict['rem'] = is_rem
         except:
             log.info("REM load failed. Skipping.")
@@ -1107,13 +1107,13 @@ def baphy_load_recording(**options):
             else:
                 pupil = pupil.concatenate_time([pupil, t_pupil])
 
-            print("rlen={}  plen={}".format(resp.ntimes, pupil.ntimes))
+            log.debug("rlen={}  plen={}".format(resp.ntimes, pupil.ntimes))
             max_this=t_resp.epochs['end'].max()
             max_all=resp.epochs['end'].max()
-            print('resp max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
+            log.debug('resp max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
             max_this=t_pupil.epochs['end'].max()
             max_all=pupil.epochs['end'].max()
-            print('pupil max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
+            log.debug('pupil max times: this={:.15f} all={:.15f}'.format(max_this,max_all))
 
         if options.get('facemap',False):
 
