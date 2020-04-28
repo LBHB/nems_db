@@ -248,7 +248,7 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
         elif (len(cellid.split('+')) > 1):
             # list of cellids (specified in model queue by separating with '_')
             cellid = cellid.split('+')
-    
+
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
 

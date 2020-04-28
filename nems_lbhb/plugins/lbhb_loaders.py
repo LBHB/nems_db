@@ -1,6 +1,7 @@
 import logging
 import re
 
+
 log = logging.getLogger(__name__)
 
 
@@ -36,13 +37,42 @@ def psth(loadkey, cellid=None, batch=None):
     return xfspec
 
 
-def ozgf(loadkey, cellid=None, batch=None):
+def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     gammatone filter
        extra parameters handled by loadkey parser in baphy_load_wrapper
     """
-    d = _load_dict(loadkey, cellid, batch)
-    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+
+    from nems_lbhb.xform_wrappers import generate_recording_uri
+    import nems_lbhb.baphy as nb
+
+    pc_idx = None
+    if type(cellid) is str:
+        cc = cellid.split("_")
+        if (len(cc) > 1) and (cc[1][0] == "P"):
+            pc_idx = [int(cc[1][1:])]
+            cellid = cc[0]
+        elif (len(cellid.split('+')) > 1):
+            # list of cellids (specified in model queue by separating with '_')
+            cellid = cellid.split('+')
+
+    recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
+                                           loadkey=loadkey, siteid=siteid)
+
+    # update the cellid in context so that we don't have to parse the cellid
+    # again in xforms
+    t_ops = {} # options.copy()
+    t_ops['cellid'] = cellid
+    t_ops['batch'] = batch
+    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
+
+    if pc_idx is not None:
+        context['pc_idx'] = pc_idx
+
+    xfspec = [['nems.xforms.init_context', context]]
+    #d = _load_dict(loadkey, cellid, batch)
+    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec
 
 
