@@ -278,6 +278,7 @@ def fill_default_options(options):
     options['stim'] = int(options.get('stim', True))
     options['runclass'] = options.get('runclass', None)
     options['rawid'] = options.get('rawid', None)
+    options['facemap'] = options.get('facemap', False)
 
     if options['stimfmt'] in ['envelope', 'parm']:
         log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
