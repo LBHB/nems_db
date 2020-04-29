@@ -16,42 +16,19 @@ def _load_dict(loadkey, cellid=None, batch=None):
         d['batch'] = batch
     return d
 
-def env(loadkey, cellid=None, batch=None):
-    """
-    envelope loader
-       extra parameters handled by loadkey parser in baphy_load_wrapper
-    """
-
-    d = _load_dict(loadkey, cellid, batch)
-    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
-    return xfspec
-
-
-def psth(loadkey, cellid=None, batch=None):
-    """
-    psth loader (no stim)
-       extra parameters handled by loadkey parser in baphy_load_wrapper
-    """
-    d = _load_dict(loadkey, cellid, batch)
-    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
-    return xfspec
-
-
-def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
-    """
-    gammatone filter
-       extra parameters handled by loadkey parser in baphy_load_wrapper
-    """
+def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **options):
 
     from nems_lbhb.xform_wrappers import generate_recording_uri
     import nems_lbhb.baphy as nb
 
     pc_idx = None
+
     if type(cellid) is str:
         cc = cellid.split("_")
         if (len(cc) > 1) and (cc[1][0] == "P"):
             pc_idx = [int(cc[1][1:])]
             cellid = cc[0]
+
         elif (len(cellid.split('+')) > 1):
             # list of cellids (specified in model queue by separating with '_')
             cellid = cellid.split('+')
@@ -70,13 +47,45 @@ def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     if pc_idx is not None:
         context['pc_idx'] = pc_idx
 
-    xfspec = [['nems.xforms.init_context', context]]
-    #d = _load_dict(loadkey, cellid, batch)
-    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    return [['nems.xforms.init_context', context]]
+
+
+def env(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    envelope loader
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+
+    d = _load_dict(loadkey, cellid, batch)
+    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec
 
 
-def parm(loadkey, cellid=None, batch=None):
+def psth(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    psth loader (no stim)
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+    return _parse_baphy_loadkey(loadkey, cellid=cellid, batch=batch, siteid=siteid, **options)
+
+    #d = _load_dict(loadkey, cellid, batch)
+    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    #return xfspec
+
+
+def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    gammatone filter
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+    return _parse_baphy_loadkey(loadkey, cellid=cellid, batch=batch, siteid=siteid, **options)
+
+    #d = _load_dict(loadkey, cellid, batch)
+    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    #return xfspec
+
+
+def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     parm spectrogram
        extra parameters handled by loadkey parser in baphy_load_wrapper
@@ -86,7 +95,7 @@ def parm(loadkey, cellid=None, batch=None):
     return xfspec
 
 
-def ns(loadkey, cellid=None, batch=None):
+def ns(loadkey, cellid=None, batch=None, siteid=None, **options):
     d = _load_dict(loadkey, cellid, batch)
     xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec

@@ -1137,7 +1137,7 @@ def baphy_load_recording(**options):
             # generate pupil signals
             t_fm = nems.signal.RasterizedSignal(
                     fs=options['rasterfs'], data=state_dict['facemap'],
-                    name='facemap', recording=rec_name, chans=[str(n) for n in range(state_dict['facemap'].shape[0])],
+                    name='facemap', recording=rec_name, chans=[f'motSVD{n}' for n in range(state_dict['facemap'].shape[0])],
                     epochs=event_times)
 
             if i == 0:
