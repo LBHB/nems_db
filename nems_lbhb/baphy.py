@@ -644,7 +644,7 @@ def baphy_load_dataset(parmfilepath, **options):
                 exptevents.loc[i + 1, 'start'] = trialstoptime
                 exptevents.loc[i + 1, 'end'] = trialstoptime
 
-        print("Keeping {0}/{1} events that precede responses"
+        log.info("Keeping {0}/{1} events that precede responses"
               .format(np.sum(keepevents), len(keepevents)))
         exptevents = exptevents[keepevents].reset_index()
 
