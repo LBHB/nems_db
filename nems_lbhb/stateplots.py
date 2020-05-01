@@ -523,7 +523,7 @@ def model_per_time_wrapper(cellid, batch=307,
                            fitter = "_jk.nf20-basic",
                            basemodel = "-ref-psthfr_stategain.S",
                            state_list=None, plot_halves=True,
-                           colors=None, epoch="REFERENCE"):
+                           colors=None, epoch="REFERENCE", max_states=100):
     """
     batch = 307  # A1 SUA and MUA
     batch = 309  # IC SUA and MUA
@@ -585,7 +585,7 @@ def model_per_time_wrapper(cellid, batch=307,
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
                             psth_name2='pred', state_sig='state_f',
                             colors=colors, channel=None, decimate_by=1,
-                            ax=ax[2+i], files_only=files_only, modelspec=modelspec)
+                            ax=ax[2+i], files_only=files_only, modelspec=modelspec, max_states=max_states)
         ax[2+i].set_ylabel(state_list[i])
         ax[2+i].set_xticks([])
 

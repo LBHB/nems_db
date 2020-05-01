@@ -649,7 +649,7 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     dp = pd.pivot_table(da, index='cellid',columns='state_sig',values=['r','r_se'])
 
     sig = (dp.loc[:, pd.IndexSlice['r', state_list[3]]] - dp.loc[:, pd.IndexSlice['r', state_list[0]]]) > \
-            (dp.loc[:, pd.IndexSlice['r_se', state_list[3]]] + dp.loc[:, pd.IndexSlice['r_se', state_list[0]]])
+          (dp.loc[:, pd.IndexSlice['r_se', state_list[3]]] + dp.loc[:, pd.IndexSlice['r_se', state_list[0]]])
     sig_cells = sig[sig].index
 
     dfull = df[df['state_sig']==state_list[3]]
@@ -676,7 +676,6 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
         dMI0_pas = dp0_pas.loc[:, pd.IndexSlice['MI', states]]
         dMIu_pas = dMI_pas - dMI0_pas
         dMI_pas = dp_beh_pas.loc[:, pd.IndexSlice['MI', states]]
-
     
     # add zeros for "PASSIVE_0" col
     dMI.loc[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
@@ -684,7 +683,7 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     dMIu.loc[:, pd.IndexSlice['MI', 'PASSIVE_0']] = 0
 
     active_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'ACTIVE' in c]
-    passive_idx = [c for c in dMI.columns.get_level_values('state_chan') if 'PASSIVE' in c]
+    passive_idx = [c for c in dMI.columns.get_level_values('state_chan') if ('PASSIVE' in c)]
 
     # force reorder the columns of all dataframes for the plot
     new_col_order = sorted(dMI.columns.get_level_values('state_chan'), key=lambda x: x[-1])
@@ -704,11 +703,15 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
 
     if norm_sign:
         b = dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1).fillna(0)
-        dMI = dMI.subtract(b, axis=0)
-        dMIu = dMIu.subtract(b, axis=0)
-        dMI0 = dMI0.subtract(b, axis=0)
+        #dMI = dMI.subtract(b, axis=0)
+        #dMIu = dMIu.subtract(b, axis=0)
+        #dMI0 = dMI0.subtract(b, axis=0)
+
+        # make it so that active MI > 0
         sg = dMI.loc[:, pd.IndexSlice['MI', active_idx]].mean(axis=1) - \
-                    dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1)
+             dMI.loc[:, pd.IndexSlice['MI', passive_idx]].mean(axis=1)
+        #sg = dMI.loc[:, pd.IndexSlice['MI', active_idx]].mean(axis=1)
+        #import pdb;pdb.set_trace()
         sg = sg.apply(np.sign)
         dMI = dMI.multiply(sg, axis=0)
         dMIu = dMIu.multiply(sg, axis=0)
@@ -730,7 +733,8 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     sig_state_cells = len(sig_cells)
     stable_cells = state_mask.sum()
 
-    f, ax = plt.subplots(2, 1, figsize=(3,6))
+    f = plt.figure(figsize=(6,6))
+    ax = [plt.subplot(2,2,1), plt.subplot(2,1,2)]
 
     # scatter plot of raw post passive MI vs. unique post passive MI
     # e.g. does pupil account for some persistent effects?
