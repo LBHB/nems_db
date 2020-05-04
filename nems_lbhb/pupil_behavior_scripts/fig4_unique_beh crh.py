@@ -25,7 +25,7 @@ dump_path = get_setting('NEMS_RESULTS_DIR')
 helper_path = os.path.dirname(helper.__file__)
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 # SPECIFY models
 USE_AFL=True
@@ -79,7 +79,7 @@ if group_files & ('beh' not in model_string):
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c].iloc[0] for c in df.index.get_level_values('cellid')]
     df=df.reset_index()
     
-fh, axs = plt.subplots(2, 2, figsize=(5,5))
+fh, axs = plt.subplots(2, 3, figsize=(7.5,5))
 
 # Figure 4A
 # A1
@@ -152,6 +152,25 @@ axs[1, 1].set_ylabel('MI_task only/unique')
 #plt.savefig('MI_task_unique_IC.pdf')
 nplt.ax_remove_box(axs[1,1])
 
+axs[0, 2].bar(x_axis_ICC, df_MI_only_sorted.loc[df_MI_only_sorted.area.isin(['ICC']), 'MI_task'],
+                                color = common.color_b, edgecolor = common.color_b)
+axs[0, 2].bar(x_axis_ICC, df_MI_unique_sorted.loc[df_MI_unique_sorted.area.isin(['ICC']), 'MI_task_unique'],
+                                color=common.color_b, edgecolor=common.color_p, linewidth=0.5)
+axs[0, 2].set_ylim((-0.7,0.7))
+axs[0, 2].set_xlabel('ICC units')
+axs[0, 2].set_ylabel('MI_task only/unique')
+nplt.ax_remove_box(axs[1,1])
+
+axs[1, 2].bar(x_axis_ICX, df_MI_only_sorted.loc[df_MI_only_sorted.area.isin(['ICX']), 'MI_task'],
+                                color = common.color_b, edgecolor = common.color_b)
+axs[1, 2].bar(x_axis_ICX, df_MI_unique_sorted.loc[df_MI_unique_sorted.area.isin(['ICX']), 'MI_task_unique'],
+                                color=common.color_b, edgecolor=common.color_p, linewidth=0.5)
+axs[1, 2].set_ylim((-0.7,0.7))
+axs[1, 2].set_xlabel('ICX units')
+axs[1, 2].set_ylabel('MI_task only/unique')
+nplt.ax_remove_box(axs[1,1])
+
+
 
 # ===================================== Stats stuff ==============================================
 # To quantify differences in modulation without the confounding element of sign let's do
@@ -168,6 +187,7 @@ signed_diff_A1 = (df.loc[df.area=='A1', 'MI_task']
 signed_only_A1 = df.loc[df.area=='A1', 'MI_task'] * sign_A1
 
 signed_unique_A1 = df.loc[df.area=='A1', 'MI_task_unique'] * sign_A1
+unique_A1 = df.loc[(df.area=='A1') & df['sig_state'], 'MI_task_unique']
 
 diff_A1 = (df.loc[df.area=='A1', 'MI_task']
                   -df.loc[df.area=='A1', 'MI_task_unique'])
@@ -208,14 +228,24 @@ signed_diff_A1_MU = (df.loc[(df.area=='A1') & ~df['SU'],
 
 sign_IC = np.sign((df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task_unique']+
                            df.loc[df.area.isin(['ICC', 'ICX']),'MI_task'])/2)
+sign_ICC = np.sign((df.loc[df.area.isin(['ICC']), 'MI_task_unique']+
+                           df.loc[df.area.isin(['ICC']),'MI_task'])/2)
+sign_ICX = np.sign((df.loc[df.area.isin(['ICX']), 'MI_task_unique']+
+                           df.loc[df.area.isin(['ICX']),'MI_task'])/2)
 
 signed_diff_IC = (df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task']
                   -df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task_unique']) * sign_IC
 
 
 signed_only_IC = df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task'] * sign_IC
-
 signed_unique_IC = df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task_unique'] * sign_IC
+signed_only_ICC = df.loc[df.area.isin(['ICC']), 'MI_task'] * sign_ICC
+signed_unique_ICC = df.loc[df.area.isin(['ICC']), 'MI_task_unique'] * sign_ICC
+signed_only_ICX = df.loc[df.area.isin(['ICX']), 'MI_task'] * sign_ICX
+signed_unique_ICX = df.loc[df.area.isin(['ICX']), 'MI_task_unique'] * sign_ICX
+unique_IC = df.loc[df.area.isin(['ICC', 'ICX']) & df['sig_state'], 'MI_task_unique']
+unique_ICC = df.loc[df.area.isin(['ICC']) & df['sig_state'], 'MI_task_unique']
+unique_ICX = df.loc[df.area.isin(['ICX']) & df['sig_state'], 'MI_task_unique']
 
 diff_IC = (df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task']
                   -df.loc[df.area.isin(['ICC', 'ICX']), 'MI_task_unique'])
@@ -263,12 +293,50 @@ signed_diff_IC_SU = (df.loc[df.area.isin(['ICC', 'ICX'])  & df['SU'],
                                                                                                  'MI_task'])/2)
 
 # IC MU
-signed_diff_IC_MU = (df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
-                  'MI_task']-df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
-                                         'MI_task_unique']) * np.sign((df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
-                                                                          'MI_task_unique']+df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
-                                                                                                 'MI_task'])/2)
+signed_diff_IC_MU = (df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'], 'MI_task']
+                     -df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
+                             'MI_task_unique']) * np.sign((df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'],
+                             'MI_task_unique']+df.loc[df.area.isin(['ICC', 'ICX'])  & ~df['SU'], 'MI_task'])/2)
 
+
+ratio_A1 = 1 - (signed_unique_A1.mean() / signed_only_A1.mean())
+ratio_IC = 1 - (signed_unique_IC.mean() / signed_only_IC.mean())
+ratio_ICC = 1 - (signed_unique_ICC.mean() / signed_only_ICC.mean())
+ratio_ICX = 1 - (signed_unique_ICX.mean() / signed_only_ICX.mean())
+
+stat, p = sci.wilcoxon(signed_diff_A1)
+print(f'A1 mean MI task only, unique: {signed_only_A1.median():.3f}, {signed_unique_A1.median():.3f}')
+print(f'  signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+print(f'  Ratio: {ratio_A1:.3f}')
+stat, p = sci.wilcoxon(signed_diff_IC)
+print(f'IC mean MI task only, unique: {signed_only_IC.median():.3f}, {signed_unique_IC.median():.3f}')
+print(f'  signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+print(f'  Ratio: {ratio_IC:.3f}')
+stat, p = sci.wilcoxon(signed_diff_ICC)
+print(f' ICC signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+print(f'  Ratio: {ratio_ICC:.3f}')
+stat, p = sci.wilcoxon(signed_diff_ICX)
+print(f' ICX signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+print(f'  Ratio: {ratio_ICX:.3f}')
+
+stat, p = sci.ranksums(signed_unique_A1 / signed_only_A1,
+                       signed_unique_IC / signed_only_IC)
+print(f'A1 vs. IC rank sum ratio: stat={stat:.3f}, p={p:.4e}')
+stat, p = sci.ranksums(signed_unique_ICC / signed_only_ICC,
+                       signed_unique_ICX / signed_only_ICX)
+print(f'ICC vs. ICX rank sum ratio: stat={stat:.3f}, p={p:.4e}')
+
+
+stat, p = sci.wilcoxon(unique_A1)
+print(f'A1 u_mod_beh: n+={np.sum(unique_A1>0)}/{len(unique_A1)} med={np.median(unique_A1):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+stat, p = sci.wilcoxon(unique_IC)
+print(f'IC u_mod_beh: n+={np.sum(unique_IC>0)}/{len(unique_IC)} med={np.median(unique_IC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+stat, p = sci.wilcoxon(unique_ICC)
+print(f'ICC u_mod_beh: n+={np.sum(unique_ICC>0)}/{len(unique_ICC)} med={np.median(unique_ICC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+stat, p = sci.wilcoxon(unique_ICX)
+print(f'ICX u_mod_beh: n+={np.sum(unique_ICX>0)}/{len(unique_ICX)} med={np.median(unique_ICX):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+
+"""
 print(signed_diff_A1.mean())
 print(signed_diff_IC.mean())
 
@@ -278,8 +346,6 @@ print(signed_unique_A1.mean())
 print(signed_only_IC.mean())
 print(signed_unique_IC.mean())
 
-ratio_A1 = (signed_unique_A1 / signed_only_A1).median()
-ratio_IC = (signed_unique_IC / signed_only_IC).median()
 
 print(ratio_A1)
 print(ratio_IC)
@@ -289,7 +355,7 @@ print(diff_IC.median())
 
 print(diff_A1_sig_state.median())
 print(diff_IC_sig_state.median())
-
+"""
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig4_unique_beh.pdf'))
 

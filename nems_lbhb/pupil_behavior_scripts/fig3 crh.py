@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import math
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -10,11 +9,6 @@ import matplotlib.collections as clt
 import re
 import pylab as pl
 
-from nems_lbhb.pupil_behavior_scripts.mod_per_state import get_model_results_per_state_model
-from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
-from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
-from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
-from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
 from nems import get_setting

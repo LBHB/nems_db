@@ -91,7 +91,6 @@ if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
 
-
 # ==================================================== behavior only data ===========================================================
 # Figures 6C-D  - beh only effects, bigger set of cells
 # later figure -- beh only (ignore pupil, can use larger stim set)
@@ -166,3 +165,5 @@ f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, state_list=['st.afl0', 'st.
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_A1.pdf'))
 
+"""
+"""

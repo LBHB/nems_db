@@ -567,7 +567,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     if state_list is None:
         state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
     
-    f = plt.figure(figsize=(2.5,7.5))
+    f = plt.figure(figsize=(5.0,5.0))
 
     dr = df.copy()
 
@@ -583,6 +583,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['p_unique'] = dr['bp_common']*0
         mfull=dr[['r_shuff', 'r_full', 'bp_common', 'b_unique', 'p_unique', 'sig_state']].values
 
+    mfull=mfull.astype(float)
     if nb > 0:
         mm=np.zeros((nb,mfull.shape[1]))
         for i in range(nb):
@@ -603,11 +604,11 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     mall = mall[:, 2:]
     mb=m[:,2:]
 
-    ax1 = plt.subplot(3,1,1)
+    ax1 = plt.subplot(2,2,1)
     stateplots.beta_comp(mfull[:,0],mfull[:,1],n1='State independent',n2='Full state-dep',
                          ax=ax1, highlight=mfull[:, -1], hist_range=[-0.1, 1])
 
-    plt.subplot(3,1,2)
+    plt.subplot(2,2,3)
     width=0.8
     mplots=np.concatenate((mall, mb), axis=0)
     ind = np.arange(mplots.shape[0])
@@ -621,21 +622,39 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.xlabel('behavior-independent quintile')
     plt.ylabel('mean r2')
 
-    ax3 = plt.subplot(3,1,3)
-    d=(mfull[:,1]-mfull[:,0])# /(1-np.abs(mfull[:,0]))
+    ax3 = plt.subplot(2,2,2)
+    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
     stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
     ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
-    r, p = st.pearsonr(mfull[:,0],d)
+    slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
+    mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
+    ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     plt.title('cc={:.3} p={:.4}'.format(r,p))
 
+    ax4 = plt.subplot(2,2,4)
+    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    snr = np.log(dr['SNR'].values)
+    #import pdb; pdb.set_trace()
+    _ok = np.isfinite(d) & np.isfinite(snr)
+    ax4.plot(snr[_ok], d[_ok], 'k.', markersize=4)
+    #stateplots.beta_comp(snr[_ok], d[_ok], n1='SNR',n2='dep - indep',
+    #                 ax=ax4, highlight=mfull[_ok,-1], hist_range=[-0.1, 1], markersize=4)
+    slope, intercept, r, p, std_err = st.linregress(snr[_ok], d[_ok])
+    mm = np.array([np.min(snr[_ok]), np.max(snr[_ok])])
+    ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
+    ax4.set_xlabel('log(SNR)')
+    ax4.set_ylabel('dep-indep')
+    ax4.set_title('cc={:.3} p={:.4}'.format(r,p))
+    nplt.ax_remove_box(ax4)
 
     f.tight_layout()
 
     return f
 
 
-def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=False, states=None, scatter_sig_cells=None):
+def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
+                 sig_cells_only=False, states=None, scatter_sig_cells=None):
     """
     Copied/modified version of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
     """
@@ -787,6 +806,9 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True, sig_cells_only=Fal
     nplt.ax_remove_box(ax[1])
 
     f.tight_layout()
+
+    print("raw: ", np.nanmean((dMI), axis=0))
+    print("u: ", np.nanmean((dMIu), axis=0))
 
     #return f, dMI, dMI0
     return f, dMIu_all, dMI_all

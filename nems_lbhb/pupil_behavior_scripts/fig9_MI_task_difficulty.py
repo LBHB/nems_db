@@ -59,8 +59,8 @@ IC = helper.preprocess_sdexp_dump(dump_results,
 IC = IC[IC.sig_psth]
 
 # convert difficulty to True (for hard) and False (for easy)
-A1['difficulty'] = [True if x in hard else False for x in A1.difficulty]
-IC['difficulty'] = [True if x in hard else False for x in IC.difficulty]
+#A1['difficulty'] = [True if x in hard else False for x in A1.difficulty]
+#IC['difficulty'] = [True if x in hard else False for x in IC.difficulty]
 
 # stripplot of MI split by difficulty and task significance
 f, ax = plt.subplots(1, 2, figsize=(5, 3), sharey='row')

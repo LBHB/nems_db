@@ -161,10 +161,8 @@ else:
                                 (c not in task_only) & (c not in pupil_only) & (c not in both)] 
         IC_sig = {'task_or_pupil': task_or_pupil, 'both': both, 'pupil_only': pupil_only, 'task_only': task_only}
 
-
-        fA1, _1, _2 = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
-
-        fIC, _1, _2 = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
+        fA1, dMIu_A1, dMI_A1 = helper.hlf_analysis(A1, state_list, pas_df=A1_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=A1_sig)
+        fIC, dMIu_IC, dMI_IC = helper.hlf_analysis(IC, state_list, pas_df=IC_pas, norm_sign=True, sig_cells_only=sig_cells_only, states=states, scatter_sig_cells=IC_sig)
 
 
 if save_fig:

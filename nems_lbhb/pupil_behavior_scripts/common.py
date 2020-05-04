@@ -222,8 +222,10 @@ def scat_states_crh(df,
 
     # generate area mask
     if area is not None:
+        s_area=area
         area = df.area.str.contains(area, regex=True)
     else:
+        s_area='All'
         area = np.ones(df.shape[0]).astype(bool)
 
     if ax is None:
@@ -318,6 +320,12 @@ def scat_states_crh(df,
                         s=200, color=color, marker=marker, edgecolors='white', linewidth=0.5)
     ax.set_aspect('equal', 'box')
     nplt.ax_remove_box(ax)
+
+    # print some statistics:
+    print(f'Area={s_area} X={x_model}={df.loc[area,x_model].median():.3f}, Y={y_model}={df.loc[area,y_model].median():.3f}')
+    stat, p = sci.wilcoxon(df.loc[area,x_model],df.loc[area, y_model])
+    statr, pr = sci.pearsonr(df.loc[area,x_model],df.loc[area, y_model])
+    print(f'  Wilcoxon sign test: stat={stat:.1f}, p={p:.3e} R: {statr:.3f}, p={pr:.3e}')
 
     if save:
         plt.savefig(title + ylabel + xlabel + '.pdf')
