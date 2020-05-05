@@ -804,7 +804,7 @@ def set_default_pupil_options(options):
     return options
 
 
-def load_pupil_trace(pupilfilepath, exptevents=None, **options):
+def load_pupil_trace(pupilfilepath, exptevents=None, parmfileidx=None, **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
     and strialidx, which is the index into big_rs for the start of each
@@ -864,7 +864,27 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         #        )
 
     loading_pcs = 0
-    if 'SVD.pickle' in pupilfilepath:
+    if 'proc.npy' in pupilfilepath:
+        loading_pcs = options.get('facemap', 0)
+
+        log.info("proc.npy file, loading components from dictionary. %s", pupilfilepath)
+
+        fmdict = np.load(pupilfilepath, allow_pickle=True).item()
+	#by FM convention, the first entry in 'motSVD' regards videos taken simultaneously, 
+	#so we take the second
+        pupildata = fmdict['motSVD'][1]
+        
+        startct = 0
+        for i in range(parmfileidx):
+            startct += fmdict['iframes'][i] 
+        stopct = startct +  fmdict['iframes'][parmfileidx]
+
+        pupil_diameter = pupildata[startct:stopct, :loading_pcs]
+
+        log.info("pupil_diameter.shape: %s", str(pupildata.shape))
+        log.info("keeping %d channels: ", loading_pcs)
+
+    elif 'SVD.pickle' in pupilfilepath:
         loading_pcs = options.get('facemap', 0)
 
         log.info("SVD.pickle file, assuming single matrix: %s", pupilfilepath)
@@ -1435,6 +1455,10 @@ def get_pupil_file(pupilfilepath):
     pupilfilepath=str(pupilfilepath)
     if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
         log.info("Loading CNN pupil fit from .pickle file")
+        return pupilfilepath
+
+    elif 'proc.npy' in pupilfilepath:
+        log.info("Loading motions SVDs from proc.npy file")
         return pupilfilepath
 
     elif 'pup.mat' in pupilfilepath:

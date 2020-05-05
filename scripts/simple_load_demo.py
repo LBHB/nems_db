@@ -12,7 +12,7 @@ import nems.epoch as ep
 import numpy as np
 import matplotlib.pyplot as plt
 
-uri="/auto/data/nems_db/recordings/271/ozgf18_fs100/BRT026c-17-2.tgz"
+uri="/auto/data/nems_db/recordings/271/ozgf18_fs100/BRT026c-17-3.tgz"
 rec=Recording.load(uri)
 
 epoch_regex='^STIM_'
