@@ -804,14 +804,14 @@ def set_default_pupil_options(options):
     return options
 
 
-def load_pupil_trace(pupilfilepath, exptevents=None, parmfileidx=None, **options):
+def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
     and strialidx, which is the index into big_rs for the start of each
     trial. need to make sure the big_rs vector aligns with the other signals
     """
-
-    pupilfilepath = get_pupil_file(pupilfilepath)
+    if "facemap.npy" not in pupilfilepath:
+        pupilfilepath = get_pupil_file(pupilfilepath)
 
     options = set_default_pupil_options(options)
 
@@ -864,20 +864,26 @@ def load_pupil_trace(pupilfilepath, exptevents=None, parmfileidx=None, **options
         #        )
 
     loading_pcs = 0
-    if 'proc.npy' in pupilfilepath:
+    if 'facemap.npy' in pupilfilepath:
         loading_pcs = options.get('facemap', 0)
 
-        log.info("proc.npy file, loading components from dictionary. %s", pupilfilepath)
+        log.info("facemap.npy file, loading components from dictionary. %s", pupilfilepath)
 
         fmdict = np.load(pupilfilepath, allow_pickle=True).item()
 	#by FM convention, the first entry in 'motSVD' regards videos taken simultaneously, 
 	#so we take the second
         pupildata = fmdict['motSVD'][1]
         
+        parmfilepath  = options['parmfilepath']
+        parmfilename = os.path.basename(parmfilepath)
+        #figure out which section of the motion traces to take 
+        parmfilemsk = [(True if parmfilename in name else False) for name in fmdict['filenames']]
+        fileloc = np.argwhere(parmfilemsk)
+
         startct = 0
-        for i in range(parmfileidx):
+        for i in range(fileloc.squeeze()):
             startct += fmdict['iframes'][i] 
-        stopct = startct +  fmdict['iframes'][parmfileidx]
+        stopct = startct + fmdict['iframes'][fileloc.squeeze()]
 
         pupil_diameter = pupildata[startct:stopct, :loading_pcs]
 

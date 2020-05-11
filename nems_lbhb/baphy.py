@@ -287,13 +287,12 @@ def fill_default_options(options):
     return options
 
 
-def baphy_load_data(parmfilepath, parmfileidx=None, **options):
+def baphy_load_data(parmfilepath, **options):
     """
     this feeds into baphy_load_recording and baphy_load_recording_RDT (see
         below)
     input:
         parmfilepath: baphy parameter file
-	parmfileidx: index of parm file in files list
         options: dictionary of loading options
             runclass: matches Reference1 or Reference2 events, depending
 
@@ -413,9 +412,9 @@ def baphy_load_data(parmfilepath, parmfileidx=None, **options):
     # figure out spike file to load
     pp, bb = os.path.split(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
-    # parmfile names stereotypes in length so this is hard coded
-    bb = bb[:7]+bb[11:]
-    pcfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", "_proc.npy", bb)
+    # parmfile names stereotyped in length so this is hard coded 
+    bb = bb[:7]
+    pcfilepath = pp + '/' + spk_subdir + bb + "_facemap.npy"
     log.info("Spike file: {0}".format(spkfilepath))
 
     # load spike times
@@ -510,23 +509,22 @@ def baphy_load_data(parmfilepath, parmfileidx=None, **options):
             options['verbose'] = False
             log.info("PC filepath: %s", pcfilepath)
             pctrace, ptrialidx = io.load_pupil_trace(
-                    pcfilepath, exptevents, parmfileidx, **options)
+                    pcfilepath, exptevents, parmfilepath=parmfilepath, **options)
             state_dict['facemap'] = pctrace
 
         except ValueError:
-            raise ValueError("Error loading pupil data: " + pupilfilepath)
+            raise ValueError("Error loading motion data: " + pcfilepath)
 
     return (exptevents, stim, spike_dict, state_dict,
             tags, stimparam, exptparams)
 
 
-def baphy_load_dataset(parmfilepath, parmfileidx=None, **options):
+def baphy_load_dataset(parmfilepath, **options):
     """
     this can be used to generate a recording object
 
     input:
         parmfilepath: baphy parameter file
-	parmfileidx: index of parmfilepath in files list
         options: dictionary of loading options
 
     current outputs:
@@ -546,7 +544,7 @@ def baphy_load_dataset(parmfilepath, parmfileidx=None, **options):
     """
     # get the relatively un-pre-processed data
     exptevents, stim, spike_dict, state_dict, tags, stimparam, exptparams = \
-        baphy_load_data(parmfilepath, parmfileidx, **options)
+        baphy_load_data(parmfilepath, **options)
 
     # if runclass is BVT, add behavior outcome column (to be used later)
     # very kludgy
@@ -1036,7 +1034,7 @@ def baphy_load_recording(**options):
                 baphy_load_dataset_RDT(parmfilepath, **options)
         else:
             event_times, spike_dict, stim_dict, state_dict = \
-                baphy_load_dataset(parmfilepath, i, **options)
+                baphy_load_dataset(parmfilepath, **options)
 
             d2 = event_times.loc[0].copy()
             if (i == 0) and (d2['name'] == 'PASSIVE_EXPERIMENT'):
