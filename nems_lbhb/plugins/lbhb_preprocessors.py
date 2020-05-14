@@ -81,14 +81,13 @@ def tar(kw):
     return [['nems.xforms.mask_all_but_targets',
              {'include_incorrect': include_incorrect}]]
 
-
-def evs(loadkey):
+def fmap(loadkey):
     """
-    evs = "event stimulus"
-    currently this is specific to using target onset events and lick events
-    as the "stimuli"
+    fmap = "facemap"
+    creates a stimulus channel for facemap motion SVD traces. Assuming fmap
+    was loaded in wrapper.
 
-    broken out of evt loader keyword
+    broken out of evs keyword
     """
     pattern = re.compile(r'^evs\.([a-zA-Z0-9\.]*)$')
     parsed = re.match(pattern, loadkey)
@@ -142,6 +141,80 @@ def evs(loadkey):
                    ['rec'], ['rec']]]
 
     if loadset[0]=='tar':
+        xfspec.append(['nems.xforms.mask_all_but_targets', {}])
+
+    return xfspec
+
+
+
+def evs(loadkey):
+    """
+    evs = "event stimulus"
+    currently this is specific to using target onset events and lick events
+    or motion component traces from facemap as the "stimuli"
+    
+
+    broken out of evt loader keyword
+    """
+    pattern = re.compile(r'^evs\.([a-zA-Z0-9\.]*)$')
+    parsed = re.match(pattern, loadkey)
+    loader = parsed.group(1)
+
+    # TODO: implement better parser for more flexibility
+    loadset = loader.split(".")
+
+    sig2load = np.array(['f' if 'fmap' in kw else 'l' if 'lic' in kw 
+                        else 't' if 'tar' in kw  else 'c' if 'cct' in kw 
+                        else '0' for kw in loadset])
+    lick = False 
+    fmap = False
+    tar = False
+    if 'f' in sig2load:
+        fmap = True
+        fmap_shuffle = False
+        Fidx = np.nonzero(sig2load=='f')[0].squeeze()
+#        if len(loadset[Fidx]) == 4:
+#            fmap_shift = 0
+#        else:
+#            fmap_shift = loadset[Fidx][4:]
+        if loadset[Fidx][-2]=='x0':
+            fmap_shuffle = True
+    if 'l' in sig2load:
+        lick = True
+        lick_shuffle = False
+        Lidx = np.nonzero(sig2load=='l')[0].squeeze()
+        if loadset[Lidx] == 'lic':
+            lick_shift = 0
+        else:
+            lick_shift = int(loadset[Lidx][3:])
+        if loadset[Lidx][-2]=='x0':
+            lick_shuffle = True
+    if 't' in sig2load:
+        tar = True
+        epoch_regex='^TAR_'
+        epoch_shift = 5
+    elif 'c' in sig2load:
+        epoch_regex = '^[A-Za-z]+_[0-9]+$'
+        epoch_shift = 0
+    if '0' in sig2load:
+        raise ValueError('unknown signal detected')
+
+    xfspec = [['nems_lbhb.preprocessing.generate_stim_chans',
+                   {'new_signal_name': 'stim',
+                    'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
+                    'onsets_only': True},
+                   ['rec'], ['rec']]]
+ 
+    if fmap:
+        xfspec[0][1]['fmap'] = True
+#        xfspec[0][1]['fmap_shift'] = fmap_shift
+        xfspec[0][1]['fmap_shuffle'] = fmap_shuffle
+    if lick:
+        xfspec[0][1]['lick_regex'] = 'LICK'
+        xfspec[0][1]['lick_shift'] = lick_shift
+        xfspec[0][1]['lick_shuffle'] = lick_shuffle
+   
+    if tar:
         xfspec.append(['nems.xforms.mask_all_but_targets', {}])
 
     return xfspec

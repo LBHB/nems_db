@@ -778,3 +778,60 @@ def zscore_resp(rec):
     r['resp'] = r['resp']._modified_copy(zscore)
 
     return r
+
+def generate_stim_chans(rec, new_signal_name='stim',
+                              epoch_regex='^STIM_', epoch_shift=0,
+                              lick_regex=None, lick_shift=0,
+                              lick_shuffle=False,
+                              fmap=True,  fmap_shuffle=False,
+                              onsets_only=True):
+    """
+    Currently knows how to create a  stim signal from stim and lick epoch
+    onsets and from facemap motion SVD traces. 
+    
+    Adapted from nems/preprocessing.generate_stim_from_epochs. 
+    """
+    rec = rec.copy()
+    resp = rec['resp'].rasterize()
+
+    epochs_to_extract = ep.epoch_names_matching(resp.epochs, epoch_regex)
+    sigs = []
+    for e in epochs_to_extract:
+        log.info('Adding to %s: %s with shift = %d',
+                 new_signal_name, e, epoch_shift)
+        s = resp.epoch_to_signal(e, onsets_only=onsets_only, shift=epoch_shift)
+        if epoch_shift:
+            s.chans[0] = "{}{:+d}".format(s.chans[0], epoch_shift)
+        sigs.append(s)
+
+    if lick_regex:
+        epochs_to_extract = ep.epoch_names_matching(resp.epochs, lick_regex)
+        for e in epochs_to_extract:
+            log.info('Adding to %s: %s with shift = %d',
+                     new_signal_name, e, lick_shift)
+            s = resp.epoch_to_signal(e, onsets_only=onsets_only,
+                                     shift=lick_shift)
+            if lick_shuffle:
+                log.info('Shuffling %s', e)
+                s = s.shuffle_time()
+                s.chans[0] = "{}_shf".format(s.chans[0])
+            if epoch_shift:
+                s.chans[0] = "{}{:+d}".format(s.chans[0], lick_shift)
+            sigs.append(s)
+    if fmap:
+        s = rec['facemap']
+        if fmap_shuffle:
+            s = s.shuffle_time()
+            s.chans = ["{}_shf".format(s.chans[i]) for i in range(len(s.chans))]
+#        if fmap_shift:
+#            s.chans = ["{}{:+d}".format(s.chans[i], fmap_shift)
+#                      for i in range(len(s.chans))]
+        sigs.append(s)
+
+    stim = sigs[0].concatenate_channels(sigs)
+    stim.name = new_signal_name
+
+    # add_signal operates in place
+    rec.add_signal(stim)
+
+    return rec
