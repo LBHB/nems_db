@@ -1124,10 +1124,11 @@ def baphy_load_recording(**options):
             if i == 0:
                 rlen = int(t_resp.shape[1])
             else:
-                rlen = int(resp.shape[1]) - int(pupil.shape[1])
+                rlen = int(resp.shape[1]) - int(fm.shape[1])
 
             pcount = state_dict['facemap'].shape[0]
             plen = state_dict['facemap'].shape[1]
+            
             if plen > rlen:
                 state_dict['facemap'] = \
                     state_dict['facemap'][:, 0:-(plen-rlen)]
