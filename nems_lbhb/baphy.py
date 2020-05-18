@@ -644,7 +644,7 @@ def baphy_load_dataset(parmfilepath, **options):
                 exptevents.loc[i + 1, 'start'] = trialstoptime
                 exptevents.loc[i + 1, 'end'] = trialstoptime
 
-        print("Keeping {0}/{1} events that precede responses"
+        log.info("Keeping {0}/{1} events that precede responses"
               .format(np.sum(keepevents), len(keepevents)))
         exptevents = exptevents[keepevents].reset_index()
 
@@ -1138,7 +1138,7 @@ def baphy_load_recording(**options):
             # generate pupil signals
             t_fm = nems.signal.RasterizedSignal(
                     fs=options['rasterfs'], data=state_dict['facemap'],
-                    name='facemap', recording=rec_name, chans=[str(n) for n in range(state_dict['facemap'].shape[0])],
+                    name='facemap', recording=rec_name, chans=[f'motSVD{n}' for n in range(state_dict['facemap'].shape[0])],
                     epochs=event_times)
 
             if i == 0:
