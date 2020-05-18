@@ -103,4 +103,4 @@ if 0:
 plt.show()
 
 if save_fig:
-    f.savefig(os.path.join(save_path,'fig10_on_off_BF.pdf'))
+    f.savefig(os.path.join(save_path,'figS3_on_off_BF.pdf'))

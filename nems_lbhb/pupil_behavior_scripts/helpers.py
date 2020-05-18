@@ -630,12 +630,11 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
-    plt.title('cc={:.3} p={:.4}'.format(r,p))
+    plt.title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
 
     ax4 = plt.subplot(2,2,4)
     d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
     snr = np.log(dr['SNR'].values)
-    #import pdb; pdb.set_trace()
     _ok = np.isfinite(d) & np.isfinite(snr)
     ax4.plot(snr[_ok], d[_ok], 'k.', markersize=4)
     #stateplots.beta_comp(snr[_ok], d[_ok], n1='SNR',n2='dep - indep',
@@ -645,7 +644,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     ax4.set_xlabel('log(SNR)')
     ax4.set_ylabel('dep-indep')
-    ax4.set_title('cc={:.3} p={:.4}'.format(r,p))
+    ax4.set_title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
     nplt.ax_remove_box(ax4)
 
     f.tight_layout()

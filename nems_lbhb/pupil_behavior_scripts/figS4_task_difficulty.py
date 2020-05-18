@@ -13,7 +13,7 @@ import nems.plots.api as nplt
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = False
+save_fig = True
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
@@ -89,9 +89,10 @@ ax[0].set_title('A1 \n HARD: {0}, MEDIUM: {1}, EASY: {2}, \n'
                                                             easy_v_hard))
 nplt.ax_remove_box(ax[0])
 
-sns.stripplot(x=sig_col, y=yaxis, data=IC, hue='difficulty', dodge=True, edgecolor='white', linewidth=0.5,
+_a=sns.stripplot(x=sig_col, y=yaxis, data=IC, hue='difficulty', dodge=True, edgecolor='white', linewidth=0.5,
                         marker='o', size=5, ax=ax[1])
 ax[1].axhline(0, linestyle='--', lw=2, color='grey')
+ax[1].legend().remove()
 
 # medians
 easy_med = round(IC[IC.difficulty.isin(easy) & IC[sig_col]][yaxis].median(), 3)
@@ -115,7 +116,7 @@ f.tight_layout()
 
 
 if save_fig:
-    f.savefig(os.path.join(save_path, 'fig9_difficulty_percell.pdf'))
+    f.savefig(os.path.join(save_path, 'figS4_difficulty_percell.pdf'))
 
 # only look at cells that were recorded in all conditions
 f, ax = plt.subplots(2, 2, figsize=(6, 8))
@@ -175,5 +176,5 @@ f.tight_layout()
 plt.show()
 
 if save_fig:
-    f.savefig(os.path.join(save_path, 'fig9_difficulty_sum.pdf'))
+    f.savefig(os.path.join(save_path, 'figS4_difficulty_sum.pdf'))
 
