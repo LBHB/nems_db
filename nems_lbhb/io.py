@@ -20,6 +20,7 @@ import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
+from scipy.interpolate import interp1d
 import numpy as np
 import json
 import sys
@@ -527,15 +528,9 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
 
     # using the trial lengths, figure out adjustments to trial event times.
     if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
+        log.debug('rounding Trial offset spike times to even number of rasterfs bins')
         # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs*finalfs)
-                / finalfs*spikefs
-                )
-        # print(TrialLen_spikefs)
-
+        TrialLen_spikefs = np.ceil(TrialLen_spikefs / spikefs*finalfs) / finalfs*spikefs
     Offset_spikefs = np.cumsum(TrialLen_spikefs)
     Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
 
@@ -559,7 +554,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
         if len(sortinfo[c]) and sortinfo[c][0].size:
             s = sortinfo[c][0][0]['unitSpikes']
             comment = sortinfo[c][0][0][0][0][2][0]
-            log.debug('Comment: %s', comment)
+            log.info('Comment: %s', comment)
 
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
@@ -601,9 +596,16 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     # but since recordings are longer than the "official"
     # trial end time reported by baphy, this method preserves extra spikes
     TrialCount = np.max(exptevents['Trial'])
+
+    hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
+    max_event_times = exptevents.groupby('Trial')['end'].max().values
+
     TrialLen_sec = np.array(
             exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
             )
+    if len(hit_trials):
+        TrialLen_sec[hit_trials-1]=max_event_times[hit_trials-1]
+
     TrialLen_spikefs = np.concatenate(
             (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis]*spikefs), axis=0
             )
@@ -627,7 +629,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     # using the trial lengths, figure out adjustments to trial event times.
     if finalfs:
-        print('rounding Trial offset spike times'
+        log.info('rounding Trial offset spike times'
               ' to even number of rasterfs bins')
         # print(TrialLen_spikefs)
         TrialLen_spikefs = (
@@ -656,7 +658,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
         # print("{0} events past end of trial?".format(len(badevents)))
         # exptevents.drop(badevents)
 
-    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
     # convert spike times from samples since trial started to
     # (approximate) seconds since experiment started (matched to exptevents)
@@ -675,7 +677,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             for u in range(0, unitcount):
                 st = s[u, 0]
                 if st.size:
-                    print("{} {}".format(u,str(st.shape)))
+                    log.debug("{} {}".format(u,str(st.shape)))
                     uniquetrials = np.unique(st[0, :])
                     # print('chan {0} unit {1}: {2} spikes {3} trials'
                     #       .format(c, u, st.shape[1], len(uniquetrials)))
@@ -743,6 +745,13 @@ def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
 
     Offset_sec = TrialStartSeconds.values
 
+    if np.sum(Offset_sec)==0:
+        log.info('No timestamps in baphy events, inferring trial times from durations')
+        Offset_sec = exptevents.loc[exptevents.name=='TRIALSTOP','start'].values
+        Offset_sec = np.roll(Offset_sec,1)
+        Offset_sec[0]=0
+        Offset_sec = np.cumsum(Offset_sec)
+
     exptevents['start']=exptevents['start'].astype(float)
     exptevents['end']=exptevents['end'].astype(float)
 
@@ -760,7 +769,7 @@ def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
        exptevents['start'] = np.round(exptevents['start']*finalfs)/finalfs
        exptevents['end'] = np.round(exptevents['end']*finalfs)/finalfs
 
-    print("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
     return exptevents
 
@@ -854,19 +863,29 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         #        exptevents, sortinfo, spikefs, rasterfs
         #        )
 
-    if '.pickle' in pupilfilepath:
+    loading_pcs = 0
+    if 'SVD.pickle' in pupilfilepath:
+        loading_pcs = options.get('facemap', 0)
 
+        log.info("SVD.pickle file, assuming single matrix: %s", pupilfilepath)
+        with open(pupilfilepath, 'rb') as fp:
+            pupildata = pickle.load(fp)
+
+        pupil_diameter = pupildata[:, :loading_pcs]
+
+        log.info("pupil_diameter.shape: %s", str(pupildata.shape))
+        log.info("keeping %d channels: ", loading_pcs)
+
+    elif '.pickle' in pupilfilepath:
         with open(pupilfilepath, 'rb') as fp:
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
         options['pupil_variable_name'] = 'minor_axis'
-        log.info("Using default pupil_variable_name: " +
-                 options['pupil_variable_name'])
+        log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         log.info("Using CNN results for pupiltrace")
 
         pupil_diameter = pupildata['cnn']['a'] * 2
-
         # missing frames/frames that couldn't be decoded were saved as nans
         # pad them here
         nan_args = np.argwhere(np.isnan(pupil_diameter))
@@ -875,9 +894,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             arg = arg[0]
             log.info("padding missing pupil frame {0} with adjacent ellipse params".format(arg))
             try:
-                pupil_diameter[arg] = pupil_diameter[arg-1]
+                pupil_diameter[arg] = pupil_diameter[arg - 1]
             except:
-                pupil_diameter[arg] = pupil_diameter[arg-1]
+                pupil_diameter[arg] = pupil_diameter[arg - 1]
 
         pupil_diameter = pupil_diameter[:-1, np.newaxis]
 
@@ -892,17 +911,17 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 log.info("eye_speed requested but file does not exist!")
 
     elif '.pup.mat' in pupilfilepath:
+
         matdata = scipy.io.loadmat(pupilfilepath)
 
         p = matdata['pupil_data']
         params = p['params']
         if 'pupil_variable_name' not in options:
             options['pupil_variable_name'] = params[0][0]['default_var'][0][0][0]
-            log.info("Using default pupil_variable_name: " +
-                     options['pupil_variable_name'])
+            log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         if 'pupil_algorithm' not in options:
             options['pupil_algorithm'] = params[0][0]['default'][0][0][0]
-            log.info("Using default pupil_algorithm: " + options['pupil_algorithm'])
+            log.debug("Using default pupil_algorithm: %s", options['pupil_algorithm'])
 
         results = p['results'][0][0][-1][options['pupil_algorithm']]
         pupil_diameter = np.array(results[0][options['pupil_variable_name']][0][0])
@@ -913,14 +932,13 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if pupil_eyespeed:
             try:
                 eye_speed = np.array(results[0]['eye_speed'][0][0])
-                log.info("loaded eye_speed")
+                log.debug("loaded eye_speed")
             except:
                 pupil_eyespeed = False
                 log.info("eye_speed requested but file does not exist!")
 
-
     fs_approximate = 30  # approx video framerate
-    if pupil_deblink:
+    if pupil_deblink & ~loading_pcs:
         dp = np.abs(np.diff(pupil_diameter, axis=0))
         blink = np.zeros(dp.shape)
         blink[dp > np.nanmean(dp) + 6*np.nanstd(dp)] = 1
@@ -1029,7 +1047,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
     frame_count = np.diff(firstframe)
 
-    if pupil_eyespeed & options['pupil']:
+    if loading_pcs:
+        l = ['pupil']
+    elif pupil_eyespeed & options['pupil']:
         l = ['pupil', 'pupil_eyespeed']
     elif pupil_eyespeed:
         l = ['pupil_eyespeed']
@@ -1046,12 +1066,17 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         # warp/resample each trial to compensate for dropped frames
         strialidx = np.zeros([ntrials + 1])
-        big_rs = np.array([])
+        #big_rs = np.array([[]])
         all_fs = np.empty([ntrials])
 
-        for ii in range(0, ntrials):
+        #import pdb;
+        #pdb.set_trace()
 
-            if signal == 'pupil_eyespeed':
+        for ii in range(0, ntrials):
+            if loading_pcs:
+                d = pupil_diameter[int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), :]
+
+            elif signal == 'pupil_eyespeed':
                 d = eye_speed[
                         int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
                         ]
@@ -1061,7 +1086,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                         ]
             fs = frame_count[ii] / duration[ii]
             all_fs[ii] = fs
-            t = np.arange(0, len(d)) / fs
+            t = np.arange(0, d.shape[0]) / fs
             if pupil_eyespeed:
                 d = d * fs  # convert to px/s before resampling
             ti = np.arange(
@@ -1069,28 +1094,35 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                     )
             # print("{0} len(d)={1} len(ti)={2} fs={3}"
             #       .format(ii,len(d),len(ti),fs))
-            di = np.interp(ti, t, d)
-            big_rs = np.concatenate((big_rs, di), axis=0)
+            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            di = _f(ti)
+            if ii==0:
+                big_rs = di
+            else:
+                big_rs = np.concatenate((big_rs, di), axis=0)
             if (ii < ntrials-1) and (len(big_rs) > start_e[ii+1]):
                 big_rs = big_rs[:start_e[ii+1]]
             elif ii == ntrials-1:
                 big_rs = big_rs[:stop_e[ii]]
 
-            strialidx[ii+1] = len(big_rs)
+            strialidx[ii+1] = big_rs.shape[0]
 
         if pupil_median:
             kernel_size = int(round(pupil_median*rasterfs/2)*2+1)
-            big_rs = scipy.signal.medfilt(big_rs, kernel_size=kernel_size)
+            big_rs = scipy.signal.medfilt(big_rs, kernel_size=(kernel_size,1))
 
         # shift pupil (or eye speed) trace by offset, usually 0.75 sec
         offset_frames = int(pupil_offset*rasterfs)
-        big_rs = np.roll(big_rs, -offset_frames)
+        big_rs = np.roll(big_rs, -offset_frames, axis=0)
 
         # svd pad with final pupil value (was np.nan before)
         big_rs[-offset_frames:] = big_rs[-offset_frames]
 
-        # shape to 1 x T to match NEMS signal specs
-        big_rs = big_rs[np.newaxis, :]
+        # shape to 1 x T to match NEMS signal specs. or transpose if 2nd dim already exists
+        if big_rs.ndim==1:
+            big_rs = big_rs[np.newaxis, :]
+        else:
+            big_rs=big_rs.T
 
         if pupil_mm:
             try:
@@ -1400,6 +1432,7 @@ def get_pupil_file(pupilfilepath):
     is a helper function to find which pupil file to load
     6-28-2019, CRH
     """
+    pupilfilepath=str(pupilfilepath)
     if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
         log.info("Loading CNN pupil fit from .pickle file")
         return pupilfilepath
@@ -1477,7 +1510,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     exptevents, spiketimes, unit_names = baphy_align_time(
             exptevents, sortinfo, spikefs, options["rasterfs"])
-    print('Creating trial events')
+    log.info('Creating trial events')
     tag_mask_start = "TRIALSTART"
     tag_mask_stop = "TRIALSTOP"
     ffstart = exptevents['name'].str.startswith(tag_mask_start)
@@ -1533,6 +1566,7 @@ def load_raw_pupil(pupilfilepath, fs=None):
     pupil_diameter = pupil_diameter[:-1, np.newaxis]
 
     return pupil_diameter
+
 
 def load_raw_photometry(photofilepath, fs=None, framen=0):
     """

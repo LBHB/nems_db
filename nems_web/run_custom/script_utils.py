@@ -37,19 +37,19 @@ def filter_cells(session, batch, cells, min_snr=0, min_iso=0, min_snri=0):
     min_snri : float
         The minimum signal to noise ratio index desired.
     session : object
-        An open database session object for querying NarfBatches.
+        An open database session object for querying Batches.
 
     """
 
     bad_cells = []
     session = Session()
-    NarfBatches = Tables()['NarfBatches']
+    Batches = Tables()['Batches']
 
     for cellid in cells:
         dbCriteria = (
-                session.query(NarfBatches)
-                .filter(NarfBatches.batch == batch)
-                .filter(NarfBatches.cellid.ilike(cellid))
+                session.query(Batches)
+                .filter(Batches.batch == batch)
+                .filter(Batches.cellid.ilike(cellid))
                 .first()
                 )
         if dbCriteria:
@@ -91,7 +91,7 @@ def filter_cells(session, batch, cells, min_snr=0, min_iso=0, min_snri=0):
                 #    )
         else:
             print(
-                "No entry in NarfBatches for cellid: {0} in batch: {1}"
+                "No entry in Batches for cellid: {0} in batch: {1}"
                 .format(cellid, batch)
                 )
             bad_cells.append(cellid)
@@ -112,13 +112,13 @@ def form_data_array(
     #       Should be able to just re-index then apply some
     #       lambda function over vectorized dataframe for filtering?
     session = Session()
-    NarfResults = Tables()['NarfResults']
+    Results = Tables()['Results']
 
     data = psql.read_sql_query(
-            session.query(NarfResults)
-            .filter(NarfResults.batch == batch)
-            .filter(NarfResults.cellid.in_(cells))
-            .filter(NarfResults.modelname.in_(models))
+            session.query(Results)
+            .filter(Results.batch == batch)
+            .filter(Results.cellid.in_(cells))
+            .filter(Results.modelname.in_(models))
             .statement,
             session.bind
             )
@@ -173,7 +173,7 @@ def form_data_array(
                     # measure and if a check fails, step out of the loop.
 
                     # Comments for each check are copied from
-                    # from Narf_Analysis : compute_data_matrix
+                    # from _Analysis : compute_data_matrix
 
                     # "Drop r_test values below threshold"
                     a1 = (col == 'r_test')
@@ -212,7 +212,7 @@ def form_data_array(
                     if (a1 and b1) or (a2 and b2):
                         continue
 
-                    # TODO: is this still used? not listed in NarfResults
+                    # TODO: is this still used? not listed in Results
                     # "Drop gamma values that are too low"
                     a1 = (col == 'gamma_test')
                     b1 = (value < 0.15)

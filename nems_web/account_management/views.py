@@ -35,13 +35,13 @@ bcrypt = Bcrypt(app)
 @login_manager.user_loader
 def load_user(user_id):
     session = Session()
-    NarfUsers = Tables()['NarfUsers']
+    Users = Tables()['Users']
     try:
         # get email match from user database
         # (needs to be stored as unicode per flask-login)
         sqla_user = (
-                session.query(NarfUsers)
-                .filter(NarfUsers.email == user_id)
+                session.query(Users)
+                .filter(Users.email == user_id)
                 .first()
                 )
         if not sqla_user:
@@ -108,8 +108,8 @@ def register():
     if request.method == 'POST':
         if form.validate():
             session = Session()
-            NarfUsers = Tables()['NarfUsers']
-            new_user = NarfUsers(
+            Users = Tables()['Users']
+            new_user = Users(
                     username=form.username.data,
                     password=bcrypt.generate_password_hash(form.password.data),
                     email=(form.email.data).encode('utf-8'),
@@ -170,10 +170,10 @@ class User():
         # user_id should be the unicode rep of e-mail address
         # (should be stored in db table in that format)
         session = Session()
-        NarfUsers = Tables()['NarfUsers']
+        Users = Tables()['Users']
         user_id = (
-                session.query(NarfUsers.email)
-                .filter(NarfUsers.username == self.username)
+                session.query(Users.email)
+                .filter(Users.username == self.username)
                 .first()
                 )
         session.close()

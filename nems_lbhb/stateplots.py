@@ -74,7 +74,8 @@ fill_colors = {'actual_psth': (.8,.8,.8),
 
 def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
               hist_range=[-1, 1], title=None,
-              highlight=None, ax=None, click_fun=None):
+              highlight=None, ax=None, click_fun=None,
+              markersize=6):
     """
     beta1, beta2 are T x 1 vectors
     scatter plot comparing beta1 vs. beta2
@@ -137,16 +138,21 @@ def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     set1i = np.where(set1)
     evs = set1i[0]
 
-    ax.plot(hist_range, zz, 'k--',linewidth=0.5)
-    ax.plot(zz, hist_range, 'k--',linewidth=0.5)
-    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5)
+    ax.plot(hist_range, zz, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(zz, hist_range, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5, dashes=(4,2))
 
-    ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=6,
-            markeredgecolor='white', markeredgewidth=0.5)
-    ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
-            markeredgewidth=0.5, markersize=6)
-    ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=10,
-            markeredgecolor='white', markeredgewidth=0.5)
+    if markersize>=5:
+        ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
+                markeredgewidth=0.25, markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+    else:
+        ax.plot(beta1[set2], beta2[set2], '.', color='gray', markersize=markersize)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize)
 
     ax.set_aspect('equal', 'box')
     #plt.ylim(hist_range)
@@ -517,7 +523,7 @@ def model_per_time_wrapper(cellid, batch=307,
                            fitter = "_jk.nf20-basic",
                            basemodel = "-ref-psthfr_stategain.S",
                            state_list=None, plot_halves=True,
-                           colors=None, epoch="REFERENCE"):
+                           colors=None, epoch="REFERENCE", max_states=100):
     """
     batch = 307  # A1 SUA and MUA
     batch = 309  # IC SUA and MUA
@@ -556,13 +562,13 @@ def model_per_time_wrapper(cellid, batch=307,
         #import pdb;
         #pdb.set_trace()
 
-    plt.figure()
     #if ('hlf' in state_list[0]) or ('fil' in state_list[0]):
     if plot_halves:
         files_only=True
     else:
         files_only=False
-        
+
+    f, ax = plt.subplots(len(contexts)+2, 1)
     for i, ctx in enumerate(contexts):
 
         rec = ctx['val'].apply_mask()
@@ -570,23 +576,21 @@ def model_per_time_wrapper(cellid, batch=307,
         rec = ms.evaluate(rec, modelspec)
         if i == len(contexts)-1:
 
-            ax = plt.subplot(len(contexts)+2, 1, 1)
             nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
-                                         rec=rec, sig_name='pupil')
-            ax.set_title('{} {}'.format(cellid, modelnames[-1]))
+                                         rec=rec, sig_name='pupil', ax=ax[0])
+            ax[0].set_title('{} {}'.format(cellid, modelnames[-1]))
 
-            ax = plt.subplot(len(contexts)+2, 1, 2)
-            nplt.state_vars_timeseries(rec, modelspec, ax=ax)
+            nplt.state_vars_timeseries(rec, modelspec, ax=ax[1])
 
-        ax = plt.subplot(len(contexts)+2, 1, 3+i)
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
                             psth_name2='pred', state_sig='state_f',
                             colors=colors, channel=None, decimate_by=1,
-                            ax=ax, files_only=files_only, modelspec=modelspec)
-        ax.set_ylabel(state_list[i])
-        ax.set_xticks([])
+                            ax=ax[2+i], files_only=files_only, modelspec=modelspec, max_states=max_states)
+        ax[2+i].set_ylabel(state_list[i])
+        ax[2+i].set_xticks([])
 
     #plt.tight_layout()
+    return f
 
 
 def epochs_per_time(cellid, batch=307, modelname=None,
@@ -669,7 +673,7 @@ def epochs_per_time(cellid, batch=307, modelname=None,
     return f, modelspec
 
 
-def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
+def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None, show_ref_tar=False):
     """
     state_colors : N x 2 list
        color spec for high/low lines in each of the N states
@@ -737,6 +741,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
 
     if 'each_passive' in factors:
         psth_names_ctl = ["pred_p0b"]
+        psth_names_exp = ["pred_pb0"]
         factors.remove('each_passive')
         for v in state_var_list:
             if v.startswith('FILE_'):
@@ -744,6 +749,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
                 psth_names_ctl.append("pred_pb0")
     else:
         psth_names_ctl = ["pred_p0b", "pred_pb0"]
+        psth_names_exp = ["pred_pb0", "pred_p0b"]
 
     col_count = len(factors) - 1
     if state_colors is None:
@@ -763,7 +769,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
            varlbl = var[5:]
         else:
            varlbl = var
-        ax = plt.subplot(4, col_count, col_count+i+1)
+        ax = plt.subplot(4, col_count, col_count + i+1)
 
         nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
                                        psth_name="resp",
@@ -787,28 +793,52 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
         ax.xaxis.label.set_visible(False)
         nplt.ax_remove_box(ax)
 
-        ax = plt.subplot(4, col_count, col_count*2+i+1)
+        ax = plt.subplot(4, col_count, col_count*2 + i+1)
         nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
                                        psth_name="resp",
-                                       psth_name2="pred",
+                                       psth_name2=psth_names_exp[i],
                                        state_chan=var, ax=ax,
                                        colors=state_colors[i])
         if i == 0:
-            ax.set_ylabel("Full Model")
+            ax.set_ylabel("Experimental model")
+            ax.set_title("{} exp r={:.3f}"
+                         .format(varlbl.lower(),
+                                 ctx_p0b['modelspec'].meta['r_test'][0]),
+                         fontsize=6)
         else:
             ax.yaxis.label.set_visible(False)
+            ax.set_title("{} exp r={:.3f}"
+                         .format(varlbl.lower(),
+                                 ctx_pb0['modelspec'].meta['r_test'][0]),
+                         fontsize=6)
         if ax.legend_:
             ax.legend_.remove()
+        ax.xaxis.label.set_visible(False)
+        nplt.ax_remove_box(ax)
 
-        if psth_names_ctl[i] == "pred_p0b":
-            j=0
-        else:
-            j=1
+        if not show_ref_tar:
+            ax = plt.subplot(4, col_count, col_count*3+i+1)
+            nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
+                                           psth_name="resp",
+                                           psth_name2="pred",
+                                           state_chan=var, ax=ax,
+                                           colors=state_colors[i])
+            if i == 0:
+                ax.set_ylabel("Full Model")
+            else:
+                ax.yaxis.label.set_visible(False)
+            if ax.legend_:
+                ax.legend_.remove()
 
-        ax.set_title("r={:.3f} rawmod={:.3f} umod={:.3f}"
-                     .format(ctx_pb['modelspec'].meta['r_test'][0],
-                             pred_mod_full_norm[i+1][j], pred_mod_norm[i+1][j]),
-                     fontsize=6)
+            if psth_names_ctl[i] == "pred_p0b":
+                j=0
+            else:
+                j=1
+
+            ax.set_title("r={:.3f} rawmod={:.3f} umod={:.3f}"
+                         .format(ctx_pb['modelspec'].meta['r_test'][0],
+                                 pred_mod_full_norm[i+1][j], pred_mod_norm[i+1][j]),
+                         fontsize=6)
 
         if var == 'active':
             ax.legend(('pas', 'act'))
@@ -864,34 +894,38 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
     spont = np.nanmean(all_ref_resp[:,0,:prebins])
     ref_mean = np.nanmean(ref_resp[:,0,prebins:durbins])-spont
     all_ref_mean = np.nanmean(all_ref_resp[:,0,prebins:durbins])-spont
+
     #print(spont)
     #print(np.nanmean(ref_resp[:,0,prebins:-postbins]))
-    ax1=plt.subplot(4, 2, 7)
     ref_psth = [np.nanmean(ref_resp[:, 0, :], axis=0),
                 np.nanmean(all_ref_resp[:, 0, :], axis=0)]
-    ll = ["{} {:.1f}".format(ref_name, ref_mean),
-          "all refs {:.1f}".format(all_ref_mean)]
-    nplt.timeseries_from_vectors(ref_psth, fs=fs, legend=ll, ax=ax1,
-                                 time_offset=prebins/fs)
-
-    ax2=plt.subplot(4, 2, 8)
-    ll = []
-    tar_mean = np.zeros(np.max([2,len(keys)])) * np.nan
+    tar_mean = np.zeros(np.max([2, len(keys)])) * np.nan
     tar_psth = []
     for ii, k in enumerate(keys):
         tar_psth.append(np.nanmean(tar_resp[k][:, 0, :], axis=0))
-        tar_mean[ii] = np.nanmean(tar_resp[k][:, 0, prebins:durbins])-spont
-        ll.append("{} {:.1f}".format(k, tar_mean[ii]))
-    nplt.timeseries_from_vectors(tar_psth, fs=fs, legend=ll, ax=ax2,
-                                 time_offset=prebins/fs)
-    # plt.legend(ll, fontsize=6)
+        tar_mean[ii] = np.nanmean(tar_resp[k][:, 0, prebins:durbins]) - spont
 
-    ymin=np.min([ax1.get_ylim()[0], ax2.get_ylim()[0]])
-    ymax=np.max([ax1.get_ylim()[1], ax2.get_ylim()[1]])
-    ax1.set_ylim([ymin, ymax])
-    ax2.set_ylim([ymin, ymax])
-    nplt.ax_remove_box(ax1)
-    nplt.ax_remove_box(ax2)
+    if show_ref_tar:
+        ax1=plt.subplot(4, 2, 7)
+        ll = ["{} {:.1f}".format(ref_name, ref_mean),
+              "all refs {:.1f}".format(all_ref_mean)]
+        nplt.timeseries_from_vectors(ref_psth, fs=fs, legend=ll, ax=ax1,
+                                     time_offset=prebins/fs)
+
+        ax2=plt.subplot(4, 2, 8)
+        ll = []
+        for ii, k in enumerate(keys):
+            ll.append("{} {:.1f}".format(k, tar_mean[ii]))
+        nplt.timeseries_from_vectors(tar_psth, fs=fs, legend=ll, ax=ax2,
+                                     time_offset=prebins/fs)
+        # plt.legend(ll, fontsize=6)
+
+        ymin=np.min([ax1.get_ylim()[0], ax2.get_ylim()[0]])
+        ymax=np.max([ax1.get_ylim()[1], ax2.get_ylim()[1]])
+        ax1.set_ylim([ymin, ymax])
+        ax2.set_ylim([ymin, ymax])
+        nplt.ax_remove_box(ax1)
+        nplt.ax_remove_box(ax2)
 
     plt.tight_layout()
 

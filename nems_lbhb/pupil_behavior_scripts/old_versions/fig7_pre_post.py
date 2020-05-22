@@ -18,6 +18,10 @@ from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 import common
 
 
+save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
+save_fig = True
+
+
 # SPECIFY pup+beh models
 state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 basemodel = "-ref-psthfr.s_sdexp.S"
@@ -38,13 +42,12 @@ else:
               'ACTIVE_2', 'PASSIVE_2']
 
 batch=307
-df = get_model_results_per_state_model(
-        batch=batch, state_list=state_list, basemodel=basemodel)
+df = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 title = "{} {} Area A1 keep sgn".format(basemodel,state_list[-1],batch)
-hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
+f307, dMI, dMI0 = hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
 
 batch=309
-df = get_model_results_per_state_model(
-        batch=batch, state_list=state_list, basemodel=basemodel)
+df = get_model_results_per_state_model(batch=batch, state_list=state_list, basemodel=basemodel)
 title = "{} {} Area IC keep sgn".format(basemodel,state_list[-1],batch)
-hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
+f309, dMI, dMI0 = hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
+
