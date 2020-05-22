@@ -105,10 +105,10 @@ def scatter_soundstats(results, legend=False, manual_lims=False):
             else:
                 clean_means.append(mean)
                 clean_sds.append(sd)
-        fig = plt.figure()
-        plt.scatter(clean_sds, clean_means, color=model_colors['combined'],
+        fig = plt.figure(figsize=small_fig)
+        plt.scatter(clean_sds, clean_means, color='black',
                     s=big_scatter, label='clean')
-        plt.scatter(noisy_sds, noisy_means, color=model_colors['LN'],
+        plt.scatter(noisy_sds, noisy_means, color=model_colors['combined'],
                     s=small_scatter, label='noisy')
         if legend:
             plt.legend()
@@ -123,8 +123,8 @@ def scatter_soundstats(results, legend=False, manual_lims=False):
             means.append(mean)
             sds.append(sd)
 
-        fig = plt.figure()
-        plt.scatter(sds, means, color=model_colors['combined'], s=big_scatter)
+        fig = plt.figure(figsize=small_fig)
+        plt.scatter(sds, means, color='black', s=big_scatter)
         if manual_lims:
             plt.xlim(0,32)
             plt.ylim(0,65)

@@ -15,7 +15,7 @@ from nems_lbhb.gcmodel.figures.equivalence import (equivalence_scatter,
                                                    equivalence_effect_size)
 from nems_lbhb.gcmodel.figures.parameters import (stp_distributions,
                                                   gc_distributions)
-from nems_lbhb.gcmodel.figures.respstats import rate_vs_performance
+from nems_lbhb.gcmodel.figures.respstats import rate_histogram
 from nems_lbhb.gcmodel.figures.soundstats import mean_sd_per_stim_by_batch
 from nems_lbhb.gcmodel.figures.summary import (performance_scatters,
                                                performance_bar, significance,
@@ -36,24 +36,18 @@ log = logging.getLogger(__name__)
 plt.rcParams.update(params)
 
 
+# Plot parameters
 figures_base_path = '/auto/users/jacob/notes/gc_rank3/figures/'
-def quickrun():
-    run_all(*default_args, plot_stat='r_ceiling', gc_version='summed')
-    run_all(*default_args, plot_stat='r_test', gc_version='summed')
-    run_all(*kernel_args, plot_stat='r_ceiling', gc_version='kernel')
-    run_all(*kernel_args, plot_stat='r_test', gc_version='kernel')
+plot_stat = 'r_ceiling'
+fig_format = 'pdf'
+date = str(datetime.datetime.now()).split(' ')[0]
+figures_to_save = []
+batch, gc, stp, LN, combined = default_args
+batch2 = 263
+gc_version='summed'
 
 
 def just_final_figures():
-    plot_stat = 'r_ceiling'
-    fig_format = 'pdf'
-    date = str(datetime.datetime.now()).split(' ')[0]
-    figures_to_save = []
-    batch, gc, stp, LN, combined = default_args
-    batch2 = 263
-    gc_version='summed'
-
-
     # Figure 0 -- model schematic (not in python)
 
     # Figure 1 -- stimulus examples with contrast and summed contrast computed,
@@ -61,8 +55,7 @@ def just_final_figures():
     # DRC contrast comparisons
     log.info('Contrast and DRC comparisons ...\n')
     fig1a, fig1aa = test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
-                                           percentile=70, n_segments=8,
-                                           plot_seconds=19)
+                                           percentile=70, n_segments=8)
     figures_to_save.append((fig1a, 'contrast_comparison'))
     figures_to_save.append((fig1aa, 'contrast_comparison_text'))
 
@@ -117,10 +110,16 @@ def just_final_figures():
     log.info('Equivalence analyses ...\n')
     fig3a, fig3aa = equivalence_scatter(batch, gc, stp, LN, combined,
                                         plot_stat=plot_stat, drop_outliers=True,
-                                        color_improvements=True)#,
+                                        color_improvements=True,
+                                        self_equiv=True, self_eq_models=eq_both)#,
+    _, fig3aaa = equivalence_scatter(batch, gc, stp, LN, combined,
+                                     plot_stat=plot_stat, drop_outliers=True,
+                                     color_improvements=True,
+                                     self_equiv=True, self_eq_models=cross_all)
     fig3b, fig3bb = equivalence_scatter(batch2, gc, stp, LN, combined,
                                         plot_stat=plot_stat, drop_outliers=True,
-                                        color_improvements=True)#,
+                                        color_improvements=True)
+                                        #self_equiv=True, self_eq_models=eq_both)#,
                                         #manual_lims=(-0.3, 0.3))
 #    fig3c = equivalence_scatter(batch, combined, stp, LN, gc,
 #                                plot_stat=plot_stat, drop_outliers=True,
@@ -135,8 +134,17 @@ def just_final_figures():
     fig3e, fig3ee = equivalence_effect_size(batch, gc, stp, LN, combined,
                                             load_path=hist_path,
                                             only_improvements=True)
-    fig3f, fig3fff = equivalence_histogram(batch, gc, stp, LN, combined,
-                                                   load_path=hist_path)
+#    fig3f, fig3fff = equivalence_histogram(batch, gc, stp, LN, combined,
+#                                                   load_path=hist_path,
+#                                                   self_equiv=True,
+#                                                   self_kwargs=eq_kwargs,
+#                                                   eq_models=eq_both)
+    fig3f, fig3ff = equivalence_histogram(batch, gc, stp, LN, combined,
+                                      load_path=hist_path, self_equiv=True,
+                                      self_kwargs=eq_kwargs,
+                                      eq_models=eq_both,
+                                      cross_kwargs=cross_kwargs,
+                                      cross_models=cross_all)
     fig3g, fig3gg = equivalence_effect_size(batch2, gc, stp, LN, combined,
                                             load_path=hist_path_263,
                                             only_improvements=True)
@@ -144,6 +152,7 @@ def just_final_figures():
                                            load_path=hist_path_263)
     figures_to_save.append((fig3a, 'equivalence_scatter'))
     figures_to_save.append((fig3aa, 'equivalence_scatter_text'))
+    figures_to_save.append((fig3aaa, 'equivalence_scatter_text_cross'))
     figures_to_save.append((fig3b, 'equivalence_scatter_263'))
     figures_to_save.append((fig3bb, 'equivalence_scatter_263_text'))
 #    figures_to_save.append((fig3c, 'equivalence_scatter_comb_vs_stp'))
@@ -151,7 +160,8 @@ def just_final_figures():
     figures_to_save.append((fig3e, 'equivalence_vs_effect'))
     figures_to_save.append((fig3f, 'equivalence_histogram'))
     figures_to_save.append((fig3ee, 'equivalence_effect_text'))
-    figures_to_save.append((fig3fff, 'equivalence_hist_text'))
+    #figures_to_save.append((fig3fff, 'equivalence_hist_text'))
+    figures_to_save.append((fig3ff, 'equivalence_hist_text_crossed'))
     figures_to_save.append((fig3g, 'equivalence_vs_effect_263'))
     figures_to_save.append((fig3h, 'equivalence_histogram_263'))
     figures_to_save.append((fig3gg, 'equivalence_effect_text_263'))
@@ -248,7 +258,6 @@ def just_final_figures():
         figures_to_save.append((f, n))
 
 
-    # TODO: narrow start, end to highlight interesting part
     # simulations
     sim_start=740
     sim_end=880
@@ -287,6 +296,31 @@ def just_final_figures():
 #    figures_to_save.append((fig6ff, 'stp_cell_gc_sim_text'))
     figures_to_save.append((fig6g, 'LN_cell_LN_sim'))
     figures_to_save.append((fig6gg, 'LN_cell_LN_sim_text'))
+
+
+
+    # Response stats comparison
+    fig7a, fig7aa = rate_histogram(batch, gc, stp, LN, combined, spont_289,
+                                   rate_type='spont', allow_overlap=False)
+    fig7b, fig7bb = rate_histogram(batch, gc, stp, LN, combined, mean_289,
+                                   rate_type='mean', allow_overlap=False)
+    # Do both for now, in some ways overlap makes sense
+    # but in same ways it doesn't.
+    fig7c, fig7cc = rate_histogram(batch, gc, stp, LN, combined, spont_289,
+                                   rate_type='spont', allow_overlap=True)
+    fig7d, fig7dd = rate_histogram(batch, gc, stp, LN, combined, mean_289,
+                                   rate_type='mean', allow_overlap=True)
+
+    figures_to_save.append((fig7a, 'spont_histogram'))
+    figures_to_save.append((fig7aa, 'spont_text'))
+    figures_to_save.append((fig7b, 'mean_histogram'))
+    figures_to_save.append((fig7bb, 'mean_text'))
+
+    figures_to_save.append((fig7c, 'spont_histogram_overlap'))
+    figures_to_save.append((fig7cc, 'spont_text_overlap'))
+    figures_to_save.append((fig7d, 'mean_histogram_overlap'))
+    figures_to_save.append((fig7dd, 'mean_text_overlap'))
+
 
 
     # Save everything

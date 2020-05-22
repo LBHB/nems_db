@@ -30,7 +30,8 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                         LN_filter=False, plot_stat='r_ceiling',
                         enable_hover=False, manual_lims=None,
                         drop_outliers=False, color_improvements=True,
-                        xmodel='GC', ymodel='STP', legend=False):
+                        xmodel='GC', ymodel='STP', legend=False,
+                        self_equiv=False, self_eq_models=[]):
     '''
     model1: GC
     model2: STP
@@ -58,6 +59,43 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     r_imp, p_imp = st.pearsonr(gc_rel_imp, stp_rel_imp)
     r_not, p_not = st.pearsonr(gc_rel_not, stp_rel_not)
     r_all, p_all = st.pearsonr(gc_rel_all, stp_rel_all)
+
+    if self_equiv:
+        stp1, stp2, gc1, gc2, LN1, LN2 = self_eq_models
+        _, ga, _, _, _ = improved_cells_to_list(batch, gc1, gc2, LN1, LN2,
+                                                as_lists=True)
+        _, sa, _, _, _ = improved_cells_to_list(batch, stp1, stp2, LN1, LN2,
+                                                as_lists=True)
+        aa = list(set(ga) & set(sa))
+        df_r_eq = nd.batch_comp(batch, [gc1, gc2, stp1, stp2, LN1, LN2],
+                                stat=plot_stat)
+        df_r_eq.dropna(axis=0, how='any', inplace=True)
+        df_r_eq.sort_index(inplace=True)
+        df_r_eq = df_r_eq[df_r_eq.index.isin(aa)]
+
+        gc1_rel_imp = df_r_eq[gc1].values - df_r_eq[LN1].values
+        gc2_rel_imp = df_r_eq[gc2].values - df_r_eq[LN2].values
+        stp1_rel_imp = df_r_eq[stp1].values - df_r_eq[LN1].values
+        stp2_rel_imp = df_r_eq[stp2].values - df_r_eq[LN2].values
+        r_gceq, p_gceq = st.pearsonr(gc1_rel_imp, gc2_rel_imp)
+        r_stpeq, p_stpeq = st.pearsonr(stp1_rel_imp, stp2_rel_imp)
+        n_eq = gc1_rel_imp.size
+
+        # compute on same subset for full estimation data
+        # to compare to cross-set
+        gc_subset1 = df_r[gc][ga].values
+        gc_subset2 = df_r[gc][sa].values
+        stp_subset1 = df_r[stp][ga].values
+        stp_subset2 = df_r[stp][sa].values
+        LN_subset1 = df_r[LN][ga].values
+        LN_subset2 = df_r[LN][sa].values
+        gc_rel1 = gc_subset1 - LN_subset1
+        gc_rel2 = gc_subset2 - LN_subset2
+        stp_rel1 = stp_subset1 - LN_subset1
+        stp_rel2 = stp_subset2 - LN_subset2
+        r_sub1, p_sub1 = st.pearsonr(gc_rel1, stp_rel1)
+        r_sub2, p_sub2 = st.pearsonr(gc_rel2, stp_rel2)
+
 
     gc_rel_imp, stp_rel_imp = drop_common_outliers(gc_rel_imp, stp_rel_imp)
     gc_rel_not, stp_rel_not = drop_common_outliers(gc_rel_not, stp_rel_not)
@@ -111,13 +149,21 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     text = ("Performance Improvements over LN\n"
             "batch: %d\n"
             "dropped outliers?:  %s\n"
-            "all cells:  r: %.02f, p: %.2E, n: %d\n"
-            "improved:  r: %.02f, p: %.2E, n: %d\n"
-            "not imp:  r: %.02f, p: %.2E, n: %d\n"
+            "all cells:  r: %.2E, p: %.2E, n: %d\n"
+            "improved:  r: %.2E, p: %.2E, n: %d\n"
+            "not imp:  r: %.2E, p: %.2E, n: %d\n"
             "x: %s - LN\n"
             "y: %s - LN"
             % (batch, drop_outliers, r_all, p_all, n_all, r_imp, p_imp, n_imp,
                r_not, p_not, n_not, xmodel, ymodel))
+    if self_equiv:
+        text += ("\n\nSelf Equivalence, n:  %d\n"
+                 "gc,  r: %.2Ef, p: %.2E\n"
+                 "stp, r: %.2Ef, p: %.2E\n"
+                 "sub1, r: %.2E, p: %.2E\n"
+                 "sub2, r: %.2E, p: %.2E\n" %
+                 (n_eq, r_gceq, p_gceq, r_stpeq, p_stpeq, r_sub1, p_sub1,
+                  r_sub2, p_sub2))
     plt.text(0.1, 0.5, text)
     ax_remove_box(ax)
 
@@ -135,11 +181,95 @@ def _relative_score(df, models, mask):
     return gc_rel, stp_rel
 
 
+def self_equivalence_data(batch, m1, m2, LN1, LN2, save_path=None,
+                          load_path=None, cellids=None):
+
+    e, a, g, s, c = improved_cells_to_list(batch, m1, m2, LN1, LN2,
+                                           as_lists=True)
+    if load_path is None:
+        eqs = []
+        for c in a:
+            xf1, ctx1 = xhelp.load_model_xform(c, batch, m1)
+            xf2, ctx2 = xhelp.load_model_xform(c, batch, m2)
+            xf3, ctx3 = xhelp.load_model_xform(c, batch, LN1)
+            xf4, ctx4 = xhelp.load_model_xform(c, batch, LN2)
+
+            test_pred1 = ctx1['val'].apply_mask()['pred'].as_continuous().flatten()
+            test_pred2 = ctx2['val'].apply_mask()['pred'].as_continuous().flatten()
+            LN_pred1 = ctx3['val'].apply_mask()['pred'].as_continuous().flatten()
+            LN_pred2 = ctx4['val'].apply_mask()['pred'].as_continuous().flatten()
+
+            C1 = np.hstack((np.expand_dims(test_pred1, 0).transpose(),
+                            np.expand_dims(test_pred2, 0).transpose(),
+                            np.expand_dims(LN_pred1, 0).transpose()))
+            p1 = partial_corr(C1)[0,1]
+
+            C2 = np.hstack((np.expand_dims(test_pred1, 0).transpose(),
+                            np.expand_dims(test_pred2, 0).transpose(),
+                            np.expand_dims(LN_pred2, 0).transpose()))
+            p2 = partial_corr(C2)[0,1]
+            eqs.append(0.5*(p1+p2))
+
+        results = {'cellid': a, 'equivalence': eqs}
+        df = pd.DataFrame.from_dict(results)
+        df.set_index('cellid', inplace=True)
+        if save_path is not None:
+            df.to_pickle(save_path)
+
+    else:
+        df = pd.read_pickle(load_path)
+
+    # don't look for cells that the analysis didn't
+    # get saved for
+    saved_cells = df.index.values.tolist()
+    a = list(set(a) & set(saved_cells))
+    df = df.loc[a]
+    if cellids is not None:
+        df = df.loc[cellids]
+    eqs = df['equivalence'].values
+
+    return eqs
+
+
+def plot_self_equivalence(batch, stp1, stp2, gc1, gc2, LN1, LN2,
+                          stp_load, gc_load, axes=None):
+    eqs1 = self_equivalence_data(batch, stp1, stp2, LN1, LN2, load_path=stp_load)
+    eqs2 = self_equivalence_data(batch, gc1, gc2, LN1, LN2, load_path=gc_load)
+    eqs = np.hstack([eqs1, eqs2])
+    weights1 = [np.ones(len(eqs))/len(eqs)]
+
+    if axes is not None:
+        a1 = axes
+    else:
+        _, a1 = plt.subplots(1,1)
+
+    a1.hist(eqs, bins=30, range=[-0.5, 1], weights=weights1,
+            fc='gray', edgecolor='black', linewidth=1, alpha=0.6)
+    a1.axes.axvline(np.median(eqs), color='black', linewidth=2,
+                    linestyle='dashed', dashes=dash_spacing)
+    if axes is None:
+        ax_remove_box(a1)
+        plt.tight_layout()
+
+    return a1
+
+
+def _get_self_equivs(batch, stp1, stp2, gc1, gc2, LN1, LN2, stp_load, gc_load,
+                     cellids=None):
+    eqs1 = self_equivalence_data(batch, stp1, stp2, LN1, LN2, load_path=stp_load,
+                                 cellids=cellids)
+    eqs2 = self_equivalence_data(batch, gc1, gc2, LN1, LN2, load_path=gc_load,
+                                 cellids=cellids)
+    return eqs1, eqs2
+
+
 def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                           LN_filter=False, test_limit=None, alpha=0.05,
                           save_path=None, load_path=None,
                           equiv_key='partial_corr',
-                          effect_key='performance_effect'):
+                          effect_key='performance_effect',
+                          self_equiv=False, self_kwargs={}, eq_models=[],
+                          cross_kwargs={}, cross_models=[]):
     '''
     model1: GC
     model2: STP
@@ -197,6 +327,39 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
     n_not = len(not_improved)
     n_imp = len(improved)
 
+    if self_equiv:
+        stp1, stp2, gc1, gc2, LN1, LN2 = eq_models
+        g1, s2, s1, g2, L1, L2 = cross_models
+        _, ga, _, _, _ = improved_cells_to_list(batch, gc1, gc2, LN1, LN2,
+                                                as_lists=True)
+        _, sa, _, _, _ = improved_cells_to_list(batch, stp1, stp2, LN1, LN2,
+                                                as_lists=True)
+        aa = list(set(ga) & set(sa))
+        eqs_stp, eqs_gc = _get_self_equivs(**self_kwargs, cellids=aa)
+        md_stpeq = np.nanmedian(eqs_stp)
+        md_gceq = np.nanmedian(eqs_gc)
+        n_eq = eqs_stp.size
+        u_gceq, p_gceq = st.mannwhitneyu(eqs_gc, rs_imp, alternative='two-sided')
+        u_stpeq, p_stpeq = st.mannwhitneyu(eqs_stp, rs_imp, alternative='two-sided')
+
+        eqs_x1, eqs_x2 = _get_self_equivs(**cross_kwargs, cellids=aa)
+        md_x1 = np.nanmedian(eqs_x1)
+        md_x2 = np.nanmedian(eqs_x2)
+
+        sub1 = df.index.isin(ga)
+        sub2 = df.index.isin(sa)
+        eqs_sub1 = df[equiv_key][sub1].values
+        eqs_sub2 = df[equiv_key][sub2].values
+        md_sub1 = np.nanmedian(eqs_sub1)
+        md_sub2 = np.nanmedian(eqs_sub2)
+
+        md_avg1 = 0.5*(md_x1 + md_x2)
+        md_avg2 = 0.5*(md_sub1 + md_sub2)
+        ratio = md_avg2 / md_avg1
+        md_stpeq *= ratio
+        md_gceq *= ratio
+
+
     not_color = model_colors['LN']
     imp_color = model_colors['max']
     weights1 = [np.ones(len(rs_not))/len(rs_not)]
@@ -204,6 +367,7 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
     #n_cells = rs.shape[0]
     fig1, (a1, a2) = plt.subplots(2, 1)
+
     a1.hist(rs_not, bins=30, range=[-0.5, 1], weights=weights1,
             fc=faded_LN, edgecolor=dark_LN, linewidth=1)
     a2.hist(rs_imp, bins=30, range=[-0.5, 1], weights=weights2,
@@ -217,6 +381,27 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                     linestyle='dashed', dashes=dash_spacing)
     a2.axes.axvline(md_imp, color=dark_max, linewidth=2,
                     linestyle='dashed', dashes=dash_spacing)
+
+    if self_equiv:
+        a1.axes.annotate('', xy=(md_gceq, 0), xycoords='data',
+                         xytext=(md_gceq, 0.07), textcoords='data',
+                         arrowprops=dict(arrowstyle="->", connectionstyle="arc3"))
+        a1.axes.annotate('', xy=(md_stpeq, 0), xycoords='data',
+                         xytext=(md_stpeq, 0.07), textcoords='data',
+                         arrowprops=dict(arrowstyle="->", connectionstyle="arc3"))
+        a2.axes.annotate('', xy=(md_gceq, 0), xycoords='data',
+                         xytext=(md_gceq, 0.07), textcoords='data',
+                         arrowprops=dict(arrowstyle="->", connectionstyle="arc3"))
+        a2.axes.annotate('', xy=(md_stpeq, 0), xycoords='data',
+                         xytext=(md_stpeq, 0.07), textcoords='data',
+                         arrowprops=dict(arrowstyle="->", connectionstyle="arc3"))
+
+    ymin1, ymax1 = a1.get_ylim()
+    ymin2, ymax2 = a2.get_ylim()
+    ymax = max(ymax1, ymax2)
+    a1.set_ylim(0, ymax)
+    a2.set_ylim(0, ymax)
+
     ax_remove_box(a1)
     ax_remove_box(a2)
     plt.tight_layout()
@@ -237,6 +422,16 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
              "n sig. imp:  %d,  md:  %.2f\n"
              "st.mannwhitneyu:  u:  %.4E p:  %.4E"
              % (batch, x_text, n_not, md_not, n_imp, md_imp, u, p))
+    if self_equiv:
+        text2 += ("\n\nSelf equivalence, n: %d\n"
+                  "stp:  md:  %.2f,  u:  %.4E   p  %.4E\n"
+                  "gc:   md:  %.2f,  u:  %.4E   p  %.4E\n"
+                  "md sub1: %.2E\n"
+                  "md sub2: %.2E\n"
+                  "md x1: %.2E\n"
+                  "md x2: %.2E"
+                  % (n_eq, md_stpeq, u_stpeq, p_stpeq, md_gceq, u_gceq, p_gceq,
+                     md_sub1, md_sub2, md_x1, md_x2))
     plt.text(0.1, 0.5, text2)
 
     return fig1, fig3
@@ -549,3 +744,48 @@ def partial_corr(C):
             P_corr[j, i] = corr
 
     return P_corr
+
+
+def partial_corr_noise_test():
+    C1 = np.ones((100, 3))  # true random noise
+    C3 = C1.copy()
+    # samples [0,1), shift and scale to [-0.05, 0.05)
+    noise1 = (np.random.rand(100,) - 0.5)/10
+    noise2 = (np.random.rand(100,) - 0.5)/10
+    C1[:,0] += noise1
+    C1[:,1] += noise2
+
+
+    # noise plus some mostly matching bits (should be high partial correlation)
+    # - how much is the noise dragging it down?
+    C2 = C1.copy()
+    point_increase_one = np.zeros(100,)
+    point_increase_one[30] = 0.5
+    point_increase_one[31] = 0.4
+    point_increase_two = np.zeros(100,)
+    point_increase_two[30:33] = 0.3
+    point_increase_two[60] = 0.2
+    C2[:,0] += point_increase_one
+    C2[:,1] += point_increase_two
+
+    # just the matching bits (should be even higher partial correlation)
+    C3[:,0] += point_increase_one
+    C3[:,1] += point_increase_two
+
+    p_cor1 = partial_corr(C1)[0,1]
+    p_cor2 = partial_corr(C2)[0,1]
+    p_cor3 = partial_corr(C3)[0,1]
+
+    fig, (a1,a2, a3) = plt.subplots(3, 1, sharey=True, figsize=(6,8))
+    for i in range(3):
+        a1.plot(C1[:,i], label=f'variable {i}')
+        a2.plot(C2[:,i])
+        a3.plot(C3[:,i])
+    a1.set_title(f'random noise, pc: {p_cor1}')
+    a2.set_title(f'point noise, pc: {p_cor2}')
+    a3.set_title(f'point, pc: {p_cor3}')
+    plt.sca(a1)
+    plt.legend()
+    plt.tight_layout()
+
+    return C1, C2, C3
