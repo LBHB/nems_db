@@ -59,10 +59,14 @@ def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling',
     fig = plt.figure()
     plt.plot([0,1],[0,1], color='black', linewidth=1, linestyle='dashed',
              dashes=dash_spacing)
-    plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=small_scatter,
-                label='no imp.')
-    plt.scatter(m1_scores_improved, m2_scores_improved,
-                color=model_colors['max'], s=big_scatter, label='sig. imp.')
+    plt.scatter(m1_scores, m2_scores, s=small_scatter, label='no imp.',
+                color=model_colors['LN'])
+                #color='none',
+                #edgecolors='black', linewidth=0.35)
+    plt.scatter(m1_scores_improved, m2_scores_improved, s=big_scatter, label='sig. imp.',
+                color=model_colors['max'])
+                #color='none',
+                #edgecolors='black', linewidth=0.35)
     ax_remove_box()
 
     if legend:

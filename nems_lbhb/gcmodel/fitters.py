@@ -1028,8 +1028,9 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
 
     '''
     if IsReload:
-        _store_gain_info(modelspec, est, val)
-        return {'modelspec': modelspec}
+#        _store_gain_info(modelspec, est, val)
+#        return {'modelspec': modelspec}
+        return {}
 
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)

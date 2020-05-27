@@ -7,30 +7,27 @@ from nems.recording import load_recording
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.gcmodel.contrast import make_contrast_signal
 from nems_lbhb.gcmodel.drc import rec_from_DRC
+from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_lbhb.gcmodel.figures.definitions import *
 
 plt.rcParams.update(params)
 
 
+# TODO: this name and doc aren't accurate anymore. it just plots
+#       stim, contrast, and summed contrast for nat and voc sets
 def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
-                           percentile=50, n_segments=12, example_batch=289,
+                           percentile=70, n_segments=8, example_batch=289,
                            example_cell='TAR010c-13-1', voc_batch=263,
-                           voc_cell='tul034b-b1', plot_seconds=19):
+                           voc_cell='tul034b-b1'):
     '''
     Plot a sample DRC stimulus next to assigned contrast
     and calculated contrast.
     '''
-#    drc = rec_from_DRC(fs=fs, n_segments=n_segments)
-#    rec = make_contrast_signal(drc, name='continuous', continuous=True, ms=ms,
-#                                bands=bands, normalize=normalize)
-#    s = rec['stim'].as_continuous()
-#    c1 = rec['contrast'].as_continuous()
-#    c3 = rec['continuous'].as_continuous()
-
-
     loadkey = 'ozgf.fs%d.ch18' % fs
-    plot_bins = plot_seconds * fs
-    seconds = np.arange(0, plot_bins)/fs
+    nat_plot_bins = 1050
+    voc_plot_bins = 1110
+    nat_seconds = np.arange(0, nat_plot_bins)/fs
+    voc_seconds = np.arange(0, voc_plot_bins)/fs
     recording_uri = generate_recording_uri(cellid=example_cell,
                                            batch=example_batch,
                                            loadkey=loadkey, stim=True)
@@ -38,10 +35,26 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
     nat_rec = make_contrast_signal(nat_rec, name='continuous', continuous=True,
                                    ms=ms, percentile=percentile, bands=bands,
                                    normalize=normalize)
-    nat_stim = nat_rec['stim'].as_continuous()[:, :plot_bins]
-    nat_contrast = nat_rec['continuous'].as_continuous()[:, :plot_bins]
+
+    epochs = nat_rec['resp'].epochs
+    stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+    pre_silence = silence_duration(epochs, 'PreStimSilence')
+    post_silence = silence_duration(epochs, 'PostStimSilence')
+    indices = np.arange(20, dtype=np.int32)
+    for s in stim_epochs:
+        row = epochs[epochs.name == s]
+        st = row['start'].values[0]
+        end = row['end'].values[0]
+        stim_start = int((st + pre_silence)*fs)
+        stim_end = int((end - post_silence)*fs)
+        indices = np.append(indices, np.arange(stim_start-20, stim_end+20,
+                                   dtype=np.int32))
+
+    nat_stim = nat_rec['stim'].as_continuous()[:, indices][:, :nat_plot_bins]
+    nat_contrast = nat_rec['continuous'].as_continuous()[:, indices][:, :nat_plot_bins]
     nat_summed = np.sum(nat_contrast, axis=0)
     nat_summed /= np.max(nat_summed) # norm 0 to 1 just to match axes
+
 
     voc_rec_uri = generate_recording_uri(cellid=voc_cell, batch=voc_batch,
                                          loadkey=loadkey, stim=True)
@@ -70,35 +83,18 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
                                                dtype=np.int32))
 
 
-    voc_stim = voc_rec['stim'].as_continuous()[:, indices][:, :plot_bins]
-    voc_contrast = voc_rec['continuous'].as_continuous()[:, indices][:, :plot_bins]
+    voc_stim = voc_rec['stim'].as_continuous()[:, indices][:, :voc_plot_bins]
+    voc_contrast = voc_rec['continuous'].as_continuous()[:, indices][:, :voc_plot_bins]
     voc_summed = np.sum(voc_contrast, axis=0)
     voc_summed /= np.max(voc_summed) # norm 0 to 1 just to match axes
 
 
-    #fig, ((a1,a2,a3), (a4,a5,a6), (a7,a8,a9)) = plt.subplots(3,3)
-    fig, ((a2,a3), (a5,a6), (a8,a9)) = plt.subplots(3,2, figsize=(4.5,3))
-
-#    # DRC
-#    plt.sca(a1)
-#    plt.title('RC-DRC')
-#    plt.imshow(s, aspect='auto', origin='lower')#, cmap=plt.get_cmap('jet'))
-#    a1.get_xaxis().set_visible(False)
-#
-#    plt.sca(a4)
-#    plt.title('Calculated Contrast')
-#    plt.imshow(c3, aspect='auto', cmap=contrast_cmap, origin='lower')
-#    a4.get_xaxis().set_visible(False)
-#
-#    plt.sca(a7)
-#    plt.title('Assigned Contrast')
-#    plt.imshow(c1, aspect='auto', cmap=contrast_cmap, origin='lower')
-
+    fig, ((a2,a3), (a5,a6), (a8,a9)) = plt.subplots(3,2, figsize=(3.5,4))
 
     # Natural Sound
     plt.sca(a2)
     #plt.title('Nat. Sound')
-    plt.imshow(nat_stim, aspect='auto', origin='lower')
+    plt.imshow(nat_stim, cmap=spectrogram_cmap, aspect='auto', origin='lower')
     a2.get_xaxis().set_visible(False)
     a2.get_yaxis().set_visible(False)
     ax_remove_box(a2)
@@ -113,19 +109,19 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
 
     plt.sca(a8)
     #plt.title('Summed')
-    plt.plot(seconds, nat_summed, color=model_colors['combined'])
+    plt.plot(nat_seconds, nat_summed, color='black', linewidth=0.5)
     a8.set_ylim(-0.1, 1.1)
     a8.get_yaxis().set_visible(False)
     #plt.xlabel('Time (s)')
     #plt.ylabel('Summed Contrast (A.U.)')
-    a8.set_xlim(seconds.min(), seconds.max())
+    a8.set_xlim(nat_seconds.min(), nat_seconds.max())
     ax_remove_box(a8)
 
 
     # Voc in noise
     plt.sca(a3)
     #plt.title('Voc. in Noise')
-    plt.imshow(voc_stim, aspect='auto', origin='lower')
+    plt.imshow(voc_stim, cmap=spectrogram_cmap, aspect='auto', origin='lower')
     a3.get_xaxis().set_visible(False)
     a3.get_yaxis().set_visible(False)
     ax_remove_box(a3)
@@ -139,11 +135,11 @@ def test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
 
     plt.sca(a9)
     #plt.title('Summed')
-    plt.plot(seconds, voc_summed, color=model_colors['combined'])
+    plt.plot(voc_seconds, voc_summed, color='black', linewidth=0.5)
     a9.set_ylim(-0.1, 1.1)
     #a9.get_yaxis().tick_right()
     a9.get_yaxis().set_visible(False)
-    a9.set_xlim(seconds.min(), seconds.max())
+    a9.set_xlim(voc_seconds.min(), voc_seconds.max())
     ax_remove_box(a9)
 
 

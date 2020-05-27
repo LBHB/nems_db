@@ -164,10 +164,10 @@ def example_clip(cellid, batch, gc, stp, LN, combined, skip_combined=False,
     fig = plt.figure(figsize=wide_fig)
     xmin = 0
     xmax = end - start
-    plt.imshow(stim_plot, aspect='auto', cmap='Greys',
+    plt.imshow(stim_plot, aspect='auto', cmap=spectrogram_cmap,
                origin='lower', extent=(xmin, xmax, 1.1, 1.5))
     lw = 0.75
-    plt.plot(resp_plot, color='gray', alpha=0.65, linewidth=lw)
+    plt.plot(resp_plot, color=model_colors['LN'], linewidth=lw)
     t = np.linspace(0, resp_plot.shape[-1]-1, resp_plot.shape[-1])
     plt.fill_between(t, resp_plot, color='gray', alpha=0.15)
     plt.plot(gc_plot, color=model_colors['gc'], linewidth=lw)
@@ -176,7 +176,7 @@ def example_clip(cellid, batch, gc, stp, LN, combined, skip_combined=False,
     plt.plot(LN_plot, color='black', alpha=0.55, linewidth=lw)
     signals = ['Response', 'LN', 'GC', 'STP']
     if not skip_combined:
-        plt.plot(combined_plot, color='orange', linewidth=lw)
+        plt.plot(combined_plot, color=model_colors['combined'], linewidth=lw)
         signals.append('GC+STP')
     plt.ylim(-0.1, 1.5)
     ax = plt.gca()

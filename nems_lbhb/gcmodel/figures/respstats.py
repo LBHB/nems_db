@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import nems.xform_helper as xhelp
 import nems.db as nd
 import nems.epoch as ep
+from nems.utils import ax_remove_box
 from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
 from nems_lbhb.gcmodel.figures.utils import (improved_cells_to_list,
                                              get_filtered_cellids,
@@ -30,216 +31,227 @@ def rate_by_batch(batch, cells=None, stat='max', fs=100):
     if cells is None:
         cells = nd.get_batch_cells(batch, as_list=True)
     rates = []
+    failures = []
     for cellid in cells:
-        # should be able to do this with just the recording somehow, but
-        # I guess i'm missing a step. So for now just load the evaluated model
-#        loadkey = 'ozgf.fs%d.ch18' % fs
-#        recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
-#                                               loadkey=loadkey, stim=False)
-#        rec = load_recording(recording_uri)
-#        rec['resp'] = rec['resp'].rasterize()
-#        avgrec = average_away_epoch_occurrences(rec)
-#        resp = avgrec['resp'].extract_channels([cellid]).as_continuous().flatten()
-#        #resp = rec['resp'].extract_channels([cellid])
-#        #avgresp = generate_average_sig(resp)
+        try:
+            # should be able to do this with just the recording somehow, but
+            # I guess i'm missing a step. So for now just load the evaluated model
+    #        loadkey = 'ozgf.fs%d.ch18' % fs
+    #        recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
+    #                                               loadkey=loadkey, stim=False)
+    #        rec = load_recording(recording_uri)
+    #        rec['resp'] = rec['resp'].rasterize()
+    #        avgrec = average_away_epoch_occurrences(rec)
+    #        resp = avgrec['resp'].extract_channels([cellid]).as_continuous().flatten()
+    #        #resp = rec['resp'].extract_channels([cellid])
+    #        #avgresp = generate_average_sig(resp)
 
-        # using ln_dexp3 because it should be the fastest to evaluate,
-        # but actual model doesn't matter since we only need response
-        xfspec, ctx = xhelp.load_model_xform(cellid, batch, ln_dexp3)
-        # using val data makes epochs not line up, use full resp
-        #resp = ctx['val'].apply_mask()['resp'].as_continuous().flatten()
-        resp = ctx['rec']['resp'].as_continuous().flatten()
-        if stat == 'max':
-            raw_max = np.nanmax(resp)
-            mean_3sd = np.nanmean(resp) + 3*np.nanstd(resp)
-            max_rate = min(raw_max, mean_3sd)
-            rates.append(max_rate)
-        elif stat == 'spont':
-            epochs = ctx['rec']['resp'].epochs
-            stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
-            pre_silence = silence_duration(epochs, 'PreStimSilence')
-            silence_only = np.empty(0,)
-            # cut out only the pre-stim silence portions
-            for s in stim_epochs:
-                row = epochs[epochs.name == s]
-                if row.size/3 == 1:
-                    starts = [row['start'].values[0]]
-                else:
-                    starts = row.values[:, 0]
-                for st in starts:
-                    pre_start = int(st*fs)
-                    stim_start = int((st + pre_silence)*fs)
-                    silence_only = np.append(silence_only,
-                                             resp[pre_start:stim_start])
+            # using ln_dexp3 because it should be the fastest to evaluate,
+            # but actual model doesn't matter since we only need response
+            xfspec, ctx = xhelp.load_model_xform(cellid, batch, ln_dexp3)
+            # using val data makes epochs not line up, use full resp
+            #resp = ctx['val'].apply_mask()['resp'].as_continuous().flatten()
+            resp = ctx['rec']['resp'].as_continuous().flatten()
+            if stat == 'max':
+                raw_max = np.nanmax(resp)
+                mean_3sd = np.nanmean(resp) + 3*np.nanstd(resp)
+                max_rate = min(raw_max, mean_3sd)
+                rates.append(max_rate)
+            elif stat == 'spont':
+                epochs = ctx['rec']['resp'].epochs
+                stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+                pre_silence = silence_duration(epochs, 'PreStimSilence')
+                silence_only = np.empty(0,)
+                # cut out only the pre-stim silence portions
+                for s in stim_epochs:
+                    row = epochs[epochs.name == s]
+                    if row.size/3 == 1:
+                        starts = [row['start'].values[0]]
+                    else:
+                        starts = row.values[:, 0]
+                    for st in starts:
+                        pre_start = int(st*fs)
+                        stim_start = int((st + pre_silence)*fs)
+                        silence_only = np.append(silence_only,
+                                                 resp[pre_start:stim_start])
 
-            spont_rate = np.nanmean(silence_only)
-            rates.append(spont_rate)
-        elif stat == 'mean':
-            epochs = ctx['rec']['resp'].epochs
-            stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
-            pre_silence = silence_duration(epochs, 'PreStimSilence')
-            post_silence = silence_duration(epochs, 'PostStimSilence')
-            stim_only = np.empty(0,)
-            # cut out only the stim portions
-            for s in stim_epochs:
-                row = epochs[epochs.name == s]
-                if row.size/3 == 1:
-                    starts = [row['start'].values[0]]
-                    ends = [row['end'].values[0]]
-                else:
-                    starts = row.values[:, 0]
-                    ends = row.values[:, 1]
-                for st, e in zip(starts, ends):
-                    stim_start = int((st + pre_silence)*fs)
-                    stim_end = int((e - post_silence)*fs)
-                    stim_only = np.append(stim_only, resp[stim_start:stim_end])
+                spont_rate = np.nanmean(silence_only)
+                rates.append(spont_rate)
+            elif stat == 'mean':
+                epochs = ctx['rec']['resp'].epochs
+                stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+                pre_silence = silence_duration(epochs, 'PreStimSilence')
+                post_silence = silence_duration(epochs, 'PostStimSilence')
+                stim_only = np.empty(0,)
+                # cut out only the stim portions
+                for s in stim_epochs:
+                    row = epochs[epochs.name == s]
+                    if row.size/3 == 1:
+                        starts = [row['start'].values[0]]
+                        ends = [row['end'].values[0]]
+                    else:
+                        starts = row.values[:, 0]
+                        ends = row.values[:, 1]
+                    for st, e in zip(starts, ends):
+                        stim_start = int((st + pre_silence)*fs)
+                        stim_end = int((e - post_silence)*fs)
+                        stim_only = np.append(stim_only, resp[stim_start:stim_end])
 
-            mean_rate = np.nanmean(stim_only)
-            rates.append(mean_rate)
+                mean_rate = np.nanmean(stim_only)
+                rates.append(mean_rate)
 
-        else:
-            raise ValueError("unrecognized stat: use 'max' for maximum or "
-                             "'spont' for spontaneous")
-
+            else:
+                raise ValueError("unrecognized stat: use 'max' for maximum or "
+                                 "'spont' for spontaneous")
+        except:
+            rates.append(np.nan)
 
     results = {'cellid': cells, 'rate': rates}
     df = pd.DataFrame.from_dict(results)
+    df.dropna(inplace=True)
     df.set_index('cellid', inplace=True)
 
     return df
 
 
-def save_resp_stats(batch, max_path=None, spont_path=None, mean_path=None,
-                    fs=100):
+# To start over (with no models for example)
+def save_resp_stats(batch, cells=None, max_path=None, spont_path=None,
+                    mean_path=None, fs=100):
     if max_path is not None:
-        df = rate_by_batch(batch, stat='max', fs=fs)
+        df = rate_by_batch(batch, cells=cells, stat='max', fs=fs)
         df.to_pickle(max_path)
     if spont_path is not None:
-        df = rate_by_batch(batch, stat='spont', fs=fs)
+        df = rate_by_batch(batch, cells=cells, stat='spont', fs=fs)
         df.to_pickle(spont_path)
     if mean_path is not None:
-        df = rate_by_batch(batch, stat='mean', fs=fs)
+        df = rate_by_batch(batch, cells=cells, stat='mean', fs=fs)
         df.to_pickle(mean_path)
 
 
-def rate_vs_performance(batch, gc, stp, LN, combined, compare='gc',
-                        se_filter=True, LN_filter=False, plot_stat='r_ceiling',
-                        normalize_rates=False, load_path=None,
-                        save_path=None, rate_stat='max', fs=100,
-                        relative_performance=False):
-    df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-#    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
-#                                                          LN, combined,
-#                                                          se_filter,
-#                                                          LN_filter)
+# To update existing result (new cells or previous failures)
+def update_resp_stats(batch, gc, stp, LN, combined, path, rate_type, fs=100):
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+    try:
+        old_df = pd.read_pickle(path)
+        old_df.dropna(inplace=True)  # don't count failures
+        old_cells = old_df.index.values.tolist()
+    except FileNotFoundError:
+        old_cells = []
+    all_cells = a
+    new_cells = list(set(all_cells) - set(old_cells))
+    new_cells.sort()
+    new_df = rate_by_batch(batch, cells=new_cells, stat=rate_type, fs=fs)
+    concat = pd.concat([old_df, new_df])
+    concat.dropna(inplace=True)
+    concat.to_pickle(path)
 
-    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                           as_lists=False)
 
-    if plot_stat == 'r_ceiling':
-        plot_df = df_c
+def rate_histogram(batch, gc, stp, LN, combined, load_path, rate_type='mean',
+                   plot_stat='r_ceiling', fs=100, allow_overlap=True):
+
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
+    if allow_overlap:
+        gc_imp = g
+        stp_imp = s
+        not_imp = list(set(a) - set(c))
+        both_imp = list((set(g) & set(s)) | set(c))
     else:
-        plot_df = df_r
+        gc_imp = list(set(g) - set(s))
+        stp_imp = list(set(s) - set(g))
+        not_imp = list(set(a) - set(c) - set(g) - set(s))
+        # either both improve or only combined improve
+        both_imp = list((set(g) & set(s)) | ((set(c) - set(s) - set(g))))
 
-    if compare == 'gc':
-        model = gc
-        improved = g
-        not_improved = (a & np.logical_not(g))
-    elif compare == 'stp':
-        model = stp
-        improved = s
-        not_improved = (a & np.logical_not(s))
-    elif compare == 'combined':
-        model = combined
-        improved = c
-        not_improved = (a & np.logical_not(c))
-    else:
-        raise ValueError('model comparison not recognized: %s' % compare)
+    df = pd.read_pickle(load_path)
+    # * fs to get spikes per second
+    #rates_LN = df.loc[not_imp]['rate'].values * fs
+    rates_LN = df[df.index.isin(not_imp)]['rate'].values * fs
+    #rates_gc = df.loc[gc_imp]['rate'].values * fs
+    rates_gc = df[df.index.isin(gc_imp)]['rate'].values * fs
+    #rates_stp = df.loc[stp_imp]['rate'].values * fs
+    rates_stp = df[df.index.isin(stp_imp)]['rate'].values * fs
+    rates_both = df[df.index.isin(both_imp)]['rate'].values * fs
 
-    if load_path is None:
-        df = rate_by_batch(batch, stat=rate_stat, fs=fs)
-        if save_path is not None:
-            df.to_pickle(save_path)
-    else:
-        df = pd.read_pickle(load_path)
+    xmax = max(rates_gc.max(), rates_stp.max(), rates_both.max())*1.10
 
-    df_remove = []
-    filter_remove = []
-    if not (sorted(df['rate'].index.values) == sorted(improved.index.values)):
-        log.warning('index mismatch in rate analysis, only keeping matched cells')
-        for cell in improved.index.values:
-            if cell not in df['rate'].index.values:
-                filter_remove.append(cell)
-        for cell in df['rate'].index.values:
-            if cell not in improved.index.values:
-                df_remove.append(cell)
+    md_LN = np.nanmedian(rates_LN)
+    n_LN = rates_LN.size
+    md_gc = np.nanmedian(rates_gc)
+    n_gc = rates_gc.size
+    md_stp = np.nanmedian(rates_stp)
+    n_stp = rates_stp.size
+    md_both = np.nanmedian(rates_both)
+    n_both = rates_both.size
+    # vs each other
+    u, p = st.mannwhitneyu(rates_gc, rates_stp, alternative='two-sided')
+    u_both_gc, p_both_gc = st.mannwhitneyu(rates_both, rates_gc, alternative='two-sided')
+    u_both_stp, p_both_stp = st.mannwhitneyu(rates_both, rates_stp, alternative='two-sided')
+    # vs LN
+    u_gc, p_gc = st.mannwhitneyu(rates_gc, rates_LN, alternative='two-sided')
+    u_stp, p_stp = st.mannwhitneyu(rates_stp, rates_LN, alternative='two-sided')
+    u_both, p_both = st.mannwhitneyu(rates_both, rates_LN, alternative='two-sided')
 
-        for cell in df_remove:
-            df.drop(cell, inplace=True)
-        for cell in filter_remove:
-            improved.drop(cell, inplace=True)
-            not_improved.drop(cell, inplace=True)
-            a.drop(cell, inplace=True)
-        if not sorted(df.index.values) == sorted(improved.index.values):
-            raise ValueError('still have an index mismatch after fix')
-    cellids = sorted(df.index.values.tolist())
-    # also sort all indexes to make sure the values are in the same order
-    plot_df.sort_index(inplace=True)
-    df.sort_index(inplace=True)
-    improved.sort_index(inplace=True)
-    not_improved.sort_index(inplace=True)
-    a.sort_index(inplace=True)
+    # TODO: stat comparison for both group
 
-    imp_rates = df['rate'][improved].values.astype('float32')
-    not_rates = df['rate'][not_improved].values.astype('float32')
-    all_rates = df['rate'][a].values.astype('float32')
-    n_imp = imp_rates.size
-    n_not = not_rates.size
-    n_all = all_rates.size
+    weights1 = [np.ones(len(rates_stp))/len(rates_stp)]
+    weights2 = [np.ones(len(rates_gc))/len(rates_gc)]
+    weights3 = [np.ones(len(rates_LN))/len(rates_LN)]
+    weights4 = [np.ones(len(rates_both))/len(rates_both)]
 
-    imp_scores = plot_df[model][cellids][improved].values.astype('float32')
-    not_scores = plot_df[model][cellids][not_improved].values.astype('float32')
-    all_scores = plot_df[model][cellids][a].values.astype('float32')
-    if normalize_rates:
-        not_rates /= not_rates.max()
-        imp_rates /= imp_rates.max()
-        all_rates /= all_rates.max()
-    if relative_performance:
-        imp_LN = plot_df[LN][cellids][improved].values.astype('float32')
-        not_LN = plot_df[LN][cellids][not_improved].values.astype('float32')
-        all_LN = plot_df[LN][cellids][a].values.astype('float32')
-        imp_scores = imp_scores - imp_LN
-        not_scores = not_scores - not_LN
-        all_scores = all_scores - all_LN
+    fig, (a3, a1, a2, a4) = plt.subplots(4, 1, figsize=tall_fig)
+    axes = [a3, a1, a2, a4]
+    a1.hist(rates_stp, bins=30, range=[0, xmax], weights=weights1,
+            fc=faded_stp, edgecolor=dark_stp, linewidth=1)
+    a2.hist(rates_gc, bins=30, range=[0, xmax], weights=weights2,
+            fc=faded_gc, edgecolor=dark_gc, linewidth=1)
+    a3.hist(rates_LN, bins=30, range=[0, xmax], weights=weights3,
+            fc=model_colors['LN'], alpha=0.5, edgecolor=dark_LN, linewidth=1)
+    a4.hist(rates_both, bins=30, range=[0, xmax], weights=weights4,
+            fc=model_colors['combined'], alpha=0.5, edgecolor=dark_combined,
+            linewidth=1)
 
-    r_all, p_all = st.pearsonr(all_rates, all_scores)
-    r_imp, p_imp = st.pearsonr(imp_rates, imp_scores)
-    r_not, p_not = st.pearsonr(not_rates, not_scores)
+    for ax in axes:
+        ax.axes.axvline(md_stp, color=dark_stp, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
+        ax.axes.axvline(md_gc, color=dark_gc, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
+        ax.axes.axvline(md_LN, color=dark_LN, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
+        ax.axes.axvline(md_both, color=dark_combined, linewidth=2,
+                        linestyle='dashed', dashes=dash_spacing)
 
-    fig = plt.figure()
-    ax = plt.gca()
-    imp_color = model_colors[compare]
-    not_color = model_colors['LN']
-    ax.scatter(not_rates, not_scores, color=not_color, s=15, label='not imp.')
-    ax.scatter(imp_rates, imp_scores, color=imp_color, facecolors='none',
-               s=40, linewidth=2, label='sig. imp.')
-    ax.legend()
-    adjustFigAspect(fig, aspect=1)
-    plt.xlabel("%s rate\n"
-               "normalized? %s" % (rate_stat, normalize_rates))
-    plt.ylabel("%s\n"
-               "relative to LN?  %s" % (plot_stat, relative_performance))
+    ymaxes = [ax.get_ylim()[1] for ax in axes]
+    ymins = [ax.get_ylim()[0] for ax in axes]
+    ymax = max(ymaxes)
+    ymin = min(ymins)
+    for ax in axes:
+        ax.set_ylim(ymin, ymax)
+    fig.tight_layout()
+    ax_remove_box(a1)
+    ax_remove_box(a2)
+    ax_remove_box(a3)
+    ax_remove_box(a4)
 
-    title = ("%s vs %s model performance\n"
-             "all -- r:  %.4f, p:  %.4E, n:  %d\n"
-             "imp -- r:  %.4f, p:  %.4E, n:  %d\n"
-             "not -- r:  %.4f, p:  %.4E, n:  %d"
-             % (rate_stat, compare, r_all, p_all, n_all, r_imp, p_imp,
-                n_imp, r_not, p_not, n_not))
+    fig2 = plt.figure(figsize=text_fig)
+    text = ("%s rate blocked by model improvement\n"
+            "gc, md:  %.2E, n:  %d\n"
+            "stp, md: %.2E, n:  %d\n"
+            "LN, md:  %.2E, n:  %d\n"
+            "both, md:%.2E, n:  %d\n"
+            "m.w. stp v gc: u:  %.4E, p:  %.4E\n"
+            "gc vs LN:      u:  %.4E, p:  %.4E\n"
+            "stp vs LN:     u:  %.4E, p:  %.4E\n"
+            "both vs gc:    u:  %.4E, p:  %.4E\n"
+            "both vs stp:   u:  %.4E, p:  %.4E\n"
+            "both vs LN:    u:  %.4E, p:  %.4E\n"
+             % (rate_type, md_gc, n_gc, md_stp, n_stp, md_LN, n_LN, md_both,
+                n_both, u, p, u_gc, p_gc, u_stp, p_stp, u_both_gc, p_both_gc,
+                u_both_stp, p_both_stp, u_both, p_both))
+    plt.text(0.1, 0.5, text)
 
-    plt.title(title)
-    plt.tight_layout()
-    return fig
+
+
+    return fig, fig2
 
 
 def strf_vs_resp_by_contrast(cellid, batch, modelname,

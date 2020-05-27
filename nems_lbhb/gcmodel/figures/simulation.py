@@ -200,7 +200,7 @@ def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
     if end is None:
         end = stim.shape[-1]
     ext_stop = 1.25*(ext_start+0.1)
-    plt.imshow(stim, aspect='auto', cmap='Greys',
+    plt.imshow(stim, aspect='auto', cmap=spectrogram_cmap,
                origin='lower', extent=(0, stim.shape[-1], ext_start, ext_stop))
     lw = 0.75
     plt.plot(simulation, color='gray', alpha=0.65, linewidth=lw*2)
@@ -258,10 +258,10 @@ def compare_sims(start=0, end=None):
     fig = plt.figure(figsize=wide_fig)
     if end is None:
         end = stim.shape[-1]
-    plt.imshow(stim, aspect='auto', cmap='Greys',
+    plt.imshow(stim, aspect='auto', cmap=spectrogram_cmap,
                origin='lower', extent=(0, stim.shape[-1], 2.1, 3.4))
     lw = 0.75
-    plt.plot(LN_psth, color='black', alpha=0.55, linewidth=lw)
+    plt.plot(LN_psth, color=model_colors['LN'], linewidth=lw)
     plt.plot(gc_psth, color=model_colors['gc'], linewidth=lw*1.25)
     plt.plot(stp_psth, color=model_colors['stp'], alpha=0.75,
              linewidth=lw*1.25)
