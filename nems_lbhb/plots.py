@@ -451,7 +451,7 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
 
 
 def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset', ax=None):
+                     overlap_method='offset', s=25, ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -495,7 +495,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
         plt.sca(ax)
     else:
         plt.figure()
-    plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=50)
+    plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
 
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
@@ -568,7 +568,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
             h_dupes.append(h[index[i][0]])
             c+=1
 
-    plt.scatter(dup_locations[0,:],dup_locations[1,:],facecolor='none',edgecolor='k',s=50)
+    plt.scatter(dup_locations[0,:],dup_locations[1,:],facecolor='none',edgecolor='k',s=s)
 
     plt.axis('scaled')
     plt.xlim(-max_-.3,max_+.3)
@@ -595,7 +595,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     #mappable.set_cmap('jet')
     colors = mappable.to_rgba(list(h[indexes]))
     plt.scatter(locations[:,c_id][0,:],locations[:,c_id][1,:],
-                          c=colors,vmin=vmin,vmax=vmax,s=50,edgecolor='none')
+                          c=colors,vmin=vmin,vmax=vmax,s=s,edgecolor='none')
     # plot the duplicates
     norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
     cmap = matplotlib.cm.jet
@@ -605,14 +605,16 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     #colors = mappable.to_rgba(h[mask])
     colors = mappable.to_rgba(h_dupes)
     plt.scatter(dup_locations[0,:],dup_locations[1,:],
-                          c=colors,vmin=vmin,vmax=vmax,s=50,edgecolor='none')
+                          c=colors,vmin=vmin,vmax=vmax,s=s,edgecolor='none')
     if h_electrode is not None:
         print("h_electrode={}".format(h_electrode))
         plt.scatter(locations[0, h_electrode], locations[1, h_electrode],
-                    facecolor='none', s=60, lw=2, edgecolor='red')
+                    facecolor='none', s=s+5, lw=2, edgecolor='red')
 
     if cbar is True:
         plt.colorbar(mappable)
+
+    plt.axis('off')
 
 
 def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, title=None):
