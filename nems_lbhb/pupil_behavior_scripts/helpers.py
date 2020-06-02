@@ -779,6 +779,13 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
                           dMIu_all.loc[sig_cells, pd.IndexSlice['MI', 'PASSIVE_1']], color=color,
                           linewidth=0.5, edgecolor='white', s=15, label=category)
 
+    nncells = np.isfinite(dMI_all.loc[:, pd.IndexSlice['MI', 'PASSIVE_1']])
+    #import pdb;pdb.set_trace()
+    _dmi=dMI_all.loc[nncells, pd.IndexSlice['MI', 'PASSIVE_1']]
+    _dmiu=dMIu_all.loc[nncells, pd.IndexSlice['MI', 'PASSIVE_1']]
+    sn=np.sign(_dmi+_dmiu)
+    stat, p = st.wilcoxon(_dmi*sn,_dmiu*sn)
+    print(f' postall vs postu: Wilcoxon stat={stat} p={p:.3e}')
     ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')

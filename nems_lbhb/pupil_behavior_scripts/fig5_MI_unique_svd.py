@@ -26,7 +26,7 @@ dump_path = get_setting('NEMS_RESULTS_DIR')
 helper_path = os.path.dirname(helper.__file__)
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 # SPECIFY models
 USE_AFL=True
