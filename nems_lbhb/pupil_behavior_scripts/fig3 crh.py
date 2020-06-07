@@ -67,9 +67,14 @@ df = pd.concat([A1, IC])
 
 if group_files & ('beh' not in model_string):
     area = df['area']
-    df = df.groupby(by=['cellid', 'ON_BF']).mean()
+    #df = df.groupby(by=['cellid', 'ON_BF']).mean()
+    df = df.groupby(by=['cellid']).mean()
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c].iloc[0] for c in df.index.get_level_values('cellid')]
-
+    df['sig_task'] = df['sig_task'].astype(bool)
+    df['sig_utask'] = df['sig_utask'].astype(bool)
+    df['sig_pupil'] = df['sig_pupil'].astype(bool)
+    df['sig_upupil'] = df['sig_upupil'].astype(bool)
+    df['sig_state'] = df['sig_state'].astype(bool)
 # Create figure
 
 def donut_plot(area, unit_list, colors, savefigure=False):
