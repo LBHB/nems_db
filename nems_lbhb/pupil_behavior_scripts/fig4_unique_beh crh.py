@@ -25,7 +25,7 @@ dump_path = get_setting('NEMS_RESULTS_DIR')
 helper_path = os.path.dirname(helper.__file__)
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 # SPECIFY models
 USE_AFL=True
@@ -335,6 +335,10 @@ stat, p = sci.wilcoxon(unique_ICC)
 print(f'ICC u_mod_beh: n+={np.sum(unique_ICC>0)}/{len(unique_ICC)} med={np.median(unique_ICC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
 stat, p = sci.wilcoxon(unique_ICX)
 print(f'ICX u_mod_beh: n+={np.sum(unique_ICX>0)}/{len(unique_ICX)} med={np.median(unique_ICX):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+
+stat, p = sci.ranksums(unique_A1,unique_IC)
+print(f'A1 vs. IC ranksum: {stat:.3f}, p={p:.4e}')
+
 
 """
 print(signed_diff_A1.mean())
