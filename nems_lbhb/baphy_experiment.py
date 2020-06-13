@@ -641,7 +641,7 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     ref_ends = exptevents[exptevents.name.isin(ref_e_tags)].copy()
 
     ref_events = exptevents[exptevents.name.isin(ref_tags)].copy()
-    new_tags = [t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
     ref_events.at[:, 'name'] = new_tags
     ref_events.at[:, 'start'] = ref_starts.start.values
     ref_events.at[:, 'end'] = ref_ends.end.values
