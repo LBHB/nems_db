@@ -115,5 +115,16 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             marker='v',
             ax=axs[1])
 
+for s_area in ['A1', 'ICC|ICX']:
+    for varname in ['MI_task_unique','MI_pupil_unique']:
+
+        area = df.area.str.contains(s_area, regex=True) & df['sig_state']
+        m=df.loc[area, varname].mean()
+        stat,p = sci.wilcoxon(df.loc[area, varname])
+        npos=np.sum(df.loc[area, varname] > 0)
+        n=len(df.loc[area, varname])
+        print(f"{s_area} {varname}: mean={m:.3f} p={p:.3e}")
+        print(f"  npos={npos}/{n}")
+
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig5_MI_unique.pdf'))

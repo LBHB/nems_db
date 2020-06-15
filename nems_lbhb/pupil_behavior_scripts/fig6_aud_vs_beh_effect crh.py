@@ -81,12 +81,13 @@ if group_files & ('beh' not in model_string):
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
 # 6A
-f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, colors=common.color_list, title='A1')
+norm_by_null=True
+f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, colors=common.color_list, title='A1', norm_by_null=norm_by_null)
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_A1.pdf'))
 
 # 6B
-f = helper.aud_vs_state(df.loc[df.area.isin(['ICC', 'ICX'])], nb=5, colors=common.color_list, title='IC')
+f = helper.aud_vs_state(df.loc[df.area.isin(['ICC', 'ICX'])], nb=5, colors=common.color_list, title='IC', norm_by_null=norm_by_null)
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
@@ -157,11 +158,11 @@ if group_files & ('beh' not in model_string):
     df = df.groupby(by=['cellid']).mean()
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
-f = helper.aud_vs_state(df.loc[df.area=='IC'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='IC')
+f = helper.aud_vs_state(df.loc[df.area=='IC'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='IC', norm_by_null=norm_by_null)
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_IC.pdf'))
 
-f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='A1')
+f = helper.aud_vs_state(df.loc[df.area=='A1'], nb=5, state_list=['st.afl0', 'st.afl'], colors=common.color_list, title='A1', norm_by_null=norm_by_null)
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_beh_only_A1.pdf'))
 

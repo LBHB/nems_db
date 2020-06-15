@@ -735,6 +735,9 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None, show
             pred_mod[i] = np.array([mod2_pb-mod2_p0b, mod2_pb-mod2_pb0])
             pred_mod_full[i] = np.array([mod2_pb0, mod2_p0b])
 
+    # STOP HERE TO PULL OUT MI AND R2
+    #import pdb; pdb.set_trace()
+
     pred_mod_norm = pred_mod / (state_std + (state_std == 0).astype(float))
     pred_mod_full_norm = pred_mod_full / (state_std +
                                           (state_std == 0).astype(float))

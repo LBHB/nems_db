@@ -559,7 +559,8 @@ def compare_models(df1, df2, xlab=None, ylab=None):
     return f, ax
 
 
-def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']):
+def aud_vs_state(df, nb=5, title=None, state_list=None,
+                 colors=['r','g','b','k'], norm_by_null=False):
     """
     d = dataframe output by get_model_results_per_state_model()
     nb = number of bins
@@ -623,17 +624,28 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(2,2,2)
-    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
-    stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
+    if norm_by_null:
+        d=(mfull[:,1]-mfull[:,0]) / (1-np.abs(mfull[:,0]))
+        ylabel = "dep-indep normed"
+    else:
+        d=(mfull[:,1]-mfull[:,0])
+        ylabel = "dep-indep"
+    stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2=ylabel,
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
-    ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
+    if not norm_by_null:
+        ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
     slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     plt.title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
 
     ax4 = plt.subplot(2,2,4)
-    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    if norm_by_null:
+        d=(mfull[:,1]-mfull[:,0]) / (1-np.abs(mfull[:,0]))
+        ylabel = "dep-indep normed"
+    else:
+        d=(mfull[:,1]-mfull[:,0])
+        ylabel = "dep-indep"
     snr = np.log(dr['SNR'].values)
     _ok = np.isfinite(d) & np.isfinite(snr)
     ax4.plot(snr[_ok], d[_ok], 'k.', markersize=4)
@@ -643,7 +655,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     mm = np.array([np.min(snr[_ok]), np.max(snr[_ok])])
     ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     ax4.set_xlabel('log(SNR)')
-    ax4.set_ylabel('dep-indep')
+    ax4.set_ylabel(ylabel)
     ax4.set_title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
     nplt.ax_remove_box(ax4)
 
