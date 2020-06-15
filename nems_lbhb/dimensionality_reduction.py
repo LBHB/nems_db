@@ -155,6 +155,7 @@ def get_discrimination_projection(rec, epoch1='TARGET', epoch2='REFERENCE', coll
 
     # define discrimination axis (delta mu)
     disc_axis = r1.mean(axis=-1, keepdims=True) - r2.mean(axis=-1, keepdims=True)
+    disc_axis /= np.linalg.norm(disc_axis)
 
     # project full response onto axis
     projection = np.matmul(rec['resp'].as_continuous().T, disc_axis)
