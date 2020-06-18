@@ -566,6 +566,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
 
+    epochs = epochs.append(te, ignore_index=True)
     # append file name epoch
     mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
 
@@ -748,13 +749,13 @@ def _remove_post_lick(events, exptevents):
     #    import pdb;pdb.set_trace()
     #   raise ValueError('More than one lick recorded on a FA trial, whats up??')
     
-    for t in trunc_trials:
+    for t in trunc_trials:  
         fl = lick_time.iloc[lick_trial==t].iloc[0]
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
         events.at[e[e.end > fl].index, 'end'] = fl
         # remove events that started after the lick completely
-        events = events.drop(e[(e.start.values > fl) & (e.end.values > fl)].index)
+        events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
     
     return events
 

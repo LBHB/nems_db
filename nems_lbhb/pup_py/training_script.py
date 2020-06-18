@@ -8,7 +8,9 @@ import keras
 import nems
 import nems.db as nd
 import datetime
-sys.path.append('/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/')
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/')
 import keras_classes as kc
 
 import logging
