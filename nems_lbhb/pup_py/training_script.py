@@ -12,6 +12,7 @@ import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/')
 import keras_classes as kc
+import pupil_settings as ps
 
 import logging
 log = logging.getLogger(__name__)
@@ -40,9 +41,9 @@ if __name__ == '__main__':
         nd.update_job_start(queueid)
 
     # project directory
-    project_dir = '/auto/data/nems_db/pup_py/'
+    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
     # data path
-    path = '/auto/data/nems_db/pup_py/training_data/'
+    path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
     training_files = os.listdir(path)
     n_training_files = len(training_files)
 
@@ -58,7 +59,7 @@ if __name__ == '__main__':
     controlled = False
 
     if load_from_past:
-        model_to_load = '{0}default_trained_model.hdf5'.format('/auto/data/nems_db/pup_py/')
+        model_to_load = os.path.join(ps.ROOT_DIRECTORY, 'default_trained_model.hdf5')  
     else:
         model_to_load = None
 
