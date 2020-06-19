@@ -8,9 +8,9 @@ import keras
 import nems
 import nems.db as nd
 import datetime
-import nems_db
-nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
+import nems_lbhb
+nems_lbhb_path = nems_lbhb.__path__[0]
+sys.path.append(os.path.join(nems_lbhb_path, 'pup_py2/'))
 import keras_classes as kc
 import pupil_settings as ps
 

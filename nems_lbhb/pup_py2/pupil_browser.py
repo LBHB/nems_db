@@ -20,9 +20,9 @@ import scipy.io
 import sys
 from tkinter import filedialog
 
-import nems_db
-nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
+import nems_lbhb
+nems_lbhb_path = nems_lbhb.__path__[0]
+sys.path.append(os.path.join(nems_lbhb_path, 'pup_py2/'))
 import pupil_settings as ps
 
 executable_path = sys.executable
