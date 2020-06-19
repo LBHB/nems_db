@@ -22,12 +22,12 @@ from tkinter import filedialog
 
 import nems_db
 nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
 import pupil_settings as ps
 
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
-training_browser_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'browse_training_data.py')
+training_browser_path = os.path.join(script_path, 'nems_lbhb', 'pup_py2', 'browse_training_data.py')
 
 tmp_frame_folder = ps.TMP_SAVE  #'/auto/data/nems_db/pup_py/tmp/'
 video_folder = ps.ROOT_VIDEO_DIRECTORY  #'/auto/data/daq/'
@@ -420,7 +420,7 @@ class PupilBrowser:
         # job and automatically exit the window
         py_path = sys.executable
         script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
-        script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
+        script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py2', 'training_script.py')
         username = getpass.getuser()
 
         # add job to queue

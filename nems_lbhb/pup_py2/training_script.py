@@ -10,7 +10,7 @@ import nems.db as nd
 import datetime
 import nems_db
 nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/')
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/')
 import keras_classes as kc
 import pupil_settings as ps
 
@@ -41,15 +41,15 @@ if __name__ == '__main__':
         nd.update_job_start(queueid)
 
     # project directory
-    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py2/'
     # data path
-    path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+    path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py2/training_data/'
     training_files = os.listdir(path)
     n_training_files = len(training_files)
 
     # get current date/time so that we can save the model results in the correct place
     dt = datetime.datetime.now().isoformat()
-    os.system('mkdir {0}old_model_fits/{1}'.format('/auto/data/nems_db/pup_py/', dt))
+    os.system('mkdir {0}old_model_fits/{1}'.format(ps.ROOT_DIRECTORY, dt))
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True

@@ -14,7 +14,7 @@ import os
 import nems_db
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
-script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'pupil_fit_script.py')
+script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py2', 'pupil_fit_script.py')
 
 class queue_pupil_job:
 
@@ -68,7 +68,7 @@ class queue_pupil_job:
         py_path = self.executable_path_value.get()
         script_path = self.script_path_value.get()
         #py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
-        #script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/pupil_fit_script.py'
+        #script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py2/pupil_fit_script.py'
 
         username = getpass.getuser()
 

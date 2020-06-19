@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     # get current date/time so that we can save the model results in the correct place
     dt = datetime.datetime.now().isoformat()
-    os.system('mkdir {0}old_model_fits/{1}'.format('/auto/data/nems_db/pup_py/', dt))
+    os.system('mkdir {0}old_model_fits/{1}'.format(ps.ROOT_DIRECTORY, dt))
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True

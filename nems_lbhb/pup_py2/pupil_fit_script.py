@@ -10,7 +10,7 @@ import nems
 
 import nems_db
 nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
 import pupil_settings as ps
 
 import logging

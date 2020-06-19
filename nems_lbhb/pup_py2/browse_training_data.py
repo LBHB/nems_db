@@ -15,10 +15,10 @@ import pickle
 import sys
 import nems_db
 nems_db_path = nems_db.__path__[0]
-sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
 import pupil_settings as ps
-train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
-tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
+train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py2/training_data/'
+tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py2/tmp/'
 
 class TrainingDataBrowser:
 
@@ -39,7 +39,15 @@ class TrainingDataBrowser:
             self.video_name = video_name
             # where the prediction will be stored if this vid has already been
             # fit
-            predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
+            predictions_folder = os.path.join(ps.ROOT_VIDEO_DIRECTORY, animal, video_name[:6], 'sorted/')
+            if os.path.isdir(predictions_folder):
+                pass
+            else:
+                predictions_folder = os.path.join(os.path.split(raw_video)[0], 'sorted/')
+                if os.path.isdir(predictions_folder):
+                    pass
+                else:
+                    raise FileNotFoundError
 
             # save videos
             video = raw_video
@@ -304,9 +312,8 @@ class TrainingDataBrowser:
         current_frame = self.frame_name.get()
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
-            all_frames = [f for f in all_frames if f in self.video_name]
-            frame_numbers = [int(f[15:]) for f in all_frames]
-            inds = np.argsort(np.array(all_frames))
+            all_frames = [f for f in all_frames if self.video_name in f]
+            inds = np.argsort(np.array([int(f.split('_')[-1].split('.')[0]) for f in all_frames]))
         else:
             inds = np.argsort(np.array(all_frames))
 
@@ -484,7 +491,7 @@ class TrainingDataBrowser:
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
             all_frames = [f for f in all_frames if self.video_name in f]
-            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            frame_numbers = [int(f.split('_')[-1].split('.')[0]) for f in all_frames]
             inds = np.argsort(np.array(frame_numbers))
         else:
             inds = np.argsort(np.array(all_frames))
@@ -518,7 +525,7 @@ class TrainingDataBrowser:
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
             all_frames = [f for f in all_frames if self.video_name in f]
-            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            frame_numbers = [int(f.split('_')[-1].split('.')[0]) for f in all_frames]
             inds = np.argsort(np.array(frame_numbers))
         else:
             inds = np.argsort(np.array(all_frames))
