@@ -19,6 +19,7 @@ import nems.db as nd
 import scipy.io
 import sys
 from tkinter import filedialog
+import nems_db
 
 import nems_lbhb
 nems_lbhb_path = nems_lbhb.__path__[0]
