@@ -3,7 +3,7 @@ import os
 import pickle
 import keras
 import nems_lbhb.pup_py2.utils as ut
-
+import sys
 import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py2/'))
