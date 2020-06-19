@@ -77,7 +77,7 @@ class queue_pupil_job:
         username = getpass.getuser()
 
         # add job to queue
-        nd.add_job_to_queue([fn, modeldate, face], note="Pupil Job: {}".format(fn),
+        nd.add_job_to_queue([fn, modeldate, self.face.get()], note="Pupil Job: {}".format(fn),
         			        executable_path=py_path, user=username,
                             force_rerun=True, script_path=script_path, GPU_job=1)
         print("added job to queue")

@@ -25,6 +25,7 @@ import nems_lbhb
 nems_lbhb_path = nems_lbhb.__path__[0]
 sys.path.append(os.path.join(nems_lbhb_path, 'pup_py2/'))
 import pupil_settings as ps
+import utils as ut
 
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
@@ -129,6 +130,7 @@ class PupilBrowser:
     def plot_frame(self, frame_file):
 
         frame = mpimg.imread(frame_file)
+        frame = ut.crop_frame(frame, face=self.face.get())
         canvas = self.pupil_canvas
         canvas.delete('all')  # prevent memory leak
         loc = (0, 0)
