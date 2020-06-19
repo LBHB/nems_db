@@ -6,6 +6,15 @@ import os
 import skimage
 import warnings
 
+def crop_frame(frame, face=False):
+    """
+    If face is true zoom in (crop the upper right corner of the video)
+    """
+    if face:
+        return frame[:50, 160:-10, :]
+    else:
+        return frame[:, :-10, :]
+
 
 def loadmat(filename):
     '''

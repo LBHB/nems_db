@@ -99,6 +99,10 @@ class PupilBrowser:
         self.label_data = tk.Button(master, text="Label more training data", command=self.open_training_browser)
         self.label_data.grid(row=4, column=1)
 
+        self.face = tk.IntVar()
+        self.full_face = tk.Checkbutton(master, text='Full face video', onvalue=1, offvalue=0, variable=self.face)
+        self.full_face.grid(row=4, column=3)
+
         self.retrain = tk.Button(master, text="Re-train network", command=self.retrain)
         self.retrain.grid(row=4, column=2)
 
@@ -413,8 +417,8 @@ class PupilBrowser:
 
     def open_training_browser(self):
         os.system("{0} \
-                {1} {2} {3} {4} {5} {6}".format(executable_path, training_browser_path,
-            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame))
+                {1} {2} {3} {4} {5} {6} {7}".format(executable_path, training_browser_path,
+            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame, self.face.get()))
 
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue

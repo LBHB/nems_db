@@ -21,7 +21,7 @@ class queue_pupil_job:
     def __init__(self, master):
         self.master = master
         master.title("Queue pupil job")
-        master.geometry('300x120')
+        master.geometry('500x120')
 
         self.filename = tk.Label(master, text="Filename: ")
         self.filename.grid(row=1, column=0)
@@ -57,6 +57,10 @@ class queue_pupil_job:
         self.fit_button = tk.Button(master, text="Start fit", command=self.start_fit)
         self.fit_button.grid(row=5, column=0)
 
+        self.face = tk.IntVar()
+        self.full_face = tk.Checkbutton(master, text='Full face video', onvalue=1, offvalue=0, variable=self.face)
+        self.full_face.grid(row=5, column=1)
+
         master.grid_columnconfigure(1, weight=1)
 
 
@@ -73,7 +77,7 @@ class queue_pupil_job:
         username = getpass.getuser()
 
         # add job to queue
-        nd.add_job_to_queue([fn, modeldate], note="Pupil Job: {}".format(fn),
+        nd.add_job_to_queue([fn, modeldate, face], note="Pupil Job: {}".format(fn),
         			        executable_path=py_path, user=username,
                             force_rerun=True, script_path=script_path, GPU_job=1)
         print("added job to queue")

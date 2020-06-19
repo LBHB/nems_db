@@ -12,6 +12,7 @@ import nems_lbhb
 nems_lbhb_path = nems_lbhb.__path__[0]
 sys.path.append(os.path.join(nems_lbhb_path, 'pup_py2/'))
 import pupil_settings as ps
+import utils as ut
 
 import logging
 log = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     # perform pupil fit
     video_file = sys.argv[1]
     modelname = sys.argv[2]
+    face = sys.argv[3]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
     #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
@@ -90,7 +92,8 @@ if __name__ == '__main__':
             frame = packet.decode()[0]
 
             frame_ = np.asarray(frame.to_image().convert('LA'))
-            frame_ = frame_[:, :-10, :]
+            #frame_ = frame_[:, :-10, :]
+            frame_ = ut.crop_frame(frame_, face=face)
             frame_ = frame_ - np.min(frame_)
 
             if frame_.shape[-1] > 1:

@@ -17,17 +17,17 @@ import nems_lbhb
 nems_lbhb_path = nems_lbhb.__path__[0]
 sys.path.append(os.path.join(nems_lbhb_path, 'pup_py2/'))
 import pupil_settings as ps
+import utils as ut
 train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py2/training_data/'
 tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py2/tmp/'
 
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000):
+    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000, face=False):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
         # the training directory and then display the first of these frames.
-
         self.plot_calls = 0
 
         if (animal is None) and (video_name is None):
@@ -72,7 +72,9 @@ class TrainingDataBrowser:
 
                 # load, convert to grayscale, cut off artifact, extact/save first channel only
                 img = Image.open(tmp_save + video_name + '1' + '.jpg').convert('LA')
-                frame = np.asarray(img)[:, :-10, 0]
+                frame = np.asarray(img)
+                frame = ut.crop_frame(frame, face=face)
+                #frame = np.asarray(img)[:, :-10, 0]
                 output_dict['frame'] = frame
                 output_dict['ellipse_zack'] = {
                                 'a': parms['cnn']['a'][f],
@@ -438,7 +440,6 @@ class TrainingDataBrowser:
         self.update_ellipse_params(frame_data['ellipse_zack'])
 
         loc = (0, 0)
-
         if self.plot_calls == 0:
             self.plot_calls += 1
             self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
@@ -551,7 +552,7 @@ class TrainingDataBrowser:
 root = tk.Tk()
 
 if len(sys.argv) > 1:
-    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
     root.mainloop()
 else:
     my_gui = TrainingDataBrowser(root)
