@@ -22,6 +22,7 @@ import scipy.ndimage.filters
 import scipy.signal
 from scipy.interpolate import interp1d
 import numpy as np
+import collections
 import json
 import sys
 import tarfile
@@ -1630,3 +1631,85 @@ def load_raw_photometry(photofilepath, fs=None, framen=0):
 
 
     return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
+
+
+def evpread(filename, **options):
+    """
+    VERY crude first pass at reading in evp file using python.
+    For now, just reads in aux chans. Created to load lick data
+    CRH 06.19.2020
+    """
+
+    auxchans = options.get('auxchans', [])
+
+    f = open(filename, 'rb')
+    header = np.fromfile(f, count=10, dtype=np.int32)
+
+    spikechancount = header[1]
+    auxchancount = header[2]
+    lfpchancount = header[6]
+    trials = header[5]
+    aux_fs = header[3]
+
+    if len(auxchans) > 0:
+        auxchansteps = np.diff(np.concatenate(([0], [a+1 for a in auxchans], [auxchancount+1])))-1
+    else:
+        auxchansteps = auxchancount
+
+    # loop over trials
+    trialidx = []
+    aux_trialidx = []
+    for tt in range(trials):
+        # read trial header 
+        trheader = np.fromfile(f, count=3, dtype=np.int32)
+        if trheader.size==0:
+            break
+
+        if sum(trheader)!=0:
+            ta = []
+            # seek through spikedata
+            f.seek(trheader[0]*2*spikechancount, 1)
+            
+            if (auxchancount > 0) & (len(auxchans) > 0):
+                # read in aux data for this trial
+                for ii in range(auxchancount):
+                    if auxchansteps[ii] > 0:
+                        f.seek(trheader[1]*2*auxchansteps[ii], 1)
+                    else:
+                        ta.append(np.fromfile(f, count=trheader[1], dtype=np.int16))
+                if tt == 0:
+                    aux_trialidx.append(0)
+                else:
+                    aux_trialidx.append(aux_trialidx[tt-1]+ta[0].shape[-1]+1)
+            else:
+                f.seek(trheader[1]*2*auxchancount, 1)
+            # seek through lfp data
+            f.seek(trheader[2]*2*lfpchancount, 1)
+
+            # stack data over channels
+            if tt == 0:
+                ra = np.stack(ta)
+            else:
+                ra = np.concatenate((ra, np.stack(ta)), axis=-1)
+
+            # which trials are extracted
+            trialidx.append(tt+1)
+        else:
+            # skip to next trial
+            f.seek((trheader[0]*spikechancount)+
+                   (trheader[1]*auxchancount)+
+                   (trheader[2]*lfpchancount)*2, 1)
+
+
+        # pack and return results
+        pack = collections.namedtuple('evpdata', field_names='trialidx aux_fs aux_trialidx aux_data')
+        output = pack(trialidx=trialidx, 
+                        aux_fs=aux_fs, aux_trialidx=aux_trialidx, aux_data=ra)
+
+        return output
+        
+
+
+
+
+
