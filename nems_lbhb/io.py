@@ -255,7 +255,7 @@ def baphy_mat2py(s):
     return s8
 
 
-def baphy_parm_read(filepath):
+def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
 
     f = io.open(filepath, "r")
@@ -319,6 +319,15 @@ def baphy_parm_read(filepath):
     for i in range(len(exptevents)):
         if exptevents.loc[i, 'end'] == []:
             exptevents.loc[i, 'end'] = exptevents.loc[i, 'start']
+
+    if evpread:
+        # get lick events from evp file 
+        evpfile = filepath.with_suffix('.evp')
+        lick_events = get_lick_events(evpfile, name='LICK')
+
+        # add evp lick events, delete baphy lick events
+        exptevents = exptevents[~(exptevents.name=='LICK')]
+        exptevents = exptevents.append(lick_events, ignore_index=True)
 
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
@@ -1633,7 +1642,7 @@ def load_raw_photometry(photofilepath, fs=None, framen=0):
     return np.array(F_mag1)[:, np.newaxis], np.array(F_mag2)[:, np.newaxis]
 
 
-def evpread(filename, **options):
+def evpread(filename, options):
     """
     VERY crude first pass at reading in evp file using python.
     For now, just reads in aux chans. Created to load lick data
@@ -1649,7 +1658,7 @@ def evpread(filename, **options):
     auxchancount = header[2]
     lfpchancount = header[6]
     trials = header[5]
-    aux_fs = header[3]
+    aux_fs = header[4]
 
     if len(auxchans) > 0:
         auxchansteps = np.diff(np.concatenate(([0], [a+1 for a in auxchans], [auxchancount+1])))-1
@@ -1667,22 +1676,26 @@ def evpread(filename, **options):
 
         if sum(trheader)!=0:
             ta = []
+
             # seek through spikedata
             f.seek(trheader[0]*2*spikechancount, 1)
             
+            # read in aux data for this trial
             if (auxchancount > 0) & (len(auxchans) > 0):
-                # read in aux data for this trial
                 for ii in range(auxchancount):
                     if auxchansteps[ii] > 0:
                         f.seek(trheader[1]*2*auxchansteps[ii], 1)
                     else:
                         ta.append(np.fromfile(f, count=trheader[1], dtype=np.int16))
+                
                 if tt == 0:
-                    aux_trialidx.append(0)
+                    aux_trialidx.append(trheader[1])
                 else:
-                    aux_trialidx.append(aux_trialidx[tt-1]+ta[0].shape[-1]+1)
+                    aux_trialidx.append(trheader[1]+aux_trialidx[tt-1])
+
             else:
                 f.seek(trheader[1]*2*auxchancount, 1)
+
             # seek through lfp data
             f.seek(trheader[2]*2*lfpchancount, 1)
 
@@ -1694,6 +1707,7 @@ def evpread(filename, **options):
 
             # which trials are extracted
             trialidx.append(tt+1)
+
         else:
             # skip to next trial
             f.seek((trheader[0]*spikechancount)+
@@ -1701,14 +1715,54 @@ def evpread(filename, **options):
                    (trheader[2]*lfpchancount)*2, 1)
 
 
-        # pack and return results
-        pack = collections.namedtuple('evpdata', field_names='trialidx aux_fs aux_trialidx aux_data')
-        output = pack(trialidx=trialidx, 
-                        aux_fs=aux_fs, aux_trialidx=aux_trialidx, aux_data=ra)
+    # pack and return results
+    pack = collections.namedtuple('evpdata', field_names='trialidx aux_fs aux_trialidx aux_data')
+    output = pack(trialidx=trialidx,
+                    aux_fs=aux_fs, aux_trialidx=aux_trialidx, aux_data=ra)
 
-        return output
+    f.close()
+
+    return output
         
 
+def get_lick_events(evpfile, name='LICK'):
+    """
+    Load analog lick data from evp file. Create dataframe of 
+    lick events in the style of nems exptevents: columns = [name, start, end, Trial]
+    """
+    lickdata = evpread(evpfile, {'auxchans': [0]})
+    startidx = lickdata.aux_trialidx
+    startidx = np.append(0, startidx[:-1])
+    endidx = startidx[1:]
+    endidx = np.append(endidx, -1)
+    trialidx = lickdata.trialidx
+    fs = lickdata.aux_fs
+    lick_trace = lickdata.aux_data
+
+    s = []
+    t = []
+    for tidx, eidx, sidx in zip(trialidx, endidx, startidx):
+        data = lick_trace[0, sidx:eidx] 
+        lickedges = np.diff(data - data.mean())
+        lickidx = np.argwhere(lickedges > 0).squeeze()
+
+        if lickidx.size==0:
+            pass
+        elif lickidx.size==1:
+            s.append(lickidx / fs)
+            t.append(tidx)
+        elif lickidx.size > 1:
+            s.extend(lickidx / fs)
+            t.extend([tidx] * len(lickidx))
+
+    # build dataframe
+    df = pd.DataFrame(columns=['name', 'start', 'end', 'Trial'], index=range(len(s)))
+    df['start'] = s
+    df['end'] = s
+    df['Trial'] = t
+    df['name'] = name
+
+    return df
 
 
 
