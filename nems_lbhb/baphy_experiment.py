@@ -587,7 +587,10 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     final_trial_end = np.floor(epochs[epochs.name=='TRIAL'].end.max() * options['rasterfs']) / options['rasterfs']
     end_events = (epochs['end'] >= final_trial_end)
     epochs.loc[end_events, 'end'] = final_trial_end
-    
+
+    start_events = (epochs['start'] >= final_trial_end)
+    epochs = epochs[~start_events]
+
     return epochs
 
 
