@@ -321,13 +321,16 @@ def baphy_parm_read(filepath, evpread=True):
             exptevents.loc[i, 'end'] = exptevents.loc[i, 'start']
 
     if evpread:
-        # get lick events from evp file 
-        evpfile = filepath.with_suffix('.evp')
-        lick_events = get_lick_events(evpfile, name='LICK')
+        try:
+            # get lick events from evp file 
+            evpfile = Path(filepath).with_suffix('.evp')
+            lick_events = get_lick_events(evpfile, name='LICK')
 
-        # add evp lick events, delete baphy lick events
-        exptevents = exptevents[~(exptevents.name=='LICK')]
-        exptevents = exptevents.append(lick_events, ignore_index=True)
+            # add evp lick events, delete baphy lick events
+            exptevents = exptevents[~(exptevents.name=='LICK')]
+            exptevents = exptevents.append(lick_events, ignore_index=True)
+        except:
+            log.info("Failed loading evp file. Still zipped?")
 
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
