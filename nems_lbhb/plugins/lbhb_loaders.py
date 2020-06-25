@@ -1,9 +1,9 @@
 import logging
 import re
 
+from nems.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
-
 
 # TODO: Delete after finished deprecating.
 # Replaced with: load, splitcount, avgep, st, contrast
@@ -50,6 +50,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     return [['nems.xforms.init_context', context]]
 
 
+@xform()
 def env(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     envelope loader
@@ -61,6 +62,7 @@ def env(loadkey, cellid=None, batch=None, siteid=None, **options):
     return xfspec
 
 
+@xform()
 def psth(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     psth loader (no stim)
@@ -73,6 +75,7 @@ def psth(loadkey, cellid=None, batch=None, siteid=None, **options):
     #return xfspec
 
 
+@xform()
 def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     gammatone filter
@@ -85,6 +88,7 @@ def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     #return xfspec
 
 
+@xform()
 def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     parm spectrogram
@@ -95,12 +99,14 @@ def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     return xfspec
 
 
+@xform()
 def ns(loadkey, cellid=None, batch=None, siteid=None, **options):
     d = _load_dict(loadkey, cellid, batch)
     xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec
 
 
+@xform()
 def SPOld(loadkey, recording_uri=None, cellid=None):
     import nems.plugins.default_loaders
     xfspec = nems.plugins.default_loaders.ld(loadkey, recording_uri=recording_uri,cellid=cellid)
@@ -249,6 +255,7 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
 #              ['nems.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
+@xform()
 def loadpop(loadkey):
     ops = loadkey.split('.')[1:]
 

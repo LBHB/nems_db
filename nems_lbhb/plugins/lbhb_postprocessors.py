@@ -8,6 +8,8 @@ a non-standard configuration or generate a non-standard plot.
 import logging
 import re
 
+from nems.registry import xform, xmodule
+
 log = logging.getLogger(__name__)
 
 def ebc(loadkey):

@@ -9,9 +9,11 @@ import re
 
 import numpy as np
 
+from nems.registry import xform, xmodule
+
 log = logging.getLogger(__name__)
 
-
+@xform()
 def pas(loadkey):
     """
     pas = "passive only"
@@ -23,6 +25,8 @@ def pas(loadkey):
 
     return xfspec
 
+
+@xform()
 def ap1(loadkey):
     """
     ap1 = "first passive only"
@@ -35,6 +39,7 @@ def ap1(loadkey):
     return xfspec
 
 
+@xform()
 def cor(kw):
     """
     create mask that removes incorrect trials
@@ -45,6 +50,8 @@ def cor(kw):
 
     return [['nems.xforms.mask_incorrect', {}]]
 
+
+@xform()
 def ref(kw):
     ops = kw.split('.')[1:]
 
@@ -64,6 +71,7 @@ def ref(kw):
               'include_incorrect': include_incorrect,
               'generate_evoked_mask': generate_evoked_mask}]]
 
+@xform()
 def tar(kw):
     ops = kw.split('.')[1:]
 
@@ -82,6 +90,7 @@ def tar(kw):
              {'include_incorrect': include_incorrect}]]
 
 
+@xform()
 def evs(loadkey):
     """
     evs = "event stimulus"
@@ -147,6 +156,7 @@ def evs(loadkey):
     return xfspec
 
 
+@xform()
 def st(loadkey):
     """
     st = "state variable"
@@ -237,6 +247,7 @@ def st(loadkey):
     return xfspec
 
 
+@xform()
 def inp(loadkey):
     """
     inp = 'input signal'
@@ -261,6 +272,7 @@ def inp(loadkey):
     return xfspec
 
 
+@xform()
 def mod(loadkey):
     """
     Make a signal called "mod". Basically the residual resp (resp - psth) offset
@@ -282,6 +294,7 @@ def mod(loadkey):
     return xfspec
 
 
+@xform()
 def pca(loadkey):
     """
     compute pca (or some other state-space) on response
@@ -322,10 +335,13 @@ def pca(loadkey):
 
     return xfspec
 
+
+@xform()
 def popev(loadkey):
     return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
 
 
+@xform()
 def contrast(loadkey):
     ops = loadkey.split('.')[1:]
     kwargs = {}
@@ -353,6 +369,7 @@ def contrast(loadkey):
     return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
 
 
+@xform()
 def csum(loadkey):
     ops = loadkey.split('.')[1:]
     kwargs = {}
@@ -364,10 +381,12 @@ def csum(loadkey):
     return [['nems_lbhb.gcmodel.contrast.sum_contrast', kwargs]]
 
 
+@xform()
 def onoff(loadkey):
     return [['nems_lbhb.gcmodel.contrast.add_onoff', {}]]
 
 
+@xform()
 def hrc(load_key):
     """
     Mask only data during stimuli that were repeated 10 or greater times.
@@ -381,6 +400,7 @@ def hrc(load_key):
     return xfspec
 
 
+@xform()
 def pbal(load_key):
     """
     Mask only epochs that are presented equally between large/small pupil conditions
@@ -391,6 +411,8 @@ def pbal(load_key):
 
     return xfspec
 
+
+@xform()
 def ev(load_key):
     """
     Mask only evoked data
@@ -400,6 +422,8 @@ def ev(load_key):
 
     return xfspec
 
+
+@xform()
 def apm(load_key):
     """
     Add a mask signal ('p_mask') for pupil that can be used later on in fitting.
@@ -412,6 +436,8 @@ def apm(load_key):
 
     return xfspec
 
+
+@xform()
 def pm(load_key):
     """
     pm = pupil mask
@@ -444,6 +470,7 @@ def pm(load_key):
     return xfspec
 
 
+@xform()
 def rc(load_key):
     """
     Mask only data from a specified runclass
@@ -457,6 +484,8 @@ def rc(load_key):
 
     return xfspec
 
+
+@xform()
 def tor(load_ley):
     """
     Mask only TORC data
@@ -466,6 +495,8 @@ def tor(load_ley):
 
     return xfspec
 
+
+@xform()
 def nat(load_ley):
     """
     Mask only NAT data
@@ -475,6 +506,8 @@ def nat(load_ley):
 
     return xfspec
 
+
+@xform()
 def subset(load_key):
     """
     Create a mask so that model is fit only using a subset of the data.
@@ -487,6 +520,8 @@ def subset(load_key):
                {'epoch_list':subsets}, ['rec'], ['rec']]]
     return xfspec
 
+
+@xform()
 def psthfr(load_key):
     """
     Generate psth signal from resp psth.opt1.opt2 etc. By default, set model input_name to
@@ -529,6 +564,8 @@ def psthfr(load_key):
                       'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim}]]
     return xfspec
 
+
+@xform()
 def sm(load_key):
     """
     Smooth a signal using preproc.smooth_epoch_segments
@@ -552,6 +589,7 @@ def sm(load_key):
     return xfspec
 
 
+@xform()
 def rscsw(load_key, cellid, batch):
     """
     generate the signals for sliding window model. It's intended that these be
@@ -576,6 +614,8 @@ def rscsw(load_key, cellid, batch):
                    ['rec'], ['rec']]]
     return xfspec
 
+
+@xform()
 def stSPO(load_key):
     #add SPO state signal
     permute=False
@@ -584,10 +624,14 @@ def stSPO(load_key):
     baseline = ('nb' not in options)
     return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{'permute':permute,'baseline':baseline}]]
 
+
+@xform()
 def stimenv(load_key):
     return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
             ['rec'], ['rec']]]
 
+
+@xform()
 def residual(load_key):
     """
     Add residual signal to be used for pupil latent variable creation.
@@ -616,6 +660,8 @@ def residual(load_key):
 
     return xfspec
 
+
+@xform()
 def epsig(load_key):
     """
     Create epoch signal from epochs so that cost function has access to
@@ -629,6 +675,7 @@ def epsig(load_key):
     return xfspec
 
 
+@xform()
 def addmeta(load_key):
     """
     Add meta data to recording that can be used later on in the fit. For example,
@@ -641,6 +688,8 @@ def addmeta(load_key):
 
     return xfspec
 
+
+@xform()
 def rz(load_key):
     """
     Transform resp into zscore. Add signal 'raw_resp' for original resp
@@ -652,8 +701,10 @@ def rz(load_key):
 
     return xfspec
 
+@xform()
 def esth1(kw):
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1}]]
 
+@xform()
 def esth2(kw):
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2}]]
