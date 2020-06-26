@@ -13,9 +13,12 @@ from matplotlib.patches import Ellipse
 from PIL import Image
 import pickle
 import sys
-
-train_data_path = '/auto/data/nems_db/pup_py/training_data/'
-tmp_save = '/auto/data/nems_db/pup_py/tmp/'
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
+train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
