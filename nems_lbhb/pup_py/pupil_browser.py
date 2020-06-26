@@ -17,16 +17,20 @@ import matplotlib.image as mpimg
 import getpass
 import nems.db as nd
 import scipy.io
-import nems_db
 import sys
 from tkinter import filedialog
+
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
 
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
 training_browser_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'browse_training_data.py')
 
-tmp_frame_folder = '/auto/data/nems_db/pup_py/tmp/'
-video_folder = '/auto/data/daq/'
+tmp_frame_folder = ps.TMP_SAVE  #'/auto/data/nems_db/pup_py/tmp/'
+video_folder = ps.ROOT_VIDEO_DIRECTORY  #'/auto/data/daq/'
 
 class PupilBrowser:
 
@@ -286,7 +290,7 @@ class PupilBrowser:
 
     def browse_file(self):
         # get the pupil video file
-        self.raw_video = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
+        self.raw_video = filedialog.askopenfilename(initialdir = ps.ROOT_VIDEO_DIRECTORY,
                             title = "Select raw video file",
                             filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
 
@@ -364,8 +368,6 @@ class PupilBrowser:
 
     def save_analysis(self):
         video_name = self.video_name.get()
-        animal = self.animal_name.get()
-        site = video_name[:6]
 
         fn = video_name + '.pickle'
         fn_mat = video_name + '.mat'
@@ -416,8 +418,7 @@ class PupilBrowser:
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
-        py_path = sys.executable #'/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
-        #script_path = '/auto/users/hellerc/code/nems/nems_db/nems_lbhb/pup_py/training_script.py'
+        py_path = sys.executable
         script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
         script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()

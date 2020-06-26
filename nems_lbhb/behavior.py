@@ -19,6 +19,12 @@ def create_trial_labels(exptparams, exptevents):
             label them NULL and dont give them a trial number.
     TODO: make this function specific to the BehaviorObject (ie, RewardTargetLBHB,
           ClassicalConditioning)
+    NOTE: baphy BehaviorControl has an annoying bug where it can sometimes miss very brief lick events.
+            This creates a discrepancy between posthoc performance analysis and what was actually carried out
+            by behavior control. For example, BehaviorControl might miss an early lick, but then catch a "correct lick" 
+            and deliver a reward. Posthoc behavior analysis will call this a FA, even though a reward was delivered.
+            In this code, we take this conservative approach. We throw out all data following early licks (regardless of
+            if they were detected by BehaviorControl or not)
     """
 
     all_trials = np.unique(exptevents['Trial'])
@@ -101,10 +107,14 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
-                            if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                                trial_outcome = 'FALSE_ALARM_TRIAL'
-                            else:
-                                trial_outcome = 'EARLY_TRIAL'
+                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                                # is lick in the response window of the previous reference?
+                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #else:
+
+                            # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
+                            # this as a valid target if the lick came before the early resp window
+                            trial_outcome = 'EARLY_TRIAL'
                         else:
                             rt.append(np.nan)
                             sID.append('UNKNOWN')
@@ -138,17 +148,9 @@ def create_trial_labels(exptparams, exptevents):
             ev.insert(4, 'soundTrial', sID)
             ev.insert(5, 'RT', rt)
 
+            # update trial outcome
             if trial_outcome is not None:  
                 baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
-                # add a check here to override things labeled as HITS if 
-                # baphy called it FA. If baphy called it FA, then sound
-                # stopped, so the trial outcome should be a FALSE_ALARM
-                #if ('FALSEALARM' in baphy_outcome) & ((trial_outcome != 'FALSE_ALARM_TRIAL') | \
-                #                            (trial_outcome != 'EARLY_TRIAL')):
-                #    ev.loc[ev.name==baphy_outcome, 'name'] = 'FALSE_ALARM_TRIAL'
-                #    ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
-                #    ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
-                #else:
                 ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
                 # and update the time to span whole trial
                 ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
@@ -373,7 +375,6 @@ def _compute_metrics(exptparams, exptevents, **options):
     R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
     for tar_key in targets:
         tar = 'Stim , {} , Target'.format(tar_key)
-
         # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
         # either a HIT or INCORRECT hit. For the purposes of response rate, we don't care which
         allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']

@@ -7,7 +7,11 @@ import pickle
 import sys
 import os
 import nems
-#import nems.db as nd
+
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
 
 import logging
 log = logging.getLogger(__name__)
@@ -41,7 +45,7 @@ if __name__ == '__main__':
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
     #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
-    project_dir = '/auto/data/nems_db/pup_py/'
+    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
     if (modelname == 'current') | (modelname == 'Current'):
         default_date = os.listdir(project_dir + 'default_trained_model/')[0]
         name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]

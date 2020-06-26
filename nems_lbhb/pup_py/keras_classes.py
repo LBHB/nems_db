@@ -4,8 +4,13 @@ import pickle
 import keras
 import nems_lbhb.pup_py.utils as ut
 
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
+
 # define global variables for data
-path = '/auto/data/nems_db/pup_py/training_data/'
+path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
 data_frames = os.listdir(path)
 
 
@@ -94,7 +99,7 @@ class DataGenerator(keras.utils.Sequence):
         return X, y
 
 def train(model, epochs=1):
-
+    raise DeprecationWarning("Don't *think* this is used for anything anymore... delete?")
     # data path
     path = 'training_data/data/'
     training_files = os.listdir(path)
