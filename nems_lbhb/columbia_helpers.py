@@ -111,7 +111,7 @@ def load_data(path, downsample=4, compress=1/3, merge_reps=True):
     return groups, labels, est, val
 
 
-@xform()
+#@xform()
 def ldcol(loadkey, recording_uri=None, cellid=None):
     '''
     Keyword for loading Columbia ecog data.
