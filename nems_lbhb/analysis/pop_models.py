@@ -23,7 +23,7 @@ def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=0,
     return dstrf
 
 
-def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=True):
+def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False):
     #plt.close('all')
     f, axs = plt.subplots(3, 1, figsize=(4, 6))
     f.show()
@@ -90,7 +90,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=True):
         line_ani.save(f'/tmp/{cellid}_{index_range[0]}-{index_range[-1]}.mp4', writer=writer)
 
 
-def make_movie(modelpath, cellid=None, out_channel=0, memory=10, index_range=None):
+def make_movie(modelpath, cellid=None, out_channel=0, memory=10, index_range=None, **kwargs):
     xfspec, ctx = xforms.load_analysis(modelpath)
     rec = ctx['val']
     modelspec = ctx['modelspec']
@@ -104,7 +104,7 @@ def make_movie(modelpath, cellid=None, out_channel=0, memory=10, index_range=Non
     dstrf = dstrf_pca(modelspec, rec.copy(), out_channel=out_channel,
                       index_range=index_range, memory=memory)
 
-    dstrf_movie(rec, dstrf, out_channel, index_range, preview=True, mult=False)
+    dstrf_movie(rec, dstrf, out_channel, index_range, **kwargs)
 
 
 def pop_test():
@@ -113,7 +113,7 @@ def pop_test():
     index_range = np.arange(200, 400)
     memory = 10
 
-    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range)
+    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range, preview=True)
 
 def stp_test():
     modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_stp.1.q.s_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-22T031852"
@@ -121,5 +121,21 @@ def stp_test():
     index_range = np.arange(200, 400)
     memory = 10
 
-    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range)
+    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range, preview=True)
+
+def db_test():
+    #get_results_file(batch, modelnames=None, cellids=None)
+    from nems.db import get_results_file
+    cellid= "TAR010c-18-2"
+    batch = 289
+    #modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.q-fir.2x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
+    modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-fir.4x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
+    d = get_results_file(batch, [modelname], [cellid])
+    modelpath = d.modelpath[0]
+
+    index_range = np.arange(200, 400)
+    memory = 10
+
+    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range, preview=False, mult=False)
+
 
