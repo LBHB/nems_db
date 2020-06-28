@@ -41,7 +41,11 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     t_ops = {} # options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    if cellid == 'none':
+        cells_to_extract = 'none'
+    else:
+        cells_to_extract, _ = nb.parse_cellid(t_ops)
+
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
     if pc_idx is not None:
@@ -270,7 +274,7 @@ def loadpop(loadkey):
         elif op.startswith('bc'):
             cell_count = int(op[2:])
             best_cells=True
- 
+
     xfspec = [['nems_lbhb.xform_wrappers.pop_selector',
               {'loadkey': loadkey,
                'rand_match': rand_match, 'cell_count': cell_count,
