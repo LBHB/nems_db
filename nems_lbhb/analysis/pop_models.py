@@ -6,7 +6,7 @@ import matplotlib.animation as animation
 from nems import xforms
 from nems.plots.api import ax_remove_box
 
-def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10):
+def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10, norm_mean=True, **kwargs):
 
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
@@ -24,12 +24,15 @@ def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=[0
             dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel)
         else:
             dstrf[i,:,:,:] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel)
-    dstrf *= stim_mean[np.newaxis, ..., np.newaxis]
+
+    if norm_mean:
+        dstrf *= stim_mean[np.newaxis, ..., np.newaxis]
+
     return dstrf
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
-                out_base=None):
+                out_base=None, **kwargs):
     #plt.close('all')
 
     cellcount=len(out_channel)
@@ -116,10 +119,11 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
         line_ani.save(out_file, writer=writer)
 
 
-def make_movie(modelpath, cellid=None, out_channel=0, memory=10, index_range=None, **kwargs):
-    xfspec, ctx = xforms.load_analysis(modelpath)
+def make_movie(ctx, cellid=None, out_channel=0, memory=10, index_range=None, **kwargs):
+
     rec = ctx['val'].apply_mask()
     modelspec = ctx['modelspec']
+    index_range = index_range[index_range>memory]
 
     if cellid is not None:
         out_channel = [int(np.where([cellid == c for c in rec['resp'].chans])[0][0])]  # 26  #16 # 30
@@ -130,23 +134,27 @@ def make_movie(modelpath, cellid=None, out_channel=0, memory=10, index_range=Non
         cellid = rec['resp'].chans[out_channel[0]]
 
     batch = modelspec.meta['batch']
-    modelspecname = modelspec.meta['modelspecname']
+    modelspecname = modelspec.meta.get('modelspecname', modelspec.meta['modelname'])
     print(f'cell {cellid} is chan {out_channel[0]}. computing dstrf with memory={memory}')
     out_base = f'{cellid}_{batch}_{modelspecname}_{index_range[0]}-{index_range[-1]}.mp4'
 
     dstrf = dstrf_pca(modelspec, rec.copy(), out_channel=out_channel,
-                      index_range=index_range, memory=memory)
+                      index_range=index_range, memory=memory, **kwargs)
 
     dstrf_movie(rec, dstrf, out_channel, index_range, out_base=out_base, **kwargs)
 
 
-def pop_test():
+def pop_test(out_channel=[26,7,8], index_range=None):
+    # out_channel, index_range=[26,7,8], np.arange(200,550)
+    if index_range is None:
+        index_range = np.arange(200,550)
+
     modelpath = "/Users/svd/python/nems/results/271/TAR010c/TAR010c.dlog_wc.18x3.g_fir.1x10x3_relu.3_wc.3x55_lvl.55.unknown_fitter.2020-06-20T153243"
     cellid = "TAR010c-36-1"
-    index_range = np.arange(200, 400)
     memory = 10
+    xfspec, ctx = xforms.load_analysis(modelpath)
 
-    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range, preview=True)
+    make_movie(ctx, out_channel=out_channel, memory=memory, index_range=index_range, preview=True)
 
 
 def stp_test():
@@ -154,8 +162,9 @@ def stp_test():
     cellid = "TAR010c-18-1"
     index_range = np.arange(200, 400)
     memory = 10
+    xfspec, ctx = xforms.load_analysis(modelpath)
 
-    make_movie(modelpath, cellid=cellid, memory=memory, index_range=index_range, preview=True)
+    make_movie(ctx, cellid=cellid, memory=memory, index_range=index_range, preview=True)
 
 
 def db_test(out_channel=[6,7,8]):
@@ -183,7 +192,8 @@ def db_test(out_channel=[6,7,8]):
     #index_range = np.arange(100, 4000)
     memory = 8
 
-    make_movie(modelpath, out_channel=out_channel, memory=memory, index_range=index_range, preview=False, mult=False,
+    xf, ctx = load_model_xform(cellid, batch, modelname)
+    make_movie(ctx, out_channel=out_channel, memory=memory, index_range=index_range, preview=False, mult=False,
                out_path='/auto/data/tmp/')
 
 def db_load():
