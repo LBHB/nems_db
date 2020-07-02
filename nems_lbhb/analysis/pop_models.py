@@ -289,6 +289,7 @@ def db_test(out_channel=[6,7,8]):
     make_movie(ctx, out_channel=out_channel, memory=memory, index_range=index_range, preview=False, mult=False,
                out_path='/auto/data/tmp/')
 
+
 def db_load():
     from nems.xform_helper import load_model_xform
     batch = 289
@@ -310,5 +311,38 @@ def db_load():
     xf,ctx = load_model_xform(cellid, batch, modelname)
     
     return xf,ctx
+
+
+def db_pca():
+    xfspec, ctx = db_load()
+
+    rec = ctx['val'].apply_mask()
+    modelspec = ctx['modelspec']
+    stim_mag = rec['stim'].as_continuous().sum(axis=0)
+
+    memory = 10
+    out_channel = [2,5,11,17]
+    index_range = np.arange(0, len(stim_mag))
+    stim_big = stim_mag>np.max(stim_mag)/1000
+    index_range = index_range[(index_range>memory) & stim_big[index_range]]
+    cellid = rec['resp'].chans[out_channel[0]]
+
+    batch = modelspec.meta['batch']
+    modelspecname = modelspec.meta.get('modelspecname', modelspec.meta['modelname'])
+    print(f'cell {cellid} is chan {out_channel[0]}. computing dstrf with memory={memory}')
+
+    channel_count = len(out_channel)
+    pc_count = 5
+    pcs,pc_mag=dstrf_pca(modelspec, rec, pc_count=pc_count, out_channel=out_channel,
+                 index_range=index_range, memory=memory)
+
+    f,axs=plt.subplots(pc_count,channel_count)
+    for c in range(channel_count):
+        for i in range(pc_count):
+            mm=np.max(np.abs(pcs[i,:,:,c]))
+            _p = pcs[i,:,:,c]
+            _p *= np.sign(_p.sum())
+            axs[i,c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
+            axs[i,c].set_title(f'pc {i}: {pc_mag[i,c]:.3f}')
 
 
