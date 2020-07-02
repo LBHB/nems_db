@@ -6,7 +6,7 @@ import matplotlib.animation as animation
 from nems import xforms
 from nems.plots.api import ax_remove_box
 
-def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10, norm_mean=True, **kwargs):
+def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10, norm_mean=True, **kwargs):
 
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
@@ -29,6 +29,28 @@ def dstrf_pca(modelspec, rec, index_range=None, sample_count=100, out_channel=[0
         dstrf *= stim_mean[np.newaxis, ..., np.newaxis]
 
     return dstrf
+
+
+def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
+              **kwargs):
+
+    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
+                          memory=memory, **kwargs)
+
+    channel_count=dstrf.shape[3]
+    s = list(dstrf.shape)
+    s[0]=pc_count
+    pcs = np.zeros(s)
+    pc_mag = np.zeros((pc_count,channel_count))
+    for c in range(channel_count):
+        d = np.reshape(dstrf[:,:,:,c],(dstrf.shape[0],s[1]*s[2]))
+        _u, _s, _v = np.linalg.svd(d)
+        _s *= _s
+        _s /= np.sum(_s)
+        pcs[:,:,:,c]=np.reshape(_v[:pc_count,:],[pc_count,s[1],s[2]])
+        pc_mag[:,c] = _s[:pc_count]
+
+    return pcs, pc_mag
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
@@ -138,8 +160,8 @@ def make_movie(ctx, cellid=None, out_channel=0, memory=10, index_range=None, **k
     print(f'cell {cellid} is chan {out_channel[0]}. computing dstrf with memory={memory}')
     out_base = f'{cellid}_{batch}_{modelspecname}_{index_range[0]}-{index_range[-1]}.mp4'
 
-    dstrf = dstrf_pca(modelspec, rec.copy(), out_channel=out_channel,
-                      index_range=index_range, memory=memory, **kwargs)
+    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
+                          index_range=index_range, memory=memory, **kwargs)
 
     dstrf_movie(rec, dstrf, out_channel, index_range, out_base=out_base, **kwargs)
 
@@ -156,15 +178,86 @@ def pop_test(out_channel=[26,7,8], index_range=None):
 
     make_movie(ctx, out_channel=out_channel, memory=memory, index_range=index_range, preview=True)
 
+def pop_pca():
+    modelpath = "/Users/svd/python/nems/results/271/TAR010c/TAR010c.dlog_wc.18x3.g_fir.1x10x3_relu.3_wc.3x55_lvl.55.unknown_fitter.2020-06-20T153243"
+    cellid = "TAR010c-36-1"
+    xfspec, ctx = xforms.load_analysis(modelpath)
+
+    rec = ctx['val'].apply_mask()
+    modelspec = ctx['modelspec']
+    stim_mag = rec['stim'].as_continuous().sum(axis=0)
+
+    memory = 10
+    out_channel = [2,5,11,17]
+    index_range = np.arange(0, len(stim_mag))
+    stim_big = stim_mag>np.max(stim_mag)/1000
+    index_range = index_range[(index_range>memory) & stim_big[index_range]]
+    cellid = rec['resp'].chans[out_channel[0]]
+
+    batch = modelspec.meta['batch']
+    modelspecname = modelspec.meta.get('modelspecname', modelspec.meta['modelname'])
+    print(f'cell {cellid} is chan {out_channel[0]}. computing dstrf with memory={memory}')
+
+    channel_count = len(out_channel)
+    pc_count = 5
+    pcs,pc_mag=dstrf_pca(modelspec, rec, pc_count=pc_count, out_channel=out_channel,
+                 index_range=index_range, memory=memory)
+
+    f,axs=plt.subplots(pc_count,channel_count)
+    for c in range(channel_count):
+        for i in range(pc_count):
+            mm=np.max(np.abs(pcs[i,:,:,c]))
+            _p = pcs[i,:,:,c]
+            _p *= np.sign(_p.sum())
+            axs[i,c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
+            axs[i,c].set_title(f'pc {i}: {pc_mag[i,c]:.3f}')
+
 
 def stp_test():
     modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_stp.1.q.s_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-22T031852"
+    modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-25T204004"
     cellid = "TAR010c-18-1"
     index_range = np.arange(200, 400)
     memory = 10
     xfspec, ctx = xforms.load_analysis(modelpath)
 
     make_movie(ctx, cellid=cellid, memory=memory, index_range=index_range, preview=True)
+
+def stp_pca():
+    modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-25T204004"
+    modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_stp.1.q.s_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-22T031852"
+    cellid = "TAR010c-18-1"
+    index_range = np.arange(0, 1000)
+    memory = 10
+    xfspec, ctx = xforms.load_analysis(modelpath)
+
+    rec = ctx['val'].apply_mask()
+    modelspec = ctx['modelspec']
+    index_range = index_range[index_range>memory]
+
+    if cellid is not None:
+        out_channel = [int(np.where([cellid == c for c in rec['resp'].chans])[0][0])]  # 26  #16 # 30
+    else:
+        if type(out_channel) is not list:
+            out_channel = [out_channel]
+
+        cellid = rec['resp'].chans[out_channel[0]]
+
+    batch = modelspec.meta['batch']
+    modelspecname = modelspec.meta.get('modelspecname', modelspec.meta['modelname'])
+    print(f'cell {cellid} is chan {out_channel[0]}. computing dstrf with memory={memory}')
+
+    channel_count = len(out_channel)
+    pc_count = 3
+    pcs,pc_mag=dstrf_pca(modelspec, rec, pc_count=pc_count, out_channel=out_channel,
+                 index_range=index_range, memory=memory)
+
+    c=0
+    f,axs=plt.subplots(pc_count,channel_count)
+    for i in range(pc_count):
+        mm=np.max(np.abs(pcs[i,:,:,c]))
+        axs[i].imshow(pcs[i,:,:,c],aspect='auto',origin='lower', clim=[-mm, mm])
+        axs[i].set_title(f'pc {i}: {pc_mag[i,c]:.3f}')
 
 
 def db_test(out_channel=[6,7,8]):
