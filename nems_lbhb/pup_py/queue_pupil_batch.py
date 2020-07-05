@@ -18,5 +18,5 @@ def queue_pupil_jobs(pupilfiles, modeldate='Current', python_path=None, username
     for fn in pupilfiles:
         # add job to queue
         nd.add_job_to_queue([fn, modeldate], note="Pupil Job: {}".format(fn),
-                            executable_path=py_path, user=username,
+                            executable_path=python_path, user=username,
                             force_rerun=force_rerun, script_path=script_path, GPU_job=1)
