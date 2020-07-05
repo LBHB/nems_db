@@ -148,7 +148,7 @@ def pop_file(stimfmt='ozgf', batch=None,
 
     if siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']:
         subsetstr = "NAT1"
-    elif siteid in ['AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
+    elif siteid in ['none', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
                     'bbl099g','bbl104h',
                     'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
         subsetstr = "NAT3"
