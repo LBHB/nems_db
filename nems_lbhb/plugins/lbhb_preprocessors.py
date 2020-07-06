@@ -91,6 +91,25 @@ def tar(kw):
 
 
 @xform()
+def reftar(kw):
+    ops = kw.split('.')[1:]
+
+    balance_rep_count = False
+    include_incorrect = False
+    generate_evoked_mask = False
+    for op in ops:
+        if op.startswith('b'):
+            balance_rep_count = True
+        if op.startswith('a'):
+            include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
+
+    return [['nems_lbhb.preprocessing.mask_all_but_reference_target',
+             {'include_incorrect': include_incorrect}]]
+
+
+@xform()
 def evs(loadkey):
     """
     evs = "event stimulus"
