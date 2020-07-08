@@ -287,7 +287,7 @@ def pca(loadkey):
     compute pca (or some other state-space) on response
     """
 
-    ops = loadkey.split(".")
+    ops = loadkey.split(".")[1:]
     pc_source = "psth"
     overwrite_resp = True
     pc_count=None
@@ -314,11 +314,11 @@ def pca(loadkey):
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'computer_power': compute_power}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'computer_power': compute_power}]]
+                    'pc_count': pc_count, 'compute_power': compute_power}]]
 
     return xfspec
 
