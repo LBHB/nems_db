@@ -430,8 +430,8 @@ def generate_torc_spectrograms(TorcObject, rasterfs=None, single_cycle=True):
             final_samples=int(t.shape[1]*rasterfs/saf)
             t=sp.signal.resample(t, final_samples, axis=1)
 
-            TorcValues[k]=np.concatenate([np.zeros((numcomp,PreStimBins)), t,
-                                          np.zeros((numcomp,PostStimBins))], axis=1)
+            TorcValues[k]=np.concatenate([np.zeros((numcomp,PreStimBins))-5, t,
+                                          np.zeros((numcomp,PostStimBins))-5], axis=1)
 
     return TorcValues, tags, StimParams
 
