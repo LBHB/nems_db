@@ -6,10 +6,11 @@ import logging
 import re
 
 from nems.plugins.default_fitters import init as nems_init
+from nems.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
-
+@xform()
 def init(kw):
     '''
     Same as default nems init except adds 'c' option for contrast model.

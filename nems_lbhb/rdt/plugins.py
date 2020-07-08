@@ -1,5 +1,6 @@
 import numpy as np
 
+from nems.registry import xform, xmodule
 
 def _global_gain_spec(n_targets):
     gain_mean = np.zeros(n_targets)
@@ -61,6 +62,7 @@ def _relative_gain_spec_generic(n_targets):
     return template
 
 
+@xmodule()
 def rdtgain(kw):
     _, mode, n_targets = kw.split('.')
     n_targets = int(n_targets)
@@ -73,6 +75,8 @@ def rdtgain(kw):
     else:
         raise ValueError("Unknown mode %s", mode)
 
+
+@xmodule()
 def rdtmerge(kw):
     ops = kw.split('.')
     chans = 1
@@ -100,6 +104,7 @@ def rdtmerge(kw):
     return template
 
 
+@xmodule()
 def rdtwc(kw):
     from nems.plugins import default_keywords
     kw = kw[3:]
@@ -110,6 +115,7 @@ def rdtwc(kw):
     return ms
 
 
+@xmodule()
 def rdtfir(kw):
     from nems.plugins import default_keywords
     kw = kw[3:]

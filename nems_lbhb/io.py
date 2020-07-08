@@ -255,7 +255,7 @@ def baphy_mat2py(s):
     return s8
 
 
-def baphy_parm_read(filepath, evpread=True):
+def baphy_parm_read(filepath, evpread=False):
     log.info("Loading {0}".format(filepath))
 
     f = io.open(filepath, "r")
@@ -608,7 +608,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     # this method is a hack!
     # but since recordings are longer than the "official"
     # trial end time reported by baphy, this method preserves extra spikes
-    TrialCount = np.max(exptevents['Trial'])
+    TrialCount = int(np.max(exptevents['Trial']))
 
     hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values

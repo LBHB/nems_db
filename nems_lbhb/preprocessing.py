@@ -17,7 +17,10 @@ import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 
+from nems.preprocessing import mask_incorrect
+
 log = logging.getLogger(__name__)
+
 
 def append_difficulty(rec, **kwargs):
 
@@ -50,6 +53,66 @@ def mask_evoked(rec):
     r = rec.copy()
     r = r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
     return r
+
+
+def mask_all_but_targets(rec, include_incorrect=True):
+    """
+    Specialized function for removing incorrect trials from data
+    collected using baphy during behavior.
+
+    """
+    newrec = rec.copy()
+    newrec['resp'] = newrec['resp'].rasterize()
+    #newrec = normalize_epoch_lengths(newrec, resp_sig='resp', epoch_regex='TARGET',
+    #                                include_incorrect=include_incorrect)
+    if 'stim' in newrec.signals.keys():
+        newrec['stim'] = newrec['stim'].rasterize()
+
+    #newrec = newrec.or_mask(['TARGET'])
+    #newrec = newrec.and_mask(['PASSIVE_EXPERIMENT', 'TARGET'])
+    #newrec = newrec.and_mask(['REFERENCE','TARGET'])
+    newrec = newrec.and_mask(['TARGET'])
+
+    if not include_incorrect:
+        newrec = mask_incorrect(newrec)
+
+    # svd attempt to kludge this masking to work with a lot of code that assumes all relevant epochs are
+    # called "REFERENCE"
+    #import pdb;pdb.set_trace()
+    for k in newrec.signals.keys():
+        newrec[k].epochs.name = newrec[k].epochs.name.str.replace("TARGET", "REFERENCE")
+    return newrec
+
+
+def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
+    """
+    Specialized function for removing incorrect trials from data
+    collected using baphy during behavior.
+
+    """
+    newrec = rec.copy()
+    newrec['resp'] = newrec['resp'].rasterize()
+    #newrec = normalize_epoch_lengths(newrec, resp_sig='resp', epoch_regex='TARGET',
+    #                                include_incorrect=include_incorrect)
+    if 'stim' in newrec.signals.keys():
+        newrec['stim'] = newrec['stim'].rasterize()
+
+    #newrec = newrec.and_mask(['PASSIVE_EXPERIMENT', 'TARGET'])
+    newrec = newrec.and_mask(['REFERENCE','TARGET'])
+    #newrec = newrec.and_mask(['TARGET'])
+
+    if not include_incorrect:
+        newrec = mask_incorrect(newrec)
+
+    # svd attempt to kludge this masking to work with a lot of code that assumes all relevant epochs are
+    # called "REFERENCE"
+    #import pdb;pdb.set_trace()
+    #for k in newrec.signals.keys():
+    #    newrec[k].epochs.name = newrec[k].epochs.name.str.replace("TARGET", "REFERENCE")
+
+    return {'rec': newrec}
+
+
 
 
 def pupil_mask(est, val, condition, balance):

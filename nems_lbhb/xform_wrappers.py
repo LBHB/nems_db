@@ -146,11 +146,12 @@ def split_pop_rec_by_mask(rec, **contex):
 def pop_file(stimfmt='ozgf', batch=None,
              rasterfs=50, chancount=18, siteid=None, **options):
 
-    if siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']:
+    if ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
         subsetstr = "NAT1"
     elif siteid in ['none', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
                     'bbl099g','bbl104h',
-                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c']:
+                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c', 
+                    'AMT031a','AMT032a']:
         subsetstr = "NAT3"
     else:
         raise ValueError('site not known for popfile')
