@@ -332,6 +332,10 @@ def baphy_load_data(parmfilepath, **options):
             TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
             stim, tags, stimparam = tsf.generate_torc_spectrograms(
                       TorcObject, rasterfs=options['rasterfs'], single_cycle=False)
+            # adjust so that all power is >0
+            for k in stim.keys():
+                stim[k]=stim[k]+5
+
             # NB stim is a dict rather than a 3-d array
 
         elif exptparams['runclass']=='VOC_VOC':
