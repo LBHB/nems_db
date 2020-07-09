@@ -44,7 +44,7 @@ def mark_complete(pupilfiles):
         fn = video_name + '.pickle'
         fn_mat = video_name + '.mat'
         fp = os.path.split(vf)[0]
-        save_path = os.path.join(fp, fn)
+        save_path = os.path.join(fp, 'sorted', fn)
         # for matlab loading
         mat_fn = os.path.join(fp, fn_mat)
 
@@ -60,7 +60,7 @@ def mark_complete(pupilfiles):
 
         try:
             # load predictions
-            pred_path = os.path.join(sorted_dir, 'sorted', fn.replace('.pickle', '_pred.pickle'))
+            pred_path = os.path.join(sorted_dir, fn.replace('.pickle', '_pred.pickle'))
             with open(pred_path, 'rb') as fp:
                 save_dict = pickle.load(fp)
 
