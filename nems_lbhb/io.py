@@ -255,7 +255,7 @@ def baphy_mat2py(s):
     return s8
 
 
-def baphy_parm_read(filepath, evpread=False):
+def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
 
     f = io.open(filepath, "r")
