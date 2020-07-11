@@ -106,8 +106,6 @@ class PupilBrowser:
         self.exclude_ends = []
 
     def get_frame(self):
-        animal = self.animal_name.get()
-        video_n = self.video_name.get()
         video = self.raw_video
 
         frame = int(self.frame_n_value.get())
@@ -407,6 +405,10 @@ class PupilBrowser:
                 pickle.dump(save_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
         scipy.io.savemat(mat_fn, save_dict)
+
+        # finally, update celldb to mark pupil as analyzed
+        sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(self.raw_video)
+        nd.sql_command(sql)
 
         print("saved analysis successfully")
 
