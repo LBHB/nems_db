@@ -255,7 +255,7 @@ def baphy_mat2py(s):
     return s8
 
 
-def baphy_parm_read(filepath, evpread=False):
+def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
 
     f = io.open(filepath, "r")
@@ -325,6 +325,7 @@ def baphy_parm_read(filepath, evpread=False):
             # get lick events from evp file 
             evpfile = Path(filepath).with_suffix('.evp')
             lick_events = get_lick_events(evpfile, name='LICK')
+            log.info("evp file for licks: %s", evpfile)
 
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
