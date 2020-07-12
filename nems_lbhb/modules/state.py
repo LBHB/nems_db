@@ -4,8 +4,14 @@ modules/state.py
 functions for applying state-related transformations
 """
 
+import re
 import numpy as np
+import tensorflow as tf
+
 import nems_lbhb.preprocessing as preproc
+from nems.modules import NemsModule
+from nems.registry import xmodule
+from nems.tf.layers import BaseLayer
 
 def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
     '''
@@ -277,3 +283,330 @@ def population_mod(rec, i, o, s=None, g=None, d=None, gs=None, ds=None):
     fn = lambda x : _population_mod(x, rec[r]._data, rec[s]._data, g, d, gs, ds)
 
     return [rec[i].transform(fn, o)]
+
+
+class sdexp_new(NemsModule):
+    """
+    Add a constant to a NEMS signal
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.sdexp_new')
+        options['tf_layer'] = options.get('tf_layer', str(self.__module__) + '.sdexp_layer')
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
+                                                         'n_inputs': 1, 'chans': 1,
+                                                         'state_type': 'both'})
+        options['plot_fns'] = options.get('plot_fns',
+                                          ['nems.plots.api.mod_output',
+                                           'nems.plots.api.before_and_after',
+                                           'nems.plots.api.pred_resp',
+                                           'nems.plots.api.state_vars_timeseries',
+                                           'nems.plots.api.state_vars_psth_all'])
+        options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Pass state variable(s) through sigmoid then apply dc/gain to pred"
+
+    @xmodule('sdexp2')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the state_dexp
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: r'^sdexp\.?(\d{1,})x(\d{1,})$'
+            e.g., "sdexp.SxR" or "sdexp.S":
+                S : number of state channels (required)
+                R : number of channels to modulate (default = 1)
+        Options
+        -------
+        None
+        '''
+        options = kw.split('.')
+        pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+        parsed = re.match(pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            pattern = re.compile(r'^(\d{1,})$')
+            parsed = re.match(pattern, options[1])
+        try:
+            n_vars = int(parsed.group(1))
+            if len(parsed.groups()) > 1:
+                n_chans = int(parsed.group(2))
+            else:
+                n_chans = 1
+
+        except TypeError:
+            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                             "Make sure keyword is of the form: \n"
+                             "sdexp.{n_state_variables} \n"
+                             "keyword given: %s" % kw)
+
+        state = 'state'
+        set_bounds = False
+        # nl_state_chans = 1
+        nl_state_chans = n_vars
+        for o in options[2:]:
+            if o == 'lv':
+                state = 'lv'
+            if o == 'bound':
+                set_bounds = True
+            # if o == 'snl':
+            # state-specific non linearities (snl)
+            # only reason this is an option is to allow comparison with old models
+            # nl_state_chans = n_vars
+
+        # init gain params
+        zeros = np.zeros([n_chans, nl_state_chans])
+        ones = np.ones([n_chans, nl_state_chans])
+        base_mean_g = zeros.copy()
+        base_sd_g = ones.copy()
+        amp_mean_g = zeros.copy() + 0
+        amp_sd_g = ones.copy() * 0.1
+        amp_mean_g[:, 0] = 1  # (1 / np.exp(-np.exp(-np.exp(0)))) # so that gain = 1 for baseline chan
+        kappa_mean_g = zeros.copy()
+        kappa_sd_g = ones.copy() * 0.1
+        offset_mean_g = zeros.copy()
+        offset_sd_g = ones.copy() * 0.1
+
+        # init dc params
+        base_mean_d = zeros.copy()
+        base_sd_d = ones.copy()
+        amp_mean_d = zeros.copy() + 0
+        amp_sd_d = ones.copy() * 0.1
+        kappa_mean_d = zeros.copy()
+        kappa_sd_d = ones.copy() * 0.1
+        offset_mean_d = zeros.copy()
+        offset_sd_d = ones.copy() * 0.1
+
+        template = {
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': state,
+                          'n_inputs': n_chans,
+                          'chans': n_vars,
+                          'state_type': 'both'},
+            'plot_fns': ['nems.plots.api.mod_output',
+                         'nems.plots.api.before_and_after',
+                         'nems.plots.api.pred_resp',
+                         'nems.plots.api.state_vars_timeseries',
+                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fn_idx': 3,
+            'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
+                      'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
+                      'kappa_g': ('Normal', {'mean': kappa_mean_g, 'sd': kappa_sd_g}),
+                      'offset_g': ('Normal', {'mean': offset_mean_g, 'sd': offset_sd_g}),
+                      'base_d': ('Normal', {'mean': base_mean_d, 'sd': base_sd_d}),
+                      'amplitude_d': ('Normal', {'mean': amp_mean_d, 'sd': amp_sd_d}),
+                      'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d}),
+                      'offset_d': ('Normal', {'mean': offset_mean_d, 'sd': offset_sd_d})}
+        }
+        if set_bounds:
+            template['bounds'] = {'base_g': (0, 10),
+                                  'amplitude_g': (0, 10),
+                                  'kappa_g': (None, None),
+                                  'offset_g': (None, None),
+                                  'base_d': (-10, 10),
+                                  'amplitude_d': (-10, 10),
+                                  'kappa_d': (None, None),
+                                  'offset_d': (None, None)}
+
+        return sdexp_new(**template)
+
+    def eval(self, rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None,
+                   base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
+                   base_d=None, amplitude_d=None, kappa_d=None, offset_d=None):
+        '''
+        Parameters
+        ----------
+        i name of input
+        o name of output signal
+        s name of state signal
+        g - gain to scale s by
+        d - dc to offset by
+        base, amplitude, kappa - parameters for dexp applied to each state channel
+        '''
+
+        if (base_d is None) & (amplitude_d is None) & (kappa_d is None):
+            fn = lambda x: _state_dexp_old(x, rec[s]._data, g, d, base, amplitude, kappa)
+        else:
+            fn = lambda x: _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
+                                       base_d, amplitude_d, kappa_d, offset_d)
+
+        # kludgy backwards compatibility
+        try:
+            pred, gain, dc = fn(rec[i]._data)
+            pred = rec[i]._modified_copy(pred)
+            pred.name = o
+            gain = pred._modified_copy(gain)
+            gain.name = 'gain'
+            dc = pred._modified_copy(dc)
+            dc.name = 'dc'
+            return [pred, gain, dc]
+        except:
+            return [rec[i].transform(fn, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
+
+class sdexp_layer(BaseLayer):
+    """sdexp stategain.
+    unit= number of state channels
+    n_inputs = number of pred (input) channels
+    """
+
+    _STATE_LAYER = True
+
+    def __init__(self,
+                 units=None,
+                 n_inputs=1,
+                 initializer=None,
+                 seed=0,
+                 state_type='both',
+                 bounds=None,
+                 *args,
+                 **kwargs,
+                 ):
+        super(sdexp_layer, self).__init__(*args, **kwargs)
+
+        self.state_type = state_type
+
+        # try to infer the number of units if not specified
+        if units is None and initializer is None:
+            self.units = 1
+        elif units is None:
+            self.units = initializer['amplitude_g'].value.shape[1]
+        else:
+            self.units = units
+
+        self.n_inputs = n_inputs
+
+        self.initializer = {
+                'amplitude_g': tf.random_normal_initializer(seed=seed),
+                'amplitude_d': tf.random_normal_initializer(seed=seed + 1),
+                'base_g': tf.random_normal_initializer(seed=seed + 2),
+                'base_d': tf.random_normal_initializer(seed=seed + 3),
+                'kappa_g': tf.random_normal_initializer(seed=seed + 4),
+                'kappa_d': tf.random_normal_initializer(seed=seed + 5),
+                'offset_g': tf.random_normal_initializer(seed=seed + 6),
+                'offset_d': tf.random_normal_initializer(seed=seed + 7),
+        }
+        if initializer is not None:
+            self.initializer.update(initializer)
+
+    def build(self, input_shape):
+        input_shape, state_shape = input_shape
+
+        if self.state_type != 'dc_only':
+            self.amplitude_g = self.add_weight(name='amplitude_g',
+                                     shape=(self.n_inputs, self.units),
+                                     dtype='float32',
+                                     initializer=self.initializer['amplitude_g'],
+                                     trainable=True,
+                                     )
+            self.base_g = self.add_weight(name='base_g',
+                                          shape=(self.n_inputs, self.units),
+                                          dtype='float32',
+                                          initializer=self.initializer['base_g'],
+                                          trainable=True,
+                                          )
+            self.kappa_g = self.add_weight(name='kappa_g',
+                                      shape=(self.n_inputs, self.units),
+                                      dtype='float32',
+                                      initializer=self.initializer['kappa_g'],
+                                      trainable=True,
+                                      )
+            self.offset_g = self.add_weight(name='offset_g',
+                                      shape=(self.n_inputs, self.units),
+                                      dtype='float32',
+                                      initializer=self.initializer['offset_g'],
+                                      trainable=True,
+                                      )
+        #else:
+        #    self.g = np.zeros((self.n_inputs, self.units))
+        #    self.g[:, 0] = 1
+        #    self.g = tf.constant(self.g, dtype='float32')
+
+        if self.state_type != 'gain_only':
+            # don't need a d param if we only want gain
+            self.amplitude_d = self.add_weight(name='amplitude_d',
+                                     shape=(self.n_inputs, self.units),
+                                     dtype='float32',
+                                     initializer=self.initializer['amplitude_d'],
+                                     trainable=True,
+                                     )
+            self.base_d = self.add_weight(name='base_g',
+                                               shape=(self.n_inputs, self.units),
+                                               dtype='float32',
+                                               initializer=self.initializer['base_d'],
+                                               trainable=True,
+                                               )
+            self.kappa_d = self.add_weight(name='kappa_d',
+                                      shape=(self.n_inputs, self.units),
+                                      dtype='float32',
+                                      initializer=self.initializer['kappa_d'],
+                                      trainable=True,
+                                      )
+            self.offset_d = self.add_weight(name='offset_d',
+                                      shape=(self.n_inputs, self.units),
+                                      dtype='float32',
+                                      initializer=self.initializer['offset_d'],
+                                      trainable=True,
+                                      )
+
+    def call(self, inputs, training=True):
+        inputs, s = inputs
+
+        print('s: ', s.shape)
+        print('inputs: ', inputs.shape)
+        print('amplitude_g: ', self.amplitude_g.shape)
+
+        #if self.state_type != 'gain_only':
+        _ag = tf.reshape(tf.transpose(self.amplitude_g), [1, 1, self.units, self.n_inputs])
+        print('_ag: ', _ag.shape)
+
+        _bg = tf.reshape(tf.transpose(self.base_g), [1, 1, self.units, self.n_inputs])
+        _kg = tf.reshape(tf.transpose(self.kappa_g), [1, 1, self.units, self.n_inputs])
+        _og = tf.reshape(tf.transpose(self.offset_g), [1, 1, self.units, self.n_inputs])
+        _sg = _bg + _ag * tf.exp(-tf.exp(-tf.exp(_kg * (tf.expand_dims(s,3) - _og))))
+
+        _ad = tf.reshape(tf.transpose(self.amplitude_d), [1, 1, self.units, self.n_inputs])
+        _bd = tf.reshape(tf.transpose(self.base_d), [1, 1, self.units, self.n_inputs])
+        _kd = tf.reshape(tf.transpose(self.kappa_d), [1, 1, self.units, self.n_inputs])
+        _od = tf.reshape(tf.transpose(self.offset_d), [1, 1, self.units, self.n_inputs])
+        _sd = _bd + _ad * tf.exp(-tf.exp(-tf.exp(_kd * (tf.expand_dims(s,3) - _od))))
+
+        print('_sg: ', _sg.shape)
+
+        sg = tf.reduce_sum(_sg, axis=2)
+        sd = tf.reduce_sum(_sd, axis=2)
+        print('sg: ', sg.shape)
+        return sg * inputs + sd
+
+        #g_transposed = tf.transpose(self.g)
+
+        #g_conv = tf.nn.conv1d(state_inputs, tf.expand_dims(g_transposed, 0), stride=1, padding='SAME')
+        #if self.state_type == 'gain_only':
+        #    return inputs * g_conv
+
+        #d_transposed = tf.transpose(self.d)
+        #d_conv = tf.nn.conv1d(state_inputs, tf.expand_dims(d_transposed, 0), stride=1, padding='SAME')
+
+        #return inputs * g_conv + d_conv
+
+    def weights_to_phi(self):
+        layer_values = self.layer_values
+        log.info(f'Converted {self.name} to modelspec phis.')
+        return layer_values
