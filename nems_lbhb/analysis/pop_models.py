@@ -1,11 +1,14 @@
 import os
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from numpy.linalg import det
 
 from nems import xforms
-from nems.plots.api import ax_remove_box
+from nems.plots.api import ax_remove_box, spectrogram
+
+log = logging.getLogger(__name__)
 
 
 def subspace_overlap(u, v):
@@ -40,8 +43,8 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     sample_count = len(index_range)
     dstrf = np.zeros((sample_count, stimchans, memory, len(out_channel)))
     for i, index in enumerate(index_range):
-        if i % 25 == 0:
-            print(f"{i} idx={index}")
+        if i % 50 == 0:
+            log.info(f"dSTRF: {i}/{len(index_range)} idx={index}")
         if len(out_channel)==1:
             dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel, method=method)
         else:
@@ -77,11 +80,15 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
 
     if figures is None:
-        figures = []
-    cellids = modelspec.meta['cellids']
+        figs = []
+    else:
+        figs = figures.copy()
+
+    cellids = val['resp'].chans
     siteids = [c.split("-")[0] for c in cellids]
     # analyze all output channels
-    out_channel = list(np.arange(length(cellids)))
+    out_channel = list(np.arange(len(cellids)))
+    channel_count=len(out_channel)
 
     # only measure on validation data(?)
     rec = val.apply_mask()
@@ -91,11 +98,18 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
     index_range = np.arange(0, np.min([2000, len(stim_mag)]))
     stim_big = stim_mag > np.max(stim_mag) / 1000
     index_range = index_range[(index_range > memory) & stim_big[index_range]]
+    log.info('Calculating dstrf for %d channels, %d timepoints, memory=%d',
+             channel_count, len(index_range), memory)
 
-    pcs, pc_mag = pop_models.dstrf_pca(modelspec, rec, pc_count=n_pc, out_channel=out_channel,
-                                       index_range=index_range, memory=memory)
+    pcs, pc_mag = dstrf_pca(modelspec, rec, pc_count=n_pc, out_channel=out_channel,
+                           index_range=index_range, memory=memory)
 
     spaces = np.reshape(pcs, [n_pc, pcs.shape[1] * pcs.shape[2], pcs.shape[3]])
+
+    keepchans=np.array(out_channel)
+    r = rec['resp'].as_continuous()[out_channel,:]
+    p = rec['pred'].as_continuous()[out_channel,:]
+
 
     olapcount = channel_count
     overlap = np.zeros((olapcount, olapcount))
@@ -119,20 +133,56 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
             else:
                 olap_part_site.append(overlap[i, j])
                 cc_part_site.append(overlap[j, i])
-    print(
+    log.info(
         f"PC space same {np.mean(olap_same_site):.4f} partial: {np.mean(olap_part_site):.4f} diff: {np.mean(olap_diff_site):.4f}")
-    print(
+    log.info(
         f"Resp CC same {np.mean(cc_same_site):.4f} partial: {np.mean(cc_part_site):.4f} diff: {np.mean(cc_diff_site):.4f}")
 
-    f=plt.figure(figsize=(5, 5))
-    f.imshow(overlap, clim=[-1, 1])
+    f, ax = plt.subplots(2, 1, figsize=(6,9))
+    spectrogram(rec, sig_name='pred', title='Predicted PSTH', ax=ax[0]) 
+    ax[1].imshow(overlap, clim=[-1, 1])
 
     for i, s in enumerate(siteids[:olapcount]):
         if i > 0 and (siteids[i] != siteids[i - 1]) and (siteids[i - 1] == siteids[0]):
-            f.plot([0, olapcount - 1], [i - 0.5, i - 0.5], 'b', linewidth=0.5)
-            f.plot([i - 0.5, i - 0.5], [0, olapcount - 1], 'b', linewidth=0.5)
+            ax[1].plot([0, olapcount - 1], [i - 0.5, i - 0.5], 'b', linewidth=0.5)
+            ax[1].plot([i - 0.5, i - 0.5], [0, olapcount - 1], 'b', linewidth=0.5)
+    ax[1].text(olapcount+1, 0, f'PC space same {np.mean(olap_same_site):.3f}\n' +\
+                               f'partial: {np.mean(olap_part_site):.3f}\n' +\
+                               f'diff: {np.mean(olap_diff_site):.3f}\n' +\
+                               f'Resp CC same {np.mean(cc_same_site):.3f}\n' +\
+                               f'partial: {np.mean(cc_part_site):.3f}\n' +\
+                               f'diff: {np.mean(cc_diff_site):.3f}',
+               va='top', fontsize=8)
+    ax[1].set_ylabel('diff site -- same site')
+    ax_remove_box(ax[1])
+    figs.append(f)
 
-    figures.append(f)
+    f2,axs=plt.subplots(8, 10, figsize=(16,12))
+    for c in range(channel_count):
+        cellid = cellids[c]
+        for i in range(2):
+            mm=np.max(np.abs(pcs[i,:,:,c]))
+            _p = pcs[i,:,:,c]
+            _p *= np.sign(_p.sum())
+            os = int(c/10)*2
+            _c = c % 10
+            axs[i+os,_c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
+            if i==0:
+               axs[i+os,_c].set_title(f'{cellid} {pc_mag[i,c]:.3f}', fontsize=8)
+            else:
+               axs[i+os,_c].set_title(f'{pc_mag[i,c]:.3f}', fontsize=8)
+            if i<n_pc-1:
+                axs[i+os,_c].set_xticks([])
+            if c>0:
+                axs[i+os,_c].set_yticks([])
+            ax_remove_box(axs[i+os, _c])
+
+    figs.append(f2)
+
+    modelspec.meta['dstrf_overlap']=overlap
+
+    return {'figures': figs, 'modelspec': modelspec}
+
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
                 out_base=None, **kwargs):
