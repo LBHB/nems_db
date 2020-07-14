@@ -6,7 +6,7 @@ import matplotlib.animation as animation
 from numpy.linalg import det
 
 from nems import xforms
-from nems.plots.api import ax_remove_box, spectrogram
+from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 
 log = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
                va='top', fontsize=8)
     ax[1].set_ylabel('diff site -- same site')
     ax_remove_box(ax[1])
-    figs.append(f)
+    figs.append(fig2BytesIO(f))
 
     f2,axs=plt.subplots(8, 10, figsize=(16,12))
     for c in range(channel_count):
@@ -177,7 +177,7 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
                 axs[i+os,_c].set_yticks([])
             ax_remove_box(axs[i+os, _c])
 
-    figs.append(f2)
+    figs.append(fig2BytesIO(f2))
 
     modelspec.meta['dstrf_overlap']=overlap
 
