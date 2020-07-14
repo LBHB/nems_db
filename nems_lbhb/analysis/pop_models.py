@@ -20,6 +20,8 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     sample_count = len(index_range)
     dstrf = np.zeros((sample_count, stimchans, memory, len(out_channel)))
     for i, index in enumerate(index_range):
+        if i % 25 == 0:
+            print(f"{i} idx={index}")
         if len(out_channel)==1:
             dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel)
         else:
