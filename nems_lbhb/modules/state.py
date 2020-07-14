@@ -5,6 +5,7 @@ functions for applying state-related transformations
 """
 
 import re
+import logging
 import numpy as np
 import tensorflow as tf
 
@@ -12,6 +13,9 @@ import nems_lbhb.preprocessing as preproc
 from nems.modules import NemsModule
 from nems.registry import xmodule
 from nems.tf.layers import BaseLayer
+
+log = logging.getLogger(__name__)
+
 
 def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
     '''
@@ -22,13 +26,27 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
 
      "current" version of sdexp. separate kappa/amp/base phis for gain/dc.
      So all parameters (g, d, base_g, etc.) are the same shape.
-     '''
 
-    sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * (s - offset_g.T)))
-    sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * (s - offset_d.T)))
+     parameters are pred_inputs X state_inputs
+        _sg = _bg + _ag * tf.exp(-tf.exp(-tf.exp(_kg * (tf.expand_dims(s,3) - _og))))
+    '''
 
-    sg = sg.sum(axis=0)[np.newaxis, :]
-    sd = sd.sum(axis=0)[np.newaxis, :]
+    n_inputs=base_g.shape[0]
+    n_states=base_g.shape[1]
+    _n = np.newaxis
+    for i in range(n_inputs):
+        _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
+                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s - offset_g[i,:,_n]))), 
+                     axis=0, keepdims=True)
+        _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
+                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s - offset_d[i,:,_n]))), 
+                     axis=0, keepdims=True)
+        if i == 0:
+           sg = _sg
+           sd = _sd
+        else:
+           sg = np.concatenate((sg, _sg), axis=0)
+           sd = np.concatenate((sd, _sd), axis=0)
 
     return sg * x + sd, sg, sd
 
@@ -423,7 +441,7 @@ class sdexp_new(NemsModule):
 
     def eval(self, rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None,
                    base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
-                   base_d=None, amplitude_d=None, kappa_d=None, offset_d=None):
+                   base_d=None, amplitude_d=None, kappa_d=None, offset_d=None, **kw_args):
         '''
         Parameters
         ----------
@@ -534,10 +552,6 @@ class sdexp_layer(BaseLayer):
                                       initializer=self.initializer['offset_g'],
                                       trainable=True,
                                       )
-        #else:
-        #    self.g = np.zeros((self.n_inputs, self.units))
-        #    self.g[:, 0] = 1
-        #    self.g = tf.constant(self.g, dtype='float32')
 
         if self.state_type != 'gain_only':
             # don't need a d param if we only want gain
@@ -547,7 +561,7 @@ class sdexp_layer(BaseLayer):
                                      initializer=self.initializer['amplitude_d'],
                                      trainable=True,
                                      )
-            self.base_d = self.add_weight(name='base_g',
+            self.base_d = self.add_weight(name='base_d',
                                                shape=(self.n_inputs, self.units),
                                                dtype='float32',
                                                initializer=self.initializer['base_d'],
@@ -567,44 +581,35 @@ class sdexp_layer(BaseLayer):
                                       )
 
     def call(self, inputs, training=True):
+        """
+        TODO: support gain- or baseline only
+        """
         inputs, s = inputs
 
-        print('s: ', s.shape)
-        print('inputs: ', inputs.shape)
-        print('amplitude_g: ', self.amplitude_g.shape)
+        log.debug('s: ', s.shape)
+        log.debug('inputs: ', inputs.shape)
+        log.debug('amplitude_g: ', self.amplitude_g.shape)
 
         #if self.state_type != 'gain_only':
         _ag = tf.reshape(tf.transpose(self.amplitude_g), [1, 1, self.units, self.n_inputs])
-        print('_ag: ', _ag.shape)
-
         _bg = tf.reshape(tf.transpose(self.base_g), [1, 1, self.units, self.n_inputs])
         _kg = tf.reshape(tf.transpose(self.kappa_g), [1, 1, self.units, self.n_inputs])
         _og = tf.reshape(tf.transpose(self.offset_g), [1, 1, self.units, self.n_inputs])
-        _sg = _bg + _ag * tf.exp(-tf.exp(-tf.exp(_kg * (tf.expand_dims(s,3) - _og))))
+        _sg = _bg + _ag * tf.exp(-tf.exp(-tf.exp(_kg) * (tf.expand_dims(s,3) - _og)))
+        log.debug('_ag: ', _ag.shape)
+        log.debug('_sg: ', _sg.shape)
 
         _ad = tf.reshape(tf.transpose(self.amplitude_d), [1, 1, self.units, self.n_inputs])
         _bd = tf.reshape(tf.transpose(self.base_d), [1, 1, self.units, self.n_inputs])
         _kd = tf.reshape(tf.transpose(self.kappa_d), [1, 1, self.units, self.n_inputs])
         _od = tf.reshape(tf.transpose(self.offset_d), [1, 1, self.units, self.n_inputs])
-        _sd = _bd + _ad * tf.exp(-tf.exp(-tf.exp(_kd * (tf.expand_dims(s,3) - _od))))
-
-        print('_sg: ', _sg.shape)
+        _sd = _bd + _ad * tf.exp(-tf.exp(-tf.exp(_kd) * (tf.expand_dims(s,3) - _od)))
 
         sg = tf.reduce_sum(_sg, axis=2)
         sd = tf.reduce_sum(_sd, axis=2)
-        print('sg: ', sg.shape)
+        log.debug('sg: ', sg.shape)
         return sg * inputs + sd
 
-        #g_transposed = tf.transpose(self.g)
-
-        #g_conv = tf.nn.conv1d(state_inputs, tf.expand_dims(g_transposed, 0), stride=1, padding='SAME')
-        #if self.state_type == 'gain_only':
-        #    return inputs * g_conv
-
-        #d_transposed = tf.transpose(self.d)
-        #d_conv = tf.nn.conv1d(state_inputs, tf.expand_dims(d_transposed, 0), stride=1, padding='SAME')
-
-        #return inputs * g_conv + d_conv
 
     def weights_to_phi(self):
         layer_values = self.layer_values
