@@ -2,11 +2,31 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from numpy.linalg import det
 
 from nems import xforms
 from nems.plots.api import ax_remove_box
 
-def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10, norm_mean=True, **kwargs):
+
+def subspace_overlap(u, v):
+    """
+    cross correlation-like measure of overlap between two vector spaces
+    from Sharpee PLoS CB 2017 paper
+    u,v: n X x matrices sampling n-dim subspace of x-dim space
+    """
+    n = u.shape[1]
+
+    _u = u / np.sqrt(np.sum(u ** 2, axis=0, keepdims=True))
+    _v = v / np.sqrt(np.sum(v ** 2, axis=0, keepdims=True))
+
+    num = np.power(np.abs(det(_u.T @ _v)), (1.0 / n))
+    den = np.power(np.abs(det(_u.T @ _u)) * np.abs(det(_v.T @ _v)), (0.5 / n))
+
+    return num / den
+
+
+def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10,
+                  norm_mean=True, method='jacobian', **kwargs):
 
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
@@ -21,9 +41,9 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     dstrf = np.zeros((sample_count, stimchans, memory, len(out_channel)))
     for i, index in enumerate(index_range):
         if len(out_channel)==1:
-            dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel)
+            dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel, method=method)
         else:
-            dstrf[i,:,:,:] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel)
+            dstrf[i,:,:,:] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel, method=method)
 
     if norm_mean:
         dstrf *= stim_mean[np.newaxis, ..., np.newaxis]
@@ -52,6 +72,65 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
+def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
+
+    if figures is None:
+        figures = []
+    cellids = modelspec.meta['cellids']
+    siteids = [c.split("-")[0] for c in cellids]
+    # analyze all output channels
+    out_channel = list(np.arange(length(cellids)))
+
+    # only measure on validation data(?)
+    rec = val.apply_mask()
+
+    # skip silent bins
+    stim_mag = rec['stim'].as_continuous().sum(axis=0)
+    index_range = np.arange(0, np.min([2000, len(stim_mag)]))
+    stim_big = stim_mag > np.max(stim_mag) / 1000
+    index_range = index_range[(index_range > memory) & stim_big[index_range]]
+
+    pcs, pc_mag = pop_models.dstrf_pca(modelspec, rec, pc_count=n_pc, out_channel=out_channel,
+                                       index_range=index_range, memory=memory)
+
+    spaces = np.reshape(pcs, [n_pc, pcs.shape[1] * pcs.shape[2], pcs.shape[3]])
+
+    olapcount = channel_count
+    overlap = np.zeros((olapcount, olapcount))
+    olap_same_site = []
+    olap_diff_site = []
+    olap_part_site = []
+    cc_same_site = []
+    cc_diff_site = []
+    cc_part_site = []
+    for i in range(olapcount):
+        for j in range(i):
+            overlap[i, j] = subspace_overlap(spaces[:, :, i].T, spaces[:, :, j].T)
+            overlap[j, i] = np.corrcoef(p[i, :], p[j, :])[0, 1]
+
+            if (siteids[i] == siteids[0]) & (siteids[j] == siteids[0]):
+                olap_same_site.append(overlap[i, j])
+                cc_same_site.append(overlap[j, i])
+            elif (siteids[j] == siteids[0]):
+                olap_diff_site.append(overlap[i, j])
+                cc_diff_site.append(overlap[j, i])
+            else:
+                olap_part_site.append(overlap[i, j])
+                cc_part_site.append(overlap[j, i])
+    print(
+        f"PC space same {np.mean(olap_same_site):.4f} partial: {np.mean(olap_part_site):.4f} diff: {np.mean(olap_diff_site):.4f}")
+    print(
+        f"Resp CC same {np.mean(cc_same_site):.4f} partial: {np.mean(cc_part_site):.4f} diff: {np.mean(cc_diff_site):.4f}")
+
+    f=plt.figure(figsize=(5, 5))
+    f.imshow(overlap, clim=[-1, 1])
+
+    for i, s in enumerate(siteids[:olapcount]):
+        if i > 0 and (siteids[i] != siteids[i - 1]) and (siteids[i - 1] == siteids[0]):
+            f.plot([0, olapcount - 1], [i - 0.5, i - 0.5], 'b', linewidth=0.5)
+            f.plot([i - 0.5, i - 0.5], [0, olapcount - 1], 'b', linewidth=0.5)
+
+    figures.append(f)
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
                 out_base=None, **kwargs):
@@ -214,8 +293,8 @@ def pop_pca():
 
 
 def stp_test():
-    modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_stp.1.q.s_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-22T031852"
     modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-25T204004"
+    modelpath = "/Users/svd/python/nems/results/271/TAR010c-18-1/TAR010c.dlog_wc.18x1.g_stp.1.q.s_fir.1x15_lvl.1_dexp.1.unknown_fitter.2020-06-22T031852"
     cellid = "TAR010c-18-1"
     index_range = np.arange(200, 400)
     memory = 10

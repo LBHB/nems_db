@@ -12,6 +12,7 @@ from nems.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
+@xform('')
 def ebc(loadkey):
     """
     ebc = evaluate_by_condition
@@ -28,6 +29,7 @@ def ebc(loadkey):
     ]
     return xfspec
 
+@xform('')
 def SPOpf(loadkey):
     xfspec = [['nems.xforms.predict', {}]]
     xfspec = xfspec + ebc('ebc.rmM')
@@ -37,9 +39,17 @@ def SPOpf(loadkey):
 
     return xfspec
 
+@xform('')
 def popsum(loadkey):
 
     return [['nems.xforms.predict', {}],
             ['nems.xforms.add_summary_statistics', {}],
             ['nems.xforms.plot_summary', {}],
             ['nems_lbhb.stateplots.quick_pop_state_plot', {}]]
+
+@xform('')
+def popspc(loadkey):
+    return [['nems.xforms.predict', {}],
+            ['nems.xforms.add_summary_statistics', {}],
+            ['nems.xforms.plot_summary', {}],
+            ['nems_lbhb.analysis.pop_models.pop_space_summary', {}]]
