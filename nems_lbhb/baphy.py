@@ -600,7 +600,7 @@ def baphy_load_dataset(parmfilepath, **options):
     first_true = np.argwhere((ffstop == True).values)[0][0]
     ffstop.iloc[first_true] = False
 
-    TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
+    TrialCount = int(np.max(exptevents.loc[ffstart, 'Trial']))
 
     event_times = pd.concat([exptevents.loc[ffstart, ['start']].reset_index(),
                              exptevents.loc[ffstop, ['end']].reset_index()],
