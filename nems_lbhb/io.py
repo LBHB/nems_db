@@ -1021,7 +1021,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     timestamp = np.zeros([ntrials+1])
     firstframe = np.zeros([ntrials+1])
     for i, x in exptevents.loc[pp].iterrows():
-        t = x['Trial'] - 1
+        t = int(x['Trial'] - 1)
         s = x['name'].split(",[")
         p = eval("["+s[1])
         # print("{0} p=[{1}".format(i,s[1]))
