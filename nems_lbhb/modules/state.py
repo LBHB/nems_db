@@ -2,10 +2,20 @@
 modules/state.py
 
 functions for applying state-related transformations
+
+sdexp2 keyword declared here using NemsModule class, can replace sdexp
 """
 
+import re
+import logging
 import numpy as np
+
 import nems_lbhb.preprocessing as preproc
+from nems.modules import NemsModule
+from nems.registry import xmodule
+
+log = logging.getLogger(__name__)
+
 
 def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
     '''
@@ -16,13 +26,27 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
 
      "current" version of sdexp. separate kappa/amp/base phis for gain/dc.
      So all parameters (g, d, base_g, etc.) are the same shape.
-     '''
 
-    sg = base_g.T + amplitude_g.T * np.exp(-np.exp(np.array(-np.exp(kappa_g.T)) * (s - offset_g.T)))
-    sd = base_d.T + amplitude_d.T * np.exp(-np.exp(np.array(-np.exp(kappa_d.T)) * (s - offset_d.T)))
+     parameters are pred_inputs X state_inputs
+        _sg = _bg + _ag * tf.exp(-tf.exp(-tf.exp(_kg * (tf.expand_dims(s,3) - _og))))
+    '''
 
-    sg = sg.sum(axis=0)[np.newaxis, :]
-    sd = sd.sum(axis=0)[np.newaxis, :]
+    n_inputs=base_g.shape[0]
+    n_states=base_g.shape[1]
+    _n = np.newaxis
+    for i in range(n_inputs):
+        _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
+                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s - offset_g[i,:,_n]))), 
+                     axis=0, keepdims=True)
+        _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
+                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s - offset_d[i,:,_n]))), 
+                     axis=0, keepdims=True)
+        if i == 0:
+           sg = _sg
+           sd = _sd
+        else:
+           sg = np.concatenate((sg, _sg), axis=0)
+           sd = np.concatenate((sd, _sd), axis=0)
 
     return sg * x + sd, sg, sd
 
@@ -277,3 +301,180 @@ def population_mod(rec, i, o, s=None, g=None, d=None, gs=None, ds=None):
     fn = lambda x : _population_mod(x, rec[r]._data, rec[s]._data, g, d, gs, ds)
 
     return [rec[i].transform(fn, o)]
+
+
+class sdexp_new(NemsModule):
+    """
+    Add a constant to a NEMS signal
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.sdexp_new')
+        options['tf_layer'] = options.get('tf_layer', 'nems_lbhb.tf.layers.sdexp_layer')
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
+                                                         'n_inputs': 1, 'chans': 1,
+                                                         'state_type': 'both'})
+        options['plot_fns'] = options.get('plot_fns',
+                                          ['nems.plots.api.mod_output',
+                                           'nems.plots.api.before_and_after',
+                                           'nems.plots.api.pred_resp',
+                                           'nems.plots.api.state_vars_timeseries',
+                                           'nems.plots.api.state_vars_psth_all'])
+        options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Pass state variable(s) through sigmoid then apply dc/gain to pred"
+
+    @xmodule('sdexp2')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the state_dexp
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: r'^sdexp\.?(\d{1,})x(\d{1,})$'
+            e.g., "sdexp.SxR" or "sdexp.S":
+                S : number of state channels (required)
+                R : number of channels to modulate (default = 1)
+        Options
+        -------
+        None
+        '''
+        options = kw.split('.')
+        pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+        parsed = re.match(pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            pattern = re.compile(r'^(\d{1,})$')
+            parsed = re.match(pattern, options[1])
+        try:
+            n_vars = int(parsed.group(1))
+            if len(parsed.groups()) > 1:
+                n_chans = int(parsed.group(2))
+            else:
+                n_chans = 1
+
+        except TypeError:
+            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                             "Make sure keyword is of the form: \n"
+                             "sdexp.{n_state_variables} \n"
+                             "keyword given: %s" % kw)
+
+        state = 'state'
+        set_bounds = False
+        # nl_state_chans = 1
+        nl_state_chans = n_vars
+        for o in options[2:]:
+            if o == 'lv':
+                state = 'lv'
+            if o == 'bound':
+                set_bounds = True
+            # if o == 'snl':
+            # state-specific non linearities (snl)
+            # only reason this is an option is to allow comparison with old models
+            # nl_state_chans = n_vars
+
+        # init gain params
+        zeros = np.zeros([n_chans, nl_state_chans])
+        ones = np.ones([n_chans, nl_state_chans])
+        base_mean_g = zeros.copy()
+        base_sd_g = ones.copy()
+        amp_mean_g = zeros.copy() + 0
+        amp_sd_g = ones.copy() * 0.1
+        amp_mean_g[:, 0] = 1  # (1 / np.exp(-np.exp(-np.exp(0)))) # so that gain = 1 for baseline chan
+        kappa_mean_g = zeros.copy()
+        kappa_sd_g = ones.copy() * 0.1
+        offset_mean_g = zeros.copy()
+        offset_sd_g = ones.copy() * 0.1
+
+        # init dc params
+        base_mean_d = zeros.copy()
+        base_sd_d = ones.copy()
+        amp_mean_d = zeros.copy() + 0
+        amp_sd_d = ones.copy() * 0.1
+        kappa_mean_d = zeros.copy()
+        kappa_sd_d = ones.copy() * 0.1
+        offset_mean_d = zeros.copy()
+        offset_sd_d = ones.copy() * 0.1
+
+        template = {
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': state,
+                          'n_inputs': n_chans,
+                          'chans': n_vars,
+                          'state_type': 'both'},
+            'plot_fns': ['nems.plots.api.mod_output',
+                         'nems.plots.api.before_and_after',
+                         'nems.plots.api.pred_resp',
+                         'nems.plots.api.state_vars_timeseries',
+                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fn_idx': 3,
+            'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
+                      'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
+                      'kappa_g': ('Normal', {'mean': kappa_mean_g, 'sd': kappa_sd_g}),
+                      'offset_g': ('Normal', {'mean': offset_mean_g, 'sd': offset_sd_g}),
+                      'base_d': ('Normal', {'mean': base_mean_d, 'sd': base_sd_d}),
+                      'amplitude_d': ('Normal', {'mean': amp_mean_d, 'sd': amp_sd_d}),
+                      'kappa_d': ('Normal', {'mean': kappa_mean_d, 'sd': kappa_sd_d}),
+                      'offset_d': ('Normal', {'mean': offset_mean_d, 'sd': offset_sd_d})}
+        }
+        if set_bounds:
+            template['bounds'] = {'base_g': (0, 10),
+                                  'amplitude_g': (0, 10),
+                                  'kappa_g': (None, None),
+                                  'offset_g': (None, None),
+                                  'base_d': (-10, 10),
+                                  'amplitude_d': (-10, 10),
+                                  'kappa_d': (None, None),
+                                  'offset_d': (None, None)}
+
+        return sdexp_new(**template)
+
+    def eval(self, rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None,
+             base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
+             base_d=None, amplitude_d=None, kappa_d=None, offset_d=None, **kw_args):
+        '''
+        Parameters
+        ----------
+        i name of input
+        o name of output signal
+        s name of state signal
+        g - gain to scale s by
+        d - dc to offset by
+        base, amplitude, kappa - parameters for dexp applied to each state channel
+        '''
+
+        if (base_d is None) & (amplitude_d is None) & (kappa_d is None):
+            fn = lambda x: _state_dexp_old(x, rec[s]._data, g, d, base, amplitude, kappa)
+        else:
+            fn = lambda x: _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
+                                       base_d, amplitude_d, kappa_d, offset_d)
+
+        # kludgy backwards compatibility
+        try:
+            pred, gain, dc = fn(rec[i]._data)
+            pred = rec[i]._modified_copy(pred)
+            pred.name = o
+            gain = pred._modified_copy(gain)
+            gain.name = 'gain'
+            dc = pred._modified_copy(dc)
+            dc.name = 'dc'
+            return [pred, gain, dc]
+        except:
+            return [rec[i].transform(fn, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
