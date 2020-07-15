@@ -77,7 +77,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
+def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, **ctx):
 
     if figures is None:
         figs = []
@@ -109,7 +109,6 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=10, **ctx):
     keepchans=np.array(out_channel)
     r = rec['resp'].as_continuous()[out_channel,:]
     p = rec['pred'].as_continuous()[out_channel,:]
-
 
     olapcount = channel_count
     overlap = np.zeros((olapcount, olapcount))
