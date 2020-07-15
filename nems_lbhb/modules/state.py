@@ -2,6 +2,8 @@
 modules/state.py
 
 functions for applying state-related transformations
+
+sdexp2 keyword declared here using NemsModule class, can replace sdexp
 """
 
 import re
