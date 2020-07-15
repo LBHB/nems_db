@@ -312,7 +312,7 @@ class sdexp_new(NemsModule):
         set options to defaults if not supplied. pass to super() to add to data_dict
         """
         options['fn'] = options.get('fn', str(self.__module__) + '.sdexp_new')
-        options['tf_layer'] = options.get('nems_lbhb.tf.layers.sdexp_layer')
+        options['tf_layer'] = options.get('tf_layer', 'nems_lbhb.tf.layers.sdexp_layer')
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
                                                          'n_inputs': 1, 'chans': 1,
                                                          'state_type': 'both'})
