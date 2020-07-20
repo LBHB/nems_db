@@ -269,6 +269,8 @@ def loadpop(loadkey):
     for op in ops:
         if op=='rnd':
             rand_match = True
+        elif op=='bth':
+            rand_match = 'both'
         elif op.startswith('cc'):
             cell_count = int(op[2:])
         elif op.startswith('bc'):

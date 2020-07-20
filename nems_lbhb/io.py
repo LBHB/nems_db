@@ -325,6 +325,7 @@ def baphy_parm_read(filepath, evpread=True):
             # get lick events from evp file 
             evpfile = Path(filepath).with_suffix('.evp')
             lick_events = get_lick_events(evpfile, name='LICK')
+            log.info("evp file for licks: %s", evpfile)
 
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
@@ -1021,7 +1022,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     timestamp = np.zeros([ntrials+1])
     firstframe = np.zeros([ntrials+1])
     for i, x in exptevents.loc[pp].iterrows():
-        t = x['Trial'] - 1
+        t = int(x['Trial'] - 1)
         s = x['name'].split(",[")
         p = eval("["+s[1])
         # print("{0} p=[{1}".format(i,s[1]))
