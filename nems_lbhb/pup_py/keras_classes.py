@@ -6,6 +6,7 @@ import nems_lbhb.pup_py.utils as ut
 
 import nems_db
 nems_db_path = nems_db.__path__[0]
+import sys
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 
