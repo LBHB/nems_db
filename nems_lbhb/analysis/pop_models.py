@@ -77,7 +77,10 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, **ctx):
+def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=False, **ctx):
+
+    if IsReload:
+        return {}
 
     if figures is None:
         figs = []

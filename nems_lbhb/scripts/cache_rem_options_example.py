@@ -3,7 +3,7 @@
 
 import pandas as pd
 import nems.db as nd
-from nems_lbhb.io import get_rem, cache_rem_options, load_rem_options
+from nems_lbhb.baphy_io import get_rem, cache_rem_options, load_rem_options
 from os.path import basename
 
 #Load the file paths for pupil data.

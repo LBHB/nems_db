@@ -17,7 +17,6 @@ import scipy.signal
 import numpy as np
 import json
 import sys
-import io
 import datetime
 import glob
 from math import isclose
@@ -34,7 +33,7 @@ import nems_lbhb.behavior as beh
 from nems.recording import Recording
 from nems.recording import load_recording
 from nems.utils import recording_filename_hash
-import nems_lbhb.io as io
+import nems_lbhb.baphy_io as io
 import nems.epoch as ep
 
 # TODO: Replace catch-all `except:` statements with except SpecificError,

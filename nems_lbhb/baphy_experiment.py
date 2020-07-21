@@ -29,7 +29,7 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
-import nems_lbhb.io as io
+import nems_lbhb.baphy_io as io
 
 log = logging.getLogger(__name__)
 
