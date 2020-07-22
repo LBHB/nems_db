@@ -99,8 +99,10 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
             batch=batch, siteid=cellid, alt_cells_available=rec['resp'].chans,
             cell_count=cell_count, best_cells=best_cells)
 
-        if rand_match:
+        if rand_match == True:
             rec['resp'] = rec['resp'].extract_channels(alt_cellid)
+        elif rand_match == 'both':
+            rec['resp'] = rec['resp'].extract_channels(cellid + alt_cellid)
         else:
             rec['resp'] = rec['resp'].extract_channels(cellid)
 
