@@ -470,7 +470,7 @@ def baphy_load_data(parmfilepath, **options):
             pupilfilepath = re.sub(r"\.m$", ".pup.mat", parmfilepath)
             options['verbose'] = False
             if options['pupil_eyespeed']:
-                pupildata, ptrialidx = imo.load_pupil_trace(
+                pupildata, ptrialidx = io.load_pupil_trace(
                         pupilfilepath, exptevents, **options
                         )
                 try:
