@@ -332,6 +332,10 @@ def baphy_load_data(parmfilepath, **options):
             TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
             stim, tags, stimparam = tsf.generate_torc_spectrograms(
                       TorcObject, rasterfs=options['rasterfs'], single_cycle=False)
+            # adjust so that all power is >0
+            for k in stim.keys():
+                stim[k]=stim[k]+5
+
             # NB stim is a dict rather than a 3-d array
 
         elif exptparams['runclass']=='VOC_VOC':
@@ -467,7 +471,7 @@ def baphy_load_data(parmfilepath, **options):
             pupilfilepath = re.sub(r"\.m$", ".pup.mat", parmfilepath)
             options['verbose'] = False
             if options['pupil_eyespeed']:
-                pupildata, ptrialidx = imo.load_pupil_trace(
+                pupildata, ptrialidx = io.load_pupil_trace(
                         pupilfilepath, exptevents, **options
                         )
                 try:
@@ -596,7 +600,7 @@ def baphy_load_dataset(parmfilepath, **options):
     first_true = np.argwhere((ffstop == True).values)[0][0]
     ffstop.iloc[first_true] = False
 
-    TrialCount = np.max(exptevents.loc[ffstart, 'Trial'])
+    TrialCount = int(np.max(exptevents.loc[ffstart, 'Trial']))
 
     event_times = pd.concat([exptevents.loc[ffstart, ['start']].reset_index(),
                              exptevents.loc[ffstop, ['end']].reset_index()],

@@ -133,10 +133,12 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
-                            if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                                trial_outcome = 'FALSE_ALARM_TRIAL'
-                            else:
-                                trial_outcome = 'EARLY_TRIAL'
+                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #else:
+                            # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
+                            # this as a valid target if the lick came before the early resp window
+                            trial_outcome = 'EARLY_TRIAL'
                         else:
                             rt.append(np.nan)
                             sID.append('UNKNOWN')

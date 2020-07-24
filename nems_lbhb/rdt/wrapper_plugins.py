@@ -1,12 +1,16 @@
 import numpy as np
 
+from nems.registry import xform, xmodule
 
+
+@xform()
 def rdtld(key):
 
     xfspec = [['nems_lbhb.rdt.io.load_recording', {}]]
     return xfspec
 
 
+@xform()
 def rdtsev(key):
     """
     :param key: rdtsev.<op1>.<op2>
@@ -38,11 +42,14 @@ def rdtsev(key):
     return xfspec
 
 
+@xform()
 def rdtfmt(key):
 
     xfspec = [['nems_lbhb.rdt.xforms.format_keywordstring', {}]]
     return xfspec
 
+
+@xform()
 def rdtshf(key):
     ops = key.split(".")
     shuff_streams=False

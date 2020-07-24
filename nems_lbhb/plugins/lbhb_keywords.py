@@ -1,13 +1,14 @@
-from nems.plugins.default_keywords import wc, lvl, fir, firexp
 import re
 import logging
 import copy
-
 import numpy as np
+
+from nems.registry import xform, xmodule
+from nems.plugins.default_keywords import wc, lvl, fir, firexp
 
 log = logging.getLogger(__name__)
 
-
+@xmodule()
 def ctwc(kw):
     '''
     Same as nems.plugins.keywords.fir but renamed for contrast
@@ -19,6 +20,7 @@ def ctwc(kw):
     return m
 
 
+@xmodule()
 def gcwc(kw):
     m = wc(kw[2:])
     m['fn_kwargs'].update({'ci': 'contrast', 'co': 'ctpred'})
@@ -33,6 +35,7 @@ def gcwc(kw):
     return m
 
 
+@xmodule()
 def ctfir(kw):
     '''
     Same as nems.plugins.keywords.fir but renamed for contrast
@@ -95,12 +98,14 @@ def ctfir(kw):
     return template
 
 
+@xmodule()
 def ctfirexp(kw):
     m = firexp(kw[2:])
     m['fn_kwargs'].update({'i': 'ctpred', 'o': 'ctpred'})
     return m
 
 
+@xmodule()
 def gcfir(kw):
     m = fir(kw[2:])
     m['fn_kwargs'].update({'ci': 'ctpred', 'co': 'ctpred'})
@@ -114,6 +119,7 @@ def gcfir(kw):
     return m
 
 
+@xmodule()
 def OOfir(kw):
     kw = 'ct' + kw[2:]
     template = ctfir(kw)
@@ -121,6 +127,7 @@ def OOfir(kw):
     return template
 
 
+@xmodule()
 def ctlvl(kw):
     '''
     Same as nems.plugins.keywords.lvl but renamed for
@@ -131,6 +138,7 @@ def ctlvl(kw):
     return m
 
 
+@xmodule()
 def gclvl(kw):
     m = lvl(kw[2:])
     m['fn'] = 'nems_lbhb.gcmodel.modules.levelshift'
@@ -148,6 +156,7 @@ def gclvl(kw):
     return m
 
 
+@xmodule()
 def ctk(kw):
     ops = kw.split('.')[1:]
     offsets = None
@@ -181,6 +190,7 @@ def ctk(kw):
     return template
 
 
+@xmodule()
 def ctk2(kw):
     all_groups = kw.split('.')
     n_channels, n_coefs = [int(s) for s in all_groups[1].split('x')]
@@ -217,6 +227,7 @@ def ctk2(kw):
     return template
 
 
+@xmodule()
 def ctk3(kw):
     # default 20ms offset, will be converted to fittable parameter
     # during latter portion of fit
@@ -234,6 +245,7 @@ def ctk3(kw):
     return template
 
 
+@xmodule()
 def dsig(kw):
     '''
     Note: these priors will typically be overwritten during initialization
@@ -358,6 +370,7 @@ def _one_zz(zerocount=1):
     return np.concatenate((np.ones(1), np.zeros(zerocount)))
 
 
+@xmodule()
 def slogsig(kw):
     '''
     Generate and register modelspec for linear state gain model with rectification
@@ -421,6 +434,7 @@ def slogsig(kw):
     return template
 
 
+@xmodule()
 def sexp(kw):
     '''
     Generate and register modulespec for the state_exp
@@ -456,6 +470,7 @@ def sexp(kw):
     return template
 
 
+@xmodule()
 def lvexp(kw):
     '''
     Generate and register modelspec for fitting gain parms
@@ -487,6 +502,7 @@ def lvexp(kw):
     return template
 
 
+@xmodule()
 def lvlogsig(kw):
     '''
     Generate and register modelspec for linear state gain model with rectification
@@ -554,6 +570,7 @@ def lvlogsig(kw):
     return template
 
 
+@xmodule()
 def lv(kw):
     '''
     Generate and register modelspec for add_lv
@@ -619,6 +636,7 @@ def lv(kw):
     return template
 
 
+@xmodule()
 def puplvmodel(kw):
     """
     register modelspec for pupil dependent latent variable model.
@@ -738,7 +756,7 @@ def puplvmodel(kw):
     return template
 
 
-
+@xmodule()
 def sdexp(kw):
     '''
     Generate and register modulespec for the state_dexp
@@ -844,6 +862,7 @@ def sdexp(kw):
     return template
 
 
+@xmodule()
 def stategainchan(kw):
     """
     Same as nems default keyword stategain, but allows you to only modulate
@@ -920,6 +939,8 @@ def stategainchan(kw):
 
     return template
 
+
+@xmodule()
 def pmod(kw):
     """
     latent-variable style modulation of predicted response by weighted sum of

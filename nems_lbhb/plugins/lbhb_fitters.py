@@ -4,8 +4,10 @@ import numpy as np
 from nems.plugins.default_fitters import basic
 from nems.plugins.default_fitters import iter
 from nems.utils import escaped_split
+from nems.registry import xform, xmodule
 
 
+@xform()
 def lnp(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -23,6 +25,7 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
+@xform()
 def gc(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -49,6 +52,7 @@ def gc(fitkey):
     return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
 
 
+@xform()
 def gc2(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -89,6 +93,7 @@ def gc2(fitkey):
     return xfspec
 
 
+@xform()
 def gc3(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -119,6 +124,7 @@ def gc3(fitkey):
     return xfspec
 
 
+@xform()
 def gc4(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -143,6 +149,7 @@ def gc4(fitkey):
     return xfspec
 
 
+@xform()
 def testLN(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -168,6 +175,8 @@ def testLN(fitkey):
     xfspec.append(['nems_lbhb.gcmodel.fitters.test_LN', kwargs])
     return xfspec
 
+
+@xform()
 def strfc(fitkey):
     return [['nems_lbhb.contrast_helpers.strf_to_contrast', {}]]
 
@@ -192,6 +201,7 @@ def _aliased_fitter(fn, fitkey):
 fitjk01 = _aliased_fitter(basic, 'basic.nf5.epREFERENCE')
 
 
+@xform()
 def popiter(fitkey):
     '''
     Perform a fit_iteratively analysis on a model.
@@ -314,6 +324,7 @@ def _parse_iter(options):
     return tolerances, module_sets, fit_iter, tol_iter, fitter
 
 
+@xform()
 def pupLVbasic(fitkey):
     """
     exact same as fit basic, but add constraint that the latent variable (LV)
