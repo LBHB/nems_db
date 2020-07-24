@@ -316,12 +316,25 @@ class BAPHYExperiment:
                     signals['resp'] = signals['resp'].append_time(r)
             
         if pupil:
+            
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             pupil_sigs = [nems.signal.RasterizedSignal(
                           fs=kwargs['rasterfs'], data=p[0],
                           name='pupil', recording=rec_name, chans=['pupil'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(p_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                for i, (p, r) in enumerate(zip(pupil_sigs, resp_sigs)):
+                    rlen = r.ntimes
+                    plen = p.as_continuous().shape[1]
+                    if plen > rlen:
+                        pupil_sigs[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
+                    elif rlen > plen:
+                        pcount = p.as_continuous().shape[0]
+                        pupil_sigs[i] = p._modified_copy(np.append(p.as_continuous(), 
+                                                np.ones([pcount, rlen - plen]) * np.nan, axis=1))
 
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
@@ -396,9 +409,9 @@ class BAPHYExperiment:
         return continuous_data         
 
     def get_spike_data(self, exptevents, **kw):
-        for i, f in enumerate(self.parmfile):
-            fn = str(f).split('/')[-1]
-            exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
+        #for i, f in enumerate(self.parmfile):
+        #    fn = str(f).split('/')[-1]
+        #    exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
         spikes_fs = self._get_spikes()
         if self.correction_method == 'spikes':
             spikedicts = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
