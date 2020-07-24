@@ -25,6 +25,7 @@ from nems_lbhb.gcmodel.figures.summary import (performance_scatters,
 from nems_lbhb.gcmodel.figures.correlation import per_cell_group
 from nems_lbhb.gcmodel.figures.examples import example_clip
 from nems_lbhb.gcmodel.figures.simulation import compare_sims, compare_sim_fits
+from nems_lbhb.gcmodel.figures.snr import snr_vs_equivalence
 # Put all aliased modelnames and cellids in memory,
 # e.g. test = "ozgf.fs100.ch18-ld-sev_wc.18x1.g-fir.1x15-lvl.1_init-basic"
 from nems_lbhb.gcmodel.figures.definitions import *
@@ -41,7 +42,6 @@ figures_base_path = '/auto/users/jacob/notes/gc_rank3/figures/'
 plot_stat = 'r_ceiling'
 fig_format = 'pdf'
 date = str(datetime.datetime.now()).split(' ')[0]
-figures_to_save = []
 batch, gc, stp, LN, combined = default_args
 batch2 = 263
 gc_version='summed'
@@ -53,6 +53,7 @@ def just_final_figures():
     # Figure 1 -- stimulus examples with contrast and summed contrast computed,
     #             distributions of sound statistics for both batches
     # DRC contrast comparisons
+    figures_to_save = []
     log.info('Contrast and DRC comparisons ...\n')
     fig1a, fig1aa = test_DRC_with_contrast(ms=30, normalize=True, fs=100, bands=1,
                                            percentile=70, n_segments=8)
@@ -84,7 +85,8 @@ def just_final_figures():
                           plot_stat=plot_stat)
     fig2c, fig2cc = single_scatter(batch, gc, stp, LN, combined, compare=(2,3),
                            plot_stat=plot_stat)
-    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined, plot_stat=plot_stat)
+    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined, plot_stat=plot_stat,
+                                    improved_only=True)
     fig2e, fig2ee = single_scatter(batch2, gc, stp, LN, combined, compare=(2,3),
                                    plot_stat=plot_stat)
 
@@ -144,7 +146,8 @@ def just_final_figures():
                                       self_kwargs=eq_kwargs,
                                       eq_models=eq_both,
                                       cross_kwargs=cross_kwargs,
-                                      cross_models=cross_all)
+                                      cross_models=cross_all,
+                                      use_median=False)
     fig3g, fig3gg = equivalence_effect_size(batch2, gc, stp, LN, combined,
                                             load_path=hist_path_263,
                                             only_improvements=True)
@@ -171,22 +174,21 @@ def just_final_figures():
     # figure 4:
     # Examples
     # stp helps, gc not
-    ex_start=190
-    ex_end=330
     s1 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/stp.pickle'
     fig4a, fig4aa, fig4aaa = example_clip('AMT005c-20-1', *default_args,
                                           stim_idx=0,
                                           trim_start=40, trim_end=180,
-                                          skip_combined=True,
+                                          skip_combined=False,
                                           save_path=None,
                                           load_path=s1)
 
+    # TODO: try to find a better example for including combined PSTH
     # gc helps, stp not (but just barely)
     s2 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/gc.pickle'
     fig4b, fig4bb, fig4bbb = example_clip('TAR009d-22-1', *default_args,
                                           stim_idx=1,
-                                          trim_start=ex_start, trim_end=ex_end,
-                                          skip_combined=True,
+                                          trim_start=190, trim_end=330,
+                                          skip_combined=False,
                                           save_path=None,
                                           load_path=s2)
 
@@ -194,19 +196,19 @@ def just_final_figures():
     s3 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/LN.pickle'
     fig4c, fig4cc, fig4ccc = example_clip('TAR010c-40-1', *default_args,
                                           stim_idx=0,
-                                          trim_start=ex_start, trim_end=ex_end,
-                                          skip_combined=True,
+                                          trim_start=190, trim_end=330,
+                                          skip_combined=False,
                                           save_path=None,
                                           load_path=s3)
 
     # combined cell
-    s4 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/combined.pickle'
-    fig4d, fig4dd, fig4ddd = example_clip('TAR010c-59-1', *default_args,
-                                          stim_idx=1,
-                                          trim_start=ex_start, trim_end=ex_end,
-                                          skip_combined=False,
-                                          save_path=None,
-                                          load_path=s4)
+#    s4 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/combined.pickle'
+#    fig4d, fig4dd, fig4ddd = example_clip('AMT004b-41-1', *default_args,
+#                                          stim_idx=17,
+#                                          trim_start=40, trim_end=180,
+#                                          skip_combined=False,
+#                                          save_path=None,
+#                                          load_path=None)
     figures_to_save.append((fig4a, 'ex_stp_cell'))
     figures_to_save.append((fig4aa, 'ex_stp_cell_text'))
     figures_to_save.append((fig4aaa, 'ex_stp_cell_strf'))
@@ -216,9 +218,9 @@ def just_final_figures():
     figures_to_save.append((fig4c, 'ex_LN_cell'))
     figures_to_save.append((fig4cc, 'ex_LN_cell_text'))
     figures_to_save.append((fig4ccc, 'ex_LN_cell_strf'))
-    figures_to_save.append((fig4d, 'ex_combined_cell'))
-    figures_to_save.append((fig4dd, 'ex_combined_cell_text'))
-    figures_to_save.append((fig4ddd, 'ex_combined_cell_strf'))
+#    figures_to_save.append((fig4d, 'ex_combined_cell'))
+#    figures_to_save.append((fig4dd, 'ex_combined_cell_text'))
+#    figures_to_save.append((fig4ddd, 'ex_combined_cell_strf'))
 
 
     # Parameters
@@ -263,13 +265,15 @@ def just_final_figures():
     sim_end=880
     fig6a = compare_sims(190, 270)
     fig6b = compare_sims(1550,1610)
-    fig6c, fig6cc = compare_sim_fits(
-            load_path=load_paths['simulations']['stp_cell']['stp'],
-            start=sim_start, end=sim_end, tag='stp_cell_stp_sim'
+    fig6c, fig6cc = compare_sim_fits(simulation_spec=stp_spec,
+            *default_args, save_path=load_paths['simulations']['stp_cell']['stp'],
+            start=sim_start, end=sim_end, tag='stp_cell_stp_sim',
+            skip_combined=False
             )
-    fig6d, fig6dd = compare_sim_fits(
-            load_path=load_paths['simulations']['gc_cell']['gc'],
-            start=sim_start, end=sim_end, tag='gc_cell_gc_sim'
+    fig6d, fig6dd = compare_sim_fits(simulation_spec=gc_spec,
+            *default_args, save_path=load_paths['simulations']['gc_cell']['gc'],
+            start=sim_start, end=sim_end, tag='gc_cell_gc_sim',
+            skip_combined=False
             )
 #    fig6e, fig6ee = compare_sim_fits(
 #            load_path=load_paths['simulations']['gc_cell']['stp'],
@@ -279,10 +283,10 @@ def just_final_figures():
 #            load_path=load_paths['simulations']['stp_cell']['gc'],
 #            start=sim_start, end=sim_end, tag='stp_cell_gc_sim'
 #            )
-    fig6g, fig6gg = compare_sim_fits(
-            load_path=load_paths['simulations']['LN_cell']['LN'],
+    fig6g, fig6gg = compare_sim_fits(simulation_spec=LN_spec,
+            *default_args, save_path=load_paths['simulations']['LN_cell']['LN'],
             start=sim_start, end=sim_end, tag='LN_cell_LN_sim',
-            ext_start=2.3
+            ext_start=2.3, skip_combined=False
             )
     figures_to_save.append((fig6a, 'parameter_effects_stp_onset'))
     figures_to_save.append((fig6b, 'parameter_effects_gc_up_or_down'))
@@ -321,6 +325,16 @@ def just_final_figures():
     figures_to_save.append((fig7d, 'mean_histogram_overlap'))
     figures_to_save.append((fig7dd, 'mean_text_overlap'))
 
+
+    # SNR analysis
+    snr_path = load_paths['snrs']
+    stp_path = load_paths['self_equivalence']['stp']
+    gc_path = load_paths['self_equivalence']['gc']
+    fig8a, fig8b, fig8c = snr_vs_equivalence(snr_path, stp_path, gc_path)
+
+    figures_to_save.append((fig8a, 'snr_vs_equiv_stp'))
+    figures_to_save.append((fig8b, 'snr_vs_equiv_gc'))
+    figures_to_save.append((fig8c, 'snr_vs_equiv_text'))
 
 
     # Save everything

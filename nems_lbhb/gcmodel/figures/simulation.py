@@ -168,7 +168,8 @@ def fit_to_simulation(fit_model, simulation_spec):
     return ctx
 
 
-def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
+def compare_sim_fits(batch, gc, stp, LN, combined, simulation_spec=None,
+                     start=0, end=None, load_path=None, skip_combined=True,
                      save_path=None, tag='', ext_start=1.1):
     if load_path is None:
         if simulation_spec is None:
@@ -177,10 +178,11 @@ def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
         stp_ctx = fit_to_simulation(stp, simulation_spec)
         gc_ctx = fit_to_simulation(gc, simulation_spec)
         LN_ctx = fit_to_simulation(LN, simulation_spec)
+        combined_ctx = fit_to_simulation(combined, simulation_spec)
 
         if save_path is not None:
             results = {'simulation': simulation_spec,
-                       'contexts': [stp_ctx, gc_ctx, LN_ctx]}
+                       'contexts': [stp_ctx, gc_ctx, LN_ctx, combined_ctx]}
             pickle.dump(results, open(save_path, 'wb'))
     else:
         results = pickle.load(open(load_path, 'rb'))
@@ -191,6 +193,7 @@ def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
     stp_pred = stp_ctx['val']['pred'].as_continuous().flatten()
     gc_pred = gc_ctx['val']['pred'].as_continuous().flatten()
     LN_pred = LN_ctx['val']['pred'].as_continuous().flatten()
+    combined_pred = combined_ctx['val']['pred'].as_continuous().flatten()
 
     stim = stp_ctx['val']['stim'].as_continuous()
     if end is None:
@@ -208,8 +211,11 @@ def compare_sim_fits(simulation_spec=None, start=0, end=None, load_path=None,
     plt.fill_between(t, simulation, color='gray', alpha=0.15)
     plt.plot(LN_pred, color='black', alpha=0.55, linewidth=lw)
     plt.plot(gc_pred, color=model_colors['gc'], linewidth=lw*1.25)
-    plt.plot(stp_pred, color=model_colors['stp'], alpha=0.75,
-             linewidth=lw*1.25)
+    plt.plot(stp_pred, color=model_colors['stp'], linewidth=lw*1.25)
+    if not skip_combined:
+        plt.plot(combined_pred, color=model_colors['combined'], \
+                 linewidth=lw*1.25)
+
     plt.ylim(-0.1, ext_stop)
     plt.xlim(start, end)
     ax = plt.gca()
