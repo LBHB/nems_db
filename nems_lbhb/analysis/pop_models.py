@@ -68,12 +68,12 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
     pcs = np.zeros(s)
     pc_mag = np.zeros((pc_count,channel_count))
     for c in range(channel_count):
-        d = np.reshape(dstrf[:,:,:,c],(dstrf.shape[0],s[1]*s[2]))
+        d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
         _u, _s, _v = np.linalg.svd(d)
         _s *= _s
         _s /= np.sum(_s)
-        pcs[:,:,:,c]=np.reshape(_v[:pc_count,:],[pc_count,s[1],s[2]])
-        pc_mag[:,c] = _s[:pc_count]
+        pcs[:, :, :, c] = np.reshape(_v[:pc_count, :],[pc_count, s[1], s[2]])
+        pc_mag[:, c] = _s[:pc_count]
 
     return pcs, pc_mag
 

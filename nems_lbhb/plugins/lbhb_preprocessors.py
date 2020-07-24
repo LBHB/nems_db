@@ -328,8 +328,8 @@ def pca(loadkey):
     for op in ops:
         if op == "psth":
             pc_source = "psth"
-        elif op == "full":
-            pc_source = "full"
+        elif op == "all":
+            pc_source = "all"
         elif op == "noise":
             pc_source = "noise"
         elif op == "no":

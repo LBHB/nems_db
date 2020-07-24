@@ -139,10 +139,10 @@ def pupil_mask(est, val, condition, balance):
             op_mask = ((pupil_data > pup_median) & (~np.isnan(pupil_data)))
 
         # perform AND mask with existing mask
-        if 'mask' in est.signals:
+        if 'mask' in r.signals:
             mask = (mask & r['mask'].extract_epoch('REFERENCE'))
             op_mask = (op_mask & r['mask'].extract_epoch('REFERENCE'))
-        elif 'mask' not in est.signals:
+        elif 'mask' not in r.signals:
             pass
 
         r['mask'] = r['mask'].replace_epochs({'REFERENCE': mask})
