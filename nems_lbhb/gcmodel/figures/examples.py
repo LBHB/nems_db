@@ -176,7 +176,8 @@ def example_clip(cellid, batch, gc, stp, LN, combined, skip_combined=False,
     plt.plot(LN_plot, color='black', alpha=0.55, linewidth=lw)
     signals = ['Response', 'LN', 'GC', 'STP']
     if not skip_combined:
-        plt.plot(combined_plot, color=model_colors['combined'], linewidth=lw)
+        plt.plot(combined_plot, color=model_colors['combined'], linewidth=lw,
+                 linestyle='--')
         signals.append('GC+STP')
     plt.ylim(-0.1, 1.5)
     ax = plt.gca()

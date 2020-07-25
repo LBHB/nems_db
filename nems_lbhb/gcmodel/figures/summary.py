@@ -237,7 +237,7 @@ def gc_stp_scatter(batch, gc, stp, LN, combined,
 
 def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                     LN_filter=False, plot_stat='r_ceiling',
-                    legend=False):
+                    legend=False, improved_only=True):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
 #    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -268,11 +268,15 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     max_imp = np.maximum(gc_imp, stp_imp)
     #gc_stp_test_rel = gc_stp_test - ln_test
     #max_test_rel = np.maximum(gc_test, stp_test) - ln_test
+    imp_T, imp_p = st.wilcoxon(gc_stp_imp, max_imp)
+    med_combined = np.nanmedian(gc_stp_imp)
+    med_max = np.nanmedian(max_imp)
 
     fig1 = plt.figure()
     c_not = model_colors['LN']
     c_imp = model_colors['max']
-    plt.scatter(max_not, gc_stp_not, c=c_not, s=small_scatter, label='no imp.')
+    if not improved_only:
+        plt.scatter(max_not, gc_stp_not, c=c_not, s=small_scatter, label='no imp.')
     plt.scatter(max_imp, gc_stp_imp, c=c_imp, s=big_scatter, label='sig. imp.')
     ax = fig1.axes[0]
     plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1,
@@ -288,7 +292,11 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     fig2 = plt.figure(figsize=text_fig)
     text = ("batch: %d\n"
             "x: Max(GC,STP)\n"
-            "y: GC+STP\n" % batch)
+            "y: GC+STP\n"
+            "wilcoxon: T: %.4E, p: %.4E\n"
+            "combined median: %.4E\n"
+            "max median: %.4E"
+            % (batch, imp_T, imp_p, med_combined, med_max))
     plt.text(0.1, 0.5, text)
 
 
@@ -647,7 +655,9 @@ def significance(batch, gc, stp, LN, combined,
             # TODO: no reason to convert these to lists anymore?
             first = series_one.tolist()
             second = series_two.tolist()
-            w, p = st.wilcoxon(first, second)
+
+            if j != i:
+                w, p = st.wilcoxon(first, second)
             if j == i:
                 # if indices equal, on diagonal so no comparison
                 array[i][j] = 0.00

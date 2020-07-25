@@ -30,6 +30,8 @@ from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
 import nems_lbhb.baphy_io as io
+from nems.utils import recording_filename_hash
+from nems import get_setting
 
 log = logging.getLogger(__name__)
 
@@ -273,8 +275,26 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
+        # add BAPHYExperiment version to recording options
+        kwargs.update({'version': 'BAPHYExperiment.1'})
+
+        # see if can load from cache, if not, call generate_recording
+        data_file = recording_filename_hash(
+                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
         
-        rec_name = self.experiment      
+        if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+            rec = self.generate_recording(**kwargs)
+            log.info('Caching recording: %s', data_file)
+            rec.save(data_file)
+            return rec
+        
+        else:
+            log.info('Cached recording found')
+            rec = load_recording(data_file)
+            return rec
+
+    def generate_recording(self, **kwargs):
+        rec_name = self.experiment[:7]      
         
         # figure out signals to load, then load them (as lists)
         resp = kwargs.get('resp', False)

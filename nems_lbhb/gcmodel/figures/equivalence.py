@@ -225,7 +225,7 @@ def self_equivalence_data(batch, m1, m2, LN1, LN2, save_path=None,
     a = list(set(a) & set(saved_cells))
     df = df.loc[a]
     if cellids is not None:
-        df = df.loc[cellids]
+        df = df.loc[cellids].reindex(cellids)
     eqs = df['equivalence'].values
 
     return eqs
@@ -269,7 +269,8 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                           equiv_key='partial_corr',
                           effect_key='performance_effect',
                           self_equiv=False, self_kwargs={}, eq_models=[],
-                          cross_kwargs={}, cross_models=[]):
+                          cross_kwargs={}, cross_models=[],
+                          use_median=True):
     '''
     model1: GC
     model2: STP
@@ -346,18 +347,32 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
         md_x1 = np.nanmedian(eqs_x1)
         md_x2 = np.nanmedian(eqs_x2)
 
-        sub1 = df.index.isin(ga)
-        sub2 = df.index.isin(sa)
+        sub1 = df.index.isin(ga) & df.index.isin(aa)
+        sub2 = df.index.isin(sa) & df.index.isin(aa)
         eqs_sub1 = df[equiv_key][sub1].values
         eqs_sub2 = df[equiv_key][sub2].values
         md_sub1 = np.nanmedian(eqs_sub1)
         md_sub2 = np.nanmedian(eqs_sub2)
 
-        md_avg1 = 0.5*(md_x1 + md_x2)
-        md_avg2 = 0.5*(md_sub1 + md_sub2)
-        ratio = md_avg2 / md_avg1
-        md_stpeq *= ratio
-        md_gceq *= ratio
+        if use_median:
+            md_avg1 = 0.5*(md_x1 + md_x2)
+            md_avg2 = 0.5*(md_sub1 + md_sub2)
+            ratio = md_avg2 / md_avg1
+            md_stpeq *= ratio
+            md_gceq *= ratio
+
+        else:
+            eqs_avg1 = 0.5*(eqs_x1 + eqs_x2)  # between-model, halved est
+            eqs_avg2 = 0.5*(eqs_sub1 + eqs_sub2)  # between-model, full data
+            ratios = np.abs(eqs_avg2 / eqs_avg1)
+#            stp_scaled = eqs_stp * ratios
+#            gc_scaled = eqs_gc * ratios
+            log_ratios = np.abs(np.log(ratios))
+            log_ratios /= log_ratios.max()
+            stp_scaled = eqs_stp + (1-eqs_stp) * log_ratios
+            gc_scaled = eqs_gc + (1-eqs_gc) * log_ratios
+            md_stpeq = np.nanmedian(stp_scaled)
+            md_gceq = np.nanmedian(gc_scaled)
 
 
     not_color = model_colors['LN']
