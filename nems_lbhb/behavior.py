@@ -30,11 +30,9 @@ def create_trial_labels(exptparams, exptevents):
     all_trials = np.unique(exptevents['Trial'])
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
-    #refCountDist = exptparams['TrialObject'][1]['ReferenceCountFreq']
     refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
     refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
     refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
-    tarPreStim = exptparams['TrialObject'][1]['TargetHandle'][1]['PreStimSilence']
     tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
 
@@ -261,7 +259,7 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     if keep_cue_trials == False:
         # mark cue trials as invalid
         # same for single sounds and overall trials
-        # TO-DO add logic to use new structure in exptparams['TrialParams'][1]['CueSeg']
+        # TODO add logic to use new structure in exptparams['TrialParams'][1]['CueSeg']
         # to determine cue trials for newer baphy files (after Luke's modifications)
         nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
         if nCueTrials > 0:
