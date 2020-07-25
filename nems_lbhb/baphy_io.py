@@ -861,6 +861,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
     # these times are set based on openephys data, since baphy doesn't log exact trial start times
     if exptevents is None:
+        from nems_lbhb.baphy_experiment import BAPHYExperiment
+
         experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
         trial_starts = experiment.get_trial_starts()
         exptevents = experiment.get_baphy_events()

@@ -25,3 +25,9 @@ def init(kw):
         xfspec[0][0] = 'nems_lbhb.lnp_helpers.init_lnp_model'
 
     return xfspec
+
+
+@xform()
+def pclast(kw):
+
+    return [['nems_lbhb.initializers.pca_proj_layer', {}]]

@@ -1,4 +1,4 @@
-import nems_lbhb.io as io
+import nems_lbhb.baphy_io as io
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

@@ -1,5 +1,5 @@
 import nems_lbhb.baphy as nb
-import nems_lbhb.io as nio
+import nems_lbhb.baphy_io as nio
 from nems import epoch as ep
 import os
 
