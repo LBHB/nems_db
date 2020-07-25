@@ -226,7 +226,9 @@ load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
                       'LN_cell': {
                               'LN': '/auto/users/jacob/notes/gc_rank3/simulations/LN_TAR010c-40-1.pickle'
                               }
-                      }
+                      },
+              'snrs': '/auto/users/jacob/notes/gc_rank3/snrs/7_17_20_289.pkl'
+
               }
 
 save_paths = {'CF': cf_save_path, 'sigmoid_shapes': sigmoid_shapes,
