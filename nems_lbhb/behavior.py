@@ -46,6 +46,7 @@ def create_trial_labels(exptparams, exptevents):
         ev = exptevents[exptevents['Trial']==t].copy()
         trial_outcome = None # gets updated on every iteration. Whatever the last sound in the
                              # trial gets labeled as is what the trial outcome will be
+        catch = False        # make sure a hit on a Ref following a CR of a Catch doesn't overwrite trial outcome
         if sum(ev.name.str.contains('LICK'))>0:
             # lick(s) detected
             fl = ev[ev.name=='LICK']['start'].values[0]
@@ -67,22 +68,27 @@ def create_trial_labels(exptparams, exptevents):
                         rt.append(fl - ref_start)
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
-                            trial_outcome = 'FALSE_ALARM_TRIAL'
+                            if not catch:
+                                trial_outcome = 'FALSE_ALARM_TRIAL'
                         else:
-                            trial_outcome = 'EARLY_TRIAL'
+                            if not catch:
+                                trial_outcome = 'EARLY_TRIAL'
                     elif (fl < ref_start):
                         # sound never played because of an early lick
                         sID.append('NULL')
                         rt.append(np.nan)
-                        trial_outcome = 'EARLY_TRIAL'
+                        if not catch:
+                            trial_outcome = 'EARLY_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + early_win + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
                         rt.append(fl - ref_start)
-                        trial_outcome = 'FALSE_ALARM_TRIAL'
+                        if not catch:
+                            trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif ((fl > ref_start) & (fl > ref_start + early_win + resp_win)):
                         rt.append(fl - ref_start)
                         sID.append('CORRECT_REJECT_TRIAL')
-                        trial_outcome = 'CORRECT_REJECT_TRIAL'
+                        if not catch:
+                            trial_outcome = 'CORRECT_REJECT_TRIAL'
                     else:
                         rt.append(np.nan)
                         sID.append('UNKNOWN')
@@ -91,6 +97,7 @@ def create_trial_labels(exptparams, exptevents):
                     tar_start = r['start']
                     rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
                     if rewarded:
+                        # "classic" rewarded target case
                         if fl <= tar_start:
                             sID.append('NULL')
                             rt.append(np.nan)
@@ -117,6 +124,7 @@ def create_trial_labels(exptparams, exptevents):
                             rt.append(np.nan)
                             sID.append('UNKNOWN')
                     else:
+                        # Non-rewarded "Target", treat like a "Catch"
                         if fl <= tar_start:
                             sID.append('NULL')
                             rt.append(np.nan)
@@ -131,6 +139,66 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
+                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #else:
+                            # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
+                            # this as a valid target if the lick came before the early resp window
+                            trial_outcome = 'EARLY_TRIAL'
+                        else:
+                            rt.append(np.nan)
+                            sID.append('UNKNOWN')
+
+                elif 'Catch' in name:
+                    catch = True
+                    # NOTE that "Catch" are set up to play before targets. So, if a target plays 
+                    # after the Catch (e.g. a CORRECT_REJECT_TRIAL), trial_outcome (for baphy trial) will get overwritten
+                    # based on the target outcome
+                    catch_start = r['start']
+                    rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
+                    if rewarded:
+                        # Found a rewarded Catch. Treat it like Target. e.g. if no lick, call it a MISS, not CORRECT_REJECT
+                        if fl <= catch_start:
+                            sID.append('NULL')
+                            rt.append(np.nan)
+                        elif (fl > (catch_start + early_win)) & (fl <= (catch_start + resp_win + early_win)):
+                            sID.append('HIT_TRIAL')
+                            rt.append(fl - catch_start)
+                            trial_outcome = 'HIT_TRIAL'
+                        elif ((fl > catch_start) & (fl > (catch_start + resp_win + early_win))):
+                            sID.append('MISS_TRIAL')
+                            rt.append(fl - catch_start)
+                            trial_outcome = 'MISS_TRIAL'
+                        elif (fl > catch_start) & (fl <= (catch_start + early_win)):
+                            sID.append('EARLY_TRIAL')
+                            rt.append(fl - catch_start)
+                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                                # is lick in the response window of the previous reference?
+                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #else:
+
+                            # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
+                            # this as a valid target if the lick came before the early resp window
+                            trial_outcome = 'EARLY_TRIAL'
+                        else:
+                            rt.append(np.nan)
+                            sID.append('UNKNOWN')
+                    else:
+                        # "Classic" Catch stimulus. If no lick, call CORRECT_REJECT
+                        if fl <= catch_start:
+                            sID.append('NULL')
+                            rt.append(np.nan)
+                        elif (fl > catch_start + early_win) & (fl <= (catch_start + resp_win + early_win)):
+                            sID.append('INCORRECT_HIT_TRIAL')
+                            rt.append(fl - catch_start)
+                            trial_outcome = 'INCORRECT_HIT_TRIAL'
+                        elif ((fl > catch_start + early_win) & (fl > (catch_start + resp_win + early_win))):
+                            sID.append('CORRECT_REJECT_TRIAL')
+                            rt.append(fl - catch_start)
+                            trial_outcome = 'CORRECT_REJECT_TRIAL'
+                        elif (fl > catch_start) & (fl <= (catch_start + early_win)):
+                            sID.append('EARLY_TRIAL')
+                            rt.append(fl - catch_start)
                             #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                             #    trial_outcome = 'FALSE_ALARM_TRIAL'
                             #else:
@@ -172,6 +240,15 @@ def create_trial_labels(exptparams, exptevents):
                     sID.append('CORRECT_REJECT_TRIAL')
                     trial_outcome = 'MISS_TRIAL'
                 elif 'Target' in name:
+                    rewarded = (pump_dur[[True if t in name else False for t in tar_names]] > 0)[0]
+                    if rewarded:
+                        sID.append('MISS_TRIAL')
+                        trial_outcome = 'MISS_TRIAL'
+                    else: 
+                        sID.append('CORRECT_REJECT_TRIAL')
+                        trial_outcome = 'CORRECT_REJECT_TRIAL'
+                elif 'Catch' in name:
+                    # same logic as target, but really, a rewarded Catch is a bug...
                     rewarded = (pump_dur[[True if t in name else False for t in tar_names]] > 0)[0]
                     if rewarded:
                         sID.append('MISS_TRIAL')
@@ -366,6 +443,7 @@ def _compute_metrics(exptparams, exptevents, **options):
     """
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    isCatch = [int(i) for i in exptparams['TrialObject'][1]['IsCatch']]
 
     if pump_dur.shape == ():
         pump_dur = np.tile(pump_dur, [len(targets)])
@@ -373,8 +451,11 @@ def _compute_metrics(exptparams, exptevents, **options):
     # for each target, decide if rewarded / unrewarded the get the 
     # hit rate / miss rate 
     R = {'RR': {}, 'dprime': {}, 'DI': {}, 'nTrials': {}}
-    for tar_key in targets:
-        tar = 'Stim , {} , Target'.format(tar_key)
+    for tar_key, catch in zip(targets, isCatch):
+        if catch == 1:
+            tar = 'Stim , {} , Catch'.format(tar_key)
+        else:
+            tar = 'Stim , {} , Target'.format(tar_key)
         # Doesn't actually matter for this if rewarded or not. If there was a lick, it will be labeled
         # either a HIT or INCORRECT hit. For the purposes of response rate, we don't care which
         allTarTrials = exptevents[(exptevents.name==tar) & (exptevents.soundTrial!='NULL')]['Trial']
@@ -502,14 +583,14 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
 
     if (len(rew_tars) > 1):
-         tar_names.append('+'.join(rew_tars))
+        tar_names.append(','.join(rew_tars))
     elif (len(nr_tars) > 1):
-        tar_names.append('+'.join(nr_tars))
+        tar_names.append(','.join(nr_tars))
 
     tar_RT_prob = {}
     auc = {}
     for t in tar_names:
-        if '+' not in t:
+        if ',' not in t:
             # normal case, single target
             try:
                 tar_counts, _ = np.histogram(RTs['Target'][t], bins=bins)
@@ -527,7 +608,7 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
         else:
             # case for multiple targets being grouped
             ntrials = 0
-            for i, tar in enumerate(t.split('+')):
+            for i, tar in enumerate(t.split(',')):
                 try:
                     tc, _ = np.histogram(RTs['Target'][tar], bins=bins)
                     if i == 0:
@@ -556,7 +637,7 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     # compute area under the curve using trapezoid approximation (DI)
     tar_groups = list(permutations(tar_RT_prob.keys(), 2))
     # strip permutations where targets w/in the group, are being compared to themselves
-    tar_groups = [t for t in tar_groups if (t[0] not in t[1].split('+') and (t[1] not in t[0].split('+')))]
+    tar_groups = [t for t in tar_groups if (t[0] not in t[1].split(',') and (t[1] not in t[0].split(',')))]
     tar_group_keys = [t[0]+'_'+t[1] for t in tar_groups]
     auc = {}
     for t, tk in zip(tar_groups, tar_group_keys):
@@ -572,7 +653,7 @@ def get_reaction_times(exptparams, exptevents, **options):
     if 'invalidSoundTrial' not in events.columns:
         events = mark_invalid_trials(exptparams, events, **options)
     
-    tar_mask = events.name.str.contains('Target') & \
+    tar_mask = (events.name.str.contains('Target') | events.name.str.contains('Catch')) & \
                ~events.name.str.contains('Silence') & \
                ~events.invalidSoundTrial & \
                ~events.invalidTrial
@@ -587,6 +668,7 @@ def get_reaction_times(exptparams, exptevents, **options):
     unique_targets = events[tar_mask].name.unique()
     targets = [t.strip('Stim , ') for t in unique_targets]
     targets = [t.strip(' , Target') for t in targets]
+    targets = [t.strip(' , Catch') for t in targets]
     tar_RTs = {}
     for tar, tar_key in zip(unique_targets, targets):
         mask = tar_mask & (events.name == tar)
