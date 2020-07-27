@@ -1,12 +1,15 @@
 import os
 import logging
 import numpy as np
+import json as jsonlib
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from numpy.linalg import det
 
 from nems import xforms
 from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems.uri import NumpyEncoder
 
 log = logging.getLogger(__name__)
 
@@ -77,7 +80,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=False, **ctx):
+def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, maxbins=1000, IsReload=False, **ctx):
 
     if IsReload:
         return {}
@@ -98,9 +101,13 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
 
     # skip silent bins
     stim_mag = rec['stim'].as_continuous().sum(axis=0)
-    index_range = np.arange(0, np.min([2000, len(stim_mag)]))
     stim_big = stim_mag > np.max(stim_mag) / 1000
+    index_range = np.arange(len(stim_mag))
     index_range = index_range[(index_range > memory) & stim_big[index_range]]
+
+    # limit number of bins to speed up analysis
+    index_range = index_range[:maxbins]
+
     log.info('Calculating dstrf for %d channels, %d timepoints, memory=%d',
              channel_count, len(index_range), memory)
 
@@ -118,30 +125,40 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
     olap_same_site = []
     olap_diff_site = []
     olap_part_site = []
-    cc_same_site = []
-    cc_diff_site = []
-    cc_part_site = []
+    r_cc_same_site = []
+    r_cc_diff_site = []
+    r_cc_part_site = []
+    p_cc_same_site = []
+    p_cc_diff_site = []
+    p_cc_part_site = []
     for i in range(olapcount):
         for j in range(i):
             overlap[i, j] = subspace_overlap(spaces[:, :, i].T, spaces[:, :, j].T)
             overlap[j, i] = np.corrcoef(p[i, :], p[j, :])[0, 1]
+            r_cc = np.corrcoef(r[i, :], r[j, :])[0, 1]
 
             if (siteids[i] == siteids[0]) & (siteids[j] == siteids[0]):
                 olap_same_site.append(overlap[i, j])
-                cc_same_site.append(overlap[j, i])
+                p_cc_same_site.append(overlap[j, i])
+                r_cc_same_site.append(r_cc)
             elif (siteids[j] == siteids[0]):
                 olap_diff_site.append(overlap[i, j])
-                cc_diff_site.append(overlap[j, i])
+                p_cc_diff_site.append(overlap[j, i])
+                r_cc_diff_site.append(r_cc)
             else:
                 olap_part_site.append(overlap[i, j])
-                cc_part_site.append(overlap[j, i])
+                p_cc_part_site.append(overlap[j, i])
+                r_cc_part_site.append(r_cc)
     log.info(
         f"PC space same {np.mean(olap_same_site):.4f} partial: {np.mean(olap_part_site):.4f} diff: {np.mean(olap_diff_site):.4f}")
     log.info(
-        f"Resp CC same {np.mean(cc_same_site):.4f} partial: {np.mean(cc_part_site):.4f} diff: {np.mean(cc_diff_site):.4f}")
+        f"Pred CC same {np.mean(p_cc_same_site):.4f} partial: {np.mean(p_cc_part_site):.4f} diff: {np.mean(p_cc_diff_site):.4f}")
+    log.info(
+        f"Resp CC same {np.mean(r_cc_same_site):.4f} partial: {np.mean(r_cc_part_site):.4f} diff: {np.mean(r_cc_diff_site):.4f}")
 
     f, ax = plt.subplots(2, 1, figsize=(6,9))
-    spectrogram(rec, sig_name='pred', title='Predicted PSTH', ax=ax[0]) 
+    modelname_list = modelspec.meta["modelname"].split("_")
+    spectrogram(rec, sig_name='pred', title=f'{siteids[0]}/{modelname_list} pred PSTH', ax=ax[0]) 
     ax[1].imshow(overlap, clim=[-1, 1])
 
     for i, s in enumerate(siteids[:olapcount]):
@@ -151,9 +168,12 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
     ax[1].text(olapcount+1, 0, f'PC space same {np.mean(olap_same_site):.3f}\n' +\
                                f'partial: {np.mean(olap_part_site):.3f}\n' +\
                                f'diff: {np.mean(olap_diff_site):.3f}\n' +\
-                               f'Resp CC same {np.mean(cc_same_site):.3f}\n' +\
-                               f'partial: {np.mean(cc_part_site):.3f}\n' +\
-                               f'diff: {np.mean(cc_diff_site):.3f}',
+                               f'Resp CC same {np.mean(r_cc_same_site):.3f}\n' +\
+                               f'partial: {np.mean(r_cc_part_site):.3f}\n' +\
+                               f'diff: {np.mean(r_cc_diff_site):.3f}\n' +\
+                               f'Pred CC same {np.mean(p_cc_same_site):.3f}\n' +\
+                               f'partial: {np.mean(p_cc_part_site):.3f}\n' +\
+                               f'diff: {np.mean(p_cc_diff_site):.3f}',
                va='top', fontsize=8)
     ax[1].set_ylabel('diff site -- same site')
     ax_remove_box(ax[1])
@@ -181,7 +201,14 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
 
     figs.append(fig2BytesIO(f2))
 
-    modelspec.meta['dstrf_overlap']=overlap
+    extra_results = {'dstrf_overlap': overlap,
+            'olap_same_site': olap_same_site,
+            'olap_part_site': olap_part_site,
+            'r_cc_same_site': r_cc_same_site,
+            'r_cc_part_site': r_cc_part_site,
+            'p_cc_same_site': p_cc_same_site,
+            'p_cc_part_site': p_cc_part_site}
+    modelspec.meta['extra_results']=jsonlib.dumps(extra_results, cls=NumpyEncoder) 
 
     return {'figures': figs, 'modelspec': modelspec}
 
