@@ -462,13 +462,25 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
 
     # include all parameter values, even defaults, in filename
     fields = RefObject['UserDefinableFields']
+    if options['stimfmt']=='envelope':
+        x_these_fields=['F0s','ComponentsNumber'];
+    else:
+        x_these_fields=[];
+
     for cnt1 in range(0, len(fields), 3):
         if RefObject[fields[cnt1]] == 0:
             RefObject[fields[cnt1]] = int(0)
             # print(fields[cnt1])
             # print(RefObject[fields[cnt1]])
             # print(dstr)
-        dstr = "{0}-{1}".format(dstr, RefObject[fields[cnt1]])
+        if fields[cnt1] in x_these_fields:
+            if type(RefObject[fields[cnt1]]) is int:
+                l=['X']
+            else:
+                l = ['X' for i in range(len(RefObject[fields[cnt1]]))]
+            dstr = "{0}-{1}".format(dstr, "__".join(l))
+        else:
+            dstr = "{0}-{1}".format(dstr, RefObject[fields[cnt1]])
 
     dstr = re.sub(r":", r"", dstr)
 
