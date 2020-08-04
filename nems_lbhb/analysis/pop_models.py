@@ -213,7 +213,7 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, maxbins=1
     return {'figures': figs, 'modelspec': modelspec}
 
 
-def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
+def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
                 out_base=None, **kwargs):
     #plt.close('all')
 
@@ -225,11 +225,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
     index = index_range[i]
     memory = dstrf.shape[2]
 
-    f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
-    f.show()
-
     stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
-
     stim_lim = np.max(stim[:, index_range])
     s = stim[:, (index - memory):index]
     print("stim_lim ", stim_lim)
@@ -237,11 +233,23 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
     im_list = []
     l1_list = []
     l2_list = []
-    im_list.append(axs[0, 1].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto'))
-    axs[0, 1].set_ylabel('stim')
-    axs[0, 1].set_yticks([])
-    axs[0, 1].set_xticks([])
-    _title1 = axs[0, 1].set_title(f"dSTRF frame {index}")
+
+    if static:
+        max_frames = np.min([10, framecount])
+        f, axs = plt.subplots(cellcount+1, max_frames, figsize=(16, 8))
+        stim0col=0
+    else:
+        max_frames = framecount
+        f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
+        stim0col=1
+    f.show()
+
+    im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', 
+                                           aspect='auto', cmap='Greys'))
+    axs[0, stim0col].set_ylabel('stim')
+    axs[0, stim0col].set_yticks([])
+    axs[0, stim0col].set_xticks([])
+    _title1 = axs[0, stim0col].set_title(f"dSTRF frame {index}")
 
     for cellidx in range(cellcount):
         d = dstrf[i, :, :, cellidx].copy()
@@ -249,18 +257,20 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
         pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
         strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
         if mult:
-            strf_lim[-1] = strf_lim[-1] * stim_lim / 100
+            strf_lim = strf_lim * stim_lim
             d = d * s
-        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', aspect='auto'))
+        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
+                                               aspect='auto'))
         axs[cellidx+1, 0].set_yticks([])
         axs[cellidx+1, 0].set_xticks([])
         axs[cellidx+1, 0].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
-
-        l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory):index], '-')[0])
-        l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory):index], '--')[0])
-        axs[cellidx+1, 1].set_ylim((0, pred_max))
-        axs[cellidx+1, 1].set_yticks([])
         ax_remove_box(axs[cellidx+1,0])
+
+        if not static:
+           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory):index], '-')[0])
+           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory):index], '--')[0])
+           axs[cellidx+1, 1].set_ylim((0, pred_max))
+           axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
         index = index_range[i]
@@ -283,7 +293,35 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
 
         return tuple(im_list + l1_list + l2_list + [_title1])
 
-    if preview:
+    if static:
+        stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
+        stim_lim = np.max(stim[:, index_range])
+        print("stim_lim ", stim_lim)
+
+        for i in range(1, max_frames):
+           index = index_range[i]
+
+           s = stim[:, (index - memory):index]
+           axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
+           axs[0, i].set_title(f"dSTRF frame {index}")
+           axs[0, i].set_yticks([])
+           axs[0, i].set_xticks([])
+
+           for cellidx in range(cellcount):
+               d = dstrf[i, :, :, cellidx].copy()
+
+               pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
+               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+               if mult:
+                   strf_lim = strf_lim * stim_lim
+                   d = d * s
+               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', aspect='auto')
+               axs[cellidx+1, i].set_yticks([])
+               axs[cellidx+1, i].set_xticks([])
+               #axs[cellidx+1, i].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
+               ax_remove_box(axs[cellidx+1, i])
+
+    elif preview:
         for i in range(framecount):
             dstrf_frame(i)
             plt.pause(0.01)

@@ -841,3 +841,22 @@ def zscore_resp(rec):
     r['resp'] = r['resp']._modified_copy(zscore)
 
     return r
+
+
+def state_resp_outer(rec, s='state', r='resp',
+                     shuffle_interactions=False, **ctx):
+
+    state = rec[s]._data
+    resp = rec[r]._data
+    new_state = state.copy()
+
+    for i in range(resp.shape[0]):
+        if shuffle_interactions:
+            state = rec[s].shuffle_time(rand_seed=i, mask=rec['mask'])._data
+        new_state = np.concatenate((new_state, state*resp[i:(i+1),:]))
+
+    new_rec = rec.copy()
+    new_rec[s]=rec[s]._modified_copy(data=new_state)
+
+    return {'rec': new_rec}
+

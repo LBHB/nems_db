@@ -267,6 +267,14 @@ def st(loadkey):
 
 
 @xform()
+def rstate(kw):
+    ops = kw.split(".")[1:]
+    shuffle_interactions = ('sh' in ops)
+    return [['nems_lbhb.preprocessing.state_resp_outer',
+             {'shuffle_interactions': shuffle_interactions}]]
+
+
+@xform()
 def inp(loadkey):
     """
     inp = 'input signal'
