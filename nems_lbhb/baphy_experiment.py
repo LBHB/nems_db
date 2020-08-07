@@ -119,9 +119,10 @@ class BAPHYExperiment:
 
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-        
+            self.siteid = os.path.split(parmfile[0])[-1][:7]
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
+            self.siteid = os.path.split(parmfile)[-1][:7]
            
         if np.any([not p.exists() for p in self.parmfile]):
             raise IOError(f'Not all parmfiles in {self.parmfile} were found')
