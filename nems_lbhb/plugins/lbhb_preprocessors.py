@@ -724,7 +724,7 @@ def rz(load_key):
 def esth1(kw):
     ops = kw.split('.')[1:]
     if len(ops) > 0:
-        seed_idx = ops[0]
+        seed_idx = int(ops[0])
     else:
         seed_idx = 0
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1,
@@ -734,7 +734,7 @@ def esth1(kw):
 def esth2(kw):
     ops = kw.split('.')[1:]
     if len(ops) > 0:
-        seed_idx = ops[0]
+        seed_idx = int(ops[0])
     else:
         seed_idx = 0
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2,

@@ -115,7 +115,7 @@ def just_final_figures():
                                         plot_stat=plot_stat, drop_outliers=True,
                                         color_improvements=True,
                                         self_equiv=True, self_eq_models=eq_both,
-                                        exclude_low_snr=True,
+                                        #exclude_low_snr=True,
                                         snr_path=snr_path,
                                         #enable_hover=True,
                                         )
