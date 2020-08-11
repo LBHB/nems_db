@@ -8,7 +8,7 @@
 import nems_lbhb.behavior as beh
 import matplotlib.pyplot as plt
 import numpy as np
-import nems_lbhb.io as io
+import nems_lbhb.baphy_io as io
 import os
 
 def get_square_asp(ax):

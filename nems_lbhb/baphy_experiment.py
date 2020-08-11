@@ -29,7 +29,9 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
-import nems_lbhb.io as io
+import nems_lbhb.baphy_io as io
+from nems.utils import recording_filename_hash
+from nems import get_setting
 
 log = logging.getLogger(__name__)
 
@@ -117,9 +119,10 @@ class BAPHYExperiment:
 
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-        
+            self.siteid = os.path.split(parmfile[0])[-1][:7]
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
+            self.siteid = os.path.split(parmfile)[-1][:7]
            
         if np.any([not p.exists() for p in self.parmfile]):
             raise IOError(f'Not all parmfiles in {self.parmfile} were found')
@@ -273,8 +276,26 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
+        # add BAPHYExperiment version to recording options
+        kwargs.update({'version': 'BAPHYExperiment.1'})
+
+        # see if can load from cache, if not, call generate_recording
+        data_file = recording_filename_hash(
+                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
         
-        rec_name = self.experiment      
+        if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+            rec = self.generate_recording(**kwargs)
+            log.info('Caching recording: %s', data_file)
+            rec.save(data_file)
+            return rec
+        
+        else:
+            log.info('Cached recording found')
+            rec = load_recording(data_file)
+            return rec
+
+    def generate_recording(self, **kwargs):
+        rec_name = self.experiment[:7]      
         
         # figure out signals to load, then load them (as lists)
         resp = kwargs.get('resp', False)
@@ -699,6 +720,7 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     if remove_post_lick:
         stim_events = _remove_post_lick(stim_events, exptevents)
+        stim_events = _remove_post_stim_off(stim_events, exptevents)
 
     stim_events = stim_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -757,16 +779,16 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
 
 def _remove_post_lick(events, exptevents):
     # screen for FA / Early trials in which we need to truncate / chop out references
-    trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
-    lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
-    lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.values
-
+    trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])].Trial.unique()
+    #lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
+    #lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.unique() #.values
+    #import pdb; pdb.set_trace()
     #if len(lick_time) != len(trunc_trials):
     #    import pdb;pdb.set_trace()
     #   raise ValueError('More than one lick recorded on a FA trial, whats up??')
     
     for t in trunc_trials:  
-        fl = lick_time.iloc[lick_trial==t].iloc[0]
+        fl = exptevents[(exptevents.Trial==t) & (exptevents.name=='LICK')].iloc[0]['start']
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
         events.at[e[e.end > fl].index, 'end'] = fl
@@ -774,6 +796,22 @@ def _remove_post_lick(events, exptevents):
         events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
     
     return events
+
+
+def _remove_post_stim_off(events, exptevents):
+    # screen for trials where sound was turned off early. These will largey overlap with the events
+    # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
+    # targets can come in the middle of a string of refs, but refs are turned off post target hit
+    log.info("Removing data post stim off")
+    trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
+    for t in trunc_trials:
+        toff = exptevents[(exptevents.Trial==t) & (exptevents.name=='STIM,OFF')].iloc[0]['start']
+        e = events[events.Trial==t]
+        events.at[e[e.end > toff].index, 'end'] = toff
+        events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
+    
+    return events
+
 
 def _trim_epoch_columns(epochs):
     cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]

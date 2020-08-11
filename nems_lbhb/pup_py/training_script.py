@@ -46,6 +46,7 @@ if __name__ == '__main__':
     path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
     training_files = os.listdir(path)
     n_training_files = len(training_files)
+    training_epochs = 250  # used to be 500. Make this a user def param?
 
     # get current date/time so that we can save the model results in the correct place
     dt = datetime.datetime.now().isoformat()
@@ -115,7 +116,7 @@ if __name__ == '__main__':
                                       validation_data=validation_generator,
                                       callbacks=[callback],
                                       use_multiprocessing=True,
-                                      workers=6, epochs=500)
+                                      workers=6, epochs=training_epochs)
 
         np.save('{0}old_model_fits/{1}/val_loss{0}'.format(project_dir, dt, nrun), np.array(history.history['val_loss']))
         np.save('{0}old_model_fits/{1}/train_loss{0}'.format(project_dir, dt, nrun), np.array(history.history['loss']))
@@ -152,7 +153,7 @@ if __name__ == '__main__':
                                       validation_data=validation_generator,
                                       callbacks=[callback],
                                       use_multiprocessing=True,
-                                      workers=6, epochs=500)
+                                      workers=6, epochs=training_epochs)
 
         np.save('{0}old_model_fits/{1}/val_loss'.format(project_dir, dt), np.array(history.history['val_loss']))
         np.save('{0}old_model_fits/{1}/train_loss'.format(project_dir, dt), np.array(history.history['loss']))

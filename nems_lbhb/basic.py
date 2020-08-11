@@ -11,7 +11,7 @@ import nems.db as nd
 import pandas as pd
 from matplotlib import cm
 from nems_lbhb.baphy import baphy_load_recording_file, baphy_load_recording
-from nems_lbhb.io import baphy_parm_read
+from nems_lbhb.baphy_io import baphy_parm_read
 import nems.epoch as ep
 import matplotlib
 
