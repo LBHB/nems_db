@@ -22,11 +22,12 @@ tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000):
+    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000, train_frame_range=None, n_frames=None):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
-        # the training directory and then display the first of these frames.
+        # the training directory and then display the first of these frames. if train_frame_range is not None, choose 
+        # these 50 frames from this range. train frame range is tuple (start_frame, end_frame)
 
         self.plot_calls = 0
 
@@ -49,14 +50,30 @@ class TrainingDataBrowser:
             params_file = predictions_folder + video_name + '_pred.pickle'
             with open(params_file, 'rb') as fp:
                 parms = pickle.load(fp)
-            # delete all videos in the training folder that have this video name
-            os.system("rm {}*".format(train_data_path + video_name))
-
+            
+            # delete all videos in the training folder that have this video name (Do this inside the loop instead
+            # e.g. just check for duplicate frames)
+            # os.system("rm {}*".format(train_data_path + video_name))
+            if (n_frames is not None) & (n_frames != 'None'):
+                n_frames = int(n_frames)
             fps = 30
             t0 = int(min_frame) * (1 / fps)
             tend = int(max_frame) * (1 / fps)
-            frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
+            if (train_frame_range is not None) & (train_frame_range != 'None'):
+                start, end = int(train_frame_range.split('_')[0]), int(train_frame_range.split('_')[1])
+                if (n_frames is not None) & (n_frames != 'None') & (n_frames < (end - start)):
+                    nframes = n_frames
+                else:
+                    if 50 < (end - start):
+                        nframes = 50
+                    else:
+                        nframes = end - start
+                frames = np.sort(np.random.choice(np.arange(start * (1 / fps), 
+                                        end * (1 / fps), 1/fps), nframes, replace=False))
+            else:
+                frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
             output_dict = {}
+            n_frames_added = 0
             for i, t in enumerate(frames):
                 f = int(t * fps)
                 # save temporarily
@@ -75,11 +92,17 @@ class TrainingDataBrowser:
                 }
                 name = train_data_path + video_name + str(f) + '.pickle'
 
-                with open(name, 'wb') as fp:
-                    pickle.dump(output_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                # if this frame isn't already in the training set, add it
+                if os.path.isfile(name):
+                    pass
+                else:
+                    with open(name, 'wb') as fp:
+                        pickle.dump(output_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                    if n_frames_added == 0:
+                        default_frame = video_name + str(f)
+                    n_frames_added += 1
 
-                if i == 0:
-                    default_frame = video_name + str(f)
+            print("Added {0} video frames to training set".format(n_frames_added))
 
         self.master = master
         master.title("Training data browser")
@@ -544,7 +567,7 @@ class TrainingDataBrowser:
 root = tk.Tk()
 
 if len(sys.argv) > 1:
-    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
     root.mainloop()
 else:
     my_gui = TrainingDataBrowser(root)
