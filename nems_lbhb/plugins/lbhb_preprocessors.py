@@ -722,8 +722,20 @@ def rz(load_key):
 
 @xform()
 def esth1(kw):
-    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1}]]
+    ops = kw.split('.')[1:]
+    if len(ops) > 0:
+        seed_idx = ops[0]
+    else:
+        seed_idx = 0
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1,
+                                                           'seed_idx': seed_idx}]]
 
 @xform()
 def esth2(kw):
-    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2}]]
+    ops = kw.split('.')[1:]
+    if len(ops) > 0:
+        seed_idx = ops[0]
+    else:
+        seed_idx = 0
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2,
+                                                           'seed_idx': seed_idx}]]
