@@ -625,6 +625,13 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     start_events = (epochs['start'] >= final_trial_end)
     epochs = epochs[~start_events]
 
+    # get rid of weird floating point precision 
+    epochs.at[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
+    epochs.at[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
+
+    # Final step, remove any duplicate epochs (that are getting created somewhere???)
+    epochs = epochs.drop_duplicates()
+
     return epochs
 
 
@@ -646,6 +653,7 @@ def _make_trial_epochs(exptevents, exptparams, **options):
 
     if remove_post_lick:
        trial_events =  _remove_post_lick(trial_events, exptevents)
+       trial_events =  _remove_post_stim_off(trial_events, exptevents)
 
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -768,6 +776,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
                                 behavior_events, invalid_events], ignore_index=True)
 
     behavior_events = _remove_post_lick(behavior_events, exptevents)
+    behavior_events = _remove_post_stim_off(behavior_events, exptevents)
 
     behavior_events = behavior_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -802,7 +811,7 @@ def _remove_post_stim_off(events, exptevents):
     # screen for trials where sound was turned off early. These will largey overlap with the events
     # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
     # targets can come in the middle of a string of refs, but refs are turned off post target hit
-    log.info("Removing data post stim off")
+    log.info("Removing data post stim-off")
     trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
     for t in trunc_trials:
         toff = exptevents[(exptevents.Trial==t) & (exptevents.name=='STIM,OFF')].iloc[0]['start']
