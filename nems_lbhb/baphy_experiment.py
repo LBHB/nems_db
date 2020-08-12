@@ -277,12 +277,13 @@ class BAPHYExperiment:
         '''
         # add BAPHYExperiment version to recording options
         kwargs.update({'version': 'BAPHYExperiment.1'})
-
+        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
                 self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
         
         if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+            kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
             rec.save(data_file)
