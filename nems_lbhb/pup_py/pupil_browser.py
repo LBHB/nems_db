@@ -18,7 +18,7 @@ import getpass
 import nems.db as nd
 import scipy.io
 import sys
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog, messagebox
 
 import nems_db
 nems_db_path = nems_db.__path__[0]
@@ -107,23 +107,35 @@ class PupilBrowser:
 
     def get_frame(self):
         video = self.raw_video
-
+        
         frame = int(self.frame_n_value.get())
         t = frame * (1 / 30)
+
+        if hasattr(self, 'hline'):
+            try:
+                self.hline.remove()
+            except:
+                pass
+        self.hline = self.ax.axvline(frame, color='k')
+        self.pupil_trace.draw()
 
         # save new frames
         os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
 
         frame_file = tmp_frame_folder + 'frame1.jpg'
 
+        self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.plot_frame(frame_file)
+
+        # to reactivate key bindings (I think)
+        self.plot_trace(self.video_name.get(), exclude=True)
 
 
     def plot_frame(self, frame_file):
 
         frame = mpimg.imread(frame_file)
-        canvas = self.pupil_canvas
-        canvas.delete('all')  # prevent memory leak
+        canvas2 = self.pupil_canvas
+        canvas2.delete('all')  # prevent memory leak
         loc = (0, 0)
 
         figure = mpl.figure.Figure(figsize=(4, 3))
@@ -156,10 +168,10 @@ class PupilBrowser:
 
         figure_w = self.pupil_canvas.winfo_width()
         figure_h = self.pupil_canvas.winfo_height()
-        photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
+        photo = tk.PhotoImage(master=canvas2, width=figure_w, height=figure_h)
 
         # Position: convert from top-left anchor to center anchor
-        canvas.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
+        canvas2.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
         tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
@@ -413,9 +425,42 @@ class PupilBrowser:
         print("saved analysis successfully")
 
     def open_training_browser(self):
-        os.system("{0} \
-                {1} {2} {3} {4} {5} {6}".format(executable_path, training_browser_path,
-            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame))
+
+        if self.exclude_starts != []:
+            answer = messagebox.askokcancel("Question","Are your sure you want to label more training data using the frame range:"
+                                                "min frame {0}, max frame {1}? If not, hit cancel and make new selection".format(self.exclude_starts[0], 
+                                                                                                                                self.exclude_ends[0]))
+            if not answer:
+                # clear selection
+                self.exclude_ends = []
+                self.exclude_starts =[]
+                self.plot_trace(self.video_name.get(), exclude=True)
+        else:
+            answer = messagebox.askokcancel("Question","Are your sure you want to label more training data using this entire video?"
+                                                " If you'd like to select a specific frame range, click cancel, choose the range"
+                                                " using shift+left click, shift+right click on the pupil trace, press enter, then press"
+                                                " label more training data (See docs in nems_lbhb/pup_py/instructions.md")
+        
+        if answer:
+            if self.exclude_starts != []:
+                frame_range = "{0}_{1}".format(self.exclude_starts[0], self.exclude_ends[0])
+            else:
+                frame_range = None
+            
+            n_frames = simpledialog.askinteger("Input", "How many frames would you like to re-label for training? Default is 50",
+                                 parent=self.master,
+                                 minvalue=0, maxvalue=100)
+            os.system("{0} \
+                {1} {2} {3} {4} {5} {6} {7} {8}".format(executable_path, training_browser_path,
+            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame, frame_range, int(n_frames)))
+
+            # clear selection so that you can choose for frames, if desired.
+            self.exclude_ends = []
+            self.exclude_starts = []
+
+            return None
+        else:
+            return None
 
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue

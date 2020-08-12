@@ -187,7 +187,7 @@ def compare_sim_fits(batch, gc, stp, LN, combined, simulation_spec=None,
     else:
         results = pickle.load(open(load_path, 'rb'))
         simulation_spec = results['simulation']
-        stp_ctx, gc_ctx, LN_ctx = results['contexts']
+        stp_ctx, gc_ctx, LN_ctx, combined_ctx = results['contexts']
 
     simulation = stp_ctx['val']['resp'].as_continuous().flatten()
     stp_pred = stp_ctx['val']['pred'].as_continuous().flatten()
@@ -227,13 +227,15 @@ def compare_sim_fits(batch, gc, stp, LN, combined, simulation_spec=None,
             "tag: %s\n"
             "stp_r_test: %.4f\n"
             "gc_r_test: %.4f\n"
-            "LN_r_test: %.4f"
+            "LN_r_test: %.4f\n"
+            "combined_r_test: %.4f"
             % (simulation_spec.meta['modelname'],
                simulation_spec.meta['cellid'],
                tag,
                stp_ctx['modelspec'].meta['r_test'],
                gc_ctx['modelspec'].meta['r_test'],
-               LN_ctx['modelspec'].meta['r_test']
+               LN_ctx['modelspec'].meta['r_test'],
+               combined_ctx['modelspec'].meta['r_test']
                ))
     plt.text(0.1, 0.5, text)
 
