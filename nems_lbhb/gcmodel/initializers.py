@@ -16,7 +16,7 @@ from nems import priors
 log = logging.getLogger(__name__)
 
 
-def est_halved(half=1, random_seed=1234, **ctx):
+def est_halved(half=1, seed_idx=0, random_seed=1234, **ctx):
     '''
     Use only one half of estimation data, for comparing a model to itself.
     '''
@@ -26,6 +26,7 @@ def est_halved(half=1, random_seed=1234, **ctx):
     indices = np.linspace(0, len(stims)-1, len(stims), dtype=np.int)
 
     st0 = np.random.get_state()
+    random_seed += seed_idx
     np.random.seed(random_seed)
     set1_idx = np.random.choice(indices, round(len(stims)/2),
                                 replace=False)

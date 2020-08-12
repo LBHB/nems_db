@@ -98,36 +98,71 @@ def snr_vs_equivalence(snr_path, stp_path, gc_path):
     gc_equivs = gc_equiv_df['equivalence'].values
     snrs = snr_df['snr'].values
 
-    r_stp, p_stp = st.pearsonr(stp_equivs, snrs)
-    r_gc, p_gc = st.pearsonr(gc_equivs, snrs)
+    md_snr = np.nanmedian(snrs)
+    low_snr_mask = snrs < md_snr
+    high_snr_mask = snrs >= md_snr
+    stp_low_equivs = stp_equivs[low_snr_mask]
+    stp_high_equivs = stp_equivs[high_snr_mask]
+    gc_low_equivs = gc_equivs[low_snr_mask]
+    gc_high_equivs = gc_equivs[high_snr_mask]
 
-    # TODO: remove fig size and axis labels, just using while testing
-    fig1 = plt.figure()
+    md_stp_low = np.median(stp_low_equivs)
+    md_stp_high = np.median(stp_high_equivs)
+    md_gc_low = np.median(gc_low_equivs)
+    md_gc_high = np.median(gc_high_equivs)
+
+    u_stp, p_stp = st.mannwhitneyu(stp_low_equivs, stp_high_equivs,
+                                   alternative='two-sided')
+    u_gc, p_gc = st.mannwhitneyu(gc_low_equivs, gc_high_equivs,
+                                 alternative='two-sided')
+
+    #r_stp, p_stp = st.pearsonr(stp_equivs, snrs)
+    #r_gc, p_gc = st.pearsonr(gc_equivs, snrs)
+
+    fig1 = plt.figure(figsize=small_fig)
+    ax1 = plt.gca()
     plt.scatter(snrs, stp_equivs, c=model_colors['stp'], s=big_scatter)
+    ax1.axes.axvline(md_snr, color='black', linewidth=1, linestyle='dashed',
+                    dashes=dash_spacing)
     plt.tight_layout()
-    ax = plt.gca()
-    ax_remove_box(ax)
+    plt.subplots_adjust(left=0.25)
+    ax_remove_box(ax1)
 
-    fig2 = plt.figure()
+
+    fig2 = plt.figure(figsize=small_fig)
+    ax2 = plt.gca()
     plt.scatter(snrs, gc_equivs, c=model_colors['gc'], s=big_scatter)
+    ax2.axes.axvline(md_snr, color='black', linewidth=1, linestyle='dashed',
+                    dashes=dash_spacing)
     plt.tight_layout()
-    ax = plt.gca()
-    ax_remove_box(ax)
+    plt.subplots_adjust(left=0.25)
+    ax_remove_box(ax2)
+
+    ymin1, ymax1 = ax1.get_ylim()
+    ymin2, ymax2 = ax2.get_ylim()
+    ax1.set_ylim(min(ymin1, ymin2), max(ymax1, ymax2))
+    ax2.set_ylim(min(ymin1, ymin2), max(ymax1, ymax2))
 
 
     fig3 = plt.figure(figsize=text_fig)
     text = ("SNR vs equivalence\n"
             "x axis: signal power / total power\n"
             "y axis: equivalence (partial corr)\n"
-            "r_stp: %.4E\n"
+            "mannwhitneyu two sided low vs high snr\n"
+            "n_high: %d\n"
+            "n_low: %d\n"
+            "u_stp: %.4E\n"
             "p_stp: %.4E\n"
-            "r_gc: %.4E\n"
+            "md_stp_low: %.4E\n"
+            "md_stp_high: %.4E\n"
+            "u_gc: %.4E\n"
             "p_gc: %.4E\n"
-
-            % (r_stp, p_stp, r_gc, p_gc))
+            "md_gc_low: %.4E\n"
+            "md_gc_high: %.4E"
+            % (stp_high_equivs.size, stp_low_equivs.size, u_stp, p_stp,
+               md_stp_low, md_stp_high, u_gc, p_gc, md_gc_low, md_gc_high))
 
     plt.text(0.1, 0.5, text)
-    ax_remove_box(ax)
 
 
     return fig1, fig2, fig3
