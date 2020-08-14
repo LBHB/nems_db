@@ -75,7 +75,7 @@ class queue_pupil_job:
         modeldate = self.fitDate_value.get()
         animal = self.animal_fit_value.get()
         answer = True
-        if animal != '':
+        if (animal != '') & (animal != 'All') & (animal != 'all'):
             answer = messagebox.askokcancel("Question", "You've asked to fit this video using the model architecture that was overfit"
                             " on {0}. Are you sure you want to proceed?".format(animal))
 
