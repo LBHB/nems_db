@@ -460,6 +460,7 @@ class TrainingDataBrowser:
             self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
             self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
             self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            self.ax_handle.axis('off')
             ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
             self.ax_handle.add_patch(ellipse)
             self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)

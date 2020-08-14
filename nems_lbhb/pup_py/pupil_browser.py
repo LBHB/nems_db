@@ -163,6 +163,7 @@ class PupilBrowser:
 
         ellipse = Ellipse((y, x), b * 2, - a * 2, 180 * phi / np.pi, fill=False, color='red')
         ax.add_patch(ellipse)
+        ax.axis('off')
 
         figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
         figure_canvas_agg.draw()
