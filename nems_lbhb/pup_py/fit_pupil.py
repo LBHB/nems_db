@@ -7,7 +7,7 @@ except:
     import Tkinter as tk
 import nems.db as nd
 import getpass
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import sys
 import os
@@ -21,7 +21,7 @@ class queue_pupil_job:
     def __init__(self, master):
         self.master = master
         master.title("Queue pupil job")
-        master.geometry('300x120')
+        master.geometry('400x150')
 
         self.filename = tk.Label(master, text="Filename: ")
         self.filename.grid(row=1, column=0)
@@ -40,22 +40,30 @@ class queue_pupil_job:
         self.fitDate_value.focus_set()
         self.fitDate_value.insert(0, "Current")
 
+
+        self.animal_fit = tk.Label(master, text="Animal: ")
+        self.animal_fit.grid(row=3, column=0)
+        self.animal_fit_value = tk.Entry(master)
+        self.animal_fit_value.grid(row=3, column=1, sticky='ew')
+        self.animal_fit_value.focus_set()
+        self.animal_fit_value.insert(0, "All")
+
         self.executable_path = tk.Label(master, text="Python path: ")
-        self.executable_path.grid(row=3, column=0)
+        self.executable_path.grid(row=4, column=0)
         self.executable_path_value = tk.Entry(master)
-        self.executable_path_value.grid(row=3, column=1, sticky='ew')
+        self.executable_path_value.grid(row=4, column=1, sticky='ew')
         self.executable_path_value.focus_set()
         self.executable_path_value.insert(0, executable_path)
 
         self.script_path = tk.Label(master, text="Fit script: ")
-        self.script_path.grid(row=4, column=0)
+        self.script_path.grid(row=5, column=0)
         self.script_path_value = tk.Entry(master)
-        self.script_path_value.grid(row=4, column=1, sticky='ew')
+        self.script_path_value.grid(row=5, column=1, sticky='ew')
         self.script_path_value.focus_set()
         self.script_path_value.insert(0, script_path)
 
         self.fit_button = tk.Button(master, text="Start fit", command=self.start_fit)
-        self.fit_button.grid(row=5, column=0)
+        self.fit_button.grid(row=6, column=0)
 
         master.grid_columnconfigure(1, weight=1)
 
@@ -65,6 +73,12 @@ class queue_pupil_job:
         self.video_file = self.filename_value.get()
         fn = self.video_file
         modeldate = self.fitDate_value.get()
+        animal = self.animal_fit_value.get()
+        answer = True
+        if animal != '':
+            answer = messagebox.askokcancel("Question", "You've asked to fit this video using the model architecture that was overfit"
+                            " on {0}. Are you sure you want to proceed?".format(animal))
+
         py_path = self.executable_path_value.get()
         script_path = self.script_path_value.get()
         #py_path = '/auto/users/hellerc/anaconda3/envs/pupil_processing/bin/python3.6'
@@ -73,10 +87,13 @@ class queue_pupil_job:
         username = getpass.getuser()
 
         # add job to queue
-        nd.add_job_to_queue([fn, modeldate], note="Pupil Job: {}".format(fn),
-        			        executable_path=py_path, user=username,
-                            force_rerun=True, script_path=script_path, GPU_job=1)
-        print("added job to queue")
+        if answer:
+            nd.add_job_to_queue([fn, modeldate, animal], note="Pupil Job: {}".format(fn),
+                                executable_path=py_path, user=username,
+                                force_rerun=True, script_path=script_path, GPU_job=1)
+            print("added job to queue")
+        else:
+            return None
 
     def get_fn(self):
         self.video_file = filedialog.askopenfilename(initialdir = "/auto/data/daq/",

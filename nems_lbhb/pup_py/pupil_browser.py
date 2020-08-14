@@ -101,6 +101,9 @@ class PupilBrowser:
         self.retrain = tk.Button(master, text="Re-train network", command=self.retrain)
         self.retrain.grid(row=4, column=2)
 
+        self.overtrain = tk.Button(master, text='Over-train network \n on this animal', command=self.overtrain)
+        self.overtrain.grid(row=4, column=3)
+
         self.shift_is_held = False
         self.exclude_starts = []
         self.exclude_ends = []
@@ -475,6 +478,43 @@ class PupilBrowser:
                             user=username, force_rerun=True, script_path=script_path, GPU_job=1)
         print("Queueing new model training. Check status on queue. When finished, re-fit the pupil for this recording")
         # self.master.destroy
+
+    
+    def overtrain(self):
+        # retrain a model ONLY using video from this animal. Will throw an error if there is not training
+        # data from this animal in the database.
+        # This will lead to a model that is *likely* very over-fit to this particular animal. So, you should 
+        # really only use this if nothing else is working for you.
+        py_path = sys.executable
+        script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
+        script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
+        username = getpass.getuser()
+        
+        # animal name
+        animal_name = self.animal_name.get()
+        animal_code = self.video_name.get()[:3]
+
+        train_vids = os.listdir(ps.TRAIN_DATA_PATH)
+        this_an_vids = [v for v in train_vids if (v[:3]==animal_code) | (animal_name==v.split('_')[0])]
+        if len(this_an_vids) == 0:
+            # open message box
+            _ = messagebox.askokcancel("Question", "You've asked to retrain a new model on this animal alone, however "
+                                                        "no training data currently exists from {}. Label training data and re-try".format(animal_name))
+            return None
+        else:
+            if (animal_name == this_an_vids[0].split('_')[0]):
+                animal_code = animal_name
+            # open message box
+            _ = messagebox.askokcancel("Question", "You've asked to retrain a new model on this animal alone. This will create and"
+                                            " save a new model architecture. When re-queing this specific pupil job using 'fit_pupil.py'"
+                                            ", make sure to select the correct model by updating the animal field to {0}".format(animal_name))
+
+            # add job to queue
+            nd.enqueue_single_model(cellid='PupilTrainingJob', batch=animal_name, modelname=animal_code, 
+                                user=username, force_rerun=True, script_path=script_path, 
+                                executable_path=py_path, GPU_job=1)
+
+        print("Queueing new model for training. Will only fit on traning video frames from {}".format(animal_name))
 
 root = tk.Tk()
 my_gui = PupilBrowser(root)

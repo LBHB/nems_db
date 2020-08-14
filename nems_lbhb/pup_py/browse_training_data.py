@@ -64,14 +64,16 @@ class TrainingDataBrowser:
                 if (n_frames is not None) & (n_frames != 'None') & (n_frames < (end - start)):
                     nframes = n_frames
                 else:
-                    if 50 < (end - start):
+                    if n_frames < (end - start):
+                        nframes = n_frames
+                    elif 50 < (end - start):
                         nframes = 50
                     else:
                         nframes = end - start
                 frames = np.sort(np.random.choice(np.arange(start * (1 / fps), 
                                         end * (1 / fps), 1/fps), nframes, replace=False))
             else:
-                frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
+                frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), n_frames, replace=False))
             output_dict = {}
             n_frames_added = 0
             for i, t in enumerate(frames):
@@ -323,23 +325,23 @@ class TrainingDataBrowser:
 
     def set_to_previous(self):
 
-        current_frame = self.frame_name.get()
+        current_frame = self.frame_name.get()+'.pickle'
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
-            all_frames = [f for f in all_frames if f in self.video_name]
+            all_frames = [f for f in all_frames if self.video_name in f]
             inds = np.argsort(np.array(all_frames))
         else:
             inds = np.argsort(np.array(all_frames))
 
         all_frames = np.array(all_frames)[inds]
 
-        cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
+        cur_index = np.argwhere(all_frames == current_frame)[0][0]
         prev_index = cur_index - 1
         prev_frame = all_frames[prev_index]
 
         with open('{0}/{1}'.format(train_data_path, prev_frame), 'rb') as fp:
             prev_params = pickle.load(fp)
-
+        
         self.update_ellipse_params(prev_params['ellipse_zack'])
 
         self.pupil_canvas.delete(self.pupil_plot)
