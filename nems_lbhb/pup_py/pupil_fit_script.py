@@ -125,10 +125,11 @@ if __name__ == '__main__':
             ellipse_parms[4] = ellipse_parms[4] * np.pi
 
             # undo scaling and save
+            ellipse_parms /= 100
             y_cnn.append(ellipse_parms[0] / sf[1])
             x_cnn.append(ellipse_parms[1] / sf[0])
-            b_cnn.append(ellipse_parms[2] / sf[1] / 2)
-            a_cnn.append(ellipse_parms[3] / sf[0] / 2)
+            b_cnn.append(ellipse_parms[2] / sf[1]) # / 2)
+            a_cnn.append(ellipse_parms[3] / sf[0]) # / 2)
             phi_cnn.append(ellipse_parms[4])
 
         except:
