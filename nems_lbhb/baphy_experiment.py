@@ -715,6 +715,25 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     tar_events2.at[:, 'name'] = 'TARGET'
     tar_events = pd.concat([tar_events, tar_events2], ignore_index=True)
 
+    # Catch events (including spont)
+    cat_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            ~exptevents.name.str.contains('Silence')].name.unique()
+    cat_s_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            exptevents.name.str.contains('PreStimSilence')].name.unique()
+    cat_e_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            exptevents.name.str.contains('PostStimSilence')].name.unique()
+    cat_starts = exptevents[exptevents.name.isin(cat_s_tags)].copy()
+    cat_ends = exptevents[exptevents.name.isin(cat_e_tags)].copy()
+    
+    cat_events = exptevents[exptevents.name.isin(cat_tags)].copy()
+    new_tags = ['CAT_' + t.split(',')[1].replace(' ', '') for t in cat_events.name]
+    cat_events.at[:, 'name'] = new_tags
+    cat_events.at[:, 'start'] = cat_starts.start.values
+    cat_events.at[:, 'end'] = cat_ends.end.values
+    cat_events2 = tar_events.copy()
+    cat_events2.at[:, 'name'] = 'TARGET'
+    cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
+
     # pre/post stim events
     sil_tags = exptevents[exptevents.name.str.contains('Silence')].name.unique()
     sil_events = exptevents[exptevents.name.isin(sil_tags)].copy()
@@ -725,7 +744,7 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     lick_events = exptevents[exptevents.name=='LICK']
 
     # concatenate events together
-    stim_events = pd.concat([ref_events, tar_events, sil_events, lick_events], ignore_index=True)
+    stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
 
     if remove_post_lick:
         stim_events = _remove_post_lick(stim_events, exptevents)

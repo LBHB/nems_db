@@ -117,12 +117,12 @@ if __name__ == '__main__':
 
             # rescale parms correctly (based on the resizing and normalizing that was done for the fit)
             # undo normalization (WIP - CRH 1/30/19)
-            # ellipse_parms[0] = ellipse_parms[0] / 100 * size[0]
-            # ellipse_parms[1] = ellipse_parms[1] / 100 * size[0]
-            # ellipse_parms[2] = ellipse_parms[2] / 100 * size[0]
-            # ellipse_parms[3] = ellipse_parms[3] / 100 * size[0]
+            ellipse_parms[0] = ellipse_parms[0] * size[0]
+            ellipse_parms[1] = ellipse_parms[1] * size[0]
+            ellipse_parms[2] = ellipse_parms[2] * size[0]
+            ellipse_parms[3] = ellipse_parms[3] * size[0]
 
-            # ellipse_parms[4] = ((ellipse_parms[4] / 100) - 0.4) * (2 * np.pi)
+            ellipse_parms[4] = ellipse_parms[4] * np.pi
 
             # undo scaling and save
             y_cnn.append(ellipse_parms[0] / sf[1])
