@@ -19,7 +19,7 @@ nChans = 64
 path = '/auto/data/daq/{0}/{1}/tmp/KiloSort/'.format(animal_name, site[:6])
 
 # get all unique cellid/file pairs at this site
-sql = "SELECT DISTINCT gSingleRaw.cellid, gSingleRaw.channum, gSingleRaw.unit, sCellFile.respfile from " \
+sql = "SELECT DISTINCT gSingleRaw.cellid, gSingleRaw.channum, gSingleRaw.unit, sCellFile.respfile, gSingleRaw.unit_type from " \
             "gSingleRaw JOIN sCellFile ON (sCellFile.rawid=gSingleRaw.rawid) " \
             "WHERE gSingleRaw.cellid like %s"
 site_regex = '%' + site + '%'
@@ -33,6 +33,9 @@ for i, cid in enumerate(d.cellid):
     except ValueError:
         idx.append(i)
 d = d.drop(idx, axis='index')
+
+# sort by unit type, since this is how unit numbers get assigned
+d = d.sort_values(by=['unit_type', 'cellid'])
 
 # Now, for each unique cellid, get the corresponding KS cluster ID and add it to the df "d"
 cid_unique = d.cellid.unique()
@@ -70,7 +73,13 @@ for cid in cid_unique:
     # subtract min unit number for this channel/file pair to deal w/ appended units
     un_offset = d[(d.channum==this_chan_num[0]+1) & d.respfile.isin(rf.values)].unit.min() - 1
     this_un_num -= un_offset
+
     cluster_idx = np.argwhere(best_chans==this_chan_num)
+
+    # sort cluster indexes according to unit types
+    ut = sorted_chans[sorted_chans.group.isin(['mua', 'good'])].iloc[[int(i) for i in cluster_idx]]['group'].values
+    idx = np.argsort([1 if g=='good' else 'mua' for g in ut])
+    cluster_idx = cluster_idx[idx]
 
     if len(cluster_idx) < this_un_num:
         raise ValueError("what's up??")
