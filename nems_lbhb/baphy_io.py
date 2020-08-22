@@ -793,6 +793,7 @@ def set_default_pupil_options(options):
     options = options.copy()
     options["rasterfs"] = options.get('rasterfs', 100)
     options['pupil'] = options.get('pupil', 1)
+    options['pupil_analysis_method'] = options.get('pupil_analysis_method', 'cnn')  # or 'matlab'
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
@@ -825,9 +826,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     trial. need to make sure the big_rs vector aligns with the other signals
     """
 
-    pupilfilepath = get_pupil_file(pupilfilepath)
-
     options = set_default_pupil_options(options)
+
+    pupilfilepath = get_pupil_file(pupilfilepath, **options)
 
     rasterfs = options["rasterfs"]
     pupil_offset = options["pupil_offset"]
@@ -1440,20 +1441,25 @@ def load_rem_options(pupilfilepath, cachepath=None, **options):
         raise ValueError("REM options file not found.")
 
 
-def get_pupil_file(pupilfilepath):
+def get_pupil_file(pupilfilepath, **options):
     """
     For backwards compatibility in pupil/rem functions. Default is to load the
     pupil fit from the CNN model fit. However, for some older recordings, this
     may not exist and so you may still want to load the pup.mat file. This
     is a helper function to find which pupil file to load
     6-28-2019, CRH
+
+    options dict added 08.17.2020. In options. specific "pupil_analysis_method" to
+        specifically say if you matlab / python results for pupil. Default is to use python:
+        (options['pupil_analysis_method']='cnn'). If the method you ask for doesn't exist, you'll 
+        get a log message warning, but it will then try to load the other option.
     """
     pupilfilepath=str(pupilfilepath)
-    if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath):
+    if ('.pickle' in pupilfilepath) & os.path.isfile(pupilfilepath) & (options['pupil_analysis_method']=='cnn'):
         log.info("Loading CNN pupil fit from .pickle file")
         return pupilfilepath
-
-    elif 'pup.mat' in pupilfilepath:
+    
+    if (options['pupil_analysis_method']=='cnn') & ((not os.path.isfile(pupilfilepath)) | ('pup.mat' in pupilfilepath)):
 
         if not os.path.isfile(pupilfilepath):
             pp, bb = os.path.split(pupilfilepath)
@@ -1473,9 +1479,16 @@ def get_pupil_file(pupilfilepath):
                 log.info("Loading CNN pupil fit from .pickle file")
                 return CNN_pupilfilepath
             else:
-                log.info("CNN pupil fit doesn't exist, \
-                            Loading pupil fit from .pup.mat file")
+                log.info("WARNING: CNN pupil fit doesn't exist, " \
+                            "Loading pupil fit from .pup.mat file")
                 return pupilfilepath
+
+    elif ('pup.mat' in pupilfilepath) & (options['pupil_analysis_method']=='matlab'):
+        if os.path.isfile(pupilfilepath):
+            return pupilfilepath
+        else:
+            raise FileNotFoundError("Asked for matlab pupil analysis, but results file doesn't exist." \
+                        "Check that this video has been analyzed and/or try setting options['pupil_analyis_method']='cnn'")
 
     else:
         raise FileNotFoundError("Pupil analysis not found")

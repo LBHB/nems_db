@@ -330,7 +330,7 @@ class BAPHYExperiment:
                          name='resp', recording=rec_name, chans=list(sp.keys()),
                          epochs=baphy_events[i]) 
                          for i, sp in enumerate(spike_dicts)]
-            
+
             for i, r in enumerate(resp_sigs):
                 if i == 0:
                     signals['resp'] = r
