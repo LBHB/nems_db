@@ -775,9 +775,14 @@ def get_current_analysis():
 
     session.close()
 
+    print(a.model_extras)
+    if len(a.model_extras)==0:
+        model_extras = ''
+    else:
+        model_extras = json.loads(a.model_extras)
     return jsonify(
             id=a.id, name=a.name, status=a.status, tags=a.tags,
-            question=a.question, answer=a.answer, load=load, mod=mod, fit=fit, model_extras=json.loads(a.model_extras)
+            question=a.question, answer=a.answer, load=load, mod=mod, fit=fit, model_extras=model_extras
             )
 
 
