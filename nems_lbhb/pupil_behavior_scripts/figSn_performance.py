@@ -21,6 +21,7 @@ octave_cutoff = 0.5
 yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
+#yaxis = 'r_task'
 
 sig_col = 'area'     # sig_utask (sig unique task effect), sig_task (sig task only), sig_state (sig state effect)
 easy = [0]             # pure-tone = 0, low SNR = 1, high SNR = 3
@@ -104,18 +105,26 @@ ax[0].set_title('A1: bad: {0}, good {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5
     bad_med_ic, good_med_ic, bad_v_good_ic))
 nplt.ax_remove_box(ax[0])
 
-ax[1].plot(d[(d.area=='A1')]['DI'], d[(d.area=='A1')][yaxis], 'k.')
+for a in A1.animal.unique():
+    _k = (d.area=='A1') & (d.animal==a)
+    ax[1].plot(d.loc[_k, 'DI'], d.loc[_k, yaxis], '.')
 r, p = ss.pearsonr(d[(d.area=='A1')]['DI'], d[(d.area=='A1')][yaxis])
 ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}')
 ax[1].set_xlabel('DI')
-ax[1].set_ylabel('r_task_unique')
+ax[1].set_ylabel(yaxis)
+ax[1].set_xlim([58,102])
+ax[1].legend(A1.animal.unique(), frameon=False)
 nplt.ax_remove_box(ax[1])
 
-ax[2].plot(d[(d.area=='IC')]['DI'], d[(d.area=='IC')][yaxis], 'k.')
+for a in IC.animal.unique():
+    _k = (d.area=='IC') & (d.animal==a)
+    ax[2].plot(d.loc[_k, 'DI'], d.loc[_k, yaxis], '.')
 r, p = ss.pearsonr(d[(d.area=='IC')]['DI'], d[(d.area=='IC')][yaxis])
 ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}')
 ax[2].set_xlabel('DI')
 ax[2].set_ylabel(yaxis)
+ax[2].set_xlim([58,102])
+ax[2].legend(IC.animal.unique(), frameon=False)
 nplt.ax_remove_box(ax[2])
 
 f1.tight_layout()
