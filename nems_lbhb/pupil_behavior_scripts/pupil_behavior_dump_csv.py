@@ -82,6 +82,17 @@ for batch in batches:
                                           basemodel=basemodel2, loader=loader, fitter=fitter)
     d.to_csv('d_'+str(batch)+'_sdexp_pup_afl.csv')
 
+# pup+afl only sdexp models
+state_list = ['st.pup.afl.far.hit', 'st.pup.afl.far0.hit0', 'st.pup.afl0.far.hit', 'st.pup.afl0.far0.hit0']
+basemodel2 = '-ref-psthfr.s_sdexp.S'
+loader = 'psth.fs20.pup-ld-'
+fitter = '_jk.nf20-basic'
+batches = [307, 309]
+for batch in batches:
+    d = get_model_results_per_state_model(batch=batch, state_list=state_list,
+                                          basemodel=basemodel2, loader=loader, fitter=fitter)
+    d.to_csv('d_'+str(batch)+'_sdexp_pup_afl.csv')
+
 
 # pup+afl+pxf only sdexp models
 state_list = ['st.pup.afl.pxf', 'st.pup0.afl.pxf0', 'st.pup.afl0.pxf0', 'st.pup0.afl0.pxf0']

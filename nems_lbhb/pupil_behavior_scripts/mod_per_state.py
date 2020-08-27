@@ -131,11 +131,25 @@ def get_model_results_per_state_model(batch=307, state_list=None,
         include_AP = True
     else:
         include_AP = False
+    DI_data = nd.pd_query(
+        "SELECT DISTINCT sCellFile.stimfile, sCellFile.cellid, sCellFile.rawid, gData.value" +\
+        " FROM gData INNER JOIN sCellFile ON gData.rawid=sCellFile.rawid" +\
+        " INNER JOIN sRunData ON sCellFile.cellid=sRunData.cellid" +\
+        f" WHERE sRunData.batch={batch} AND gData.name='DiscriminationIndex'" +\
+        " ORDER BY sCellFile.cellid, sCellFile.rawid")
+    u_cellids = list(set(DI_data['cellid']))
+    for c in u_cellids:
+        DI_cell = DI_data.loc[DI_data.cellid==c]
+        acount=0
+        for index, row in DI_cell.iterrows():
+            acount += 1
+            astring = f"ACTIVE_{acount}"
+            DI_data.loc[(DI_data.cellid==c) & (DI_data.rawid==row['rawid']),
+                        'state_chan'] = astring
 
     d = pd.DataFrame(columns=['cellid', 'modelname', 'state_sig',
-                              'state_chan', 'MI', 'isolation',
+                              'state_chan', 'MI', 'isolation', 'DI'
                               'r', 'r_se', 'd', 'g', 'sp', 'state_chan_alt'])
-
     new_sdexp = False
     for mod_i, m in enumerate(modelnames):
         print('Loading modelname: ', m)
@@ -145,6 +159,7 @@ def get_model_results_per_state_model(batch=307, state_list=None,
             meta = ms.get_modelspec_metadata(modelspec)
             phi = list(modelspec[0]['phi'].keys())
             c = meta['cellid']
+
             iso = isolation[cellids.index(c)]
             state_mod = meta['state_mod']
             state_mod_se = meta['se_state_mod']
@@ -180,6 +195,10 @@ def get_model_results_per_state_model(batch=307, state_list=None,
 
             a_count = 0
             p_count = 0
+            if 'ACTIVE_0' in state_chans:
+                active_offset=1
+            else:
+                active_offset=0
 
             for j, sc in enumerate(state_chans):
                 if gain is not None:
@@ -190,8 +209,22 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                     gain_val = None
                     dc_val = None
                     sp_val = None
+
+                #if c == 'BRT026c-02-2':
+                #    import pdb
+                #    pdb.set_trace()
+                if sc.startswith("ACTIVE"):
+                    ac=int(sc.split("_")[-1])+active_offset
+                    sc_test = "ACTIVE_"+str(ac)
+                else:
+                    sc_test=sc
+                v = DI_data.loc[(DI_data.cellid==c) & (DI_data.state_chan==sc_test),'value']
+                if len(v):
+                    DI=v.values[0]
+                else:
+                    DI=0
                 r = {'cellid': c, 'state_chan': sc, 'modelname': m,
-                     'isolation': iso,
+                     'isolation': iso, 'DI': DI,
                      'state_sig': state_list[mod_i],
                      'g': gain_val, 'd': dc_val, 'sp': sp_val,
                      'MI': state_mod[j],
@@ -219,6 +252,8 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                         d.loc[l,'state_chan_alt'] = "PASSIVE_{}".format(p_count)
                 else:
                     d.loc[l,'state_chan_alt'] = d.loc[l,'state_chan']
+
+
 
     #d['r_unique'] = d['r'] - d['r0']
     #d['MI_unique'] = d['MI'] - d['MI0']
