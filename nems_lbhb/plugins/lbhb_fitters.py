@@ -136,7 +136,7 @@ def gc4(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')

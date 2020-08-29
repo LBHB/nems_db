@@ -85,8 +85,12 @@ def just_final_figures():
                           plot_stat=plot_stat)
     fig2c, fig2cc = single_scatter(batch, gc, stp, LN, combined, compare=(2,3),
                            plot_stat=plot_stat)
-    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined, plot_stat=plot_stat,
-                                    improved_only=True)
+    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined,
+                                    plot_stat=plot_stat,
+                                    improved_only=True,
+#                                    snr_path=snr_path,
+#                                    exclude_low_snr=True
+                                    )
     fig2e, fig2ee = single_scatter(batch2, gc, stp, LN, combined, compare=(2,3),
                                    plot_stat=plot_stat)
 
@@ -115,7 +119,7 @@ def just_final_figures():
                                         plot_stat=plot_stat, drop_outliers=True,
                                         color_improvements=True,
                                         self_equiv=True, self_eq_models=eq_both,
-                                        #exclude_low_snr=True,
+                                        exclude_low_snr=True,
                                         snr_path=snr_path,
                                         #enable_hover=True,
                                         )

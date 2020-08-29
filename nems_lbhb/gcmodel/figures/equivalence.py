@@ -95,8 +95,6 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                                                 as_lists=True)
         aa = list(set(ga) & set(sa))
 
-        import pdb; pdb.set_trace()
-
         if exclude_low_snr:
             snr_df = pd.read_pickle(snr_path)
             med_snr = snr_df['snr'].median()
