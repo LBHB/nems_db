@@ -1,8 +1,9 @@
 import logging
 import re
 
-log = logging.getLogger(__name__)
+from nems.registry import xform, xmodule
 
+log = logging.getLogger(__name__)
 
 # TODO: Delete after finished deprecating.
 # Replaced with: load, splitcount, avgep, st, contrast
@@ -15,7 +16,46 @@ def _load_dict(loadkey, cellid=None, batch=None):
         d['batch'] = batch
     return d
 
-def env(loadkey, cellid=None, batch=None):
+def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **options):
+
+    from nems_lbhb.xform_wrappers import generate_recording_uri
+    import nems_lbhb.baphy as nb
+
+    pc_idx = None
+
+    if type(cellid) is str:
+        cc = cellid.split("_")
+        if (len(cc) > 1) and (cc[1][0] == "P"):
+            pc_idx = [int(cc[1][1:])]
+            cellid = cc[0]
+
+        elif (len(cellid.split('+')) > 1):
+            # list of cellids (specified in model queue by separating with '_')
+            cellid = cellid.split('+')
+
+    recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
+                                           loadkey=loadkey, siteid=siteid)
+
+    # update the cellid in context so that we don't have to parse the cellid
+    # again in xforms
+    t_ops = {} # options.copy()
+    t_ops['cellid'] = cellid
+    t_ops['batch'] = batch
+    if cellid == 'none':
+        cells_to_extract = 'none'
+    else:
+        cells_to_extract, _ = nb.parse_cellid(t_ops)
+
+    context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
+
+    if pc_idx is not None:
+        context['pc_idx'] = pc_idx
+
+    return [['nems.xforms.init_context', context]]
+
+
+@xform()
+def env(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     envelope loader
        extra parameters handled by loadkey parser in baphy_load_wrapper
@@ -26,27 +66,34 @@ def env(loadkey, cellid=None, batch=None):
     return xfspec
 
 
-def psth(loadkey, cellid=None, batch=None):
+@xform()
+def psth(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     psth loader (no stim)
        extra parameters handled by loadkey parser in baphy_load_wrapper
     """
-    d = _load_dict(loadkey, cellid, batch)
-    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
-    return xfspec
+    return _parse_baphy_loadkey(loadkey, cellid=cellid, batch=batch, siteid=siteid, **options)
+
+    #d = _load_dict(loadkey, cellid, batch)
+    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    #return xfspec
 
 
-def ozgf(loadkey, cellid=None, batch=None):
+@xform()
+def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     gammatone filter
        extra parameters handled by loadkey parser in baphy_load_wrapper
     """
-    d = _load_dict(loadkey, cellid, batch)
-    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
-    return xfspec
+    return _parse_baphy_loadkey(loadkey, cellid=cellid, batch=batch, siteid=siteid, **options)
+
+    #d = _load_dict(loadkey, cellid, batch)
+    #xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    #return xfspec
 
 
-def parm(loadkey, cellid=None, batch=None):
+@xform()
+def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     parm spectrogram
        extra parameters handled by loadkey parser in baphy_load_wrapper
@@ -56,13 +103,14 @@ def parm(loadkey, cellid=None, batch=None):
     return xfspec
 
 
-def ns(loadkey, cellid=None, batch=None):
-
+@xform()
+def ns(loadkey, cellid=None, batch=None, siteid=None, **options):
     d = _load_dict(loadkey, cellid, batch)
     xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec
 
 
+@xform()
 def SPOld(loadkey, recording_uri=None, cellid=None):
     import nems.plugins.default_loaders
     xfspec = nems.plugins.default_loaders.ld(loadkey, recording_uri=recording_uri,cellid=cellid)
@@ -211,6 +259,7 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
 #              ['nems.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
+@xform()
 def loadpop(loadkey):
     ops = loadkey.split('.')[1:]
 
@@ -220,12 +269,14 @@ def loadpop(loadkey):
     for op in ops:
         if op=='rnd':
             rand_match = True
+        elif op=='bth':
+            rand_match = 'both'
         elif op.startswith('cc'):
             cell_count = int(op[2:])
         elif op.startswith('bc'):
             cell_count = int(op[2:])
             best_cells=True
- 
+
     xfspec = [['nems_lbhb.xform_wrappers.pop_selector',
               {'loadkey': loadkey,
                'rand_match': rand_match, 'cell_count': cell_count,

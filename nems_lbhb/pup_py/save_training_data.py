@@ -1,3 +1,8 @@
+"""
+06.18.2020 - Deprecated script? Don't think anyone is using this anymore.
+Looks like the purpose was to manually add frames to the training data.
+"""
+
 from nems_lbhb.pup_py.utils import loadmat
 import av
 import pims

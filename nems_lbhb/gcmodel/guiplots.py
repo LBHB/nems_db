@@ -11,8 +11,9 @@ from nems_lbhb.gcmodel.modules import _get_ctk_coefficients
 from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
 from nems.modules.weight_channels import gaussian_coefficients
 import nems.utils as nu
+from nems.gui.decorators import scrollable
 
-
+@scrollable
 def contrast_kernel_output(rec, modelspec, ax=None, title=None,
                            idx=0, channels=0, xlabel='Time', ylabel='Value',
                            **options):
@@ -122,6 +123,7 @@ def _strf_heatmap(strf, wc_coefs, fir_coefs, xlabel='Lag (s)', ylabel='Channel',
                  clim=clim, title=title)
 
 
+@scrollable
 def contrast_spectrogram(rec, modelspec, ax=None, title=None,
                          idx=0, channels=0, xlabel='Time', ylabel='Value',
                          **options):

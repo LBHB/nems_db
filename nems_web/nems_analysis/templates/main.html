@@ -521,9 +521,10 @@
             </button>
                 <script>
                     var saveselect = document.getElementById('saveselect');
-                    saveselect.style.display = 'none'
                 {% if username %}
                     saveselect.style.display = 'block'
+                {% else %}
+                    saveselect.style.display = 'none'
                 {% endif %}
                 </script>
             <!-- buttons for manually testing saved user selections -->
@@ -977,6 +978,57 @@
                                 Use GPU
                                 <input type="checkbox"
                                        id="useGPU"
+                                       value="1">
+                        </div>
+                        <br>
+                        <span style="font-weight: bold; margin-bottom: 5px;">
+                            Exacloud
+                        </span>
+                        <div class="input-group">
+                                Use Exacloud
+                                <input type="checkbox"
+                                       id="useExacloud"
+                                       value="1">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                OHSU Username
+                                <input type="text"
+                                       id="exaOHSU"
+                                       placeholder="ex: davids">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Exa Executable
+                                <input type="text"
+                                       id="exaExec"
+                                       placeholder="ex: python">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Exa Script
+                                <input type="text"
+                                       id="exaScript"
+                                       placeholder="ex: fit_single.py">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Time Limit (hours)
+                                <input type="text"
+                                       id="exaLimit"
+                                       placeholder="ex: 10">
+                        </div>
+                        <div class="input-group form-inline"
+                             style="width: 100%;">
+                                Exclude nodes (csv, no spaces)
+                                <input type="text"
+                                       id="exaExclude"
+                                       placeholder="ex: exanode1-53,exanode-7-16">
+                        </div>
+                        <div class="input-group">
+                                High Memory
+                                <input type="checkbox"
+                                       id="exaHighMem"
                                        value="1">
                         </div>
                         <br>

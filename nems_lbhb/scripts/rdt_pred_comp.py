@@ -27,9 +27,17 @@ sns.set_context('paper')
 #          'ps.fonttype': 42}
 #plt.rcParams.update(params)
 
-#outpath='/auto/users/svd/docs/current/RDT/nems/'
-outpath='/tmp/'
+outpath='/auto/users/svd/docs/current/RDT/nems/'
+#outpath='/tmp/'
 #outpath = '/auto/users/bburan/'
+
+# removing the rep-shuffled model, since it's weird and unhelpful to plot
+#loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
+#           'rdtld-rdtshf.str-rdtsev-rdtfmt',
+#           'rdtld-rdtshf-rdtsev-rdtfmt']
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
 
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-fir.1x15-lvl.1-dexp.1'
@@ -37,14 +45,11 @@ keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x1.g-stp.1-fir.1x15-lvl.1-dexp.1'
 keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
 
-# removing the rep-shuffled model, since it's weird and unhelpful to plot
-loaders = ['rdtld-rdtshf.rep.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf.str-rdtsev-rdtfmt',
-           'rdtld-rdtshf-rdtsev-rdtfmt']
-loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10-rdtfmt',
-           'rdtld-rdtshf.str-rdtsev.j.10-rdtfmt',
-           'rdtld-rdtshf-rdtsev.j.10-rdtfmt']
-# 'rdtld-rdtshf.rep-rdtsev.j.10-rdtfmt',
+# new, rep only
+loaders = ['rdtld-rdtshf.rep.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf.str-rdtsev.j.10.ns.rep-rdtfmt',
+           'rdtld-rdtshf-rdtsev.j.10.ns.rep-rdtfmt']
+keywordstring = 'rdtgain.gen.NTARGETS-rdtmerge.stim-wc.18x2.g-fir.2x15-lvl.1-dexp.1'
 
 label0 = ['{}_RS', '{}_S', '{}']   # '{}_R',
 
@@ -78,10 +83,13 @@ for b, batch in enumerate(batches):
     d.columns = [l0.format('r_test') for l0 in label0]
     dse=nd.batch_comp(batch=batch, modelnames=modelnames, stat='se_test')
     dse.columns = [l0.format('se_test') for l0 in label0]
-    r = pd.concat([d,dse], sort=True, axis=1)
+    dfl=nd.batch_comp(batch=batch, modelnames=modelnames, stat='r_floor')
+    dfl.columns = [l0.format('r_floor') for l0 in label0]
 
-    r['sig'] = (((r['r_test']) > (2 * r['se_test'])) | ((r['r_test_RS']) > (2 * r['se_test_RS']))
-                & np.isfinite(r['r_test']) & np.isfinite(r['r_test_RS']))
+    r = pd.concat([d,dse,dfl], sort=True, axis=1)
+    r['sig'] = (r['r_test'] > r['r_floor']) & \
+                       (r['r_test_S'] > r['r_floor_S']) & \
+                       (r['r_test_S'] > r['r_floor_RS'])
     r['sigdiffS'] = (((r['r_test'] - r['r_test_S']) > (r['se_test'] + r['se_test_S'])) &
                      r['sig'])
     r['sigdiffR'] = (((r['r_test_S'] - r['r_test_RS']) > (r['se_test_S'] + r['se_test_RS'])) &
@@ -127,7 +135,7 @@ for b, batch in enumerate(batches):
     bb = r.loc[r['sig'],'r_test_S']
     stat, p = wilcoxon(aa,bb)
     md = np.mean(aa-bb)
-    t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(r['sigdiffS']),r.shape[0], p, md)
+    t = "n={}/{}\np={:.3e}\nmn={:.4f}".format(np.sum(r['sigdiffS']),r.shape[0], p, md)
 
     ax.text(tx,ty, t, va='top')
     ax.set_xlabel('FG/BG\nstream improvement')
@@ -152,7 +160,7 @@ for b, batch in enumerate(batches):
     bb = r.loc[r['sig'],'r_test_RS']
     stat, p = wilcoxon(aa,bb)
     md = np.mean(aa-bb)
-    t = "n={}/{}\np={:.3e}\nmd={:.4f}".format(np.sum(r['sigdiffR']),r.shape[0], p, md)
+    t = "n={}/{}\np={:.3e}\nmn={:.4f}".format(np.sum(r['sigdiffR']),r.shape[0], p, md)
     ax.text(tx,ty, t, va='top')
     ax.set_xlabel('Rep/no-rep\nimprovement')
 
@@ -182,7 +190,7 @@ fig.savefig(outpath+'pred_comp_'+keywordstring+'.png')
 fig.savefig(outpath+'pred_comp_'+keywordstring+'.pdf')
 
 
-figure, ax = plt.subplots(1, 1, figsize=(4, 4))
+figure, axs = plt.subplots(1, 2, figsize=(8, 4))
 
 def colorize(bp, fc, ec):
     for element in ['boxes', 'whiskers', 'fliers', 'means', 'medians', 'caps']:
@@ -195,7 +203,7 @@ colors = ['blue', 'orange', 'green']
 colors = ['#1f77b4',
             '#ff7f0e',
             '#2ca02c',]
-
+ax=axs[0]
 handles = []
 for i, pred in enumerate(allpred.T):
     bp1 = ax.boxplot(pred[0].values, positions=[i], widths=0.5, patch_artist=True)
@@ -205,12 +213,31 @@ for i, pred in enumerate(allpred.T):
     handles.append(p)
 
 ax.legend(handles, ['RS', 'S', 'Full'])
-
+ax.set_xlim([-1,7])
 ax.set_xticks([1, 5])
 ax.set_xticklabels(['A1', 'PEG'])
 
-ax.set_ylabel('Mean pred. corr.')
+ax.set_ylabel('Pred. corr.')
+
+dpred = allpred[:,1:]-allpred[:,:1]
+ax=axs[1]
+handles = []
+for i, pred in enumerate(dpred.T):
+    bp1 = ax.boxplot(pred[0].values, positions=[i], widths=0.5, patch_artist=True)
+    bp2 = ax.boxplot(pred[1].values, positions=[i+4], widths=0.5, patch_artist=True)
+    p = colorize(bp1, colors[i], 'black')
+    colorize(bp2, colors[i], 'black')
+    handles.append(p)
+
+ax.legend(handles, ['S-RS', 'Full-S'])
+ax.set_xlim([-1,6])
+ax.set_xticks([0.5, 4.5])
+ax.set_xticklabels(['A1', 'PEG'])
+
+ax.set_ylabel('Delta pred. corr.')
 
 sns.despine(figure, offset=10)
+plt.tight_layout()
+
 figure.savefig(outpath + 'pred_comp_boxplot_' + keywordstring + '.pdf')
 

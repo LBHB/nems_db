@@ -5,6 +5,7 @@ import matplotlib.patches as mpatch
 import matplotlib.patheffects as pe
 import numpy as np
 import scipy.stats as st
+import pandas as pd
 
 import nems.db as nd
 from nems.utils import ax_remove_box
@@ -59,10 +60,14 @@ def single_scatter(batch, gc, stp, LN, combined, compare, plot_stat='r_ceiling',
     fig = plt.figure()
     plt.plot([0,1],[0,1], color='black', linewidth=1, linestyle='dashed',
              dashes=dash_spacing)
-    plt.scatter(m1_scores, m2_scores, color=model_colors['LN'], s=small_scatter,
-                label='no imp.')
-    plt.scatter(m1_scores_improved, m2_scores_improved,
-                color=model_colors['max'], s=big_scatter, label='sig. imp.')
+    plt.scatter(m1_scores, m2_scores, s=small_scatter, label='no imp.',
+                color=model_colors['LN'])
+                #color='none',
+                #edgecolors='black', linewidth=0.35)
+    plt.scatter(m1_scores_improved, m2_scores_improved, s=big_scatter, label='sig. imp.',
+                color=model_colors['max'])
+                #color='none',
+                #edgecolors='black', linewidth=0.35)
     ax_remove_box()
 
     if legend:
@@ -233,7 +238,8 @@ def gc_stp_scatter(batch, gc, stp, LN, combined,
 
 def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                     LN_filter=False, plot_stat='r_ceiling',
-                    legend=False):
+                    legend=False, improved_only=True, exclude_low_snr=False,
+                    snr_path=None):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
 #    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -245,6 +251,13 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                                            LN_filter=LN_filter)
     improved = c
     not_improved = list(set(a) - set(c))
+    if exclude_low_snr:
+        snr_df = pd.read_pickle(snr_path)
+        med_snr = snr_df['snr'].median()
+        high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+        high_snr_cells = high_snr.index.values.tolist()
+        improved = list(set(improved) & set(high_snr_cells))
+        not_improved = list(set(not_improved) & set(high_snr_cells))
 
     if plot_stat == 'r_ceiling':
         plot_df = df_c
@@ -264,11 +277,18 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     max_imp = np.maximum(gc_imp, stp_imp)
     #gc_stp_test_rel = gc_stp_test - ln_test
     #max_test_rel = np.maximum(gc_test, stp_test) - ln_test
+    imp_T, imp_p = st.wilcoxon(gc_stp_imp, max_imp)
+    med_combined = np.nanmedian(gc_stp_imp)
+    med_max = np.nanmedian(max_imp)
+
+
+    import pdb; pdb.set_trace()
 
     fig1 = plt.figure()
     c_not = model_colors['LN']
     c_imp = model_colors['max']
-    plt.scatter(max_not, gc_stp_not, c=c_not, s=small_scatter, label='no imp.')
+    if not improved_only:
+        plt.scatter(max_not, gc_stp_not, c=c_not, s=small_scatter, label='no imp.')
     plt.scatter(max_imp, gc_stp_imp, c=c_imp, s=big_scatter, label='sig. imp.')
     ax = fig1.axes[0]
     plt.plot(ax.get_xlim(), ax.get_xlim(), 'k--', linewidth=1,
@@ -284,7 +304,11 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     fig2 = plt.figure(figsize=text_fig)
     text = ("batch: %d\n"
             "x: Max(GC,STP)\n"
-            "y: GC+STP\n" % batch)
+            "y: GC+STP\n"
+            "wilcoxon: T: %.4E, p: %.4E\n"
+            "combined median: %.4E\n"
+            "max median: %.4E"
+            % (batch, imp_T, imp_p, med_combined, med_max))
     plt.text(0.1, 0.5, text)
 
 
@@ -601,8 +625,7 @@ def relative_bar_comparison(batch1, batch2, gc, stp, LN, combined,
 
 
 
-def significance(batch, gc, stp, LN, combined, se_filter=True,
-                 LN_filter=False, ratio_filter=False, threshold=2.5,
+def significance(batch, gc, stp, LN, combined,
                  manual_cellids=None, plot_stat='r_ceiling',
                  include_legend=True, only_improvements=False):
     '''
@@ -612,15 +635,16 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
     model4: GC+STP
 
     '''
+    # NOTE: The comparison of max(gc, stp) to gc/stp should be
+    #       ignored. They're known to be different by definition
+    #       and there's a bug in the scipy code that causes the
+    #       W-statistic to be reported as 0.
+    #       This happens because all of the differences are one-sided
+    #       and the scipy code takes the minimum of either positive
+    #       or negative differences, one of which will always be 0
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
-#    cellids, under_chance, less_LN = get_filtered_cellids(batch, gc, stp,
-#                                                          LN, combined,
-#                                                          se_filter,
-#                                                          LN_filter)
-    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined,
-                                           se_filter=se_filter,
-                                           LN_filter=LN_filter)
+    e, a, g, s, c = improved_cells_to_list(batch, gc, stp, LN, combined)
     cellids = a
 
     gc_test = df_r[gc][cellids]
@@ -640,20 +664,22 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
             # for each model
             series_one = models[m_one]
             series_two = models[m_two]
+            # TODO: no reason to convert these to lists anymore?
+            first = series_one.tolist()
+            second = series_two.tolist()
+
+            if j != i:
+                w, p = st.wilcoxon(first, second)
             if j == i:
                 # if indices equal, on diagonal so no comparison
                 array[i][j] = 0.00
             elif j > i:
                 # if j is larger, below diagonal so get mean difference
-                mean_one = np.mean(series_one)
-                mean_two = np.mean(series_two)
-                array[i][j] = abs(mean_one - mean_two)
+                array[i][j] = w
             else:
                 # if j is smaller, above diagonal so run t-test and
                 # get p-value
-                first = series_one.tolist()
-                second = series_two.tolist()
-                array[i][j] = st.wilcoxon(first, second)[1]
+                array[i][j] = p
 
     xticks = range(len(modelnames))
     yticks = xticks
@@ -687,9 +713,10 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
         if j == i:
             # don't draw text for diagonal
             continue
-        formatting = '{:.04f}'
-        if z <= 0.0001:
-            formatting = '{:.2E}'
+#        formatting = '{:.04f}'
+#        if z <= 0.0001:
+#            formatting = '{:.2E}'
+        formatting = '{:.2E}'
         ax.text(
                 j, i, formatting.format(z), ha='center', va='center',
                 )
@@ -709,7 +736,7 @@ def significance(batch, gc, stp, LN, combined, se_filter=True,
 
     if include_legend:
         blue_patch = mpatch.Patch(
-                color='#368DFF', label='Mean Difference', edgecolor='black'
+                color='#368DFF', label='W statistic', edgecolor='black'
                 )
         p001_patch = mpatch.Patch(
                 color='#74E572', label='P < 0.001', edgecolor='black'

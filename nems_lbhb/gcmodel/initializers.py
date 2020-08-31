@@ -3,7 +3,7 @@ import copy
 
 import numpy as np
 
-import nems.epoch
+import nems.epoch as ep
 import nems.modelspec as ms
 from nems.utils import find_module
 from nems.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
@@ -14,6 +14,36 @@ import nems.metrics.api as metrics
 from nems import priors
 
 log = logging.getLogger(__name__)
+
+
+def est_halved(half=1, seed_idx=0, random_seed=1234, **ctx):
+    '''
+    Use only one half of estimation data, for comparing a model to itself.
+    '''
+    est = ctx['est']
+    epochs = est['stim'].epochs
+    stims = np.array(ep.epoch_names_matching(epochs, 'STIM_'))
+    indices = np.linspace(0, len(stims)-1, len(stims), dtype=np.int)
+
+    st0 = np.random.get_state()
+    random_seed += seed_idx
+    np.random.seed(random_seed)
+    set1_idx = np.random.choice(indices, round(len(stims)/2),
+                                replace=False)
+    np.random.set_state(st0)
+
+    mask = np.zeros_like(stims, np.bool)
+    mask[set1_idx] = True
+    set1_stims = stims[mask].tolist()
+    set2_stims = stims[~mask].tolist()
+
+    est1, est2 = est.split_by_epochs(set1_stims, set2_stims)
+    if half == 1:
+        est = est1
+    else:
+        est = est2
+
+    return {'est': est}
 
 
 def init_contrast_model(est, modelspec, IsReload=False,

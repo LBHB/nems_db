@@ -4,8 +4,14 @@ import pickle
 import keras
 import nems_lbhb.pup_py.utils as ut
 
+import nems_db
+nems_db_path = nems_db.__path__[0]
+import sys
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
+
 # define global variables for data
-path = '/auto/data/nems_db/pup_py/training_data/'
+path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
 data_frames = os.listdir(path)
 
 
@@ -61,20 +67,16 @@ class DataGenerator(keras.utils.Sequence):
 
             im = keras.applications.densenet.preprocess_input(im)
 
-            # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others
-            '''
+            # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others            
             # normalize the params to live between 0 and 1
             y[i, 0] = y[i, 0] / self.image_dim[1]
             y[i, 1] = y[i, 1] / self.image_dim[1]
-            y[i, 2] = y[i, 2] / self.image_dim[1]
-            y[i, 3] = y[i, 3] / self.image_dim[1]
-
-            # for the angle (phi) will also need to offset it a bit since phi usually quite small rel to max phi
-            y[i, 4] = (y[i, 4] / (np.pi * 2)) + 0.4
+            y[i, 2] = y[i, 2] / (self.image_dim[1] / 2)
+            y[i, 3] = y[i, 3] / (self.image_dim[1] / 2)
+            y[i, 4] = (y[i, 4] / (np.pi)) 
 
             y[i, :] = y[i, :] * 100
-            '''
-
+            
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])
 
         return X, y
@@ -94,7 +96,7 @@ class DataGenerator(keras.utils.Sequence):
         return X, y
 
 def train(model, epochs=1):
-
+    raise DeprecationWarning("Don't *think* this is used for anything anymore... delete?")
     # data path
     path = 'training_data/data/'
     training_files = os.listdir(path)

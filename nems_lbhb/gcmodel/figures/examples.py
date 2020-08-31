@@ -1,119 +1,21 @@
 import os
 import logging
 import json
+import pickle
 
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf
 import numpy as np
+from scipy.signal import convolve
 
 import nems.xform_helper as xhelp
 import nems.epoch as ep
+from nems.utils import ax_remove_box
+import nems.plots.api as nplt
 from nems_lbhb.gcmodel.figures.utils import improved_cells_to_list
 
+from nems_lbhb.gcmodel.figures.definitions import *
 log = logging.getLogger(__name__)
-
-
-# TODO:    Deprecated below until they are fixed to use the new return format
-#          of improved_cells_to_list
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def save_improved_cells(gc_cells, stp_cells, both_cells, batch, gc, stp, LN,
-                        combined, gc_dir, stp_dir, both_dir):
-
-    save_examples_from_list(gc_cells, batch, gc, stp, LN, combined, gc_dir,
-                            skip_combined=True)
-    save_examples_from_list(stp_cells, batch, gc, stp, LN, combined, stp_dir,
-                            skip_combined=True)
-    save_examples_from_list(both_cells, batch, gc, stp, LN, combined, both_dir,
-                            skip_combined=False)
-
-
-def example_cell(cellid, batch, gc, stp, LN, combined):
-
-    gc_ctx, stp_ctx, LN_ctx, combined_ctx = \
-            _get_plot_contexts(cellid, batch, gc, stp, LN, combined)
-
-    gc_pred, stp_pred, LN_pred, combined_pred, resp, stim = \
-        _get_plot_signals(gc_ctx, stp_ctx, LN_ctx, combined_ctx)
-
-    def plot_maker(start=0, stop=None, show_gc=True, show_stp=True,
-                   show_LN=True, show_combined=True, show_resp=True,
-                   show_stim=True, cmap='viridis', figsize=(8,5),
-                   show_yaxis=True, show_xaxis=True, seconds=False,
-                   linewidth=1):
-        signals = []
-        fig, ax = plt.subplots(1, 1)
-        xmin = 0
-        length = stim.shape[1]
-        if stop is not None:
-            xmax = stop - start
-        else:
-            xmax = length
-
-        max_all = np.nanmax(np.concatenate(
-                [resp[start:stop], LN_pred[start:stop], gc_pred[start:stop],
-                 stp_pred[start:stop], combined_pred[start:stop]]
-                ))
-        gc_plot = gc_pred / max_all
-        stp_plot = stp_pred / max_all
-        LN_plot = LN_pred / max_all
-        combined_plot = combined_pred / max_all
-        resp_plot = resp / max_all
-
-        if show_stim:
-            plt.imshow(stim[:, start:stop], aspect='auto', cmap=cmap,
-                       origin='lower', extent=(xmin, xmax, 1.05, 1.5))
-
-        if show_resp:
-            plt.plot(resp_plot[start:stop], color='gray', alpha=0.2, linewidth=linewidth)
-            signals.append('Response')
-
-        if show_LN:
-            plt.plot(LN_plot[start:stop], color='black', alpha=0.5, linewidth=linewidth)
-            signals.append('LN')
-
-        if show_gc:
-            plt.plot(gc_plot[start:stop], color='green', alpha=0.5, linewidth=linewidth)
-            signals.append('GC')
-
-        if show_stp:
-            plt.plot(stp_plot[start:stop], color='blue', alpha=0.5, linewidth=linewidth)
-            signals.append('STP')
-
-        if show_combined:
-            plt.plot(combined_plot[start:stop], color='orange', alpha=0.5, linewidth=linewidth)
-            signals.append('GC+STP')
-
-        plt.legend(signals, bbox_to_anchor=(0, 1.02, 1, 0.2), mode='expand',
-                   loc='lower left', ncol=len(signals))
-
-        if not show_yaxis:
-            ax.get_yaxis().set_visible(False)
-        if not show_xaxis:
-            ax.get_xaxis().set_visible(False)
-
-        return fig
-
-    plot_maker.contexts = {'gc': gc_ctx, 'stp': stp_ctx, 'LN': LN_ctx,
-                           'combined': combined_ctx}
-
-    return plot_maker
 
 
 def save_examples_from_list(cellids, batch, gc, stp, LN, combined, directory,
@@ -203,6 +105,120 @@ def save_examples_from_list(cellids, batch, gc, stp, LN, combined, directory,
             pdf.savefig(fig)
             plt.close(fig)
         pdf.close()
+
+
+def example_clip(cellid, batch, gc, stp, LN, combined, skip_combined=False,
+                 normalize=True, stim_idx=0, trim_start=None, trim_end=None,
+                 smooth_response=False, kernel_length=3, strf_spec='LN',
+                 load_path=None, save_path=None):
+    if load_path is None:
+        gc_ctx, stp_ctx, LN_ctx, combined_ctx = \
+                _get_plot_contexts(cellid, batch, gc, stp, LN, combined)
+        if save_path is not None:
+            results = {'contexts': [gc_ctx, stp_ctx, LN_ctx, combined_ctx]}
+            pickle.dump(results, open(save_path, 'wb'))
+    else:
+        results = pickle.load(open(load_path, 'rb'))
+        gc_ctx, stp_ctx, LN_ctx, combined_ctx = results['contexts']
+
+    gc_pred, stp_pred, LN_pred, combined_pred, resp, stim = \
+        _get_plot_signals(gc_ctx, stp_ctx, LN_ctx, combined_ctx)
+
+    gc_v, stp_v, LN_v, combined_v = _get_plot_vals(gc_ctx, stp_ctx, LN_ctx,
+                                                   combined_ctx)
+
+    # break up into separate stims
+    epochs = gc_v.epochs
+    stims = ep.epoch_names_matching(epochs, 'STIM_')
+    s = stims[stim_idx]
+    row = epochs[epochs.name == s]
+    fs = gc_v['resp'].fs
+    start = int(row['start'].values[0]*fs)
+    end = int(row['end'].values[0]*fs)
+
+    if trim_start is not None:
+        start += trim_start
+    if trim_end is not None:
+        end = start + (trim_end - trim_start)
+
+    resp_plot = resp[start:end]
+    if smooth_response:
+        # box filter, "simple average"
+        kernel = np.ones((kernel_length,))*(1/kernel_length)
+        resp_plot = convolve(resp_plot, kernel, mode='same')
+    LN_plot = LN_pred[start:end]
+    gc_plot = gc_pred[start:end]
+    stp_plot = stp_pred[start:end]
+    combined_plot = combined_pred[start:end]
+    stim_plot = stim[:, start:end]
+    if normalize:
+        max_all = np.nanmax(np.concatenate(
+                [resp_plot, LN_plot, gc_plot, stp_plot, combined_plot]
+                ))
+        gc_plot = gc_plot / max_all
+        stp_plot = stp_plot / max_all
+        LN_plot = LN_plot / max_all
+        combined_plot = combined_plot / max_all
+        resp_plot = resp_plot / max_all
+
+    fig = plt.figure(figsize=wide_fig)
+    xmin = 0
+    xmax = end - start
+    plt.imshow(stim_plot, aspect='auto', cmap=spectrogram_cmap,
+               origin='lower', extent=(xmin, xmax, 1.1, 1.5))
+    lw = 0.75
+    plt.plot(resp_plot, color=model_colors['LN'], linewidth=lw)
+    t = np.linspace(0, resp_plot.shape[-1]-1, resp_plot.shape[-1])
+    plt.fill_between(t, resp_plot, color='gray', alpha=0.15)
+    plt.plot(gc_plot, color=model_colors['gc'], linewidth=lw)
+    plt.plot(stp_plot, color=model_colors['stp'], alpha=0.65,
+             linewidth=lw*1.25)
+    plt.plot(LN_plot, color='black', alpha=0.55, linewidth=lw)
+    signals = ['Response', 'LN', 'GC', 'STP']
+    if not skip_combined:
+        plt.plot(combined_plot, color=model_colors['combined'], linewidth=lw,
+                 linestyle='--')
+        signals.append('GC+STP')
+    plt.ylim(-0.1, 1.5)
+    ax = plt.gca()
+    ax_remove_box(ax)
+
+    fig2 = plt.figure(figsize=text_fig)
+    text = ("cellid: %s\n"
+            "stp_r_test: %.4f\n"
+            "gc_r_test: %.4f\n"
+            "LN_r_test: %.4f\n"
+            "comb_r_test: %.4f"
+            % (cellid,
+               stp_ctx['modelspec'].meta['r_test'],
+               gc_ctx['modelspec'].meta['r_test'],
+               LN_ctx['modelspec'].meta['r_test'],
+               combined_ctx['modelspec'].meta['r_test']
+               ))
+    plt.text(0.1, 0.5, text)
+
+
+    # TODO: probably need to just rip code out of strf_heatmap instead,
+    #       setting the extent is not working. or alternatively just
+    #       resize it manually to mach the spectrogram
+    fig3 = plt.figure(figsize=wide_fig)
+    ax2 = plt.gca()
+
+    if strf_spec == 'LN':
+        modelspec = LN_ctx['modelspec']
+    elif strf_spec == 'stp':
+        modelspec = stp_ctx['modelspec']
+    elif strf_spec == 'gc':
+        modelspec = gc_ctx['modelspec']
+    else:
+        modelspec = combined_ctx['modelspec']
+
+    nplt.strf_heatmap(modelspec, ax=ax2, show_factorized=False,
+                 show_cbar=False, manual_extent=(0, 1, 1.1, 1.5))
+    ax2.set_ylim(-0.1, 1.5)
+    ax_remove_box(ax2)
+
+    return fig, fig2, fig3
 
 
 def _get_plot_contexts(cellid, batch, gc, stp, LN, combined):

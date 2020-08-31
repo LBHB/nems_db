@@ -4,8 +4,10 @@ import numpy as np
 from nems.plugins.default_fitters import basic
 from nems.plugins.default_fitters import iter
 from nems.utils import escaped_split
+from nems.registry import xform, xmodule
 
 
+@xform()
 def lnp(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -23,6 +25,7 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
+@xform()
 def gc(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -49,6 +52,7 @@ def gc(fitkey):
     return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
 
 
+@xform()
 def gc2(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -60,7 +64,7 @@ def gc2(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -89,6 +93,7 @@ def gc2(fitkey):
     return xfspec
 
 
+@xform()
 def gc3(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -119,6 +124,7 @@ def gc3(fitkey):
     return xfspec
 
 
+@xform()
 def gc4(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -130,7 +136,7 @@ def gc4(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -143,6 +149,7 @@ def gc4(fitkey):
     return xfspec
 
 
+@xform()
 def testLN(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -168,6 +175,8 @@ def testLN(fitkey):
     xfspec.append(['nems_lbhb.gcmodel.fitters.test_LN', kwargs])
     return xfspec
 
+
+@xform()
 def strfc(fitkey):
     return [['nems_lbhb.contrast_helpers.strf_to_contrast', {}]]
 
@@ -192,6 +201,7 @@ def _aliased_fitter(fn, fitkey):
 fitjk01 = _aliased_fitter(basic, 'basic.nf5.epREFERENCE')
 
 
+@xform()
 def popiter(fitkey):
     '''
     Perform a fit_iteratively analysis on a model.
@@ -232,8 +242,8 @@ def popiter(fitkey):
         flip_pcs = True
     else:
         flip_pcs = False
-    xfspec = [['nems_lbhb.fit_wrappers.init_pop_pca', {'flip_pcs': flip_pcs}],
-              ['nems_lbhb.fit_wrappers.fit_population_iteratively',
+    xfspec = [['nems.analysis.fit_pop_model.init_pop_pca', {'flip_pcs': flip_pcs}],
+              ['nems.analysis.fit_pop_model.fit_population_iteratively',
                {'module_sets': module_sets, 'fitter': fitter,
                 'tolerances': tolerances, 'tol_iter': tol_iter,
                 'fit_iter': fit_iter}]]
@@ -314,6 +324,7 @@ def _parse_iter(options):
     return tolerances, module_sets, fit_iter, tol_iter, fitter
 
 
+@xform()
 def pupLVbasic(fitkey):
     """
     exact same as fit basic, but add constraint that the latent variable (LV)
@@ -324,18 +335,36 @@ def pupLVbasic(fitkey):
     xfspec = []
 
     options = _extract_options(fitkey)
-    max_iter, tolerance, fitter, choose_best, fast_eval, alpha = _parse_pupLVbasic(options)
+    max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation = _parse_pupLVbasic(options)
     xfspec = []
-    #if fast_eval:
-    #    xfspec = [['nems.xforms.fast_eval', {}]]
-    #else:
-    #    xfspec = []
-    xfspec.append(['nems_lbhb.lv_helpers.fit_pupil_lv',
+
+    if rand_count>1:
+        xfspec.append(['nems.initializers.rand_phi', {'rand_count': rand_count}])
+
+    metric = 'pup_nmse'
+    if pup_constraint == 'lv_var':
+        metric = 'pup_nmse'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_nmse'
+    elif pup_constraint == 'nc':
+        metric = 'pup_nc_nmse'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_nc_nmse'
+    elif pup_constraint == 'lv_only':
+        metric = 'pup_dep_LVs'
+        metric_fn = 'nems_lbhb.lv_helpers.pup_dep_LVs'
+
+    xfspec.append(['nems.xforms.fit_wrapper',
                   {'max_iter': max_iter,
-                   'fitter': fitter, 'tolerance': tolerance, 
-                   'alpha': alpha}])
+                   'fitter': fitter, 'tolerance': tolerance,
+                   'metric': metric,
+                   'fit_function': 'nems_lbhb.lv_helpers.fit_pupil_lv',
+                   'alpha': alpha,
+                   'signed_correlation': signed_correlation}])
+
     if choose_best:
-        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
+        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn,
+                                                                       'alpha': alpha,
+                                                                       'signed_correlation': signed_correlation
+                                                                       }])
 
     return xfspec
 
@@ -346,7 +375,12 @@ def _parse_pupLVbasic(options):
     fitter = 'scipy_minimize'
     choose_best = False
     fast_eval = False
+    pup_constraint = 'lv_var'
     alpha = 0
+    fast_alpha = None
+    slow_alpha = None
+    rand_count = 1
+    signed_correlation = False
     for op in options:
         if op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -363,7 +397,42 @@ def _parse_pupLVbasic(options):
             choose_best = True
         elif op == 'f':
             fast_eval = True
-        elif 'a' in op:
+        elif op.startswith('rb'):
+            if len(op) == 2:
+                rand_count = 10
+            else:
+                rand_count = int(op[2:])
+            choose_best = True
+
+        elif op.startswith('af'):
+            fast_alpha = np.float('.'.join(op[2:].split(':')))
+
+        elif op.startswith('as'):
+            slow_alpha = np.float('.'.join(op[2:].split(':')))
+
+        elif op.startswith('a'):
             alpha = np.float('.'.join(op[1:].split(':')))
 
-    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha
+        elif op.startswith('sc'):
+            # force fast LV variance to be (-) corr. with pupil
+            signed_correlation = True
+
+        elif op.startswith('constr'):
+            pc = op[6:]
+            if pc == 'LV':
+                pup_constraint = 'lv_var'
+            elif pc == 'NC':
+                pup_constraint = 'nc'
+            elif pc == 'LVonly':
+                pup_constraint = 'lv_only'
+
+    if (fast_alpha is not None) | (slow_alpha is not None):
+        if (fast_alpha is None):
+            alpha = slow_alpha
+        elif (slow_alpha is None):
+            alpha = fast_alpha
+        else:
+            alpha = {'fast_alpha': fast_alpha,
+                     'slow_alpha': slow_alpha}
+
+    return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation

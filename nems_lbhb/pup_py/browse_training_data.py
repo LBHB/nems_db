@@ -13,17 +13,21 @@ from matplotlib.patches import Ellipse
 from PIL import Image
 import pickle
 import sys
-
-train_data_path = '/auto/data/nems_db/pup_py/training_data/'
-tmp_save = '/auto/data/nems_db/pup_py/tmp/'
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
+train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
 
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000):
+    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000, train_frame_range=None, n_frames=None):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
-        # the training directory and then display the first of these frames.
+        # the training directory and then display the first of these frames. if train_frame_range is not None, choose 
+        # these 50 frames from this range. train frame range is tuple (start_frame, end_frame)
 
         self.plot_calls = 0
 
@@ -36,8 +40,9 @@ class TrainingDataBrowser:
             self.video_name = video_name
             # where the prediction will be stored if this vid has already been
             # fit
-            predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
-
+ 
+            #predictions_folder = '/auto/data/daq/{0}/{1}/sorted/'.format(animal, video_name[:6])
+            predictions_folder = os.path.join(os.path.split(raw_video)[0], 'sorted/')
             # save videos
             video = raw_video
 
@@ -45,15 +50,32 @@ class TrainingDataBrowser:
             params_file = predictions_folder + video_name + '_pred.pickle'
             with open(params_file, 'rb') as fp:
                 parms = pickle.load(fp)
-
-            # delete all videos in the training folder that have this video name
-            os.system("rm {}*".format(train_data_path + video_name))
-
+            
+            # delete all videos in the training folder that have this video name (Do this inside the loop instead
+            # e.g. just check for duplicate frames)
+            # os.system("rm {}*".format(train_data_path + video_name))
+            if (n_frames is not None) & (n_frames != 'None'):
+                n_frames = int(n_frames)
             fps = 30
             t0 = int(min_frame) * (1 / fps)
             tend = int(max_frame) * (1 / fps)
-            frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), 50, replace=False))
+            if (train_frame_range is not None) & (train_frame_range != 'None'):
+                start, end = int(train_frame_range.split('_')[0]), int(train_frame_range.split('_')[1])
+                if (n_frames is not None) & (n_frames != 'None') & (n_frames < (end - start)):
+                    nframes = n_frames
+                else:
+                    if n_frames < (end - start):
+                        nframes = n_frames
+                    elif 50 < (end - start):
+                        nframes = 50
+                    else:
+                        nframes = end - start
+                frames = np.sort(np.random.choice(np.arange(start * (1 / fps), 
+                                        end * (1 / fps), 1/fps), nframes, replace=False))
+            else:
+                frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), n_frames, replace=False))
             output_dict = {}
+            n_frames_added = 0
             for i, t in enumerate(frames):
                 f = int(t * fps)
                 # save temporarily
@@ -70,14 +92,19 @@ class TrainingDataBrowser:
                                 'Y0_in': parms['cnn']['y'][f],
                                 'phi': parms['cnn']['phi'][f]
                 }
-
                 name = train_data_path + video_name + str(f) + '.pickle'
 
-                with open(name, 'wb') as fp:
-                    pickle.dump(output_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                # if this frame isn't already in the training set, add it
+                if os.path.isfile(name):
+                    pass
+                else:
+                    with open(name, 'wb') as fp:
+                        pickle.dump(output_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                    if n_frames_added == 0:
+                        default_frame = video_name + str(f)
+                    n_frames_added += 1
 
-                if i == 0:
-                    default_frame = video_name + str(f)
+            print("Added {0} video frames to training set".format(n_frames_added))
 
         self.master = master
         master.title("Training data browser")
@@ -298,24 +325,23 @@ class TrainingDataBrowser:
 
     def set_to_previous(self):
 
-        current_frame = self.frame_name.get()
+        current_frame = self.frame_name.get()+'.pickle'
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
-            all_frames = [f for f in all_frames if f in self.video_name]
-            frame_numbers = [int(f[15:]) for f in all_frames]
+            all_frames = [f for f in all_frames if self.video_name in f]
             inds = np.argsort(np.array(all_frames))
         else:
             inds = np.argsort(np.array(all_frames))
 
         all_frames = np.array(all_frames)[inds]
 
-        cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
+        cur_index = np.argwhere(all_frames == current_frame)[0][0]
         prev_index = cur_index - 1
         prev_frame = all_frames[prev_index]
 
         with open('{0}/{1}'.format(train_data_path, prev_frame), 'rb') as fp:
             prev_params = pickle.load(fp)
-
+        
         self.update_ellipse_params(prev_params['ellipse_zack'])
 
         self.pupil_canvas.delete(self.pupil_plot)
@@ -434,6 +460,7 @@ class TrainingDataBrowser:
             self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
             self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
             self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            self.ax_handle.axis('off')
             ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
             self.ax_handle.add_patch(ellipse)
             self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
@@ -481,8 +508,9 @@ class TrainingDataBrowser:
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
             all_frames = [f for f in all_frames if self.video_name in f]
-            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
-            inds = np.argsort(np.array(frame_numbers))
+            #frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            #inds = np.argsort(np.array(frame_numbers))
+            inds = np.argsort(np.array(all_frames))
         else:
             inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
@@ -515,8 +543,9 @@ class TrainingDataBrowser:
         all_frames = os.listdir(train_data_path)
         if self.from_browser:
             all_frames = [f for f in all_frames if self.video_name in f]
-            frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
-            inds = np.argsort(np.array(frame_numbers))
+            #frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
+            #inds = np.argsort(np.array(frame_numbers))
+            inds = np.argsort(np.array(all_frames))
         else:
             inds = np.argsort(np.array(all_frames))
         all_frames = np.array(all_frames)[inds]
@@ -541,7 +570,7 @@ class TrainingDataBrowser:
 root = tk.Tk()
 
 if len(sys.argv) > 1:
-    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
     root.mainloop()
 else:
     my_gui = TrainingDataBrowser(root)

@@ -136,33 +136,72 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                               'state_chan', 'MI', 'isolation',
                               'r', 'r_se', 'd', 'g', 'sp', 'state_chan_alt'])
 
+    new_sdexp = False
     for mod_i, m in enumerate(modelnames):
         print('Loading modelname: ', m)
         modelspecs = nems_db.params._get_modelspecs(cellids, batch, m, multi='mean')
 
         for modelspec in modelspecs:
             meta = ms.get_modelspec_metadata(modelspec)
+            phi = list(modelspec[0]['phi'].keys())
             c = meta['cellid']
             iso = isolation[cellids.index(c)]
             state_mod = meta['state_mod']
             state_mod_se = meta['se_state_mod']
             state_chans = meta['state_chans']
-            dc = modelspec[0]['phi']['d']
-            gain = modelspec[0]['phi']['g']
-            sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
-            if dc.ndim > 1:
-                dc = dc[0, :]
-                gain = gain[0, :]
-                sp = sp[0, :]
+            if 'g' in phi:
+                dc = modelspec[0]['phi']['d']
+                gain = modelspec[0]['phi']['g']
+            elif ('amplitude_g' in phi) & ('amplitude_d' in phi):
+                new_sdexp = True
+                dc = None
+                gain = None
+                g_amplitude = modelspec[0]['phi']['amplitude_g']
+                g_base = modelspec[0]['phi']['base_g']
+                g_kappa = modelspec[0]['phi']['kappa_g']
+                g_offset = modelspec[0]['phi']['offset_g']
+                d_amplitude = modelspec[0]['phi']['amplitude_d']
+                d_base = modelspec[0]['phi']['base_d']
+                d_kappa = modelspec[0]['phi']['kappa_d']
+                d_offset = modelspec[0]['phi']['offset_d']
+
+            gain_mod = None
+            dc_mod = None
+            if 'state_mod_gain' in meta.keys():
+                gain_mod = meta['state_mod_gain']
+                dc_mod = meta['state_mod_dc']
+
+            if dc is not None:
+                sp = modelspec[0]['phi'].get('sp', np.zeros(gain.shape))
+                if dc.ndim > 1:
+                    dc = dc[0, :]
+                    gain = gain[0, :]
+                    sp = sp[0, :]
+
             a_count = 0
             p_count = 0
+
             for j, sc in enumerate(state_chans):
+                if gain is not None:
+                    gain_val = gain[j]
+                    dc_val = dc[j]
+                    sp_val = sp[j]
+                else:
+                    gain_val = None
+                    dc_val = None
+                    sp_val = None
                 r = {'cellid': c, 'state_chan': sc, 'modelname': m,
                      'isolation': iso,
                      'state_sig': state_list[mod_i],
-                     'g': gain[j], 'd': dc[j], 'sp': sp[j],
+                     'g': gain_val, 'd': dc_val, 'sp': sp_val,
                      'MI': state_mod[j],
                      'r': meta['r_test'][0], 'r_se': meta['se_test'][0]}
+                if new_sdexp:
+                    r.update({'g_amplitude': g_amplitude[0, j], 'g_base': g_base[0, j], 'g_kappa': g_kappa[0, j], 'g_offset': g_offset[0, j],
+                                'd_amplitude': d_amplitude[0, j], 'd_base': d_base[0, j], 'd_kappa': d_kappa[0, j], 'd_offset': d_offset[0, j]})
+                if gain_mod is not None:
+                    r.update({'gain_mod': gain_mod[j], 'dc_mod': dc_mod[j]})
+
                 d = d.append(r, ignore_index=True)
                 l = len(d) - 1
 
@@ -180,8 +219,6 @@ def get_model_results_per_state_model(batch=307, state_list=None,
                         d.loc[l,'state_chan_alt'] = "PASSIVE_{}".format(p_count)
                 else:
                     d.loc[l,'state_chan_alt'] = d.loc[l,'state_chan']
-
-
 
     #d['r_unique'] = d['r'] - d['r0']
     #d['MI_unique'] = d['MI'] - d['MI0']
@@ -227,7 +264,6 @@ def get_model_results(batch=307, state_list=None,
             state_chans = meta['state_chans']
             dc = modelspec[0]['phi']['d']
             gain = modelspec[0]['phi']['g']
-            import pdb; pdb.set_trace()
             for j, sc in enumerate(state_chans):
                 ii = ((d['cellid'] == c) & (d['state_chan'] == sc))
                 if np.sum(ii) == 0:
@@ -368,7 +404,7 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, states=None):
     MIu = MIu[ff,:]
     MI0 = MI0[ff,:]
 
-    plt.figure(figsize=(8,8))
+    f = plt.figure(figsize=(8,8))
     plt.subplot(3,1,1)
     plt.plot(MI.T, linewidth=0.5)
     plt.ylabel('raw MI per cell')
@@ -401,7 +437,7 @@ def hlf_analysis(df, state_list, title=None, norm_sign=True, states=None):
 
     plt.tight_layout()
 
-    return dMI, dMI0
+    return f, dMI, dMI0
 
 
 def hlf_wrapper(use_hlf=True):
@@ -437,7 +473,7 @@ def hlf_wrapper(use_hlf=True):
             df = get_model_results_per_state_model(
                     batch=batch, state_list=state_list, basemodel=basemodel)
             title = "{} {} batch {} keep sgn".format(basemodel,state_list[-1],batch)
-            hlf_analysis(df, state_list, title=title, norm_sign=True, states=states);
+            hlf_analysis(df, state_list, title=title, norm_sign=True, states=states)
 
 
 def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']):
@@ -448,8 +484,8 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     if state_list is None:
         state_list = ['st.pup0.beh0','st.pup0.beh','st.pup.beh0','st.pup.beh']
 
-    plt.figure(figsize=(4,6))
-
+    f = plt.figure(figsize=(4,6))
+   
     da = df[df['state_chan']=='active']
 
     dp = da.pivot(index='cellid',columns='state_sig',values=['r','r_se'])
@@ -465,7 +501,8 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['full']=dr[state_list[3]]**2 * np.sign(dr[state_list[3]])
 
         dr['sig']=((dp['r'][state_list[3]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[3]]+dp['r_se'][state_list[0]]))
+             (dp['r_se'][state_list[3]]+
+              dp['r_se'][state_list[0]]))
 
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
         dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
@@ -482,12 +519,20 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
         dr['full']=dr[state_list[1]]**2 * np.sign(dr[state_list[1]])
 
         dr['sig']=((dp['r'][state_list[1]]-dp['r'][state_list[0]]) > \
-             (dp['r_se'][state_list[1]]+dp['r_se'][state_list[0]]))
-
+             (dp['r_se'][state_list[1]]+
+              dp['r_se'][state_list[0]]))
+        dr['cellid'] = dp['r'][state_list[1]].index
         #dm = dr.loc[dr['sig'].values,['null','full','bp_common','p_unique','b_unique']]
-        dm = dr.loc[:,['null','full','bp_common','b_unique','p_unique','sig']]
+        dm = dr.loc[:,['cellid','null','full','bp_common','b_unique','p_unique','sig']]
         dm = dm.sort_values(['null'])
         mfull=dm[['null','full','bp_common','b_unique','p_unique','sig']].values
+        cellids=dm['cellid'].to_list()
+
+        big_idx = mfull[:,1]-mfull[:,0]>0.2
+        for i,b in enumerate(big_idx):
+            if b:
+                print('{} : {:.3f} - {:.3f}'.format(cellids[i],mfull[i,0],mfull[i,1]))
+
 
     if nb > 0:
         stepsize = mfull.shape[0]/nb
@@ -533,9 +578,10 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     plt.ylabel('mean r2')
 
     ax3 = plt.subplot(3,1,3)
-    d=(mfull[:,1]-mfull[:,0])  # /(1-np.abs(mfull[:,0]))
+    d=(mfull[:,1]-mfull[:,0])#/(1-np.abs(mfull[:,0]))
     stateplots.beta_comp(mfull[:,0], d, n1='State independent',n2='dep - indep',
-                     ax=ax3, highlight=dm['sig'], hist_range=[-0.3, 1])
+                     ax=ax3, highlight=dm['sig'], hist_range=[-0.1, 1], markersize=4)
+    ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
     r, p = st.pearsonr(mfull[:,0],d)
     plt.title('cc={:.3} p={:.4}'.format(r,p))
 
@@ -549,7 +595,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None, colors=['r','g','b','k']
     #plt.ylabel('mean r2')
 
     plt.tight_layout()
-    return ax1, ax2, ax3
+    return f
 
 
 def aud_vs_state_wrapper(batches=None, pupil=True):
@@ -590,7 +636,7 @@ def aud_vs_state_wrapper(batches=None, pupil=True):
                                      state_list=state_list)
         ax2.set_ylim([0,.1])
         ax3.set_ylim([0,.1])
-        
+
 
 
 def beh_only_plot(batch=311):

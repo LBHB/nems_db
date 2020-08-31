@@ -5,12 +5,12 @@ should occur intermingled with fitter keywords
 import logging
 import re
 
-from nems.plugins.default_initializers import init as nems_init
-from nems_lbhb.lnp_helpers import _lnp_metric
+from nems.plugins.default_fitters import init as nems_init
+from nems.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
-
+@xform()
 def init(kw):
     '''
     Same as default nems init except adds 'c' option for contrast model.
@@ -25,3 +25,9 @@ def init(kw):
         xfspec[0][0] = 'nems_lbhb.lnp_helpers.init_lnp_model'
 
     return xfspec
+
+
+@xform()
+def pclast(kw):
+
+    return [['nems_lbhb.initializers.pca_proj_layer', {}]]

@@ -1044,7 +1044,7 @@ def baphy_load_dataset_RDT(parmfilepath, options, sample_offset,
 
 def baphy_load_recording_RDT(cellid, batch, options):
     """
-    query NarfData to find baphy files for specified cell/batch and then load
+    query Data to find baphy files for specified cell/batch and then load
     """
 
     # print(options)
@@ -1066,7 +1066,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
                                label='parm')
 
     if len(d)==0:
-        raise ValueError('cellid/batch entry not found in NarfData')
+        raise ValueError('cellid/batch entry not found in Data')
 
     files = list(d['parm'])
 
@@ -1371,7 +1371,7 @@ def baphy_load_recording(**options):
     goodtrials = np.array([], dtype=bool)
 
     if len(files) == 0:
-       raise ValueError('NarfData not found for cell {0}/batch {1}'.format(
+       raise ValueError('Data not found for cell {0}/batch {1}'.format(
                cellid,batch))
 
     for i, parmfilepath in enumerate(files):

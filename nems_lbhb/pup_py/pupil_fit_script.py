@@ -7,7 +7,11 @@ import pickle
 import sys
 import os
 import nems
-#import nems.db as nd
+
+import nems_db
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
 
 import logging
 log = logging.getLogger(__name__)
@@ -38,14 +42,21 @@ if __name__ == '__main__':
     # perform pupil fit
     video_file = sys.argv[1]
     modelname = sys.argv[2]
+    animal = sys.argv[3]
 
     # load the keras model (this is hardcoded rn but should be flexible at some point
     #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
-    project_dir = '/auto/data/nems_db/pup_py/'
+    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
     if (modelname == 'current') | (modelname == 'Current'):
-        default_date = os.listdir(project_dir + 'default_trained_model/')[0]
-        name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
-        modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
+        if (animal != '') & (animal != 'None') & (animal != 'All') & (animal != None):
+            this_model_dir = 'animal_specific_fits/{}/'.format(animal)
+            default_date = os.listdir(project_dir + this_model_dir + 'default_trained_model/')[0]
+            name = os.listdir(project_dir + this_model_dir + 'default_trained_model/{0}'.format(default_date))[0]
+            modelpath = project_dir + this_model_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
+        else:
+            default_date = os.listdir(project_dir + 'default_trained_model/')[0]
+            name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
+            modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
     else:
         date = modelname
         datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
@@ -106,12 +117,13 @@ if __name__ == '__main__':
 
             # rescale parms correctly (based on the resizing and normalizing that was done for the fit)
             # undo normalization (WIP - CRH 1/30/19)
-            # ellipse_parms[0] = ellipse_parms[0] / 100 * size[0]
-            # ellipse_parms[1] = ellipse_parms[1] / 100 * size[0]
-            # ellipse_parms[2] = ellipse_parms[2] / 100 * size[0]
-            # ellipse_parms[3] = ellipse_parms[3] / 100 * size[0]
+            ellipse_parms /= 100
+            ellipse_parms[0] = ellipse_parms[0] * size[0]
+            ellipse_parms[1] = ellipse_parms[1] * size[0]
+            ellipse_parms[2] = ellipse_parms[2] * (size[0] / 2)
+            ellipse_parms[3] = ellipse_parms[3] * (size[0] / 2)
 
-            # ellipse_parms[4] = ((ellipse_parms[4] / 100) - 0.4) * (2 * np.pi)
+            ellipse_parms[4] = ellipse_parms[4] * np.pi
 
             # undo scaling and save
             y_cnn.append(ellipse_parms[0] / sf[1])

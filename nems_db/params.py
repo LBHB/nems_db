@@ -12,6 +12,7 @@ import nems.db as nd
 import nems.modelspec as ms
 from nems.uri import load_resource
 from nems.utils import find_common
+from nems import get_setting
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +111,9 @@ def _get_modelspecs(cellids, batch, modelname, multi='mean'):
     speclists = []
     for path in filepaths:
         mspaths = []
+        path = path.replace('http://hyrax.ohsu.edu:3003/','/auto/data/nems_db/')
+        if get_setting('NEMS_RESULTS_DIR').startswith("/Volumes"):
+            path = path.replace('/auto/', '/Volumes/')
         for file in os.listdir(path):
             if file.startswith("modelspec"):
                 mspaths.append(os.path.join(path, file))

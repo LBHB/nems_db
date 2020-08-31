@@ -9,9 +9,11 @@ import re
 
 import numpy as np
 
+from nems.registry import xform, xmodule
+
 log = logging.getLogger(__name__)
 
-
+@xform()
 def pas(loadkey):
     """
     pas = "passive only"
@@ -24,6 +26,32 @@ def pas(loadkey):
     return xfspec
 
 
+@xform()
+def ap1(loadkey):
+    """
+    ap1 = "first passive only"
+    mask out everything that doesn't fall in an active for first passive FILE_ epoch
+    """
+
+    xfspec = [['nems.preprocessing.mask_late_passives',
+               {}, ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
+def cor(kw):
+    """
+    create mask that removes incorrect trials
+    :param kw:
+    :return:
+    """
+    ops = kw.split('.')[1:]
+
+    return [['nems.xforms.mask_incorrect', {}]]
+
+
+@xform()
 def ref(kw):
     ops = kw.split('.')[1:]
 
@@ -43,7 +71,45 @@ def ref(kw):
               'include_incorrect': include_incorrect,
               'generate_evoked_mask': generate_evoked_mask}]]
 
+@xform()
+def tar(kw):
+    ops = kw.split('.')[1:]
 
+    balance_rep_count = False
+    include_incorrect = False
+    generate_evoked_mask = False
+    for op in ops:
+        if op.startswith('b'):
+            balance_rep_count = True
+        if op.startswith('a'):
+            include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
+
+    return [['nems.xforms.mask_all_but_targets',
+             {'include_incorrect': include_incorrect}]]
+
+
+@xform()
+def reftar(kw):
+    ops = kw.split('.')[1:]
+
+    balance_rep_count = False
+    include_incorrect = False
+    generate_evoked_mask = False
+    for op in ops:
+        if op.startswith('b'):
+            balance_rep_count = True
+        if op.startswith('a'):
+            include_incorrect = True
+        if op.startswith('e'):
+            generate_evoked_mask = True
+
+    return [['nems_lbhb.preprocessing.mask_all_but_reference_target',
+             {'include_incorrect': include_incorrect}]]
+
+
+@xform()
 def evs(loadkey):
     """
     evs = "event stimulus"
@@ -59,24 +125,57 @@ def evs(loadkey):
     # TODO: implement better parser for more flexibility
     loadset = loader.split(".")
 
-    if loader == ("tar.lic"):
-        epoch2_shuffle = False
-    elif loader == ("tar.lic0"):
-        epoch2_shuffle = True
+    if loadset[0]=='tar':
+        epoch_regex='^TAR_'
+        epoch_shift = 5
+    elif loadset[0]=='cct':
+        epoch_regex = '^[A-Za-z]+_[0-9]+$'
+        epoch_shift = 0
     else:
-        raise ValueError("unknown signals for alt-stimulus initializer")
+        raise ValueError('unknown stim spec')
 
-    xfspec = [['nems.preprocessing.generate_stim_from_epochs',
-               {'new_signal_name': 'stim',
-                'epoch_regex': '^TAR_', 'epoch_shift': 5,
-                'epoch2_regex': 'LICK', 'epoch2_shift': -5,
-                'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
-               ['rec'], ['rec']],
-              ['nems.xforms.mask_all_but_targets', {}]]
+    lick = False
+    if len(loadset) >= 2:
+        if loadset[1] == "lic":
+            epoch2_shuffle = False
+            lick = True
+            epoch2_shift = -5
+        elif loadset[1] == "lic0":
+            epoch2_shuffle = True
+            lick = True
+            epoch2_shift = -5
+        elif loadset[1] == "l20":
+            epoch2_shuffle = False
+            lick = True
+            epoch2_shift = -20
+        elif loadset[1] == "l20x0":
+            epoch2_shuffle = True
+            lick = True
+            epoch2_shift = -20
+
+        else:
+            raise ValueError('evs option 2 not known')
+    if lick:
+        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+                   {'new_signal_name': 'stim',
+                    'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
+                    'epoch2_regex': 'LICK', 'epoch2_shift': epoch2_shift,
+                    'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
+                   ['rec'], ['rec']]]
+    else:
+        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+                   {'new_signal_name': 'stim',
+                    'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
+                    'onsets_only': True},
+                   ['rec'], ['rec']]]
+
+    if loadset[0]=='tar':
+        xfspec.append(['nems.xforms.mask_all_but_targets', {}])
 
     return xfspec
 
 
+@xform()
 def st(loadkey):
     """
     st = "state variable"
@@ -111,6 +210,8 @@ def st(loadkey):
             this_sig = ["pupil"]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
+        elif l.startswith("pxf"):
+            this_sig = ["p_x_f"]
         elif l.startswith("pre"):
             this_sig = ["pre_passive"]
         elif l.startswith("dif"):
@@ -123,6 +224,8 @@ def st(loadkey):
             this_sig = ["each_passive"]
         elif l.startswith("fil"):
             this_sig = ["each_file"]
+        elif l.startswith("afl"):
+            this_sig = ["each_active"]
         elif l.startswith("hlf"):
             this_sig = ["each_half"]
         elif l.startswith("r1"):
@@ -163,6 +266,7 @@ def st(loadkey):
     return xfspec
 
 
+@xform()
 def inp(loadkey):
     """
     inp = 'input signal'
@@ -187,6 +291,7 @@ def inp(loadkey):
     return xfspec
 
 
+@xform()
 def mod(loadkey):
     """
     Make a signal called "mod". Basically the residual resp (resp - psth) offset
@@ -208,12 +313,13 @@ def mod(loadkey):
     return xfspec
 
 
+@xform()
 def pca(loadkey):
     """
     compute pca (or some other state-space) on response
     """
 
-    ops = loadkey.split(".")
+    ops = loadkey.split(".")[1:]
     pc_source = "psth"
     overwrite_resp = True
     pc_count=None
@@ -222,8 +328,8 @@ def pca(loadkey):
     for op in ops:
         if op == "psth":
             pc_source = "psth"
-        elif op == "full":
-            pc_source = "full"
+        elif op == "all":
+            pc_source = "all"
         elif op == "noise":
             pc_source = "noise"
         elif op == "no":
@@ -240,18 +346,21 @@ def pca(loadkey):
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'computer_power': compute_power}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'computer_power': compute_power}]]
+                    'pc_count': pc_count, 'compute_power': compute_power}]]
 
     return xfspec
 
+
+@xform()
 def popev(loadkey):
     return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
 
 
+@xform()
 def contrast(loadkey):
     ops = loadkey.split('.')[1:]
     kwargs = {}
@@ -279,6 +388,7 @@ def contrast(loadkey):
     return [['nems_lbhb.gcmodel.contrast.add_contrast', kwargs]]
 
 
+@xform()
 def csum(loadkey):
     ops = loadkey.split('.')[1:]
     kwargs = {}
@@ -290,10 +400,12 @@ def csum(loadkey):
     return [['nems_lbhb.gcmodel.contrast.sum_contrast', kwargs]]
 
 
+@xform()
 def onoff(loadkey):
     return [['nems_lbhb.gcmodel.contrast.add_onoff', {}]]
 
 
+@xform()
 def hrc(load_key):
     """
     Mask only data during stimuli that were repeated 10 or greater times.
@@ -307,15 +419,44 @@ def hrc(load_key):
     return xfspec
 
 
+@xform()
+def pbal(load_key):
+    """
+    Mask only epochs that are presented equally between large/small pupil conditions
+    """
+    xfspec = [['nems_lbhb.preprocessing.mask_pupil_balanced_epochs',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
 def ev(load_key):
     """
     Mask only evoked data
     """
 
     xfspec = [['nems_lbhb.preprocessing.mask_evoked', {}, ['rec'], ['rec']]]
-    
+
     return xfspec
 
+
+@xform()
+def apm(load_key):
+    """
+    Add a mask signal ('p_mask') for pupil that can be used later on in fitting.
+    Doesn't go in "true" mask signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_pupil_mask',
+            {},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
 def pm(load_key):
     """
     pm = pupil mask
@@ -326,6 +467,7 @@ def pm(load_key):
     performs an AND mask (so will only create mask inside the existing current
         mask. If mask is None, creates mask with: rec = rec.create_mask(True))
     """
+    raise DeprecationWarning("Is anyone using this??")
     options = load_key.split('.')
     if len(options)>1:
         if options[1] == 'b':
@@ -347,6 +489,7 @@ def pm(load_key):
     return xfspec
 
 
+@xform()
 def rc(load_key):
     """
     Mask only data from a specified runclass
@@ -360,6 +503,8 @@ def rc(load_key):
 
     return xfspec
 
+
+@xform()
 def tor(load_ley):
     """
     Mask only TORC data
@@ -369,6 +514,8 @@ def tor(load_ley):
 
     return xfspec
 
+
+@xform()
 def nat(load_ley):
     """
     Mask only NAT data
@@ -378,6 +525,8 @@ def nat(load_ley):
 
     return xfspec
 
+
+@xform()
 def subset(load_key):
     """
     Create a mask so that model is fit only using a subset of the data.
@@ -390,6 +539,8 @@ def subset(load_key):
                {'epoch_list':subsets}, ['rec'], ['rec']]]
     return xfspec
 
+
+@xform()
 def psthfr(load_key):
     """
     Generate psth signal from resp psth.opt1.opt2 etc. By default, set model input_name to
@@ -406,7 +557,11 @@ def psthfr(load_key):
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
-    if 'stimtar' not in options:
+    channel_per_stim = ('sep' in options)
+    if 'tar' in options:
+        epoch_regex = ['^STIM_', '^TAR_']
+        #epoch_regex='^TAR_'
+    elif 'stimtar' not in options:
         epoch_regex = '^STIM_'
     else:
         epoch_regex = ['^STIM_', '^TAR_']
@@ -424,9 +579,12 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
-                     {'smooth_resp': smooth, 'use_as_input': use_as_input, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'use_as_input': use_as_input,
+                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim}]]
     return xfspec
 
+
+@xform()
 def sm(load_key):
     """
     Smooth a signal using preproc.smooth_epoch_segments
@@ -450,6 +608,7 @@ def sm(load_key):
     return xfspec
 
 
+@xform()
 def rscsw(load_key, cellid, batch):
     """
     generate the signals for sliding window model. It's intended that these be
@@ -474,6 +633,8 @@ def rscsw(load_key, cellid, batch):
                    ['rec'], ['rec']]]
     return xfspec
 
+
+@xform()
 def stSPO(load_key):
     #add SPO state signal
     permute=False
@@ -482,6 +643,99 @@ def stSPO(load_key):
     baseline = ('nb' not in options)
     return [['nems_lbhb.SPO_helpers.add_coherence_as_state',{'permute':permute,'baseline':baseline}]]
 
+
+@xform()
 def stimenv(load_key):
     return [['nems_lbhb.preprocessing.transform_stim_envelope', {},
             ['rec'], ['rec']]]
+
+
+@xform()
+def residual(load_key):
+    """
+    Add residual signal to be used for pupil latent variable creation.
+    Because LV creation happens dynamically during the fit,
+    want to create this signal first so that shuffling
+    (if specified) only happens one time on the outside.
+    """
+    options = load_key.split('.')
+
+    shuffle = False
+    cutoff = None
+    signal = 'psth_sp'
+    for op in options:
+        if op.endswith('0'):
+            shuffle = True
+        elif op.startswith('hp'):
+            cutoff = np.float(op[2:].replace(',','.'))
+        elif op.startswith('pred'):
+            signal = 'pred'
+
+    xfspec = [['nems_lbhb.preprocessing.create_residual',
+            {'shuffle': shuffle,
+            'cutoff': cutoff,
+            'signal': signal},
+            ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
+def epsig(load_key):
+    """
+    Create epoch signal from epochs so that cost function has access to
+    stim epoch times
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_epoch_signal',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
+def addmeta(load_key):
+    """
+    Add meta data to recording that can be used later on in the fit. For example,
+    information about epochs could be useful.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.add_meta',
+                {},
+                ['rec'], ['rec']]]
+
+    return xfspec
+
+
+@xform()
+def rz(load_key):
+    """
+    Transform resp into zscore. Add signal 'raw_resp' for original resp
+    signal.
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.zscore_resp',
+                {}, ['rec'], ['rec']]]
+
+    return xfspec
+
+@xform()
+def esth1(kw):
+    ops = kw.split('.')[1:]
+    if len(ops) > 0:
+        seed_idx = int(ops[0])
+    else:
+        seed_idx = 0
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 1,
+                                                           'seed_idx': seed_idx}]]
+
+@xform()
+def esth2(kw):
+    ops = kw.split('.')[1:]
+    if len(ops) > 0:
+        seed_idx = int(ops[0])
+    else:
+        seed_idx = 0
+    return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2,
+                                                           'seed_idx': seed_idx}]]

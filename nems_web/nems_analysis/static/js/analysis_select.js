@@ -229,6 +229,12 @@ $(document).ready(function(){
         $("#kamiakFunction").val(saved_selections.kamiakFunction).change();
         $("#kamiakPath").val(saved_selections.kamiakPath).change();
         $("#kamiakResults").val(saved_selections.kamiakResults).change();
+
+        $("#exaOHSU").val(saved_selections.exaOHSU).change();
+        $("#exaExec").val(saved_selections.exaExec).change();
+        $("#exaScript").val(saved_selections.exaScript).change();
+        $("#exaLimit").val(saved_selections.exaLimit).change();
+        $("#exaExclude").val(saved_selections.exaExclude).change();
     }
 
 
@@ -291,6 +297,26 @@ $(document).ready(function(){
 
     $("#kamiakResults").change(function(){
         saved_selections.kamiakResults = $(this).val();
+    });
+
+    $("#exaOHSU").change(function(){
+        saved_selections.exaOHSU = $(this).val();
+    });
+
+    $("#exaExec").change(function(){
+        saved_selections.exaExec = $(this).val();
+    });
+
+    $("#exaScript").change(function(){
+        saved_selections.exaScript = $(this).val();
+    });
+
+    $("#exaLimit").change(function(){
+        saved_selections.exaLimit = $(this).val();
+    });
+
+    $("#exaExclude").change(function(){
+        saved_selections.exaExclude = $(this).val();
     });
 
     $("[name='extraModels']").change(function(){
@@ -958,7 +984,7 @@ $(document).ready(function(){
 
     $("#strf").on('click',function(){
         py_console_log("STRF Function not yet implemented");
-        //return strf plots ala narf_analysis
+        //return strf plots ala _analysis
         //low priority
     });
 
@@ -1083,6 +1109,13 @@ $(document).ready(function(){
         var useKamiak = 0;
         var loadKamiak = 0;
         var useGPU = 0;
+        var useExacloud = 0;
+        var exaHighMem = 0;
+        var exaOHSU = $("#exaOHSU").val();
+        var exaExec = $("#exaExec").val();
+        var exaScript = $("#exaScript").val();
+        var exaLimit = $("#exaLimit").val();
+        var exaExclude = $("#exaExclude").val();
 
         if (document.getElementById('forceRerun').checked){
             forceRerun = 1;
@@ -1098,6 +1131,14 @@ $(document).ready(function(){
 
         if (document.getElementById('useGPU').checked){
             useGPU = 1;
+        }
+
+        if (document.getElementById('useExacloud').checked){
+            useExacloud = 1;
+        }
+
+        if (document.getElementById('exaHighMem').checked){
+            exaHighMem = 1;
         }
 
         if ((bSelected === null) || (bSelected === undefined) ||
@@ -1133,7 +1174,10 @@ $(document).ready(function(){
                    execPath:execPath, scriptPath:scriptPath,
                    useKamiak:useKamiak, kamiakFunction:kamiakFunction,
                    kamiakPath:kamiakPath, loadKamiak:loadKamiak,
-                   kamiakResults:kamiakResults, useGPU:useGPU},
+                   kamiakResults:kamiakResults, useGPU:useGPU,
+                   useExacloud:useExacloud, exaOHSU:exaOHSU,
+                   exaExec:exaExec, exaScript:exaScript, exaLimit:exaLimit,
+                   exaExclude:exaExclude, exaHighMem:exaHighMem},
             // TODO: should POST be used in this case?
             type: 'GET',
             success: function(result){
