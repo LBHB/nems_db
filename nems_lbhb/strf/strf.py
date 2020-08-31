@@ -12,8 +12,8 @@ import collections
 from nems_lbhb.strf.torc_subfunctions import interpft, strfplot, strf_torc_pred, strf_est_core
 
 ####Sample Data- works as test#####
-# mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
-# cellid = 'AMT005c-12-1'
+mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
+cellid = 'AMT005c-12-1'
 ###################################
 
 def tor_tuning(mfilename,cellid,rec=None,fs=1000,plot=False):
