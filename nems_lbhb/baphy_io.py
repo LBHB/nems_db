@@ -726,7 +726,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
-    TrialCount = np.max(exptevents['Trial'])
+    TrialCount = int(np.max(exptevents['Trial']))
 
     TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
 
