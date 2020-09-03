@@ -120,10 +120,12 @@ class BAPHYExperiment:
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
             self.siteid = os.path.split(parmfile[0])[-1][:7]
+            self.batch = None
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
-           
+            self.batch = None
+
         if np.any([not p.exists() for p in self.parmfile]):
             raise IOError(f'Not all parmfiles in {self.parmfile} were found')
 
@@ -133,6 +135,18 @@ class BAPHYExperiment:
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
+
+        # add some new attributes for purposes of caching recordings
+        self.animal = str(self.parmfile[0].parent).split(os.path.sep)[4]
+        penname = str(self.parmfile[0].parent).split(os.path.sep)[5]
+        # if batch is None, set batch = 'animal/siteid', unless "training" in parmfile.
+        # If training, save in training director by setting batch = 'animal/trainingXXXX'
+        if (self.batch is None) & ('training' in penname):
+            self.batch = os.path.sep.join([self.animal, penname])
+        elif self.batch is None:
+            self.batch = os.path.sep.join([self.animal, self.siteid])
+        else:
+            pass
     
 
     @property
@@ -279,6 +293,10 @@ class BAPHYExperiment:
         # add BAPHYExperiment version to recording options
         kwargs.update({'version': 'BAPHYExperiment.1'})
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+
+        # add batch to cache recording in the correct location
+        kwargs.update({'batch': self.batch})
+
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
                 self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
