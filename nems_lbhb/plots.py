@@ -1318,7 +1318,8 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         for k, m in modelgroups.items():
             modelnames.extend(m)
 
-    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
+    dot_markers = ['.','o','^','s','^','.','s','o','.']
     if ax is None:
         fig,ax = plt.subplots()
 
@@ -1392,7 +1393,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
                     modelset.append(modelnames[jjj])
             #print("{} : {}".format(k, modelset))
             #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-            ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k, markersize=10)
+            ax.plot(n_parms[jj], b_m[jj], dot_markers[i], color=dot_colors[i], label=k, markersize=10)
             i+=1
 
             best_mean = b_m[jj].max()

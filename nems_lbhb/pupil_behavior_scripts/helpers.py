@@ -282,7 +282,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         task_merge['sig_task'] = [True if ((task_merge.iloc[i]['r_x'] - task_merge.iloc[i]['r_y']) > 
                                             (task_merge.iloc[i]['r_se_x'] + task_merge.iloc[i]['r_se_y'])) else False for i in range(task_merge.shape[0])]
         # add task rpred
-        task_merge['r_task'] = task_merge['r_x'].pow(2)
+        task_merge['r_task'] = task_merge['r_x'].pow(2) - task_merge['r_y'].pow(2)
 
         if 'DI' in cols:
             task_merge['DI'] = task_merge['DI_y']

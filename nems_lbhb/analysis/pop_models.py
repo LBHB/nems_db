@@ -34,6 +34,18 @@ def subspace_overlap(u, v):
 def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10,
                   norm_mean=True, method='jacobian', **kwargs):
 
+    # remove static nonlinearities from end of modelspec chain
+    modelspec = modelspec.copy()
+    if ('double_exponential' in modelspec[-1]['fn']):
+        log.info('removing dexp from tail')
+        modelspec.pop_module()
+    if ('relu' in modelspec[-1]['fn']):
+        log.info('removing relu from tail')
+        modelspec.pop_module()
+    if ('levelshift' in modelspec[-1]['fn']):
+        log.info('removing lvl from tail')
+        modelspec.pop_module()
+
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
     bincount = rec['pred'].shape[1]
@@ -80,7 +92,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, maxbins=1000, IsReload=False, **ctx):
+def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12, maxbins=1000, stepbins=3, IsReload=False, **ctx):
 
     if IsReload:
         return {}
@@ -90,27 +102,26 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, maxbins=1
     else:
         figs = figures.copy()
 
+    rec = val.apply_mask()
+    
     cellids = val['resp'].chans
     siteids = [c.split("-")[0] for c in cellids]
     # analyze all output channels
     out_channel = list(np.arange(len(cellids)))
     channel_count=len(out_channel)
 
-    # only measure on validation data(?)
-    rec = val.apply_mask()
-
     # skip silent bins
     stim_mag = rec['stim'].as_continuous().sum(axis=0)
     stim_big = stim_mag > np.max(stim_mag) / 1000
-    index_range = np.arange(len(stim_mag))
+    index_range = np.arange(0, len(stim_mag), stepbins)
     index_range = index_range[(index_range > memory) & stim_big[index_range]]
 
     # limit number of bins to speed up analysis
     index_range = index_range[:maxbins]
 
-    log.info('Calculating dstrf for %d channels, %d timepoints, memory=%d',
-             channel_count, len(index_range), memory)
-
+    log.info('Calculating dstrf for %d channels, %d timepoints (%d steps), memory=%d',
+             channel_count, len(index_range), stepbins, memory)
+    log.info(rec.signals.keys())
     pcs, pc_mag = dstrf_pca(modelspec, rec, pc_count=n_pc, out_channel=out_channel,
                            index_range=index_range, memory=memory)
 
@@ -227,6 +238,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
 
     stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
     stim_lim = np.max(stim[:, index_range])
+
     s = stim[:, (index - memory):index]
     print("stim_lim ", stim_lim)
 
@@ -255,10 +267,13 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         d = dstrf[i, :, :, cellidx].copy()
 
         pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-        strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) / 2
+
         if mult:
             strf_lim = strf_lim * stim_lim
             d = d * s
+        print(f"strf_lim[{cellidx}]: ", strf_lim)
+
         im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
                                                aspect='auto'))
         axs[cellidx+1, 0].set_yticks([])
@@ -327,7 +342,10 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
             plt.pause(0.01)
     else:
         if out_base is None:
-            out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}.mp4'
+            if mult:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}_masked.mp4'
+            else:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}.mp4'
         out_file = os.path.join(out_path, out_base)
         print(f'saving to: {out_file}')
 
