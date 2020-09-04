@@ -82,6 +82,7 @@ d['di_class']='good'
 split=82
 d.loc[d.DI<split, 'di_class']='bad'
 
+# Good vs. bad behavior
 f1, ax = plt.subplots(1, 3, figsize=(8, 3), sharey='row')
 
 sns.stripplot(x=sig_col, y=yaxis, data=d, hue='di_class', dodge=True, edgecolor='white', linewidth=0.5,
@@ -184,7 +185,33 @@ lm = ols(formula, IC).fit()
 table1 = anova_lm(lm)
 print(table1)
 
+# SU vs. MU
+f3, ax = plt.subplots(1, 2, figsize=(6, 3), sharey='row')
+
+for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
+    sns.stripplot(x=sig_col, y=_yax, data=d, hue='SU', dodge=True, edgecolor='white', linewidth=0.5,
+                            marker='o', size=5, ax=ax[_i])
+    ax[_i].axhline(0, linestyle='--', lw=2, color='grey')
+
+    # medians
+    bad_med_a1 = round(d[(d.SU) & (d.area=='A1')][_yax].median(), 3)
+    good_med_a1 = round(d[(~d.SU)  & (d.area=='A1')][_yax].median(), 3)
+    bad_med_ic = round(d[(d.SU) & (d.area=='IC')][_yax].median(), 3)
+    good_med_ic = round(d[(~d.SU)  & (d.area=='IC')][_yax].median(), 3)
+
+    # pvals
+    bad_v_good_a1 = round(ss.ranksums(d[d.SU & (d.area=='A1')][_yax],
+                                      d[~d.SU & (d.area=='A1')][_yax]).pvalue, 3)
+    bad_v_good_ic = round(ss.ranksums(d[d.SU & (d.area=='IC')][_yax],
+                                      d[~d.SU & (d.area=='IC')][_yax]).pvalue, 3)
+
+    ax[_i].set_title('{6}, A1: SU: {0}, MU {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}'.format(
+        bad_med_a1, good_med_a1, bad_v_good_a1,
+        bad_med_ic, good_med_ic, bad_v_good_ic, _yax))
+    nplt.ax_remove_box(ax[_i])
+
 if save_fig:
     f1.savefig(os.path.join(save_path, f'figSn_performance_sum_{yaxis}.pdf'))
     f2.savefig(os.path.join(save_path, f'figSn_animal_sum_{yaxis}.pdf'))
+    f3.savefig(os.path.join(save_path, f'figSn_su_mu_comp_{yaxis}.pdf'))
 
