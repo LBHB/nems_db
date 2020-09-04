@@ -119,10 +119,13 @@ class BAPHYExperiment:
 
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-        
+            self.siteid = os.path.split(parmfile[0])[-1][:7]
+            self.batch = None
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
-           
+            self.siteid = os.path.split(parmfile)[-1][:7]
+            self.batch = None
+
         if np.any([not p.exists() for p in self.parmfile]):
             raise IOError(f'Not all parmfiles in {self.parmfile} were found')
 
@@ -132,6 +135,18 @@ class BAPHYExperiment:
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
+
+        # add some new attributes for purposes of caching recordings
+        self.animal = str(self.parmfile[0].parent).split(os.path.sep)[4]
+        penname = str(self.parmfile[0].parent).split(os.path.sep)[5]
+        # if batch is None, set batch = 'animal/siteid', unless "training" in parmfile.
+        # If training, save in training director by setting batch = 'animal/trainingXXXX'
+        if (self.batch is None) & ('training' in penname):
+            self.batch = os.path.sep.join([self.animal, penname])
+        elif self.batch is None:
+            self.batch = os.path.sep.join([self.animal, self.siteid])
+        else:
+            pass
     
 
     @property
@@ -277,12 +292,17 @@ class BAPHYExperiment:
         '''
         # add BAPHYExperiment version to recording options
         kwargs.update({'version': 'BAPHYExperiment.1'})
+        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+
+        # add batch to cache recording in the correct location
+        kwargs.update({'batch': self.batch})
 
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
                 self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
         
         if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+            kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
             rec.save(data_file)
@@ -328,7 +348,7 @@ class BAPHYExperiment:
                          name='resp', recording=rec_name, chans=list(sp.keys()),
                          epochs=baphy_events[i]) 
                          for i, sp in enumerate(spike_dicts)]
-            
+
             for i, r in enumerate(resp_sigs):
                 if i == 0:
                     signals['resp'] = r
@@ -624,6 +644,13 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     start_events = (epochs['start'] >= final_trial_end)
     epochs = epochs[~start_events]
 
+    # get rid of weird floating point precision 
+    epochs.at[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
+    epochs.at[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
+
+    # Final step, remove any duplicate epochs (that are getting created somewhere???)
+    epochs = epochs.drop_duplicates()
+
     return epochs
 
 
@@ -645,6 +672,7 @@ def _make_trial_epochs(exptevents, exptparams, **options):
 
     if remove_post_lick:
        trial_events =  _remove_post_lick(trial_events, exptevents)
+       trial_events =  _remove_post_stim_off(trial_events, exptevents)
 
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -705,6 +733,25 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     tar_events2.at[:, 'name'] = 'TARGET'
     tar_events = pd.concat([tar_events, tar_events2], ignore_index=True)
 
+    # Catch events (including spont)
+    cat_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            ~exptevents.name.str.contains('Silence')].name.unique()
+    cat_s_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            exptevents.name.str.contains('PreStimSilence')].name.unique()
+    cat_e_tags = exptevents[exptevents.name.str.contains('Catch') & \
+                            exptevents.name.str.contains('PostStimSilence')].name.unique()
+    cat_starts = exptevents[exptevents.name.isin(cat_s_tags)].copy()
+    cat_ends = exptevents[exptevents.name.isin(cat_e_tags)].copy()
+    
+    cat_events = exptevents[exptevents.name.isin(cat_tags)].copy()
+    new_tags = ['CAT_' + t.split(',')[1].replace(' ', '') for t in cat_events.name]
+    cat_events.at[:, 'name'] = new_tags
+    cat_events.at[:, 'start'] = cat_starts.start.values
+    cat_events.at[:, 'end'] = cat_ends.end.values
+    cat_events2 = tar_events.copy()
+    cat_events2.at[:, 'name'] = 'TARGET'
+    cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
+
     # pre/post stim events
     sil_tags = exptevents[exptevents.name.str.contains('Silence')].name.unique()
     sil_events = exptevents[exptevents.name.isin(sil_tags)].copy()
@@ -715,10 +762,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     lick_events = exptevents[exptevents.name=='LICK']
 
     # concatenate events together
-    stim_events = pd.concat([ref_events, tar_events, sil_events, lick_events], ignore_index=True)
+    stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
 
     if remove_post_lick:
         stim_events = _remove_post_lick(stim_events, exptevents)
+        stim_events = _remove_post_stim_off(stim_events, exptevents)
 
     stim_events = stim_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -766,6 +814,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
                                 behavior_events, invalid_events], ignore_index=True)
 
     behavior_events = _remove_post_lick(behavior_events, exptevents)
+    behavior_events = _remove_post_stim_off(behavior_events, exptevents)
 
     behavior_events = behavior_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -777,16 +826,16 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
 
 def _remove_post_lick(events, exptevents):
     # screen for FA / Early trials in which we need to truncate / chop out references
-    trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL'])].Trial.unique()
-    lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
-    lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.values
-
+    trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])].Trial.unique()
+    #lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
+    #lick_trial = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].Trial.unique() #.values
+    #import pdb; pdb.set_trace()
     #if len(lick_time) != len(trunc_trials):
     #    import pdb;pdb.set_trace()
     #   raise ValueError('More than one lick recorded on a FA trial, whats up??')
     
     for t in trunc_trials:  
-        fl = lick_time.iloc[lick_trial==t].iloc[0]
+        fl = exptevents[(exptevents.Trial==t) & (exptevents.name=='LICK')].iloc[0]['start']
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
         events.at[e[e.end > fl].index, 'end'] = fl
@@ -794,6 +843,22 @@ def _remove_post_lick(events, exptevents):
         events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
     
     return events
+
+
+def _remove_post_stim_off(events, exptevents):
+    # screen for trials where sound was turned off early. These will largey overlap with the events
+    # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
+    # targets can come in the middle of a string of refs, but refs are turned off post target hit
+    log.info("Removing data post stim-off")
+    trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
+    for t in trunc_trials:
+        toff = exptevents[(exptevents.Trial==t) & (exptevents.name=='STIM,OFF')].iloc[0]['start']
+        e = events[events.Trial==t]
+        events.at[e[e.end > toff].index, 'end'] = toff
+        events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
+    
+    return events
+
 
 def _trim_epoch_columns(epochs):
     cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]

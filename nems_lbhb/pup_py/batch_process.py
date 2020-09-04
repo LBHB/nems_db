@@ -15,14 +15,14 @@ log = logging.getLogger(__name__)
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
 script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'pupil_fit_script.py')
 
-def queue_pupil_jobs(pupilfiles, modeldate='Current', python_path=None, username='nems', force_rerun=True):
+def queue_pupil_jobs(pupilfiles, modeldate='Current', animal='All', python_path=None, username='nems', force_rerun=True):
 
     if python_path is None:
         python_path = sys.executable  # path to python (can be set manually, but defaults to active python running
 
     for fn in pupilfiles:
         # add job to queue
-        nd.add_job_to_queue([fn, modeldate], note="Pupil Job: {}".format(fn),
+        nd.add_job_to_queue([fn, modeldate, animal], note="Pupil Job: {}".format(fn),
                             executable_path=python_path, user=username,
                             force_rerun=force_rerun, script_path=script_path, GPU_job=1)
 
@@ -79,7 +79,14 @@ def mark_complete(pupilfiles):
             scipy.io.savemat(mat_fn, save_dict)
 
             # finally, update celldb to mark pupil as analyzed
-            sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(vf)
+            get_file1 = "SELECT eyecalfile from gDataRaw where eyecalfile='{0}'".format(self.raw_video)
+            out1 = nd.pd_query(get_file1)
+            if out1.shape[0]==0:
+                # try the L:/ path
+                og_video_path = self.raw_video.replace('/auto/data/daq/', 'L:/')
+                sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(og_video_path)
+            else:
+                sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(self.raw_video)
             nd.sql_command(sql)
 
             log.info("Saved analysis successfully for {}".format(video_name))

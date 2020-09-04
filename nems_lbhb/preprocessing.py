@@ -439,8 +439,7 @@ def create_pupil_mask(rec, **options):
     epoch = options.get('epoch', None)
     fs = options.get('fs', rec['resp'].fs)
     collapse = options.get('collapse', False)
-    rm_rem = options.get("rm_rem", True)
-    use_cache = False
+    rm_rem = options.get("rm_rem", False)  # updated default behavior on 08.07.2020 by crh
 
     if fs > rec['resp'].fs:
         raise ValueError

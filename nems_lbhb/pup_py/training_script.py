@@ -39,17 +39,45 @@ if __name__ == '__main__':
     if queueid:
         log.info("Starting QUEUEID={}".format(queueid))
         nd.update_job_start(queueid)
+   
 
-    # project directory
-    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
-    # data path
-    path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
-    training_files = os.listdir(path)
-    n_training_files = len(training_files)
+    # check for sys arguments to determine how to fit model / where to save results
+    if len(sys.argv) > 1:
+        # get the animal / animal video key for figuring out which videos to use for training
+        animal_name = sys.argv[2]
+        video_code = sys.argv[3]
+        # project directory
+        project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+        # data path
+        path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+        training_files = [t for t in os.listdir(path) if video_code in t]
+        n_training_files = len(training_files)
+        training_epochs = 500  # used to be 500. Make this a user def param?
 
-    # get current date/time so that we can save the model results in the correct place
-    dt = datetime.datetime.now().isoformat()
-    os.system('mkdir {0}old_model_fits/{1}'.format('/auto/data/nems_db/pup_py/', dt))
+        # get current date/time so that we can save the model results in the correct place
+        dt = datetime.datetime.now().isoformat()
+        this_model_directory = 'animal_specific_fits/{}'.format(animal_name)
+        
+        if os.path.isdir('{0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory)):
+            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        else:
+            os.system('mkdir {0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
+            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+
+    else:
+        video_code = None
+        # project directory
+        project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+        # data path
+        path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+        training_files = os.listdir(path)
+        n_training_files = len(training_files)
+        training_epochs = 250  # used to be 500. Make this a user def param?
+
+        # get current date/time so that we can save the model results in the correct place
+        dt = datetime.datetime.now().isoformat()
+        this_model_directory = 'old_model_fits'
+        os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True
@@ -108,17 +136,17 @@ if __name__ == '__main__':
         print("new learning rate is {0}".format(keras.backend.eval(model.optimizer.lr)))
 
         callback = keras.callbacks.ModelCheckpoint(
-            filepath='{0}old_model_fits/dt/weights.{epoch:02d}-{val_loss:.2f}.hdf5'.format(project_dir),
+            filepath='{0}{1}/dt/weights.{epoch:02d}-{val_loss:.2f}.hdf5'.format(project_dir, this_model_directory),
             monitor='val_loss', save_best_only=False)
 
         history = model.fit_generator(generator=training_generator,
                                       validation_data=validation_generator,
                                       callbacks=[callback],
                                       use_multiprocessing=True,
-                                      workers=6, epochs=500)
+                                      workers=6, epochs=training_epochs)
 
-        np.save('{0}old_model_fits/{1}/val_loss{0}'.format(project_dir, dt, nrun), np.array(history.history['val_loss']))
-        np.save('{0}old_model_fits/{1}/train_loss{0}'.format(project_dir, dt, nrun), np.array(history.history['loss']))
+        np.save('{0}{1}/{2}/val_loss{3}'.format(project_dir, this_model_directory, dt, nrun), np.array(history.history['val_loss']))
+        np.save('{0}{1}/{2}/train_loss{3}'.format(project_dir, this_model_directory, dt, nrun), np.array(history.history['loss']))
 
     else:
 
@@ -143,7 +171,7 @@ if __name__ == '__main__':
         model.compile(loss='mean_squared_error', optimizer=keras.optimizers.Adam(lr=0.001))
 
         # define callback to save the best weights based on val
-        callback = keras.callbacks.ModelCheckpoint(filepath=project_dir + 'old_model_fits/' + dt + '/' +
+        callback = keras.callbacks.ModelCheckpoint(filepath=project_dir + this_model_directory+'/' + dt + '/' +
                                                    'weights.{epoch:02d}-{val_loss:.2f}.hdf5',
                                                    monitor='val_loss', save_best_only=False)
 
@@ -152,14 +180,14 @@ if __name__ == '__main__':
                                       validation_data=validation_generator,
                                       callbacks=[callback],
                                       use_multiprocessing=True,
-                                      workers=6, epochs=500)
+                                      workers=6, epochs=training_epochs)
 
-        np.save('{0}old_model_fits/{1}/val_loss'.format(project_dir, dt), np.array(history.history['val_loss']))
-        np.save('{0}old_model_fits/{1}/train_loss'.format(project_dir, dt), np.array(history.history['loss']))
+        np.save('{0}{1}/{2}/val_loss'.format(project_dir, this_model_directory, dt), np.array(history.history['val_loss']))
+        np.save('{0}{1}/{2}/train_loss'.format(project_dir, this_model_directory, dt), np.array(history.history['loss']))
         log.info('finished fit')
 
         # find the new "best fit" and save this as the default trained model
-        files = os.listdir("{0}old_model_fits/{1}/".format(project_dir, dt))
+        files = os.listdir("{0}{1}/{2}/".format(project_dir, this_model_directory, dt))
         vals = [0]
         for i, f in enumerate(files):
             if "weights" not in f:
@@ -173,33 +201,55 @@ if __name__ == '__main__':
                         val = np.float(f.split('-')[-1].split('.')[0])
                         mod = f
 
-        old_date = os.listdir(project_dir + 'default_trained_model/')[0]
-        name = os.listdir(project_dir + 'default_trained_model/{0}'.format(old_date))[0]
-        default_name = project_dir + 'default_trained_model/{0}/{1}'.format(old_date, name)
+        if video_code is not None:
+            try:
+                old_date = os.listdir(project_dir + this_model_directory + '/default_trained_model/')[0]
+                name = os.listdir(project_dir + this_model_directory + '/default_trained_model/{0}'.format(old_date))[0]
+                default_name = project_dir + this_model_directory + '/default_trained_model/{0}/{1}'.format(old_date, name)
+            except FileNotFoundError:
+                os.system('mkdir {0}{1}/default_trained_model/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
+                default_name = None # no default exists yet
+            except IndexError:
+                default_name = None
+        else:
+            old_date = os.listdir(project_dir + 'default_trained_model/')[0]
+            name = os.listdir(project_dir + 'default_trained_model/{0}'.format(old_date))[0]
+            default_name = project_dir + 'default_trained_model/{0}/{1}'.format(old_date, name)
 
         # delete the current model from defaults (it is still saved in the
-        # "old_model_fits" folder under the date it was fit on), along with
+        # parent (probably "old_model_fits") folder under the date it was fit on), along with
         # the training data from that date
-        if os.path.isfile(default_name):
-            log.info("replacing old default model with new fit...")
-            os.system("rm -r {0}".format(project_dir + 'default_trained_model/' + old_date))
+        if default_name is not None:
+            if os.path.isfile(default_name):
+                log.info("replacing old default model with new fit...")
+                if video_code is not None:
+                    os.system("rm -r {0}".format(project_dir + this_model_directory + '/default_trained_model/' + old_date))
+                else:
+                    os.system("rm -r {0}".format(project_dir + 'default_trained_model/' + old_date))
 
         # Now save the new best model as the current default model
-        backup_loc = "{0}old_model_fits/{1}/{2}".format(project_dir, dt, mod)
-        default_loc = "{0}default_trained_model/{1}/{2} ".format(project_dir, dt, mod)
-        dir = "{0}default_trained_model/{1}/".format(project_dir, dt)
-        os.system("mkdir {}".format(dir))
+        backup_loc = "{0}{1}/{2}/{3}".format(project_dir, this_model_directory, dt, mod)
+        if video_code is not None:
+            default_loc = "{0}/default_trained_model/{1}/{2} ".format(project_dir + this_model_directory, dt, mod)
+            direc = "{0}/default_trained_model/{1}/".format(project_dir + this_model_directory, dt)
+        else:
+            default_loc = "{0}default_trained_model/{1}/{2} ".format(project_dir, dt, mod)
+            direc = "{0}default_trained_model/{1}/".format(project_dir, dt)
+        os.system("mkdir {}".format(direc))
         os.system("cp {0} {1}".format(backup_loc, default_loc))
 
         # purge all non-saved model weights
         log.info("Purging all other 'non-optimal' model fits...")
         for i, f in enumerate(files):
             if f != mod:
-                os.system("rm {0}old_model_fits/{1}/{2}".format(project_dir, dt, f))
+                os.system("rm {0}{1}/{2}/{3}".format(project_dir, this_model_directory, dt, f))
 
         # Finally, copy the current training data into this directory as well
         log.info("Copying training data into model fit folder...")
-        os.system("cp -r {0}training_data/ {1}old_model_fits/{2}/".format(project_dir, project_dir, dt))
+        if video_code is not None:
+            os.system("cp -r {0}training_data/{1} {2}{3}/{4}/".format(project_dir, video_code+'*', project_dir, this_model_directory, dt))
+        else:
+            os.system("cp -r {0}training_data/ {1}old_model_fits/{2}/".format(project_dir, project_dir, dt))
 
         if queueid:
             nd.update_job_complete(queueid)

@@ -85,8 +85,12 @@ def just_final_figures():
                           plot_stat=plot_stat)
     fig2c, fig2cc = single_scatter(batch, gc, stp, LN, combined, compare=(2,3),
                            plot_stat=plot_stat)
-    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined, plot_stat=plot_stat,
-                                    improved_only=True)
+    fig2d, fig2dd = combined_vs_max(batch, gc, stp, LN, combined,
+                                    plot_stat=plot_stat,
+                                    improved_only=True,
+#                                    snr_path=snr_path,
+#                                    exclude_low_snr=True
+                                    )
     fig2e, fig2ee = single_scatter(batch2, gc, stp, LN, combined, compare=(2,3),
                                    plot_stat=plot_stat)
 
@@ -110,10 +114,16 @@ def just_final_figures():
     # Figure 3:
     # Equivalence
     log.info('Equivalence analyses ...\n')
+    snr_path = load_paths['snrs']
     fig3a, fig3aa = equivalence_scatter(batch, gc, stp, LN, combined,
                                         plot_stat=plot_stat, drop_outliers=True,
                                         color_improvements=True,
-                                        self_equiv=True, self_eq_models=eq_both)#,
+                                        self_equiv=True, self_eq_models=eq_both,
+                                        exclude_low_snr=True,
+                                        snr_path=snr_path,
+                                        #enable_hover=True,
+                                        )
+
     _, fig3aaa = equivalence_scatter(batch, gc, stp, LN, combined,
                                      plot_stat=plot_stat, drop_outliers=True,
                                      color_improvements=True,
@@ -133,6 +143,7 @@ def just_final_figures():
 #                                xmodel='GC+STP', ymodel='GC')
     hist_path = load_paths['equivalence_effect_size'][gc_version]
     hist_path_263 = load_paths['equivalence_effect_size']['263']
+    snr_path = load_paths['snrs']
     fig3e, fig3ee = equivalence_effect_size(batch, gc, stp, LN, combined,
                                             load_path=hist_path,
                                             only_improvements=True)
@@ -147,7 +158,20 @@ def just_final_figures():
                                       eq_models=eq_both,
                                       cross_kwargs=cross_kwargs,
                                       cross_models=cross_all,
-                                      use_median=False)
+                                      adjust_scores=True,
+                                      use_median=False,
+                                      #use_log_ratios=True,
+                                      )
+    fig3k, fig3kk = equivalence_histogram(batch, gc, stp, LN, combined,
+                                      load_path=hist_path, self_equiv=True,
+                                      self_kwargs=eq_kwargs,
+                                      eq_models=eq_both,
+                                      cross_kwargs=cross_kwargs,
+                                      cross_models=cross_all,
+                                      adjust_scores=False,
+                                      exclude_low_snr=True,
+                                      snr_path=snr_path
+                                      )
     fig3g, fig3gg = equivalence_effect_size(batch2, gc, stp, LN, combined,
                                             load_path=hist_path_263,
                                             only_improvements=True)
@@ -169,6 +193,8 @@ def just_final_figures():
     figures_to_save.append((fig3h, 'equivalence_histogram_263'))
     figures_to_save.append((fig3gg, 'equivalence_effect_text_263'))
     figures_to_save.append((fig3hhh, 'equivalence_hist_text_263'))
+    figures_to_save.append((fig3k, 'equivalence_hist_snr'))
+    figures_to_save.append((fig3kk, 'equivalence_hist_text_snr'))
 
 
     # figure 4:
@@ -201,13 +227,13 @@ def just_final_figures():
                                           save_path=None,
                                           load_path=s3)
 
-    # combined cell
-#    s4 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/combined.pickle'
-#    fig4d, fig4dd, fig4ddd = example_clip('AMT004b-41-1', *default_args,
-#                                          stim_idx=17,
+    # difference cell
+#    s4 = '/auto/users/jacob/notes/gc_rank3/figures/examples/use_for_paper/difference.pickle'
+#    fig4d, fig4dd, fig4ddd = example_clip('AMT004b-26-2', *default_args,
+#                                          stim_idx=13,
 #                                          trim_start=40, trim_end=180,
 #                                          skip_combined=False,
-#                                          save_path=None,
+#                                          save_path=s4,
 #                                          load_path=None)
     figures_to_save.append((fig4a, 'ex_stp_cell'))
     figures_to_save.append((fig4aa, 'ex_stp_cell_text'))
@@ -218,9 +244,9 @@ def just_final_figures():
     figures_to_save.append((fig4c, 'ex_LN_cell'))
     figures_to_save.append((fig4cc, 'ex_LN_cell_text'))
     figures_to_save.append((fig4ccc, 'ex_LN_cell_strf'))
-#    figures_to_save.append((fig4d, 'ex_combined_cell'))
-#    figures_to_save.append((fig4dd, 'ex_combined_cell_text'))
-#    figures_to_save.append((fig4ddd, 'ex_combined_cell_strf'))
+    figures_to_save.append((fig4d, 'ex_difference_cell'))
+    figures_to_save.append((fig4dd, 'ex_difference_cell_text'))
+    figures_to_save.append((fig4ddd, 'ex_difference_cell_strf'))
 
 
     # Parameters
@@ -261,17 +287,29 @@ def just_final_figures():
 
 
     # simulations
+    #fig6a = compare_sims(190, 270)
+    #fig6b = compare_sims(1550,1610)
+
+    # Simulation specs for re-generating simulations
+    # TODO: STP isn't matching the previous simulation... not even
+    # the response is the same. Did the cellid get overwritten or something?
+#    xfspec1, ctx1 = xhelp.load_model_xform('AMT005c-20-1', batch, stp)
+#    stp_spec = ctx1['modelspec']
+#    xfspec2, ctx2 = xhelp.load_model_xform('TAR009d-22-1', batch, gc)
+#    gc_spec = ctx2['modelspec']
+#    xfspec3, ctx3 = xhelp.load_model_xform('TAR010c-40-1', batch, LN)
+#    LN_spec = ctx3['modelspec']
+
     sim_start=740
     sim_end=880
-    fig6a = compare_sims(190, 270)
-    fig6b = compare_sims(1550,1610)
-    fig6c, fig6cc = compare_sim_fits(simulation_spec=stp_spec,
-            *default_args, save_path=load_paths['simulations']['stp_cell']['stp'],
+
+    fig6c, fig6cc = compare_sim_fits(#simulation_spec=stp_spec,
+            *default_args, load_path=load_paths['simulations']['stp_cell']['stp'],
             start=sim_start, end=sim_end, tag='stp_cell_stp_sim',
             skip_combined=False
             )
-    fig6d, fig6dd = compare_sim_fits(simulation_spec=gc_spec,
-            *default_args, save_path=load_paths['simulations']['gc_cell']['gc'],
+    fig6d, fig6dd = compare_sim_fits(#simulation_spec=gc_spec,
+            *default_args, load_path=load_paths['simulations']['gc_cell']['gc'],
             start=sim_start, end=sim_end, tag='gc_cell_gc_sim',
             skip_combined=False
             )
@@ -282,14 +320,14 @@ def just_final_figures():
 #    fig6f, fig6ff = compare_sim_fits(
 #            load_path=load_paths['simulations']['stp_cell']['gc'],
 #            start=sim_start, end=sim_end, tag='stp_cell_gc_sim'
-#            )
-    fig6g, fig6gg = compare_sim_fits(simulation_spec=LN_spec,
-            *default_args, save_path=load_paths['simulations']['LN_cell']['LN'],
+#            )19s-
+    fig6g, fig6gg = compare_sim_fits(#simulation_spec=LN_spec,
+            *default_args, load_path=load_paths['simulations']['LN_cell']['LN'],
             start=sim_start, end=sim_end, tag='LN_cell_LN_sim',
             ext_start=2.3, skip_combined=False
             )
-    figures_to_save.append((fig6a, 'parameter_effects_stp_onset'))
-    figures_to_save.append((fig6b, 'parameter_effects_gc_up_or_down'))
+    #figures_to_save.append((fig6a, 'parameter_effects_stp_onset'))
+    #figures_to_save.append((fig6b, 'parameter_effects_gc_up_or_down'))
     figures_to_save.append((fig6c, 'stp_cell_stp_sim'))
     figures_to_save.append((fig6cc, 'stp_cell_stp_sim_text'))
     figures_to_save.append((fig6d, 'gc_cell_gc_sim'))

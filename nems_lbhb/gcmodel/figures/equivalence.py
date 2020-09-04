@@ -31,7 +31,10 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                         enable_hover=False, manual_lims=None,
                         drop_outliers=False, color_improvements=True,
                         xmodel='GC', ymodel='STP', legend=False,
-                        self_equiv=False, self_eq_models=[]):
+                        self_equiv=False, self_eq_models=[],
+                        show_highlights=False,
+                        exclude_low_snr=False,
+                        snr_path=None):
     '''
     model1: GC
     model2: STP
@@ -50,10 +53,34 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
                                            LN_filter=LN_filter)
     improved = c
     not_improved = list(set(a) - set(c))
+    if exclude_low_snr:
+        snr_df = pd.read_pickle(snr_path)
+        med_snr = snr_df['snr'].median()
+        high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+        high_snr_cells = high_snr.index.values.tolist()
+        improved = list(set(improved) & set(high_snr_cells))
+        not_improved = list(set(not_improved) & set(high_snr_cells))
+        a = list(set(a) & set(high_snr_cells))
+        # check number of animals included
+        prefixes = [s[:3] for s in a]
+        n_animals = len(list(set(prefixes)))
+        print('n_animals: %d' % n_animals)
+
     models = [gc, stp, LN]
     gc_rel_imp, stp_rel_imp = _relative_score(plot_df, models, improved)
     gc_rel_not, stp_rel_not = _relative_score(plot_df, models, not_improved)
     gc_rel_all, stp_rel_all = _relative_score(plot_df, models, a)
+
+
+    # LN, STP, GC
+    cells_to_highlight = ['TAR010c-40-1', 'AMT005c-20-1', 'TAR009d-22-1']
+    cells_to_plot_gc_rel = []
+    cells_to_plot_stp_rel = []
+    for c in cells_to_highlight:
+        stp_rel = plot_df[stp][c] - plot_df[LN][c]
+        gc_rel = plot_df[gc][c] - plot_df[LN][c]
+        cells_to_plot_gc_rel.append(gc_rel)
+        cells_to_plot_stp_rel.append(stp_rel)
 
     # compute corr. before dropping outliers (only dropping for visualization)
     r_imp, p_imp = st.pearsonr(gc_rel_imp, stp_rel_imp)
@@ -67,6 +94,14 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
         _, sa, _, _, _ = improved_cells_to_list(batch, stp1, stp2, LN1, LN2,
                                                 as_lists=True)
         aa = list(set(ga) & set(sa))
+
+        if exclude_low_snr:
+            snr_df = pd.read_pickle(snr_path)
+            med_snr = snr_df['snr'].median()
+            high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+            high_snr_cells = high_snr.index.values.tolist()
+            aa = list(set(aa) & set(high_snr_cells))
+
         df_r_eq = nd.batch_comp(batch, [gc1, gc2, stp1, stp2, LN1, LN2],
                                 stat=plot_stat)
         df_r_eq.dropna(axis=0, how='any', inplace=True)
@@ -119,6 +154,9 @@ def equivalence_scatter(batch, gc, stp, LN, combined, se_filter=True,
     if color_improvements:
         ax.scatter(gc_rel_not, stp_rel_not, c=model_colors['LN'], s=small_scatter)
         ax.scatter(gc_rel_imp, stp_rel_imp, c=model_colors['max'], s=big_scatter)
+        if show_highlights:
+            for i, (g, s) in enumerate(zip(cells_to_plot_gc_rel, cells_to_plot_stp_rel)):
+                plt.text(g, s, str(i+1), fontsize=12, color='black')
     else:
         ax.scatter(gc_rel_all, stp_rel_all, c='black', s=big_scatter)
 
@@ -270,7 +308,9 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
                           effect_key='performance_effect',
                           self_equiv=False, self_kwargs={}, eq_models=[],
                           cross_kwargs={}, cross_models=[],
-                          use_median=True):
+                          use_median=True, exclude_low_snr=False,
+                          snr_path=None, adjust_scores=True,
+                          use_log_ratios=False):
     '''
     model1: GC
     model2: STP
@@ -315,6 +355,13 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
 
     df = df[cellids]
     rs = df[equiv_key].values
+    if exclude_low_snr:
+        snr_df = pd.read_pickle(snr_path)
+        med_snr = snr_df['snr'].median()
+        high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+        high_snr_cells = high_snr.index.values.tolist()
+        improved = list(set(improved) & set(high_snr_cells))
+        not_improved = list(set(not_improved) & set(high_snr_cells))
 
     imp = np.array(improved)
     not_imp = np.array(not_improved)
@@ -336,6 +383,13 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
         _, sa, _, _, _ = improved_cells_to_list(batch, stp1, stp2, LN1, LN2,
                                                 as_lists=True)
         aa = list(set(ga) & set(sa))
+        if exclude_low_snr:
+            snr_df = pd.read_pickle(snr_path)
+            med_snr = snr_df['snr'].median()
+            high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+            high_snr_cells = high_snr.index.values.tolist()
+            aa = list(set(aa) & set(high_snr_cells))
+
         eqs_stp, eqs_gc = _get_self_equivs(**self_kwargs, cellids=aa)
         md_stpeq = np.nanmedian(eqs_stp)
         md_gceq = np.nanmedian(eqs_gc)
@@ -354,26 +408,28 @@ def equivalence_histogram(batch, gc, stp, LN, combined, se_filter=True,
         md_sub1 = np.nanmedian(eqs_sub1)
         md_sub2 = np.nanmedian(eqs_sub2)
 
-        if use_median:
-            md_avg1 = 0.5*(md_x1 + md_x2)
-            md_avg2 = 0.5*(md_sub1 + md_sub2)
-            ratio = md_avg2 / md_avg1
-            md_stpeq *= ratio
-            md_gceq *= ratio
+        if adjust_scores:
+            if use_median:
+                md_avg1 = 0.5*(md_x1 + md_x2)
+                md_avg2 = 0.5*(md_sub1 + md_sub2)
+                ratio = md_avg2 / md_avg1
+                md_stpeq *= ratio
+                md_gceq *= ratio
 
-        else:
-            eqs_avg1 = 0.5*(eqs_x1 + eqs_x2)  # between-model, halved est
-            eqs_avg2 = 0.5*(eqs_sub1 + eqs_sub2)  # between-model, full data
-            ratios = np.abs(eqs_avg2 / eqs_avg1)
-#            stp_scaled = eqs_stp * ratios
-#            gc_scaled = eqs_gc * ratios
-            log_ratios = np.abs(np.log(ratios))
-            log_ratios /= log_ratios.max()
-            stp_scaled = eqs_stp + (1-eqs_stp) * log_ratios
-            gc_scaled = eqs_gc + (1-eqs_gc) * log_ratios
-            md_stpeq = np.nanmedian(stp_scaled)
-            md_gceq = np.nanmedian(gc_scaled)
-
+            else:
+                eqs_avg1 = 0.5*(eqs_x1 + eqs_x2)  # between-model, halved est
+                eqs_avg2 = 0.5*(eqs_sub1 + eqs_sub2)  # between-model, full data
+                ratios = np.abs(eqs_avg2 / eqs_avg1)
+                if use_log_ratios:
+                    log_ratios = np.abs(np.log(ratios))
+                    log_ratios /= log_ratios.max()
+                    stp_scaled = eqs_stp + (1-eqs_stp) * log_ratios
+                    gc_scaled = eqs_gc + (1-eqs_gc) * log_ratios
+                else:
+                    stp_scaled = eqs_stp * ratios
+                    gc_scaled = eqs_gc * ratios
+                md_stpeq = np.nanmedian(stp_scaled)
+                md_gceq = np.nanmedian(gc_scaled)
 
     not_color = model_colors['LN']
     imp_color = model_colors['max']
