@@ -13,12 +13,12 @@ import nems.plots.api as nplt
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = False
+save_fig = True
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
-#yaxis = 'r_pupil_unique'
-yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
+yaxis = 'r_pupil_unique'
+#yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
 #yaxis = 'r_task'
@@ -104,6 +104,7 @@ bad_v_good_ic = round(ss.ranksums(d[(d.di_class=='bad') & (d.area=='IC')][yaxis]
 ax[0].set_title('A1: bad: {0}, good {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}'.format(
     bad_med_a1, good_med_a1, bad_v_good_a1,
     bad_med_ic, good_med_ic, bad_v_good_ic))
+ax[0].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0])
 
 for a in A1.animal.unique():
@@ -132,7 +133,7 @@ f1.tight_layout()
 
 
 
-f2,ax = plt.subplots(2,2, figsize=(5, 5))
+f2,ax = plt.subplots(2,2, figsize=(5, 5), sharey='row')
 sns.stripplot(x='animal', y=yaxis, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
                         marker='o', size=5, ax=ax[0,0])
 ax[0,0].axhline(0, linestyle='--', lw=2, color='grey')
@@ -149,6 +150,7 @@ sets_ic = [IC.loc[IC['animal']==a, yaxis] for a in IC.animal.unique()]
 means_ic = [f'{a}={IC.loc[IC["animal"]==a, yaxis].mean():.3f}' for a in IC.animal.unique()]
 F,p = ss.f_oneway(*sets_ic)
 ax[0,1].set_title(f'IC F={F:.3f} p={p:.3e}\n{",".join(means_ic)}')
+ax[0,1].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0,1])
 
 sns.stripplot(x='animal', y='DI', data=A1, dodge=True, edgecolor='white', linewidth=0.5,
@@ -167,6 +169,7 @@ sets_ic = [IC.loc[IC['animal']==a, 'DI'] for a in IC.animal.unique()]
 means_ic = [f'{a}={IC.loc[IC["animal"]==a, "DI"].mean():.3f}' for a in IC.animal.unique()]
 F,p = ss.f_oneway(*sets_ic)
 ax[1,1].set_title(f'IC F={F:.3f} p={p:.3e}\n{",".join(means_ic)}')
+
 nplt.ax_remove_box(ax[1,1])
 
 f2.tight_layout()
