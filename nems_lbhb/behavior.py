@@ -30,6 +30,7 @@ def create_trial_labels(exptparams, exptevents):
     all_trials = np.unique(exptevents['Trial'])
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
     resp_win = exptparams['BehaveObject'][1]['ResponseWindow']
+    tarPreStim = exptparams['TrialObject'][1]['TargetHandle'][1]['PreStimSilence']
     refPreStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
     refDuration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
     refPostStim = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
@@ -71,14 +72,22 @@ def create_trial_labels(exptparams, exptevents):
                             if not catch:
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                         else:
-                            if not catch:
+                            if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                                # only make the trial outcome label an early trial if on the first sound.
+                                # the sound token (sID) will get labeled correctly
                                 trial_outcome = 'EARLY_TRIAL'
+                            else:
+                                trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif (fl < ref_start):
                         # sound never played because of an early lick
                         sID.append('NULL')
                         rt.append(np.nan)
-                        if not catch:
+                        if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                            # catch did not precede this reference and this was the first ref in the trial
+                            # label trial as early
                             trial_outcome = 'EARLY_TRIAL'
+                        else:
+                            trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + early_win + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
                         rt.append(fl - ref_start)
@@ -114,11 +123,13 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
-                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                                # is lick in the response window of the previous reference?
-                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
-                            #else:
 
+                            #if not catch:
+                            #    if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                                    # is lick in the response window of the previous reference?
+                            #        trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #    else:
+                            #        trial_outcome = 'EARLY_TRIAL'
                             # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
                             # this as a valid target if the lick came before the early resp window
                             if not catch:
@@ -142,12 +153,16 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
-                            #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
-                            #    trial_outcome = 'FALSE_ALARM_TRIAL'
-                            #else:
+
+                            #if not catch:
+                            #    if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
+                            #        trial_outcome = 'FALSE_ALARM_TRIAL'
+                            #    else:
+                            #        trial_outcome = 'EARLY_TRIAL'
                             # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
                             # this as a valid target if the lick came before the early resp window
-                            trial_outcome = 'EARLY_TRIAL'
+                            if not catch:
+                                trial_outcome = 'EARLY_TRIAL'
                         else:
                             rt.append(np.nan)
                             sID.append('UNKNOWN')
@@ -176,11 +191,13 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > catch_start) & (fl <= (catch_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - catch_start)
+                            
+                            
                             #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                                 # is lick in the response window of the previous reference?
                             #    trial_outcome = 'FALSE_ALARM_TRIAL'
                             #else:
-
+                            #    trial_outcome = 'EARLY_TRIAL'
                             # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
                             # this as a valid target if the lick came before the early resp window
                             trial_outcome = 'EARLY_TRIAL'
@@ -203,9 +220,11 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > catch_start) & (fl <= (catch_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - catch_start)
+                            
                             #if fl < (tar_start - refPostStim - refDuration - tarPreStim + early_win + resp_win):
                             #    trial_outcome = 'FALSE_ALARM_TRIAL'
                             #else:
+                            #    trial_outcome = 'EARLY_TRIAL'
                             # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
                             # this as a valid target if the lick came before the early resp window
                             trial_outcome = 'EARLY_TRIAL'
