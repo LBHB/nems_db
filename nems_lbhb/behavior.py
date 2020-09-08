@@ -46,7 +46,7 @@ def create_trial_labels(exptparams, exptevents):
         ev = exptevents[exptevents['Trial']==t].copy()
         trial_outcome = None # gets updated on every iteration. Whatever the last sound in the
                              # trial gets labeled as is what the trial outcome will be
-        catch = False        # make sure a hit on a Ref following a CR of a Catch doesn't overwrite trial outcome
+        catch = False        # make sure a hit on a REF/TAR following a CR of a Catch doesn't overwrite trial outcome
         if sum(ev.name.str.contains('LICK'))>0:
             # lick(s) detected
             fl = ev[ev.name=='LICK']['start'].values[0]
@@ -104,11 +104,13 @@ def create_trial_labels(exptparams, exptevents):
                         elif (fl > (tar_start + early_win)) & (fl <= (tar_start + resp_win + early_win)):
                             sID.append('HIT_TRIAL')
                             rt.append(fl - tar_start)
-                            trial_outcome = 'HIT_TRIAL'
+                            if not catch:
+                                trial_outcome = 'HIT_TRIAL'
                         elif ((fl > tar_start) & (fl > (tar_start + resp_win + early_win))):
                             sID.append('MISS_TRIAL')
                             rt.append(fl - tar_start)
                             trial_outcome = 'MISS_TRIAL'
+                            # don't have catch "catch" here bc if miss here, not really a correct reject. Probably just a miss
                         elif (fl > tar_start) & (fl <= (tar_start + early_win)):
                             sID.append('EARLY_TRIAL')
                             rt.append(fl - tar_start)
@@ -119,7 +121,8 @@ def create_trial_labels(exptparams, exptevents):
 
                             # CRH 06.24.2020 - always call this an early trial bc we don't want to classify
                             # this as a valid target if the lick came before the early resp window
-                            trial_outcome = 'EARLY_TRIAL'
+                            if not catch:
+                                trial_outcome = 'EARLY_TRIAL'
                         else:
                             rt.append(np.nan)
                             sID.append('UNKNOWN')
@@ -152,8 +155,9 @@ def create_trial_labels(exptparams, exptevents):
                 elif 'Catch' in name:
                     catch = True
                     # NOTE that "Catch" are set up to play before targets. So, if a target plays 
-                    # after the Catch (e.g. a CORRECT_REJECT_TRIAL), trial_outcome (for baphy trial) will get overwritten
-                    # based on the target outcome
+                    # after the Catch (e.g. a CORRECT_REJECT_TRIAL), trial_outcome will get overwritten
+                    # based on the target outcome. That's why we create "catch" bool here to look for that in a
+                    # post catch target. (because we want it to be labeled CORRECT_REJECT_TRIAL)
                     catch_start = r['start']
                     rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
                     if rewarded:
