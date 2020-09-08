@@ -753,7 +753,7 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     cat_events.at[:, 'name'] = new_tags
     cat_events.at[:, 'start'] = cat_starts.start.values
     cat_events.at[:, 'end'] = cat_ends.end.values
-    cat_events2 = tar_events.copy()
+    cat_events2 = cat_events.copy()
     cat_events2.at[:, 'name'] = 'CATCH'
     cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
 
