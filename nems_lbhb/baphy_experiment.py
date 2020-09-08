@@ -297,9 +297,14 @@ class BAPHYExperiment:
         # add batch to cache recording in the correct location
         kwargs.update({'batch': self.batch})
 
+        # kwargs shouldn't have the "recache" keyword when generating hash
+        kwargs_hash = copy.deepcopy(kwargs)
+        if 'recache' in kwargs.keys():
+            kwargs_hash.pop('recache')
+
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
-                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+                self.experiment[:7], kwargs_hash, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
         
         if (not os.path.exists(data_file)) | kwargs.get('recache', False):
             kwargs.update({'mfiles': None})
@@ -748,8 +753,8 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     cat_events.at[:, 'name'] = new_tags
     cat_events.at[:, 'start'] = cat_starts.start.values
     cat_events.at[:, 'end'] = cat_ends.end.values
-    cat_events2 = tar_events.copy()
-    cat_events2.at[:, 'name'] = 'TARGET'
+    cat_events2 = cat_events.copy()
+    cat_events2.at[:, 'name'] = 'CATCH'
     cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
 
     # pre/post stim events
