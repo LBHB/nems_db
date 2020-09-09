@@ -1211,3 +1211,42 @@ def quick_pop_state_plot(modelspec=None, **ctx):
     ax.set_xticklabels(rec['stim'].chans)
 
     return {}
+
+def state_resp_coefs(rec, modelspec, ax=None,
+                     channel=None, **options):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    if ax is None:
+        f, ax = plt.subplots()
+
+    d = modelspec.phi[-1]['d']
+    n_inputs = d.shape[0]
+    total_states = d.shape[1]
+    true_states = int(total_states / (n_inputs + 1))
+
+    d_new = d[:, 0::true_states]
+    for _i in range(1, true_states):
+        d_new = np.concatenate((d_new,np.full((n_inputs,1),np.nan),
+                                d[:,_i::true_states]), axis=1)
+    mm = np.max(np.abs(d))
+    im = ax.imshow(d_new, origin='lower', clim=[-mm, mm])
+    state_chans = modelspec.meta['state_chans']
+    for _i in range(len(state_chans)):
+        ax.text(_i*(n_inputs+2)+1, n_inputs, state_chans[_i], va='top')
+    plt.colorbar(im, ax=ax)
+    nplt.ax_remove_box(ax)
+    ax.set_ylabel('output chan')
+    ax.set_xticks([])
+
+    """
+    g = modelspec.phi[-1]['g']
+    g[:, 0] = 0
+    mm = np.max(np.abs(g))
+    ax[1, 0].imshow(g[:, 0::3], clim=[-mm, mm])
+    ax[1, 0].set_ylabel('channel out')
+    ax[1, 1].imshow(g[:, 1::3], clim=[-mm, mm])
+    im = ax[1, 2].imshow(g[:, 2::3], clim=[-mm, mm])
+    plt.colorbar(im, ax=ax[1, 2])
+    """
+
+

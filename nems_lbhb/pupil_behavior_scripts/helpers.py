@@ -268,6 +268,9 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     # =================== get overall task model params / MI ===============================
     if p0 is not None:
         cols = ['cellid', 'state_chan_alt', 'MI', 'gain_mod', 'dc_mod', 'r', 'r_se']
+        if 'DI' in dMI.columns:
+            cols += ['DI']
+
         task_merge = dMI[(dMI['state_sig']==p0) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
                         dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
                         on=['cellid', 'state_chan_alt'])
@@ -279,7 +282,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         task_merge['sig_task'] = [True if ((task_merge.iloc[i]['r_x'] - task_merge.iloc[i]['r_y']) > 
                                             (task_merge.iloc[i]['r_se_x'] + task_merge.iloc[i]['r_se_y'])) else False for i in range(task_merge.shape[0])]
         # add task rpred
-        task_merge['r_task'] = task_merge['r_x'].pow(2)
+        task_merge['r_task'] = task_merge['r_x'].pow(2) - task_merge['r_y'].pow(2)
+
+        if 'DI' in cols:
+            task_merge['DI'] = task_merge['DI_y']
 
         # strip extraneous columns
         task_merge = task_merge.drop(columns=[c for c in task_merge.columns if ('_x' in c) | ('_y' in c)])
@@ -350,7 +356,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     # =========================== get sig sensory cells ============================
     psth_cells = dMI[(dMI.state_sig==shuf_model) & (dMI.r > r0_threshold)].cellid.unique()
-    
+
     # merge results into single df
     if ('beh' in full_model) | pas_model:
         # "target freq is meaningless because could change between files"

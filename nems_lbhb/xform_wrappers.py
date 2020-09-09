@@ -85,10 +85,14 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
                  whiten=True, meta={}, manual_cellids=None, **context):
 
     rec = load_recording(recording_uri_list[0])
+
     if type(cellid) is list:
+        #if len(cellid[0].split("-"))>1:
+        #    manual_cellids = cellid.copy()
+
         # convert back to siteid
         cellid = cellid[0].split("-")[0]
-
+        
     # Can't do these steps w/o access to LBHB database,
     # so have to skip this step when fitting models locally.
     # TODO: handle this better. Ideally, cellids should just be saved
@@ -148,6 +152,7 @@ def split_pop_rec_by_mask(rec, **contex):
 def pop_file(stimfmt='ozgf', batch=None,
              rasterfs=50, chancount=18, siteid=None, **options):
 
+    siteid = siteid.split("-")[0]
     if ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
         subsetstr = "NAT1"
     elif siteid in ['none', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',

@@ -267,6 +267,28 @@ def st(loadkey):
 
 
 @xform()
+def sml(kw):
+    """
+    set sm_win_len variable
+    """
+    ops = kw.split(".")[1:]
+    sm_win_len = 180
+    for op in ops:
+        sm_win_len = float(op)
+    xfspec = [['nems.xforms.init_context', {'sm_win_len': sm_win_len}]]
+
+    return xfspec
+
+
+@xform()
+def rstate(kw):
+    ops = kw.split(".")[1:]
+    shuffle_interactions = ('sh' in ops)
+    return [['nems_lbhb.preprocessing.state_resp_outer',
+             {'shuffle_interactions': shuffle_interactions}]]
+
+
+@xform()
 def inp(loadkey):
     """
     inp = 'input signal'

@@ -1,12 +1,15 @@
 import os
 import logging
 import numpy as np
+import json as jsonlib
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from numpy.linalg import det
 
 from nems import xforms
 from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems.uri import NumpyEncoder
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +33,18 @@ def subspace_overlap(u, v):
 
 def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10,
                   norm_mean=True, method='jacobian', **kwargs):
+
+    # remove static nonlinearities from end of modelspec chain
+    modelspec = modelspec.copy()
+    if ('double_exponential' in modelspec[-1]['fn']):
+        log.info('removing dexp from tail')
+        modelspec.pop_module()
+    if ('relu' in modelspec[-1]['fn']):
+        log.info('removing relu from tail')
+        modelspec.pop_module()
+    if ('levelshift' in modelspec[-1]['fn']):
+        log.info('removing lvl from tail')
+        modelspec.pop_module()
 
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
@@ -77,7 +92,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=False, **ctx):
+def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12, maxbins=1000, stepbins=3, IsReload=False, **ctx):
 
     if IsReload:
         return {}
@@ -87,23 +102,26 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
     else:
         figs = figures.copy()
 
+    rec = val.apply_mask()
+    
     cellids = val['resp'].chans
     siteids = [c.split("-")[0] for c in cellids]
     # analyze all output channels
     out_channel = list(np.arange(len(cellids)))
     channel_count=len(out_channel)
 
-    # only measure on validation data(?)
-    rec = val.apply_mask()
-
     # skip silent bins
     stim_mag = rec['stim'].as_continuous().sum(axis=0)
-    index_range = np.arange(0, np.min([2000, len(stim_mag)]))
     stim_big = stim_mag > np.max(stim_mag) / 1000
+    index_range = np.arange(0, len(stim_mag), stepbins)
     index_range = index_range[(index_range > memory) & stim_big[index_range]]
-    log.info('Calculating dstrf for %d channels, %d timepoints, memory=%d',
-             channel_count, len(index_range), memory)
 
+    # limit number of bins to speed up analysis
+    index_range = index_range[:maxbins]
+
+    log.info('Calculating dstrf for %d channels, %d timepoints (%d steps), memory=%d',
+             channel_count, len(index_range), stepbins, memory)
+    log.info(rec.signals.keys())
     pcs, pc_mag = dstrf_pca(modelspec, rec, pc_count=n_pc, out_channel=out_channel,
                            index_range=index_range, memory=memory)
 
@@ -118,30 +136,40 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
     olap_same_site = []
     olap_diff_site = []
     olap_part_site = []
-    cc_same_site = []
-    cc_diff_site = []
-    cc_part_site = []
+    r_cc_same_site = []
+    r_cc_diff_site = []
+    r_cc_part_site = []
+    p_cc_same_site = []
+    p_cc_diff_site = []
+    p_cc_part_site = []
     for i in range(olapcount):
         for j in range(i):
             overlap[i, j] = subspace_overlap(spaces[:, :, i].T, spaces[:, :, j].T)
             overlap[j, i] = np.corrcoef(p[i, :], p[j, :])[0, 1]
+            r_cc = np.corrcoef(r[i, :], r[j, :])[0, 1]
 
             if (siteids[i] == siteids[0]) & (siteids[j] == siteids[0]):
                 olap_same_site.append(overlap[i, j])
-                cc_same_site.append(overlap[j, i])
+                p_cc_same_site.append(overlap[j, i])
+                r_cc_same_site.append(r_cc)
             elif (siteids[j] == siteids[0]):
                 olap_diff_site.append(overlap[i, j])
-                cc_diff_site.append(overlap[j, i])
+                p_cc_diff_site.append(overlap[j, i])
+                r_cc_diff_site.append(r_cc)
             else:
                 olap_part_site.append(overlap[i, j])
-                cc_part_site.append(overlap[j, i])
+                p_cc_part_site.append(overlap[j, i])
+                r_cc_part_site.append(r_cc)
     log.info(
         f"PC space same {np.mean(olap_same_site):.4f} partial: {np.mean(olap_part_site):.4f} diff: {np.mean(olap_diff_site):.4f}")
     log.info(
-        f"Resp CC same {np.mean(cc_same_site):.4f} partial: {np.mean(cc_part_site):.4f} diff: {np.mean(cc_diff_site):.4f}")
+        f"Pred CC same {np.mean(p_cc_same_site):.4f} partial: {np.mean(p_cc_part_site):.4f} diff: {np.mean(p_cc_diff_site):.4f}")
+    log.info(
+        f"Resp CC same {np.mean(r_cc_same_site):.4f} partial: {np.mean(r_cc_part_site):.4f} diff: {np.mean(r_cc_diff_site):.4f}")
 
     f, ax = plt.subplots(2, 1, figsize=(6,9))
-    spectrogram(rec, sig_name='pred', title='Predicted PSTH', ax=ax[0]) 
+    modelname_list = modelspec.meta["modelname"].split("_")
+    spectrogram(rec, sig_name='pred', title=f'{siteids[0]}/{modelname_list} pred PSTH', ax=ax[0]) 
     ax[1].imshow(overlap, clim=[-1, 1])
 
     for i, s in enumerate(siteids[:olapcount]):
@@ -151,9 +179,12 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
     ax[1].text(olapcount+1, 0, f'PC space same {np.mean(olap_same_site):.3f}\n' +\
                                f'partial: {np.mean(olap_part_site):.3f}\n' +\
                                f'diff: {np.mean(olap_diff_site):.3f}\n' +\
-                               f'Resp CC same {np.mean(cc_same_site):.3f}\n' +\
-                               f'partial: {np.mean(cc_part_site):.3f}\n' +\
-                               f'diff: {np.mean(cc_diff_site):.3f}',
+                               f'Resp CC same {np.mean(r_cc_same_site):.3f}\n' +\
+                               f'partial: {np.mean(r_cc_part_site):.3f}\n' +\
+                               f'diff: {np.mean(r_cc_diff_site):.3f}\n' +\
+                               f'Pred CC same {np.mean(p_cc_same_site):.3f}\n' +\
+                               f'partial: {np.mean(p_cc_part_site):.3f}\n' +\
+                               f'diff: {np.mean(p_cc_diff_site):.3f}',
                va='top', fontsize=8)
     ax[1].set_ylabel('diff site -- same site')
     ax_remove_box(ax[1])
@@ -181,12 +212,19 @@ def pop_space_summary(val, modelspec, figures=None, n_pc=2, memory=12, IsReload=
 
     figs.append(fig2BytesIO(f2))
 
-    modelspec.meta['dstrf_overlap']=overlap
+    extra_results = {'dstrf_overlap': overlap,
+            'olap_same_site': olap_same_site,
+            'olap_part_site': olap_part_site,
+            'r_cc_same_site': r_cc_same_site,
+            'r_cc_part_site': r_cc_part_site,
+            'p_cc_same_site': p_cc_same_site,
+            'p_cc_part_site': p_cc_part_site}
+    modelspec.meta['extra_results']=jsonlib.dumps(extra_results, cls=NumpyEncoder) 
 
     return {'figures': figs, 'modelspec': modelspec}
 
 
-def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False, out_path="/tmp", 
+def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
                 out_base=None, **kwargs):
     #plt.close('all')
 
@@ -198,42 +236,56 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
     index = index_range[i]
     memory = dstrf.shape[2]
 
-    f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
-    f.show()
-
     stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
-
     stim_lim = np.max(stim[:, index_range])
+
     s = stim[:, (index - memory):index]
     print("stim_lim ", stim_lim)
 
     im_list = []
     l1_list = []
     l2_list = []
-    im_list.append(axs[0, 1].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto'))
-    axs[0, 1].set_ylabel('stim')
-    axs[0, 1].set_yticks([])
-    axs[0, 1].set_xticks([])
-    _title1 = axs[0, 1].set_title(f"dSTRF frame {index}")
+
+    if static:
+        max_frames = np.min([10, framecount])
+        f, axs = plt.subplots(cellcount+1, max_frames, figsize=(16, 8))
+        stim0col=0
+    else:
+        max_frames = framecount
+        f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
+        stim0col=1
+    f.show()
+
+    im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', 
+                                           aspect='auto', cmap='Greys'))
+    axs[0, stim0col].set_ylabel('stim')
+    axs[0, stim0col].set_yticks([])
+    axs[0, stim0col].set_xticks([])
+    _title1 = axs[0, stim0col].set_title(f"dSTRF frame {index}")
 
     for cellidx in range(cellcount):
         d = dstrf[i, :, :, cellidx].copy()
 
         pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-        strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) / 2
+
         if mult:
-            strf_lim[-1] = strf_lim[-1] * stim_lim / 100
+            strf_lim = strf_lim * stim_lim
             d = d * s
-        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', aspect='auto'))
+        print(f"strf_lim[{cellidx}]: ", strf_lim)
+
+        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
+                                               aspect='auto'))
         axs[cellidx+1, 0].set_yticks([])
         axs[cellidx+1, 0].set_xticks([])
         axs[cellidx+1, 0].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
-
-        l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory):index], '-')[0])
-        l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory):index], '--')[0])
-        axs[cellidx+1, 1].set_ylim((0, pred_max))
-        axs[cellidx+1, 1].set_yticks([])
         ax_remove_box(axs[cellidx+1,0])
+
+        if not static:
+           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory):index], '-')[0])
+           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory):index], '--')[0])
+           axs[cellidx+1, 1].set_ylim((0, pred_max))
+           axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
         index = index_range[i]
@@ -256,13 +308,44 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, preview=False, mult=False,
 
         return tuple(im_list + l1_list + l2_list + [_title1])
 
-    if preview:
+    if static:
+        stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
+        stim_lim = np.max(stim[:, index_range])
+        print("stim_lim ", stim_lim)
+
+        for i in range(1, max_frames):
+           index = index_range[i]
+
+           s = stim[:, (index - memory):index]
+           axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
+           axs[0, i].set_title(f"dSTRF frame {index}")
+           axs[0, i].set_yticks([])
+           axs[0, i].set_xticks([])
+
+           for cellidx in range(cellcount):
+               d = dstrf[i, :, :, cellidx].copy()
+
+               pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
+               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+               if mult:
+                   strf_lim = strf_lim * stim_lim
+                   d = d * s
+               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', aspect='auto')
+               axs[cellidx+1, i].set_yticks([])
+               axs[cellidx+1, i].set_xticks([])
+               #axs[cellidx+1, i].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
+               ax_remove_box(axs[cellidx+1, i])
+
+    elif preview:
         for i in range(framecount):
             dstrf_frame(i)
             plt.pause(0.01)
     else:
         if out_base is None:
-            out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}.mp4'
+            if mult:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}_masked.mp4'
+            else:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}.mp4'
         out_file = os.path.join(out_path, out_base)
         print(f'saving to: {out_file}')
 

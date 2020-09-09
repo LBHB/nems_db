@@ -1306,25 +1306,31 @@ def LN_pop_plot(ctx):
 
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
-                      offset=0.5, max=0.85, ax=None):
+                      offset=None, max=None, ax=None):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
-        modelgroups={'ALL': modelnames}
-    modelnames=[]
-    for k, m in modelgroups.items():
-        modelnames.extend(m)
+        #modelgroups={'ALL': modelnames}
+        pass
+    else:
+        modelnames=[]
+        for k, m in modelgroups.items():
+            modelnames.extend(m)
 
-    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
+    dot_markers = ['.','o','^','s','^','.','s','o','.']
     if ax is None:
-        ax = plt.gca()
+        fig,ax = plt.subplots()
 
     if goodcells is None:
         cellids=None
+    elif type(goodcells) is list:
+        cellids = goodcells
     else:
         cellids=list(goodcells.index)
-    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    #b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_test')
     b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
@@ -1337,33 +1343,76 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
             b_goodcells[:,i] = td[m] > 2*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
+    model_mean = (b_ceiling.loc[goodcells]).mean()[modelnames]
     b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+    if max is None:
+        max = b_m.max() * 1.05
+    if offset is None:
+        offset = b_m.min() * 0.9
 
-    #u_modelgroups = np.unique(modelgroups)
-    #for i, g in enumerate(u_modelgroups):
-    i=0
-    for k, m in modelgroups.items():
-        jj = [m0 in m for m0 in modelnames]
-        modelset=[]
-        for jjj in range(len(jj)):
-            if jj[jjj]:
-                modelset.append(modelnames[jjj])
-        print("{} : {}".format(k, modelset))
-        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
-        i+=1
+    if modelgroups is None:
+        sc = ax.scatter(n_parms, b_m, s=100)
 
-    handles, labels = ax.get_legend_handles_labels()
-    # reverse the order
-    ax.legend(handles, labels, loc='lower right')
+        annot = ax.annotate("", xy=(0, 0), xytext=(0, 0.05), textcoords="offset points",
+                            fontsize=7, ha="center", bbox=dict(boxstyle="round", fc="w"),
+                            arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+
+        def update_annot(ind):
+
+            pos = sc.get_offsets()[ind["ind"][0]]
+            annot.xy = pos
+            text = "{}".format(" ".join([modelnames[n] for n in ind["ind"]]))
+            annot.set_text(text)
+            #annot.get_bbox_patch().set_facecolor(cmap(norm(c[ind["ind"][0]])))
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = sc.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+
+    else:
+        i=0
+        for k, m in modelgroups.items():
+            jj = [m0 in m for m0 in modelnames]
+            modelset=[]
+            for jjj in range(len(jj)):
+                if jj[jjj]:
+                    modelset.append(modelnames[jjj])
+            #print("{} : {}".format(k, modelset))
+            #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+            ax.plot(n_parms[jj], b_m[jj], dot_markers[i], color=dot_colors[i], label=k, markersize=10)
+            i+=1
+
+            best_mean = b_m[jj].max()
+            best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
+            print(f"{k} best: {best_mean:.3f} {best_model}")
+            worst_mean = b_m[jj].min()
+            worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
+            print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+
+        handles, labels = ax.get_legend_handles_labels()
+        # reverse the order
+        ax.legend(handles, labels, loc='lower right', fontsize=8)
 
     ax.set_xlabel('Free parameters')
-    ax.set_ylabel('Mean var explained')
-    ax.set_ylim((offset-0.05, max))
+    ax.set_ylabel('Mean pred corr')
+    ax.set_ylim((offset, max))
     nplt.ax_remove_box(ax)
 
-    return ax, b_ceiling
+    return ax, b_ceiling, model_mean
 
 
 @scrollable

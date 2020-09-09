@@ -303,6 +303,144 @@ def population_mod(rec, i, o, s=None, g=None, d=None, gs=None, ds=None):
     return [rec[i].transform(fn, o)]
 
 
+class population_mod(NemsModule):
+    """
+    Scale each input by weighted sum of (true) responses on other channels, projected to separate latent variables,
+    each scaled by state
+
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.population_mod')
+        options['tf_layer'] = options.get('tf_layer', 'nems_lbhb.tf.layers.population_mod')
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state', 'r': 'resp',
+                                                         'n_inputs': 1, 'n_state_vars': 1, 'state_type': 'dc'
+                                                         })
+        options['plot_fns'] = options.get('plot_fns',
+                                          ['nems.plots.api.mod_output',
+                                           'nems.plots.api.before_and_after',
+                                           'nems.plots.api.pred_resp',
+                                           'nems.plots.api.state_vars_timeseries',
+                                           'nems.plots.api.state_vars_psth_all'])
+        options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Pass state variable(s) through sigmoid then apply dc/gain to pred"
+
+    @xmodule('pmodxx')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the state_dexp
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: r'^pmod\.?(\d{1,})x(\d{1,})$'
+            e.g., "pmod.SxR" or "pmod.S":
+                S : number of state channels (required)
+                R : number of channels to modulate, ie, number of neurons in pop model (default = 1)
+        Options
+        -------
+        None
+        '''
+        options = kw.split('.')
+        pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+        parsed = re.match(pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            pattern = re.compile(r'^(\d{1,})$')
+            parsed = re.match(pattern, options[1])
+        try:
+            n_state_vars = int(parsed.group(1))
+            if len(parsed.groups()) > 1:
+                n_inputs = int(parsed.group(2))
+            else:
+                n_inputs = 1
+
+        except TypeError:
+            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+                             "Make sure keyword is of the form: \n"
+                             "pmod.{n_state_variables} \n"
+                             "keyword given: %s" % kw)
+
+        state = 'state'
+        resp = 'resp'
+        set_bounds = False
+        for o in options[2:]:
+            if o == 'lv':
+                state = 'lv'
+            if o == 'bound':
+                set_bounds = True
+        state_type = 'dc'
+        # init gain params
+        z = np.zeros([n_state_vars, n_inputs, n_inputs])
+
+        template = {
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': state,
+                          'r': resp,
+                          'n_inputs': n_inputs,
+                          'n_state_vars': n_state_vars,
+                          'state_type': state_type},
+            'plot_fns': ['nems.plots.api.mod_output',
+                         'nems.plots.api.before_and_after',
+                         'nems.plots.api.pred_resp',
+                         'nems.plots.api.state_vars_timeseries',
+                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fn_idx': 3,
+            'prior': {'coefficients': ('Normal', {'mean': z, 'sd': z+0.1})}
+        }
+        if set_bounds:
+            pass
+            #template['bounds'] = {}
+
+        return population_mod(**template)
+
+    def eval(self, rec, i, o, s, r, coefficients, **kw_args):
+        '''
+
+        Parameters
+        ----------
+        i name of input
+        o name of output signal
+        s name of state signal
+        r name of response signal
+        coefficients - weight matrix (S x R x R)
+
+        '''
+        resp = rec[r]._data
+        state = rec[s]._data
+
+        c = coefficients.copy()
+        b = np.zeros((c.shape[2], c.shape[0]))
+        for ii in range(c.shape[0]):
+            b[:, ii] = np.diagonal(c[ii])
+            np.fill_diagonal(c[ii], 0)
+
+        lv = np.tensordot(c, resp, axes=(2, 0))
+        lv = np.sum(np.expand_dims(rec[s]._data, 1) * lv, axis=0)
+        lv0 = b @ state
+
+        fn = lambda x: x + lv + lv0
+
+        return [rec[i].transform(fn, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
+
+
 class sdexp_new(NemsModule):
     """
     Add a constant to a NEMS signal
