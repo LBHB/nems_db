@@ -29,6 +29,7 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
+import nems_lbhb.behavior_plots as bplot
 import nems_lbhb.baphy_io as io
 from nems.utils import recording_filename_hash
 from nems import get_setting
@@ -557,6 +558,41 @@ class BAPHYExperiment:
             epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
         '''
+
+    # ======================= PLOTTING METHODS ======================
+    def plot_RT_histogram(self, trials=None, tokens=None, bins=None, ax=None, **options):
+        """
+        extract RTs and pass to behavior_plots.plot_RT_histogram fn
+
+        options:    behavioral trial options (e.g. which trials are invalid -- see behavior.compute_metrics)
+        trials:     BAPHY trials (list/array of ints) over which to compute metrics. If None, use all valid trials specified in options dict.
+        tokens:     epoch tokens (list/array of ints) over which to compute metrics. If None, use all valid sound tokens according to options dict.
+        bins:       int or range for specifying histogram resolution. If int, 
+                        histogram will be plotted from 0 to 2 sec in "bins" number of time bins
+        """
+        bev = self.get_behavior_events()
+        bev = self._stack_events(bev)
+        options.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
+        bev = behavior.mark_invalid_trials(self.get_baphy_exptparams()[0], bev, **options)
+
+        # get RTs for each sound
+        tars = bev.loc[bev.name.str.contains('Target') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        catch =bev.loc[bev.name.str.contains('Catch') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        ref = bev.loc[bev.name.str.contains('Reference') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        epochs = tars + catch
+        keys = [k.split(' , ')[1] for k in epochs]
+        RTs = {k: [] for k in keys + ['Reference']}
+        for e in epochs + ref:
+            if e in ref:
+                RTs['Reference'].extend(bev.loc[(bev.name==e) & (bev.invalidSoundTrial == False), 'RT'])
+            else:
+                RTs[e.split(' , ')[1]].extend(bev.loc[(bev.name==e) & (bev.invalidSoundTrial == False), 'RT'])
+        
+        perf = self.get_behavior_performance(trials=trials, tokens=tokens, **options)
+        di = perf['DI']
+        ax = bplot.plot_RT_histogram(RTs, bins=bins, DI=di, ax=ax)
+
+        return ax
 
     # ===================================================================
     # Methods below this line just pass through to the functions for now.

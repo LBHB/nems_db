@@ -426,7 +426,6 @@ def compute_metrics(exptparams, exptevents, **options):
     Return the following metrics in a dictionary:
         - Response Rate (RR):
             - Per target correct hit rate (hit trials)
-            - Per target incorrect hit rate (incorrect hits = total - correct rejects) -- NaN if all targets are rewarded
             - Reference false alarm rate
             (note, incorrect hit rate / correct hit rate are not distinguished in the resulting dictionary.
             Results are just labeled by target name, so use extparams to decide which are rewarded/unrewarded
@@ -489,7 +488,11 @@ def _compute_metrics(exptparams, exptevents, **options):
                                             'INCORRECT_HIT_TRIAL', 'CORRECT_REJECT_TRIAL', 'EARLY_TRIAL']))]['Trial']
         nTrials = len(np.unique(validTrialList))
         validTrialdf = exptevents[exptevents.Trial.isin(validTrialList)]
-        nHits = (validTrialdf.name.isin(['HIT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
+        #nHits = (validTrialdf.name.isin(['HIT_TRIAL', 'INCORRECT_HIT_TRIAL', 'EARLY_TRIAL'])).sum()
+        # 09.10.2020 -- Don't use baphy outcome for this, should use sound token classication. Otherwise HR is
+        # messed up for two target trials (e.g. on a trial with a catch)
+        nHits = ((validTrialdf.soundTrial.isin(['HIT_TRIAL', 'INCORRECT_HIT_TRIAL'])) & \
+                               (validTrialdf.name==tar)).sum()
         if nTrials == 0:
             R['RR'][tar_key] = np.nan
         else:
