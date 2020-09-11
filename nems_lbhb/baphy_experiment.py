@@ -35,6 +35,8 @@ from nems import get_setting
 
 log = logging.getLogger(__name__)
 
+stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
+
 # special decorator that returns copies of cached objects.
 # this is useful for cases where you don't want to accidentally
 # mutate the native object returned by a cache function
@@ -278,8 +280,32 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
+    def get_recording_uri(self, generate_if_missing=True, **kwargs):
+
+        kwargs = io.fill_default_options(kwargs)
+
+        # add BAPHYExperiment version to recording options
+        kwargs.update({'version': 'BAPHYExperiment.1'})
+        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+
+        # add batch to cache recording in the correct location
+        kwargs.update({'batch': self.batch})
+
+        # see if can load from cache, if not, call generate_recording
+        data_file = recording_filename_hash(
+                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+
+        if (not os.path.exists(data_file)) & generate_if_missing:
+            kwargs.update({'mfiles': None})
+            rec = self.generate_recording(**kwargs)
+            log.info('Caching recording: %s', data_file)
+            rec.save(data_file)
+
+        return data_file
+
+
     @lru_cache(maxsize=128)
-    def get_recording(self, **kwargs):
+    def get_recording(self, recache=False, **kwargs):
         '''
         Steps to building a recording:
             1) Figure out which signals to load
@@ -290,33 +316,19 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
-        # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.1'})
-        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
-
-        # add batch to cache recording in the correct location
-        kwargs.update({'batch': self.batch})
-
-        # kwargs shouldn't have the "recache" keyword when generating hash
-        kwargs_hash = copy.deepcopy(kwargs)
-        if 'recache' in kwargs.keys():
-            kwargs_hash.pop('recache')
-
         # see if can load from cache, if not, call generate_recording
-        data_file = recording_filename_hash(
-                self.experiment[:7], kwargs_hash, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+        data_file = self.get_recording_uri(self, generate_if_missing=False, **kwargs)
         
-        if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+        if (not os.path.exists(data_file)) | recache:
             kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
             rec.save(data_file)
-            return rec
-        
         else:
             log.info('Cached recording found')
             rec = load_recording(data_file)
-            return rec
+
+        return rec
 
     def generate_recording(self, **kwargs):
         rec_name = self.experiment[:7]      
@@ -324,6 +336,8 @@ class BAPHYExperiment:
         # figure out signals to load, then load them (as lists)
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
+        stim = kwargs.get('stim', False)
+
         # stim, lfp, photometry etc.
 
         # get correction method
@@ -382,6 +396,14 @@ class BAPHYExperiment:
                                                 np.ones([pcount, rlen - plen]) * np.nan, axis=1))
 
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+
+        if stim:
+            stim_sigs = [nems.signal.TiledSignal(
+                            data=io.baphy_load_stim(e, str(p), **kwargs),
+                            fs=kwargs['rasterfs'], name='stim',
+                            epochs=baphy_events[i], recording=rec_name)
+                        for e, p in zip(exptparams, self.parmfile)]
+            signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
 
         if len(signals)==0:
             # make a dummy signal

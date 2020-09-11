@@ -222,7 +222,7 @@ def _todict(matobj):
 
 def baphy_mat2py(s):
 
-    s3 = re.sub(r';', r'', s.rstrip())
+    s3 = re.sub(r';$', r'', s.rstrip())
     s3 = re.sub(r'%', r'#', s3)
     s3 = re.sub(r'\\', r'/', s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
@@ -237,8 +237,21 @@ def baphy_mat2py(s):
     s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
 
     s6 = re.sub(r'([0-9]+) ', r"\g<0>,", s5)
-    s6 = re.sub(r'NaN ', r"np.nan,", s6)
-    s6 = re.sub(r'Inf ', r"np.inf,", s6)
+    x = s6.split('=')
+    if len(x) > 1:
+        if ';' in x[1]:
+            x[1] = re.sub(r'\[', r"np.array([[", x[1])
+            x[1] = re.sub(r'\]', r"]])", x[1])
+            x[1] = re.sub(r';','],[', x[1])
+        x[1] = re.sub('true','True', x[1])
+        x[1] = re.sub('false','False', x[1])
+        x[1] = re.sub(r'NaN ', r"np.nan,", x[1])
+        x[1] = re.sub(r'Inf ', r"np.inf,", x[1])
+        x[1] = re.sub(r'NaN,', r"np.nan,", x[1])
+        x[1] = re.sub(r'Inf,', r"np.inf,", x[1])
+        x[1] = re.sub(r'NaN\]', r"np.nan]", x[1])
+        x[1] = re.sub(r'Inf\]', r"np.inf]", x[1])
+        s6 = "=".join(x)
 
     s7 = re.sub(r"XX([a-zA-Z0-9]+)'", r".\g<1>'", s6)
     s7 = re.sub(r"XX([a-zA-Z0-9]+)\+", r".\g<1>+", s7)
@@ -388,6 +401,43 @@ def baphy_convert_user_definable_fields(x):
             baphy_convert_user_definable_fields(v)
 
 
+def fill_default_options(options):
+    """
+    fill in default options. use options after adding defaults to specify
+    metadata hash
+    """
+
+    options = options.copy()
+
+    # set default options if missing
+    options['rasterfs'] = int(options.get('rasterfs', 100))
+    options['stimfmt'] = options.get('stimfmt', 'ozgf')
+    options['chancount'] = int(options.get('chancount', 18))
+    options['pertrial'] = int(options.get('pertrial', False))
+    options['includeprestim'] = options.get('includeprestim', 1)
+    options['pupil'] = int(options.get('pupil', False))
+    options['rem'] = int(options.get('rem', False))
+    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
+    if options['pupil'] or options['rem']:
+        options = io.set_default_pupil_options(options)
+
+    #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
+    #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
+    #options['pupil_median'] = options.get('pupil_median', 0)
+    #options["pupil_offset"] = options.get('pupil_offset', 0.75)
+    options['resp'] = int(options.get('resp', True))
+    options['stim'] = int(options.get('stim', True))
+    options['runclass'] = options.get('runclass', None)
+    options['rawid'] = options.get('rawid', None)
+    options['facemap'] = options.get('facemap', False)
+
+    if options['stimfmt'] in ['envelope', 'parm']:
+        log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
+        options['chancount'] = 0
+
+    return options
+
+
 def baphy_load_specgram(stimfilepath):
 
     matdata = scipy.io.loadmat(stimfilepath, chars_as_strings=True)
@@ -501,6 +551,144 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
     dstr = re.sub(r"[\[\]]", r"", dstr)
 
     return stim_cache_dir + dstr + '.mat'
+
+def parm_tbp(exptparams, **options):
+    """
+    generate parameterized spectrograms for TBP ref/tar stimuli in stim_dict format
+
+    :param exptparams:
+    :param options:
+    :return:
+    """
+    ref = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    tar = exptparams['TrialObject'][1]['TargetHandle'][1]
+
+    ref_names = ref['Names']
+    tar_names = tar['Names']
+    tar_tone_names = tar['Tone'][1]['Names']
+    tar_noise_bands = tar['ToneBands']
+    tar_fixed_band = tar['ToneFixedBand']
+    if len(tar_fixed_band) == 0:
+        tar_tone_bands = tar_noise_bands
+    else:
+        tar_tone_bands = [int(tar_fixed_band)] * len(tar_noise_bands)
+    tar_snrs = tar['SNRs']
+
+    stim_dict = {}
+    total_bands = len(ref_names) + len(set(tar_tone_bands))
+    fs = options['rasterfs']
+    prebins = int(fs * ref['PreStimSilence'])
+    durbins = int(fs * ref['Duration'])
+    postbins = int(fs * ref['PostStimSilence'])
+    total_bins = prebins + durbins + postbins
+    for i, r in enumerate(ref_names):
+        s = np.zeros((total_bands, total_bins))
+        s[i, prebins] = 1
+        stim_dict[r] = s
+    for i, t in enumerate(tar_names):
+        s = np.zeros((total_bands, total_bins))
+        if np.isfinite(tar_snrs[i]):
+            s[tar_noise_bands[i], prebins] = 1
+            s[len(ref_names), prebins] = 10 ** (tar_snrs[i] / 20)
+        elif tar_snrs[i] > 0:
+            s[len(ref_names), prebins] = 1
+        else:
+            s[tar_noise_bands[i], prebins] = 1
+        stim_dict[t] = s
+    tags = list(stim_dict.keys())
+    stimparam = {'chans': ref_names + list(set(tar['Tone'][1]['Names']))}
+
+    return stim_dict, tags, stimparam
+
+
+def baphy_load_stim(exptparams, parmfilepath, **options):
+
+    if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
+        import nems_lbhb.strf.torc_subfunctions as tsf
+        TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+        stim, tags, stimparam = tsf.generate_torc_spectrograms(
+                  TorcObject, rasterfs=options['rasterfs'], single_cycle=False)
+        # adjust so that all power is >0
+        for k in stim.keys():
+            stim[k]=stim[k]+5
+
+        # NB stim is a dict rather than a 3-d array
+
+    if (options['stimfmt']=='parm') & \
+            exptparams['TrialObject'][1]['TargetClass'].startswith('ToneInNoise'):
+
+        # NB stim is a dict rather than a 3-d array
+        stim, tags, stimparam = parm_tbp(exptparams, **options)
+
+    elif exptparams['runclass']=='VOC_VOC':
+        stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+        stimfilepath2 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+        log.info("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
+        # load stimulus spectrogram
+        stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
+        stim2, tags2, stimparam2 = baphy_load_specgram(stimfilepath2)
+        stim = np.concatenate((stim1,stim2), axis=2)
+        if exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR'] >= 100:
+            t2 = [t+'_0dB' for t in tags2]
+            tags = np.concatenate((tags1,t2))
+            eventmatch='Reference1'
+        else:
+            t1 = [t+'_0dB' for t in tags1]
+            tags = np.concatenate((t1,tags2))
+            eventmatch = 'Reference2'
+        #import pdb
+        #pdb.set_trace()
+        for i in range(len(exptevents)):
+            if eventmatch in exptevents.loc[i,'name']:
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('.wav','.wav_0dB')
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference1','Reference')
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference2','Reference')
+
+        stimparam = stimparam1
+    else:
+        stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
+        print("Cached stim: {0}".format(stimfilepath))
+        # load stimulus spectrogram
+        stim, tags, stimparam = baphy_load_specgram(stimfilepath)
+
+    if options["stimfmt"]=='envelope' and \
+        exptparams['TrialObject'][1]['ReferenceClass']=='SSA':
+        # SSA special case
+        stimo=stim.copy()
+        maxval=np.max(np.reshape(stimo,[2,-1]),axis=1)
+        print('special case for SSA stim!')
+        ref=exptparams['TrialObject'][1]['ReferenceHandle'][1]
+        stimlen=ref['PipDuration']+ref['PipInterval']
+        stimbins=int(stimlen*options['rasterfs'])
+
+        stim=np.zeros([2,stimbins,6])
+        prebins=int(ref['PipInterval']/2*options['rasterfs'])
+        durbins=int(ref['PipDuration']*options['rasterfs'])
+        stim[0,prebins:(prebins+durbins),0:3]=maxval[0]
+        stim[1,prebins:(prebins+durbins),3:]=maxval[1]
+        tags=["{}+ONSET".format(ref['Frequencies'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][0],ref['F1Rates'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][0],ref['F1Rates'][1]),
+              "{}+ONSET".format(ref['Frequencies'][1]),
+              "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][1])]
+
+    snr_suff=""
+    if 'SNR' in exptparams['TrialObject'][1]['ReferenceHandle'][1].keys():
+        SNR = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR']
+        if SNR<100:
+            log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
+            snr_suff="_{}dB".format(SNR)
+
+    stim_dict = {}
+    for eventidx in range(0, len(tags)):
+        # save stimulus for this event as separate dictionary entry
+        if type(stim) is dict:
+            stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[tags[eventidx]]
+        else:
+            stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+
+    return stim, tags, stimparam
 
 
 def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
