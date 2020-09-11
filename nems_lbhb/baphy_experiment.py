@@ -570,7 +570,7 @@ class BAPHYExperiment:
         bins:       int or range for specifying histogram resolution. If int, 
                         histogram will be plotted from 0 to 2 sec in "bins" number of time bins
         """
-        bev = self.get_behavior_events()
+        bev = self.get_behavior_events(**options)
         bev = self._stack_events(bev)
         options.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
         bev = behavior.mark_invalid_trials(self.get_baphy_exptparams()[0], bev, **options)

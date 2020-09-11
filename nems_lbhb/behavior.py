@@ -597,6 +597,7 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     # create set of rt bins
     bins = np.arange(early_window, early_window + resp_window + dx, dx)
     RTs = get_reaction_times(exptparams, exptevents, **options)
+
     if len(RTs['Target'].keys()) == 1:
         print("only one target. Can't compute LI between categories")
 
@@ -692,9 +693,10 @@ def get_reaction_times(exptparams, exptevents, **options):
 
     # for each unique target, get RTs
     unique_targets = events[tar_mask].name.unique()
-    targets = [t.strip('Stim , ') for t in unique_targets]
-    targets = [t.strip(' , Target') for t in targets]
-    targets = [t.strip(' , Catch') for t in targets]
+    targets = [t.split(' , ')[1] for t in unique_targets]
+    #targets = [t.strip('Stim , ') for t in unique_targets]
+    #targets = [t.strip(' , Target') for t in targets]
+    #targets = [t.strip(' , Catch') for t in targets]
     tar_RTs = {}
     for tar, tar_key in zip(unique_targets, targets):
         mask = tar_mask & (events.name == tar)
