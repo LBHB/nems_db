@@ -59,7 +59,4 @@ def TBP(events, params):
     params['TrialObject'][1]['TargetHandle'][1]['Names'] = baphy_tar_strings
     new_params = params
 
-            
-
-
     return new_events, new_params
