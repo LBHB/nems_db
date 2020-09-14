@@ -419,7 +419,7 @@ def fill_default_options(options):
     options['rem'] = int(options.get('rem', False))
     options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
-        options = io.set_default_pupil_options(options)
+        options = set_default_pupil_options(options)
 
     #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
     #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
