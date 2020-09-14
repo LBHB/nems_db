@@ -360,11 +360,13 @@ class BAPHYExperiment:
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
         
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
-        #for i, bev, param in enumerate(zip(baphy_events, exptparams)):
-        #    if param['runclass']=='TBP':
+        for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
+            if param['runclass']=='TBP':
                 # for TBP, we need to update events to tweak certain target names if they belong to targetDistSet 2, i.e. reminder targets
-                # also need to update the soundObject names accordingly in self.exptparams
-        #        baphy_events[i] = runclass.TBP(bev, param)
+                # also need to update the soundObject names accordingly in exptparams. 
+                # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
+                # but it will update this local exptparams that gets used for signal generation
+                baphy_events[i], exptparams[i] = runclass.TBP(bev, param)
         
     
         signals = {}
