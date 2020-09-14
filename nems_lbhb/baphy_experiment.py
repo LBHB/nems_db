@@ -19,6 +19,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
+from nems_lbhb import runclass
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
@@ -343,6 +344,14 @@ class BAPHYExperiment:
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
+        
+        # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
+        #for i, bev, param in enumerate(zip(baphy_events, exptparams)):
+        #    if param['runclass']=='TBP':
+                # for TBP, we need to update events to tweak certain target names if they belong to targetDistSet 2, i.e. reminder targets
+                # also need to update the soundObject names accordingly in self.exptparams
+        #        baphy_events[i] = runclass.TBP(bev, param)
+        
     
         signals = {}
         if resp:
