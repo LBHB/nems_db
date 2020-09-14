@@ -121,7 +121,7 @@ def baphy_load_recording_uri(recache=False, **options):
     siteid = options['siteid']
 
     # fill in remaining default options
-    options = fill_default_options(options)
+    options = io.fill_default_options(options)
 
     use_API = get_setting('USE_NEMS_BAPHY_API')
 
@@ -253,42 +253,6 @@ def parse_cellid(options):
     return list(cells_to_extract), options
 
 
-def fill_default_options(options):
-    """
-    fill in default options. use options after adding defaults to specify
-    metadata hash
-    """
-
-    options = options.copy()
-
-    # set default options if missing
-    options['rasterfs'] = int(options.get('rasterfs', 100))
-    options['stimfmt'] = options.get('stimfmt', 'ozgf')
-    options['chancount'] = int(options.get('chancount', 18))
-    options['pertrial'] = int(options.get('pertrial', False))
-    options['includeprestim'] = options.get('includeprestim', 1)
-    options['pupil'] = int(options.get('pupil', False))
-    options['rem'] = int(options.get('rem', False))
-    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
-    if options['pupil'] or options['rem']:
-        options = io.set_default_pupil_options(options)
-
-    #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
-    #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
-    #options['pupil_median'] = options.get('pupil_median', 0)
-    #options["pupil_offset"] = options.get('pupil_offset', 0.75)
-    options['resp'] = int(options.get('resp', True))
-    options['stim'] = int(options.get('stim', True))
-    options['runclass'] = options.get('runclass', None)
-    options['rawid'] = options.get('rawid', None)
-    options['facemap'] = options.get('facemap', False)
-
-    if options['stimfmt'] in ['envelope', 'parm']:
-        log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
-        options['chancount'] = 0
-
-    return options
-
 
 def baphy_load_data(parmfilepath, **options):
     """
@@ -330,6 +294,8 @@ def baphy_load_data(parmfilepath, **options):
 
     # figure out stimulus cachefile to load
     if options['stim']:
+
+        """
         if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
             import nems_lbhb.strf.torc_subfunctions as tsf
             TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
@@ -393,7 +359,8 @@ def baphy_load_data(parmfilepath, **options):
                   "{}+ONSET".format(ref['Frequencies'][1]),
                   "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][0]),
                   "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][1])]
-
+        """
+        stim, tags, stimparam = io.baphy_load_stim(exptparams, parmfilepath, **options)
     else:
         stim = np.array([])
 
@@ -994,7 +961,7 @@ def baphy_load_recording(**options):
 
     # STEP 1: FIGURE OUT FILE(S) and SIGNAL(S) TO LOAD
 
-    options = fill_default_options(options)
+    options = io.fill_default_options(options)
     meta = options
     mfilename = options.get('mfilename', None)
     cellid = options.get('cellid', None)
@@ -1950,7 +1917,7 @@ def baphy_data_path(**options):
     if 'recache' in options:
         del options['recache']
 
-    options = fill_default_options(options)
+    options = io.fill_default_options(options)
     log.info(options)
 
     # three ways to select cells
