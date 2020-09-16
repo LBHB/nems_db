@@ -282,7 +282,7 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, recache=False, generate_if_missing=True, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, **kwargs):
 
         kwargs = io.fill_default_options(kwargs)
 
