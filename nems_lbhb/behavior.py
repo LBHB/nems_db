@@ -72,7 +72,7 @@ def create_trial_labels(exptparams, exptevents):
                             if not catch:
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                         else:
-                            if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                            if (not catch) & (fl < (refDuration + refPostStim)):
                                 # only make the trial outcome label an early trial if on the first sound.
                                 # the sound token (sID) will get labeled correctly
                                 trial_outcome = 'EARLY_TRIAL'
@@ -82,7 +82,7 @@ def create_trial_labels(exptparams, exptevents):
                         # sound never played because of an early lick
                         sID.append('NULL')
                         rt.append(np.nan)
-                        if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                        if (not catch) & (fl < (refDuration + refPostStim)):
                             # catch did not precede this reference and this was the first ref in the trial
                             # label trial as early
                             trial_outcome = 'EARLY_TRIAL'
