@@ -680,15 +680,25 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
             log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
             snr_suff="_{}dB".format(SNR)
 
-    if (epochs is not None) and (type(stim) is dict):
-        keys = list(stim.keys())
-        new_stim={}
-        new_keys=[]
-        for k in keys:
-            matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
-            for nk in matches:
-                new_stim[nk] = stim[k]
-        stim = new_stim
+    if (epochs is not None):
+        # additional processing steps to convert stim into a dictionary with keys that match epoch names
+        # specific to BAPHYExperiment loader.
+        if (type(stim) is not dict):
+            stim_dict = {}
+            for eventidx in range(0, len(tags)):
+                # save stimulus for this event as separate dictionary entry
+                stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+            stim = stim_dict
+
+        if (type(stim) is dict):
+            keys = list(stim.keys())
+            new_stim={}
+            new_keys=[]
+            for k in keys:
+                matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
+                for nk in matches:
+                    new_stim[nk] = stim[k]
+            stim = new_stim
 
     #stim_dict = {}
     #for eventidx in range(0, len(tags)):

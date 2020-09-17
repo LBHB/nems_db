@@ -410,12 +410,12 @@ class BAPHYExperiment:
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
         if stim:
+            #import pdb; pdb.set_trace()
             stim_sigs = [nems.signal.TiledSignal(
                             data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **kwargs)[0],
                             fs=kwargs['rasterfs'], name='stim',
                             epochs=baphy_events[i], recording=rec_name)
                         for i, p in enumerate(self.parmfile)]
-            #import pdb; pdb.set_trace()
 
             signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
 
