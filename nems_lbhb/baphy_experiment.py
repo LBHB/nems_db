@@ -319,7 +319,7 @@ class BAPHYExperiment:
             3) Package all signals into recording
         '''
         # see if can load from cache, if not, call generate_recording
-        data_file = self.get_recording_uri(self, generate_if_missing=False, **kwargs)
+        data_file = self.get_recording_uri(generate_if_missing=False, **kwargs)
         
         if (not os.path.exists(data_file)) | recache:
             kwargs.update({'mfiles': None})
