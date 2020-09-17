@@ -601,7 +601,7 @@ def parm_tbp(exptparams, **options):
     return stim_dict, tags, stimparam
 
 
-def baphy_load_stim(exptparams, parmfilepath, **options):
+def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
     if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
         import nems_lbhb.strf.torc_subfunctions as tsf
@@ -680,13 +680,23 @@ def baphy_load_stim(exptparams, parmfilepath, **options):
             log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
             snr_suff="_{}dB".format(SNR)
 
-    stim_dict = {}
-    for eventidx in range(0, len(tags)):
-        # save stimulus for this event as separate dictionary entry
-        if type(stim) is dict:
-            stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[tags[eventidx]]
-        else:
-            stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+    if (epochs is not None) and (type(stim) is dict):
+        keys = list(stim.keys())
+        new_stim={}
+        new_keys=[]
+        for k in keys:
+            matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
+            for nk in matches:
+                new_stim[nk] = stim[k]
+        stim = new_stim
+
+    #stim_dict = {}
+    #for eventidx in range(0, len(tags)):
+    #    # save stimulus for this event as separate dictionary entry
+    #    if type(stim) is dict:
+    #        stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[tags[eventidx]]
+    #    else:
+    #        stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
 
     return stim, tags, stimparam
 

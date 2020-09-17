@@ -28,6 +28,8 @@ from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
 from nems import get_setting
+from nems_lbhb.baphy_experiment import BAPHYExperiment
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -257,7 +259,11 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
     else:
-        recording_uri, _ = nb.baphy_load_recording_uri(**options)
+        #recording_uri, _ = nb.baphy_load_recording_uri(**options)
+        if siteid is None:
+            siteid = cellid.split("-")[0]
+        manager = BAPHYExperiment(batch=batch, siteid=siteid)
+        recording_uri = manager.get_recording_uri(**options)
 
     return recording_uri
 

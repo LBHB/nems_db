@@ -98,7 +98,7 @@ def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
         newrec['stim'] = newrec['stim'].rasterize()
 
     #newrec = newrec.and_mask(['PASSIVE_EXPERIMENT', 'TARGET'])
-    newrec = newrec.and_mask(['REFERENCE','TARGET'])
+    newrec = newrec.and_mask(['REFERENCE','TARGET','CATCH'])
     #newrec = newrec.and_mask(['TARGET'])
 
     if not include_incorrect:
