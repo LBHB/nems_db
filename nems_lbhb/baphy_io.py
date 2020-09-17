@@ -339,7 +339,7 @@ def baphy_parm_read(filepath, evpread=True):
             evpfile = Path(filepath).with_suffix('.evp')
             lick_events = get_lick_events(evpfile, name='LICK')
             log.info("evp file for licks: %s", evpfile)
-
+            
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
             exptevents = exptevents.append(lick_events, ignore_index=True)

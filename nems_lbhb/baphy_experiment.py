@@ -282,7 +282,7 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, recache=False, generate_if_missing=True, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, **kwargs):
 
         kwargs = io.fill_default_options(kwargs)
 
@@ -319,7 +319,7 @@ class BAPHYExperiment:
             3) Package all signals into recording
         '''
         # see if can load from cache, if not, call generate_recording
-        data_file = self.get_recording_uri(self, generate_if_missing=False, **kwargs)
+        data_file = self.get_recording_uri(generate_if_missing=False, **kwargs)
         
         if (not os.path.exists(data_file)) | recache:
             kwargs.update({'mfiles': None})
@@ -538,11 +538,20 @@ class BAPHYExperiment:
         # get aligned exptevents for behavior files
         events = self.get_behavior_events(correction_method=self.correction_method, **kwargs)
         params = self.get_baphy_exptparams()
+
+        for i, (bev, param) in enumerate(zip(events, params)):
+            if param['runclass']=='TBP':
+                # for TBP, we need to update events to tweak certain target names if they belong to targetDistSet 2, i.e. reminder targets
+                # also need to update the soundObject names accordingly in exptparams. 
+                # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
+                # but it will update this local exptparams that gets used for signal generation
+                events[i], params[i] = runclass.TBP(bev, param)
+
         behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
         if len(behave_file) > 1:
             events = [e for i, e in enumerate(events) if behave_file[i]]
         elif behave_file[0] == True:
-            events = events
+            pass
         # assume params same for all files. This is a bit kludgy... Think it
         # should work?
         beh_params = params[np.min(np.where(behave_file)[0])]
@@ -552,7 +561,7 @@ class BAPHYExperiment:
 
         # run behavior analysis
         kwargs.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
-
+        
         metrics = behavior.compute_metrics(beh_params, events, **kwargs)    
 
         return metrics

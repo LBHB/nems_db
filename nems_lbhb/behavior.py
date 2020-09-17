@@ -48,6 +48,7 @@ def create_trial_labels(exptparams, exptevents):
         trial_outcome = None # gets updated on every iteration. Whatever the last sound in the
                              # trial gets labeled as is what the trial outcome will be
         catch = False        # make sure a hit on a REF/TAR following a CR of a Catch doesn't overwrite trial outcome
+        target = False       # make sure that sounds following a target hit / miss don't cause the trial to be misclassified
         if sum(ev.name.str.contains('LICK'))>0:
             # lick(s) detected
             fl = ev[ev.name=='LICK']['start'].values[0]
@@ -69,40 +70,41 @@ def create_trial_labels(exptparams, exptevents):
                         rt.append(fl - ref_start)
                         # if in window of prevrious ref, trial is FA, else it's Early
                         if fl < (ref_start - refPostStim - refDuration - refPreStim + early_win + resp_win):
-                            if not catch:
+                            if (not catch) & (not target):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                         else:
-                            if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                            if (not catch) & (not target) & (fl < (refDuration + refPostStim)):
                                 # only make the trial outcome label an early trial if on the first sound.
                                 # the sound token (sID) will get labeled correctly
                                 trial_outcome = 'EARLY_TRIAL'
-                            else:
+                            elif (not catch) & (not target):
                                 trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif (fl < ref_start):
                         # sound never played because of an early lick
                         sID.append('NULL')
                         rt.append(np.nan)
-                        if (not catch) & (fl < (refDuration + refPreStim + refPostStim)):
+                        if (not catch) & (not target) & (fl < (refDuration + refPostStim)):
                             # catch did not precede this reference and this was the first ref in the trial
                             # label trial as early
                             trial_outcome = 'EARLY_TRIAL'
-                        else:
+                        elif (not catch) & (not target):
                             trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif (fl > ref_start) & (fl <= ref_start + early_win + resp_win):
                         sID.append('FALSE_ALARM_TRIAL')
                         rt.append(fl - ref_start)
-                        if not catch:
+                        if (not catch) & (not target):
                             trial_outcome = 'FALSE_ALARM_TRIAL'
                     elif ((fl > ref_start) & (fl > ref_start + early_win + resp_win)):
                         rt.append(fl - ref_start)
                         sID.append('CORRECT_REJECT_TRIAL')
-                        if not catch:
+                        if (not catch) & (not target):
                             trial_outcome = 'CORRECT_REJECT_TRIAL'
                     else:
                         rt.append(np.nan)
                         sID.append('UNKNOWN')
 
                 elif 'Target' in name:
+                    target = True
                     tar_start = r['start']
                     rewarded = (pump_dur[[True if t == name.split(',')[1].replace(' ', '') else False for t in tar_names]] > 0)[0]
                     if rewarded:
