@@ -282,7 +282,7 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, generate_if_missing=True, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, **kwargs):
 
         kwargs = io.fill_default_options(kwargs)
 
@@ -291,6 +291,7 @@ class BAPHYExperiment:
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
 
         # add batch to cache recording in the correct location
+        kwargs.update({'siteid': self.siteid})
         kwargs.update({'batch': self.batch})
 
         # see if can load from cache, if not, call generate_recording
@@ -755,9 +756,9 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     trial_events.at[:, 'end'] = end_events['start'].values
     trial_events.at[:, 'name'] = 'TRIAL'
 
-    if remove_post_lick:
-       trial_events =  _remove_post_lick(trial_events, exptevents, **options)
-       trial_events =  _remove_post_stim_off(trial_events, exptevents, **options)
+    #if remove_post_lick:
+    #   trial_events =  _remove_post_lick(trial_events, exptevents, **options)
+    #   trial_events =  _remove_post_stim_off(trial_events, exptevents, **options)
 
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -846,12 +847,17 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
 
+    if remove_post_lick:
+        #ref_events = _remove_post_lick(stim_events, exptevents)
+        cat_events = _remove_post_stim_off(cat_events, exptevents)
+        ref_events = _remove_post_stim_off(ref_events, exptevents)
+
     # concatenate events together
     stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
 
-    if remove_post_lick:
-        stim_events = _remove_post_lick(stim_events, exptevents)
-        stim_events = _remove_post_stim_off(stim_events, exptevents)
+    #if remove_post_lick:
+    #    stim_events = _remove_post_lick(stim_events, exptevents)
+    #    stim_events = _remove_post_stim_off(stim_events, exptevents)
 
     stim_events = stim_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -898,8 +904,8 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     behavior_events = pd.concat([baphy_behavior_events,
                                 behavior_events, invalid_events], ignore_index=True)
 
-    behavior_events = _remove_post_lick(behavior_events, exptevents)
-    behavior_events = _remove_post_stim_off(behavior_events, exptevents)
+    #behavior_events = _remove_post_lick(behavior_events, exptevents)
+    #behavior_events = _remove_post_stim_off(behavior_events, exptevents)
 
     behavior_events = behavior_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -949,6 +955,7 @@ def _remove_post_stim_off(events, exptevents, **options):
             events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
 
         else:
+            #import pdb; pdb.set_trace()
             # cruder, but simpler. remove events that end after toff
             events = events.drop(e[e.end >= toff].index)
 
