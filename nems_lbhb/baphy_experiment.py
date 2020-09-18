@@ -756,8 +756,8 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     trial_events.at[:, 'name'] = 'TRIAL'
 
     if remove_post_lick:
-       trial_events =  _remove_post_lick(trial_events, exptevents)
-       trial_events =  _remove_post_stim_off(trial_events, exptevents)
+       trial_events =  _remove_post_lick(trial_events, exptevents, **options)
+       trial_events =  _remove_post_stim_off(trial_events, exptevents, **options)
 
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -909,7 +909,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     return behavior_events
 
 
-def _remove_post_lick(events, exptevents):
+def _remove_post_lick(events, exptevents, **options):
     # screen for FA / Early trials in which we need to truncate / chop out references
     trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])].Trial.unique()
     #lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
@@ -923,14 +923,17 @@ def _remove_post_lick(events, exptevents):
         fl = exptevents[(exptevents.Trial==t) & (exptevents.name=='LICK')].iloc[0]['start']
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
-        events.at[e[e.end > fl].index, 'end'] = fl
-        # remove events that started after the lick completely
-        events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
-    
+        if options.get('truncate_postlick', False):
+            events.at[e[e.end > fl].index, 'end'] = fl
+            # remove events that started after the lick completely
+            events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
+        else:
+            events = events.drop(e[e.end >= fl].index)
+
     return events
 
 
-def _remove_post_stim_off(events, exptevents):
+def _remove_post_stim_off(events, exptevents, **options):
     # screen for trials where sound was turned off early. These will largey overlap with the events
     # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
     # targets can come in the middle of a string of refs, but refs are turned off post target hit
@@ -939,9 +942,16 @@ def _remove_post_stim_off(events, exptevents):
     for t in trunc_trials:
         toff = exptevents[(exptevents.Trial==t) & (exptevents.name=='STIM,OFF')].iloc[0]['start']
         e = events[events.Trial==t]
-        events.at[e[e.end > toff].index, 'end'] = toff
-        events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
-    
+        if options.get('truncate_postlick', False):
+            # truncate partial events
+            events.at[e[e.end > toff].index, 'end'] = toff
+            # remove events that start after toff
+            events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
+
+        else:
+            # cruder, but simpler. remove events that end after toff
+            events = events.drop(e[e.end >= toff].index)
+
     return events
 
 
