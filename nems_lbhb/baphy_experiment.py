@@ -130,8 +130,8 @@ class BAPHYExperiment:
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
 
-        if np.any([not p.exists() for p in self.parmfile]):
-            raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+        #if np.any([not p.exists() for p in self.parmfile]):
+        #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
 
         # we can assume all parmfiles come from same folder/experiment (site)
         self.folder = self.parmfile[0].parent
