@@ -12,6 +12,10 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems.preprocessing import make_state_signal
 
 
+def sort_refs(refs):
+    idx = np.argsort([int(r.strip('STIM_')[0]) for r in refs])
+    return np.array(refs)[idx].tolist()
+
 def sort_targets(targets):
     """
     sort target epoch strings by freq, then by snr, then by targets tag (N1, N2 etc.)
@@ -53,7 +57,7 @@ def get_tar_freqs(targets):
     """
     return list of target freqs
     """
-    return [int(t.split('+')[0]) for t in targets]
+    return [int(t.strip('TAR_').strip('CAT_').split('+')[0]) for t in targets]
 
 
 def compute_ellipse(x, y):

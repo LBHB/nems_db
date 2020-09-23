@@ -35,8 +35,8 @@ def plot_RT_histogram(rts, DI=None, bins=None, ax=None):
         ax.step(xvals[:-1], np.cumsum(counts) / len(rts[k]), 
                     label=f'{k}, DI: {_di}, n: {n}', lw=1)
     
-    ax.legend(fontsize=6, frameon=False)
-    ax.set_xlabel('Reaction time (s)', fontsize=8)
-    ax.set_ylabel('Cummulative Probability', fontsize=8)
+    ax.legend(frameon=False)
+    ax.set_xlabel('Reaction time (s)')
+    ax.set_ylabel('Cummulative Probability')
 
     return ax
