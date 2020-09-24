@@ -1,15 +1,18 @@
 import os
 import logging
-import numpy as np
-import json as jsonlib
 
+import json as jsonlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import numpy as np
 from numpy.linalg import det
 
 from nems import xforms
+import nems.plots.api as nplt
 from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 from nems.uri import NumpyEncoder
+
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +39,7 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
 
     # remove static nonlinearities from end of modelspec chain
     modelspec = modelspec.copy()
+    """
     if ('double_exponential' in modelspec[-1]['fn']):
         log.info('removing dexp from tail')
         modelspec.pop_module()
@@ -45,7 +49,7 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     if ('levelshift' in modelspec[-1]['fn']):
         log.info('removing lvl from tail')
         modelspec.pop_module()
-
+    """
     modelspec.rec = rec
     stimchans = rec['stim'].shape[0]
     bincount = rec['pred'].shape[1]
@@ -71,6 +75,130 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     return dstrf
 
 
+def strf_mtx(modelspec, rows=3):
+    
+    fir_layers = [idx for idx,m in enumerate(modelspec) if ('fir' in m['fn'])]
+    wc_layers = np.array([idx for idx,m in enumerate(modelspec) if ('weight' in m['fn'])])
+    fi = 0
+    wc_coefs = _get_wc_coefficients(modelspec, fi)
+    fir_coefs = _get_fir_coefficients(modelspec, fi)
+
+    bank_count=modelspec[fir_layers[fi]]['fn_kwargs']['bank_count']
+    chan_count = wc_coefs.shape[0]
+    bank_chans = int(chan_count / bank_count)
+
+    #print(wc_coefs.shape, fir_coefs.shape, bank_count, bank_chans)
+    strfs = [wc_coefs[(bank_chans*i):(bank_chans*(i+1)),:].T @
+                      fir_coefs[(bank_chans*i):(bank_chans*(i+1)), :]
+                      for i in range(bank_count)]
+
+    r_step = strfs[0].shape[0]+1
+    c_step = strfs[0].shape[1]+int(strfs[0].shape[1]/rows)
+    strf_all=np.full([r_step*rows-1, c_step*int(np.ceil(len(strfs)/rows))], np.nan)
+    #print(strf_all.shape)
+
+    for i in range(bank_count):
+        m = np.max(np.abs(strfs[i]))
+        if m:
+            strfs[i] = strfs[i] / m
+        
+        r = (i%rows)*r_step
+        c = int(i/rows)*c_step + (i%rows)*int(strfs[0].shape[1]/rows)
+
+        strf_all[r:(r+strfs[i].shape[0]),c:(c+strfs[i].shape[1])]=strfs[i]         
+        
+    #f, ax=plt.subplots(1,1, figsize=(18,2))
+    #ax.imshow(strf_all, origin='lower', aspect='auto')
+
+    return strf_all
+
+
+def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsize=None, **kwargs):
+
+    nl_layers = [idx for idx,m in enumerate(modelspec) if ('nonlinearity' in m['fn'])]
+    
+    if index_range is None:
+        index_range = np.arange(1000)
+    elif len(index_range)==2:
+        index_range = np.arange(index_range[0], index_range[1])
+    elif len(index_range)==3:
+        index_range = np.arange(index_range[0], index_range[1], index_range[2])
+        
+    pred = []
+    for l in nl_layers:
+        layer_output = modelspec.evaluate(rec, start=0, stop=l+1)
+        pred.append(layer_output['pred'].as_continuous()[:,index_range])
+
+    max_width = np.max([p.shape[0] for p in pred])
+        
+    rows = len(nl_layers)+1
+    if figsize is None:
+        figsize=(18, rows*1.5)
+
+    f = plt.figure(constrained_layout=True, figsize=figsize)
+    gs = f.add_gridspec(rows, 3)
+    ax0 = f.add_subplot(gs[0, 0])
+    ax1 = f.add_subplot(gs[1:, 0])
+    ax = [f.add_subplot(gs[i, 1]) for i in range(rows)]
+
+    srows=3
+    strf_all=strf_mtx(modelspec, rows=srows)
+    mm = np.max(np.abs(strf_all))
+    ax0.imshow(strf_all, aspect='auto')
+    ax0.set_axis_off()
+    
+    ax[0].imshow(rec['stim'].as_continuous()[:,index_range],aspect='auto',interpolation='none',origin='lower', cmap='viridis')
+    cmap="gist_yarg"
+    cmap="Reds"
+    for i,l in enumerate(nl_layers):
+        p = pred[i]-pred[i][:,:1]
+        if i<len(nl_layers)-1:
+            im=ax[i+1].imshow(p>0.01,aspect='auto',interpolation='none',origin='lower', cmap=cmap)
+        else:
+            im=ax[i+1].imshow(p,aspect='auto',interpolation='none',origin='lower', cmap="gist_yarg")
+
+        n1 = pred[i].shape[0]
+        x1 = np.linspace(-n1/2, n1/2, n1)
+        if i > 0:
+            c = modelspec.phi[nl_layers[i-1]+1].get('coefficients',None)
+            if c is not None:
+                c = c/np.max(np.abs(c))
+            n0 = pred[i-1].shape[0]
+            x0 = np.linspace(-n0/2, n0/2, n0)
+            
+            for i0 in range(0,n0):
+                for i1 in range(0,n1):
+                    if c is not None:
+                        col = c[i1,i0]
+                        if col>0:
+                            col = [(1-col), 1-0.5*col, 1-0.5*col]
+                        else:
+                            col = [1+0.5*col, 1+0.5*col, 1+col]
+                    else:
+                        col = [.5, .5, .5]
+                    if col[0]<0.8:
+                        ax1.plot([x0[i0], x1[i1]],[rows - (i -1), rows - i], color=col, linewidth=0.5)
+        else:
+            n0 = max_width
+            x0 = np.linspace(-n0/2, n0/2, n1)
+            #print(-n0/2, n0/2)
+
+            for i1 in range(srows-1,n1,srows):
+                ax1.plot([x0[i1], x1[i1]],[rows - (i-0.5), rows - i], color=[.5, .5, .5], linewidth=0.5)
+                #print(x0[i1], x1[i1])
+    for i,l in enumerate(nl_layers):
+
+        n1 = pred[i].shape[0]
+        x1 = np.linspace(-n1/2, n1/2, n1)
+        ax1.scatter(x1, np.zeros(n1) + rows - i, edgecolors='black', facecolors='white')
+        #print(x1[0], x1[-1])
+    ax1.set_ylim([1.5, rows+0.5])
+    ax1.set_axis_off()
+    
+    f.suptitle(f"{modelspec.meta['cellid']}: {index_range[0]}-{index_range[-1]}")
+    return f
+
+
 def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
               **kwargs):
 
@@ -84,17 +212,17 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
     pc_mag = np.zeros((pc_count,channel_count))
     for c in range(channel_count):
         d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
-        _u, _s, _v = np.linalg.svd(d)
-        _s *= _s
-        _s /= np.sum(_s)
+        _u, _s, _v = np.linalg.svd(d.T @ d)
+        _s = np.sqrt(_s)
+        _s /= np.sum(_s[:pc_count])
         pcs[:, :, :, c] = np.reshape(_v[:pc_count, :],[pc_count, s[1], s[2]])
         pc_mag[:, c] = _s[:pc_count]
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12, maxbins=1000, stepbins=3, IsReload=False, **ctx):
+def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
 
-    if IsReload:
+    if IsReload and batching:
         return {}
 
     if figures is None:
@@ -167,27 +295,63 @@ def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12,
     log.info(
         f"Resp CC same {np.mean(r_cc_same_site):.4f} partial: {np.mean(r_cc_part_site):.4f} diff: {np.mean(r_cc_diff_site):.4f}")
 
-    f, ax = plt.subplots(2, 1, figsize=(6,9))
-    modelname_list = modelspec.meta["modelname"].split("_")
-    spectrogram(rec, sig_name='pred', title=f'{siteids[0]}/{modelname_list} pred PSTH', ax=ax[0]) 
-    ax[1].imshow(overlap, clim=[-1, 1])
-
+    f = plt.figure(constrained_layout=True, figsize=(10,8))
+    show_pcs=5
+    gs = f.add_gridspec(4, show_pcs+1)
+    ax0 = f.add_subplot(gs[:2, :3])
+    ax1 = f.add_subplot(gs[:2, 3:])
+    ax = np.array([[f.add_subplot(gs[2, i]) for i in range(6)],
+                   [f.add_subplot(gs[3, i]) for i in range(6)]])
+    modelname_list = "\n".join(modelspec.meta["modelname"].split("_"))
+    spectrogram(rec, sig_name='pred', title=None, ax=ax0)
+    ax1.imshow(overlap, clim=[-1, 1])
     for i, s in enumerate(siteids[:olapcount]):
         if i > 0 and (siteids[i] != siteids[i - 1]) and (siteids[i - 1] == siteids[0]):
-            ax[1].plot([0, olapcount - 1], [i - 0.5, i - 0.5], 'b', linewidth=0.5)
-            ax[1].plot([i - 0.5, i - 0.5], [0, olapcount - 1], 'b', linewidth=0.5)
-    ax[1].text(olapcount+1, 0, f'PC space same {np.mean(olap_same_site):.3f}\n' +\
+            ax1.plot([0, olapcount - 1], [i - 0.5, i - 0.5], 'b', linewidth=0.5)
+            ax1.plot([i - 0.5, i - 0.5], [0, olapcount - 1], 'b', linewidth=0.5)
+    ax1.text(olapcount+1, 0, f'PC space same {np.mean(olap_same_site):.3f}\n' +\
                                f'partial: {np.mean(olap_part_site):.3f}\n' +\
-                               f'diff: {np.mean(olap_diff_site):.3f}\n' +\
                                f'Resp CC same {np.mean(r_cc_same_site):.3f}\n' +\
                                f'partial: {np.mean(r_cc_part_site):.3f}\n' +\
-                               f'diff: {np.mean(r_cc_diff_site):.3f}\n' +\
                                f'Pred CC same {np.mean(p_cc_same_site):.3f}\n' +\
-                               f'partial: {np.mean(p_cc_part_site):.3f}\n' +\
-                               f'diff: {np.mean(p_cc_diff_site):.3f}',
+                               f'partial: {np.mean(p_cc_part_site):.3f}\n',
                va='top', fontsize=8)
-    ax[1].set_ylabel('diff site -- same site')
-    ax_remove_box(ax[1])
+    ax1.set_ylabel('diff site -- same site')
+    ax_remove_box(ax1)
+
+    sspaces = spaces * np.expand_dims(pc_mag, axis=1)
+    cellcount=spaces.shape[-1]
+    n = int(cellcount/2)
+    bspace1_ = np.transpose(sspaces[:,:,:n],[0,2,1])
+    bspace2_ = np.transpose(sspaces[:,:,n:],[0,2,1])
+    s=bspace1_.shape
+    print(s)
+    bspace1 = np.reshape(bspace1_, (s[0]*s[1], s[2]))
+    bspace2 = np.reshape(bspace2_, (s[0]*s[1], s[2]))
+    print(bspace1.shape, bspace2.shape)
+    u1, s1, v1 = np.linalg.svd(bspace1.T @ bspace1)
+    u2, s2, v2 = np.linalg.svd(bspace2.T @ bspace2)
+
+    ax[0,0].plot(s1[:10]/np.sum(s1[:10]))
+    ax[0,0].plot(s2[:10]/np.sum(s2[:10]))
+    ax[0,0].set_ylabel("PC mag")
+    
+    ax[1,0].set_axis_off()
+    
+    for i in range(show_pcs):
+        p1=u1[:,i]
+        p1=np.reshape(p1,[18,20])
+        p1 /= np.max(np.abs(p1))
+        ax[0,i+1].imshow(np.fliplr(p1),origin='lower', clim=[-1, 1])
+        ax[0,i+1].set_title(f"PC {i}")
+
+        p2=u2[:,i]
+        p2=np.reshape(p2,[18,20])    
+        p2 /= np.max(np.abs(p2))
+        ax[1,i+1].imshow(np.fliplr(p2),origin='lower', clim=[-1, 1])
+
+    f.suptitle(f'{siteids[0]} pred PSTH\n{modelname_list}');
+
     figs.append(fig2BytesIO(f))
 
     f2,axs=plt.subplots(8, 10, figsize=(16,12))
@@ -199,12 +363,12 @@ def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12,
             _p *= np.sign(_p.sum())
             os = int(c/10)*2
             _c = c % 10
-            axs[i+os,_c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
+            axs[i+os,_c].imshow(np.fliplr(_p),aspect='auto',origin='lower', clim=[-mm, mm])
             if i==0:
                axs[i+os,_c].set_title(f'{cellid} {pc_mag[i,c]:.3f}', fontsize=8)
             else:
                axs[i+os,_c].set_title(f'{pc_mag[i,c]:.3f}', fontsize=8)
-            if i<n_pc-1:
+            if i+os<7:
                 axs[i+os,_c].set_xticks([])
             if c>0:
                 axs[i+os,_c].set_yticks([])
@@ -212,16 +376,22 @@ def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=2, memory=12,
 
     figs.append(fig2BytesIO(f2))
 
-    extra_results = {'dstrf_overlap': overlap,
+    extra_results = {
             'olap_same_site': olap_same_site,
             'olap_part_site': olap_part_site,
             'r_cc_same_site': r_cc_same_site,
             'r_cc_part_site': r_cc_part_site,
             'p_cc_same_site': p_cc_same_site,
-            'p_cc_part_site': p_cc_part_site}
+            'p_cc_part_site': p_cc_part_site,
+            'pc_mag_same_site': s1[:10],
+            'pc_mag_part_site': s2[:10]}
+    # 'dstrf_overlap': overlap,
     modelspec.meta['extra_results']=jsonlib.dumps(extra_results, cls=NumpyEncoder) 
 
-    return {'figures': figs, 'modelspec': modelspec}
+    if batching:
+        return {'figures': figs, 'modelspec': modelspec}
+    else:
+        return {'figures': [f, f2], 'modelspec': modelspec}
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
