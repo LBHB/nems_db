@@ -234,6 +234,14 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
     
     cellids = rec['resp'].chans
     siteids = [c.split("-")[0] for c in cellids]
+    modelname = modelspec.meta['modelname']
+    if 'cc20.bth' in modelname:
+       fmt='bth'   # both single site and random
+    elif 'cc20.rnd' in modelname:
+       fmt='rnd'
+    else:
+       fmt='sng'  # single site only
+
     # analyze all output channels
     out_channel = list(np.arange(len(cellids)))
     channel_count=len(out_channel)
@@ -276,11 +284,11 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
             overlap[j, i] = np.corrcoef(p[i, :], p[j, :])[0, 1]
             r_cc = np.corrcoef(r[i, :], r[j, :])[0, 1]
 
-            if (siteids[i] == siteids[0]) & (siteids[j] == siteids[0]):
+            if (fmt=='sng') | ((fmt=='bth') & (siteids[i] == siteids[0]) & (siteids[j] == siteids[0])):
                 olap_same_site.append(overlap[i, j])
                 p_cc_same_site.append(overlap[j, i])
                 r_cc_same_site.append(r_cc)
-            elif (siteids[j] == siteids[0]):
+            elif (fmt=='bth') & (siteids[j] == siteids[0]):
                 olap_diff_site.append(overlap[i, j])
                 p_cc_diff_site.append(overlap[j, i])
                 r_cc_diff_site.append(r_cc)
@@ -321,9 +329,15 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
 
     sspaces = spaces * np.expand_dims(pc_mag, axis=1)
     cellcount=spaces.shape[-1]
-    n = int(cellcount/2)
-    bspace1_ = np.transpose(sspaces[:,:,:n],[0,2,1])
-    bspace2_ = np.transpose(sspaces[:,:,n:],[0,2,1])
+    if fmt=='bth':
+       n = int(cellcount/2)
+       bspace1_ = np.transpose(sspaces[:,:,:n],[0,2,1])
+       bspace2_ = np.transpose(sspaces[:,:,n:],[0,2,1])
+    else:
+       n = cellcount
+       bspace1_ = np.transpose(sspaces,[0,2,1])
+       bspace2_ = np.transpose(sspaces,[0,2,1])
+
     s=bspace1_.shape
     print(s)
     bspace1 = np.reshape(bspace1_, (s[0]*s[1], s[2]))
