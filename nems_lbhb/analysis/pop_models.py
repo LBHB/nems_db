@@ -220,7 +220,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
 
     return pcs, pc_mag
 
-def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
+def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
 
     if IsReload and batching:
         return {}
@@ -230,9 +230,9 @@ def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=3, memory=20,
     else:
         figs = figures.copy()
 
-    rec = val.apply_mask()
+    rec = ctx[recname]
     
-    cellids = val['resp'].chans
+    cellids = rec['resp'].chans
     siteids = [c.split("-")[0] for c in cellids]
     # analyze all output channels
     out_channel = list(np.arange(len(cellids)))
@@ -340,13 +340,13 @@ def pop_space_summary(val, modelspec, rec=None, figures=None, n_pc=3, memory=20,
     
     for i in range(show_pcs):
         p1=u1[:,i]
-        p1=np.reshape(p1,[18,20])
+        p1=np.reshape(p1,[pcs.shape[1],memory])
         p1 /= np.max(np.abs(p1))
         ax[0,i+1].imshow(np.fliplr(p1),origin='lower', clim=[-1, 1])
         ax[0,i+1].set_title(f"PC {i}")
 
         p2=u2[:,i]
-        p2=np.reshape(p2,[18,20])    
+        p2=np.reshape(p2,[pcs.shape[1],memory])    
         p2 /= np.max(np.abs(p2))
         ax[1,i+1].imshow(np.fliplr(p2),origin='lower', clim=[-1, 1])
 
