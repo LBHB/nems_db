@@ -24,6 +24,14 @@ def sort_targets(targets):
     return np.array(targets)[sidx].tolist()
 
 
+def sort_refs(refs):
+    """
+    Sort ref strings by frequency
+    """
+    idx = np.argsort([int(f.split('STIM_')[1]) for f in refs])
+    return np.array(refs)[idx].tolist()
+
+
 def get_snrs(targets):
     """
     return list of snrs for each target
@@ -42,7 +50,7 @@ def get_tar_freqs(targets):
     """
     return list of target freqs
     """
-    return [int(t.split('+')[0]) for t in targets]
+    return [int(t.split('+')[0].split('_')[-1]) for t in targets]
 
 
 def compute_ellipse(x, y):
