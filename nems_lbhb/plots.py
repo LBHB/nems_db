@@ -1157,7 +1157,9 @@ def LN_pop_plot(ctx):
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
         ax = fig.add_subplot(filter_count, 6, chanidx*6+1)
-        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,5),
+        interpolation=(2,5)
+        interpolation=(1,2)
+        nplt.strf_heatmap(tmodelspec, title=None, interpolation=interpolation,
                           show_factorized=False, fs=fs, ax=ax, show_cbar=False)
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
@@ -1177,7 +1179,7 @@ def LN_pop_plot(ctx):
         wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
         wcc *= fcc_std
         mm = np.std(wcc)*2.5
-        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
         #plt.colorbar(im)
         plt.title('L2')
         nplt.ax_remove_box(ax)
@@ -1190,7 +1192,7 @@ def LN_pop_plot(ctx):
     wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
     wcc *= fcc_std
     mm = np.std(wcc)*2.5
-    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
     plt.colorbar(im)
     plt.title('L3')
     nplt.ax_remove_box(ax)
@@ -1319,7 +1321,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
             modelnames.extend(m)
 
     dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
-    dot_markers = ['.','o','^','s','^','.','s','o','.']
+    dot_markers = ['.','o','^','s','v','*','x','>','<']
     if ax is None:
         fig,ax = plt.subplots()
 
@@ -1341,10 +1343,13 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
             b_goodcells[:,i] = td[m] > 2*td[m+'_se']
-        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
+
+        print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
-    model_mean = (b_ceiling.loc[goodcells]).mean()[modelnames]
-    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
+    # consider converting to r^2 with **2
+    model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
+    b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
     if max is None:
         max = b_m.max() * 1.05
@@ -1393,19 +1398,19 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
                     modelset.append(modelnames[jjj])
             #print("{} : {}".format(k, modelset))
             #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-            ax.plot(n_parms[jj], b_m[jj], dot_markers[i], color=dot_colors[i], label=k, markersize=10)
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[i], color=dot_colors[i], label=k, markersize=6)
             i+=1
 
             best_mean = b_m[jj].max()
             best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
-            print(f"{k} best: {best_mean:.3f} {best_model}")
+            #print(f"{k} best: {best_mean:.3f} {best_model}")
             worst_mean = b_m[jj].min()
             worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
-            print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+            #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
 
         handles, labels = ax.get_legend_handles_labels()
         # reverse the order
-        ax.legend(handles, labels, loc='lower right', fontsize=8)
+        ax.legend(handles, labels, loc='lower right', fontsize=8, frameon=False)
 
     ax.set_xlabel('Free parameters')
     ax.set_ylabel('Mean pred corr')

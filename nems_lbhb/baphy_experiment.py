@@ -130,8 +130,8 @@ class BAPHYExperiment:
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
 
-        if np.any([not p.exists() for p in self.parmfile]):
-            raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+        #if np.any([not p.exists() for p in self.parmfile]):
+        #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
 
         # we can assume all parmfiles come from same folder/experiment (site)
         self.folder = self.parmfile[0].parent
@@ -298,13 +298,24 @@ class BAPHYExperiment:
         data_file = recording_filename_hash(
                 self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
 
-        if (not os.path.exists(data_file)) & generate_if_missing:
-            kwargs.update({'mfiles': None})
-            rec = self.generate_recording(**kwargs)
-            log.info('Caching recording: %s', data_file)
-            rec.save(data_file)
+        use_API = get_setting('USE_NEMS_BAPHY_API')
 
-        return data_file
+        if use_API:
+            _, f = os.path.split(data_file)
+            host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+            data_uri = host + '/recordings/' + str(self.batch) + '/' + f
+            log.info('Cached recording: %s', data_uri)
+        else:
+            if (not os.path.exists(data_file)) & generate_if_missing:
+                kwargs.update({'mfiles': None})
+                rec = self.generate_recording(**kwargs)
+                log.info('Caching recording: %s', data_file)
+                rec.save(data_file)
+            else:
+                log.info('Cached recording: %s', data_file)
+            data_uri = data_file
+
+        return data_uri
 
 
     @lru_cache(maxsize=128)

@@ -581,12 +581,13 @@ def psthfr(load_key):
     use_as_input = ('ni' not in options)
     channel_per_stim = ('sep' in options)
     if 'tar' in options:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
         #epoch_regex='^TAR_'
     elif 'stimtar' not in options:
-        epoch_regex = '^STIM_'
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
+        #epoch_regex = '^STIM_'
     else:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
 
     if hilo:
         if jackknife:
