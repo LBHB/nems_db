@@ -1350,7 +1350,13 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     # consider converting to r^2 with **2
     model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
     b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+
+    cellids = b_n.index.tolist()
+    siteids = list(set([c.split("-")[0] for c in cellids]))
+    mean_cells_per_site = len(cellids)/len(siteids)
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+    n_parms[n_parms>100] = n_parms[n_parms>100]/mean_cells_per_site
+
     if max is None:
         max = b_m.max() * 1.05
     if offset is None:
@@ -1403,10 +1409,10 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
 
             best_mean = b_m[jj].max()
             best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
-            #print(f"{k} best: {best_mean:.3f} {best_model}")
+            print(f"{k} best: {best_mean:.3f} {best_model}")
             worst_mean = b_m[jj].min()
             worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
-            #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+            print(f"{k} worst: {worst_mean:.3f} {worst_model}")
 
         handles, labels = ax.get_legend_handles_labels()
         # reverse the order

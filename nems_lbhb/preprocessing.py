@@ -16,8 +16,10 @@ import nems.epoch as ep
 import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
+from scipy.ndimage import gaussian_filter1d
 
-from nems.preprocessing import mask_incorrect
+
+from nems.preprocessing import mask_incorrect, generate_average_sig
 
 log = logging.getLogger(__name__)
 
@@ -842,20 +844,36 @@ def zscore_resp(rec):
     return r
 
 
-def state_resp_outer(rec, s='state', r='resp',
+def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
                      shuffle_interactions=False, **ctx):
 
     state = rec[s]._data
-    resp = rec[r]._data
+    state[1:,:] = state[1:,:] - np.min(state[1:,:], axis=1, keepdims=True)
+    
+    psth = generate_average_sig(rec[r],'psth','^(STIM|TAR|CAT)', mask=rec['mask'])
+    p = psth._data
+    resp = rec[r]._data - p
+    #smwin = np.ones((1,smooth_window))/smooth_window
+    #resp = ss.convolve2d(resp,smwin,'same')
+    resp = gaussian_filter1d(resp,smooth_window,axis=1)
+ 
     new_state = state.copy()
 
     for i in range(resp.shape[0]):
         if shuffle_interactions:
-            state = rec[s].shuffle_time(rand_seed=i, mask=rec['mask'])._data
-        new_state = np.concatenate((new_state, state*resp[i:(i+1),:]))
+            tsig1 = state[0:1,:]*resp[i:(i+1),:]
+            tsig2 = rec[s]._modified_copy(data=state[1:,:]*resp[i:(i+1),:])
+            tsig2 = tsig2.shuffle_time(rand_seed=i, mask=rec['mask'])._data 
+            new_state = np.concatenate((new_state, tsig1, tsig2))
+        else:
+            new_state = np.concatenate((new_state, state*resp[i:(i+1),:]))
 
+    ts=np.std(new_state, axis=1, keepdims=True)
+    ts[ts==0]=1
+    new_state[1,:] -= np.min(new_state[1,:]) # hard-coded assuming pupil
+ 
     new_rec = rec.copy()
-    new_rec[s]=rec[s]._modified_copy(data=new_state)
+    new_rec[s]=rec[s]._modified_copy(data=new_state/ts)
 
     return {'rec': new_rec}
 

@@ -570,7 +570,7 @@ def lvlogsig(kw):
     return template
 
 
-@xmodule()
+#@xmodule()
 def lv(kw):
     '''
     Generate and register modelspec for add_lv

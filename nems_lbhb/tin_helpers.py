@@ -6,10 +6,11 @@ import matplotlib as mpl
 mpl.rcParams['axes.spines.right'] = False
 mpl.rcParams['axes.spines.top'] = False
 import seaborn as sns
-
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems.preprocessing import make_state_signal
+
 
 
 def sort_refs(refs):
@@ -67,6 +68,50 @@ def get_tar_freqs(targets):
     """
     return [int(t.strip('TAR_').strip('CAT_').split('+')[0]) for t in targets]
 
+def get_freqs(targets):
+    """
+    return list of target freqs
+    """
+    return [int(t.strip('STIM_').strip('TAR_').strip('CAT_').split('+')[0]) for t in targets]
+
+def make_tbp_colormaps(ref_stims=None, tar_stims=None, use_tar_freq_idx=0):
+
+    if ref_stims is None:
+       N_ref = 256
+       N_tar = 256
+       mid_ref = 128
+    else:
+       N_ref = len(ref_stims)
+       N_tar = len(tar_stims)
+
+       tar_freqs=get_freqs(tar_stims)
+       ref_freqs=get_freqs(ref_stims)
+
+       mid_ref = np.where(np.array([tar_freqs[use_tar_freq_idx]==r 
+                                    for r in ref_freqs]))[0][0]
+
+       #print(tar_freqs,ref_freqs,mid_ref)
+
+    #print(f"N_ref={N_ref} mid_ref={mid_ref} N_tar={N_tar}") 
+    vals = np.ones((N_ref, 4))
+    mid_gray = 224/256
+    vals[:mid_ref, 0] = np.linspace((1-mid_gray), mid_gray, mid_ref)
+    vals[:mid_ref, 1] = np.linspace((1-mid_gray), mid_gray, mid_ref)
+    vals[:mid_ref, 2] = np.linspace(mid_gray, mid_gray, mid_ref)
+    vals[mid_ref:, 0] = np.linspace(mid_gray, 0, N_ref-mid_ref)
+    vals[mid_ref:, 1] = np.linspace(mid_gray, 168/256, N_ref-mid_ref)
+    vals[mid_ref:, 2] = np.linspace(mid_gray, 0, N_ref-mid_ref)
+    BwG = ListedColormap(vals, 'BwG')
+    
+    vals = np.ones((N_tar, 4))
+    vals[:, 0] = np.linspace(mid_gray, 1, N_tar)
+    vals[:, 1] = np.linspace(mid_gray, 1-mid_gray, N_tar)
+    vals[:, 2] = np.linspace(mid_gray, 1-mid_gray, N_tar)
+    gR = ListedColormap(vals, 'gR')
+
+    return BwG, gR
+
+BwG, gR = make_tbp_colormaps()
 
 def compute_ellipse(x, y):
     inds = np.isfinite(x) & np.isfinite(y)

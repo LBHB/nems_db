@@ -283,9 +283,14 @@ def sml(kw):
 @xform()
 def rstate(kw):
     ops = kw.split(".")[1:]
-    shuffle_interactions = ('sh' in ops)
-    return [['nems_lbhb.preprocessing.state_resp_outer',
-             {'shuffle_interactions': shuffle_interactions}]]
+    dopt = {}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.state_resp_outer', dopt]]
 
 
 @xform()

@@ -2,16 +2,19 @@ import os
 import logging
 
 import json as jsonlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 from numpy.linalg import det
+from scipy.ndimage import zoom as zoom
 
 from nems import xforms
 import nems.plots.api as nplt
 from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 from nems.uri import NumpyEncoder
+from nems.utils import get_setting
 
 
 log = logging.getLogger(__name__)
@@ -88,8 +91,8 @@ def strf_mtx(modelspec, rows=3):
     bank_chans = int(chan_count / bank_count)
 
     #print(wc_coefs.shape, fir_coefs.shape, bank_count, bank_chans)
-    strfs = [wc_coefs[(bank_chans*i):(bank_chans*(i+1)),:].T @
-                      fir_coefs[(bank_chans*i):(bank_chans*(i+1)), :]
+    strfs = [zoom(wc_coefs[(bank_chans*i):(bank_chans*(i+1)),:].T @
+                      fir_coefs[(bank_chans*i):(bank_chans*(i+1)), :], [2,2], mode='constant')
                       for i in range(bank_count)]
 
     r_step = strfs[0].shape[0]+1
@@ -143,8 +146,17 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsi
 
     srows=3
     strf_all=strf_mtx(modelspec, rows=srows)
+    #mask=np.isnan(strf_all)
+    #strf_all[mask]=0
+    #strf_all = zoom(strf_all,[2,2])
+    #mask = zoom(mask,[2,2])
+    #strf_all[mask]=np.nan
     mm = np.max(np.abs(strf_all))
-    ax0.imshow(strf_all, aspect='auto')
+   
+    cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
+    cmap.set_bad('lightgray',1.)
+
+    ax0.imshow(strf_all, aspect='auto', cmap=cmap)
     ax0.set_axis_off()
     
     ax[0].imshow(rec['stim'].as_continuous()[:,index_range],aspect='auto',interpolation='none',origin='lower', cmap='viridis')
@@ -198,13 +210,107 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsi
     f.suptitle(f"{modelspec.meta['cellid']}: {index_range[0]}-{index_range[-1]}")
     return f
 
+def force_signal_silence(rec, signal='stim'):
+    rec = rec.copy()
+    for e in ["PreStimSilence", "PostStimSilence"]:
+        s = rec[signal].extract_epoch(e)
+        s[:,:,:]=0
+        rec[signal]=rec[signal].replace_epoch(e, s)
+    return rec
 
-def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
-              **kwargs):
+def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
+    cellids = rec['resp'].chans
+    match=[c==cellid for c in cellids]
+    c = np.where(match)[0][0]
+        
+    # analyze all output channels
+    out_channel = [c]
+    channel_count=len(out_channel)
 
-    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
-                          memory=memory, **kwargs)
+    if dstrf is not None:
+        stimmag = dstrf.shape[0]
 
+    rec=force_signal_silence(rec)
+    stim_mag = rec['stim'].as_continuous()[:,:maxbins].sum(axis=0)
+    index_range = np.arange(0, len(stim_mag), 1)
+    if dstrf is None:
+        log.info('Calculating dstrf for %d channels, %d timepoints (%d steps), memory=%d',
+                 channel_count, len(index_range), stepbins, memory)
+        dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
+                              memory=memory, index_range=index_range)
+
+    if dpcs is None:
+        # don't skip silent bins
+
+        stim_big = stim_mag > np.max(stim_mag) / 1000
+        driven_index_range = index_range[(index_range > memory) & stim_big[index_range]]
+        driven_index_range = driven_index_range[(driven_index_range >= memory)]
+
+        # limit number of bins to speed up analysis
+        driven_index_range = driven_index_range[:maxbins]
+        #index_range = np.arange(525,725)
+    
+        pcs, pc_mag = compute_dpcs(dstrf[driven_index_range,:,:,:], pc_count=n_pc)
+    
+    c_=0
+
+    ii = np.arange(rr[0],rr[1])
+    rr_orig = ii
+    
+    print(pcs.shape, dstrf.shape)
+    u = np.reshape(pcs[:,:,:,c_],[n_pc, -1])
+    d = np.reshape(dstrf[ii,:,:,c_],[len(ii),-1])
+    pc_proj = d @ u.T
+
+    n_strf=len(dindex)
+
+    f = plt.figure(constrained_layout=True, figsize=(18,8))
+    gs = f.add_gridspec(5, n_strf)
+    ax0 = f.add_subplot(gs[0, :])
+    ax1 = f.add_subplot(gs[1, :])
+    ax2 = f.add_subplot(gs[2, :])
+    ax = np.array([f.add_subplot(gs[3, i]) for i in range(n_strf)])
+    ax3 = np.array([f.add_subplot(gs[4, i]) for i in range(n_strf)])
+
+    ax0.imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower')
+    xl=ax0.get_xlim()
+
+    ax1.plot(rec['resp'].as_continuous()[c, rr_orig]);
+    ax1.plot(rec['pred'].as_continuous()[c, rr_orig]);
+    ax1.legend(('actual','pred'), frameon=False)
+    ax1.set_xlim(xl)
+
+    ax2.plot(pc_proj);
+    ax2.set_xlim(xl)
+    ax2.set_ylabel('pc projection')
+    yl=ax2.get_ylim()
+
+    mmd=np.max(np.abs(dstrf[np.array(dindex),:,:,c_]))
+
+    for i,d in enumerate(dindex):
+        ax2.plot([d,d],yl,'k--')
+        ds = np.fliplr(dstrf[d,:,:,c_])
+        ds=zoom(ds, [2,2])
+        ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'))
+        #plot_heatmap(ds, aspect='auto', ax=ax[i], interpolation=2, clim=[-mmd, mmd], show_cbar=False, xlabel=None, ylabel=None)
+
+        ax[i].set_title(f"Frame {d}", fontsize=8)
+        if i<n_pc:
+            ds=np.fliplr(pcs[i,:,:,c_])
+            ds=zoom(ds, [2,2])
+            mmp = np.max(np.abs(ds))
+            #ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp])
+            ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp], cmap=get_setting('WEIGHTS_CMAP'))
+        else:
+            ax3[i].set_axis_off()
+
+    ax[0].set_ylabel('example frames')
+    ax3[0].set_ylabel('PCs')
+
+    return f
+
+
+def compute_dpcs(dstrf, pc_count=3):
     channel_count=dstrf.shape[3]
     s = list(dstrf.shape)
     s[0]=pc_count
@@ -212,6 +318,7 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
     pc_mag = np.zeros((pc_count,channel_count))
     for c in range(channel_count):
         d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
+
         _u, _s, _v = np.linalg.svd(d.T @ d)
         _s = np.sqrt(_s)
         _s /= np.sum(_s[:pc_count])
@@ -219,6 +326,24 @@ def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10,
         pc_mag[:, c] = _s[:pc_count]
 
     return pcs, pc_mag
+
+
+def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10, return_dstrf=False,
+              pca_index_range=None, **kwargs):
+
+    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
+                          memory=memory, **kwargs)
+
+    if pca_index_range is None:
+        pcs, pc_mag = compute_dpcs(dstrf, pc_count)
+    else:
+        pcs, pc_mag = compute_dpcs(dstrf[pca_index_range, :, :], pc_count)
+
+    if return_dstrf:
+       return pcs, pc_mag, dstrf
+    else:
+       return pcs, pc_mag
+
 
 def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
 
