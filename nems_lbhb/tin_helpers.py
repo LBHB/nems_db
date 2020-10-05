@@ -94,7 +94,7 @@ def make_tbp_colormaps(ref_stims=None, tar_stims=None, use_tar_freq_idx=0):
 
     #print(f"N_ref={N_ref} mid_ref={mid_ref} N_tar={N_tar}") 
     vals = np.ones((N_ref, 4))
-    mid_gray = 224/256
+    mid_gray = 210/256
     vals[:mid_ref, 0] = np.linspace((1-mid_gray), mid_gray, mid_ref)
     vals[:mid_ref, 1] = np.linspace((1-mid_gray), mid_gray, mid_ref)
     vals[:mid_ref, 2] = np.linspace(mid_gray, mid_gray, mid_ref)
@@ -262,10 +262,12 @@ def plot_average_psths(rec):
     f,ax=plt.subplots(cellcount+2, 4, figsize=(4,(cellcount+2)*0.4), sharex=True, sharey='row')
 
     ii=0
-    cmaps = [plt.cm.get_cmap('viridis', len(ref_stims)+2),
-             plt.cm.get_cmap('Reds', len(sounds)+1)]
+    #cmaps = [plt.cm.get_cmap('viridis', len(ref_stims)+2),
+    #         plt.cm.get_cmap('Reds', len(sounds)+1)]
+    cmaps=make_tbp_colormaps(ref_stims, sounds)
+
     for cat,labels,colors in zip(['noise','target'],[ref_stims,sounds],cmaps):
-        tar = int(cat=='target')
+        #tar = int(cat=='target')
 
         for to,r in zip(['Passive','Active'],[r_passive, r_active ]):
 
@@ -283,7 +285,7 @@ def plot_average_psths(rec):
                         g = np.isfinite(p1[:,c,10])
                         x = np.nanmean(p1[g,c,:stim_len], axis=0) * fs
                         tt = np.arange(x.shape[0])/r['resp'].fs - onsetsec
-                        ax[jj,ii].plot(tt, x, color=colors(i+tar), linewidth=0.5, label=k)
+                        ax[jj,ii].plot(tt, x, color=colors(i), linewidth=0.5, label=k)
                         mean_cell[jj,i,:] = x
 
                     except:
@@ -312,7 +314,7 @@ def plot_average_psths(rec):
 
     for yy, k in zip(range(len(sounds)), sounds):
         _k = k.split("_")[1].split("+")[0]
-        ax[cellcount+1,0].text(0, yy+1, k, fontsize=8, color=cmaps[1](yy+1),ha='center',va='bottom')
+        ax[cellcount+1,0].text(0, yy+1, k, fontsize=8, color=cmaps[1](yy),ha='center',va='bottom')
         #print((tt[0], yy+1, k, cmaps[1](yy)))
 
     ax[cellcount+1,0].set_ylim([0,len(sounds)]);
