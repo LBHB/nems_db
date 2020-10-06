@@ -19,7 +19,7 @@ import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
 
 
-from nems.preprocessing import mask_incorrect, generate_average_sig
+from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
 
 log = logging.getLogger(__name__)
 
@@ -94,8 +94,8 @@ def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
     """
     newrec = rec.copy()
     newrec['resp'] = newrec['resp'].rasterize()
-    #newrec = normalize_epoch_lengths(newrec, resp_sig='resp', epoch_regex='TARGET',
-    #                                include_incorrect=include_incorrect)
+    newrec = normalize_epoch_lengths(newrec, resp_sig='resp', epoch_regex='^(STIM|TAR|REF|CAT)',
+                                    include_incorrect=include_incorrect)
     if 'stim' in newrec.signals.keys():
         newrec['stim'] = newrec['stim'].rasterize()
 
