@@ -1342,7 +1342,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
-            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
+            b_goodcells[:,i] = td[m] > 3*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
 
         print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")

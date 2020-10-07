@@ -567,16 +567,19 @@ def parm_tbp(exptparams, **options):
     tar_names = tar['Names']
     if tar['descriptor'] == 'ToneInNoise':
         tar_tone_names = tar['Tone'][1]['Names']
-        tar_noise_bands = tar['ToneBands']
+        tar_noise_bands = np.array(tar['ToneBands'])-1
         tar_fixed_band = tar['ToneFixedBand']
         if len(tar_fixed_band) == 0:
             tar_tone_bands = tar_noise_bands
         else:
-            tar_tone_bands = [int(tar_fixed_band)] * len(tar_noise_bands)
+            tar_tone_bands = [int(tar_fixed_band)-1] * len(tar_noise_bands)
 
-        _, tar_tone_channels = np.unique(tar_tone_bands, return_index=True)
+        #_, tar_tone_channels = np.unique(tar_tone_bands, return_index=True)
+        # assume there's only one target tone frequency!
+        tar_tone_channels = np.full_like(tar_tone_bands, 0)
 
         tar_snrs = tar['SNRs']
+        #import pdb; pdb.set_trace()
     elif tar['descriptor'] == 'Tone':
         #import pdb;
         #pdb.set_trace()
