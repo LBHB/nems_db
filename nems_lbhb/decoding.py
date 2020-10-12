@@ -22,6 +22,11 @@ def compute_dprime(A, B, diag=False, wopt=None):
     if A.shape[0] != B.shape[0]:
         raise ValueError("Number of dimensions do not match between conditions")
 
+    if A.shape[0] == 1:
+        # single dimension
+        dprime = _dprime_single_dim(A, B)
+        return dprime
+
     if diag:
         dprime, wopt, evals, evecs, evec_sim, dU = _dprime_diag(A, B)
 
@@ -29,6 +34,21 @@ def compute_dprime(A, B, diag=False, wopt=None):
         dprime, wopt, evals, evecs, evec_sim, dU = _dprime(A, B, wopt=wopt)
 
     return dprime, wopt, evals, evecs, evec_sim, dU 
+
+
+def _dprime_single_dim(A, B):
+    """
+    Simplest case of single neuron (dimension) dprime -- classic signal detection theory
+    u1 - u2 / sqrt(0.5 * (sig1 + sig2))
+    """
+    num = A.mean() - B.mean()
+    den = np.sqrt(0.5 * (A.var() + B.var()))
+    if num == 0:
+        return 0
+    elif den == 0:
+        return np.inf
+    else:
+        return num / den
 
 
 def _dprime(A, B, wopt=None):

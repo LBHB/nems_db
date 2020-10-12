@@ -2004,5 +2004,18 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
+def get_mean_spike_waveform(cellid):
+    """
+    Return 1-D numpy array containing the mean sorted
+    spike waveform
+    """
+    if type(cellid) != str:
+        raise ValueError("cellid must be string type")
+    # get KS_cluster (if it exists... this is a new feature)
+    sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
+    kid = db.pd_query(sql)
+
+    # find phy results
 
 
+    # get all waveforms for this sorted file
