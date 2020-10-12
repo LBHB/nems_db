@@ -1342,7 +1342,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
-            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
+            b_goodcells[:,i] = td[m] > 3*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
 
         print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
@@ -1409,10 +1409,10 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
 
             best_mean = b_m[jj].max()
             best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
-            print(f"{k} best: {best_mean:.3f} {best_model}")
+            #print(f"{k} best: {best_mean:.3f} {best_model}")
             worst_mean = b_m[jj].min()
             worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
-            print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+            #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
 
         handles, labels = ax.get_legend_handles_labels()
         # reverse the order

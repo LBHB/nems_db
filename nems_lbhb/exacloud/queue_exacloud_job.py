@@ -75,13 +75,13 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
             if force_rerun:
                 if complete == 1:
                     message = "Resetting existing queue entry for: %s\n" % note
-                    sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', GPU_job='{}', user='{}' WHERE id={}".format(
-                        commandPrompt, GPU_job, user, queueid)
+                    sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', user='{}' WHERE id={}".format(
+                        progname, user, queueid)
                     r = conn.execute(sql)
 
                 elif complete == 2:
                     message = "Dead queue entry for: %s exists, resetting.\n" % note
-                    sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(GPU_job, queueid)
+                    sql = "UPDATE tQueue SET complete=0, killnow=0 WHERE id={}".format(queueid)
                     r = conn.execute(sql)
 
                 else:  # complete in [-1, 0] -- already running or queued

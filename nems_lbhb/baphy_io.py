@@ -565,14 +565,32 @@ def parm_tbp(exptparams, **options):
 
     ref_names = ref['Names']
     tar_names = tar['Names']
-    tar_tone_names = tar['Tone'][1]['Names']
-    tar_noise_bands = tar['ToneBands']
-    tar_fixed_band = tar['ToneFixedBand']
-    if len(tar_fixed_band) == 0:
-        tar_tone_bands = tar_noise_bands
+    if tar['descriptor'] == 'ToneInNoise':
+        tar_tone_names = tar['Tone'][1]['Names']
+        tar_noise_bands = np.array(tar['ToneBands'])-1
+        tar_fixed_band = tar['ToneFixedBand']
+        if len(tar_fixed_band) == 0:
+            tar_tone_bands = tar_noise_bands
+        else:
+            tar_tone_bands = [int(tar_fixed_band)-1] * len(tar_noise_bands)
+
+        #_, tar_tone_channels = np.unique(tar_tone_bands, return_index=True)
+        # assume there's only one target tone frequency!
+        tar_tone_channels = np.full_like(tar_tone_bands, 0)
+
+        tar_snrs = tar['SNRs']
+        #import pdb; pdb.set_trace()
+    elif tar['descriptor'] == 'Tone':
+        #import pdb;
+        #pdb.set_trace()
+        tar_tone_names = tar['Names']
+        tar_noise_bands = np.arange(len(tar_tone_names))
+        tar_tone_bands = np.arange(len(tar_tone_names))
+        tar_tone_channels = tar_tone_bands.copy()
+        tar_snrs = np.full(len(tar_tone_names), np.inf)
+
     else:
-        tar_tone_bands = [int(tar_fixed_band)] * len(tar_noise_bands)
-    tar_snrs = tar['SNRs']
+        raise ValueError(f"Unsupported TargetClass {tar['descriptor']}")
 
     stim_dict = {}
     total_bands = len(ref_names) + len(set(tar_tone_bands))
@@ -589,14 +607,14 @@ def parm_tbp(exptparams, **options):
         s = np.zeros((total_bands, total_bins))
         if np.isfinite(tar_snrs[i]):
             s[tar_noise_bands[i], prebins] = 1
-            s[len(ref_names), prebins] = 10 ** (tar_snrs[i] / 20)
+            s[len(ref_names)+tar_tone_channels[i], prebins] = 10 ** (tar_snrs[i] / 20)
         elif tar_snrs[i] > 0:
-            s[len(ref_names), prebins] = 1
+            s[len(ref_names)+tar_tone_channels[i], prebins] = 1
         else:
             s[tar_noise_bands[i], prebins] = 1
         stim_dict[t] = s
     tags = list(stim_dict.keys())
-    stimparam = {'chans': ref_names + list(set(tar['Tone'][1]['Names']))}
+    stimparam = {'chans': ref_names + list(set(tar_tone_names))}
 
     return stim_dict, tags, stimparam
 
@@ -614,8 +632,9 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
         # NB stim is a dict rather than a 3-d array
 
-    if (options['stimfmt']=='parm') & \
-            exptparams['TrialObject'][1]['TargetClass'].startswith('ToneInNoise'):
+    elif (options['stimfmt']=='parm') & \
+            (exptparams['TrialObject'][1]['ReferenceClass']=='NoiseBurst'):
+        #exptparams['TrialObject'][1]['TargetClass'].startswith('ToneInNoise'):
 
         # NB stim is a dict rather than a 3-d array
         stim, tags, stimparam = parm_tbp(exptparams, **options)
