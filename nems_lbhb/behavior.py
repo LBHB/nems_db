@@ -467,8 +467,10 @@ def _compute_metrics(exptparams, exptevents, **options):
     """
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
-    isCatch = [int(i) for i in exptparams['TrialObject'][1]['IsCatch']]
-
+    try:
+        isCatch = [int(i) for i in exptparams['TrialObject'][1]['IsCatch']]
+    except:
+        isCatch = [0 for i in targets]
     if pump_dur.shape == ():
         pump_dur = np.tile(pump_dur, [len(targets)])
 
@@ -608,6 +610,8 @@ def _compute_LI(exptparams, exptevents, resp_window, early_window, dx=0.1, **opt
     # those categories
     tar_names = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    if pump_dur.size==1:
+        pump_dur = np.tile(pump_dur, [len(tar_names)]).tolist()
     rew_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]>0]
     nr_tars = [t for i, t in enumerate(tar_names) if pump_dur[i]==0]
 
@@ -800,6 +804,8 @@ def _get_target_RTs(exptparams, exptevents):
     raise DeprecationWarning
     targets = exptparams['TrialObject'][1]['TargetHandle'][1]['Names']
     pump_dur = np.array(exptparams['BehaveObject'][1]['PumpDuration'])
+    if pump_dur.size==1:
+        pump_dur = np.tile(pump_dur, [len(tar_names)]).tolist()
     early_win = exptparams['BehaveObject'][1]['EarlyWindow']
 
     if pump_dur.shape == ():

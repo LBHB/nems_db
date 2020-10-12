@@ -87,8 +87,9 @@ def make_tbp_colormaps(ref_stims=None, tar_stims=None, use_tar_freq_idx=0):
        tar_freqs=get_freqs(tar_stims)
        ref_freqs=get_freqs(ref_stims)
 
-       mid_ref = np.where(np.array([tar_freqs[use_tar_freq_idx]==r 
-                                    for r in ref_freqs]))[0][0]
+       mid_ref = np.abs(np.array(ref_freqs) - tar_freqs[use_tar_freq_idx]).argmin()
+       #mid_ref = np.where(np.array([tar_freqs[use_tar_freq_idx]==r 
+       #                             for r in ref_freqs]))[0][0]
 
        #print(tar_freqs,ref_freqs,mid_ref)
 
