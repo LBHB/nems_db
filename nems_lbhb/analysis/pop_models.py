@@ -122,7 +122,7 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                        performance_metric='r_ceiling', modelspec_ref=None, **kwargs):
 
     fs = rec['resp'].fs
-    nl_layers = [idx for idx,m in enumerate(modelspec) if ('nonlinearity' in m['fn'])]
+    nl_layers = [idx for idx,m in enumerate(modelspec) if (('nonlinearity' in m['fn']) and ('dlog' not in m['fn']))]
     
     if index_range is None:
         index_range = np.arange(1000)
