@@ -698,10 +698,15 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
         if SNR<100:
             log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
             snr_suff="_{}dB".format(SNR)
+    
+    if exptparams['runclass']=='CPN':
+        # clean up NTI sequence tags
+        tags=[ "".join(t.split(" ")[:2]) if t.startswith("sequence") else t for t in tags]
 
     if (epochs is not None):
         # additional processing steps to convert stim into a dictionary with keys that match epoch names
         # specific to BAPHYExperiment loader.
+                
         if (type(stim) is not dict):
             stim_dict = {}
             for eventidx in range(0, len(tags)):

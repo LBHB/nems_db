@@ -16,7 +16,7 @@ import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import (find_module)
+from nems.utils import find_module, get_setting
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -1114,7 +1114,7 @@ def LN_plot(ctx, ax1=None, ax2=None, ax3=None, ax4=None):
 
     nplt.ax_remove_box(ax4)
 
-def LN_pop_plot(ctx):
+def LN_pop_plot(ctx, ctx0=None):
     """
     compact summary plot for model fit to a single dim of a population subspace
 
@@ -1143,6 +1143,7 @@ def LN_pop_plot(ctx):
 
 
     fig = plt.figure()
+    # input layer filters as STRFs
     for chanidx in range(filter_count):
 
         tmodelspec=copy.deepcopy(modelspec[:(fir_idx+1)])
@@ -1160,7 +1161,7 @@ def LN_pop_plot(ctx):
         interpolation=(2,5)
         interpolation=(1,2)
         nplt.strf_heatmap(tmodelspec, title=None, interpolation=interpolation,
-                          show_factorized=False, fs=fs, ax=ax, show_cbar=False)
+                          show_factorized=False, fs=fs, ax=ax, show_cbar=False, cmap=get_setting('FILTER_CMAP'))
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
             plt.xticks([])
@@ -1198,7 +1199,10 @@ def LN_pop_plot(ctx):
     nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(6, 6, 21)
-    plt.plot(modelspec.meta['r_test'])
+    if ctx0 is not None:
+        ax.plot(ctx0['modelspec'].meta['r_test'],'--',color='lightgray')
+
+    plt.plot(modelspec.meta['r_test'],'k')
     plt.xlabel('cell')
     plt.ylabel('r test')
     nplt.ax_remove_box(ax)
@@ -1209,20 +1213,36 @@ def LN_pop_plot(ctx):
 
     # or just plot the PSTH for an example stimulus
     raster = resp.extract_epoch(epoch)
-    psth = np.mean(raster, axis=0)
-    praster = pred.extract_epoch(epoch)
-    ppsth = np.mean(praster, axis=0)
-    spec = stim.extract_epoch(epoch)[0,:,:]
-    trimbins=0
-    if trimbins > 0:
-        ppsth=ppsth[:,trimbins:]
-        psth=psth[:,trimbins:]
-        spec=spec[:,trimbins:]
+    if raster.shape[-1]>50:
+       psth = np.mean(raster, axis=0)
+       praster = pred.extract_epoch(epoch)
+       ppsth = np.mean(praster, axis=0)
+       spec = stim.extract_epoch(epoch)[0,:,:]
+       trimbins=0
+       if trimbins > 0:
+           ppsth=ppsth[:,trimbins:]
+           psth=psth[:,trimbins:]
+           spec=spec[:,trimbins:]
+    else:
+       rr = slice(0,400)
+       psth = resp.as_continuous()[:,rr]
+       ppsth = pred.as_continuous()[:,rr]
+       spec = stim.as_continuous()[:,rr]
 
     ax = plt.subplot(6, 2, 8)
     #nplt.plot_spectrogram(spec, fs=resp.fs, ax=ax, title=epoch)
     extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
-    im=ax.imshow(spec, origin='lower', interpolation='none',
+    if np.mean(spec==0)>0.05:
+       from nems_lbhb.tin_helpers import make_tbp_colormaps
+       BwG, gR = make_tbp_colormaps()
+       x,y=np.where(spec.T)
+       colors = [BwG(i) for i in range(0,256,int(256/spec.shape[0]))]
+       colors[-1]=gR(256) 
+       for yy,cc in enumerate(colors):
+           ax.plot(x[y==yy]/fs, y[y==yy],'s',color=cc, markersize=2)
+       ax.set_xlim((extent[0],extent[1]))
+    else:
+       im=ax.imshow(spec, origin='lower', interpolation='none',
                  aspect='auto', extent=extent)
     nplt.ax_remove_box(ax)
     plt.ylabel('stim')
@@ -1308,7 +1328,7 @@ def LN_pop_plot(ctx):
 
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
-                      offset=None, max=None, ax=None):
+                      offset=None, dot_colors=None, dot_markers=None, max=None, ax=None):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
@@ -1320,8 +1340,15 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         for k, m in modelgroups.items():
             modelnames.extend(m)
 
-    dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
-    dot_markers = ['.','o','^','s','v','*','x','>','<']
+    key_list = list(modelgroups.keys())
+    if dot_colors is None:
+        dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
+        dot_markers = ['.','o','^','s','v','*','x','>','<']
+    if type(dot_colors) is list:
+        dot_colors={k: c for k,c in zip(key_list, dot_colors[:len(key_list)])}
+    if type(dot_markers) is list:
+        dot_markers={k: c for k,c in zip(key_list, dot_markers[:len(key_list)])}
+
     if ax is None:
         fig,ax = plt.subplots()
 
@@ -1342,7 +1369,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
-            b_goodcells[:,i] = td[m] > 3*td[m+'_se']
+            b_goodcells[:,i] = td[m] > 4*td[m+'_se']
         goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
 
         print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
@@ -1404,7 +1431,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
                     modelset.append(modelnames[jjj])
             #print("{} : {}".format(k, modelset))
             #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[i], color=dot_colors[i], label=k, markersize=6)
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k], label=k, markersize=6)
             i+=1
 
             best_mean = b_m[jj].max()

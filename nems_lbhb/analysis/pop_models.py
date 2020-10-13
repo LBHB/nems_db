@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 from numpy.linalg import det
-from scipy.ndimage import zoom as zoom
+from scipy.ndimage import zoom, gaussian_filter1d
 
 from nems import xforms
 import nems.plots.api as nplt
 from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 from nems.uri import NumpyEncoder
-from nems.utils import get_setting
+from nems.utils import get_setting, smooth
 
 
 log = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     return dstrf
 
 
-def strf_mtx(modelspec, rows=3):
+def strf_mtx(modelspec, rows=3, smooth=[1,2]):
     
     fir_layers = [idx for idx,m in enumerate(modelspec) if ('fir' in m['fn'])]
     wc_layers = np.array([idx for idx,m in enumerate(modelspec) if ('weight' in m['fn'])])
@@ -92,12 +92,12 @@ def strf_mtx(modelspec, rows=3):
 
     #print(wc_coefs.shape, fir_coefs.shape, bank_count, bank_chans)
     strfs = [zoom(wc_coefs[(bank_chans*i):(bank_chans*(i+1)),:].T @
-                      fir_coefs[(bank_chans*i):(bank_chans*(i+1)), :], [2,2], mode='constant')
+                      fir_coefs[(bank_chans*i):(bank_chans*(i+1)), :], smooth, mode='constant')
                       for i in range(bank_count)]
-
-    r_step = strfs[0].shape[0]+1
-    c_step = strfs[0].shape[1]+int(strfs[0].shape[1]/rows)
-    strf_all=np.full([r_step*rows-1, c_step*int(np.ceil(len(strfs)/rows))], np.nan)
+    strfs = [np.pad(s,((0,0),(1,0))) for s in strfs]
+    r_step = strfs[0].shape[0]+2
+    c_step = strfs[0].shape[1]+int(np.ceil(strfs[0].shape[1]/rows))
+    strf_all=np.full([r_step*rows-1, int(c_step * np.ceil((len(strfs)+1)/rows)+c_step/rows) ], np.nan)
     #print(strf_all.shape)
 
     for i in range(bank_count):
@@ -106,18 +106,22 @@ def strf_mtx(modelspec, rows=3):
             strfs[i] = strfs[i] / m
         
         r = (i%rows)*r_step
-        c = int(i/rows)*c_step + (i%rows)*int(strfs[0].shape[1]/rows)
+        c = int(i/rows)*c_step + ((rows-i)%rows)*int(strfs[0].shape[1]/rows)
+        #print (r,c)
 
         strf_all[r:(r+strfs[i].shape[0]),c:(c+strfs[i].shape[1])]=strfs[i]         
         
     #f, ax=plt.subplots(1,1, figsize=(18,2))
     #ax.imshow(strf_all, origin='lower', aspect='auto')
 
-    return strf_all
+    return strf_all, strfs
 
 
-def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsize=None, **kwargs):
+def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, 
+                       smooth=[2,2], figsize=None, example_idx=0, cmap='bwr',
+                       performance_metric='r_ceiling', modelspec_ref=None, **kwargs):
 
+    fs = rec['resp'].fs
     nl_layers = [idx for idx,m in enumerate(modelspec) if ('nonlinearity' in m['fn'])]
     
     if index_range is None:
@@ -134,45 +138,108 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsi
 
     max_width = np.max([p.shape[0] for p in pred])
         
-    rows = len(nl_layers)+1
+    rows = len(nl_layers)+2
     if figsize is None:
-        figsize=(18, rows*1.5)
+        figsize=(12, rows*1.5)
 
     f = plt.figure(constrained_layout=True, figsize=figsize)
-    gs = f.add_gridspec(rows, 3)
-    ax0 = f.add_subplot(gs[0, 0])
-    ax1 = f.add_subplot(gs[1:, 0])
-    ax = [f.add_subplot(gs[i, 1]) for i in range(rows)]
+    gs = f.add_gridspec(rows, 4)
+    ax0 = f.add_subplot(gs[0, 0:2])
+    ax1 = f.add_subplot(gs[1:(rows-1), 0:2])
+    ax = [f.add_subplot(gs[i, 2:4]) for i in range(rows)]
+    ax_zoom = f.add_subplot(gs[rows-1, 0])
+    ax_perf = f.add_subplot(gs[rows-1, 1])
 
     srows=3
-    strf_all=strf_mtx(modelspec, rows=srows)
+    strf_all, strfs = strf_mtx(modelspec, rows=srows, smooth=smooth)
     #mask=np.isnan(strf_all)
     #strf_all[mask]=0
     #strf_all = zoom(strf_all,[2,2])
     #mask = zoom(mask,[2,2])
     #strf_all[mask]=np.nan
-    mm = np.max(np.abs(strf_all))
+    mm = np.nanmax(np.abs(strf_all))
    
-    cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
-    cmap.set_bad('lightgray',1.)
-
-    ax0.imshow(strf_all, aspect='auto', cmap=cmap)
+    if cmap=='bwr':
+        cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
+        cmap.set_bad('lightgray',1.)
+    elif cmap=='jet':
+        cmap = mpl.cm.get_cmap(name='jet')
+        cmap.set_bad('white',1.)
+    else:
+        cmap = mpl.cm.get_cmap(name=cmap)
+        cmap.set_bad('white',1.)
+        #cmap = mpl.cm.get_cmap(name='RdYlBu_r')
+    ax0.imshow(strf_all, aspect='auto', cmap=cmap, origin='lower', interpolation='none', clim=[-mm, mm])
     ax0.set_axis_off()
     
-    ax[0].imshow(rec['stim'].as_continuous()[:,index_range],aspect='auto',interpolation='none',origin='lower', cmap='viridis')
+    s = strfs[example_idx]
+    extent = [0.5/(fs*smooth[1])-1.5/(fs*smooth[1]), (s.shape[1]+0.5)/(fs*smooth[1])-1.5/(fs*smooth[1]), 0.5, s.shape[0]+0.5]
+    cl = np.nanmax(np.abs(s))
+    im = ax_zoom.imshow(s, interpolation='none', aspect='auto', cmap=cmap, origin='lower', 
+                        clim=[-cl,cl], extent=extent)
+    plt.colorbar(im, ax=ax_zoom)
+    ax_zoom.set_ylabel(f"input channel")
+    ax_zoom.set_title(f"example L1 filter ({example_idx})")
+
+    if modelspec_ref is not None:
+        r_test0 = modelspec_ref.meta[performance_metric]
+        ax_perf.plot(r_test0, color='lightgray')
+    r_test = modelspec.meta[performance_metric]
+    ax_perf.plot(r_test, color='black')
+    ax_perf.plot([0, len(r_test)],[0, 0], '--', color='gray')
+    ax_perf.set_xlabel('unit #')
+    ax_perf.set_ylim([-0.05, 1])
+    ax_perf.set_yticks([0,0.5,1])
+    ax_perf.set_title(performance_metric)
+
+    spec = rec['stim'].as_continuous()[:,index_range]
+    extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
+
+    if np.mean(spec==0)>0.5:
+       from nems_lbhb.tin_helpers import make_tbp_colormaps
+       BwG, gR = make_tbp_colormaps()
+       xx,yy=np.where(spec.T)
+       colors = [BwG(i) for i in range(0,256,int(256/spec.shape[0]))]
+       colors[-1]=gR(256)
+       dur=0.3
+       for x,y in zip(xx/fs,yy):
+           ax[0].plot([x,x+dur],[y,y],'-',linewidth=2,color=colors[y])
+       ax[0].set_xlim((extent[0],extent[1]))
+    else:
+       #im=ax.imshow(spec, origin='lower', interpolation='none', aspect='auto', extent=extent)
+
+       ax[0].imshow(spec,aspect='auto',interpolation='none',origin='lower', cmap='gray_r')
+    ax[0].set_ylabel("input channel")
+
+    resp = rec['resp'].as_continuous()[:,index_range]
+    extent = [0.5/fs, (resp.shape[1]+0.5)/fs, 0.5, resp.shape[0]+0.5]
+    ax[-1].imshow(resp,aspect='auto',interpolation='none',origin='lower', extent=extent, cmap='gist_yarg')
+    ax[-1].set_ylabel('resp')
+
     cmap="gist_yarg"
     cmap="Reds"
     for i,l in enumerate(nl_layers):
         p = pred[i]-pred[i][:,:1]
+        extent = [0.5/fs, (p.shape[1]+0.5)/fs, 0.5, p.shape[0]+0.5]
         if i<len(nl_layers)-1:
-            im=ax[i+1].imshow(p>0.01,aspect='auto',interpolation='none',origin='lower', cmap=cmap)
+            im=ax[i+1].imshow(p>0.01,aspect='auto',interpolation='none',origin='lower', 
+                              extent=extent, cmap=cmap)
+            ax[i+1].set_ylabel(f"L{i+1} activation")
         else:
-            im=ax[i+1].imshow(p,aspect='auto',interpolation='none',origin='lower', cmap="gist_yarg")
+            mm = np.nanmax(p)
+            im=ax[i+1].imshow(p,aspect='auto',interpolation='none',origin='lower', 
+                              clim=[0, mm], extent=extent, cmap="gist_yarg")
+            ax[i+1].set_ylabel(f"pred")
 
         n1 = pred[i].shape[0]
         x1 = np.linspace(-n1/2, n1/2, n1)
         if i > 0:
-            c = modelspec.phi[nl_layers[i-1]+1].get('coefficients',None)
+            midx = nl_layers[i-1]+1
+            if 'weight_channels' in modelspec[midx]['fn']:
+                pass
+            elif 'weight_channels' in modelspec[midx+1]['fn']:
+                midx+=1
+            c = modelspec.phi[midx].get('coefficients',None)
             if c is not None:
                 c = c/np.max(np.abs(c))
             n0 = pred[i-1].shape[0]
@@ -182,32 +249,36 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, figsi
                 for i1 in range(0,n1):
                     if c is not None:
                         col = c[i1,i0]
-                        if col>0:
-                            col = [(1-col), 1-0.5*col, 1-0.5*col]
-                        else:
-                            col = [1+0.5*col, 1+0.5*col, 1+col]
+                        if np.abs(col)>0.2:
+                            if col>0:
+                                col = [(1-col), 1-0.5*col, 1-0.5*col]
+                            else:
+                                col = [1+0.5*col, 1+0.5*col, 1+col]
+                            ax1.plot([x0[i0], x1[i1]],[rows - (i), rows - (i+1)], 
+                                     color=col, linewidth=0.5)
                     else:
                         col = [.5, .5, .5]
-                    if col[0]<0.8:
-                        ax1.plot([x0[i0], x1[i1]],[rows - (i -1), rows - i], color=col, linewidth=0.5)
+                        ax1.plot([x0[i0], x1[i1]],[rows - (i), rows - (i+1)], 
+                                 color=col, linewidth=0.5)
+
         else:
             n0 = max_width
             x0 = np.linspace(-n0/2, n0/2, n1)
             #print(-n0/2, n0/2)
 
             for i1 in range(srows-1,n1,srows):
-                ax1.plot([x0[i1], x1[i1]],[rows - (i-0.5), rows - i], color=[.5, .5, .5], linewidth=0.5)
+                ax1.plot([x0[i1], x1[i1]],[rows - (i+0.5), rows - (i+1)], color=[.5, .5, .5], linewidth=0.5)
                 #print(x0[i1], x1[i1])
     for i,l in enumerate(nl_layers):
 
         n1 = pred[i].shape[0]
         x1 = np.linspace(-n1/2, n1/2, n1)
-        ax1.scatter(x1, np.zeros(n1) + rows - i, edgecolors='black', facecolors='white')
+        ax1.scatter(x1, np.zeros(n1) + rows - (i+1), edgecolors='black', facecolors='white')
         #print(x1[0], x1[-1])
-    ax1.set_ylim([1.5, rows+0.5])
+    ax1.set_ylim([1.5, rows-0.5])
     ax1.set_axis_off()
-    
-    f.suptitle(f"{modelspec.meta['cellid']}: {index_range[0]}-{index_range[-1]}")
+    modelname = modelspec.meta['modelname'].split("_")[1] 
+    f.suptitle(f"{modelspec.meta['cellid']} {modelname} {index_range[0]}-{index_range[-1]}")
     return f
 
 def force_signal_silence(rec, signal='stim'):
@@ -272,24 +343,28 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     ax = np.array([f.add_subplot(gs[3, i]) for i in range(n_strf)])
     ax3 = np.array([f.add_subplot(gs[4, i]) for i in range(n_strf)])
 
-    ax0.imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower')
+    ax0.imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower', cmap="gray_r")
     xl=ax0.get_xlim()
 
-    ax1.plot(rec['resp'].as_continuous()[c, rr_orig]);
-    ax1.plot(rec['pred'].as_continuous()[c, rr_orig]);
+    ax1.plot(rec['resp'].as_continuous()[c, rr_orig], color='gray');
+    ax1.plot(rec['pred'].as_continuous()[c, rr_orig], color='purple');
     ax1.legend(('actual','pred'), frameon=False)
     ax1.set_xlim(xl)
+    yl1=ax1.get_ylim()
 
     ax2.plot(pc_proj);
     ax2.set_xlim(xl)
     ax2.set_ylabel('pc projection')
-    yl=ax2.get_ylim()
+    ax2.legend(('PC1','PC2','PC3'), frameon=False)
+    yl2=ax2.get_ylim()
 
-    mmd=np.max(np.abs(dstrf[np.array(dindex),:,:,c_]))
+    dindex = np.array(dindex)
+    mmd=np.max(np.abs(dstrf[np.array(dindex)+rr[0],:,:,c_]))
 
     for i,d in enumerate(dindex):
-        ax2.plot([d,d],yl,'k--')
-        ds = np.fliplr(dstrf[d,:,:,c_])
+        ax1.plot([d,d],yl1,'--', color='darkgray')
+        ax2.plot([d,d],yl2,'--', color='darkgray')
+        ds = np.fliplr(dstrf[d+rr[0],:,:,c_])
         ds=zoom(ds, [2,2])
         ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'))
         #plot_heatmap(ds, aspect='auto', ax=ax[i], interpolation=2, clim=[-mmd, mmd], show_cbar=False, xlabel=None, ylabel=None)
@@ -534,13 +609,13 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
-                out_base=None, **kwargs):
+                out_base=None, fps=10, **kwargs):
     #plt.close('all')
 
     cellcount=len(out_channel)
     framecount=len(index_range)
     cellids = [rec['resp'].chans[o] for o in out_channel]
-
+    fs=rec['resp'].fs
     i = 0
     index = index_range[i]
     memory = dstrf.shape[2]
@@ -548,7 +623,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
     stim_lim = np.max(stim[:, index_range])
 
-    s = stim[:, (index - memory):index]
+    s = stim[:, (index - memory*2):index]
     print("stim_lim ", stim_lim)
 
     im_list = []
@@ -570,35 +645,40 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     axs[0, stim0col].set_ylabel('stim')
     axs[0, stim0col].set_yticks([])
     axs[0, stim0col].set_xticks([])
-    _title1 = axs[0, stim0col].set_title(f"dSTRF frame {index}")
+    _title1 = axs[0, stim0col].set_title(f"dSTRF frame {index / fs:.3f}")
 
+    axs[0, 0].set_axis_off()
     for cellidx in range(cellcount):
         d = dstrf[i, :, :, cellidx].copy()
 
         pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) / 2
+        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) * 2.0
 
         if mult:
             strf_lim = strf_lim * stim_lim
             d = d * s
-        print(f"strf_lim[{cellidx}]: ", strf_lim)
-
-        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
-                                               aspect='auto'))
+        d=zoom(d,[2,2])
+        print(f"strf_lim[{cellidx}]: {strf_lim} shape: {d.shape}")
+        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
+                                               interpolation='none', origin='lower',
+                                               aspect='auto', cmap='bwr'))
         axs[cellidx+1, 0].set_yticks([])
         axs[cellidx+1, 0].set_xticks([])
         axs[cellidx+1, 0].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
         ax_remove_box(axs[cellidx+1,0])
 
+        if cellidx<cellcount-1:
+            axs[cellidx+1, 1].set_xticklabels([])
+
         if not static:
-           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory):index], '-')[0])
-           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory):index], '--')[0])
+           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index], '-', color='purple')[0])
+           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*2):index], '-', color='gray')[0])
            axs[cellidx+1, 1].set_ylim((0, pred_max))
            axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
         index = index_range[i]
-        s = stim[:, (index - memory):index]
+        s = stim[:, (index - memory*2):index]
         im_list[0].set_data(s)
 
         for cellidx in range(cellcount):
@@ -606,14 +686,20 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
                 d = dstrf[i, :, :, cellidx] * s
             else:
                 d = dstrf[i, :, :, cellidx]
-
+            d=zoom(d,[2,2])
             im_list[cellidx+1].set_data(d)
 
-            _t = np.arange(memory)
-            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[cellidx, (index - memory):index]))
-            l2_list[cellidx].set_data((_t, rec['resp'].as_continuous()[cellidx, (index - memory):index]))
+            _t = np.arange(memory*2)
+            _r = rec['resp'].as_continuous()[cellidx, (index - memory*2-1):(index+1)]
+            smooth_window=0.75
+            #import pdb; pdb.set_trace()
+            _r = gaussian_filter1d(_r, smooth_window, axis=0)[1:-1]
 
-        _title1.set_text(f"dSTRF frame {index}")
+            #print(f"{index}: {_t.shape} {_r.shape}")
+            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[cellidx, (index - memory*2):index]))
+            l2_list[cellidx].set_data((_t, _r))
+
+        _title1.set_text(f"dSTRF frame {index/fs:.3f}")
 
         return tuple(im_list + l1_list + l2_list + [_title1])
 
@@ -660,7 +746,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
 
         # Set up formatting for the movie files
         Writer = animation.writers['ffmpeg']
-        writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+        writer = Writer(fps=fps, metadata=dict(artist='Me'), bitrate=1800)
         line_ani = animation.FuncAnimation(f, dstrf_frame, framecount, fargs=(),
                                            interval=1, blit=True)
         line_ani.save(out_file, writer=writer)
