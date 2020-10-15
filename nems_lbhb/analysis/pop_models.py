@@ -569,7 +569,7 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
     figs.append(fig2BytesIO(f))
 
     f2,axs=plt.subplots(8, 10, figsize=(16,12))
-    for c in range(channel_count):
+    for c in range(np.min([40,channel_count])):
         cellid = cellids[c]
         for i in range(2):
             mm=np.max(np.abs(pcs[i,:,:,c]))
@@ -591,21 +591,22 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
     figs.append(fig2BytesIO(f2))
 
     extra_results = {
-            'olap_same_site': olap_same_site,
-            'olap_part_site': olap_part_site,
-            'r_cc_same_site': r_cc_same_site,
-            'r_cc_part_site': r_cc_part_site,
-            'p_cc_same_site': p_cc_same_site,
-            'p_cc_part_site': p_cc_part_site,
+            'olap_same_site': np.round(olap_same_site, 4),
+            'olap_part_site': np.round(olap_part_site, 4),
+            'r_cc_same_site': np.round(r_cc_same_site, 4),
+            'r_cc_part_site': np.round(r_cc_part_site, 4),
+            'p_cc_same_site': np.round(p_cc_same_site, 4),
+            'p_cc_part_site': np.round(p_cc_part_site, 4),
             'pc_mag_same_site': s1[:10],
-            'pc_mag_part_site': s2[:10]}
+            'pc_mag_part_site': s2[:10],
+            'pc_mag': pc_mag}
     # 'dstrf_overlap': overlap,
     modelspec.meta['extra_results']=jsonlib.dumps(extra_results, cls=NumpyEncoder) 
 
     if batching:
         return {'figures': figs, 'modelspec': modelspec}
     else:
-        return {'figures': [f, f2], 'modelspec': modelspec}
+        return {'figures': [f, f2], 'modelspec': modelspec, 'pc_mag': pc_mag, 'pcs': pcs}
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
