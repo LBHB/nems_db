@@ -618,6 +618,50 @@ def parm_tbp(exptparams, **options):
 
     return stim_dict, tags, stimparam
 
+def labeled_line_stim(exptparams, **options):
+    """
+    generate parameterized "spectrogram" of stimulus where onset of each unique stim/tar/ref/cat event
+    is coded in each row
+
+    :param exptparams:
+    :param options:
+    :return:
+    """
+    ref = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    tar = exptparams['TrialObject'][1]['TargetHandle'][1]
+
+    ref_names = ref['Names']
+    tar_names = tar['Names']
+    all_names = ref_names+tar_names
+
+    stim_dict = {}
+    total_bands = len(ref_names) + len(tar_names)
+    fs = options['rasterfs']
+    prebins = int(fs * ref['PreStimSilence'])
+    durbins = int(fs * ref['Duration'])
+    postbins = int(fs * ref['PostStimSilence'])
+    total_bins = prebins + durbins + postbins
+    for i, r in enumerate(all_names):
+        if i==0:
+            prebins = int(fs * ref['PreStimSilence'])
+            durbins = int(fs * ref['Duration'])
+            postbins = int(fs * ref['PostStimSilence'])
+            total_bins = prebins + durbins + postbins
+        elif i==len(ref_names):
+            # shift to using tar lengths
+            prebins = int(fs * tar['PreStimSilence'])
+            durbins = int(fs * tar['Duration'])
+            postbins = int(fs * tar['PostStimSilence'])
+            total_bins = prebins + durbins + postbins
+
+        s = np.zeros((total_bands, total_bins))
+        s[i, prebins] = 1
+        stim_dict[r] = s
+    tags = list(stim_dict.keys())
+    stimparam = {'chans': all_names}
+
+    return stim_dict, tags, stimparam
+
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
@@ -634,10 +678,14 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
     elif (options['stimfmt']=='parm') & \
             (exptparams['TrialObject'][1]['ReferenceClass']=='NoiseBurst'):
-        #exptparams['TrialObject'][1]['TargetClass'].startswith('ToneInNoise'):
 
         # NB stim is a dict rather than a 3-d array
         stim, tags, stimparam = parm_tbp(exptparams, **options)
+
+    elif (options['stimfmt']=='ll'):
+
+        # NB stim is a dict rather than a 3-d array
+        stim, tags, stimparam = labeled_line_stim(exptparams, **options)
 
     elif exptparams['runclass']=='VOC_VOC':
         stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)

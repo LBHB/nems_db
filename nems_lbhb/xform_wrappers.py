@@ -214,6 +214,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['stimfmt'] = 'ozgf'
         elif op=='parm':
             options['stimfmt'] = 'parm'
+        elif op=='ll':
+            options['stimfmt'] = 'll'
         elif op=='env':
             options['stimfmt'] = 'envelope'
         elif op in ['nostim','psth','ns', 'evt']:
