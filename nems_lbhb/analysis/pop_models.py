@@ -590,18 +590,14 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
 
     figs.append(fig2BytesIO(f2))
 
-    extra_results = {
-            'olap_same_site': np.round(olap_same_site, 4),
-            'olap_part_site': np.round(olap_part_site, 4),
-            'r_cc_same_site': np.round(r_cc_same_site, 4),
-            'r_cc_part_site': np.round(r_cc_part_site, 4),
-            'p_cc_same_site': np.round(p_cc_same_site, 4),
-            'p_cc_part_site': np.round(p_cc_part_site, 4),
-            'pc_mag_same_site': s1[:10],
-            'pc_mag_part_site': s2[:10],
-            'pc_mag': pc_mag}
-    # 'dstrf_overlap': overlap,
-    modelspec.meta['extra_results']=jsonlib.dumps(extra_results, cls=NumpyEncoder) 
+    modelspec.meta['olap_same_site'] = olap_same_site
+    modelspec.meta['olap_part_site'] = olap_part_site
+    modelspec.meta['r_cc_same_site'] = r_cc_same_site
+    modelspec.meta['r_cc_part_site'] = r_cc_part_site
+    modelspec.meta['p_cc_same_site'] = p_cc_same_site
+    modelspec.meta['p_cc_part_site'] = p_cc_part_site
+    modelspec.meta['pc_mag_same_site'] = s1[:10]
+    modelspec.meta['pc_mag_part_site'] = s2[:10]
     modelspec.meta['pc_mag'] = pc_mag
 
     if batching:
