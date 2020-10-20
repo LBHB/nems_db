@@ -102,6 +102,16 @@ def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
     return xfspec
 
+@xform()
+def ll(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    labeled line spectrogram
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+    d = _load_dict(loadkey, cellid, batch)
+    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    return xfspec
+
 
 @xform()
 def ns(loadkey, cellid=None, batch=None, siteid=None, **options):

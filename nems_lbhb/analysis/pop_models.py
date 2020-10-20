@@ -618,10 +618,13 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     index = index_range[i]
     memory = dstrf.shape[2]
 
-    stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
-    stim_lim = np.max(stim[:, index_range])
+    stim=rec['stim'].as_continuous()-0.05
+    stim[stim<0]=0
+    stim = np.exp(stim*2)-1
+    
+    stim_lim = np.max(stim[:, index_range])*0.5
 
-    s = stim[:, (index - memory*2):index]
+    s = stim[:, (index - memory*3):index]
     print("stim_lim ", stim_lim)
 
     im_list = []
@@ -702,9 +705,9 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         return tuple(im_list + l1_list + l2_list + [_title1])
 
     if static:
-        stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
-        stim_lim = np.max(stim[:, index_range])
-        print("stim_lim ", stim_lim)
+        #stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
+        #stim_lim = np.max(stim[:, index_range])
+        #print("stim_lim ", stim_lim)
 
         for i in range(1, max_frames):
            index = index_range[i]
@@ -723,11 +726,21 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
                if mult:
                    strf_lim = strf_lim * stim_lim
                    d = d * s
-               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', aspect='auto')
+               d=zoom(d,[2,2])
+               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
+                                        aspect='auto', cmap='bwr')
                axs[cellidx+1, i].set_yticks([])
                axs[cellidx+1, i].set_xticks([])
                #axs[cellidx+1, i].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
                ax_remove_box(axs[cellidx+1, i])
+        if out_base is None:
+            if mult:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}_masked.pdf'
+            else:
+                out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}.pdf'
+        out_file = os.path.join(out_path, out_base)
+        print(f'saving to: {out_file}')
+        f.savefig(out_file)
 
     elif preview:
         for i in range(framecount):

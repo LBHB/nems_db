@@ -1382,7 +1382,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     siteids = list(set([c.split("-")[0] for c in cellids]))
     mean_cells_per_site = len(cellids)/len(siteids)
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
-    n_parms[n_parms>100] = n_parms[n_parms>100]/mean_cells_per_site
+    n_parms[n_parms>200] = n_parms[n_parms>200]/mean_cells_per_site
 
     if max is None:
         max = b_m.max() * 1.05
@@ -1434,17 +1434,18 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
             ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k], label=k, markersize=6)
             i+=1
 
-            best_mean = b_m[jj].max()
+            if np.sum(np.isfinite(b_m[jj]))<len(b_m[jj]):
+                import pdb; pdb.set_trace()
+            best_mean = np.nanmax(b_m[jj])
             best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
             #print(f"{k} best: {best_mean:.3f} {best_model}")
-            worst_mean = b_m[jj].min()
+            worst_mean = np.nanmin(b_m[jj])
             worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
             #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
 
         handles, labels = ax.get_legend_handles_labels()
         # reverse the order
         ax.legend(handles, labels, loc='lower right', fontsize=8, frameon=False)
-
     ax.set_xlabel('Free parameters')
     ax.set_ylabel('Mean pred corr')
     ax.set_ylim((offset, max))
