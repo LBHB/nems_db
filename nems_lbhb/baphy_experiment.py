@@ -762,8 +762,8 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     # sort of hacky. This means that if behavior classification 
     # was run and it's NOT classical conditioning, you should truncate
     # trials after licks
-    remove_post_lick = ('soundTrial' in exptevents.columns) & \
-                            (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
+    #remove_post_lick = ('soundTrial' in exptevents.columns) & \
+    #                        (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
     
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
@@ -798,7 +798,8 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     # reference events (including spont)
     ref_tags = exptevents[exptevents.name.str.contains('Reference') & \
-                            ~exptevents.name.str.contains('Silence')].name.unique()
+                            (~exptevents.name.str.contains('PreStimSilence') & \
+                            ~exptevents.name.str.contains('PostStimSilence'))].name.unique()
     ref_s_tags = exptevents[exptevents.name.str.contains('Reference') & \
                             exptevents.name.str.contains('PreStimSilence')].name.unique()
     ref_e_tags = exptevents[exptevents.name.str.contains('Reference') & \
@@ -895,7 +896,6 @@ def _make_light_epochs(exptevents, exptparams, **options):
                 by=['start', 'end'], ascending=[1, 0]
                 ).reset_index()
         light_events = light_events.drop(columns=['index'])
-
         return light_events
 
     else:

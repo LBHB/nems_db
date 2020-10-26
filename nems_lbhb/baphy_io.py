@@ -2076,7 +2076,7 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid):
+def get_mean_spike_waveform(cellid, animal):
     """
     Return 1-D numpy array containing the mean sorted
     spike waveform
@@ -2085,9 +2085,32 @@ def get_mean_spike_waveform(cellid):
         raise ValueError("cellid must be string type")
     # get KS_cluster (if it exists... this is a new feature)
     sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
-    kid = db.pd_query(sql)
-
+    kid = db.pd_query(sql).iloc[0][0]
+    
     # find phy results
-
+    site = cellid[:7]
+    path = f'/auto/data/daq/{animal}/{site[:-1]}/tmp/KiloSort/'
+    res_dirs = os.listdir(path)
+    res_dirs = [p for p in res_dirs if site in p]
+    results_dir = []
+    for r in res_dirs:
+        # find results dir with this cellid
+        rns = r.split(f'{site}_')[1].split('KiloSort')[0].split('_')[:-1]
+        rns = np.sort([int(r) for r in rns])
+        sql = f"SELECT stimfile from sCellFile WHERE cellid = '{cellid}'"
+        _rns = np.sort(db.pd_query(sql)['stimfile'].apply(lambda x: int(x.split(site)[1].split('_')[0])))
+        if np.all(_rns == rns):
+            results_dir = r
+    if results_dir == []:
+        raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
 
     # get all waveforms for this sorted file
+    w = np.load(path + results_dir + '/results/wft_mwf.npy')
+    clust_ids = pd.read_csv(path + results_dir + '/results/cluster_group.tsv', '\t').cluster_id
+    kidx = np.argwhere(clust_ids.values == kid)[0][0]
+    
+
+    # get waveform
+    mwf = w[:, kidx]
+
+    return mwf
