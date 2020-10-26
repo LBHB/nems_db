@@ -50,7 +50,7 @@ for i, unit in enumerate(rec['resp'].chans):
     a[i].set_xlim(lim[0], lim[1])
 
     # add inset for mwf
-    ax2 = plt.axes([0,0,1,1])
+    ax2 = plt.axes([a[i].colNum, a[i].colNum, a[i].rowNum, a[i].rowNum])
     # Manually set the position and relative size of the inset axes within ax1
     ip = InsetPosition(a[i], [0.5,0.5,0.5,0.5])
     ax2.set_axes_locator(ip)
