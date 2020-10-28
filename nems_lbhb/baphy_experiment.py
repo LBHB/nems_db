@@ -693,7 +693,8 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
 
     log.info('Creating Light epochs')
     light_epochs = _make_light_epochs(exptevents, exptparams, **options)
-    epochs.append(light_epochs)
+    if light_epochs != []:
+        epochs.append(light_epochs)
 
     # this step includes removing post lick events for 
     # active files
