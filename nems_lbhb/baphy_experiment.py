@@ -691,6 +691,11 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     stim_epochs = _make_stim_epochs(exptevents, exptparams, **options)
     epochs.append(stim_epochs)
 
+    log.info('Creating Light epochs')
+    light_epochs = _make_light_epochs(exptevents, exptparams, **options)
+    if light_epochs != []:
+        epochs.append(light_epochs)
+
     # this step includes removing post lick events for 
     # active files
     behavior = False
@@ -758,8 +763,8 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     # sort of hacky. This means that if behavior classification 
     # was run and it's NOT classical conditioning, you should truncate
     # trials after licks
-    remove_post_lick = ('soundTrial' in exptevents.columns) & \
-                            (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
+    #remove_post_lick = ('soundTrial' in exptevents.columns) & \
+    #                        (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
     
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
@@ -794,7 +799,8 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     # reference events (including spont)
     ref_tags = exptevents[exptevents.name.str.contains('Reference') & \
-                            ~exptevents.name.str.contains('Silence')].name.unique()
+                            (~exptevents.name.str.contains('PreStimSilence') & \
+                            ~exptevents.name.str.contains('PostStimSilence'))].name.unique()
     ref_s_tags = exptevents[exptevents.name.str.contains('Reference') & \
                             exptevents.name.str.contains('PreStimSilence')].name.unique()
     ref_e_tags = exptevents[exptevents.name.str.contains('Reference') & \
@@ -876,6 +882,25 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     stim_events = stim_events.drop(columns=['index'])
 
     return stim_events
+
+
+def _make_light_epochs(exptevents, exptparams, **options):
+    """
+    Look for / define light epochs (for optogenetics).
+    Quick and dirty, probably needs improvment -- CRH 10.21.2020
+    """ 
+    light_events = exptevents[exptevents['name'].str.contains('LightStim')].copy()
+    
+    if light_events.shape[0] >= 1:
+        light_events.at[:, 'name'] = 'LIGHTON'
+        light_events = light_events.sort_values(
+                by=['start', 'end'], ascending=[1, 0]
+                ).reset_index()
+        light_events = light_events.drop(columns=['index'])
+        return light_events
+
+    else:
+        return []
 
 
 def _make_behavior_epochs(exptevents, exptparams, **options):
