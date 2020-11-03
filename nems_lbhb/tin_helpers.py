@@ -24,21 +24,23 @@ def sort_targets(targets):
     f = []
     snrs = []
     labs = []
-    for t in targets:
-        f.append(int(t.strip('TAR_').strip('CAT_').split('+')[0]))
-        snr = t.split('+')[1].split('dB')[0]
-        if snr=='Inf': snr=np.inf
-        elif snr=='-Inf': snr=-np.inf
-        else: snr=int(snr)
-        snrs.append(snr)
-        try:
-            labs.append(int(t.split('+')[-1].split(':N')[-1]))
-        except:
-            labs.append(np.nan)
-    tar_df = pd.DataFrame(data=np.stack([f, snrs, labs]).T, columns=['freq', 'snr', 'n']).sort_values(by=['freq', 'snr', 'n'])
-    sidx = tar_df.index
-    return np.array(targets)[sidx].tolist()
-
+    try:
+        for t in targets:
+            f.append(int(t.strip('TAR_').strip('CAT_').split('+')[0]))
+            snr = t.split('+')[1].split('dB')[0]
+            if snr=='Inf': snr=np.inf
+            elif snr=='-Inf': snr=-np.inf
+            else: snr=int(snr)
+            snrs.append(snr)
+            try:
+                labs.append(int(t.split('+')[-1].split(':N')[-1]))
+            except:
+                labs.append(np.nan)
+        tar_df = pd.DataFrame(data=np.stack([f, snrs, labs]).T, columns=['freq', 'snr', 'n']).sort_values(by=['freq', 'snr', 'n'])
+        sidx = tar_df.index
+        return np.array(targets)[sidx].tolist()
+    except:
+        return targets
 
 def sort_refs(refs):
     """
@@ -148,18 +150,25 @@ def load_tbp_recording(siteid, batch, **options):
     offset = int(offsetsec * options['rasterfs'])
 
     # PCA on trial averaged responses
-    targets = [f for f in rec['resp'].epochs.name.unique() if 'TAR_' in f]
-    catch = [f for f in rec['resp'].epochs.name.unique() if 'CAT_' in f]
+    ref_stims, sounds, all_sounds = get_sound_labels(rec)
+    """
+    try:
+        targets = [f for f in rec['resp'].epochs.name.unique() if 'TAR_' in f]
+        catch = [f for f in rec['resp'].epochs.name.unique() if 'CAT_' in f]
 
-    sounds = targets + catch
+        sounds = targets + catch
 
-    ref_stims = [x for x in rec['resp'].epochs.name.unique() if 'STIM_' in x]
-    idx = np.argsort([int(s.split('_')[-1]) for s in ref_stims])
-    ref_stims = np.array(ref_stims)[idx].tolist()
+        ref_stims = [x for x in rec['resp'].epochs.name.unique() if 'STIM_' in x]
+        idx = np.argsort([int(s.split('_')[-1]) for s in ref_stims])
+        ref_stims = np.array(ref_stims)[idx].tolist()
 
-    sounds=sort_targets(sounds)
+        sounds=sort_targets(sounds)
+    except:
+        ref_stims=['REFERENCE']
+        sounds = ['TARGET']
+
     all_sounds = ref_stims + sounds
-
+    """
     rall = rec.and_mask(['ACTIVE_EXPERIMENT', 'PASSIVE_EXPERIMENT'])
 
     # can't simply extract evoked for refs because can be longer/shorted if it came after target
