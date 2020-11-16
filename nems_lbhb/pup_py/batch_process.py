@@ -79,14 +79,14 @@ def mark_complete(pupilfiles):
             scipy.io.savemat(mat_fn, save_dict)
 
             # finally, update celldb to mark pupil as analyzed
-            get_file1 = "SELECT eyecalfile from gDataRaw where eyecalfile='{0}'".format(self.raw_video)
+            get_file1 = "SELECT eyecalfile from gDataRaw where eyecalfile='{0}'".format(vf)
             out1 = nd.pd_query(get_file1)
             if out1.shape[0]==0:
                 # try the L:/ path
-                og_video_path = self.raw_video.replace('/auto/data/daq/', 'L:/')
+                og_video_path = vf.replace('/auto/data/daq/', 'L:/')
                 sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(og_video_path)
             else:
-                sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(self.raw_video)
+                sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(vf)
             nd.sql_command(sql)
 
             log.info("Saved analysis successfully for {}".format(video_name))
