@@ -1821,7 +1821,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     parmfilepath = pupilfilepath.replace(".pup.mat",".m")
     pp, bb = os.path.split(parmfilepath)
-
+    
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
