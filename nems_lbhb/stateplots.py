@@ -731,9 +731,8 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None, show
                                        psth_name='pred_pb0', state_chan=var)
             mod2_pb = state_mod_index(val, epoch='REFERENCE',
                                       psth_name='pred', state_chan=var)
-
-            pred_mod[i] = np.array([mod2_pb-mod2_p0b, mod2_pb-mod2_pb0])
-            pred_mod_full[i] = np.array([mod2_pb0, mod2_p0b])
+            pred_mod[i] = np.concatenate((mod2_pb-mod2_p0b, mod2_pb-mod2_pb0))
+            pred_mod_full[i] = np.concatenate((mod2_pb0, mod2_p0b))
 
     # STOP HERE TO PULL OUT MI AND R2
     #import pdb; pdb.set_trace()

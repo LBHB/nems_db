@@ -17,8 +17,10 @@ save_fig = True
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
-yaxis = 'r_pupil_unique'
-#yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
+#perf_stat='DI'
+perf_stat='dp'
+#yaxis = 'r_pupil_unique'
+yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
 #yaxis = 'r_task'
@@ -74,12 +76,19 @@ A1['MI_task_unique_abs'] = np.abs(A1['MI_task_unique'])
 IC['MI_task_unique_abs'] = np.abs(IC['MI_task_unique'])
 A1['area']='A1'
 IC['area']='IC'
+# compress DI slightly to avoid explosions
+#A1['dp']=-np.log(100/A1.DI-1)
+A1['dp']=-np.log(100/(A1.DI*0.92+6)-1)
+A1.loc[A1.dp>3.5,'dp']=3.5
+#IC['dp']=-np.log(100/IC.DI-1)
+IC['dp']=-np.log(100/(IC.DI*0.92+6)-1)
+IC.loc[IC.dp>3.5,'dp']=3.5
 
 d = pd.concat((A1,IC))
 
-d['di_class']='good'
 
 split=82
+d['di_class']='good'
 d.loc[d.DI<split, 'di_class']='bad'
 
 # Good vs. bad behavior
@@ -109,23 +118,37 @@ nplt.ax_remove_box(ax[0])
 
 for a in A1.animal.unique():
     _k = (d.area=='A1') & (d.animal==a)
-    ax[1].plot(d.loc[_k, 'DI'], d.loc[_k, yaxis], '.')
-r, p = ss.pearsonr(d[(d.area=='A1')]['DI'], d[(d.area=='A1')][yaxis])
+    ax[1].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+r, p = ss.pearsonr(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis])
+beta = np.polyfit(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis],1)
+
 ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}')
-ax[1].set_xlabel('DI')
+ax[1].set_xlabel(perf_stat)
 ax[1].set_ylabel(yaxis)
-ax[1].set_xlim([58,102])
+if perf_stat=='DI':
+    x0=np.array([58,102])
+else:
+    x0=np.array([0.5,3.5])
+ax[1].plot(x0,x0*beta[0]+beta[1],'k--')
+ax[1].set_xlim(x0)
 ax[1].legend(A1.animal.unique(), frameon=False)
 nplt.ax_remove_box(ax[1])
 
 for a in IC.animal.unique():
     _k = (d.area=='IC') & (d.animal==a)
-    ax[2].plot(d.loc[_k, 'DI'], d.loc[_k, yaxis], '.')
-r, p = ss.pearsonr(d[(d.area=='IC')]['DI'], d[(d.area=='IC')][yaxis])
+    ax[2].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+r, p = ss.pearsonr(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis])
+beta = np.polyfit(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis],1)
+
 ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}')
-ax[2].set_xlabel('DI')
+ax[2].set_xlabel(perf_stat)
 ax[2].set_ylabel(yaxis)
-ax[2].set_xlim([58,102])
+if perf_stat=='DI':
+    x0=np.array([58,102])
+else:
+    x0=np.array([0.5,3.5])
+ax[2].plot(x0,x0*beta[0]+beta[1],'k--')
+ax[2].set_xlim(x0)
 ax[2].legend(IC.animal.unique(), frameon=False)
 nplt.ax_remove_box(ax[2])
 
@@ -153,20 +176,26 @@ ax[0,1].set_title(f'IC F={F:.3f} p={p:.3e}\n{",".join(means_ic)}')
 ax[0,1].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0,1])
 
-sns.stripplot(x='animal', y='DI', data=A1, dodge=True, edgecolor='white', linewidth=0.5,
+sns.stripplot(x='animal', y=perf_stat, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
                         marker='o', size=5, ax=ax[1,0])
-ax[1,0].axhline(50, linestyle='--', lw=2, color='grey')
-sets_a1 = [A1.loc[A1['animal']==a, 'DI'] for a in A1.animal.unique()]
-means_a1 = [f'{a}={A1.loc[A1["animal"]==a, "DI"].mean():.3f}' for a in A1.animal.unique()]
+if perf_stat=='DI':
+    ax[1,0].axhline(50, linestyle='--', lw=2, color='grey')
+else:
+    ax[1,0].axhline(0, linestyle='--', lw=2, color='grey')
+sets_a1 = [A1.loc[A1['animal']==a, perf_stat] for a in A1.animal.unique()]
+means_a1 = [f'{a}={A1.loc[A1["animal"]==a, perf_stat].mean():.3f}' for a in A1.animal.unique()]
 F,p = ss.f_oneway(*sets_a1)
 ax[1,0].set_title(f'A1 F={F:.3f} p={p:.3e}\n{",".join(means_a1)}')
 nplt.ax_remove_box(ax[1,0])
 
-sns.stripplot(x='animal', y='DI', data=IC, dodge=True, edgecolor='white', linewidth=0.5,
+sns.stripplot(x='animal', y=perf_stat, data=IC, dodge=True, edgecolor='white', linewidth=0.5,
                         marker='o', size=5, ax=ax[1,1])
-ax[1,1].axhline(50, linestyle='--', lw=2, color='grey')
-sets_ic = [IC.loc[IC['animal']==a, 'DI'] for a in IC.animal.unique()]
-means_ic = [f'{a}={IC.loc[IC["animal"]==a, "DI"].mean():.3f}' for a in IC.animal.unique()]
+if perf_stat=='DI':
+    ax[1,1].axhline(50, linestyle='--', lw=2, color='grey')
+else:
+    ax[1,1].axhline(0, linestyle='--', lw=2, color='grey')
+sets_ic = [IC.loc[IC['animal']==a, perf_stat] for a in IC.animal.unique()]
+means_ic = [f'{a}={IC.loc[IC["animal"]==a, perf_stat].mean():.3f}' for a in IC.animal.unique()]
 F,p = ss.f_oneway(*sets_ic)
 ax[1,1].set_title(f'IC F={F:.3f} p={p:.3e}\n{",".join(means_ic)}')
 
@@ -180,7 +209,7 @@ from statsmodels.graphics.api import interaction_plot, abline_plot
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
 
-formula = f'{yaxis} ~ C(animal) + DI'
+formula = f'{yaxis} ~ C(animal) + ' + perf_stat
 lm = ols(formula, A1).fit()
 table1 = anova_lm(lm)
 print(table1)
