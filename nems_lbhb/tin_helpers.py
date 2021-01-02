@@ -38,15 +38,7 @@ def sort_targets(targets):
     tar_df = pd.DataFrame(data=np.stack([f, snrs, labs]).T, columns=['freq', 'snr', 'n']).sort_values(by=['freq', 'snr', 'n'])
     sidx = tar_df.index
     return np.array(targets)[sidx].tolist()
-
-
-def sort_refs(refs):
-    """
-    Sort ref strings by frequency
-    """
-    idx = np.argsort([int(f.split('STIM_')[1]) for f in refs])
-    return np.array(refs)[idx].tolist()
-
+    
 
 def get_snrs(targets):
     """
