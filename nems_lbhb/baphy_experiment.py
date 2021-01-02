@@ -119,7 +119,7 @@ class BAPHYExperiment:
                                    rawid=rawid)
             files = list(set(list(d['parm'])))
             files.sort()
-            self.parmfile = [Path(f) for f in files]
+            self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
@@ -370,7 +370,9 @@ class BAPHYExperiment:
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
-        
+
+        import pdb; pdb.set_trace()
+
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
             if param['runclass']=='TBP':

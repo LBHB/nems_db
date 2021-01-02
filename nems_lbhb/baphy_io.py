@@ -1821,7 +1821,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     parmfilepath = pupilfilepath.replace(".pup.mat",".m")
     pp, bb = os.path.split(parmfilepath)
-
+    
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
@@ -2076,13 +2076,33 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, animal):
+def get_mean_spike_waveform(cellid, animal, usespkfile=False):
     """
     Return 1-D numpy array containing the mean sorted
     spike waveform
     """
     if type(cellid) != str:
         raise ValueError("cellid must be string type")
+
+    if usespkfile:
+        cparts=cellid.split("-")
+        chan=int(cparts[1])
+        unit=int(cparts[2])
+        sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
+        d = db.pd_query(sql)
+        spkfilepath=os.path.join(d['path'][0], d['respfile'][0])
+        matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
+        sortinfo = matdata['sortinfo']
+        if sortinfo.shape[0] > 1:
+            sortinfo = sortinfo.T
+        try:
+           mwf=sortinfo[0][chan-1][0][0][unit-1]['Template'][0][chan-1,:]
+
+        except:
+           import pdb
+           pdb.set_trace()
+        return mwf
+
     # get KS_cluster (if it exists... this is a new feature)
     sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
     kid = db.pd_query(sql).iloc[0][0]

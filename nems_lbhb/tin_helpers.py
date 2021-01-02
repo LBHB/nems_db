@@ -140,18 +140,25 @@ def load_tbp_recording(siteid, batch, **options):
     offset = int(offsetsec * options['rasterfs'])
 
     # PCA on trial averaged responses
-    targets = [f for f in rec['resp'].epochs.name.unique() if 'TAR_' in f]
-    catch = [f for f in rec['resp'].epochs.name.unique() if 'CAT_' in f]
+    ref_stims, sounds, all_sounds = get_sound_labels(rec)
+    """
+    try:
+        targets = [f for f in rec['resp'].epochs.name.unique() if 'TAR_' in f]
+        catch = [f for f in rec['resp'].epochs.name.unique() if 'CAT_' in f]
 
-    sounds = targets + catch
+        sounds = targets + catch
 
-    ref_stims = [x for x in rec['resp'].epochs.name.unique() if 'STIM_' in x]
-    idx = np.argsort([int(s.split('_')[-1]) for s in ref_stims])
-    ref_stims = np.array(ref_stims)[idx].tolist()
+        ref_stims = [x for x in rec['resp'].epochs.name.unique() if 'STIM_' in x]
+        idx = np.argsort([int(s.split('_')[-1]) for s in ref_stims])
+        ref_stims = np.array(ref_stims)[idx].tolist()
 
-    sounds=sort_targets(sounds)
+        sounds=sort_targets(sounds)
+    except:
+        ref_stims=['REFERENCE']
+        sounds = ['TARGET']
+
     all_sounds = ref_stims + sounds
-
+    """
     rall = rec.and_mask(['ACTIVE_EXPERIMENT', 'PASSIVE_EXPERIMENT'])
 
     # can't simply extract evoked for refs because can be longer/shorted if it came after target
