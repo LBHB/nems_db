@@ -905,7 +905,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     TrialLen_sec = np.array(
             exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
             )

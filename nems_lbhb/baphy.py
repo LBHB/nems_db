@@ -800,27 +800,27 @@ def baphy_load_dataset(parmfilepath, **options):
                    (exptevents['start'][fdur].min() < d['start'] + 0.5):
 
                     # assume fully overlapping, delete automaticlly
-                    print("Stim (event {0}: {1:.2f}-{2:.2f} {3}"
-                          .format(eventidx,d['start'], d['end'],d['name']))
-                    print(f"overlapping event:")
-                    print(exptevents.loc[fdur])
+                    #print("Stim (event {0}: {1:.2f}-{2:.2f} {3}"
+                    #      .format(eventidx,d['start'], d['end'],d['name']))
+                    #print(f"overlapping event:")
+                    #print(exptevents.loc[fdur])
                     keepevents[i] = False
                     keeppostevents[i] = False
                     #import pdb; pdb.set_trace()
                 elif np.sum(fdur):
                     # truncate reference period
-                    print(f"overlapping event:")
-                    print(exptevents.loc[fdur])
-                    print("adjusting {0}-{1}={2}".format(this_event_times['end'][i],
-                           exptevents['start'][fdur].min(),
-                           this_event_times['end'][i]-exptevents['start'][fdur].min()))
+                    #print(f"overlapping event:")
+                    #print(exptevents.loc[fdur])
+                    #print("adjusting {0}-{1}={2}".format(this_event_times['end'][i],
+                    #       exptevents['start'][fdur].min(),
+                    #       this_event_times['end'][i]-exptevents['start'][fdur].min()))
                     this_event_times.loc[i, 'end'] = \
                        exptevents['start'][fdur].min()
                     keeppostevents[i] = False
                     #import pdb; pdb.set_trace()
 
             if np.sum(keepevents == False):
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 print("Removed {0}/{1} events that overlap with target"
                       .format(np.sum(keepevents == False), len(keepevents)))
 

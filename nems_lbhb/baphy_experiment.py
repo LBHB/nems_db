@@ -1033,12 +1033,17 @@ def _truncate_trials(exptevents, **options):
         # for remaining events, just brute force truncate
         # truncate partial events
         events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*') & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
+            #print(t)
+            #import pdb; pdb.set_trace()
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start']=toff
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'end']=toff
         # remove events that start after toff
         events = events.drop(e[(e.start.values > toff) &
                                (e.end.values >= toff) &
                                 ~e.name.str.contains('.*Stim.*') &
                                 ~e.name.str.contains('TRIALSTOP')].index)
-
+        
     return events
 '''
 # this is the old code in baphy.py. Seems to break stuff for some batch 309 because it
