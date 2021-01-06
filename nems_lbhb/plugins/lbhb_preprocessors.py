@@ -457,6 +457,15 @@ def pbal(load_key):
 
     return xfspec
 
+@xform()
+def plgsm(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', {}]]
+
+    return xfspec
+
 
 @xform()
 def ev(load_key):
