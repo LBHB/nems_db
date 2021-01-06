@@ -394,6 +394,8 @@ class BAPHYExperiment:
         globalparams = self.get_baphy_globalparams()
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
 
+        #import pdb; pdb.set_trace()
+
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
             if param['runclass']=='TBP':

@@ -24,31 +24,21 @@ def sort_targets(targets):
     f = []
     snrs = []
     labs = []
-    try:
-        for t in targets:
-            f.append(int(t.strip('TAR_').strip('CAT_').split('+')[0]))
-            snr = t.split('+')[1].split('dB')[0]
-            if snr=='Inf': snr=np.inf
-            elif snr=='-Inf': snr=-np.inf
-            else: snr=int(snr)
-            snrs.append(snr)
-            try:
-                labs.append(int(t.split('+')[-1].split(':N')[-1]))
-            except:
-                labs.append(np.nan)
-        tar_df = pd.DataFrame(data=np.stack([f, snrs, labs]).T, columns=['freq', 'snr', 'n']).sort_values(by=['freq', 'snr', 'n'])
-        sidx = tar_df.index
-        return np.array(targets)[sidx].tolist()
-    except:
-        return targets
-
-def sort_refs(refs):
-    """
-    Sort ref strings by frequency
-    """
-    idx = np.argsort([int(f.split('STIM_')[1]) for f in refs])
-    return np.array(refs)[idx].tolist()
-
+    for t in targets:
+        f.append(int(t.strip('TAR_').strip('CAT_').split('+')[0]))
+        snr = t.split('+')[1].split('dB')[0]
+        if snr=='Inf': snr=np.inf
+        elif snr=='-Inf': snr=-np.inf
+        else: snr=int(snr)
+        snrs.append(snr)
+        try:
+            labs.append(int(t.split('+')[-1].split(':N')[-1]))
+        except:
+            labs.append(np.nan)
+    tar_df = pd.DataFrame(data=np.stack([f, snrs, labs]).T, columns=['freq', 'snr', 'n']).sort_values(by=['freq', 'snr', 'n'])
+    sidx = tar_df.index
+    return np.array(targets)[sidx].tolist()
+    
 
 def get_snrs(targets):
     """
