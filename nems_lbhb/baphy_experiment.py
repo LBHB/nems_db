@@ -1032,7 +1032,7 @@ def _truncate_trials(exptevents, **options):
 
         # for remaining events, just brute force truncate
         # truncate partial events
-        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*') & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
         if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
             #print(t)
             #import pdb; pdb.set_trace()
