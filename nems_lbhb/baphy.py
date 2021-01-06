@@ -818,6 +818,7 @@ def baphy_load_dataset(parmfilepath, **options):
                     keeppostevents[i] = False
 
             if np.sum(keepevents == False):
+                import pdb; pdb.set_trace()
                 print("Removed {0}/{1} events that overlap with target"
                       .format(np.sum(keepevents == False), len(keepevents)))
 

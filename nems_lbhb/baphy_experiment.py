@@ -231,6 +231,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self.get_baphy_exptevents()
+    
         if correction_method is None:
             return baphy_events
         if correction_method == 'baphy':
@@ -268,9 +269,31 @@ class BAPHYExperiment:
         return behavior_events
 
     @copying_lru_cache(maxsize=128)
-    def get_baphy_exptevents(self):
+    def get_baphy_exptevents(self, raw=False):
         exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
-        return exptevents
+        if raw:
+            return exptevents
+        else: 
+            # do basic preprocessing of baphy events. For example, in PTD data,
+            # when OverlapRefTar = Yes, two overlapping events are created (Ref / Target).
+            # We want to merge these for the sake of behavior analysis etc.
+            exptparams = self.get_baphy_exptparams()
+            
+            # deal with overlapping ref/tar epochs
+            OverlapRefTar = [e['TrialObject'][1]['OverlapRefTar'] for e in exptparams]
+            exptevents = [_merge_refTar_epochs(e, o) for e, o in zip(exptevents, OverlapRefTar)]
+            
+            # truncate FA trials
+            log.info('Remove post-response events')
+            # typically, this isn't an issue with OEP recordings. However, for MANTA recordings,
+            # where spikes aren't collected continuously, not removing these post-response epochs
+            # will mess up time alignment, which occurs within `get_baphy_events`, which calls
+            # baphy_io.baphy_align_time -- crh 01.04.2021
+            exptevents = [_truncate_trials(e) for e in exptevents]
+
+            #other preprocessing steps...
+
+            return exptevents
 
     @copying_lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
@@ -370,8 +393,6 @@ class BAPHYExperiment:
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
-
-        import pdb; pdb.set_trace()
 
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
@@ -684,7 +705,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     """
 
     epochs = []
-    
+
     log.info('Creating trial epochs')
     trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
     epochs.append(trial_epochs)
@@ -767,7 +788,6 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     # trials after licks
     #remove_post_lick = ('soundTrial' in exptevents.columns) & \
     #                        (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
-    
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
     end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
@@ -866,10 +886,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
 
-    if remove_post_lick:
+    #if remove_post_lick:
+        # crh 01.05.2021 - this should get taken care of in exptevents loading now
         #ref_events = _remove_post_lick(stim_events, exptevents)
-        cat_events = _remove_post_stim_off(cat_events, exptevents)
-        ref_events = _remove_post_stim_off(ref_events, exptevents)
+        #cat_events = _remove_post_stim_off(cat_events, exptevents)
+        #ref_events = _remove_post_stim_off(ref_events, exptevents)
 
     # concatenate events together
     stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
@@ -911,7 +932,6 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     the name column so that they stick around when these columns get
     stripped later for nems packaging.
     """
-
     if 'soundTrial' not in exptevents.columns:
         raise KeyError("soundTrial not in exptevents. Behavior analysis code \
                         has not been run yet, shouldn't be making \
@@ -977,10 +997,96 @@ def _remove_post_lick(events, exptevents, **options):
     return events
 
 
+def _truncate_trials(exptevents, **options):
+    """
+    Catch-all for removing stim epoch data post stim-off. Meant to replace former baphy code that
+    deals with MANTA recordings. This operates on exptevents (raw) before running align time.
+    For compatibility later on, need to make sure you never orphan a prestim / sound / poststim on
+    its own. They need to be in triplets.
+    """
+    log.info("Removing post-reponse data")
+    
+    trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
+    events = exptevents.copy()
+    for t in trunc_trials:
+        toff = exptevents[(exptevents.Trial==t) & exptevents.name.isin(['STIM,OFF', 'TRIALSTOP'])]['start'].min()
+        e = events[events.Trial==t]
+
+        # for "stim" events, make sure to not orphan a 
+        # pre/post/stim epoch (keep all, or delete all)
+        for idx, r in e.iterrows():
+            name = r.loc['name']
+            if 'Stim , ' in name:
+                if toff > r.loc['start']:
+                    # keep all stim events for this sound and
+                    # if toff < poststim end, set toff to poststim end
+                    if (toff < events.loc[idx+1, 'end']):
+                        toff = events.loc[idx+1, 'end']
+                    pass
+                else:
+                    events = events.drop(idx)
+                    events = events.drop(idx-1)
+                    events = events.drop(idx+1)
+
+        # for remaining events, just brute force truncate
+        # truncate partial events
+        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*') & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        # remove events that start after toff
+        events = events.drop(e[(e.start.values > toff) &
+                               (e.end.values >= toff) &
+                                ~e.name.str.contains('.*Stim.*') &
+                                ~e.name.str.contains('TRIALSTOP')].index)
+
+    return events
+'''
+# this is the old code in baphy.py. Seems to break stuff for some batch 309 because it
+# removes some TRIALSTOPS which screws up aligning time. (e.g. see BRT006d-a1)
+    keepevents = np.full(len(exptevents), True, dtype=bool)
+    TrialCount = exptevents.Trial.max()
+    for trialidx in range(1, TrialCount+1):
+        # remove stimulus events after TRIALSTOP or STIM,OFF event
+        fftrial_stop = (exptevents['Trial'] == trialidx) & \
+            ((exptevents['name'] == "STIM,OFF") |
+                (exptevents['name'] == "OUTCOME,VEARLY") |
+                (exptevents['name'] == "OUTCOME,EARLY") |
+                (exptevents['name'] == "TRIALSTOP"))
+        if np.sum(fftrial_stop):
+            trialstoptime = np.min(exptevents[fftrial_stop]['start'])
+
+            fflate = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] > trialstoptime)
+            fftrunc = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] <= trialstoptime) & \
+                (exptevents['end'] > trialstoptime)
+
+        for i, d in exptevents.loc[fflate].iterrows():
+            # print("{0}: {1} - {2} - {3}>{4}"
+            #       .format(i, d['Trial'], d['name'], d['end'], start))
+            # remove Pre- and PostStimSilence as well
+            keepevents[(i-1):(i+2)] = False
+
+        for i, d in exptevents.loc[fftrunc].iterrows():
+            log.debug("Truncating event %d early at %.3f", i, trialstoptime)
+            exptevents.loc[i, 'end'] = trialstoptime
+            # also trim post stim silence
+            exptevents.loc[i + 1, 'start'] = trialstoptime
+            exptevents.loc[i + 1, 'end'] = trialstoptime
+
+    log.info("Keeping {0}/{1} events that precede responses"
+            .format(np.sum(keepevents), len(keepevents)))
+    exptevents = exptevents[keepevents].reset_index()
+
+    return exptevents
+'''
+
+
 def _remove_post_stim_off(events, exptevents, **options):
     # screen for trials where sound was turned off early. These will largey overlap with the events
     # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
     # targets can come in the middle of a string of refs, but refs are turned off post target hit
+
     log.info("Removing data post stim-off")
     trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
     for t in trunc_trials:
@@ -991,15 +1097,37 @@ def _remove_post_stim_off(events, exptevents, **options):
             events.at[e[e.end > toff].index, 'end'] = toff
             # remove events that start after toff
             events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
-
         else:
             #import pdb; pdb.set_trace()
             # cruder, but simpler. remove events that end after toff
             events = events.drop(e[e.end >= toff].index)
-
     return events
 
 
 def _trim_epoch_columns(epochs):
     cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]
     return epochs.drop(columns=cols)
+
+
+def _merge_refTar_epochs(exptevents, OverlapRefTar):
+    """
+    If OverlapRefTar = Yes, merge overlapping reference / target events
+    """
+    if OverlapRefTar=='No':
+        return exptevents
+    else:
+        # for every target, if there's a preceding reference with an identical start time, merge them
+        target_prestims = exptevents[exptevents.name.str.contains('PreStimSilence , .* , Target', regex=True)]
+        # get preceding ref stim names (if prestim time stamp matches)
+        ref_idx = target_prestims.index-3
+        refs = exptevents.loc[ref_idx]
+        refs = refs[refs.start.values == target_prestims.start.values]
+
+        # set the poststim duration to the ref post stim (to get rid of long poststim tails)
+        exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
+
+        exptevents = exptevents.drop(refs.index)   # drop ref pre stim
+        exptevents = exptevents.drop(refs.index+1) # drop ref stim
+        exptevents = exptevents.drop(refs.index+2) # drop ref poststim
+
+        return exptevents
