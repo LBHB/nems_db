@@ -269,6 +269,8 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
 #              ['nems.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
+
+
 @xform()
 def loadpop(loadkey):
     ops = loadkey.split('.')[1:]
@@ -293,6 +295,21 @@ def loadpop(loadkey):
                'best_cells': best_cells}]]
 
     return xfspec
+
+@xform()
+def loadpred(loadkey):
+    ops = loadkey.split('.')[1:]
+
+    modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+    for op in ops:
+        if op=='rnd':
+            rand_match = True
+
+    xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
+              {'modelname_existing': modelname_existing}]]
+
+    return xfspec
+
 
 
 # TODO: delete after finished deprecating, no longer used in this module.

@@ -18,8 +18,9 @@ import scipy.fftpack as fp
 import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
 
-
 from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
+import nems.db as nd
+
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
+
+#
+# BUNCH OF MASKING FUNCTIONS
+#
 
 def mask_high_repetion_stims(rec, epoch_regex='^STIM_'):
     full_rec = rec.copy()
@@ -116,8 +121,6 @@ def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
     return {'rec': newrec}
 
 
-
-
 def pupil_mask(est, val, condition, balance):
     """
     Create pupil mask by epoch (use REF by default) - so entire epoch is
@@ -125,6 +128,7 @@ def pupil_mask(est, val, condition, balance):
     separately. This is so that both test metrics and fit metrics are
     evaluated on the same class of data (big or small pupil)
     """
+    raise Warning('deprecated???')
     full_est = est.copy()
     full_val = val.copy()
     new_est_val = []
@@ -752,16 +756,22 @@ def mask_pupil_balanced_epochs(rec):
     r = r.and_mask(balanced_epochs)
     return r
 
-def add_pupil_mask(rec):
+def add_pupil_mask(rec, state='big', mask_name='p_mask'):
     '''
     Simply add a p_mask signal that's true where p > median.
     Does this on a "per ref" basis so that epochs aren't chopped up.
     '''
     r = rec.copy()
-    ops = {'state': 'big', 'epoch': ['REFERENCE'], 'collapse': True} 
+    ops = {'state': state, 'epoch': ['REFERENCE'], 'collapse': True} 
     bp = create_pupil_mask(r, **ops)
-    r['p_mask'] = bp['mask']
+    r[mask_name] = bp['mask']
     return r
+
+def pupil_large_small_masks(rec, **kwargs):
+    r = rec.copy()
+    r = add_pupil_mask(r, state='big', mask_name='mask_large')
+    r = add_pupil_mask(r, state='small', mask_name='mask_small')
+    return {'rec': r}
 
 def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):
     

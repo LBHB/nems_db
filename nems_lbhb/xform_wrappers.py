@@ -38,8 +38,10 @@ log = logging.getLogger(__name__)
 def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
                     cell_count=None, best_cells=False):
 
-    #pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
-    pmodelname = 'ozgf.fs50.ch18-ld-norm.l1-sev_wc.18x3R.g-fir.3x12xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4'
+    if batch==289:
+       pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
+    else:
+       pmodelname = 'ozgf.fs50.ch18-ld-norm.l1-sev_wc.18x3R.g-fir.3x12xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4'
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
         all_cells = alt_cells_available
@@ -183,7 +185,7 @@ def pop_file(stimfmt='ozgf', batch=None,
 
 
 def generate_recording_uri(cellid=None, batch=None, loadkey=None,
-                           siteid=None, **options):
+                           siteid=None, force_old_loader=False, **options):
     """
     required parameters (passed through to nb.baphy_data_path):
         cellid: string or list
@@ -261,7 +263,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-    elif batch in [307, 309]: #batch==307:
+        #elif batch in [307, 309]: #batch==307:
+    elif force_old_loader | (batch==307):
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
     else:
         if siteid is None:
@@ -301,6 +304,32 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
 
     return context
 
+def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=None, **kwargs):
+    if (batch is None):
+        raise ValueError("must specify cellid/siteid and batch")
+
+    if cellid is None:
+        if siteid is None:
+            raise ValueError("must specify cellid/siteid and batch")
+        d = nd.pd_query("SELECT batch,cellid FROM Batches WHERE batch=%s AND cellid like %s",
+                        (batch, siteid+"%",))
+        cellid=d['cellid'].values[0]
+    elif type(cellid) is list:
+        cellid = cellid[0]
+
+    if modelname_existing is None:
+        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+
+    xf,ctx = xhelp.load_model_xform(cellid, batch, modelname_existing)
+    for k in ctx['val'].signals.keys():
+        if k not in ctx['rec'].signals.keys():
+           ctx['rec'].signals[k] = ctx['val'].signals[k].copy()
+    s = ctx['rec']['pred'].copy()
+    s.name='pred0'
+    ctx['rec'].add_signal(s)
+
+    #return {'rec': ctx['rec'],'val': ctx['val'],'est': ctx['est']}
+    return {'rec': ctx['rec'], 'input_name': 'pred0'}
 
 def model_pred_comp(cellid, batch, modelnames, occurrence=None,
                     pre_dur=None, dur=None):
