@@ -294,8 +294,10 @@ def create_trial_labels(exptparams, exptevents):
 
                 rt.append(np.inf)
 
-            if trial_outcome is None:
-                import pdb; pdb.set_trace()
+            if (trial_outcome is None) & (ev.name.str.contains('.*Stim.*', regex=True).sum()==0):
+                # early trial - sound shut off before sounds played
+                trial_outcome = 'EARLY_TRIAL'
+                
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
             # and update the time to span whole trial
             ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()

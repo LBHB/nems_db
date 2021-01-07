@@ -99,36 +99,79 @@ class BAPHYExperiment:
 
         return cls(parmfile)
 
-    def __init__(self, parmfile=None, batch=None, siteid=None, rawid=None):
+    def __init__(self, parmfile=None, batch=None, cellid=None, rawid=None):
         # Make sure that the '.m' suffix is present! In baphy_load data I see
         # that there's care to make sure it's present so I assume not all
         # functions are careful about the suffix.
 
         # New init options. CRH 2/15/2020. Want to be able to load 
         #   1) multiple parmfiles into single baphy experiment
-        #   2) find parmfiles using batch/siteid
+        #   2) find parmfiles using batch/cellid
 
-        # if don't pass parmfile, must pass both batch and siteid (can 
+        # if don't pass parmfile, must pass both batch and cellid (can 
         # extract individual cellids later if needed). rawid is optional
 
         if parmfile is None:
+            # use database to find the correct parmfiles / cellids to load
+            parse_cellid_options = {
+                'batch': batch,
+                'cellid': cellid,
+                'rawid': rawid
+            }
+            cells_to_extract, nops = io.parse_cellid(parse_cellid_options)
             self.batch = batch
-            self.siteid = siteid
-            self.rawid = rawid
-            d = db.get_batch_cell_data(batch=batch, cellid=siteid, label='parm',
-                                   rawid=rawid)
+            self.siteid = cellid[:7]
+            self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
+            self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
+            self.rawid = nops['rawid']
+            # get list of corresponding parmfiles at this site for these rawids
+            d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
             files = list(set(list(d['parm'])))
             files.sort()
             self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
+
+        # db-free options for loading specific cellids / parmfiles
+        # here, must assume cellid = cells_to_load = cells_to_extract 
+        # (so, might end up caching an extra, redundant, recording,
+        # but this is the 'safe' way to do it.)
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-            self.siteid = os.path.split(parmfile[0])[-1][:7]
             self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.siteid = os.path.split(parmfile[0])[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.sited = os.path.split(parmfile)[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
@@ -152,7 +195,6 @@ class BAPHYExperiment:
         else:
             pass
     
-
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
@@ -306,12 +348,20 @@ class BAPHYExperiment:
         return globalparams
 
     def get_recording_uri(self, generate_if_missing=True, cellid=None, **kwargs):
+        '''
+        This is where the kwargs contents are critical (for generating the correct 
+        recording file hash)
 
+        TODO: loadkey parsing?
+        '''
         kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.1'})
+        kwargs.update({'version': 'BAPHYExperiment.2'})
+
+        # add parmfiles / cells_to_load list - these are unique ids for the recording
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'cell_list': self.cells_to_load})
 
         # add batch to cache recording in the correct location
         kwargs.update({'siteid': self.siteid})
@@ -330,7 +380,8 @@ class BAPHYExperiment:
             log.info('Cached recording: %s', data_uri)
         else:
             if (not os.path.exists(data_file)) & generate_if_missing:
-                kwargs.update({'mfiles': None})
+                # strip unhashable fields (list) from the kwargs (to play nice with lru_caching / copying)
+                del kwargs['mfiles']; del kwargs['cell_list']
                 rec = self.generate_recording(**kwargs)
                 log.info('Caching recording: %s', data_file)
                 rec.save(data_file)
@@ -364,6 +415,8 @@ class BAPHYExperiment:
         else:
             log.info('Cached recording found')
             rec = load_recording(data_file)
+
+        rec.meta['cells_to_extract'] = self.cells_to_extract
 
         return rec
 
@@ -537,6 +590,8 @@ class BAPHYExperiment:
             spike_dict = []
             for sd in spikedicts:
                 units = sd[1]
+                # only keep units included in self.cells_to_load
+                units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
                 spiketimes = sd[0]
                 d = {}
                 for i, unit in enumerate(units):

@@ -92,6 +92,8 @@ dfg = df[['r_task_unique', 'r_pupil_unique', 'siteid', 'batch']].groupby(by='sit
 
 # for each site, load recording and get pupil variance across ref stimuli (use nems mask from fitting)
 modelname = 'psth.fs20.pup-ld-st.pup.beh-ref-psthfr_sdexp.S_jk.nf20-basic'
-for site, batch in zip(dfg.index, dfg['batch']):
+tot = len(dfg.index)
+for idx, (site, batch) in enumerate(zip(dfg.index, dfg['batch'])):
+    print(f"\n \n site n={idx}/{tot} \n \n")
     cid = df[df.siteid==site].index.get_level_values(0)[0]
     xf, ctx = xhelp.load_model_xform(cid, batch, modelname, eval_model=True)

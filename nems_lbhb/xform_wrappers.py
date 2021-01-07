@@ -27,6 +27,7 @@ import nems.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+import nems_lbhb.baphy_io as io
 from nems import get_setting
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 
@@ -263,13 +264,11 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-        #elif batch in [307, 309]: #batch==307:
-    elif force_old_loader | (batch==307):
+    elif force_old_loader: # | (batch==307):
+        log.info("Using 'old' baphy.py loader")
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
     else:
-        if siteid is None:
-            siteid = cellid.split("-")[0]
-        manager = BAPHYExperiment(batch=batch, siteid=siteid)
+        manager = BAPHYExperiment(batch=batch, cellid=cellid)
         recording_uri = manager.get_recording_uri(**options)
 
     return recording_uri
@@ -296,7 +295,7 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
     t_ops = options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    cells_to_extract, _ = io.parse_cellid(t_ops)
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
     if pc_idx is not None:
