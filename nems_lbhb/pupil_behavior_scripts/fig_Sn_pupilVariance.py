@@ -20,6 +20,7 @@ import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
 import nems.xform_helper as xhelp
+import nems.db as db
 
 
 # set path to dump file
@@ -94,6 +95,29 @@ dfg = df[['r_task_unique', 'r_pupil_unique', 'siteid', 'batch']].groupby(by='sit
 modelname = 'psth.fs20.pup-ld-st.pup.beh-ref-psthfr_sdexp.S_jk.nf20-basic'
 tot = len(dfg.index)
 for idx, (site, batch) in enumerate(zip(dfg.index, dfg['batch'])):
+    # for this site, check to see if need to run multiple analyses
+    # (for different cells w/ different number of parmfiles)
+    d = db.get_batch_cell_data(batch=batch, cellid=site)
+    parmCount = d.groupby(by='cellid').count()
+    cells = []
+    groups = False
+    if len(parmCount.parm.unique()) > 1:
+        groups = True
+        parmCount['cellid'] = parmCount.index
+        cgroups = parmCount.groupby(by='parm').agg(lambda column: ", ".join(column))
+        for cgroup in cgroups.cellid:
+            cells.append(cgroup.split(', ')[0])
+    else:
+        groups = False
+        cells = [d.index.get_level_values(0)[0]]
     print(f"\n \n site n={idx}/{tot} \n \n")
-    cid = df[df.siteid==site].index.get_level_values(0)[0]
-    xf, ctx = xhelp.load_model_xform(cid, batch, modelname, eval_model=True)
+    for cid in cells:
+        print(f"cellid: {cid} \n")
+        xf, ctx = xhelp.load_model_xform(cid, batch, modelname, eval_model=True)
+
+        # compute pupil stats
+
+        # save pupil stats per cellid
+        if groups:
+
+        else:
