@@ -322,7 +322,10 @@ class BAPHYExperiment:
             exptparams = self.get_baphy_exptparams()
             
             # deal with overlapping ref/tar epochs
-            OverlapRefTar = [e['TrialObject'][1]['OverlapRefTar'] for e in exptparams]
+            try:
+                OverlapRefTar = [e['TrialObject'][1]['OverlapRefTar'] for e in exptparams]
+            except:
+                OverlapRefTar = ['No' for e in exptparams]
             exptevents = [_merge_refTar_epochs(e, o) for e, o in zip(exptevents, OverlapRefTar)]
             
             # truncate FA trials
