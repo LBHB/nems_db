@@ -4,7 +4,7 @@ Helper plotting functions for behavior data.
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_RT_histogram(rts, DI=None, bins=None, ax=None, cmap=None, lw=1):
+def plot_RT_histogram(rts, DI=None, bins=None, ax=None, cmap=None, lw=1, legend=None):
     """
     rts:    reaction times dictionary. keys are epochs, values are list of RTs
     DI:     dict with each target's DI. Vals get added to legend
@@ -37,8 +37,12 @@ def plot_RT_histogram(rts, DI=None, bins=None, ax=None, cmap=None, lw=1):
             color = cmap(i)
         else:
             color = None
+        if legend is not None:
+            leg = legend[i]
+        else:
+            leg = f'{k}, DI: {_di}, n: {n}'
         ax.step(xvals[:-1], np.cumsum(counts) / len(rts[k]), 
-                    label=f'{k}, DI: {_di}, n: {n}', lw=lw, color=color)
+                    label=leg, lw=lw, color=color)
     
     ax.legend(frameon=False)
     ax.set_xlabel('Reaction time (s)')
