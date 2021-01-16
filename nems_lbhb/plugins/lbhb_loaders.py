@@ -20,6 +20,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
 
     from nems_lbhb.xform_wrappers import generate_recording_uri
     import nems_lbhb.baphy as nb
+    from nems_lbhb import baphy_io
 
     pc_idx = None
 
@@ -44,7 +45,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     if cellid == 'none':
         cells_to_extract = 'none'
     else:
-        cells_to_extract, _ = nb.parse_cellid(t_ops)
+        cells_to_extract, _ = baphy_io.parse_cellid(t_ops)
 
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 

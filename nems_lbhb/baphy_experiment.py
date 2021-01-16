@@ -322,7 +322,7 @@ class BAPHYExperiment:
             exptparams = self.get_baphy_exptparams()
             
             # deal with overlapping ref/tar epochs
-            OverlapRefTar = [e['TrialObject'][1]['OverlapRefTar'] for e in exptparams]
+            OverlapRefTar = [e['TrialObject'][1].get('OverlapRefTar','No') for e in exptparams]
             exptevents = [_merge_refTar_epochs(e, o) for e, o in zip(exptevents, OverlapRefTar)]
             
             # truncate FA trials
@@ -484,7 +484,6 @@ class BAPHYExperiment:
                           name='pupil', recording=rec_name, chans=['pupil'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(p_traces)]
-
             # make sure each pupil signal is the same len as resp, if resp exists
             if resp:
                 for i, (p, r) in enumerate(zip(pupil_sigs, resp_sigs)):

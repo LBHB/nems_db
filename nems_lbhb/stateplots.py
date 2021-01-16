@@ -26,10 +26,14 @@ params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
           'axes.labelsize': font_size,
           'axes.titlesize': font_size,
+          'axes.spines.right': False,
+          'axes.spines.top': False,
           'xtick.labelsize': font_size,
           'ytick.labelsize': font_size,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
+
+
 plt.rcParams.update(params)
 
 line_colors = {'actual_psth': (0,0,0),
@@ -1305,9 +1309,10 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
     # can't simply extract evoked for refs because can be longer/shorted if it came after target 
     # and / or if it was the last stim. So, masking prestim / postim doesn't work. Do it manually
     d = rt['resp'].extract_epochs(stims, mask=rt['mask'])
-
-    R = [v.mean(axis=0) for (k, v) in d.items()]
-    #R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
+    d0 = rt['psth'].extract_epochs(stims, mask=rt['mask'])
+    d = {k: d[k]-d0[k] for k in d.keys()}
+    #R = [v.mean(axis=0) for (k, v) in d.items()]
+    R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
     Rall_u = np.hstack(R).T
 
     pca = PCA(n_components=2)

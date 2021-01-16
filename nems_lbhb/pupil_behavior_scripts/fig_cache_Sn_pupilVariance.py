@@ -4,7 +4,7 @@ import math
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import scipy.stats as sci
+import scipy.stats as ss
 import statsmodels.formula.api as smf
 import matplotlib.collections as clt
 import re
@@ -82,10 +82,10 @@ IC = IC.merge(d_IC_area, on=['cellid'])
 
 df = pd.concat([A1, IC])
 
-if group_files & ('beh' not in model_string):
-    area = df['area']
-    df = df.groupby(by=['cellid', 'ON_BF']).mean()
-    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
+#if group_files & ('beh' not in model_string):
+#    area = df['area']
+#    df = df.groupby(by=['cellid', 'ON_BF']).mean()
+#    df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c][0] for c in df.index.get_level_values('cellid')]
 
 
 if recache | (os.path.isfile(pup_results)==False):
@@ -148,16 +148,16 @@ ax[0].set_xlabel('Pupil Variance')
 ax[0].set_ylabel(r'$r_{pupil unique}$', fontsize=10)
 r, p = ss.pearsonr(A1['pnorm_var'], A1['r_pupil_unique'])
 r = np.round(r, 3)
-p = np.round(p, 3)
-ax[0].set_title(f'A1, r={r}, p={p}')
+p = np.round(p, 6)
+ax[0].set_title(f'A1, r={r:.3f}, p={p:.6f}')
 
 ax[1].scatter(IC['pnorm_var'], IC['r_pupil_unique'], edgecolor='white', s=25)
 ax[1].set_xlabel('Pupil Variance')
 ax[1].set_ylabel(r'$r_{pupil unique}$', fontsize=10)
 r, p = ss.pearsonr(IC['pnorm_var'], IC['r_pupil_unique'])
 r = np.round(r, 3)
-p = np.round(p, 3)
-ax[1].set_title(f'IC, r={r}, p={p}')
+p = np.round(p, 6)
+ax[1].set_title(f'IC, r={r}, p={p:.6f}')
 
 f.tight_layout()
 
