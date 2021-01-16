@@ -1445,7 +1445,9 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
                     modelset.append(modelnames[jjj])
             #print("{} : {}".format(k, modelset))
             #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k], label=k, markersize=6)
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k],
+                    label=k.split('_single')[0],  # don't print special _single flag in legend
+                    markersize=6)
             i+=1
 
             if np.sum(np.isfinite(b_m[jj]))<len(b_m[jj]):
