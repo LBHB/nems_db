@@ -267,6 +267,33 @@ def st(loadkey):
 
 
 @xform()
+def sml(kw):
+    """
+    set sm_win_len variable
+    """
+    ops = kw.split(".")[1:]
+    sm_win_len = 180
+    for op in ops:
+        sm_win_len = float(op)
+    xfspec = [['nems.xforms.init_context', {'sm_win_len': sm_win_len}]]
+
+    return xfspec
+
+
+@xform()
+def rstate(kw):
+    ops = kw.split(".")[1:]
+    dopt = {}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.state_resp_outer', dopt]]
+
+
+@xform()
 def inp(loadkey):
     """
     inp = 'input signal'
@@ -430,6 +457,15 @@ def pbal(load_key):
 
     return xfspec
 
+@xform()
+def plgsm(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', {}]]
+
+    return xfspec
+
 
 @xform()
 def ev(load_key):
@@ -559,12 +595,13 @@ def psthfr(load_key):
     use_as_input = ('ni' not in options)
     channel_per_stim = ('sep' in options)
     if 'tar' in options:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
         #epoch_regex='^TAR_'
     elif 'stimtar' not in options:
-        epoch_regex = '^STIM_'
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
+        #epoch_regex = '^STIM_'
     else:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
 
     if hilo:
         if jackknife:

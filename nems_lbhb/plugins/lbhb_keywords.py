@@ -570,7 +570,7 @@ def lvlogsig(kw):
     return template
 
 
-@xmodule()
+#@xmodule()
 def lv(kw):
     '''
     Generate and register modelspec for add_lv
@@ -951,6 +951,8 @@ def pmod(kw):
     :param kw:
     :return:
     """
+    from nems.registry import keyword_lib
+
     options = kw.split('.')
     in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
 
@@ -959,61 +961,38 @@ def pmod(kw):
         if parsed is None:
             # backward compatible parsing if R not specified
             n_chans = int(options[1])
-            n_states = 0
-
+            n_states = 1
         else:
             n_chans = int(parsed.group(1))
             if len(parsed.groups())>1:
                 n_states = int(parsed.group(2))
             else:
-                n_states = 0
+                n_states = 1
     except TypeError:
         raise ValueError("Got TypeError when parsing pmod keyword.\n"
                          "Make sure keyword is of the form: \n"
-                         "pmod.R or pmod.RxS \n"
+                         "pmod.S or pmod.SxR \n"
                          "keyword given: %s" % kw)
 
-    plot_fns = ['nems.plots.api.mod_output_all',
-                'nems.plots.api.mod_output',
-                'nems.plots.api.before_and_after',
-                'nems.plots.api.pred_resp']
+    _kw = kw.replace("pmod", "stategain")
+    template = keyword_lib[_kw]
+    template['bounds'] = {}
+    for k, v in template['prior'].items():
+        ub = np.full(v[1]['mean'].shape, np.inf)
+        lb = np.full(v[1]['mean'].shape, -np.inf)
 
-    g_mean = np.ones([n_chans, n_chans])/n_chans
-    g_sd = np.ones([n_chans, n_chans])/n_chans
-    np.fill_diagonal(g_mean, 0)
-    #np.fill_diagonal(g_sd, 0)
-    d_mean = np.zeros([n_chans, n_chans])
-    d_sd = np.ones([n_chans, n_chans])
-
-    if 'g' in options:
-        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd})}
-    elif 'd' in options:
-        prior = {'d': ('Normal', {'mean': d_mean, 'sd': d_sd})}
-    else:
-        prior = {'g': ('Normal', {'mean': g_mean, 'sd': g_sd}),
-                 'd': ('Normal', {'mean': d_mean, 'sd': d_sd})}
-
-    if n_states>0:
-        s_mean = np.zeros([1, n_states])
-        s_mean[0,:] = 1
-        s_sd = np.ones([1, n_states])
-
-        if 'd' in prior.keys():
-            prior['ds'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
-        if 'g' in prior.keys():
-            prior['gs'] = ('Normal', {'mean': s_mean, 'sd': s_sd})
-
-    template = {
-        'fn': 'nems_lbhb.modules.state.population_mod',
-        'fn_kwargs': {'i': 'pred',
-                      'o': 'pred',
-                      's': 'state'},
-        'plot_fns': plot_fns,
-        'plot_fn_idx': 3,
-        'prior': prior
-        }
+        n_inputs = template['fn_kwargs']['n_inputs']
+        total_states = template['fn_kwargs']['chans']
+        true_states = int(total_states/(n_inputs+1))
+        for _i in range(n_inputs):
+            ub[_i, ((_i + 1) * true_states):((_i + 2) * true_states)] = 0
+            lb[_i, ((_i + 1) * true_states):((_i + 2) * true_states)] = 0
+        template['bounds'][k] = (lb, ub)
+    template['plot_fns'].append('nems_lbhb.stateplots.state_resp_coefs')
+    template['plot_fn_idx'] = len(template['plot_fns'])-1
 
     return template
+
 
 def _aliased_keyword(fn, kw):
     '''Forces the keyword fn to use the given kw. Used for implementing

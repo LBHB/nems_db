@@ -120,10 +120,10 @@ for s_area in ['A1', 'ICC|ICX']:
 
         area = df.area.str.contains(s_area, regex=True) & df['sig_state']
         m=df.loc[area, varname].mean()
-        stat,p = sci.wilcoxon(df.loc[area, varname])
+        stat,p = sci.wilcoxon(df.loc[area, varname].values)
         npos=np.sum(df.loc[area, varname] > 0)
         n=len(df.loc[area, varname])
-        print(f"{s_area} {varname}: mean={m:.3f} p={p:.3e}")
+        print(f"{s_area} {varname}: mean={m:.3f} W={stat:.3f} p={p:.3e}")
         print(f"  npos={npos}/{n}")
 
 if save_fig:

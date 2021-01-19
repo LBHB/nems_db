@@ -85,6 +85,9 @@ class TrainingDataBrowser:
                 img = Image.open(tmp_save + video_name + '1' + '.jpg').convert('LA')
                 frame = np.asarray(img)[:, :-10, 0]
                 output_dict['frame'] = frame
+                img2 = Image.open(tmp_save + video_name + '1' + '.jpg').convert('LA')
+                frame2 = np.asarray(img2)[:, :-10, 0]
+                output_dict['frame2'] = frame2  # for display purposes
                 output_dict['ellipse_zack'] = {
                                 'a': parms['cnn']['a'][f],
                                 'b': parms['cnn']['b'][f],
@@ -459,13 +462,19 @@ class TrainingDataBrowser:
             self.plot_calls += 1
             self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
             self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
-            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            try:
+                self.pupil_handle = self.ax_handle.imshow(frame_data['frame2'])
+            except:
+                self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
             self.ax_handle.axis('off')
             ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
             self.ax_handle.add_patch(ellipse)
             self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
         else:
-            self.pupil_handle.set_data(frame_data['frame'])
+            try:
+                self.pupil_handle.set_data(frame_data['frame2'])
+            except:
+                self.pupil_handle.set_data(frame_data['frame'])
             ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
             self.ax_handle.patches[0].remove()
             self.ax_handle.add_patch(ellipse)

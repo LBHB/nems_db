@@ -16,7 +16,7 @@ import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import (find_module)
+from nems.utils import find_module, get_setting
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -1114,7 +1114,7 @@ def LN_plot(ctx, ax1=None, ax2=None, ax3=None, ax4=None):
 
     nplt.ax_remove_box(ax4)
 
-def LN_pop_plot(ctx):
+def LN_pop_plot(ctx, ctx0=None):
     """
     compact summary plot for model fit to a single dim of a population subspace
 
@@ -1143,6 +1143,7 @@ def LN_pop_plot(ctx):
 
 
     fig = plt.figure()
+    # input layer filters as STRFs
     for chanidx in range(filter_count):
 
         tmodelspec=copy.deepcopy(modelspec[:(fir_idx+1)])
@@ -1157,8 +1158,10 @@ def LN_pop_plot(ctx):
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
         ax = fig.add_subplot(filter_count, 6, chanidx*6+1)
-        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,5),
-                          show_factorized=False, fs=fs, ax=ax, show_cbar=False)
+        interpolation=(2,5)
+        interpolation=(1,2)
+        nplt.strf_heatmap(tmodelspec, title=None, interpolation=interpolation,
+                          show_factorized=False, fs=fs, ax=ax, show_cbar=False, cmap=get_setting('FILTER_CMAP'))
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
             plt.xticks([])
@@ -1177,7 +1180,7 @@ def LN_pop_plot(ctx):
         wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
         wcc *= fcc_std
         mm = np.std(wcc)*2.5
-        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
         #plt.colorbar(im)
         plt.title('L2')
         nplt.ax_remove_box(ax)
@@ -1190,13 +1193,16 @@ def LN_pop_plot(ctx):
     wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
     wcc *= fcc_std
     mm = np.std(wcc)*2.5
-    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
     plt.colorbar(im)
     plt.title('L3')
     nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(6, 6, 21)
-    plt.plot(modelspec.meta['r_test'])
+    if ctx0 is not None:
+        ax.plot(ctx0['modelspec'].meta['r_test'],'--',color='lightgray')
+
+    plt.plot(modelspec.meta['r_test'],'k')
     plt.xlabel('cell')
     plt.ylabel('r test')
     nplt.ax_remove_box(ax)
@@ -1207,20 +1213,36 @@ def LN_pop_plot(ctx):
 
     # or just plot the PSTH for an example stimulus
     raster = resp.extract_epoch(epoch)
-    psth = np.mean(raster, axis=0)
-    praster = pred.extract_epoch(epoch)
-    ppsth = np.mean(praster, axis=0)
-    spec = stim.extract_epoch(epoch)[0,:,:]
-    trimbins=0
-    if trimbins > 0:
-        ppsth=ppsth[:,trimbins:]
-        psth=psth[:,trimbins:]
-        spec=spec[:,trimbins:]
+    if raster.shape[-1]>50:
+       psth = np.mean(raster, axis=0)
+       praster = pred.extract_epoch(epoch)
+       ppsth = np.mean(praster, axis=0)
+       spec = stim.extract_epoch(epoch)[0,:,:]
+       trimbins=0
+       if trimbins > 0:
+           ppsth=ppsth[:,trimbins:]
+           psth=psth[:,trimbins:]
+           spec=spec[:,trimbins:]
+    else:
+       rr = slice(0,400)
+       psth = resp.as_continuous()[:,rr]
+       ppsth = pred.as_continuous()[:,rr]
+       spec = stim.as_continuous()[:,rr]
 
     ax = plt.subplot(6, 2, 8)
     #nplt.plot_spectrogram(spec, fs=resp.fs, ax=ax, title=epoch)
     extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
-    im=ax.imshow(spec, origin='lower', interpolation='none',
+    if np.mean(spec==0)>0.05:
+       from nems_lbhb.tin_helpers import make_tbp_colormaps
+       BwG, gR = make_tbp_colormaps()
+       x,y=np.where(spec.T)
+       colors = [BwG(i) for i in range(0,256,int(256/spec.shape[0]))]
+       colors[-1]=gR(256) 
+       for yy,cc in enumerate(colors):
+           ax.plot(x[y==yy]/fs, y[y==yy],'s',color=cc, markersize=2)
+       ax.set_xlim((extent[0],extent[1]))
+    else:
+       im=ax.imshow(spec, origin='lower', interpolation='none',
                  aspect='auto', extent=extent)
     nplt.ax_remove_box(ax)
     plt.ylabel('stim')
@@ -1306,25 +1328,38 @@ def LN_pop_plot(ctx):
 
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
-                      offset=0.5, max=0.85, ax=None):
+                      offset=None, dot_colors=None, dot_markers=None, max=None, ax=None):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
-        modelgroups={'ALL': modelnames}
-    modelnames=[]
-    for k, m in modelgroups.items():
-        modelnames.extend(m)
+        #modelgroups={'ALL': modelnames}
+        pass
+    else:
+        modelnames=[]
+        for k, m in modelgroups.items():
+            modelnames.extend(m)
 
-    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    key_list = list(modelgroups.keys())
+    if dot_colors is None:
+        dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
+        dot_markers = ['.','o','^','s','v','*','x','>','<']
+    if type(dot_colors) is list:
+        dot_colors={k: c for k,c in zip(key_list, dot_colors[:len(key_list)])}
+    if type(dot_markers) is list:
+        dot_markers={k: c for k,c in zip(key_list, dot_markers[:len(key_list)])}
+
     if ax is None:
-        ax = plt.gca()
+        fig,ax = plt.subplots()
 
     if goodcells is None:
         cellids=None
+    elif type(goodcells) is list:
+        cellids = goodcells
     else:
         cellids=list(goodcells.index)
-    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    #b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_test')
     b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
@@ -1334,36 +1369,89 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
-            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
-        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+            b_goodcells[:,i] = td[m] > 4*td[m+'_se']
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
+
+        print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
-    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
+    # consider converting to r^2 with **2
+    model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
+    b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+
+    cellids = b_n.index.tolist()
+    siteids = list(set([c.split("-")[0] for c in cellids]))
+    mean_cells_per_site = len(cellids)/len(siteids)
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
+    n_parms[n_parms>200] = n_parms[n_parms>200]/mean_cells_per_site
 
-    #u_modelgroups = np.unique(modelgroups)
-    #for i, g in enumerate(u_modelgroups):
-    i=0
-    for k, m in modelgroups.items():
-        jj = [m0 in m for m0 in modelnames]
-        modelset=[]
-        for jjj in range(len(jj)):
-            if jj[jjj]:
-                modelset.append(modelnames[jjj])
-        print("{} : {}".format(k, modelset))
-        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
-        i+=1
+    if max is None:
+        max = b_m.max() * 1.05
+    if offset is None:
+        offset = b_m.min() * 0.9
 
-    handles, labels = ax.get_legend_handles_labels()
-    # reverse the order
-    ax.legend(handles, labels, loc='lower right')
+    if modelgroups is None:
+        sc = ax.scatter(n_parms, b_m, s=100)
 
+        annot = ax.annotate("", xy=(0, 0), xytext=(0, 0.05), textcoords="offset points",
+                            fontsize=7, ha="center", bbox=dict(boxstyle="round", fc="w"),
+                            arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+
+        def update_annot(ind):
+
+            pos = sc.get_offsets()[ind["ind"][0]]
+            annot.xy = pos
+            text = "{}".format(" ".join([modelnames[n] for n in ind["ind"]]))
+            annot.set_text(text)
+            #annot.get_bbox_patch().set_facecolor(cmap(norm(c[ind["ind"][0]])))
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = sc.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+
+    else:
+        i=0
+        for k, m in modelgroups.items():
+            jj = [m0 in m for m0 in modelnames]
+            modelset=[]
+            for jjj in range(len(jj)):
+                if jj[jjj]:
+                    modelset.append(modelnames[jjj])
+            #print("{} : {}".format(k, modelset))
+            #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k], label=k, markersize=6)
+            i+=1
+
+            if np.sum(np.isfinite(b_m[jj]))<len(b_m[jj]):
+                import pdb; pdb.set_trace()
+            best_mean = np.nanmax(b_m[jj])
+            best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
+            #print(f"{k} best: {best_mean:.3f} {best_model}")
+            worst_mean = np.nanmin(b_m[jj])
+            worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
+            #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+
+        handles, labels = ax.get_legend_handles_labels()
+        # reverse the order
+        ax.legend(handles, labels, loc='lower right', fontsize=8, frameon=False)
     ax.set_xlabel('Free parameters')
-    ax.set_ylabel('Mean var explained')
-    ax.set_ylim((offset-0.05, max))
+    ax.set_ylabel('Mean pred corr')
+    ax.set_ylim((offset, max))
     nplt.ax_remove_box(ax)
 
-    return ax, b_ceiling
+    return ax, b_ceiling, model_mean
 
 
 @scrollable

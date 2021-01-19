@@ -6,7 +6,11 @@ try:
     import tkinter as tk
 except:
     import Tkinter as tk
-import matplotlib.backends.tkagg as tkagg
+
+# svd fixed mpl/tk version compatibility bug 2020-09-04
+#import matplotlib.backends.tkagg as tkagg
+from matplotlib.backends import _backend_tk as tkagg
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import sys
@@ -178,7 +182,9 @@ class PupilBrowser:
         canvas2.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
 
         # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        # svd replaced with this line to fix mpl/tk versioning bug. 2020-09-04
+        #tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer,  (0, 1, 2, 3))
 
         return photo
 
@@ -423,7 +429,15 @@ class PupilBrowser:
         scipy.io.savemat(mat_fn, save_dict)
 
         # finally, update celldb to mark pupil as analyzed
-        sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(self.raw_video)
+        # see if the eyecalfile is correct (migth've been a flush error, in which case it'll still say L:/)
+        get_file1 = "SELECT eyecalfile from gDataRaw where eyecalfile='{0}'".format(self.raw_video)
+        out1 = nd.pd_query(get_file1)
+        if out1.shape[0]==0:
+            # try the L:/ path
+            og_video_path = self.raw_video.replace('/auto/data/daq/', 'L:/')
+            sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(og_video_path)
+        else:
+            sql = "UPDATE gDataRaw SET eyewin=2 WHERE eyecalfile='{}'".format(self.raw_video)
         nd.sql_command(sql)
 
         print("saved analysis successfully")

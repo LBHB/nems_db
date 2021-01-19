@@ -26,10 +26,14 @@ params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
           'axes.labelsize': font_size,
           'axes.titlesize': font_size,
+          'axes.spines.right': False,
+          'axes.spines.top': False,
           'xtick.labelsize': font_size,
           'ytick.labelsize': font_size,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
+
+
 plt.rcParams.update(params)
 
 line_colors = {'actual_psth': (0,0,0),
@@ -731,9 +735,8 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None, show
                                        psth_name='pred_pb0', state_chan=var)
             mod2_pb = state_mod_index(val, epoch='REFERENCE',
                                       psth_name='pred', state_chan=var)
-
-            pred_mod[i] = np.array([mod2_pb-mod2_p0b, mod2_pb-mod2_pb0])
-            pred_mod_full[i] = np.array([mod2_pb0, mod2_p0b])
+            pred_mod[i] = np.concatenate((mod2_pb-mod2_p0b, mod2_pb-mod2_pb0))
+            pred_mod_full[i] = np.concatenate((mod2_pb0, mod2_p0b))
 
     # STOP HERE TO PULL OUT MI AND R2
     #import pdb; pdb.set_trace()
@@ -1211,3 +1214,170 @@ def quick_pop_state_plot(modelspec=None, **ctx):
     ax.set_xticklabels(rec['stim'].chans)
 
     return {}
+
+def state_resp_coefs(rec, modelspec, ax=None,
+                     channel=None, **options):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    if ax is None:
+        f, ax = plt.subplots()
+
+    d = modelspec.phi[-1]['d']
+    n_inputs = d.shape[0]
+    total_states = d.shape[1]
+    true_states = int(total_states / (n_inputs + 1))
+
+    d_new = d[:, 0::true_states]
+    for _i in range(1, true_states):
+        d_new = np.concatenate((d_new,np.full((n_inputs,1),np.nan),
+                                d[:,_i::true_states]), axis=1)
+    mm = np.max(np.abs(d))
+    im = ax.imshow(d_new, origin='lower', clim=[-mm, mm])
+    state_chans = modelspec.meta['state_chans']
+    for _i in range(len(state_chans)):
+        ax.text(_i*(n_inputs+2)+1, n_inputs, state_chans[_i], va='top')
+    plt.colorbar(im, ax=ax)
+    nplt.ax_remove_box(ax)
+    ax.set_ylabel('output chan')
+    ax.set_xticks([])
+
+    """
+    g = modelspec.phi[-1]['g']
+    g[:, 0] = 0
+    mm = np.max(np.abs(g))
+    ax[1, 0].imshow(g[:, 0::3], clim=[-mm, mm])
+    ax[1, 0].set_ylabel('channel out')
+    ax[1, 1].imshow(g[:, 1::3], clim=[-mm, mm])
+    im = ax[1, 2].imshow(g[:, 2::3], clim=[-mm, mm])
+    plt.colorbar(im, ax=ax[1, 2])
+    """
+
+
+def cc_comp(rec, modelspec, ax=None, **options):
+    ## display noise corr. matrices
+    f,ax = plt.subplots(4,2, figsize=(4,8), sharex=True, sharey=True)
+
+    val = rec.apply_mask()
+    large_idx=val['mask_large'].as_continuous()[0,:]
+    small_idx=val['mask_small'].as_continuous()[0,:]
+    pred0=val['pred0'].as_continuous()
+    pred=val['pred'].as_continuous()
+    resp=val['resp'].as_continuous()
+    siteid = modelspec.meta['cellid'].split("-")[0]
+    large_cc = np.cov(resp[:,large_idx]-pred0[:,large_idx])
+    small_cc = np.cov(resp[:,small_idx]-pred0[:,small_idx])
+    mm=np.max(np.abs(small_cc)) * 0.5
+
+    ax[0,0].imshow(small_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[1,0].imshow(large_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[2,0].imshow(large_cc-small_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[0,0].set_title(siteid + ' resp')
+
+    ax[0,0].set_ylabel('small')
+    ax[1,0].set_ylabel('large')
+    ax[2,0].set_ylabel('large-small')
+    ax[3,0].set_ylabel('d_sim-d_act')
+    ax[2,0].set_title(f"std={np.mean((large_cc-small_cc)**2):.3f}")
+
+    sm_cc = np.cov(pred[:,small_idx]-pred0[:,small_idx])
+    lg_cc = np.cov(pred[:,large_idx]-pred0[:,large_idx])
+    ax[0,1].imshow(sm_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[1,1].imshow(lg_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[2,1].imshow((lg_cc-sm_cc),aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[3,1].imshow((large_cc-small_cc) - (lg_cc-sm_cc),aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[0,1].set_title(siteid + ' pred');
+    ax[2,1].set_title(f"std={np.mean((lg_cc-sm_cc)**2):.3f}")
+    ax[3,1].set_title(f"E={np.mean(((large_cc-small_cc) - (lg_cc-sm_cc))**2):.3f}");
+
+    return f
+
+
+def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
+    from nems_lbhb.dimensionality_reduction import TDR
+    from sklearn.decomposition import PCA
+    import re
+    from nems_lbhb.tin_helpers import make_tbp_colormaps, compute_ellipse
+
+    rt=rec.copy()
+    siteid = modelspec.meta['cellid'].split("-")[0]
+
+    print("Computing PCs")
+
+    stims = (rt.epochs['name'].value_counts() >= 8)
+    stims = [stims.index[i] for i, s in enumerate(stims) if bool(re.search(epoch_regex, stims.index[i])) and s == True]
+
+    # can't simply extract evoked for refs because can be longer/shorted if it came after target 
+    # and / or if it was the last stim. So, masking prestim / postim doesn't work. Do it manually
+    d = rt['resp'].extract_epochs(stims, mask=rt['mask'])
+    d0 = rt['psth'].extract_epochs(stims, mask=rt['mask'])
+    d = {k: d[k]-d0[k] for k in d.keys()}
+    #R = [v.mean(axis=0) for (k, v) in d.items()]
+    R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
+    Rall_u = np.hstack(R).T
+
+    pca = PCA(n_components=2)
+    pca.fit(Rall_u)
+    pc_axes = pca.components_
+
+    #a=tdr_axes
+    a=pc_axes
+
+    # project onto first two PCs
+    print("Projecting onto first two PCs")
+    rt['rpc'] = rt['resp']._modified_copy(rt['resp']._data.T.dot(a.T).T[0:2, :])
+    rt['ppc_pred0'] = rt['pred0']._modified_copy(rt['pred0']._data.T.dot(a.T).T[0:2, :])
+    rt['ppc_pred'] = rt['pred']._modified_copy(rt['pred']._data.T.dot(a.T).T[0:2, :])
+
+    units = rt['resp'].chans
+    e=rt['resp'].epochs
+    r_large = rt.copy()
+    r_large['mask']=r_large['mask_large']
+    r_small = rt.copy()
+    r_small['mask']=r_small['mask_small']
+
+    conditions = ['small', 'large']
+    cond_recs = [r_small, r_large]
+
+    d = rec['resp'].get_epoch_bounds('PreStimSilence')
+    PreStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+    d = rec['resp'].get_epoch_bounds('PostStimSilence')
+    PostStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+
+    ChunkSec=0.25
+    ChunkBins = int(np.round(ChunkSec*rec['resp'].fs))
+    PreStimBins, PostStimBins, ChunkBins
+
+    #cmaps = [[BwG(int(c)) for c in np.linspace(0,255,len(ref_stims))], 
+    #         [gR(int(c)) for c in np.linspace(0,255,len(sounds))]]
+    siglist = ['ppc_pred0', 'ppc_pred', 'rpc']
+    f,ax=plt.subplots(len(conditions),len(siglist),sharex=True,sharey=True, figsize=(2*len(siglist),4))
+    for ci, to, r in zip(range(len(conditions)), conditions, cond_recs):
+        for j, sig in enumerate(siglist):
+            #colors = cmaps[0]
+            for i,k in enumerate(stims):
+                try:
+                    p = r[sig].extract_epoch(k, mask=r['mask'])
+                    if p.shape[0]>2:
+                        psamples = p.shape[2]
+                        for c in range(PreStimBins-ChunkBins,psamples-PostStimBins,ChunkBins):
+                            g = np.isfinite(p[:,0,c])
+                            x = np.nanmean(p[g,0,c:(c+ChunkBins)], axis=1)
+                            y = np.nanmean(p[g,1,c:(c+ChunkBins)], axis=1)
+                            #c=list(colors(i))
+                            #c[-1]=0.2
+                            #ax[ci, j].plot(x,y,'.', color=c, label=k)
+                            e = compute_ellipse(x, y)
+                            ax[ci, j].plot(e[0], e[1])
+                            if c==(PreStimBins-ChunkBins):
+                                ax[ci,j].plot(x.mean(),y.mean(),'k*',markersize=5)
+                except:
+                    #print(f'no matches for {k}')
+                    pass
+
+            ax[ci,j].set_title(f"{to}-{sig}")
+    #ax[ci, 0].legend()
+    #ax[ci, 0].set_title(to + " REF/TAR")
+
+    ax[0,0].set_ylabel(siteid)
+    ax[1,0].set_xlabel('PC1')
+    ax[1,0].set_ylabel('PC2')    
