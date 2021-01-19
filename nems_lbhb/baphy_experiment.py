@@ -589,8 +589,9 @@ class BAPHYExperiment:
             spike_dict = []
             for sd in spikedicts:
                 units = sd[1]
-                # only keep units included in self.cells_to_load
-                units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
+                if self.cells_to_load is not None:
+                    # only keep units included in self.cells_to_load
+                    units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
                 spiketimes = sd[0]
                 d = {}
                 for i, unit in enumerate(units):
