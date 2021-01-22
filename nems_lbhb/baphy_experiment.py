@@ -347,7 +347,7 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, generate_if_missing=True, cellid=None, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, recache=False, **kwargs):
         '''
         This is where the kwargs contents are critical (for generating the correct 
         recording file hash)
@@ -379,7 +379,7 @@ class BAPHYExperiment:
             data_uri = host + '/recordings/' + str(self.batch) + '/' + f
             log.info('Cached recording: %s', data_uri)
         else:
-            if (not os.path.exists(data_file)) & generate_if_missing:
+            if ((not os.path.exists(data_file)) & generate_if_missing) | recache:
                 # strip unhashable fields (list) from the kwargs (to play nice with lru_caching / copying)
                 del kwargs['mfiles']; del kwargs['cell_list']
                 rec = self.generate_recording(**kwargs)
@@ -405,9 +405,11 @@ class BAPHYExperiment:
             3) Package all signals into recording
         '''
         # see if can load from cache, if not, call generate_recording
-        data_file = self.get_recording_uri(generate_if_missing=False, **kwargs)
+        data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
         
-        if (not os.path.exists(data_file)) | recache:
+        # take care of the recache inside get_recording_uri 
+        # do we even need this if/else block here??? crh 01.22.2021
+        if (not os.path.exists(data_file)): # | recache:
             kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
