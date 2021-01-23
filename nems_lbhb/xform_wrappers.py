@@ -159,6 +159,7 @@ def split_pop_rec_by_mask(rec, **contex):
 def select_cell_count(rec, cell_count, **context):
     if cell_count == 0:
         cell_count = len(rec['resp'].chans)
+    random.seed(12345)
     random_selection = random.sample(rec['resp'].chans, cell_count)
     rec['resp'].chans = random_selection
 
