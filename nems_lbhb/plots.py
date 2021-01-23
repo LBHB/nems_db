@@ -1328,7 +1328,8 @@ def LN_pop_plot(ctx, ctx0=None):
 
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
-                      offset=None, dot_colors=None, dot_markers=None, max=None, ax=None):
+                      offset=None, dot_colors=None, dot_markers=None, max=None, ax=None,
+                      check_single_cell=False):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
@@ -1336,8 +1337,13 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         #modelgroups={'ALL': modelnames}
         pass
     else:
-        modelnames=[]
+        modelnames = []
+        single_cell = []
         for k, m in modelgroups.items():
+            if '_single' in k:
+                single_cell.extend([True]*len(m))
+            else:
+                single_cell.extend([False]*len(m))
             modelnames.extend(m)
 
     key_list = list(modelgroups.keys())
@@ -1382,7 +1388,15 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     siteids = list(set([c.split("-")[0] for c in cellids]))
     mean_cells_per_site = len(cellids)/len(siteids)
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
-    n_parms[n_parms>200] = n_parms[n_parms>200]/mean_cells_per_site
+
+    # don't divide by cells per site if only one cell was fit
+    # (e.g. the way Jacob is fitting dnn1 models).
+    if check_single_cell and modelgroups is not None:
+        for i, (single, m) in enumerate(zip(single_cell, modelnames)):
+            if not single:
+                n_parms[i] = n_parms[i] / mean_cells_per_site
+    else:
+        n_parms[n_parms>200] = n_parms[n_parms>200]/mean_cells_per_site
 
     if max is None:
         max = b_m.max() * 1.05
@@ -1431,7 +1445,9 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
                     modelset.append(modelnames[jjj])
             #print("{} : {}".format(k, modelset))
             #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k], label=k, markersize=6)
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k],
+                    label=k.split('_single')[0],  # don't print special _single flag in legend
+                    markersize=6)
             i+=1
 
             if np.sum(np.isfinite(b_m[jj]))<len(b_m[jj]):
