@@ -35,6 +35,7 @@ from nems_lbhb.tin_helpers import sort_targets, compute_ellipse, load_tbp_record
    get_sound_labels, plot_average_psths, site_tuning_avg, site_tuning_curves
 from nems.xform_helper import fit_model_xform, load_model_xform
 import nems.db as nd
+from nems.metrics.lv import cc_err
 
 
 outpath="/auto/users/svd/projects/lv/pupil_nat/"
@@ -123,8 +124,7 @@ def cc_err_defunct(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc
     return E
 
 # cost function to compute error between predicted and actual noise correlation matrices, with additional term to match
-
-def cc_err(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc, aidx, pidx,
+def cc_err_bak(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc, aidx, pidx,
             pcproj_std=None, pc_axes=None):
     global err_counter
     _w=np.reshape(w,[pred0.shape[0], -1])
@@ -132,7 +132,7 @@ def cc_err(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc, aidx, 
     p = lv_mod(_w[:,lv_count:(lv_count*2)], _w[:,(lv_count*2):(lv_count*3)], state, lv, pred) + (_w[:,0:lv_count] @ state) *indep_noise
     pascc = np.cov(p[:,pidx] - pred0[:,pidx])
     actcc = np.cov(p[:,aidx] - pred0[:,aidx])
-    
+
     if pc_axes is not None:
         pcproj = (p-pred).T.dot(pc_axes.T).T
         pp_std = pcproj.std(axis=1)
@@ -140,6 +140,22 @@ def cc_err(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc, aidx, 
            np.sum((pcproj_std-pp_std)**2)*10
     else:
         E = np.sum((pascc-passive_cc)**2) / np.sum(passive_cc**2) + np.sum((actcc-active_cc)**2) / np.sum(active_cc**2)
+
+    if (err_counter % 1000) == 0:
+        print(f"{err_counter}: {E}")
+    err_counter+=1
+    return E
+
+def cc_err_withlv(w, pred, indep_noise, lv, pred0, state, active_cc, passive_cc, aidx, pidx,
+                  pcproj_std=None, pc_axes=None):
+    global err_counter
+    _w=np.reshape(w,[pred0.shape[0], -1])
+    lv_count=int(_w.shape[1]/3)
+    p = lv_mod(_w[:,lv_count:(lv_count*2)], _w[:,(lv_count*2):(lv_count*3)], state, lv, pred) + (_w[:,0:lv_count] @ state) *indep_noise
+    pascc = np.cov(p[:,pidx] - pred0[:,pidx])
+    actcc = np.cov(p[:,aidx] - pred0[:,aidx])
+    E = cc_err({'pred_lv': p, 'pred': pred0}, group_idx=[aidx, pidx], group_cc=[active_cc, passive_cc], 
+                  pcproj_std=pcproj_std, pc_axes=pc_axes)
 
     if (err_counter % 1000) == 0:
         print(f"{err_counter}: {E}")
@@ -338,7 +354,7 @@ def lv_wrapper(siteid="TAR010c",
 
     # first fit without independent noise to push out to LVs
     print('fitting only LV terms first...')
-    res = minimize(cc_err, w0, options=options, method='L-BFGS-B',
+    res = minimize(cc_err_withlv, w0, options=options, method='L-BFGS-B',
                    args=(pred_fit, indep_noise*0, lv, pred0, state_fit, large_cc, small_cc, large_idx, small_idx, pcproj_std, pc_axes))
     w1=np.reshape(res.x,[-1, lv_count*3])
 
@@ -348,7 +364,7 @@ def lv_wrapper(siteid="TAR010c",
 
     # second fit WITH independent noise to allow for independent noise
     print('... then fitting indep + LV terms...')
-    res = minimize(cc_err, w1, options=options, method='L-BFGS-B',
+    res = minimize(cc_err_withlv, w1, options=options, method='L-BFGS-B',
                    args=(pred_fit, indep_noise, lv, pred0, state_fit, large_cc, small_cc, large_idx, small_idx, pcproj_std, pc_axes))
     w=np.reshape(res.x,[-1, lv_count*3])
 

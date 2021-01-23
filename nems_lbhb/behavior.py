@@ -63,6 +63,7 @@ def create_trial_labels(exptparams, exptevents):
                 if ('PreStim' in name) | ('PostStim' in name):
                     sID.append('NULL')
                     rt.append(np.nan)
+
                 elif 'Reference' in name:
                     ref_start = r['start']
                     if ((fl >= ref_start) & (fl < (ref_start + early_win))):
@@ -249,7 +250,14 @@ def create_trial_labels(exptparams, exptevents):
                 ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
                 ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
             else:
-                import pdb; pdb.set_trace()
+                # this happens when a lick occurs before a sound epoch (ref / catch / target). In this case,
+                # call it an EARLY_TRIAL
+                trial_outcome = 'EARLY_TRIAL'
+                baphy_outcome = ev[ev.name.str.contains('OUTCOME') | ev.name.str.contains('BEHAVIOR')]['name'].values[0]
+                ev.loc[ev.name==baphy_outcome, 'name'] = trial_outcome
+                ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()
+                ev.loc[ev.name==trial_outcome, 'end'] = ev.end.max()
+
             trial_dfs.append(ev)
 
         else:
@@ -286,8 +294,10 @@ def create_trial_labels(exptparams, exptevents):
 
                 rt.append(np.inf)
 
-            if trial_outcome is None:
-                import pdb; pdb.set_trace()
+            if (trial_outcome is None) & (ev.name.str.contains('.*Stim.*', regex=True).sum()==0):
+                # early trial - sound shut off before sounds played
+                trial_outcome = 'EARLY_TRIAL'
+                
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
             # and update the time to span whole trial
             ev.loc[ev.name==trial_outcome, 'start'] = ev.start.min()

@@ -13,14 +13,14 @@ import nems.plots.api as nplt
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
 #perf_stat='DI'
 perf_stat='dp'
-#yaxis = 'r_pupil_unique'
-yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
+yaxis = 'r_pupil_unique'
+#yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
 #yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
 #yaxis = 'r_task'
@@ -210,6 +210,20 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
 
 formula = f'{yaxis} ~ C(animal) + ' + perf_stat
+lm = ols(formula, A1).fit()
+table1 = anova_lm(lm)
+print(table1)
+lm = ols(formula, IC).fit()
+table1 = anova_lm(lm)
+print(table1)
+
+# same stats, include pupil variance as an explanatory variable
+path = os.path.dirname(helper.__file__)
+pup_var = path + '/pupilVariance.csv'
+pvar = pd.read_csv(pup_var, index_col=0)
+A1 = A1.merge(pvar, on='cellid')
+IC = IC.merge(pvar, on='cellid')
+formula = f'{yaxis} ~ C(animal) + pnorm_var + ' + perf_stat
 lm = ols(formula, A1).fit()
 table1 = anova_lm(lm)
 print(table1)

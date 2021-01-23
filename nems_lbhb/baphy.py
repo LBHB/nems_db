@@ -117,7 +117,7 @@ def baphy_load_recording_uri(recache=False, **options):
 
     # parse cellid. Update cellid, siteid, rawid in options dictionary
     # if cellid/batch not specified, find them based on mfile.
-    cells_to_extract, options = parse_cellid(options)
+    cells_to_extract, options = io.parse_cellid(options)
     siteid = options['siteid']
 
     # fill in remaining default options
@@ -148,112 +148,6 @@ def baphy_load_recording_uri(recache=False, **options):
 
 
 # ============================ baphy loading "utils" ==================================
-def parse_cellid(options):
-    """
-    figure out if cellid is
-        1) single cellid
-        2) list of cellids
-        3) a siteid
-
-    using this, add the field 'siteid' to the options dictionary. If siteid was passed,
-    define cellid as a list of all cellids recorded at this site, for this batch.
-
-    options: dictionary
-            batch - (int) batch number
-            cellid - single cellid string, list of cellids, or siteid
-                If siteid is passed, return superset of cells. i.e. if some
-                cells aren't present in one of the files that is found for this batch,
-                don't load that file. To override this behavior, pass rawid list.
-
-    returns updated options dictionary and the cellid to extract from the recording
-        NOTE: The reason we keep "cellid to extract" distinct from the options dictionary
-        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze
-        cell1 from a site where you recorded cells1-4, you don't want a different recording
-        cached for each cell.
-    """
-
-    options = options.copy()
-
-    mfilename = options.get('mfilename', None)
-    cellid = options.get('cellid', None)
-    batch = options.get('batch', None)
-    rawid = options.get('rawid', None)
-    cells_to_extract = None
-
-    if ((cellid is None) | (batch is None)) & (mfilename is None):
-        raise ValueError("must provide cellid and batch or mfilename")
-
-    siteid = None
-    cell_list = None
-    if type(cellid) is list:
-        cell_list = cellid
-    elif (type(cellid) is str) & ('%' in cellid):
-        cell_data = db.pd_query(f"SELECT cellid FROM Batches WHERE batch=%s and cellid like %s",
-                (batch, cellid))
-        cell_list = cell_data['cellid'].to_list()
-    elif (type(cellid) is str) & ('-' not in cellid):
-        siteid = cellid
-
-    if mfilename is not None:
-        # simple, db-free case. Just a pass through.
-        pass
-        if batch is None:
-            options['batch'] = 0
-
-    elif cell_list is not None:
-        # list of cells was passed
-        siteid = cellid.split('-')[0]
-        cell_list_all, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
-                                             rawid=rawid)
-        options['cellid'] = cell_list_all
-        options['rawid'] = rawid
-        options['siteid'] = cell_list[0].split('-')[0]
-        cells_to_extract = cell_list
-
-    elif siteid is not None:
-        # siteid was passed, figure out if electrode numbers were specified.
-        chan_nums = None
-        if '.e' in siteid:
-            args = siteid.split('.')
-            siteid = args[0]
-            chan_lims = args[1].replace('e', '').split(':')
-            chan_nums = np.arange(int(chan_lims[0]), int(chan_lims[1])+1)
-
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
-                                             rawid=rawid)
-
-        if chan_nums is not None:
-            cells_to_extract = [c for c in cell_list if int(c.split('-')[1]) in chan_nums]
-        else:
-            cells_to_extract = cell_list
-
-        options['cellid'] = cell_list
-        if len(rawid) != 0:
-            options['rawid'] = rawid
-        options['siteid'] = siteid
-
-    elif cellid is not None:
-        # single cellid was passed, want list of all cellids. First, get rawids
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
-                                                     rawid=rawid)
-        # now, use rawid to get all stable cellids across these files
-        siteid = cell_list[0].split('-')[0]
-        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
-                                                     rawid=rawid)
-
-        options['cellid'] = cell_list
-        options['rawid'] = rawid
-        options['siteid'] = siteid
-        cells_to_extract = [cellid]
-
-    if (len(cells_to_extract) == 0) & (mfilename is None):
-        raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "
-                            "or that you've specified an mfile.")
-
-    return list(cells_to_extract), options
-
-
-
 def baphy_load_data(parmfilepath, **options):
     """
     this feeds into baphy_load_recording and baphy_load_recording_RDT (see
@@ -798,26 +692,29 @@ def baphy_load_dataset(parmfilepath, **options):
 
                 if np.sum(fdur) and \
                    (exptevents['start'][fdur].min() < d['start'] + 0.5):
+
                     # assume fully overlapping, delete automaticlly
-                    # print("Stim (event {0}: {1:.2f}-{2:.2f} {3}"
-                    #       .format(eventidx,d['start'], d['end'],d['name']))
-                    # print("??? But did it happen?"
-                    #       "? Conflicting target: {0}-{1} {2}"
-                    #       .format(exptevents['start'][j],
-                    #               exptevents['end'][j],
-                    #               exptevents['name'][j]))
+                    #print("Stim (event {0}: {1:.2f}-{2:.2f} {3}"
+                    #      .format(eventidx,d['start'], d['end'],d['name']))
+                    #print(f"overlapping event:")
+                    #print(exptevents.loc[fdur])
                     keepevents[i] = False
                     keeppostevents[i] = False
+                    #import pdb; pdb.set_trace()
                 elif np.sum(fdur):
                     # truncate reference period
-                    # print("adjusting {0}-{1}={2}".format(this_event_times['end'][i],
-                    #        exptevents['start'][fdur].min(),
-                    #        this_event_times['end'][i]-exptevents['start'][fdur].min()))
+                    #print(f"overlapping event:")
+                    #print(exptevents.loc[fdur])
+                    #print("adjusting {0}-{1}={2}".format(this_event_times['end'][i],
+                    #       exptevents['start'][fdur].min(),
+                    #       this_event_times['end'][i]-exptevents['start'][fdur].min()))
                     this_event_times.loc[i, 'end'] = \
                        exptevents['start'][fdur].min()
                     keeppostevents[i] = False
+                    #import pdb; pdb.set_trace()
 
             if np.sum(keepevents == False):
+                #import pdb; pdb.set_trace()
                 print("Removed {0}/{1} events that overlap with target"
                       .format(np.sum(keepevents == False), len(keepevents)))
 

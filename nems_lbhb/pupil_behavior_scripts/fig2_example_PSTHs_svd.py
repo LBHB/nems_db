@@ -17,6 +17,7 @@ state_list = ['st.pup0.hlf0', 'st.pup0.hlf', 'st.pup.hlf0', 'st.pup.hlf']
 cellids = ["TAR010c-06-1", "TAR010c-27-2"]
 batch = 307
 
+savefigs=False
 save_path = '/Volumes/users/svd/docs/current/pupil_behavior/eps'
 
 for cellid in cellids:
@@ -25,11 +26,13 @@ for cellid in cellids:
                                fitter = "_jk.nf20-basic",
                                basemodel = "-ref-psthfr_stategain.S",
                                state_list=None, plot_halves=True)
-    #f.savefig(os.path.join(save_path, f'fig2_model_per_time_{cellid}.pdf'))
+    if savefigs:
+        f.savefig(os.path.join(save_path, f'fig2_model_per_time_{cellid}.pdf'))
 
 
 for cellid in cellids:
     fh, stats = pb_model_plot(cellid=cellid, batch=batch,
                   loader="psth.fs20.pup", basemodel="ref-psthfr_stategain.S",
                   fitter="jk.nf20-basic")
-    #fh.savefig(os.path.join(save_path, f'fig2_pb_psths_{cellid}.pdf'))
+    if savefigs:
+        fh.savefig(os.path.join(save_path, f'fig2_pb_psths_{cellid}.pdf'))

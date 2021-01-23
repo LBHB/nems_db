@@ -27,6 +27,7 @@ import nems.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+import nems_lbhb.baphy_io as io
 from nems import get_setting
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 
@@ -38,9 +39,11 @@ log = logging.getLogger(__name__)
 def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
                     cell_count=None, best_cells=False):
 
-    #pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
-    #pmodelname = 'ozgf.fs50.ch18-ld-norm.l1-sev_wc.18x3R.g-fir.3x12xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4'
-    pmodelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4R.g-fir.4x20xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4"
+    if batch==289:
+       pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
+    else:
+       pmodelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4R.g-fir.4x20xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4"
+
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
         all_cells = alt_cells_available
@@ -184,7 +187,7 @@ def pop_file(stimfmt='ozgf', batch=None,
 
 
 def generate_recording_uri(cellid=None, batch=None, loadkey=None,
-                           siteid=None, **options):
+                           siteid=None, force_old_loader=False, **options):
     """
     required parameters (passed through to nb.baphy_data_path):
         cellid: string or list
@@ -262,12 +265,11 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-    elif batch==307:
+    elif force_old_loader: # | (batch==307):
+        log.info("Using 'old' baphy.py loader")
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
     else:
-        if siteid is None:
-            siteid = cellid.split("-")[0]
-        manager = BAPHYExperiment(batch=batch, siteid=siteid)
+        manager = BAPHYExperiment(batch=batch, cellid=cellid)
         recording_uri = manager.get_recording_uri(**options)
 
     return recording_uri
@@ -294,7 +296,7 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
     t_ops = options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    cells_to_extract, _ = io.parse_cellid(t_ops)
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
     if pc_idx is not None:
@@ -302,6 +304,32 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
 
     return context
 
+def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=None, **kwargs):
+    if (batch is None):
+        raise ValueError("must specify cellid/siteid and batch")
+
+    if cellid is None:
+        if siteid is None:
+            raise ValueError("must specify cellid/siteid and batch")
+        d = nd.pd_query("SELECT batch,cellid FROM Batches WHERE batch=%s AND cellid like %s",
+                        (batch, siteid+"%",))
+        cellid=d['cellid'].values[0]
+    elif type(cellid) is list:
+        cellid = cellid[0]
+
+    if modelname_existing is None:
+        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+
+    xf,ctx = xhelp.load_model_xform(cellid, batch, modelname_existing)
+    for k in ctx['val'].signals.keys():
+        if k not in ctx['rec'].signals.keys():
+           ctx['rec'].signals[k] = ctx['val'].signals[k].copy()
+    s = ctx['rec']['pred'].copy()
+    s.name='pred0'
+    ctx['rec'].add_signal(s)
+
+    #return {'rec': ctx['rec'],'val': ctx['val'],'est': ctx['est']}
+    return {'rec': ctx['rec'], 'input_name': 'pred0'}
 
 def model_pred_comp(cellid, batch, modelnames, occurrence=None,
                     pre_dur=None, dur=None):

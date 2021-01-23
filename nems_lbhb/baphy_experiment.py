@@ -99,36 +99,79 @@ class BAPHYExperiment:
 
         return cls(parmfile)
 
-    def __init__(self, parmfile=None, batch=None, siteid=None, rawid=None):
+    def __init__(self, parmfile=None, batch=None, cellid=None, rawid=None):
         # Make sure that the '.m' suffix is present! In baphy_load data I see
         # that there's care to make sure it's present so I assume not all
         # functions are careful about the suffix.
 
         # New init options. CRH 2/15/2020. Want to be able to load 
         #   1) multiple parmfiles into single baphy experiment
-        #   2) find parmfiles using batch/siteid
+        #   2) find parmfiles using batch/cellid
 
-        # if don't pass parmfile, must pass both batch and siteid (can 
+        # if don't pass parmfile, must pass both batch and cellid (can 
         # extract individual cellids later if needed). rawid is optional
 
         if parmfile is None:
+            # use database to find the correct parmfiles / cellids to load
+            parse_cellid_options = {
+                'batch': batch,
+                'cellid': cellid,
+                'rawid': rawid
+            }
+            cells_to_extract, nops = io.parse_cellid(parse_cellid_options)
             self.batch = batch
-            self.siteid = siteid
-            self.rawid = rawid
-            d = db.get_batch_cell_data(batch=batch, cellid=siteid, label='parm',
-                                   rawid=rawid)
+            self.siteid = cellid[:7]
+            self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
+            self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
+            self.rawid = nops['rawid']
+            # get list of corresponding parmfiles at this site for these rawids
+            d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
             files = list(set(list(d['parm'])))
             files.sort()
             self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
+
+        # db-free options for loading specific cellids / parmfiles
+        # here, must assume cellid = cells_to_load = cells_to_extract 
+        # (so, might end up caching an extra, redundant, recording,
+        # but this is the 'safe' way to do it.)
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-            self.siteid = os.path.split(parmfile[0])[-1][:7]
             self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.siteid = os.path.split(parmfile[0])[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.sited = os.path.split(parmfile)[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
@@ -152,7 +195,6 @@ class BAPHYExperiment:
         else:
             pass
     
-
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
@@ -231,6 +273,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self.get_baphy_exptevents()
+    
         if correction_method is None:
             return baphy_events
         if correction_method == 'baphy':
@@ -268,9 +311,31 @@ class BAPHYExperiment:
         return behavior_events
 
     @copying_lru_cache(maxsize=128)
-    def get_baphy_exptevents(self):
+    def get_baphy_exptevents(self, raw=False):
         exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
-        return exptevents
+        if raw:
+            return exptevents
+        else: 
+            # do basic preprocessing of baphy events. For example, in PTD data,
+            # when OverlapRefTar = Yes, two overlapping events are created (Ref / Target).
+            # We want to merge these for the sake of behavior analysis etc.
+            exptparams = self.get_baphy_exptparams()
+            
+            # deal with overlapping ref/tar epochs
+            OverlapRefTar = [e['TrialObject'][1].get('OverlapRefTar','No') for e in exptparams]
+            exptevents = [_merge_refTar_epochs(e, o) for e, o in zip(exptevents, OverlapRefTar)]
+            
+            # truncate FA trials
+            log.info('Remove post-response events')
+            # typically, this isn't an issue with OEP recordings. However, for MANTA recordings,
+            # where spikes aren't collected continuously, not removing these post-response epochs
+            # will mess up time alignment, which occurs within `get_baphy_events`, which calls
+            # baphy_io.baphy_align_time -- crh 01.04.2021
+            exptevents = [_truncate_trials(e) for e in exptevents]
+
+            #other preprocessing steps...
+
+            return exptevents
 
     @copying_lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
@@ -282,13 +347,21 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, generate_if_missing=True, cellid=None, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, recache=False, **kwargs):
+        '''
+        This is where the kwargs contents are critical (for generating the correct 
+        recording file hash)
 
+        TODO: loadkey parsing?
+        '''
         kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.1'})
+        kwargs.update({'version': 'BAPHYExperiment.2'})
+
+        # add parmfiles / cells_to_load list - these are unique ids for the recording
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'cell_list': self.cells_to_load})
 
         # add batch to cache recording in the correct location
         kwargs.update({'siteid': self.siteid})
@@ -306,8 +379,9 @@ class BAPHYExperiment:
             data_uri = host + '/recordings/' + str(self.batch) + '/' + f
             log.info('Cached recording: %s', data_uri)
         else:
-            if (not os.path.exists(data_file)) & generate_if_missing:
-                kwargs.update({'mfiles': None})
+            if ((not os.path.exists(data_file)) & generate_if_missing) | recache:
+                # strip unhashable fields (list) from the kwargs (to play nice with lru_caching / copying)
+                del kwargs['mfiles']; del kwargs['cell_list']
                 rec = self.generate_recording(**kwargs)
                 log.info('Caching recording: %s', data_file)
                 rec.save(data_file)
@@ -331,9 +405,11 @@ class BAPHYExperiment:
             3) Package all signals into recording
         '''
         # see if can load from cache, if not, call generate_recording
-        data_file = self.get_recording_uri(generate_if_missing=False, **kwargs)
+        data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
         
-        if (not os.path.exists(data_file)) | recache:
+        # take care of the recache inside get_recording_uri 
+        # do we even need this if/else block here??? crh 01.22.2021
+        if (not os.path.exists(data_file)): # | recache:
             kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
@@ -341,6 +417,8 @@ class BAPHYExperiment:
         else:
             log.info('Cached recording found')
             rec = load_recording(data_file)
+
+        rec.meta['cells_to_extract'] = self.cells_to_extract
 
         return rec
 
@@ -408,7 +486,6 @@ class BAPHYExperiment:
                           name='pupil', recording=rec_name, chans=['pupil'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(p_traces)]
-
             # make sure each pupil signal is the same len as resp, if resp exists
             if resp:
                 for i, (p, r) in enumerate(zip(pupil_sigs, resp_sigs)):
@@ -514,6 +591,9 @@ class BAPHYExperiment:
             spike_dict = []
             for sd in spikedicts:
                 units = sd[1]
+                if self.cells_to_load is not None:
+                    # only keep units included in self.cells_to_load
+                    units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
                 spiketimes = sd[0]
                 d = {}
                 for i, unit in enumerate(units):
@@ -684,7 +764,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     """
 
     epochs = []
-    
+
     log.info('Creating trial epochs')
     trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
     epochs.append(trial_epochs)
@@ -767,7 +847,6 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     # trials after licks
     #remove_post_lick = ('soundTrial' in exptevents.columns) & \
     #                        (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
-    
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
     end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
@@ -866,10 +945,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
 
-    if remove_post_lick:
+    #if remove_post_lick:
+        # crh 01.05.2021 - this should get taken care of in exptevents loading now
         #ref_events = _remove_post_lick(stim_events, exptevents)
-        cat_events = _remove_post_stim_off(cat_events, exptevents)
-        ref_events = _remove_post_stim_off(ref_events, exptevents)
+        #cat_events = _remove_post_stim_off(cat_events, exptevents)
+        #ref_events = _remove_post_stim_off(ref_events, exptevents)
 
     # concatenate events together
     stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
@@ -911,7 +991,6 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     the name column so that they stick around when these columns get
     stripped later for nems packaging.
     """
-
     if 'soundTrial' not in exptevents.columns:
         raise KeyError("soundTrial not in exptevents. Behavior analysis code \
                         has not been run yet, shouldn't be making \
@@ -977,10 +1056,101 @@ def _remove_post_lick(events, exptevents, **options):
     return events
 
 
+def _truncate_trials(exptevents, **options):
+    """
+    Catch-all for removing stim epoch data post stim-off. Meant to replace former baphy code that
+    deals with MANTA recordings. This operates on exptevents (raw) before running align time.
+    For compatibility later on, need to make sure you never orphan a prestim / sound / poststim on
+    its own. They need to be in triplets.
+    """
+    log.info("Removing post-reponse data")
+    
+    trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
+    events = exptevents.copy()
+    for t in trunc_trials:
+        toff = exptevents[(exptevents.Trial==t) & exptevents.name.isin(['STIM,OFF', 'TRIALSTOP'])]['start'].min()
+        e = events[events.Trial==t]
+
+        # for "stim" events, make sure to not orphan a 
+        # pre/post/stim epoch (keep all, or delete all)
+        for idx, r in e.iterrows():
+            name = r.loc['name']
+            if 'Stim , ' in name:
+                if toff > r.loc['start']:
+                    # keep all stim events for this sound and
+                    # if toff < poststim end, set toff to poststim end
+                    if (toff < events.loc[idx+1, 'end']):
+                        toff = events.loc[idx+1, 'end']
+                    pass
+                else:
+                    events = events.drop(idx)
+                    events = events.drop(idx-1)
+                    events = events.drop(idx+1)
+
+        # for remaining events, just brute force truncate
+        # truncate partial events
+        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
+            #print(t)
+            #import pdb; pdb.set_trace()
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start']=toff
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'end']=toff
+        # remove events that start after toff
+        events = events.drop(e[(e.start.values > toff) &
+                               (e.end.values >= toff) &
+                                ~e.name.str.contains('.*Stim.*') &
+                                ~e.name.str.contains('TRIALSTOP')].index)
+        
+    return events
+'''
+# this is the old code in baphy.py. Seems to break stuff for some batch 309 because it
+# removes some TRIALSTOPS which screws up aligning time. (e.g. see BRT006d-a1)
+    keepevents = np.full(len(exptevents), True, dtype=bool)
+    TrialCount = exptevents.Trial.max()
+    for trialidx in range(1, TrialCount+1):
+        # remove stimulus events after TRIALSTOP or STIM,OFF event
+        fftrial_stop = (exptevents['Trial'] == trialidx) & \
+            ((exptevents['name'] == "STIM,OFF") |
+                (exptevents['name'] == "OUTCOME,VEARLY") |
+                (exptevents['name'] == "OUTCOME,EARLY") |
+                (exptevents['name'] == "TRIALSTOP"))
+        if np.sum(fftrial_stop):
+            trialstoptime = np.min(exptevents[fftrial_stop]['start'])
+
+            fflate = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] > trialstoptime)
+            fftrunc = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] <= trialstoptime) & \
+                (exptevents['end'] > trialstoptime)
+
+        for i, d in exptevents.loc[fflate].iterrows():
+            # print("{0}: {1} - {2} - {3}>{4}"
+            #       .format(i, d['Trial'], d['name'], d['end'], start))
+            # remove Pre- and PostStimSilence as well
+            keepevents[(i-1):(i+2)] = False
+
+        for i, d in exptevents.loc[fftrunc].iterrows():
+            log.debug("Truncating event %d early at %.3f", i, trialstoptime)
+            exptevents.loc[i, 'end'] = trialstoptime
+            # also trim post stim silence
+            exptevents.loc[i + 1, 'start'] = trialstoptime
+            exptevents.loc[i + 1, 'end'] = trialstoptime
+
+    log.info("Keeping {0}/{1} events that precede responses"
+            .format(np.sum(keepevents), len(keepevents)))
+    exptevents = exptevents[keepevents].reset_index()
+
+    return exptevents
+'''
+
+
 def _remove_post_stim_off(events, exptevents, **options):
     # screen for trials where sound was turned off early. These will largey overlap with the events
     # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
     # targets can come in the middle of a string of refs, but refs are turned off post target hit
+
     log.info("Removing data post stim-off")
     trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
     for t in trunc_trials:
@@ -991,15 +1161,37 @@ def _remove_post_stim_off(events, exptevents, **options):
             events.at[e[e.end > toff].index, 'end'] = toff
             # remove events that start after toff
             events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
-
         else:
             #import pdb; pdb.set_trace()
             # cruder, but simpler. remove events that end after toff
             events = events.drop(e[e.end >= toff].index)
-
     return events
 
 
 def _trim_epoch_columns(epochs):
     cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]
     return epochs.drop(columns=cols)
+
+
+def _merge_refTar_epochs(exptevents, OverlapRefTar):
+    """
+    If OverlapRefTar = Yes, merge overlapping reference / target events
+    """
+    if OverlapRefTar=='No':
+        return exptevents
+    else:
+        # for every target, if there's a preceding reference with an identical start time, merge them
+        target_prestims = exptevents[exptevents.name.str.contains('PreStimSilence , .* , Target', regex=True)]
+        # get preceding ref stim names (if prestim time stamp matches)
+        ref_idx = target_prestims.index-3
+        refs = exptevents.loc[ref_idx]
+        refs = refs[refs.start.values == target_prestims.start.values]
+
+        # set the poststim duration to the ref post stim (to get rid of long poststim tails)
+        exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
+
+        exptevents = exptevents.drop(refs.index)   # drop ref pre stim
+        exptevents = exptevents.drop(refs.index+1) # drop ref stim
+        exptevents = exptevents.drop(refs.index+2) # drop ref poststim
+
+        return exptevents
