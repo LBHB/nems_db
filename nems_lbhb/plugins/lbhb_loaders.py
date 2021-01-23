@@ -306,6 +306,8 @@ def cc(loadkey):
         cell_count = None  # loads all cells
     xfspec = [['nems_lbhb.xform_wrappers.select_cell_count', {'cell_count': cell_count}]]
 
+    return xfspec
+
 
 @xform()
 def loadpred(loadkey):
