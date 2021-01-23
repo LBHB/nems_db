@@ -301,9 +301,8 @@ def loadpop(loadkey):
 @xform()
 def cc(loadkey):
     # Only option is to pick # random cells, ex: cc.10
+    # cell count of 0 loads all cells
     cell_count = int(loadkey.split('.')[1])
-    if cell_count == 0:
-        cell_count = None  # loads all cells
     xfspec = [['nems_lbhb.xform_wrappers.select_cell_count', {'cell_count': cell_count}]]
 
     return xfspec
