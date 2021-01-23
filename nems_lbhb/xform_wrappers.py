@@ -156,8 +156,7 @@ def split_pop_rec_by_mask(rec, **contex):
     return {'est': est, 'val': val}
 
 
-def select_cell_count(recording_uri_list, cell_count, **context):
-    rec = load_recording(recording_uri_list[0])
+def select_cell_count(rec, cell_count, **context):
     random_selection = random.sample(rec['resp'].chans, cell_count)
     rec['resp'].chans = random_selection
 
