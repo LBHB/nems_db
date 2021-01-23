@@ -905,7 +905,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-
+    #import pdb; pdb.set_trace()
     TrialLen_sec = np.array(
             exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
             )
@@ -1821,7 +1821,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     parmfilepath = pupilfilepath.replace(".pup.mat",".m")
     pp, bb = os.path.split(parmfilepath)
-
+    
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
@@ -2076,13 +2076,33 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, animal):
+def get_mean_spike_waveform(cellid, animal, usespkfile=False):
     """
     Return 1-D numpy array containing the mean sorted
     spike waveform
     """
     if type(cellid) != str:
         raise ValueError("cellid must be string type")
+
+    if usespkfile:
+        cparts=cellid.split("-")
+        chan=int(cparts[1])
+        unit=int(cparts[2])
+        sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
+        d = db.pd_query(sql)
+        spkfilepath=os.path.join(d['path'][0], d['respfile'][0])
+        matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
+        sortinfo = matdata['sortinfo']
+        if sortinfo.shape[0] > 1:
+            sortinfo = sortinfo.T
+        try:
+           mwf=sortinfo[0][chan-1][0][0][unit-1]['Template'][0][chan-1,:]
+
+        except:
+           import pdb
+           pdb.set_trace()
+        return mwf
+
     # get KS_cluster (if it exists... this is a new feature)
     sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
     kid = db.pd_query(sql).iloc[0][0]
@@ -2114,3 +2134,108 @@ def get_mean_spike_waveform(cellid, animal):
     mwf = w[:, kidx]
 
     return mwf
+
+
+def parse_cellid(options):
+    """
+    figure out if cellid is
+        1) single cellid
+        2) list of cellids
+        3) a siteid
+
+    using this, add the field 'siteid' to the options dictionary. If siteid was passed,
+    define cellid as a list of all cellids recorded at this site, for this batch.
+
+    options: dictionary
+            batch - (int) batch number
+            cellid - single cellid string, list of cellids, or siteid
+                If siteid is passed, return superset of cells. i.e. if some
+                cells aren't present in one of the files that is found for this batch,
+                don't load that file. To override this behavior, pass rawid list.
+
+    returns updated options dictionary and the cellid to extract from the recording
+        NOTE: The reason we keep "cellid to extract" distinct from the options dictionary
+        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze
+        cell1 from a site where you recorded cells1-4, you don't want a different recording
+        cached for each cell.
+    """
+
+    options = options.copy()
+
+    mfilename = options.get('mfilename', None)
+    cellid = options.get('cellid', None)
+    batch = options.get('batch', None)
+    rawid = options.get('rawid', None)
+    cells_to_extract = None
+
+    if ((cellid is None) | (batch is None)) & (mfilename is None):
+        raise ValueError("must provide cellid and batch or mfilename")
+
+    siteid = None
+    cell_list = None
+    if type(cellid) is list:
+        cell_list = cellid
+    elif (type(cellid) is str) & ('%' in cellid):
+        cell_data = db.pd_query(f"SELECT cellid FROM Batches WHERE batch=%s and cellid like %s",
+                (batch, cellid))
+        cell_list = cell_data['cellid'].to_list()
+    elif (type(cellid) is str) & ('-' not in cellid):
+        siteid = cellid
+
+    if mfilename is not None:
+        # simple, db-free case. Just a pass through.
+        pass
+        if batch is None:
+            options['batch'] = 0
+
+    elif cell_list is not None:
+        # list of cells was passed
+        siteid = cellid.split('-')[0]
+        cell_list_all, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
+                                             rawid=rawid)
+        options['cellid'] = cell_list_all
+        options['rawid'] = rawid
+        options['siteid'] = cell_list[0].split('-')[0]
+        cells_to_extract = cell_list
+
+    elif siteid is not None:
+        # siteid was passed, figure out if electrode numbers were specified.
+        chan_nums = None
+        if '.e' in siteid:
+            args = siteid.split('.')
+            siteid = args[0]
+            chan_lims = args[1].replace('e', '').split(':')
+            chan_nums = np.arange(int(chan_lims[0]), int(chan_lims[1])+1)
+
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                             rawid=rawid)
+
+        if chan_nums is not None:
+            cells_to_extract = [c for c in cell_list if int(c.split('-')[1]) in chan_nums]
+        else:
+            cells_to_extract = cell_list
+
+        options['cellid'] = cell_list
+        if len(rawid) != 0:
+            options['rawid'] = rawid
+        options['siteid'] = siteid
+
+    elif cellid is not None:
+        # single cellid was passed, want list of all cellids. First, get rawids
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
+                                                     rawid=rawid)
+        # now, use rawid to get all stable cellids across these files
+        siteid = cell_list[0].split('-')[0]
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                                     rawid=rawid)
+
+        options['cellid'] = cell_list
+        options['rawid'] = rawid
+        options['siteid'] = siteid
+        cells_to_extract = [cellid]
+
+    if (len(cells_to_extract) == 0) & (mfilename is None):
+        raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "
+                            "or that you've specified an mfile.")
+
+    return list(cells_to_extract), options

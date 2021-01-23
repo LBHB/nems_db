@@ -20,6 +20,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
 
     from nems_lbhb.xform_wrappers import generate_recording_uri
     import nems_lbhb.baphy as nb
+    from nems_lbhb import baphy_io
 
     pc_idx = None
 
@@ -44,7 +45,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     if cellid == 'none':
         cells_to_extract = 'none'
     else:
-        cells_to_extract, _ = nb.parse_cellid(t_ops)
+        cells_to_extract, _ = baphy_io.parse_cellid(t_ops)
 
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
@@ -269,6 +270,8 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
 #              ['nems.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
+
+
 @xform()
 def loadpop(loadkey):
     ops = loadkey.split('.')[1:]
@@ -293,6 +296,21 @@ def loadpop(loadkey):
                'best_cells': best_cells}]]
 
     return xfspec
+
+@xform()
+def loadpred(loadkey):
+    ops = loadkey.split('.')[1:]
+
+    modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+    for op in ops:
+        if op=='rnd':
+            rand_match = True
+
+    xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
+              {'modelname_existing': modelname_existing}]]
+
+    return xfspec
+
 
 
 # TODO: delete after finished deprecating, no longer used in this module.

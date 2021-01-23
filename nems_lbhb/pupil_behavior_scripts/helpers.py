@@ -430,7 +430,9 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
             df = df.drop(columns=['cellid'])
 
     df['sig_psth'] = df.index.isin(psth_cells)
-    
+    df['animal']=df.index.copy().str[:3]
+    df['MI_task_unique_abs'] = np.abs(df['MI_task_unique'])
+
     return df
 
 
@@ -804,6 +806,7 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
     sn=np.sign(_dmi+_dmiu)
     stat, p = st.wilcoxon(_dmi*sn,_dmiu*sn)
     print(f' postall vs postu: Wilcoxon stat={stat} p={p:.3e}')
+    print(f' mean: {_dmi.mean():.3f} mean0: {_dmiu.mean():.3f}')
     ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')
