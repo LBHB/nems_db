@@ -156,6 +156,14 @@ def split_pop_rec_by_mask(rec, **contex):
     return {'est': est, 'val': val}
 
 
+def select_cell_count(recording_uri_list, cell_count, **context):
+    rec = load_recording(recording_uri_list[0])
+    random_selection = random.sample(rec['resp'].chans, cell_count)
+    rec['resp'].chans = random_selection
+
+    return {'rec': rec}
+
+
 def pop_file(stimfmt='ozgf', batch=None,
              rasterfs=50, chancount=18, siteid=None, **options):
 
