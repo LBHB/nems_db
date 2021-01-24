@@ -164,8 +164,10 @@ def select_cell_count(rec, cell_count, **context):
     rec['resp'] = rec['resp'].extract_channels(random_selection)
     if 'mask_est' in rec.signals:
         rec['mask_est'].chans = random_selection
+    meta = context['meta']
+    meta['cellids'] = random_selection
 
-    return {'rec': rec}
+    return {'rec': rec, 'meta': meta}
 
 
 def pop_file(stimfmt='ozgf', batch=None,
