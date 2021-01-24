@@ -161,7 +161,9 @@ def select_cell_count(rec, cell_count, **context):
         cell_count = len(rec['resp'].chans)
     random.seed(12345)
     random_selection = random.sample(rec['resp'].chans, cell_count)
-    rec['resp'].chans = random_selection
+    rec['resp'] = rec['resp'].extract_channels(random_selection)
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = random_selection
 
     return {'rec': rec}
 
