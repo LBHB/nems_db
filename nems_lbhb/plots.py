@@ -1329,7 +1329,7 @@ def LN_pop_plot(ctx, ctx0=None):
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
                       offset=None, dot_colors=None, dot_markers=None, max=None, ax=None,
-                      check_single_cell=False):
+                      check_single_cell=False, plot_stat='r_test'):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
@@ -1364,8 +1364,8 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         cellids = goodcells
     else:
         cellids=list(goodcells.index)
-    #b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
-    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_test')
+
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
     b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
