@@ -42,7 +42,8 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
     if batch==289:
        pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
     else:
-       pmodelname = 'ozgf.fs50.ch18-ld-norm.l1-sev_wc.18x3R.g-fir.3x12xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4'
+       pmodelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4R.g-fir.4x20xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3-newtf.n.lr1e4"
+
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
         all_cells = alt_cells_available
@@ -153,6 +154,20 @@ def split_pop_rec_by_mask(rec, **contex):
     val.add_signal(vmask)
 
     return {'est': est, 'val': val}
+
+
+def select_cell_count(rec, cell_count, seed_mod=0, **context):
+    if cell_count == 0:
+        cell_count = len(rec['resp'].chans)
+    random.seed(12345 + seed_mod)
+    random_selection = random.sample(rec['resp'].chans, cell_count)
+    rec['resp'] = rec['resp'].extract_channels(random_selection)
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = random_selection
+    meta = context['meta']
+    meta['cellids'] = random_selection
+
+    return {'rec': rec, 'meta': meta}
 
 
 def pop_file(stimfmt='ozgf', batch=None,
