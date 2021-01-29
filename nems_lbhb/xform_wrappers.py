@@ -156,10 +156,10 @@ def split_pop_rec_by_mask(rec, **contex):
     return {'est': est, 'val': val}
 
 
-def select_cell_count(rec, cell_count, **context):
+def select_cell_count(rec, cell_count, seed_mod=0, **context):
     if cell_count == 0:
         cell_count = len(rec['resp'].chans)
-    random.seed(12345)
+    random.seed(12345 + seed_mod)
     random_selection = random.sample(rec['resp'].chans, cell_count)
     rec['resp'] = rec['resp'].extract_channels(random_selection)
     if 'mask_est' in rec.signals:
