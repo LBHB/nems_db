@@ -15,7 +15,7 @@ from itertools import product
 import nems_lbhb.stateplots as stateplots
 import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
-
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 
 
 def preprocess_stategain_dump(df_name, batch, full_model=None, p0=None, b0=None, shuf_model=None, octave_cutoff=0.5, r0_threshold=0,
@@ -673,7 +673,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
 
 
 def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
-                 sig_cells_only=False, states=None, scatter_sig_cells=None):
+                 sig_cells_only=False, states=None, scatter_sig_cells=None, bootstats=False):
     """
     Copied/modified version of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
     """
@@ -807,6 +807,19 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
     stat, p = st.wilcoxon(_dmi*sn,_dmiu*sn)
     print(f' postall vs postu: Wilcoxon stat={stat} p={p:.3e}')
     print(f' mean: {_dmi.mean():.3f} mean0: {_dmiu.mean():.3f}')
+
+    if bootstats: 
+        # also do hierarchical bootstrap test
+        _dmi_df = pd.DataFrame((_dmi*sn).values, index=_dmi.index, columns=['mi'])
+        _dmiu_df = pd.DataFrame((_dmiu*sn).values, index=_dmiu.index, columns=['miu'])
+        _dmi_df['siteid'] = [c[:7] for c in _dmi_df.index]
+        _dmiu_df['siteid'] = [c[:7] for c in _dmiu_df.index]
+        diff = {s: _dmi_df.loc[(_dmi_df.siteid==s), 'mi'].values - _dmiu_df.loc[(_dmiu_df.siteid==s), 'miu'].values for s in _dmi_df.siteid.unique()}
+        bootsamp = get_bootstrapped_sample(diff, nboot=100)
+        p = get_direct_prob(bootsamp, np.zeros(bootsamp.shape[0]))[0]
+        print(f"Hierarchical bootstrap probability unique > block only: {p}")
+        
+
     ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')

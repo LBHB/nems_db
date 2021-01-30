@@ -19,6 +19,7 @@ from nems import get_setting
 import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
@@ -78,6 +79,7 @@ if group_files & ('beh' not in model_string):
     df = df.groupby(by=['cellid', 'ON_BF']).mean()
     df['area'] = [area.loc[c] if type(area.loc[c]) is str else area.loc[c].iloc[0] for c in df.index.get_level_values('cellid')]
     df=df.reset_index()
+    df.index = df.cellid
     
 fh, axs = plt.subplots(2, 3, figsize=(7.5,5))
 
@@ -93,7 +95,8 @@ common.scat_states_crh(df, x_model='MI_task',
             title='A1',
             xlim=rr,
             ylim=rr,
-            ax=axs[0,0])
+            ax=axs[0,0], 
+            bootstats=True)
 
 # ICC
 common.scat_states_crh(df, x_model='MI_task',
@@ -106,7 +109,8 @@ common.scat_states_crh(df, x_model='MI_task',
             xlim=rr,
             ylim=rr,
             marker='^',
-            ax=axs[0,1])
+            ax=axs[0,1],
+            bootstats=True)
 
 # ICX
 common.scat_states_crh(df, x_model='MI_task',
@@ -119,7 +123,8 @@ common.scat_states_crh(df, x_model='MI_task',
             xlim=rr,
             ylim=rr,
             marker='o',
-            ax=axs[0,1])
+            ax=axs[0,1], 
+            bootstats=True)
 
 # Figure 4B
 
@@ -312,6 +317,24 @@ stat, p = sci.wilcoxon(signed_diff_IC)
 print(f'IC mean MI task only, unique: {signed_only_IC.median():.3f}, {signed_unique_IC.median():.3f}')
 print(f'  signed delta task unique: stat={stat:.3f}, p={p:.4e}')
 print(f'  Ratio: {ratio_IC:.3f}')
+
+# run the above two comparisons with bootstrapped test
+np.random.seed(123)
+signed_diff_A1_wSite = pd.DataFrame(signed_diff_A1, columns=['signed_diff'])
+signed_diff_A1_wSite['siteid'] = [c[:7] for c in signed_diff_A1_wSite.index]
+signed_diff_IC_wSite = pd.DataFrame(signed_diff_IC, columns=['signed_diff'])
+signed_diff_IC_wSite['siteid'] = [c[:7] for c in signed_diff_IC_wSite.index]
+
+a1 = {s: signed_diff_A1_wSite.loc[(signed_diff_A1_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_A1_wSite.siteid.unique()}
+a1 = get_bootstrapped_sample(a1, nboot=100)
+p = get_direct_prob(a1, np.zeros(a1.shape[0]))[0]
+print(f"\n A1 task only vs. task unique bootstrapped prob: {p}\n")
+ic = {s: signed_diff_IC_wSite.loc[(signed_diff_IC_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_IC_wSite.siteid.unique()}
+ic = get_bootstrapped_sample(ic, nboot=100)
+p = get_direct_prob(ic, np.zeros(ic.shape[0]))[0]
+print(f"\n IC task only vs. task unique bootstrapped prob: {p}\n")
+
+# split up ICC / ICX
 stat, p = sci.wilcoxon(signed_diff_ICC)
 print(f' ICC signed delta task unique: stat={stat:.3f}, p={p:.4e}')
 print(f'  Ratio: {ratio_ICC:.3f}')

@@ -333,9 +333,9 @@ def scat_states_crh(df,
     # print some more statistics using hierarchical bootstrap for recording site
     if bootstats:
         # add siteid to df
-        df['siteid'] = [c[:7] for c in df.index]
+        df['siteid'] = [c[:7] for c in df.index.get_level_values(0)]
         np.random.seed(123)
-        s1 = {s: df.loc[(df.siteid==s) & area, x_model].values - df.loc[(df.siteid==s) & area, y_model].values for s in df.siteid.unique()}
+        s1 = {s: df.loc[(df.siteid==s) & area, x_model].values - df.loc[(df.siteid==s) & area, y_model].values for s in df[area].siteid.unique()}
         ds1 = get_bootstrapped_sample(s1, nboot=nboots)
         p = 1 - get_direct_prob(ds1, np.zeros(ds1.shape[0]))[0]
         print(f"   Hierarcichal bootstrap probability: {p}")

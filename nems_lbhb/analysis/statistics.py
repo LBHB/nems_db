@@ -1,7 +1,7 @@
 import numpy as np
 
 # hierarchachal bootstrap, see: cite biorxiv paper
-def get_bootstrapped_sample(variable, even_sample=False, nboot=1000):
+def get_bootstrapped_sample(variable, variable2=None, metric=None, even_sample=False, nboot=1000):
     '''
     Adapted from Saravanan et al. 2020 arXiv
 
@@ -11,10 +11,14 @@ def get_bootstrapped_sample(variable, even_sample=False, nboot=1000):
     the values (1D arrays) represent repetitions/observations within that level (e.g. neurons).
 
     Only set up to handle two-level data right now 08.21.2020, CRH
+
+    CRH 01.30.2021 - modified to allow computing corr. coefs hierarchically
+        set variable1 to the dict of x values, variable2 to the dict of y values, and metric to corrcoef
     '''
     bootstats = np.zeros(nboot)
     for i in np.arange(nboot):
         temp = []
+        temp2 = []
         num_lev1 = len(variable.keys())        # n animals
         num_lev2 = max([variable[n].shape[0] for n in variable.keys()]) # min number of observations sampled for an animal
         rand_lev1 = np.random.choice(num_lev1, num_lev1)
@@ -28,12 +32,19 @@ def get_bootstrapped_sample(variable, even_sample=False, nboot=1000):
                 rand_lev2 = np.random.choice(this_n_range, this_n_range, replace=True)
             
             temp.extend(variable[k][rand_lev2].tolist())   # k is saying which animal, rand_lev2 are the observations from this animal
+            if variable2 is not None:
+                temp2.extend(variable2[k][rand_lev2].tolist())
 
         #Note that this is the step at which actual computation is performed. In all cases for these simulations
         #we are only interested in the mean. But as elaborated in the text, this method can be extended to 
         #several other metrics of interest. They would be computed here:
         #bootstats[i] = np.mean(np.concatenate(temp))
-        bootstats[i] = np.mean(temp)
+        if metric=='corrcoef':
+            bootstats[i] = np.corrcoef(temp, temp2)[0, 1]
+        elif metric is None:
+            bootstats[i] = np.mean(temp)
+        else:
+            raise ValueError(f"No code implemented for method: {method} yet!")
 
     return bootstats
 

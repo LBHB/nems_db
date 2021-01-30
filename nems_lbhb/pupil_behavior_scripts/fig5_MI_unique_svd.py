@@ -19,6 +19,7 @@ from nems import get_setting
 import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
@@ -118,6 +119,28 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             marker='v',
             ax=axs[1],
             bootstats=True)
+
+# CRH adding scipy test for correlation significance -- it's in the ms, but code doesn't seem to exist?
+a1cc, p = sci.pearsonr(df[df.area=='A1']['MI_task_unique'], df[df.area=='A1']['MI_pupil_unique'])     
+print(f"A1 \n   correlation MI_task_unique vs. MI_pupil_unique: {round(a1cc, 3)}, {round(p, 3)}")       
+
+iccc, p = sci.pearsonr(df[df.area.isin(['ICX', 'ICC'])]['MI_task_unique'], df[df.area.isin(['ICX', 'ICC'])]['MI_pupil_unique'])     
+print(f"IC \n   correlation MI_task_unique vs. MI_pupil_unique: {round(iccc, 3)}, {round(p, 3)}")  
+
+# test correlation using hierarchical bootstrap
+np.random.seed(123)
+print("Using hierarchical bootstrap:")
+da1_task = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+da1_pupil = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+a1_boot_cc = get_bootstrapped_sample(da1_task, da1_pupil, metric='corrcoef', nboot=100)
+p = 1 - get_direct_prob(a1_boot_cc, np.zeros(a1_boot_cc.shape[0]))[0]
+print(f"A1 \n   correlation MI_task_unique vs. MI_pupil_unique: {round(a1cc, 3)}, {round(p, 5)}")  
+
+dic_task = {s: df.loc[(df.siteid==s) & (df.area.isin(['ICC', 'ICX'])), 'MI_pupil_unique'].values for s in df[(df.area.isin(['ICC', 'ICX']))].siteid.unique()}
+dic_pupil = {s: df.loc[(df.siteid==s) & (df.area.isin(['ICC', 'ICX'])), 'MI_task_unique'].values for s in df[(df.area.isin(['ICC', 'ICX']))].siteid.unique()}
+ic_boot_cc = get_bootstrapped_sample(dic_task, dic_pupil, metric='corrcoef', nboot=100)
+p = 1 - get_direct_prob(ic_boot_cc, np.zeros(ic_boot_cc.shape[0]))[0]
+print(f"IC \n   correlation MI_task_unique vs. MI_pupil_unique: {round(iccc, 3)}, {round(p, 5)}")  
 
 for s_area in ['A1', 'ICC|ICX']:
     for varname in ['MI_task_unique','MI_pupil_unique']:

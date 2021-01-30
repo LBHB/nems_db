@@ -198,6 +198,7 @@ dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_pupil_unique'
 a1 = get_bootstrapped_sample(da1, nboot=100)
 ic = get_bootstrapped_sample(dic, nboot=100)
 p = 1- get_direct_prob(a1, ic)[0]
+print("\n")
 print(f" Median r_pupil_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_pupil_unique'].median()}\n"\
       f" Median r_pupil_unique A1: {df[df.area.isin(['A1'])]['r_pupil_unique'].median()}\n"\
       f" Bootstrapped probability A1 > IC: {p}\n")
