@@ -14,6 +14,7 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import get_model_results_per
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 import nems.plots.api as nplt
 
 params = {'legend.fontsize': 6,
@@ -183,7 +184,9 @@ def scat_states_crh(df,
                 xlim=None,
                 ylim=None,
                 marker='o', marker_size=15,
-                ax=None):
+                ax=None,
+                bootstats=False,
+                nboots=100):
     """
     This function makes a scatter plots of identified arguments.
     sig_list = ~sig_state, sig_state, sig_ubeh, sig_upup, sig_both]
@@ -326,6 +329,16 @@ def scat_states_crh(df,
     stat, p = sci.wilcoxon(df.loc[area,x_model],df.loc[area, y_model])
     statr, pr = sci.pearsonr(df.loc[area,x_model],df.loc[area, y_model])
     print(f'  Wilcoxon sign test: stat={stat:.1f}, p={p:.3e} R: {statr:.3f}, p={pr:.3e}')
+
+    # print some more statistics using hierarchical bootstrap for recording site
+    if bootstats:
+        # add siteid to df
+        df['siteid'] = [c[:7] for c in df.index]
+        np.random.seed(123)
+        s1 = {s: df.loc[(df.siteid==s) & area, x_model].values - df.loc[(df.siteid==s) & area, y_model].values for s in df.siteid.unique()}
+        ds1 = get_bootstrapped_sample(s1, nboot=nboots)
+        p = 1 - get_direct_prob(ds1, np.zeros(ds1.shape[0]))[0]
+        print(f"   Hierarcichal bootstrap probability: {p}")
 
     if save:
         plt.savefig(title + ylabel + xlabel + '.pdf')
