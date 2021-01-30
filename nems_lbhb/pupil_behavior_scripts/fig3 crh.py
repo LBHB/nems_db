@@ -142,7 +142,8 @@ common.scat_states_crh(df, x_model='r_shuff',
             xlabel='state-independent R2',
             ylabel='state-dependent R2',
             title='A1',
-            ax=axs[1,0])
+            ax=axs[1,0],
+            bootstats=True)
 
 # All IC with colored untis according to model significance
 common.scat_states_crh(df, x_model='r_shuff',
@@ -154,7 +155,8 @@ common.scat_states_crh(df, x_model='r_shuff',
             xlabel='state-independent R2',
             ylabel='state-dependent R2',
             title='IC',
-            ax=axs[1,1])
+            ax=axs[1,1],
+            bootstats=True)
 
 # Figure 3C
 # A1
@@ -167,7 +169,8 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             title='A1',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
-                   ax=axs[2,0])
+            ax=axs[2,0],
+            bootstats=True)
 
 # IC and ICX together
 common.scat_states_crh(df, x_model='r_pupil_unique',
@@ -179,7 +182,8 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             title='IC',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
-            ax=axs[2,1])
+            ax=axs[2,1],
+            bootstats=True)
 
 #plt.tight_layout()
 
