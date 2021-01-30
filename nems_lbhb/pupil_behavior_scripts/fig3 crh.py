@@ -11,6 +11,7 @@ import pylab as pl
 
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 from nems import get_setting
 
 # set path to dump file
@@ -186,6 +187,30 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             bootstats=True)
 
 #plt.tight_layout()
+
+# add statistical test to directly test if r_pupil/task is different between areas
+np.random.seed(123)
+df['siteid'] = [c[:7] for c in df.index]
+
+# pupil test
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_pupil_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=100)
+ic = get_bootstrapped_sample(dic, nboot=100)
+p = 1- get_direct_prob(a1, ic)[0]
+print(f" Median r_pupil_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_pupil_unique'].median()}\n"\
+      f" Median r_pupil_unique A1: {df[df.area.isin(['A1'])]['r_pupil_unique'].median()}\n"\
+      f" Bootstrapped probability A1 > IC: {p}\n")
+
+# task test
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_task_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=100)
+ic = get_bootstrapped_sample(dic, nboot=100)
+p = 1- get_direct_prob(a1, ic)[0]
+print(f" Median r_task_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_task_unique'].median()}\n"\
+      f" Median r_task_unique A1: {df[df.area.isin(['A1'])]['r_task_unique'].median()}\n"\
+      f" Bootstrapped probability A1 > IC: {p}")
 
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig3_r2_summ.pdf'))

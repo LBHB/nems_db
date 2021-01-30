@@ -91,7 +91,8 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             title='A1',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
-            ax=axs[0])
+            ax=axs[0],
+            bootstats=True)
 
 common.scat_states_crh(df, x_model='MI_pupil_unique',
             y_model='MI_task_unique',
@@ -102,7 +103,9 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             title='IC',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
-            ax=axs[1])
+            ax=axs[1],
+            bootstats=True)
+
 common.scat_states_crh(df, x_model='MI_pupil_unique',
             y_model='MI_task_unique',
             area='ICX',
@@ -113,7 +116,8 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
             marker='v',
-            ax=axs[1])
+            ax=axs[1],
+            bootstats=True)
 
 for s_area in ['A1', 'ICC|ICX']:
     for varname in ['MI_task_unique','MI_pupil_unique']:
