@@ -1255,11 +1255,12 @@ def state_resp_coefs(rec, modelspec, ax=None,
 
 def cc_comp(rec, modelspec, ax=None, **options):
     ## display noise corr. matrices
-    f,ax = plt.subplots(4,2, figsize=(4,8), sharex=True, sharey=True)
+    f,ax = plt.subplots(4,3, figsize=(6,8))
+    #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
     val = rec.apply_mask()
-    large_idx=val['mask_large'].as_continuous()[0,:]
-    small_idx=val['mask_small'].as_continuous()[0,:]
+    large_idx=val['mask_large'].as_continuous()[0,:].astype(bool)
+    small_idx=val['mask_small'].as_continuous()[0,:].astype(bool)
     pred0=val['pred0'].as_continuous()
     pred=val['pred'].as_continuous()
     resp=val['resp'].as_continuous()
@@ -1288,6 +1289,30 @@ def cc_comp(rec, modelspec, ax=None, **options):
     ax[0,1].set_title(siteid + ' pred');
     ax[2,1].set_title(f"std={np.mean((lg_cc-sm_cc)**2):.3f}")
     ax[3,1].set_title(f"E={np.mean(((large_cc-small_cc) - (lg_cc-sm_cc))**2):.3f}");
+
+    dact=large_cc-small_cc
+    dpred=lg_cc-sm_cc
+    ax[1,2].plot(np.diag(dact),label='act')
+    ax[1,2].plot(np.diag(dpred),label='pred')
+    ax[1,2].legend()
+    np.fill_diagonal(dact, 0)
+    ax[2,2].plot(dact.mean(axis=0),label='act')
+    np.fill_diagonal(dpred, 0)
+    ax[2,2].plot(dpred.mean(axis=0),label='pred')
+    ax[2,2].set_title('mean lg-sm cc')
+    ax[2,2].set_xlabel('unit')
+ 
+    triu = np.triu_indices(dpred.shape[0], 1)
+    cc_avg = (large_cc[triu] + small_cc[triu])/2
+    h,b=np.histogram(cc_avg,bins=20,range=[-0.3,0.3])
+    ax[0,2].bar(b[1:],h,width=b[1]-b[0])
+    ax[0,2].set_title(f"median cc={np.median(cc_avg):.3f}")
+
+    d_each = dact[triu]
+    h,b=np.histogram(d_each,bins=20,range=[-0.3,0.3])
+    ax[3,2].bar(b[1:],h,width=b[1]-b[0])
+    ax[3,2].set_xlabel(f"median d_cc={np.median(d_each):.3f}")
+
 
     return f
 

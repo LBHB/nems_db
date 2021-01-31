@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as ss
+from numpy.random import normal
 
 import helpers as helper
 
@@ -13,16 +14,19 @@ import nems.plots.api as nplt
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = False
+save_fig = True
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
 #perf_stat='DI'
 perf_stat='dp'
+
+# important options
 yaxis = 'r_pupil_unique'
-#yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
-#yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
-#yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
+#yaxis = 'r_task_unique'
+
+#yaxis = 'MI_task_unique'
+#yaxis = 'MI_task_unique_abs'
 #yaxis = 'r_task'
 
 sig_col = 'area'     # sig_utask (sig unique task effect), sig_task (sig task only), sig_state (sig state effect)
@@ -86,16 +90,18 @@ IC.loc[IC.dp>3.5,'dp']=3.5
 
 d = pd.concat((A1,IC))
 
-
 split=82
 d['di_class']='good'
 d.loc[d.DI<split, 'di_class']='bad'
+
+jitter_mag = 0.015
+ms = 4
 
 # Good vs. bad behavior
 f1, ax = plt.subplots(1, 3, figsize=(8, 3), sharey='row')
 
 sns.stripplot(x=sig_col, y=yaxis, data=d, hue='di_class', dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[0])
+                        marker='o', size=ms, ax=ax[0])
 ax[0].axhline(0, linestyle='--', lw=2, color='grey')
 
 # medians
@@ -116,9 +122,15 @@ ax[0].set_title('A1: bad: {0}, good {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5
 ax[0].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0])
 
+animal_colors = {'TAR': [244/255, 165/255, 130/255],
+                 'bbl': [147/255, 197/255, 222/255],
+                 'ley': [5/255, 113/255, 176/255],
+                 'BRT': [202/255, 32/255, 39/255]}
+
 for a in A1.animal.unique():
     _k = (d.area=='A1') & (d.animal==a)
-    ax[1].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+    ax[1].plot(d.loc[_k, perf_stat]+normal(0,jitter_mag,np.sum(_k)),
+               d.loc[_k, yaxis], '.', markersize=ms, color=animal_colors[a])
 r, p = ss.pearsonr(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis])
 beta = np.polyfit(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis],1)
 
@@ -136,7 +148,8 @@ nplt.ax_remove_box(ax[1])
 
 for a in IC.animal.unique():
     _k = (d.area=='IC') & (d.animal==a)
-    ax[2].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+    ax[2].plot(d.loc[_k, perf_stat]+normal(0,jitter_mag,np.sum(_k)),
+               d.loc[_k, yaxis], '.', markersize=ms, color=animal_colors[a])
 r, p = ss.pearsonr(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis])
 beta = np.polyfit(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis],1)
 
@@ -158,7 +171,7 @@ f1.tight_layout()
 
 f2,ax = plt.subplots(2,2, figsize=(5, 5), sharey='row')
 sns.stripplot(x='animal', y=yaxis, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[0,0])
+                        marker='o', size=ms, ax=ax[0,0])
 ax[0,0].axhline(0, linestyle='--', lw=2, color='grey')
 sets_a1 = [A1.loc[A1['animal']==a, yaxis] for a in A1.animal.unique()]
 means_a1 = [f'{a}={A1.loc[A1["animal"]==a, yaxis].mean():.3f}' for a in A1.animal.unique()]
@@ -177,7 +190,7 @@ ax[0,1].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0,1])
 
 sns.stripplot(x='animal', y=perf_stat, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[1,0])
+                        marker='o', size=ms, ax=ax[1,0])
 if perf_stat=='DI':
     ax[1,0].axhline(50, linestyle='--', lw=2, color='grey')
 else:
@@ -236,7 +249,7 @@ f3, ax = plt.subplots(1, 2, figsize=(6, 3), sharey='row')
 
 for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
     sns.stripplot(x=sig_col, y=_yax, data=d, hue='SU', dodge=True, edgecolor='white', linewidth=0.5,
-                            marker='o', size=5, ax=ax[_i])
+                            marker='o', size=ms, ax=ax[_i])
     ax[_i].axhline(0, linestyle='--', lw=2, color='grey')
 
     # medians

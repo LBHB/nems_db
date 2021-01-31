@@ -431,7 +431,8 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     df['sig_psth'] = df.index.isin(psth_cells)
     df['animal']=df.index.copy().str[:3]
-    df['MI_task_unique_abs'] = np.abs(df['MI_task_unique'])
+    if 'MI_task_unique' in df.columns.tolist():
+        df['MI_task_unique_abs'] = np.abs(df['MI_task_unique'])
 
     return df
 
@@ -642,7 +643,9 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
     if not norm_by_null:
         ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
+        
     slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
+    
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     plt.title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))

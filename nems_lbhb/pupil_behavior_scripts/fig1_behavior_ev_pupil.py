@@ -440,7 +440,7 @@ if save_figures:
     f.savefig('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil_sharpened.pdf')
     f.savefig('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil_sharpened.png')
 
-df=pd.DataFrame(data=np.vstack([passive_0, active_0, passive_d, active_d, cc_pup_beh]).T,
-                columns=['baseline_p','baseline_a','evoked_p','evoked_a', 'cc_pup_beh'],
-                index=siteids)
-df.to_csv('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil.per_site.csv')
+    df=pd.DataFrame(data=np.vstack([passive_0, active_0, passive_d, active_d, cc_pup_beh]).T,
+                    columns=['baseline_p','baseline_a','evoked_p','evoked_a', 'cc_pup_beh'],
+                    index=siteids)
+    df.to_csv('/auto/users/svd/projects/pupil-behavior/PTD_ev_pupil.per_site.csv')
