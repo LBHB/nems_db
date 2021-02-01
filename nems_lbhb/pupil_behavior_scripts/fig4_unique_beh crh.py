@@ -349,6 +349,18 @@ stat, p = sci.ranksums(signed_unique_ICC / signed_only_ICC,
                        signed_unique_ICX / signed_only_ICX)
 print(f'ICC vs. ICX rank sum ratio: stat={stat:.3f}, p={p:.4e}')
 
+# ICC vs. ICX comparison with bootstrap
+signed_diff_ICC_wSite = pd.DataFrame(signed_diff_ICC, columns=['signed_diff'])
+signed_diff_ICC_wSite['siteid'] = [c[:7] for c in signed_diff_ICC_wSite.index]
+signed_diff_ICX_wSite = pd.DataFrame(signed_diff_ICX, columns=['signed_diff'])
+signed_diff_ICX_wSite['siteid'] = [c[:7] for c in signed_diff_ICX_wSite.index]
+
+icx = {s: signed_diff_ICX_wSite.loc[(signed_diff_ICX_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_ICX_wSite.siteid.unique()}
+icx = get_bootstrapped_sample(icx, nboot=100)
+icc = {s: signed_diff_ICC_wSite.loc[(signed_diff_ICC_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_ICC_wSite.siteid.unique()}
+icc = get_bootstrapped_sample(icc, nboot=100)
+p = get_direct_prob(icc, icx)[0]
+print(f"\n ICX vs. ICC bootstrapped prob: {p}\n")
 
 stat, p = sci.wilcoxon(unique_A1)
 print(f'A1 u_mod_beh: n+={np.sum(unique_A1>0)}/{len(unique_A1)} med={np.median(unique_A1):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')

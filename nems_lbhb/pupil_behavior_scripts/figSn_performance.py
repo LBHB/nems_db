@@ -8,13 +8,14 @@ from numpy.random import normal
 
 import helpers as helper
 
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 from nems import get_setting
 import nems.plots.api as nplt
 
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
@@ -134,7 +135,15 @@ for a in A1.animal.unique():
 r, p = ss.pearsonr(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis])
 beta = np.polyfit(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis],1)
 
-ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}')
+# add bootstrapped test of correlation
+np.random.seed(123)
+# unique site / active combos
+d['siteid'] = [c[:7]+d['state_chan_alt'].iloc[i] for i, c in enumerate(d.index)]
+x = {s: d.loc[(d.siteid==s) & (d.area=='A1'), perf_stat].values for s in d[(d.area=='A1')].siteid.unique()}
+y = {s: d.loc[(d.siteid==s) & (d.area=='A1'), yaxis].values for s in d[(d.area=='A1')].siteid.unique()}
+cc = get_bootstrapped_sample(x, y, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
+ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}, pboot={pboot:.4f}')
 ax[1].set_xlabel(perf_stat)
 ax[1].set_ylabel(yaxis)
 if perf_stat=='DI':
@@ -152,8 +161,13 @@ for a in IC.animal.unique():
                d.loc[_k, yaxis], '.', markersize=ms, color=animal_colors[a])
 r, p = ss.pearsonr(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis])
 beta = np.polyfit(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis],1)
+# bootstrapped test
+x = {s: d.loc[(d.siteid==s) & (d.area=='IC'), perf_stat].values for s in d[(d.area=='IC')].siteid.unique()}
+y = {s: d.loc[(d.siteid==s) & (d.area=='IC'), yaxis].values for s in d[(d.area=='IC')].siteid.unique()}
+cc = get_bootstrapped_sample(x, y, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
 
-ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}')
+ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}, pboot={pboot:4f}')
 ax[2].set_xlabel(perf_stat)
 ax[2].set_ylabel(yaxis)
 if perf_stat=='DI':

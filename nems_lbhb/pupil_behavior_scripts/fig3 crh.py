@@ -213,6 +213,20 @@ print(f" Median r_task_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_task_uniq
       f" Median r_task_unique A1: {df[df.area.isin(['A1'])]['r_task_unique'].median()}\n"\
       f" Bootstrapped probability A1 > IC: {p}")
 
+# within area tests of pupil vs. task (using significant cells only)
+print("Only significant cells included:\n")
+sigmask = df.sig_state
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1') & sigmask, 'r_task_unique'].values -
+                       df.loc[(df.siteid==s) & (df.area=='A1') & sigmask, 'r_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_task_unique'].values - 
+                       df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_pupil_unique'].values 
+                       for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=100)
+ic = get_bootstrapped_sample(dic, nboot=100)
+p = get_direct_prob(a1, np.zeros(a1.shape[0]))[0]
+print(f"A1\n    r_pupil_unique vs. r_task_unique p-value: {p}")
+p = get_direct_prob(ic, np.zeros(ic.shape[0]))[0]
+print(f"IC\n    r_pupil_unique vs. r_task_unique p-value: {p}")
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig3_r2_summ.pdf'))
 

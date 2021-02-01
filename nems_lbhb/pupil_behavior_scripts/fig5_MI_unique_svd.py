@@ -142,16 +142,26 @@ ic_boot_cc = get_bootstrapped_sample(dic_task, dic_pupil, metric='corrcoef', nbo
 p = 1 - get_direct_prob(ic_boot_cc, np.zeros(ic_boot_cc.shape[0]))[0]
 print(f"IC \n   correlation MI_task_unique vs. MI_pupil_unique: {round(iccc, 3)}, {round(p, 5)}")  
 
-for s_area in ['A1', 'ICC|ICX']:
+for s_area in ['A1', 'ICC|ICX', 'ICC', 'ICX']:
     for varname in ['MI_task_unique','MI_pupil_unique']:
 
         area = df.area.str.contains(s_area, regex=True) & df['sig_state']
         m=df.loc[area, varname].mean()
         stat,p = sci.wilcoxon(df.loc[area, varname].values)
+        d = {s: df.loc[(df.siteid==s) & area, varname].values for s in df[area].siteid.unique()}
+        bs = get_bootstrapped_sample(d, nboot=100)
+        pboot = get_direct_prob(bs, np.zeros(bs.shape[0]))[0]
         npos=np.sum(df.loc[area, varname] > 0)
         n=len(df.loc[area, varname])
-        print(f"{s_area} {varname}: mean={m:.3f} W={stat:.3f} p={p:.3e}")
+        print(f"{s_area} {varname}: mean={m:.3f} W={stat:.3f} p={p:.3e}, pboot={pboot:.3f}")
         print(f"  npos={npos}/{n}")
 
+# A1 vs. IC change in task unique
+a1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+ic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'MI_task_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(a1, nboot=100)
+ic = get_bootstrapped_sample(ic, nboot=100)
+pboot = get_direct_prob(a1, ic)[0]
+print(f"A1 task unique vs. IC task unique, pboot: {pboot}")
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig5_MI_unique.pdf'))
