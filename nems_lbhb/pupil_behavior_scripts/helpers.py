@@ -645,10 +645,16 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
         ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
         
     slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
+
+    dr['site'] = [c[:7] for c in dr.index.get_level_values(0)]
+    
+    x = get_bootstrapped_sample({s: mfull[(dr.site==s).values, 0] for s in dr.site.unique()}, 
+                                        {s: d[(dr.site==s).values] for s in dr.site.unique()}, metric='corrcoef', nboot=1000)
+    pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
     
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
-    plt.title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
+    plt.title('n={} cc={:.3} p={:.4}, pboot={:.4f}'.format(len(d),r,p,pboot))
 
     ax4 = plt.subplot(2,2,4)
     if norm_by_null:
@@ -663,11 +669,16 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
     #stateplots.beta_comp(snr[_ok], d[_ok], n1='SNR',n2='dep - indep',
     #                 ax=ax4, highlight=mfull[_ok,-1], hist_range=[-0.1, 1], markersize=4)
     slope, intercept, r, p, std_err = st.linregress(snr[_ok], d[_ok])
+        
+    x = get_bootstrapped_sample({s: snr[(dr.site==s).values & _ok] for s in dr.site.unique()}, 
+                                        {s: d[(dr.site==s).values & _ok] for s in dr.site.unique()}, metric='corrcoef', nboot=1000)
+    pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
+
     mm = np.array([np.min(snr[_ok]), np.max(snr[_ok])])
     ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     ax4.set_xlabel('log(SNR)')
     ax4.set_ylabel(ylabel)
-    ax4.set_title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
+    ax4.set_title('n={} cc={:.3} p={:.4}, pboot={:.4f}'.format(len(d),r,p, pboot))
     nplt.ax_remove_box(ax4)
 
     f.tight_layout()

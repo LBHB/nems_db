@@ -7,6 +7,7 @@ import scipy.stats as ss
 import nems.db as nd
 from nems import get_setting
 import nems.plots.api as nplt
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
@@ -66,13 +67,21 @@ ax[0].axhline(0, linestyle='--', lw=2, color='grey')
 pval = round(ss.ranksums(A1[A1.ON_BF & A1.sig_utask][yaxis_task], A1[~A1.ON_BF & A1.sig_utask][yaxis_task]).pvalue, 3)
 off_med = round(A1[~A1.ON_BF & A1.sig_utask][yaxis_task].median(), 3)
 on_med = round(A1[A1.ON_BF & A1.sig_utask][yaxis_task].median(), 3)
+# get bootstrapped pval
+A1['site'] = [c[:7] for c in A1.index]
+sig_a1_on = get_bootstrapped_sample({s: A1[A1.ON_BF & A1.sig_utask & (A1.site==s)][yaxis_task] for s in A1.site.unique()}, nboot=1000)
+sig_a1_off = get_bootstrapped_sample({s: A1[~A1.ON_BF & A1.sig_utask & (A1.site==s)][yaxis_task] for s in A1.site.unique()}, nboot=1000)
+pboot, jm = get_direct_prob(sig_a1_on, sig_a1_off)
 
 pval_ns = round(ss.ranksums(A1[A1.ON_BF & ~A1.sig_utask][yaxis_task], A1[~A1.ON_BF & ~A1.sig_utask][yaxis_task]).pvalue, 3)
 off_med_ns = round(A1[~A1.ON_BF & ~A1.sig_utask][yaxis_task].median(), 3)
 on_med_ns = round(A1[A1.ON_BF & ~A1.sig_utask][yaxis_task].median(), 3)
+ns_a1_on = get_bootstrapped_sample({s: A1[A1.ON_BF & ~A1.sig_utask & (A1.site==s)][yaxis_task] for s in A1.site.unique()}, nboot=1000)
+ns_a1_off = get_bootstrapped_sample({s: A1[~A1.ON_BF & ~A1.sig_utask & (A1.site==s)][yaxis_task] for s in A1.site.unique()}, nboot=1000)
+pboot_ns, jm = get_direct_prob(ns_a1_on, ns_a1_off)
 
-ax[0].set_title('A1 \n sig_cells: ON: {0}, OFF: {1}, pval: {2} \n'
-                    'ns cells: ON: {3}, OFF: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+ax[0].set_title('A1 \n sig_cells: ON: {0}, OFF: {1}, pval: {2}, pboot: {6:.4f} \n'
+                    'ns cells: ON: {3}, OFF: {4}, pval: {5}, pboot: {7:.4f}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns, pboot, pboot_ns))
 nplt.ax_remove_box(ax[0])
 
 
@@ -83,13 +92,20 @@ ax[1].axhline(0, linestyle='--', lw=2, color='grey')
 pval = round(ss.ranksums(IC[IC.ON_BF & IC.sig_utask][yaxis_task], IC[~IC.ON_BF & IC.sig_utask][yaxis_task]).pvalue, 3)
 off_med = round(IC[~IC.ON_BF & IC.sig_utask][yaxis_task].median(), 3)
 on_med = round(IC[IC.ON_BF & IC.sig_utask][yaxis_task].median(), 3)
+IC['site'] = [c[:7] for c in IC.index]
+sig_ic_on = get_bootstrapped_sample({s: IC[IC.ON_BF & IC.sig_utask & (IC.site==s)][yaxis_task] for s in IC.site.unique()}, nboot=1000)
+sig_ic_off = get_bootstrapped_sample({s: IC[~IC.ON_BF & IC.sig_utask & (IC.site==s)][yaxis_task] for s in IC.site.unique()}, nboot=1000)
+pboot, jm = get_direct_prob(sig_ic_on, sig_ic_off)
 
 pval_ns = round(ss.ranksums(IC[IC.ON_BF & ~IC.sig_utask][yaxis_task], IC[~IC.ON_BF & ~IC.sig_utask][yaxis_task]).pvalue, 3)
 off_med_ns = round(IC[~IC.ON_BF & ~IC.sig_utask][yaxis_task].median(), 3)
 on_med_ns = round(IC[IC.ON_BF & ~IC.sig_utask][yaxis_task].median(), 3)
+ns_ic_on = get_bootstrapped_sample({s: IC[IC.ON_BF & ~IC.sig_utask & (IC.site==s)][yaxis_task] for s in IC.site.unique()}, nboot=1000)
+ns_ic_off = get_bootstrapped_sample({s: IC[~IC.ON_BF & ~IC.sig_utask & (IC.site==s)][yaxis_task] for s in IC.site.unique()}, nboot=1000)
+pboot_ns, jm = get_direct_prob(ns_ic_on, ns_ic_off)
 
-ax[1].set_title('IC \n sig_cells: ON: {0}, OFF: {1}, pval: {2} \n'
-                    'ns cells: ON: {3}, OFF: {4}, pval: {5}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns))
+ax[1].set_title('IC \n sig_cells: ON: {0}, OFF: {1}, pval: {2}, pboot: {6:.4f} \n'
+                    'ns cells: ON: {3}, OFF: {4}, pval: {5}, pboot: {7:.4f}'.format(on_med, off_med, pval, on_med_ns, off_med_ns, pval_ns, pboot, pboot_ns))
 nplt.ax_remove_box(ax[1])
 f.tight_layout()
 

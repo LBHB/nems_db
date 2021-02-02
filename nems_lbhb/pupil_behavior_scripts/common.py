@@ -186,7 +186,7 @@ def scat_states_crh(df,
                 marker='o', marker_size=15,
                 ax=None,
                 bootstats=False,
-                nboots=100):
+                nboots=1000):
     """
     This function makes a scatter plots of identified arguments.
     sig_list = ~sig_state, sig_state, sig_ubeh, sig_upup, sig_both]

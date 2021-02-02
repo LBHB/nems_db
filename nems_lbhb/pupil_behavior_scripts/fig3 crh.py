@@ -171,7 +171,7 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
             ax=axs[2,0],
-            bootstats=True)
+            bootstats=True, nboots=1000)
 
 # IC and ICX together
 common.scat_states_crh(df, x_model='r_pupil_unique',
@@ -184,7 +184,7 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
             ax=axs[2,1],
-            bootstats=True)
+            bootstats=True, nboots=1000)
 
 #plt.tight_layout()
 
@@ -195,8 +195,8 @@ df['siteid'] = [c[:7] for c in df.index]
 # pupil test
 da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
 dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_pupil_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
-a1 = get_bootstrapped_sample(da1, nboot=100)
-ic = get_bootstrapped_sample(dic, nboot=100)
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
 p = 1- get_direct_prob(a1, ic)[0]
 print("\n")
 print(f" Median r_pupil_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_pupil_unique'].median()}\n"\
@@ -206,8 +206,8 @@ print(f" Median r_pupil_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_pupil_un
 # task test
 da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
 dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_task_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
-a1 = get_bootstrapped_sample(da1, nboot=100)
-ic = get_bootstrapped_sample(dic, nboot=100)
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
 p = 1- get_direct_prob(a1, ic)[0]
 print(f" Median r_task_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_task_unique'].median()}\n"\
       f" Median r_task_unique A1: {df[df.area.isin(['A1'])]['r_task_unique'].median()}\n"\
@@ -221,8 +221,8 @@ da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1') & sigmask, 'r_task_unique'].va
 dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_task_unique'].values - 
                        df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_pupil_unique'].values 
                        for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
-a1 = get_bootstrapped_sample(da1, nboot=100)
-ic = get_bootstrapped_sample(dic, nboot=100)
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
 p = get_direct_prob(a1, np.zeros(a1.shape[0]))[0]
 print(f"A1\n    r_pupil_unique vs. r_task_unique p-value: {p}")
 p = get_direct_prob(ic, np.zeros(ic.shape[0]))[0]

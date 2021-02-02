@@ -97,7 +97,7 @@ np.random.seed(123)
 df['siteid'] = [c[:7] for c in df.index.get_level_values(0)]
 for area in [['A1'], ['ICC', 'ICX']]:
     am = df.area.isin(area)
-    r, p = ss.pearsonr(df[am]['r_full'] - df[am]['r_shuff'], df[am]['r_shuff'])
+    r, p = sci.pearsonr(df[am]['r_full'] - df[am]['r_shuff'], df[am]['r_shuff'])
     diff = {s: df[(df.siteid==s) & am]['r_full'].values - df[(df.siteid==s) & am]['r_shuff'].values 
                                         for s in df[am].siteid.unique()}
     null = {s: df[(df.siteid==s) & am]['r_shuff'].values for s in df[am].siteid.unique()}
