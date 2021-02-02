@@ -334,12 +334,25 @@ ic = get_bootstrapped_sample(ic, nboot=100)
 p = get_direct_prob(ic, np.zeros(ic.shape[0]))[0]
 print(f"\n IC task only vs. task unique bootstrapped prob: {p}\n")
 
+# ICC vs. ICX comparison with bootstrap
+signed_diff_ICC_wSite = pd.DataFrame(signed_diff_ICC, columns=['signed_diff'])
+signed_diff_ICC_wSite['siteid'] = [c[:7] for c in signed_diff_ICC_wSite.index]
+signed_diff_ICX_wSite = pd.DataFrame(signed_diff_ICX, columns=['signed_diff'])
+signed_diff_ICX_wSite['siteid'] = [c[:7] for c in signed_diff_ICX_wSite.index]
+
 # split up ICC / ICX
 stat, p = sci.wilcoxon(signed_diff_ICC)
-print(f' ICC signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+icc = {s: signed_diff_ICC_wSite.loc[(signed_diff_ICC_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_ICC_wSite.siteid.unique()}
+icc = get_bootstrapped_sample(icc, nboot=100)
+pboot = get_direct_prob(icc, np.zeros(icc.shape[0]))[0]
+print(f' ICC signed delta task unique: stat={stat:.3f}, p={p:.4e}, pboot={pboot:.4f}')
 print(f'  Ratio: {ratio_ICC:.3f}')
+
 stat, p = sci.wilcoxon(signed_diff_ICX)
-print(f' ICX signed delta task unique: stat={stat:.3f}, p={p:.4e}')
+icx = {s: signed_diff_ICX_wSite.loc[(signed_diff_ICX_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_ICX_wSite.siteid.unique()}
+icx = get_bootstrapped_sample(icx, nboot=100)
+pboot = get_direct_prob(icx, np.zeros(icx.shape[0]))[0]
+print(f' ICX signed delta task unique: stat={stat:.3f}, p={p:.4e}, pboot={pboot:.4f}')
 print(f'  Ratio: {ratio_ICX:.3f}')
 
 stat, p = sci.ranksums(signed_unique_A1 / signed_only_A1,
@@ -349,11 +362,6 @@ stat, p = sci.ranksums(signed_unique_ICC / signed_only_ICC,
                        signed_unique_ICX / signed_only_ICX)
 print(f'ICC vs. ICX rank sum ratio: stat={stat:.3f}, p={p:.4e}')
 
-# ICC vs. ICX comparison with bootstrap
-signed_diff_ICC_wSite = pd.DataFrame(signed_diff_ICC, columns=['signed_diff'])
-signed_diff_ICC_wSite['siteid'] = [c[:7] for c in signed_diff_ICC_wSite.index]
-signed_diff_ICX_wSite = pd.DataFrame(signed_diff_ICX, columns=['signed_diff'])
-signed_diff_ICX_wSite['siteid'] = [c[:7] for c in signed_diff_ICX_wSite.index]
 
 icx = {s: signed_diff_ICX_wSite.loc[(signed_diff_ICX_wSite.siteid==s), 'signed_diff'].values for s in signed_diff_ICX_wSite.siteid.unique()}
 icx = get_bootstrapped_sample(icx, nboot=100)
@@ -367,9 +375,19 @@ print(f'A1 u_mod_beh: n+={np.sum(unique_A1>0)}/{len(unique_A1)} med={np.median(u
 stat, p = sci.wilcoxon(unique_IC)
 print(f'IC u_mod_beh: n+={np.sum(unique_IC>0)}/{len(unique_IC)} med={np.median(unique_IC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
 stat, p = sci.wilcoxon(unique_ICC)
-print(f'ICC u_mod_beh: n+={np.sum(unique_ICC>0)}/{len(unique_ICC)} med={np.median(unique_ICC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+uicc_ws = pd.DataFrame(unique_ICC, index=unique_ICC.index)
+uicc_ws['site'] = [c[:7] for c in uicc_ws.index]
+icc = {s: uicc_ws[uicc_ws.site==s]['MI_task_unique'] for s in uicc_ws.site.unique()}
+icc = get_bootstrapped_sample(icc, nboot=100)
+pboot = get_direct_prob(icc, np.zeros(icc.shape[0]))[0]
+print(f'ICC u_mod_beh: n+={np.sum(unique_ICC>0)}/{len(unique_ICC)} med={np.median(unique_ICC):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}, pboot={pboot:.4f}')
 stat, p = sci.wilcoxon(unique_ICX)
-print(f'ICX u_mod_beh: n+={np.sum(unique_ICX>0)}/{len(unique_ICX)} med={np.median(unique_ICX):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}')
+uicx_ws = pd.DataFrame(unique_ICX, index=unique_ICX.index)
+uicx_ws['site'] = [c[:7] for c in uicx_ws.index]
+icx = {s: uicx_ws[uicx_ws.site==s]['MI_task_unique'] for s in uicx_ws.site.unique()}
+icx = get_bootstrapped_sample(icx, nboot=100)
+pboot = get_direct_prob(icx, np.zeros(icx.shape[0]))[0]
+print(f'ICX u_mod_beh: n+={np.sum(unique_ICX>0)}/{len(unique_ICX)} med={np.median(unique_ICX):.3f} Wilcoxon stat={stat:.3f}, p={p:.4e}, pboot={pboot:.4f}')
 
 stat, p = sci.ranksums(unique_A1,unique_IC)
 print(f'A1 vs. IC ranksum: {stat:.3f}, p={p:.4e}')

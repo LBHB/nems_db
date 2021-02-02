@@ -163,5 +163,9 @@ a1 = get_bootstrapped_sample(a1, nboot=100)
 ic = get_bootstrapped_sample(ic, nboot=100)
 pboot = get_direct_prob(a1, ic)[0]
 print(f"A1 task unique vs. IC task unique, pboot: {pboot}")
+
+# fig S5 -- ICC / ICX task only vs. task unique
+
+
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig5_MI_unique.pdf'))

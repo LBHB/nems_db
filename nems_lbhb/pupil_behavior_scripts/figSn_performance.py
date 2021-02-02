@@ -259,6 +259,7 @@ table1 = anova_lm(lm)
 print(table1)
 
 # SU vs. MU
+d['siteid'] = [c[:7] for c in d.index]
 f3, ax = plt.subplots(1, 2, figsize=(6, 3), sharey='row')
 
 for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
@@ -278,9 +279,22 @@ for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
     bad_v_good_ic = round(ss.ranksums(d[d.SU & (d.area=='IC')][_yax],
                                       d[~d.SU & (d.area=='IC')][_yax]).pvalue, 3)
 
-    ax[_i].set_title('{6}, A1: SU: {0}, MU {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}'.format(
+    # bootstrap pvalues
+    a1_su = {s: d[(d.siteid==s) & d.SU & d.area.isin(['A1'])][_yax].values for s in d[d.area.isin(['A1']) & d.SU].siteid.unique()}
+    a1_mu = {s: d[(d.siteid==s) & ~d.SU & d.area.isin(['A1'])][_yax].values for s in d[d.area.isin(['A1']) & ~d.SU].siteid.unique()}
+    a1_su = get_bootstrapped_sample(a1_su, nboot=100)
+    a1_mu = get_bootstrapped_sample(a1_mu, nboot=100)
+    bvg_a1_boot = get_direct_prob(a1_su, a1_mu)[0]
+
+    ic_su = {s: d[(d.siteid==s) & d.SU & d.area.isin(['IC'])][_yax].values for s in d[d.area.isin(['IC']) & d.SU].siteid.unique()}
+    ic_mu = {s: d[(d.siteid==s) & ~d.SU & d.area.isin(['IC'])][_yax].values for s in d[d.area.isin(['IC']) & ~d.SU].siteid.unique()}
+    ic_su = get_bootstrapped_sample(ic_su, nboot=100)
+    ic_mu = get_bootstrapped_sample(ic_mu, nboot=100)
+    bvg_ic_boot = get_direct_prob(ic_su, ic_mu)[0]
+
+    ax[_i].set_title('{6}, A1: SU: {0}, MU {1} p: {2:.3f}, pboot: {7:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}, pboot: {8:.3f}'.format(
         bad_med_a1, good_med_a1, bad_v_good_a1,
-        bad_med_ic, good_med_ic, bad_v_good_ic, _yax))
+        bad_med_ic, good_med_ic, bad_v_good_ic, _yax, bvg_a1_boot, bvg_ic_boot))
     nplt.ax_remove_box(ax[_i])
 
 if save_fig:

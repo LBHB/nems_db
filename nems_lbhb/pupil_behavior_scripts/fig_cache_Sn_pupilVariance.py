@@ -21,6 +21,7 @@ import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
 import nems.xform_helper as xhelp
 import nems.db as db
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 
 
 # recache results of pupil variance?
@@ -138,6 +139,7 @@ if recache | (os.path.isfile(pup_results)==False):
 else:
     pdf = pd.read_csv(pup_results, index_col=0)
 
+np.random.seed(123)
 A1 = A1.merge(pdf, on='cellid')
 IC = IC.merge(pdf, on='cellid')
 # plot r_pupil_unique vs. pupil variance for each cell, in each area
@@ -147,17 +149,23 @@ ax[0].scatter(A1['pnorm_var'], A1['r_pupil_unique'], edgecolor='white', s=25)
 ax[0].set_xlabel('Pupil Variance')
 ax[0].set_ylabel(r'$r_{pupil unique}$', fontsize=10)
 r, p = ss.pearsonr(A1['pnorm_var'], A1['r_pupil_unique'])
-r = np.round(r, 3)
-p = np.round(p, 6)
-ax[0].set_title(f'A1, r={r:.3f}, p={p:.6f}')
+A1['siteid'] = [c[:7] for c in A1.index]
+pvar = {s: A1[A1.siteid==s]['pnorm_var'].values for s in A1.siteid.unique()}
+punique = {s: A1[A1.siteid==s]['r_pupil_unique'].values for s in A1.siteid.unique()}
+cc = get_bootstrapped_sample(pvar, punique, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
+ax[0].set_title(f'A1, r={r:.3f}, p={p:.6f}, pboot={p:.3f}')
 
 ax[1].scatter(IC['pnorm_var'], IC['r_pupil_unique'], edgecolor='white', s=25)
 ax[1].set_xlabel('Pupil Variance')
 ax[1].set_ylabel(r'$r_{pupil unique}$', fontsize=10)
 r, p = ss.pearsonr(IC['pnorm_var'], IC['r_pupil_unique'])
-r = np.round(r, 3)
-p = np.round(p, 6)
-ax[1].set_title(f'IC, r={r}, p={p:.6f}')
+IC['siteid'] = [c[:7] for c in IC.index]
+pvar = {s: IC[IC.siteid==s]['pnorm_var'].values for s in IC.siteid.unique()}
+punique = {s: IC[IC.siteid==s]['r_pupil_unique'].values for s in IC.siteid.unique()}
+cc = get_bootstrapped_sample(pvar, punique, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
+ax[1].set_title(f'IC, r={r}, p={p:.6f}, pboot={pboot:.3f}')
 
 f.tight_layout()
 
