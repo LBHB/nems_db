@@ -41,10 +41,14 @@ def get_bootstrapped_sample(variable, variable2=None, metric=None, even_sample=F
         #bootstats[i] = np.mean(np.concatenate(temp))
         if metric=='corrcoef':
             bootstats[i] = np.corrcoef(temp, temp2)[0, 1]
+        elif metric=='median':
+            bootstats[i] = np.median(temp)
+        elif metric=='mean':
+            bootstats[i] = np.mean(temp)
         elif metric is None:
             bootstats[i] = np.mean(temp)
         else:
-            raise ValueError(f"No code implemented for method: {method} yet!")
+            raise ValueError(f"No code implemented for method: {metric} yet!")
 
     return bootstats
 

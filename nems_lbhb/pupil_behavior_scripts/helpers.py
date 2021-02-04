@@ -649,12 +649,12 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
     dr['site'] = [c[:7] for c in dr.index.get_level_values(0)]
     
     x = get_bootstrapped_sample({s: mfull[(dr.site==s).values, 0] for s in dr.site.unique()}, 
-                                        {s: d[(dr.site==s).values] for s in dr.site.unique()}, metric='corrcoef', nboot=1000)
+                                        {s: d[(dr.site==s).values] for s in dr.site.unique()}, metric='corrcoef', nboot=10000)
     pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
     
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
-    plt.title('n={} cc={:.3} p={:.4}, pboot={:.4f}'.format(len(d),r,p,pboot))
+    plt.title('n={} cc={:.3} p={:.4}, pboot={:.5f}'.format(len(d),r,p,1-pboot),fontsize=7)
 
     ax4 = plt.subplot(2,2,4)
     if norm_by_null:
@@ -671,14 +671,14 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
     slope, intercept, r, p, std_err = st.linregress(snr[_ok], d[_ok])
         
     x = get_bootstrapped_sample({s: snr[(dr.site==s).values & _ok] for s in dr.site.unique()}, 
-                                        {s: d[(dr.site==s).values & _ok] for s in dr.site.unique()}, metric='corrcoef', nboot=1000)
+                                        {s: d[(dr.site==s).values & _ok] for s in dr.site.unique()}, metric='corrcoef', nboot=10000)
     pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
 
     mm = np.array([np.min(snr[_ok]), np.max(snr[_ok])])
     ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     ax4.set_xlabel('log(SNR)')
     ax4.set_ylabel(ylabel)
-    ax4.set_title('n={} cc={:.3} p={:.4}, pboot={:.4f}'.format(len(d),r,p, pboot))
+    ax4.set_title('n={} cc={:.3} p={:.4}, pboot={:.5f}'.format(len(d),r,p, 1-pboot),fontsize=7)
     nplt.ax_remove_box(ax4)
 
     f.tight_layout()
@@ -829,7 +829,7 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
         _dmi_df['siteid'] = [c[:7] for c in _dmi_df.index]
         _dmiu_df['siteid'] = [c[:7] for c in _dmiu_df.index]
         diff = {s: _dmi_df.loc[(_dmi_df.siteid==s), 'mi'].values - _dmiu_df.loc[(_dmiu_df.siteid==s), 'miu'].values for s in _dmi_df.siteid.unique()}
-        bootsamp = get_bootstrapped_sample(diff, nboot=100)
+        bootsamp = get_bootstrapped_sample(diff, nboot=500)
         p = get_direct_prob(bootsamp, np.zeros(bootsamp.shape[0]))[0]
         print(f"Hierarchical bootstrap probability unique > block only: {p}")
         
