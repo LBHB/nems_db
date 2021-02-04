@@ -4,9 +4,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as ss
+from numpy.random import normal
 
 import helpers as helper
 
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 from nems import get_setting
 import nems.plots.api as nplt
 
@@ -19,10 +21,13 @@ r0_threshold = 0.5
 octave_cutoff = 0.5
 #perf_stat='DI'
 perf_stat='dp'
+
+# important options
 yaxis = 'r_pupil_unique'
-#yaxis = 'r_task_unique'  # r_task_unique, r_pupil_unique
-#yaxis = 'MI_task_unique'  # r_task_unique, r_pupil_unique
-#yaxis = 'MI_task_unique_abs'  # r_task_unique, r_pupil_unique
+#yaxis = 'r_task_unique'
+
+#yaxis = 'MI_task_unique'
+#yaxis = 'MI_task_unique_abs'
 #yaxis = 'r_task'
 
 sig_col = 'area'     # sig_utask (sig unique task effect), sig_task (sig task only), sig_state (sig state effect)
@@ -86,16 +91,18 @@ IC.loc[IC.dp>3.5,'dp']=3.5
 
 d = pd.concat((A1,IC))
 
-
 split=82
 d['di_class']='good'
 d.loc[d.DI<split, 'di_class']='bad'
+
+jitter_mag = 0.015
+ms = 4
 
 # Good vs. bad behavior
 f1, ax = plt.subplots(1, 3, figsize=(8, 3), sharey='row')
 
 sns.stripplot(x=sig_col, y=yaxis, data=d, hue='di_class', dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[0])
+                        marker='o', size=ms, ax=ax[0])
 ax[0].axhline(0, linestyle='--', lw=2, color='grey')
 
 # medians
@@ -116,13 +123,27 @@ ax[0].set_title('A1: bad: {0}, good {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5
 ax[0].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0])
 
+animal_colors = {'TAR': [244/255, 165/255, 130/255],
+                 'bbl': [147/255, 197/255, 222/255],
+                 'ley': [5/255, 113/255, 176/255],
+                 'BRT': [202/255, 32/255, 39/255]}
+
 for a in A1.animal.unique():
     _k = (d.area=='A1') & (d.animal==a)
-    ax[1].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+    ax[1].plot(d.loc[_k, perf_stat]+normal(0,jitter_mag,np.sum(_k)),
+               d.loc[_k, yaxis], '.', markersize=ms, color=animal_colors[a])
 r, p = ss.pearsonr(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis])
 beta = np.polyfit(d[(d.area=='A1')][perf_stat], d[(d.area=='A1')][yaxis],1)
 
-ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}')
+# add bootstrapped test of correlation
+np.random.seed(123)
+# unique site / active combos
+d['siteid'] = [c[:7]+d['state_chan_alt'].iloc[i] for i, c in enumerate(d.index)]
+x = {s: d.loc[(d.siteid==s) & (d.area=='A1'), perf_stat].values for s in d[(d.area=='A1')].siteid.unique()}
+y = {s: d.loc[(d.siteid==s) & (d.area=='A1'), yaxis].values for s in d[(d.area=='A1')].siteid.unique()}
+cc = get_bootstrapped_sample(x, y, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
+ax[1].set_title(f'A1 r={r:.3f}, p={p:.4f}, pboot={pboot:.4f}')
 ax[1].set_xlabel(perf_stat)
 ax[1].set_ylabel(yaxis)
 if perf_stat=='DI':
@@ -136,11 +157,17 @@ nplt.ax_remove_box(ax[1])
 
 for a in IC.animal.unique():
     _k = (d.area=='IC') & (d.animal==a)
-    ax[2].plot(d.loc[_k, perf_stat], d.loc[_k, yaxis], '.')
+    ax[2].plot(d.loc[_k, perf_stat]+normal(0,jitter_mag,np.sum(_k)),
+               d.loc[_k, yaxis], '.', markersize=ms, color=animal_colors[a])
 r, p = ss.pearsonr(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis])
 beta = np.polyfit(d[(d.area=='IC')][perf_stat], d[(d.area=='IC')][yaxis],1)
+# bootstrapped test
+x = {s: d.loc[(d.siteid==s) & (d.area=='IC'), perf_stat].values for s in d[(d.area=='IC')].siteid.unique()}
+y = {s: d.loc[(d.siteid==s) & (d.area=='IC'), yaxis].values for s in d[(d.area=='IC')].siteid.unique()}
+cc = get_bootstrapped_sample(x, y, metric='corrcoef', nboot=100)
+pboot = get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
 
-ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}')
+ax[2].set_title(f'IC r={r:.3f}, p={p:.4f}, pboot={pboot:4f}')
 ax[2].set_xlabel(perf_stat)
 ax[2].set_ylabel(yaxis)
 if perf_stat=='DI':
@@ -158,7 +185,7 @@ f1.tight_layout()
 
 f2,ax = plt.subplots(2,2, figsize=(5, 5), sharey='row')
 sns.stripplot(x='animal', y=yaxis, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[0,0])
+                        marker='o', size=ms, ax=ax[0,0])
 ax[0,0].axhline(0, linestyle='--', lw=2, color='grey')
 sets_a1 = [A1.loc[A1['animal']==a, yaxis] for a in A1.animal.unique()]
 means_a1 = [f'{a}={A1.loc[A1["animal"]==a, yaxis].mean():.3f}' for a in A1.animal.unique()]
@@ -177,7 +204,7 @@ ax[0,1].set_ylim([-0.02, 0.22])
 nplt.ax_remove_box(ax[0,1])
 
 sns.stripplot(x='animal', y=perf_stat, data=A1, dodge=True, edgecolor='white', linewidth=0.5,
-                        marker='o', size=5, ax=ax[1,0])
+                        marker='o', size=ms, ax=ax[1,0])
 if perf_stat=='DI':
     ax[1,0].axhline(50, linestyle='--', lw=2, color='grey')
 else:
@@ -232,11 +259,12 @@ table1 = anova_lm(lm)
 print(table1)
 
 # SU vs. MU
+d['siteid'] = [c[:7] for c in d.index]
 f3, ax = plt.subplots(1, 2, figsize=(6, 3), sharey='row')
 
 for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
     sns.stripplot(x=sig_col, y=_yax, data=d, hue='SU', dodge=True, edgecolor='white', linewidth=0.5,
-                            marker='o', size=5, ax=ax[_i])
+                            marker='o', size=ms, ax=ax[_i])
     ax[_i].axhline(0, linestyle='--', lw=2, color='grey')
 
     # medians
@@ -251,9 +279,22 @@ for _i, _yax in enumerate(['r_task_unique', 'r_pupil_unique']):
     bad_v_good_ic = round(ss.ranksums(d[d.SU & (d.area=='IC')][_yax],
                                       d[~d.SU & (d.area=='IC')][_yax]).pvalue, 3)
 
-    ax[_i].set_title('{6}, A1: SU: {0}, MU {1} p: {2:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}'.format(
+    # bootstrap pvalues
+    a1_su = {s: d[(d.siteid==s) & d.SU & d.area.isin(['A1'])][_yax].values for s in d[d.area.isin(['A1']) & d.SU].siteid.unique()}
+    a1_mu = {s: d[(d.siteid==s) & ~d.SU & d.area.isin(['A1'])][_yax].values for s in d[d.area.isin(['A1']) & ~d.SU].siteid.unique()}
+    a1_su = get_bootstrapped_sample(a1_su, nboot=100)
+    a1_mu = get_bootstrapped_sample(a1_mu, nboot=100)
+    bvg_a1_boot = get_direct_prob(a1_su, a1_mu)[0]
+
+    ic_su = {s: d[(d.siteid==s) & d.SU & d.area.isin(['IC'])][_yax].values for s in d[d.area.isin(['IC']) & d.SU].siteid.unique()}
+    ic_mu = {s: d[(d.siteid==s) & ~d.SU & d.area.isin(['IC'])][_yax].values for s in d[d.area.isin(['IC']) & ~d.SU].siteid.unique()}
+    ic_su = get_bootstrapped_sample(ic_su, nboot=100)
+    ic_mu = get_bootstrapped_sample(ic_mu, nboot=100)
+    bvg_ic_boot = get_direct_prob(ic_su, ic_mu)[0]
+
+    ax[_i].set_title('{6}, A1: SU: {0}, MU {1} p: {2:.3f}, pboot: {7:.3f}\nIC: bad: {3}, good {4} p: {5:.3f}, pboot: {8:.3f}'.format(
         bad_med_a1, good_med_a1, bad_v_good_a1,
-        bad_med_ic, good_med_ic, bad_v_good_ic, _yax))
+        bad_med_ic, good_med_ic, bad_v_good_ic, _yax, bvg_a1_boot, bvg_ic_boot))
     nplt.ax_remove_box(ax[_i])
 
 if save_fig:

@@ -11,6 +11,7 @@ import pylab as pl
 
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
+from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 from nems import get_setting
 
 # set path to dump file
@@ -142,7 +143,8 @@ common.scat_states_crh(df, x_model='r_shuff',
             xlabel='state-independent R2',
             ylabel='state-dependent R2',
             title='A1',
-            ax=axs[1,0])
+            ax=axs[1,0],
+            bootstats=True)
 
 # All IC with colored untis according to model significance
 common.scat_states_crh(df, x_model='r_shuff',
@@ -154,7 +156,8 @@ common.scat_states_crh(df, x_model='r_shuff',
             xlabel='state-independent R2',
             ylabel='state-dependent R2',
             title='IC',
-            ax=axs[1,1])
+            ax=axs[1,1],
+            bootstats=True)
 
 # Figure 3C
 # A1
@@ -167,7 +170,8 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             title='A1',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
-                   ax=axs[2,0])
+            ax=axs[2,0],
+            bootstats=True, nboots=1000)
 
 # IC and ICX together
 common.scat_states_crh(df, x_model='r_pupil_unique',
@@ -179,10 +183,50 @@ common.scat_states_crh(df, x_model='r_pupil_unique',
             title='IC',
             xlim=(-0.05,0.2),
             ylim=(-0.05,0.2),
-            ax=axs[2,1])
+            ax=axs[2,1],
+            bootstats=True, nboots=1000)
 
 #plt.tight_layout()
 
+# add statistical test to directly test if r_pupil/task is different between areas
+np.random.seed(123)
+df['siteid'] = [c[:7] for c in df.index]
+
+# pupil test
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_pupil_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
+p = 1- get_direct_prob(a1, ic)[0]
+print("\n")
+print(f" Median r_pupil_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_pupil_unique'].median()}\n"\
+      f" Median r_pupil_unique A1: {df[df.area.isin(['A1'])]['r_pupil_unique'].median()}\n"\
+      f" Bootstrapped probability A1 > IC: {p}\n")
+
+# task test
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'r_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'r_task_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
+p = 1- get_direct_prob(a1, ic)[0]
+print(f" Median r_task_unique IC: {df[df.area.isin(['ICC', 'ICX'])]['r_task_unique'].median()}\n"\
+      f" Median r_task_unique A1: {df[df.area.isin(['A1'])]['r_task_unique'].median()}\n"\
+      f" Bootstrapped probability A1 > IC: {p}")
+
+# within area tests of pupil vs. task (using significant cells only)
+print("Only significant cells included:\n")
+sigmask = df.sig_state
+da1 = {s: df.loc[(df.siteid==s) & (df.area=='A1') & sigmask, 'r_task_unique'].values -
+                       df.loc[(df.siteid==s) & (df.area=='A1') & sigmask, 'r_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+dic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_task_unique'].values - 
+                       df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']) & sigmask, 'r_pupil_unique'].values 
+                       for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(da1, nboot=1000)
+ic = get_bootstrapped_sample(dic, nboot=1000)
+p = get_direct_prob(a1, np.zeros(a1.shape[0]))[0]
+print(f"A1\n    r_pupil_unique vs. r_task_unique p-value: {p}")
+p = get_direct_prob(ic, np.zeros(ic.shape[0]))[0]
+print(f"IC\n    r_pupil_unique vs. r_task_unique p-value: {p}")
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig3_r2_summ.pdf'))
 

@@ -10,6 +10,7 @@ import matplotlib.collections as clt
 import re
 import pylab as pl
 
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import get_model_results_per_state_model
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
@@ -23,7 +24,7 @@ from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 # ===================================================== pupil behavior data =======================================================
 # SPECIFY models
@@ -91,7 +92,18 @@ f = helper.aud_vs_state(df.loc[df.area.isin(['ICC', 'ICX'])], nb=5, colors=commo
 if save_fig:
     f.savefig(os.path.join(save_path,'fig6_tuning_vs_pup_beh_IC.pdf'))
 
-
+# compute stats -- null vs unique state prediction
+np.random.seed(123)
+df['siteid'] = [c[:7] for c in df.index.get_level_values(0)]
+for area in [['A1'], ['ICC', 'ICX']]:
+    am = df.area.isin(area)
+    r, p = sci.pearsonr(df[am]['r_full'] - df[am]['r_shuff'], df[am]['r_shuff'])
+    diff = {s: df[(df.siteid==s) & am]['r_full'].values - df[(df.siteid==s) & am]['r_shuff'].values 
+                                        for s in df[am].siteid.unique()}
+    null = {s: df[(df.siteid==s) & am]['r_shuff'].values for s in df[am].siteid.unique()}
+    cc = get_bootstrapped_sample(diff, null, metric='corrcoef', nboot=100)
+    pboot = 1 - get_direct_prob(cc, np.zeros(cc.shape[0]))[0]
+    print(f"{area}\n    r={r:.3f}, p={p:.3f}, pboot={pboot:.3f}")
 # ==================================================== behavior only data ===========================================================
 # Figures 6C-D  - beh only effects, bigger set of cells
 # later figure -- beh only (ignore pupil, can use larger stim set)
