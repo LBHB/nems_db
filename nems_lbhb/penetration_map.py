@@ -196,12 +196,9 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
 
     return fig, coordinates
 
-
-# test_set
-sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
-         'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
-
-# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
-fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
-
-print('hola')
+# # test_set
+# sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
+#          'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
+#
+# # fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
+# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
