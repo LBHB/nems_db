@@ -140,16 +140,13 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
         ax.set_zlabel('Dorsal ventral (mm)')
 
         fig.canvas.draw()
-
         xlab = [item.get_text() for item in ax.get_xticklabels() if item.get_text() != '']
-
         if flip_X:
             xlab[0] = 'A'
             xlab[-1] = 'P'
         else:
             xlab[0] = 'P'
             xlab[-1] = 'A'
-
         _ = ax.set_xticklabels(xlab)
 
         ylab = [item.get_text() for item in ax.get_yticklabels() if item.get_text() != '']
@@ -163,8 +160,15 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
         _ = ax.set_zticklabels(zlab)
 
     elif flatten is True:
-        # ToDo constrain the PCA so dimension x is mantained ...
-        flat_coords = PCA().fit_transform(coordinates.T)[:,:2].T
+        # flattens doing a PCA over the Y and Z dimensions, i.e. medio-lateral and dorso-ventral.
+        # this keeps the anteroposterior orientations to help locate the flattened projection
+        pc1 = PCA().fit_transform(coordinates[1:,:].T)[:,0]
+        flat_coords = np.stack((coordinates[0,:], pc1), axis=0)
+
+        if flip_X is True:
+            flat_coords = flat_coords * np.array([[-1],[ 1]])
+
+
         fig, ax = plt.subplots()
 
         for area in set(areas):
@@ -181,17 +185,23 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
                 x, y = coord
                 ax.text(x, y, site[3:6])
 
+        # formats axis
+        ax.set_xlabel('anterior posterior (mm)')
+        ax.set_ylabel('1PC_YZ (mm)')
+
+
+
     cbar = fig.colorbar(p)
     cbar.ax.set_ylabel('BF (Hz)', rotation=-90, va="top")
 
     return fig, coordinates
 
-#
-# # test_set
-# sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
-#          'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
-#
+
+# test_set
+sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
+         'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
+
 # fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
-# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
-#
-#
+fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
+
+print('hola')
