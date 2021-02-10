@@ -616,6 +616,65 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
 
     plt.axis('off')
 
+def plot_waveforms_64D(waveforms, cellids, ax=None):
+        if type(cellids) is not np.ndarray:
+        cellids = np.array(cellids)
+
+    if type(h) is not np.ndarray:
+        h = np.array(h)
+        if vmin is None:
+            vmin = np.min(h)
+        if vmax is None:
+            vmax = np.max(h)
+    else:
+        if vmin is None:
+            vmin = np.min(h)
+        if vmax is None:
+            vmax = np.max(h)
+
+     # Make a vector for each column of electrodes
+
+    # left column + right column are identical
+    lr_col = np.arange(0,21*0.25,0.25)  # 25 micron vertical spacing
+    left_ch_nums = np.arange(3,64,3)
+    right_ch_nums = np.arange(4,65,3)
+    center_ch_nums = np.insert(np.arange(5, 63, 3),obj=slice(0,1),values =[1,2],axis=0)
+    center_col = np.arange(-0.25,20.25*.25,0.25)-0.125
+    ch_nums = np.hstack((left_ch_nums, center_ch_nums, right_ch_nums))
+    sort_inds = np.argsort(ch_nums)
+
+    l_col = np.vstack((np.ones(21)*-0.2,lr_col))
+    r_col = np.vstack((np.ones(21)*0.2,lr_col))
+    c_col = np.vstack((np.zeros(22),center_col))
+    locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
+    if ax is None:
+        f, ax = plt.subplots(1, 1, figsize=(6, 2))
+    
+    #plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
+
+    electrodes = [int(x.split('-')[1]) for x in cellids]
+
+    # for duplicate (multiple spikes on one electrode), plot all waveforms, just in different
+    # colors    
+    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+    for l in range(locations.shape[-1]):
+        chan = l+1
+        cidx = np.argwhere(electrodes==chan)
+        for j, cidx in enumerate(cidx):
+            mwf = waveforms[l+j, :]
+            mwf /= np.abs(np.max(np.abs(mwf)))
+            if locations[0, l+j] == -0.2:
+                t = np.linspace(-0.25, -0.15, mwf.shape[0])
+            elif locations[0, l+j] == 0.2:
+                t = np.linspace(0.15, 0.25, mwf.shape[0])
+            elif locations[0, l+j] == 0:
+                t = np.linspace(-0.05, 0.05, mwf.shape[0])
+            
+            ax.plot(t, mwf, color=colors[j], lw=1)
+
+    return ax
+
+
 
 def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, title=None):
 
