@@ -451,7 +451,7 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
 
 
 def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset', s=25, ax=None):
+                     overlap_method='offset', s=25, logscale=False, ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -497,6 +497,12 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
         plt.figure()
     plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
 
+    # plot outline
+    plt.plot([-0.32, -0.4], [-.075, 5.2], 'k-')
+    plt.plot([0.32, 0.4], [-.075, 5.2], 'k-')
+    plt.plot([-0.4, 0.4], [5.2, 5.2], 'k-')
+    plt.plot([-0.32, 0], [-0.075, -0.7], 'k-')
+    plt.plot([0.32, 0], [-0.075, -0.7], 'k-')
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
 
@@ -571,7 +577,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     plt.scatter(dup_locations[0,:],dup_locations[1,:],facecolor='none',edgecolor='k',s=s)
 
     plt.axis('scaled')
-    plt.xlim(-max_-.3,max_+.3)
+    plt.xlim(-max_-.42,max_+.42)
 
     c_id = np.sort([int(x) for x in electrodes if electrodes.count(x)==1])
     electrodes = [int(x) for x in electrodes]
@@ -588,7 +594,10 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
 
     # plot the unique ones
     import matplotlib
-    norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
+    if logscale:
+        norm = matplotlib.colors.LogNorm(vmin=vmin,vmax=vmax)
+    else:
+        norm = matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
     cmap = matplotlib.cm.jet
     mappable = matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap)
     mappable.set_array(h[indexes])
@@ -597,7 +606,6 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     plt.scatter(locations[:,c_id][0,:],locations[:,c_id][1,:],
                           c=colors,vmin=vmin,vmax=vmax,s=s,edgecolor='none')
     # plot the duplicates
-    norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
     cmap = matplotlib.cm.jet
     mappable = matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap)
     mappable.set_array(h[mask])
@@ -617,22 +625,10 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     plt.axis('off')
 
 def plot_waveforms_64D(waveforms, cellids, ax=None):
-        if type(cellids) is not np.ndarray:
+    if type(cellids) is not np.ndarray:
         cellids = np.array(cellids)
 
-    if type(h) is not np.ndarray:
-        h = np.array(h)
-        if vmin is None:
-            vmin = np.min(h)
-        if vmax is None:
-            vmax = np.max(h)
-    else:
-        if vmin is None:
-            vmin = np.min(h)
-        if vmax is None:
-            vmax = np.max(h)
-
-     # Make a vector for each column of electrodes
+    # Make a vector for each column of electrodes
 
     # left column + right column are identical
     lr_col = np.arange(0,21*0.25,0.25)  # 25 micron vertical spacing
@@ -648,7 +644,7 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
     c_col = np.vstack((np.zeros(22),center_col))
     locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
     if ax is None:
-        f, ax = plt.subplots(1, 1, figsize=(6, 2))
+        f, ax = plt.subplots(1, 1, figsize=(2, 6))
     
     #plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
 
@@ -658,19 +654,27 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
     # colors    
     colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
     for l in range(locations.shape[-1]):
+        if locations[0, l] == -0.2:
+            t = np.linspace(-0.25, -0.15, waveforms.shape[1])
+        elif locations[0, l] == 0.2:
+            t = np.linspace(0.15, 0.25, waveforms.shape[1])
+        elif locations[0, l] == 0:
+            t = np.linspace(-0.05, 0.05, waveforms.shape[1])
+        else:
+            raise ValueError
+        y = locations[1, l]
+
         chan = l+1
-        cidx = np.argwhere(electrodes==chan)
-        for j, cidx in enumerate(cidx):
-            mwf = waveforms[l+j, :]
-            mwf /= np.abs(np.max(np.abs(mwf)))
-            if locations[0, l+j] == -0.2:
-                t = np.linspace(-0.25, -0.15, mwf.shape[0])
-            elif locations[0, l+j] == 0.2:
-                t = np.linspace(0.15, 0.25, mwf.shape[0])
-            elif locations[0, l+j] == 0:
-                t = np.linspace(-0.05, 0.05, mwf.shape[0])
-            
-            ax.plot(t, mwf, color=colors[j], lw=1)
+        cidxs = np.argwhere(np.array(electrodes)==chan)
+        ax.plot(t, np.zeros(t.shape[0])+y, color='lightgrey', linestyle='--', lw=0.5)
+        for j, cidx in enumerate(cidxs):
+            cidx = cidx.squeeze()
+            mwf = waveforms[cidx, :]
+            mwf /= np.abs(np.max(np.abs(mwf))) 
+            mwf *= 0.1
+            ax.plot(t, mwf + y, color=colors[j], lw=1)
+    
+    ax.axis('off')
 
     return ax
 
