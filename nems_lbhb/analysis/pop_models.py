@@ -397,7 +397,7 @@ def compute_dpcs(dstrf, pc_count=3):
     #import pdb; pdb.set_trace()
     for c in range(channel_count):
         d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
-        d -= d.mean(axis=0, keepdims=0)
+        #d -= d.mean(axis=0, keepdims=0)
 
         _u, _s, _v = np.linalg.svd(d.T @ d)
         _s = np.sqrt(_s)
