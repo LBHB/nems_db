@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from nems import db
 
 
-def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
+def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False):
     """
     Plots a 3d mapt of the list of specified sites, displaying the best frequency as color, and the brain region as
     maker type (NA: circle, A1: triangle, PEG: square).
@@ -17,7 +17,7 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
     The values in the plot increase in direction Posterior -> Anterior, Medial -> Lateral and Ventral -> Dorsal. The
     antero posterior (X) axis can be flipped with the according parameter.
     :param sites: list of str specifying sites, with the format "ABC001a"
-    :param cubic: boolean. whether to constrain the data to a cubic space i.e. equal dimensions in XYZ
+    :param equal_aspect: boolean. whether to constrain the data to a cubic/square space i.e. equal dimensions in XYZ/XY
     :flip_X: Boolean. whether to flip the direction labels for the antero-posterior (X) axis. The default is A > P .
     Y. Lateral > Medial, Z. Dorsal > Ventral.
     :flatten: Boolean. PCA 2d projection. Work in progress.
@@ -109,7 +109,7 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
 
-        if cubic:
+        if equal_aspect:
             X, Y, Z = coordinates
             # Create cubic bounding box to simulate equal aspect ratio
             max_range = np.array([X.max() - X.min(), Y.max() - Y.min(), Z.max() - Z.min()]).max()
@@ -186,6 +186,8 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
                 ax.text(x, y, site[3:6])
 
         # formats axis
+        if equal_aspect:
+            ax.axis('equal')
         ax.set_xlabel('anterior posterior (mm)')
         ax.set_ylabel('1PC_YZ (mm)')
 
@@ -200,5 +202,5 @@ def penetration_map(sites, cubic=False, flip_X=False, flatten=False):
 # sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
 #          'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
 #
-# # fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
+# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
 # fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
