@@ -386,13 +386,18 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
 
 
 def compute_dpcs(dstrf, pc_count=3):
+
+    #from sklearn.decomposition import PCA
+
     channel_count=dstrf.shape[3]
     s = list(dstrf.shape)
     s[0]=pc_count
     pcs = np.zeros(s)
     pc_mag = np.zeros((pc_count,channel_count))
+    #import pdb; pdb.set_trace()
     for c in range(channel_count):
         d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
+        #d -= d.mean(axis=0, keepdims=0)
 
         _u, _s, _v = np.linalg.svd(d.T @ d)
         _s = np.sqrt(_s)

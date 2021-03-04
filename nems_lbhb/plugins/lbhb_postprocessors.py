@@ -52,5 +52,5 @@ def popspc(loadkey):
     return [['nems.xforms.predict', {}],
             ['nems.xforms.add_summary_statistics', {}],
             ['nems.xforms.plot_summary', {}],
-            ['nems_lbhb.analysis.pop_models.pop_space_summary', {}]]
+            ['nems_lbhb.analysis.pop_models.pop_space_summary', {'n_pc': 5}]]
 

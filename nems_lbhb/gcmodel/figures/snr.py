@@ -47,6 +47,36 @@ def compute_snr(resp, frac_total=True):
 
     return np.nanmean(per_stim_snrs)
 
+def compute_snr_multi(resp, frac_total=True):
+    epochs = resp.epochs
+    stim_epochs = ep.epoch_names_matching(epochs, 'STIM_')
+    resp_dict = resp.extract_epochs(stim_epochs)
+
+    chan_count=resp.shape[0]
+    snr = np.zeros(chan_count)
+    for cidx in range(chan_count):
+        per_stim_snrs = []
+        for stim, r in resp_dict.items():
+            repcount=r.shape[0]
+            if repcount>2:
+                for j in range(repcount):
+                    _r = r[:,cidx,:]
+                    products = np.dot(_r, _r.T)
+                    per_rep_snrs = []
+                    for i in range(repcount):
+                        total_power = products[i,i]
+                        signal_powers = np.delete(products[i], i)
+                        if frac_total:
+                            rep_snr = np.nanmean(signal_powers)/total_power
+                        else:
+                            rep_snr = np.nanmean(signal_powers/(total_power-signal_powers))
+
+                        per_rep_snrs.append(rep_snr)
+                    per_stim_snrs.append(np.nanmean(per_rep_snrs))
+        snr[cidx] = np.nanmean(per_stim_snrs)
+        #print(resp.chans[cidx], snr[cidx])
+    return snr
+
 
 def snr_by_batch(batch, gc, stp, LN, combined, save_path=None, load_path=None,
                  frac_total=True):
