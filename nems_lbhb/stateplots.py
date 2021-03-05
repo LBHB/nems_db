@@ -1253,17 +1253,17 @@ def state_resp_coefs(rec, modelspec, ax=None,
     """
 
 
-def cc_comp(rec, modelspec, ax=None, **options):
+def cc_comp(val, modelspec, ax=None, **options):
     ## display noise corr. matrices
-    f,ax = plt.subplots(4,3, figsize=(6,8))
+    f,ax = plt.subplots(4,3, figsize=(9,12))
     #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
-    val = rec.apply_mask()
-    large_idx=val['mask_large'].as_continuous()[0,:].astype(bool)
-    small_idx=val['mask_small'].as_continuous()[0,:].astype(bool)
-    pred0=val['pred0'].as_continuous()
-    pred=val['pred'].as_continuous()
-    resp=val['resp'].as_continuous()
+    rec = val.apply_mask()
+    large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+    small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+    pred0=rec['pred0'].as_continuous()
+    pred=rec['pred'].as_continuous()
+    resp=rec['resp'].as_continuous()
     siteid = modelspec.meta['cellid'].split("-")[0]
     large_cc = np.cov(resp[:,large_idx]-pred0[:,large_idx])
     small_cc = np.cov(resp[:,small_idx]-pred0[:,small_idx])
@@ -1294,7 +1294,8 @@ def cc_comp(rec, modelspec, ax=None, **options):
     dpred=lg_cc-sm_cc
     ax[1,2].plot(np.diag(dact),label='act')
     ax[1,2].plot(np.diag(dpred),label='pred')
-    ax[1,2].legend()
+    ax[1,2].set_title('mean lg-sm var')
+    ax[1,2].legend(frameon=False)
     np.fill_diagonal(dact, 0)
     ax[2,2].plot(dact.mean(axis=0),label='act')
     np.fill_diagonal(dpred, 0)
@@ -1312,7 +1313,7 @@ def cc_comp(rec, modelspec, ax=None, **options):
     h,b=np.histogram(d_each,bins=20,range=[-0.3,0.3])
     ax[3,2].bar(b[1:],h,width=b[1]-b[0])
     ax[3,2].set_xlabel(f"median d_cc={np.median(d_each):.3f}")
-
+    f.suptitle(f"{modelspec.meta['cellid']} - {modelspec.meta['modelname']}", fontsize=8)
 
     return f
 
@@ -1413,3 +1414,4 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **
     ax[1,0].set_ylabel('PC2')    
  
     return rt
+
