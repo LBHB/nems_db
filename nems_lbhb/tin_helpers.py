@@ -7,6 +7,7 @@ mpl.rcParams['axes.spines.right'] = False
 mpl.rcParams['axes.spines.top'] = False
 import seaborn as sns
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+import matplotlib.pyplot as plt
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems.preprocessing import make_state_signal
@@ -123,6 +124,15 @@ def compute_ellipse(x, y):
     e = np.matmul(VV, e).T + mu  # project circle back to orig space
     e = e.T
     return e
+
+def plot_ellipse(x, y, ax=None, show_dots=True, markersize=5, color=None):
+    if ax is None:
+        f,ax=plt.subplots(1,1)
+    e = compute_ellipse(x,y)
+    if show_dots:
+        ax.plot(x,y,'.',markersize=markersize, color=color)
+    ax.plot(e[0], e[1], color=color)
+    return ax  
 
 def load_tbp_recording(siteid, batch, **options):
     options['resp']=True

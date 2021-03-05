@@ -1253,17 +1253,17 @@ def state_resp_coefs(rec, modelspec, ax=None,
     """
 
 
-def cc_comp(rec, modelspec, ax=None, **options):
+def cc_comp(val, modelspec, ax=None, **options):
     ## display noise corr. matrices
-    f,ax = plt.subplots(4,3, figsize=(6,8))
+    f,ax = plt.subplots(4,3, figsize=(9,12))
     #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
-    val = rec.apply_mask()
-    large_idx=val['mask_large'].as_continuous()[0,:].astype(bool)
-    small_idx=val['mask_small'].as_continuous()[0,:].astype(bool)
-    pred0=val['pred0'].as_continuous()
-    pred=val['pred'].as_continuous()
-    resp=val['resp'].as_continuous()
+    rec = val.apply_mask()
+    large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+    small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+    pred0=rec['pred0'].as_continuous()
+    pred=rec['pred'].as_continuous()
+    resp=rec['resp'].as_continuous()
     siteid = modelspec.meta['cellid'].split("-")[0]
     large_cc = np.cov(resp[:,large_idx]-pred0[:,large_idx])
     small_cc = np.cov(resp[:,small_idx]-pred0[:,small_idx])
@@ -1294,7 +1294,8 @@ def cc_comp(rec, modelspec, ax=None, **options):
     dpred=lg_cc-sm_cc
     ax[1,2].plot(np.diag(dact),label='act')
     ax[1,2].plot(np.diag(dpred),label='pred')
-    ax[1,2].legend()
+    ax[1,2].set_title('mean lg-sm var')
+    ax[1,2].legend(frameon=False)
     np.fill_diagonal(dact, 0)
     ax[2,2].plot(dact.mean(axis=0),label='act')
     np.fill_diagonal(dpred, 0)
@@ -1312,12 +1313,12 @@ def cc_comp(rec, modelspec, ax=None, **options):
     h,b=np.histogram(d_each,bins=20,range=[-0.3,0.3])
     ax[3,2].bar(b[1:],h,width=b[1]-b[0])
     ax[3,2].set_xlabel(f"median d_cc={np.median(d_each):.3f}")
-
+    f.suptitle(f"{modelspec.meta['cellid']} - {modelspec.meta['modelname']}", fontsize=8)
 
     return f
 
 
-def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
+def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **options):
     from nems_lbhb.dimensionality_reduction import TDR
     from sklearn.decomposition import PCA
     import re
@@ -1326,7 +1327,7 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
     rt=rec.copy()
     siteid = modelspec.meta['cellid'].split("-")[0]
 
-    print("Computing PCs")
+    print(f"Computing PCs pc_base={pc_base}")
 
     stims = (rt.epochs['name'].value_counts() >= 8)
     stims = [stims.index[i] for i, s in enumerate(stims) if bool(re.search(epoch_regex, stims.index[i])) and s == True]
@@ -1334,10 +1335,12 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
     # can't simply extract evoked for refs because can be longer/shorted if it came after target 
     # and / or if it was the last stim. So, masking prestim / postim doesn't work. Do it manually
     d = rt['resp'].extract_epochs(stims, mask=rt['mask'])
-    d0 = rt['psth'].extract_epochs(stims, mask=rt['mask'])
-    d = {k: d[k]-d0[k] for k in d.keys()}
-    #R = [v.mean(axis=0) for (k, v) in d.items()]
-    R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
+    if pc_base=="stim":
+        R = [v.mean(axis=0) for (k, v) in d.items()]
+    else:
+        d0 = rt['psth'].extract_epochs(stims, mask=rt['mask'])
+        d = {k: d[k]-d0[k] for k in d.keys()}
+        R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
     Rall_u = np.hstack(R).T
 
     pca = PCA(n_components=2)
@@ -1349,9 +1352,12 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
 
     # project onto first two PCs
     print("Projecting onto first two PCs")
-    rt['rpc'] = rt['resp']._modified_copy(rt['resp']._data.T.dot(a.T).T[0:2, :])
-    rt['ppc_pred0'] = rt['pred0']._modified_copy(rt['pred0']._data.T.dot(a.T).T[0:2, :])
-    rt['ppc_pred'] = rt['pred']._modified_copy(rt['pred']._data.T.dot(a.T).T[0:2, :])
+    pred0 = rt['pred0'].as_continuous()
+    pred = rt['pred'].as_continuous()
+    resp = rt['resp'].as_continuous()
+    rt['rpc'] = rt['resp']._modified_copy((resp).T.dot(a.T).T[0:2, :])
+    rt['ppc_pred0'] = rt['pred0']._modified_copy((pred0).T.dot(a.T).T[0:2, :])
+    rt['ppc_pred'] = rt['pred']._modified_copy((pred).T.dot(a.T).T[0:2, :])
 
     units = rt['resp'].chans
     e=rt['resp'].epochs
@@ -1406,3 +1412,6 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", **options):
     ax[0,0].set_ylabel(siteid)
     ax[1,0].set_xlabel('PC1')
     ax[1,0].set_ylabel('PC2')    
+ 
+    return rt
+
