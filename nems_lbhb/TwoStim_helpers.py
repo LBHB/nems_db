@@ -108,8 +108,6 @@ def load_TwoStim(batch,cellid,fit_epochs,modelspec_name,loader='env100',
     import pandas as pd
     import copy
     
-    from pdb import set_trace
-    set_trace() 
     
     # load into a recording object
     if not get_stim:
@@ -838,7 +836,7 @@ def r_noise_corrected(X,Y,N_ac=200):
     #plt.figure(); plt.imshow(rs)
     return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
     
-def calc_psth_weight_resp(row,do_plot=False):
+def calc_psth_weight_resp(row,do_plot=True):
     print('load {}'.format(row.name))
     modelspecs,est,val = load_TwoStim(row.batch,
                                       row.name,
@@ -1079,12 +1077,29 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     #names=['STIM_T+si516+null','STIM_T+null+si516','STIM_T+si516+si516']
     #weights_C[1,:]=calc_psth_weights_of_model_responses_single(val,names)   
     
+    #Find epochs that go the full duration
+    epcs=val.epochs[val.epochs['name'].str.count('-0-1') >= 1].copy()
+    sepname=epcs['name'].apply(get_sep_stim_names)
+    epcs['nameA']=[x[0] for x in sepname.values]
+    epcs['nameB']=[x[1] for x in sepname.values]
+    
+    #epochs with two sounds in them
+    epcs_twostim=epcs[epcs['name'].str.count('-0-1')==2].copy()
+    
+    #Go through each two-sound epoch, check that singles exist, add to  list
+    A,B,AB=([],[],[])
+    for i in range(len(epcs_twostim)):
+        if any( (epcs['nameA']==epcs_twostim.iloc[i].nameA) & (epcs['nameB']=='null') ) \
+        and any( (epcs['nameA']=='null') & (epcs['nameB']==epcs_twostim.iloc[i].nameB) ):
+            A.append('STIM_'+epcs_twostim.iloc[i].nameA + '_null')
+            B.append('STIM_null_'+epcs_twostim.iloc[i].nameB)
+            AB.append(epcs_twostim['name'].iloc[i])
     from pdb import set_trace
-    set_trace() 
-    names=[['STIM_T+si464+null','STIM_T+si516+null'],
-           ['STIM_T+null+si464','STIM_T+null+si516'],
-           ['STIM_T+si464+si464','STIM_T+si516+si516']]
-    weights_C, Efit_C, nrmse_C, nf_C, get_nrmse_C, r_C = calc_psth_weights_of_model_responses_list(
+    set_trace()            
+    names=[A,B,AB]
+    
+    #Calculate weights
+    weights, Efit, nrmse, nf, get_nrmse, r = calc_psth_weights_of_model_responses_list(
             val,names,signame,do_plot=do_plot,find_mse_confidence=find_mse_confidence,get_nrmse_fn=get_nrmse_fn)
     if do_plot and find_mse_confidence:
         plt.title('Coherent, signame={}'.format(signame))
@@ -1094,17 +1109,9 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     #names=['STIM_T+si516+null','STIM_T+null+si464','STIM_T+si516+si464']
     #weights_I[1,:]=calc_psth_weights_of_model_responses_single(val,names)
     
-    names=[['STIM_T+si464+null','STIM_T+si516+null'],
-           ['STIM_T+null+si516','STIM_T+null+si464'],
-           ['STIM_T+si464+si516','STIM_T+si516+si464']]
-    weights_I, Efit_I, nrmse_I, nf_I, get_nrmse_I, r_I = calc_psth_weights_of_model_responses_list(
-            val,names,signame,do_plot=do_plot,find_mse_confidence=find_mse_confidence,get_nrmse_fn=get_nrmse_fn)
-    if do_plot and find_mse_confidence:
-        plt.title('Incoherent, signame={}'.format(signame))
     
     D=locals()
-    D={k: D[k] for k in ('weights_C', 'Efit_C', 'nrmse_C', 'nf_C', 'get_nrmse_C', 'r_C',
-                         'weights_I', 'Efit_I', 'nrmse_I', 'nf_I', 'get_nrmse_I', 'r_I')}
+    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r')}
     return D
     #return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
