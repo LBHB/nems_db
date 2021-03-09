@@ -23,9 +23,9 @@ OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat1.h5'
 
 batch=328
 cell_df=nd.get_batch_cells(batch)
-cell_list=cell_df['cellid'].tolist()[:2]
-
-
+#cell_list=cell_df['cellid'].tolist()[-2:]
+#cell_list=cell_df['cellid'].tolist()[-10:-8]
+#cell_list=['ARM013b-03-1','ARM013b-04-1']
 
 #cellid='ARM020a-05';
 
@@ -42,6 +42,7 @@ cell_list=cell_df['cellid'].tolist()[:2]
 #rec = manager.get_recording(**options)
 
 
+# PSTH metrics that have to do with one stimulus at a time
 if True:
     metrics=[]
     for cellid in cell_list:
@@ -72,3 +73,4 @@ df[cols+['SinglesMax','MEnh_I','MSupp_I','Rtype','inds']]
 
 
 df=df.apply(ts.calc_psth_weight_resp,axis=1)   
+

@@ -415,6 +415,9 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     import nems.metrics.corrcoef
     import copy
     
+    start_win_offset=0  #Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
+    #start_win_offset=0.5 (HCT-stimuli)
+    
     options = {}
     #options['cellid']=cellid
     #options['batch']=batch
@@ -464,6 +467,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     val['resp']=val['resp'].rasterize()
     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
     #smooth and subtract SR
+
     fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR/resp.fs)
     val['resp']=val['resp'].transform(fn)
     val['resp']=add_stimtype_epochs(val['resp'])
@@ -492,14 +496,13 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     # Compute threshold, exitatory percentage, and inhibitory percentage
     val['resp'].epochs['end']=nds
     val['resp'].epochs['start']=sts
-    val['resp'].epochs['start']=val['resp'].epochs['start']+prestim+.5
+    val['resp'].epochs['start']=val['resp'].epochs['start']+prestim+start_win_offset
     val['resp'].epochs['end']=val['resp'].epochs['end']-poststim
     thresh=np.array(((SR + SR_av_std)/resp.fs,
             (SR - SR_av_std)/resp.fs))
     thresh=np.array((SR/resp.fs + 0.1 * (SinglesMax - SR/resp.fs),
             (SR - SR_av_std)/resp.fs))
             #SR/resp.fs - 0.5 * (np.nanmax(val['resp'].as_continuous()) - SR/resp.fs)]
-
     types=['A','B','I']
     excitatory_percentage={}
     inhibitory_percentage={}
@@ -515,6 +518,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
             Mean[_type]=ps[ff].mean()
     
  
+   # Compute threshold, exitatory percentage, and inhibitory percentage just over onset time
     # restore times
     val['resp'].epochs['end']=nds
     val['resp'].epochs['start']=sts
@@ -555,9 +559,11 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
         rA_st=[]; rB_st=[]; r_st=[]; rA_rB_st=[];
         init=True
         for ind in inds:
+            #for each dual-voice response
             r=val['resp'].extract_epoch(epcs.iloc[ind]['name'])
             if np.any(np.isfinite(r)):
                 print(epcs.iloc[ind]['name'])
+                #Find the indicies of single-voice responses that match this dual-voice response
                 indA = np.where((EA[ind] == EA) & (EB == 'null'))[0]
                 indB = np.where((EB[ind] == EB) & (EA == 'null'))[0]
                 if (len(indA) > 0) & (len(indB) > 0):
@@ -581,12 +587,13 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
                         r_=np.hstack((r_,r.squeeze()))
                         rA_rB_=np.hstack((rA_rB_,rA.squeeze()+rB.squeeze()))
                     val['linmodel']=val['linmodel'].replace_epoch(epcs.iloc[ind]['name'],rA+rB,preserve_nan=False)
-        ff = np.isfinite(r_) & np.isfinite(rA_) & np.isfinite(rB_)
-        r_dual_A[_type]=np.corrcoef(rA_[ff],r_[ff])[0,1]
-        r_dual_B[_type]=np.corrcoef(rB_[ff],r_[ff])[0,1]
-        r_lin_A[_type]=np.corrcoef(rA_[ff],rA_rB_[ff])[0,1]
-        r_lin_B[_type]=np.corrcoef(rB_[ff],rA_rB_[ff])[0,1]
+        ff = np.isfinite(r_) & np.isfinite(rA_) & np.isfinite(rB_) #find places with data
+        r_dual_A[_type]=np.corrcoef(rA_[ff],r_[ff])[0,1] #Correlation between response to A and response to dual
+        r_dual_B[_type]=np.corrcoef(rB_[ff],r_[ff])[0,1] #Correlation between response to B and response to dual
+        r_lin_A[_type]=np.corrcoef(rA_[ff],rA_rB_[ff])[0,1] #Correlation between response to A and response to linear 'model'
+        r_lin_B[_type]=np.corrcoef(rB_[ff],rA_rB_[ff])[0,1] #Correlation between response to B and response to linear 'model'
         
+        #correlations over single-trial data
         minreps = np.min([x.shape[0] for x in r_st])
         r_st = [x[:minreps, :] for x in r_st]
         r_st = np.concatenate(r_st, axis=1)
@@ -641,6 +648,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     
     
     
+    #Calculate correlation between linear 'model and dual-voice response, and mean amount of suppression, enhancement relative to linear 'model'
     r_fit_linmodel={}             
     r_fit_linmodel_NM={}
     r_ceil_linmodel={}
@@ -658,8 +666,10 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
 #        from pdb import set_trace
 #        set_trace()
         val_copy['resp']=val_copy['resp'].select_epochs([_type])
-        r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp') 
+        #Correlation between linear 'model' (response to A plus response to B) and dual-voice response
+        r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp')
         #r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
+        #Noise-corrected correlation between linear 'model' (response to A plus response to B) and dual-voice response
         r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp')[0]
         
         pred = val_copy['linmodel'].as_continuous()
@@ -836,7 +846,7 @@ def r_noise_corrected(X,Y,N_ac=200):
     #plt.figure(); plt.imshow(rs)
     return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
     
-def calc_psth_weight_resp(row,do_plot=True):
+def calc_psth_weight_resp(row,do_plot=False):
     print('load {}'.format(row.name))
     modelspecs,est,val = load_TwoStim(row.batch,
                                       row.name,
@@ -856,7 +866,7 @@ def calc_psth_weight_resp(row,do_plot=True):
     #weights_CR_,weights_IR_=sp.calc_psth_weights_of_model_responses(val[0],signame='resp')
     #weights_CR_,weights_IR_,Efit_CR_,Efit_IR_=sp.calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot)
     #weights_CR_, Efit_C_, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
-    d=ts.calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot)
+    d=calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot,find_mse_confidence=True)
     d={k+'R': v for k, v in d.items()}
     for k, v in d.items():
         row[k]=v
@@ -943,14 +953,14 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     else:
         weights,residual_sum,rank,singular_values = np.linalg.lstsq(fsigs[ff,:],sigO[ff],rcond=None)   
     
-    #calc CC
+    #calc CC between weight model and actual response
     sigF2 = np.dot(weights,fsigs[ff,:].T)
     cc = np.corrcoef(sigF2, sigO[ff])
     r_weight_model = cc[0, 1]
 
     norm_factor = np.std(sigO[ff])    
 
-    min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor
+    min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor #minimim normalized mean squared error
     #create NMSE caclulator for later
     if get_nrmse_fn:
         def get_nrmse(weights=weights):
@@ -1087,31 +1097,49 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     epcs_twostim=epcs[epcs['name'].str.count('-0-1')==2].copy()
     
     #Go through each two-sound epoch, check that singles exist, add to  list
-    A,B,AB=([],[],[])
+    A,B,AB,sepnames=([],[],[],[])  #re-defining sepname
     for i in range(len(epcs_twostim)):
         if any( (epcs['nameA']==epcs_twostim.iloc[i].nameA) & (epcs['nameB']=='null') ) \
         and any( (epcs['nameA']=='null') & (epcs['nameB']==epcs_twostim.iloc[i].nameB) ):
             A.append('STIM_'+epcs_twostim.iloc[i].nameA + '_null')
             B.append('STIM_null_'+epcs_twostim.iloc[i].nameB)
             AB.append(epcs_twostim['name'].iloc[i])
-    from pdb import set_trace
-    set_trace()            
-    names=[A,B,AB]
+            sepnames.append(sepname.iloc[i])
     
     #Calculate weights
-    weights, Efit, nrmse, nf, get_nrmse, r = calc_psth_weights_of_model_responses_list(
+    weights = np.zeros((2,len(AB)))
+    Efit = np.zeros((5,len(AB)))
+    nrmse = np.zeros(len(AB))
+    nf = np.zeros(len(AB))
+    r = np.zeros(len(AB))
+    for i in range(len(AB)):
+        names=[[A[i]],[B[i]],[AB[i]]]
+        weights[:,i], Efit[:,i], nrmse[i], nf[i], get_nrmse, r[i] = calc_psth_weights_of_model_responses_list(
             val,names,signame,do_plot=do_plot,find_mse_confidence=find_mse_confidence,get_nrmse_fn=get_nrmse_fn)
-    if do_plot and find_mse_confidence:
-        plt.title('Coherent, signame={}'.format(signame))
+        if do_plot and find_mse_confidence:
+            plt.title('{}, signame={}'.format(AB[i],signame))
+#    names=[A,B,AB]    
+#    weights, Efit, nrmse, nf, get_nrmse, r = calc_psth_weights_of_model_responses_list(
+#        val,names,signame,do_plot=do_plot,find_mse_confidence=find_mse_confidence,get_nrmse_fn=get_nrmse_fn)
+#    if do_plot and find_mse_confidence:
+#        plt.title('Coherent, signame={}'.format(signame))
     #weights_I=np.ones((2,3))
     #names=['STIM_T+si464+null','STIM_T+null+si516','STIM_T+si464+si516']
     #weights_I[0,:]=calc_psth_weights_of_model_responses_single(val,names)
     #names=['STIM_T+si516+null','STIM_T+null+si464','STIM_T+si516+si464']
     #weights_I[1,:]=calc_psth_weights_of_model_responses_single(val,names)
     
+
+    A_matches,B_matches=([],[])
+    for i in range(len(epcs_twostim)):
+        epcs_twostim['nameA']==epcs_twostim.iloc[i].nameA
     
+    
+    names=AB
+    namesA=A
+    namesB=B
     D=locals()
-    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r')}
+    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r','names','namesA','namesB')}
     return D
     #return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
