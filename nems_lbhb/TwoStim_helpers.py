@@ -846,9 +846,9 @@ def r_noise_corrected(X,Y,N_ac=200):
     #plt.figure(); plt.imshow(rs)
     return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
     
-def calc_psth_weight_resp(row,do_plot=False):
+def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False):
     print('load {}'.format(row.name))
-    modelspecs,est,val = load_TwoStim(row.batch,
+    modelspecs,est,val = load_TwoStim(int(row.batch),
                                       row.name,
                                       ['A','B','C','I'],
                                       None,fs=200,
@@ -866,7 +866,7 @@ def calc_psth_weight_resp(row,do_plot=False):
     #weights_CR_,weights_IR_=sp.calc_psth_weights_of_model_responses(val[0],signame='resp')
     #weights_CR_,weights_IR_,Efit_CR_,Efit_IR_=sp.calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot)
     #weights_CR_, Efit_C_, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
-    d=calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot,find_mse_confidence=True)
+    d=calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot,find_mse_confidence=find_mse_confidence)
     d={k+'R': v for k, v in d.items()}
     for k, v in d.items():
         row[k]=v
@@ -952,6 +952,7 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
         weights[~close_to_zero] = weights_
     else:
         weights,residual_sum,rank,singular_values = np.linalg.lstsq(fsigs[ff,:],sigO[ff],rcond=None)   
+    #residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
     
     #calc CC between weight model and actual response
     sigF2 = np.dot(weights,fsigs[ff,:].T)
@@ -960,7 +961,10 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
 
     norm_factor = np.std(sigO[ff])    
 
-    min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor #minimim normalized mean squared error
+    if rank==1:
+        min_nrmse=1
+    else:
+        min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor #minimim normalized mean squared error
     #create NMSE caclulator for later
     if get_nrmse_fn:
         def get_nrmse(weights=weights):
