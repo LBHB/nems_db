@@ -15,6 +15,7 @@ from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 from nems.uri import NumpyEncoder
 from nems.utils import get_setting, smooth
+from nems.modules.fir import per_channel
 
 
 log = logging.getLogger(__name__)
@@ -333,6 +334,11 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     d = np.reshape(dstrf[ii,:,:,c_],[len(ii),-1])
     pc_proj = d @ u.T
 
+    stim = rec['stim'].as_continuous()
+    pred=np.zeros((pcs.shape[0],stim.shape[1]))
+    for i in range(pcs.shape[0]):
+        pred[i,:] = per_channel(stim, np.fliplr(pcs[i,:,:,0]))
+
     n_strf=len(dindex)
 
     f = plt.figure(constrained_layout=True, figsize=(18,8))
@@ -352,7 +358,8 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     ax1.set_xlim(xl)
     yl1=ax1.get_ylim()
 
-    ax2.plot(pc_proj);
+    #ax2.plot(pc_proj);
+    ax2.plot(pred[:,rr_orig].T);
     ax2.set_xlim(xl)
     ax2.set_ylabel('pc projection')
     ax2.legend(('PC1','PC2','PC3'), frameon=False)
