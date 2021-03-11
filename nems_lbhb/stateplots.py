@@ -1253,14 +1253,25 @@ def state_resp_coefs(rec, modelspec, ax=None,
     """
 
 
-def cc_comp(val, modelspec, ax=None, **options):
+def cc_comp(val, modelspec, ax=None, extra_epoch=None, **options):
     ## display noise corr. matrices
     f,ax = plt.subplots(4,3, figsize=(9,12))
     #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
-    rec = val.apply_mask()
-    large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
-    small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+    if extra_epoch is not None:
+        rec=val.copy()
+        rec=rec.and_mask(extra_epoch)
+        rec = rec.apply_mask()
+        print(f"masked {extra_epoch} len from {val['mask'].as_continuous().sum()} to {val['mask'].as_continuous().sum()}")
+        large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+        small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+        mask = rec['mask'].as_continuous()[0,:].astype(bool)
+        large_idx *= mask
+        small_idx *= mask
+    else:
+        rec = val.apply_mask()
+        large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+        small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
     pred0=rec['pred0'].as_continuous()
     pred=rec['pred'].as_continuous()
     resp=rec['resp'].as_continuous()
@@ -1373,6 +1384,8 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **
     PreStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
     d = rec['resp'].get_epoch_bounds('PostStimSilence')
     PostStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+    d = rec['resp'].get_epoch_bounds('REFERENCE')
+    ReferenceBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
 
     ChunkSec=0.25
     ChunkBins = int(np.round(ChunkSec*rec['resp'].fs))
@@ -1387,10 +1400,13 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **
             #colors = cmaps[0]
             for i,k in enumerate(stims):
                 try:
-                    p = r[sig].extract_epoch(k, mask=r['mask'])
+                    p = r[sig].extract_epoch(k, mask=r['mask'], allow_incomplete=True)
                     if p.shape[0]>2:
                         psamples = p.shape[2]
-                        for c in range(PreStimBins-ChunkBins,psamples-PostStimBins,ChunkBins):
+                        if psamples<ReferenceBins:
+                            PreStimBins=0
+                            PostStimBins=0
+                        for c in range(np.max((PreStimBins-ChunkBins,0)),psamples-PostStimBins,ChunkBins):
                             g = np.isfinite(p[:,0,c])
                             x = np.nanmean(p[g,0,c:(c+ChunkBins)], axis=1)
                             y = np.nanmean(p[g,1,c:(c+ChunkBins)], axis=1)
