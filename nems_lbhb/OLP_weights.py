@@ -74,10 +74,23 @@ cols=['EP_A','EP_B','IP_A','IP_B','SR','SR_av_std']
 df[cols+['SinglesMax','MEnh_I','MSupp_I','Rtype','inds']]
 
 
-df=df.apply(ts.calc_psth_weight_resp,axis=1)   
-# df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
-# df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
-# df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
+if True:
+    df=df.apply(ts.calc_psth_weight_resp,axis=1)   
+    # df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
+    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
+    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
+    store = pd.HDFStore(OLP_cell_metrics_db_path)
+    store['df']=df.drop(columns='get_nrmseR')
+    store.close()
+else:
+    store = pd.HDFStore(OLP_cell_metrics_db_path)
+    df=store['df']
+    store.close()
+
+cols=['namesA','namesB','weightsA','weightsB']
+weight_df = pd.concat(df['weight_dfR'].values,keys=df.index)
+BGgroups = pd.concat(df['WeightAgroupsR'].values,keys=df.index)
+FGgroups = pd.concat(df['WeightBgroupsR'].values,keys=df.index)
 
 plt.figure()
 for i in range(len(df)):
@@ -91,6 +104,13 @@ plt.gca().set_aspect(1)
 weights=np.concatenate(df.weightsR.values,axis=1)
 weights=weights[:,~np.any(np.isnan(weights),axis=0)]
 plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
+plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
+plt.gca().set_aspect(1)
+
+#Same plot as the previous one but using the weight dataframe
+gi=~np.isnan(weight_df['weightsA']) & ~np.isnan(weight_df['weightsB'])
+weights=weights[:,~np.any(np.isnan(weights),axis=0)]
+plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=200)
 plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
 
@@ -109,3 +129,84 @@ plt.legend(('Background','Foreground'))
 plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=400,histtype='step')
 plt.xlim((-2, 2));
 plt.xlabel('Paired Foreground - Background')
+
+## Plots based on differences
+
+# Scatterplot of range of weights over constant bg
+plt.figure()
+for cellid in BGgroups.index.levels[0]:
+    plt.plot(BGgroups.loc[cellid]['weightsA']['range'], BGgroups.loc[cellid]['weightsB']['range'], '.')
+plt.xlabel('Background Weight Range')
+plt.ylabel('Foreground Weight Range')
+plt.title('Weight ranges over a constant Background')
+plt.xlim((0, 5))
+plt.ylim((0, 5))
+plt.gca().set_aspect(1)
+
+FGgroups=FGgroups.iloc[:4]
+BGgroups=BGgroups.iloc[:4]
+#2-d hist of range of weights over constant fg and constant bg
+gi=~np.isnan(BGgroups['weightsA']['range']) & ~np.isnan(BGgroups['weightsB']['range'])
+f, ax = plt.subplots(1, 2, sharex=True, sharey=True,figsize=(8.7,4))
+ax[0].hist2d(BGgroups[gi]['weightsA']['range'],\
+           BGgroups[gi]['weightsB']['range'],\
+           bins=np.linspace(0,5,40))
+ax[0].plot((0,2),(0,2),'-k',linewidth=0.5)
+gi=~np.isnan(FGgroups['weightsA']['range']) & ~np.isnan(FGgroups['weightsB']['range'])
+ax[1].hist2d(FGgroups[gi]['weightsA']['range'],\
+           FGgroups[gi]['weightsB']['range'],\
+           bins=np.linspace(0,5,40))
+ax[1].plot((0,2),(0,2),'-k',linewidth=0.5)
+[axi.set_xlim((0,2)) for axi in ax]
+[axi.set_ylim((0,2)) for axi in ax]
+[axi.set_aspect('equal') for axi in ax];
+ax[0].set_xlabel('Background Weight Range')
+ax[0].set_ylabel('Foreground Weight Range')
+ax[0].set_title('Over a constant Background')
+ax[1].set_title('Over a constant Foreground')
+
+
+#Marginal histograms of range of weights over constant fg and constant bg
+bins=np.linspace(0,2,30)
+f, ax = plt.subplots(1,2,figsize=(8.7,4))
+gi=~np.isnan(BGgroups['weightsA']['range']) & ~np.isnan(BGgroups['weightsB']['range'])
+N,_=np.histogram(BGgroups[gi]['weightsA']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[0].step(np.insert(bins,0,0), np.insert(np.append(N,0),0,0),where='post',color='C0')
+N,_=np.histogram(BGgroups[gi]['weightsB']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[0].step(np.insert(bins,0,0), -1*np.insert(np.append(N,0),0,0),where='post',linestyle='--',color='C0')
+gi=~np.isnan(FGgroups['weightsA']['range']) & ~np.isnan(FGgroups['weightsB']['range'])
+N,_=np.histogram(FGgroups[gi]['weightsA']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[0].step(np.insert(bins,0,0), np.insert(np.append(N,0),0,0),where='post',color='C1')
+N,_=np.histogram(FGgroups[gi]['weightsB']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[0].step(np.insert(bins,0,0), -1*np.insert(np.append(N,0),0,0),where='post',linestyle='--',color='C1')
+ax[0].set_ylabel('Percent of Population')
+ax[0].set_xlabel('Range of weights')
+yl = np.array((-1,1))*np.max(np.abs(ax[0].get_ylim()))
+ax[0].set_ylim(yl)
+ytl=ax[0].get_yticklabels()
+for this_ytl in ytl:
+    if this_ytl._y < 0:
+        this_ytl.set_text(this_ytl._text[1:]);
+ax[0].set_yticklabels(ytl)
+ax[0].legend(('Range of Bg over constant Bg','Range of Fg over constant Bg','Range of Bg over constant Fg','Range of Fg over constant Fg'),loc='upper right', bbox_to_anchor=(1.05,1.15))
+
+#Histograms of difference in range of weights (fg-bg) over constant fg and constant bg
+bins=np.linspace(-2,2,61)
+gi=~np.isnan(BGgroups['weightsA']['range']) & ~np.isnan(BGgroups['weightsB']['range'])
+N,_=np.histogram(BGgroups[gi]['weightsB']['range']-BGgroups[gi]['weightsA']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[1].step(np.insert(bins,0,bins[0]), np.insert(np.append(N,0),0,0),where='post',color='C0')
+gi=~np.isnan(FGgroups['weightsA']['range']) & ~np.isnan(FGgroups['weightsB']['range'])
+N,_=np.histogram(FGgroups[gi]['weightsB']['range']-FGgroups[gi]['weightsA']['range'],bins=bins)
+N=N.astype(np.float32) /sum(N)*100
+ax[1].step(np.insert(bins,0,bins[0]), np.insert(np.append(N,0),0,0),where='post',color='C1')
+ax[1].legend(('range(Fg) - range(Bg) over constant Bg','range(Fg) - range(Bg) over constant Fg'), bbox_to_anchor=(1.05,1.15))
+ax[1].set_xlabel('Diff in range of weights (range(Fg)-range(Bg))')
+ax[1].plot((0,0),(0,np.max(np.abs(ax[1].get_ylim()))),'k',linewidth=.5)
+
+#from pdb import set_trace
+#set_trace() 

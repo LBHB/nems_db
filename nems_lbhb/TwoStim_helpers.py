@@ -21,6 +21,7 @@ import pandas as pd
 import sys
 import os
 import re
+import itertools
 sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
 import fitEllipse as fE
 
@@ -1133,17 +1134,42 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     #names=['STIM_T+si516+null','STIM_T+null+si464','STIM_T+si516+si464']
     #weights_I[1,:]=calc_psth_weights_of_model_responses_single(val,names)
     
-
-    A_matches,B_matches=([],[])
-    for i in range(len(epcs_twostim)):
-        epcs_twostim['nameA']==epcs_twostim.iloc[i].nameA
+    weight_df=pd.DataFrame([epcs_twostim['nameA'].values,epcs_twostim['nameB'].values,weights[0,:],weights[1,:],Efit,nrmse,nf,r])
+    weight_df = weight_df.T
+    weight_df.columns=['namesA','namesB','weightsA','weightsB','Efit','nrmse','nf','r']
+    cols=['namesA','namesB','weightsA','weightsB']
+    print(weight_df[cols])
     
+    
+    weight_df=weight_df.astype({'weightsA':float,'weightsB':float})
+    val_range = lambda x: max(x)-min(x)
+    val_range.__name__ = 'range'
+    MI = lambda x: np.mean([np.abs(np.diff(pair))/np.abs(np.sum(pair)) for pair in itertools.combinations(x,2)])
+    MI.__name__ = 'meanMI'
+    MIall = lambda x: (max(x)-min(x))/np.abs(max(x)+min(x))
+    MIall.__name__ = 'meanMIall'
+    
+    fns=['count',val_range,'std',MI,MIall,'sum']
+    WeightAgroups = weight_df.groupby('namesA')[['weightsA','weightsB']].agg(fns)
+    WeightAgroups = WeightAgroups[WeightAgroups['weightsA']['count']>1]
+    WeightBgroups = weight_df.groupby('namesB')[['weightsA','weightsB']].agg(fns)
+    WeightBgroups = WeightBgroups[WeightBgroups['weightsA']['count']>1]    
+    
+    cols=['count','range','meanMIall']
+    print('Grouped by A, A weight metrics:')
+    print(WeightAgroups['weightsA'][cols])
+    print('Grouped by A, B weight metrics:')
+    print(WeightAgroups['weightsB'][cols])
+    print('Grouped by B, A weight metrics:')
+    print(WeightBgroups['weightsA'][cols])
+    print('Grouped by B, B weight metrics:')
+    print(WeightBgroups['weightsB'][cols])    
     
     names=AB
     namesA=A
     namesB=B
     D=locals()
-    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r','names','namesA','namesB')}
+    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r','names','namesA','namesB','weight_df','WeightAgroups','WeightBgroups')}
     return D
     #return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
