@@ -143,8 +143,6 @@ plt.xlim((0, 5))
 plt.ylim((0, 5))
 plt.gca().set_aspect(1)
 
-FGgroups=FGgroups.iloc[:4]
-BGgroups=BGgroups.iloc[:4]
 #2-d hist of range of weights over constant fg and constant bg
 gi=~np.isnan(BGgroups['weightsA']['range']) & ~np.isnan(BGgroups['weightsB']['range'])
 f, ax = plt.subplots(1, 2, sharex=True, sharey=True,figsize=(8.7,4))
