@@ -771,7 +771,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, add_per_stim=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, split_per_stim=False, add_per_stim=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -786,7 +786,7 @@ def pupil_large_small_masks(rec, evoked_only=True, add_per_stim=False, **kwargs)
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
     
-    if add_per_stim:
+    if add_per_stim or split_per_stim:
         e = epoch_names_matching(r['resp'].epochs, '^STIM_')
         #e[:3]
 
@@ -796,7 +796,11 @@ def pupil_large_small_masks(rec, evoked_only=True, add_per_stim=False, **kwargs)
             _r = _r.and_mask(e)
             if evoked_only:
                 _r=_r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
-            r['mask_'+e] = r['mask']._modified_copy(_r['mask']._data)
+            if split_per_stim:
+                r['mask_'+e+'_lg'] = r['mask']._modified_copy(_r['mask']._data * r['mask_large']._data)
+                r['mask_'+e+'_sm'] = r['mask']._modified_copy(_r['mask']._data * r['mask_small']._data)
+            else:
+                r['mask_'+e] = r['mask']._modified_copy(_r['mask']._data)
 
         #plt.figure()
         #plt.plot(rec['mask'].as_continuous()[0,:]-1.1)
