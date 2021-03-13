@@ -98,11 +98,13 @@ plt.xlim((-2, 2))
 plt.ylim((-2, 2))
 plt.gca().set_aspect(1)
 
-weights=np.concatenate(df.weightsR.values,axis=1)
-weights=weights[:,~np.any(np.isnan(weights),axis=0)]
-plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
-plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
-plt.gca().set_aspect(1)
+#weights=np.concatenate(df.weightsR.values,axis=1)
+#weights=weights[:,~np.any(np.isnan(weights),axis=0)]
+#plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
+#plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
+#plt.gca().set_aspect(1)
+#plt.xlabel('Background Weights')
+#plt.ylabel('Foreground Weights')
 
 #Same plot as the previous one but using the weight dataframe
 gi=~np.isnan(weight_df['weightsA']) & ~np.isnan(weight_df['weightsB'])
@@ -110,6 +112,8 @@ weights=weights[:,~np.any(np.isnan(weights),axis=0)]
 plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=200)
 plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
+plt.xlabel('Background Weight')
+plt.ylabel('Foreground Weight')
 
 #WARNING, LEGEND BACKWARDS???!
 #plt.figure();  plt.hist(weights.T,bins=400,histtype='step')
@@ -121,7 +125,7 @@ plt.figure();
 plt.hist(weights[0,:],bins=bins,histtype='step')
 plt.hist(weights[1,:],bins=bins,histtype='step')
 plt.legend(('Background','Foreground'))
-
+plt.xlabel('Weight')
 
 plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=400,histtype='step')
 plt.xlim((-2, 2));
@@ -205,16 +209,17 @@ ax[1].plot((0,0),(0,np.max(np.abs(ax[1].get_ylim()))),'k',linewidth=.5)
 
 
 #Get and plot error functions
-err = weight_df.iloc[0]['get_error']
-squared_errors = np.array((len(err),len(weight_df)))
+err = weight_df.iloc[0]['get_error']()
+squared_errors = np.zeros((len(err),len(weight_df)))
 for i in range(len(weight_df)):
-    err = weight_df.iloc[i]['get_error']
+    err = weight_df.iloc[i]['get_error']()
     norm_factor = weight_df.iloc[i]['nf'] #mean of resp to Fg+Bg squared
-    squared_errors[i,:] = err**2/norm_factor
+    squared_errors[:,i] = err**2/norm_factor
 
 time = np.arange(0, err.shape[-1]) / fs
-plt.figure();plt.plot(time,squared_errors)
-plt.plot(time,np.mean(squared_errors),LineWidth=2)
+plt.figure();
+#plt.plot(time,squared_errors,linewidth=.5)
+plt.plot(time,np.nanmean(squared_errors,axis=1),'k',LineWidth=1)
 plt.xlabel('Time (s)')
 plt.ylabel('Normalized Squared Error')
 
