@@ -14,6 +14,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sb
+import copy
 sb.color_palette 
 sb.color_palette('colorblind')
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind')) 
@@ -71,7 +72,12 @@ if True:
 
     os.makedirs(os.path.dirname(OLP_cell_metrics_db_path),exist_ok=True)
     store = pd.HDFStore(OLP_cell_metrics_db_path)
-    store['df']=df.drop(columns=['get_nrmseR','get_error'])
+    df_store=copy.deepcopy(df)
+    def drop_get_error(row):
+        row['weight_dfR'] = row['weight_dfR'].copy().drop(columns='get_error')
+        return row
+    df_store=df_store.apply(drop_get_error,axis=1)
+    store['df']=df_store.drop(columns=['get_nrmseR'])
     store.close()
 else:
     store = pd.HDFStore(OLP_cell_metrics_db_path)
