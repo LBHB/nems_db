@@ -216,6 +216,7 @@ for i in range(len(weight_df)):
     norm_factor = weight_df.iloc[i]['nf'] #mean of resp to Fg+Bg squared
     squared_errors[:,i] = err**2/norm_factor
 
+
 time = np.arange(0, err.shape[-1]) / fs
 plt.figure();
 #plt.plot(time,squared_errors,linewidth=.5)
@@ -239,6 +240,43 @@ plt.legend(('Bg','Fg','Both','Weight Model'))
 plt.figure();plt.plot(time,row['get_error']()/np.sqrt(row['nf']))
 
 
+#PSTH plotting function:
+def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
+    if plot_error:
+        nr=2
+    else:
+        nr=1
+    f, ax = plt.subplots(nr,1)
+    if nr==1: ax=[ax]
+    cellid,stimA,stimB = cellid_and_stim_str.split(':')
+    cell_df=weight_df.loc[cellid]
+    this_cell_stim=cell_df[(cell_df['namesA']==stimA) & (cell_df['namesB']==stimB)].iloc[0]
+    err=this_cell_stim['get_error']()
+    time = np.arange(0, err.shape[-1]) / fs
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigA'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigB'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigAB'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='pred'))
+    ax[0].legend(('Bg, weight={:.2f}'.format(this_cell_stim.weightsA),
+      'Fg, weight={:.2f}'.format(this_cell_stim.weightsB),
+      'Both',
+      'Weight Model, r={:.2f}'.format(this_cell_stim.r)))
+    ax[0].set_title(cellid_and_stim_str)
+    
+    if plot_error:
+        ax[1].plot(time,this_cell_stim['get_error']()/np.sqrt(this_cell_stim['nf']))
+
+#Make interactive scatterplot of weights
+cellid_and_str_strs= [index[0]+':'+nameA+':'+nameB for index,nameA,nameB in \
+                      zip(weight_df.index.values,
+                          weight_df['namesA'],weight_df['namesB'])]
+
+f, ax = plt.subplots(1,1)
+fnargs={'plot_error':False}
+phi=ts.scatterplot_print(weight_df['weightsA'].values,
+                         weight_df['weightsB'].values,
+                         cellid_and_str_strs,
+                         ax=ax,fn=plot_psth,fnargs=fnargs)
 
 #from pdb import set_trace
 #set_trace() 
