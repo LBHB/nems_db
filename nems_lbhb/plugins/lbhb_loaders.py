@@ -2,6 +2,7 @@ import logging
 import re
 
 from nems.registry import xform, xmodule
+import nems.db as nd
 
 log = logging.getLogger(__name__)
 
@@ -305,11 +306,24 @@ def cc(loadkey):
     # cell count of 0 loads all cells
     cell_count = int(options[1])
     seed_mod = 0
+    exclusions = None
     for op in options[2:]:
         if op == 'sd':
             seed_mod = int(op[2:])
+        if op.startswith('xx'):
+            try:
+                # int for random number of cellids to exclude (all sites)
+                exclusions = int(op[2:])
+            except ValueError:
+                # or specify a site to exclude. repeat option to exclude more than one.
+                site = op[2:]
+                if exclusions is None:
+                    exclusions = [site]
+                else:
+                    exclusions += site
 
-    xfspec = [['nems_lbhb.xform_wrappers.select_cell_count', {'cell_count': cell_count, 'seed_mod': seed_mod}]]
+    xfspec = [['nems_lbhb.xform_wrappers.select_cell_count', {'cell_count': cell_count, 'seed_mod': seed_mod,
+                                                              'exclusions': exclusions}]]
 
     return xfspec
 

@@ -156,16 +156,30 @@ def split_pop_rec_by_mask(rec, **contex):
     return {'est': est, 'val': val}
 
 
-def select_cell_count(rec, cell_count, seed_mod=0, **context):
-    if cell_count == 0:
-        cell_count = len(rec['resp'].chans)
+def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
+
+    rec_cells = rec['resp'].chans
     random.seed(12345 + seed_mod)
-    random_selection = random.sample(rec['resp'].chans, cell_count)
+    if exclusions is None:
+        # don't exclude any cellids
+        exclusions = []
+    elif isinstance(exclusions, int):
+        # pick random subset to exclude
+        exclusions = random.sample(rec_cells, exclusions)
+    # else: exclusions should be a list of siteids to exclude
+
+    cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
+    if cell_count == 0:
+        cell_count = len(cell_set)
+    random_selection = random.sample(cell_set, cell_count)
     rec['resp'] = rec['resp'].extract_channels(random_selection)
+
     if 'mask_est' in rec.signals:
         rec['mask_est'].chans = random_selection
     meta = context['meta']
     meta['cellids'] = random_selection
+    if exclusions is not None:
+        meta['excluded_cellids'] = exclusions
 
     return {'rec': rec, 'meta': meta}
 
