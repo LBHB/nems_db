@@ -19,6 +19,7 @@ import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
 
 from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
+from nems.epoch import epoch_names_matching
 import nems.db as nd
 
 
@@ -121,7 +122,7 @@ def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
     return {'rec': newrec}
 
 
-def pupil_mask(est, val, condition, balance):
+def pupil_mask(est, val, condition, evoked_only=True, balance=False):
     """
     Create pupil mask by epoch (use REF by default) - so entire epoch is
     classified as big or small. Perform the mask on both est and val sets
@@ -153,7 +154,8 @@ def pupil_mask(est, val, condition, balance):
             pass
 
         r['mask'] = r['mask'].replace_epochs({'REFERENCE': mask})
-
+        r=r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
+        
         if (i == 1) & (balance == True):
             # balance epochs between big / small pupil conditions for the val
             # set in order to make sure r_test for big / small pupil fits is
@@ -415,7 +417,7 @@ def transform_stim_envelope(rec=None):
     return newrec
 
 
-def create_pupil_mask(rec, **options):
+def create_pupil_mask(rec, evoked_only=False, **options):
     """
     Returns new recording with mask specified by the following options params.
     Pupil mask will always be "and-ed" with existing mask
@@ -663,7 +665,9 @@ def create_pupil_mask(rec, **options):
 
     # Add the new mask to the recording
     newrec['mask'] = newrec['mask']._modified_copy(final_mask)
-
+    if evoked_only:
+        newrec=newrec.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
+    
     return newrec
 
 
@@ -756,21 +760,55 @@ def mask_pupil_balanced_epochs(rec):
     r = r.and_mask(balanced_epochs)
     return r
 
-def add_pupil_mask(rec, state='big', mask_name='p_mask'):
+def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     '''
     Simply add a p_mask signal that's true where p > median.
     Does this on a "per ref" basis so that epochs aren't chopped up.
     '''
     r = rec.copy()
     ops = {'state': state, 'epoch': ['REFERENCE'], 'collapse': True} 
-    bp = create_pupil_mask(r, **ops)
+    bp = create_pupil_mask(r, evoked_only=evoked_only, **ops)
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, split_per_stim=False, add_per_stim=False, **kwargs):
+    """
+    Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
+      reproduce desired pattern of noise correlations in different conditions.
+    By default, creates signals that mask trials according to whether pupil is smaller or larger than the mean.
+    Added to whatever mask already exists in rec.
+    Inputs: rec: Recording from NEMS
+    Returns rec: Recording with new signals 'mask_large' and 'mask_small'
+    Option: add_per_stim: if True, also returns signals 'mask_<epoch>' matching each epoch that 
+       starts with "STIM_". Currently these masks span both large and small pupil
+    """
     r = rec.copy()
-    r = add_pupil_mask(r, state='big', mask_name='mask_large')
-    r = add_pupil_mask(r, state='small', mask_name='mask_small')
+    r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
+    r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    
+    if add_per_stim or split_per_stim:
+        e = epoch_names_matching(r['resp'].epochs, '^STIM_')
+        #e[:3]
+
+        epochs_to_mask=list(r['resp'].extract_epochs(e, mask=r['mask']).keys())
+        for e in epochs_to_mask:
+            _r = r.copy()
+            _r = _r.and_mask(e)
+            if evoked_only:
+                _r=_r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
+            if split_per_stim:
+                r['mask_'+e+'_lg'] = r['mask']._modified_copy(_r['mask']._data * r['mask_large']._data)
+                r['mask_'+e+'_sm'] = r['mask']._modified_copy(_r['mask']._data * r['mask_small']._data)
+            else:
+                r['mask_'+e] = r['mask']._modified_copy(_r['mask']._data)
+
+        #plt.figure()
+        #plt.plot(rec['mask'].as_continuous()[0,:]-1.1)
+        #for i,e in enumerate(epochs_to_mask):
+        #    plt.plot(rec['mask_'+e].as_continuous()[0,:]+i*1.1)
+        #import pdb;
+        #pdb.set_trace()
+        
     return {'rec': r}
 
 def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):

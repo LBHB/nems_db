@@ -333,6 +333,15 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
     return context
 
 def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=None, **kwargs):
+    """
+    designed to be called by xforms keyword loadpred 
+    cellid/siteid - one or the other required
+    batch - required
+    default modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+    
+    makes new signal 'pred0' from evaluated 'pred', returns in updated rec
+    returns ctx-compatible dict {'rec': nems.Recording, 'input_name': 'pred0'}
+    """
     if (batch is None):
         raise ValueError("must specify cellid/siteid and batch")
 
@@ -346,7 +355,8 @@ def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=
         cellid = cellid[0]
 
     if modelname_existing is None:
-        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+        #modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
 
     xf,ctx = xhelp.load_model_xform(cellid, batch, modelname_existing)
     for k in ctx['val'].signals.keys():

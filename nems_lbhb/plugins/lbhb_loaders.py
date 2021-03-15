@@ -332,7 +332,8 @@ def cc(loadkey):
 def loadpred(loadkey):
     ops = loadkey.split('.')[1:]
 
-    modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+    #modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+    modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     for op in ops:
         if op=='rnd':
             rand_match = True

@@ -208,6 +208,10 @@ def st(loadkey):
             this_sig = ["pupil2"]
         elif l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("pvp"):
+            this_sig = ["pupil_dup"]
+        elif l.startswith("pwp"):
+            this_sig = ["pupil_dup2"]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
@@ -462,7 +466,14 @@ def plgsm(load_key):
     """
     Create masks for large and small pupl
     """
-    xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', {}]]
+    ops = load_key.split('.')[1:]
+    kwargs = {}
+    evoked_only = ('e' in ops)
+    add_per_stim = ('s' in ops)
+    split_per_stim = ('sp' in ops)
+
+    xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
+               {'evoked_only': evoked_only, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim}]]
 
     return xfspec
 

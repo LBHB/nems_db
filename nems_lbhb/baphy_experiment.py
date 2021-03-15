@@ -629,6 +629,11 @@ class BAPHYExperiment:
         if not self.behavior:
             raise ValueError("No behavior detected in this experiment")
 
+        # add dummy rasterfs for creating aligned timestamps. Not critically important what
+        # this is for the behavior metrics
+        rasterfs = kwargs.get('rasterfs', 100)
+        kwargs['rasterfs'] = rasterfs
+
         # get aligned exptevents for behavior files
         events = self.get_behavior_events(correction_method=self.correction_method, **kwargs)
         params = self.get_baphy_exptparams()

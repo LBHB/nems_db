@@ -15,6 +15,7 @@ from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
 from nems.uri import NumpyEncoder
 from nems.utils import get_setting, smooth
+from nems.modules.fir import per_channel
 
 
 log = logging.getLogger(__name__)
@@ -301,7 +302,7 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     if dstrf is not None:
         stimmag = dstrf.shape[0]
 
-    rec=force_signal_silence(rec)
+    rec = force_signal_silence(rec)
     stim_mag = rec['stim'].as_continuous()[:,:maxbins].sum(axis=0)
     index_range = np.arange(0, len(stim_mag), 1)
     if dstrf is None:
@@ -333,6 +334,11 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     d = np.reshape(dstrf[ii,:,:,c_],[len(ii),-1])
     pc_proj = d @ u.T
 
+    stim = rec['stim'].as_continuous()
+    pred=np.zeros((pcs.shape[0],stim.shape[1]))
+    for i in range(pcs.shape[0]):
+        pred[i,:] = per_channel(stim, np.fliplr(pcs[i,:,:,0]))
+
     n_strf=len(dindex)
 
     f = plt.figure(constrained_layout=True, figsize=(18,8))
@@ -352,7 +358,8 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     ax1.set_xlim(xl)
     yl1=ax1.get_ylim()
 
-    ax2.plot(pc_proj);
+    #ax2.plot(pc_proj);
+    ax2.plot(pred[:,rr_orig].T);
     ax2.set_xlim(xl)
     ax2.set_ylabel('pc projection')
     ax2.legend(('PC1','PC2','PC3'), frameon=False)
@@ -360,11 +367,20 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
 
     dindex = np.array(dindex)
     mmd=np.max(np.abs(dstrf[np.array(dindex)+rr[0],:,:,c_]))
-
+    stim = rec['stim'].as_continuous()[:,rr_orig] ** 2
+    mms = np.max(stim)
+    stim /= mms
+    
     for i,d in enumerate(dindex):
         ax1.plot([d,d],yl1,'--', color='darkgray')
         ax2.plot([d,d],yl2,'--', color='darkgray')
-        ds = np.fliplr(dstrf[d+rr[0],:,:,c_])
+        _dstrf = dstrf[d+rr[0],:,:,c_]
+        if True:
+            #_dstrf = np.concatenate((_dstrf,stim[:,(d-_dstrf.shape[1]):d]*mmd), axis=0)
+            _dstrf = np.concatenate((_dstrf,_dstrf*stim[:,(d-_dstrf.shape[1]):d]), axis=0)
+
+            #_dstrf *= stim[:,(d-_dstrf.shape[1]):d]
+        ds = np.fliplr(_dstrf)
         ds=zoom(ds, [2,2])
         ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'))
         #plot_heatmap(ds, aspect='auto', ax=ax[i], interpolation=2, clim=[-mmd, mmd], show_cbar=False, xlabel=None, ylabel=None)
@@ -386,13 +402,18 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
 
 
 def compute_dpcs(dstrf, pc_count=3):
+
+    #from sklearn.decomposition import PCA
+
     channel_count=dstrf.shape[3]
     s = list(dstrf.shape)
     s[0]=pc_count
     pcs = np.zeros(s)
     pc_mag = np.zeros((pc_count,channel_count))
+    #import pdb; pdb.set_trace()
     for c in range(channel_count):
         d = np.reshape(dstrf[:, :, :, c], (dstrf.shape[0], s[1]*s[2]))
+        #d -= d.mean(axis=0, keepdims=0)
 
         _u, _s, _v = np.linalg.svd(d.T @ d)
         _s = np.sqrt(_s)
