@@ -13,8 +13,12 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-
-OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat1.h5'
+import seaborn as sb
+import copy
+sb.color_palette 
+sb.color_palette('colorblind')
+plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind')) 
+OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat_A1_v1.h5'
 
 #Decide which cell:
 #UPDATE THE LINE BELOW TO POINT TO THE FILE
@@ -26,6 +30,7 @@ OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat1.h5'
 batch=328
 cell_df=nd.get_batch_cells(batch)
 cell_list=cell_df['cellid'].tolist()
+fs=100
 #cell_list=cell_df['cellid'].tolist()[-10:-8]
 #cell_list=['ARM013b-03-1','ARM013b-04-1']
 
@@ -60,9 +65,19 @@ if True:
     df = df.apply(ts.type_by_psth, axis=1);
     df['batch']=batch
     
+    df=df.apply(ts.calc_psth_weight_resp,axis=1,fs=fs)   
+    # df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
+    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
+    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
+
     os.makedirs(os.path.dirname(OLP_cell_metrics_db_path),exist_ok=True)
     store = pd.HDFStore(OLP_cell_metrics_db_path)
-    store['df']=df
+    df_store=copy.deepcopy(df)
+    def drop_get_error(row):
+        row['weight_dfR'] = row['weight_dfR'].copy().drop(columns='get_error')
+        return row
+    df_store=df_store.apply(drop_get_error,axis=1)
+    store['df']=df_store.drop(columns=['get_nrmseR'])
     store.close()
 else:
     store = pd.HDFStore(OLP_cell_metrics_db_path)
@@ -71,23 +86,11 @@ else:
     
 
 cols=['EP_A','EP_B','IP_A','IP_B','SR','SR_av_std']
-df[cols+['SinglesMax','MEnh_I','MSupp_I','Rtype','inds']]
+cols2=cols+['SinglesMax','MEnh_I','MSupp_I','Rtype']
+df[cols2]
 
 
-if True:
-    df=df.apply(ts.calc_psth_weight_resp,axis=1)   
-    # df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
-    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
-    # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
-    store = pd.HDFStore(OLP_cell_metrics_db_path)
-    store['df']=df.drop(columns='get_nrmseR')
-    store.close()
-else:
-    store = pd.HDFStore(OLP_cell_metrics_db_path)
-    df=store['df']
-    store.close()
-
-cols=['namesA','namesB','weightsA','weightsB']
+Wcols=['namesA','namesB','weightsA','weightsB']
 weight_df = pd.concat(df['weight_dfR'].values,keys=df.index)
 BGgroups = pd.concat(df['WeightAgroupsR'].values,keys=df.index)
 FGgroups = pd.concat(df['WeightBgroupsR'].values,keys=df.index)
@@ -101,11 +104,13 @@ plt.xlim((-2, 2))
 plt.ylim((-2, 2))
 plt.gca().set_aspect(1)
 
-weights=np.concatenate(df.weightsR.values,axis=1)
-weights=weights[:,~np.any(np.isnan(weights),axis=0)]
-plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
-plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
-plt.gca().set_aspect(1)
+#weights=np.concatenate(df.weightsR.values,axis=1)
+#weights=weights[:,~np.any(np.isnan(weights),axis=0)]
+#plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
+#plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
+#plt.gca().set_aspect(1)
+#plt.xlabel('Background Weights')
+#plt.ylabel('Foreground Weights')
 
 #Same plot as the previous one but using the weight dataframe
 gi=~np.isnan(weight_df['weightsA']) & ~np.isnan(weight_df['weightsB'])
@@ -113,6 +118,8 @@ weights=weights[:,~np.any(np.isnan(weights),axis=0)]
 plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=200)
 plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
+plt.xlabel('Background Weight')
+plt.ylabel('Foreground Weight')
 
 #WARNING, LEGEND BACKWARDS???!
 #plt.figure();  plt.hist(weights.T,bins=400,histtype='step')
@@ -124,7 +131,7 @@ plt.figure();
 plt.hist(weights[0,:],bins=bins,histtype='step')
 plt.hist(weights[1,:],bins=bins,histtype='step')
 plt.legend(('Background','Foreground'))
-
+plt.xlabel('Weight')
 
 plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=400,histtype='step')
 plt.xlim((-2, 2));
@@ -205,6 +212,77 @@ ax[1].step(np.insert(bins,0,bins[0]), np.insert(np.append(N,0),0,0),where='post'
 ax[1].legend(('range(Fg) - range(Bg) over constant Bg','range(Fg) - range(Bg) over constant Fg'), bbox_to_anchor=(1.05,1.15))
 ax[1].set_xlabel('Diff in range of weights (range(Fg)-range(Bg))')
 ax[1].plot((0,0),(0,np.max(np.abs(ax[1].get_ylim()))),'k',linewidth=.5)
+
+
+#Get and plot error functions
+err = weight_df.iloc[0]['get_error']()
+squared_errors = np.zeros((len(err),len(weight_df)))
+for i in range(len(weight_df)):
+    err = weight_df.iloc[i]['get_error']()
+    norm_factor = weight_df.iloc[i]['nf'] #mean of resp to Fg+Bg squared
+    squared_errors[:,i] = err**2/norm_factor
+
+
+time = np.arange(0, err.shape[-1]) / fs
+plt.figure();
+#plt.plot(time,squared_errors,linewidth=.5)
+plt.plot(time,np.nanmean(squared_errors,axis=1),'k',LineWidth=1)
+plt.xlabel('Time (s)')
+plt.ylabel('Normalized Squared Error')
+
+#To plot PSTHs and weight model
+cellid='ARM031a-33-1';
+row=df.loc[cellid]['weight_dfR'].iloc[0]
+plt.figure();
+err=row['get_error']()
+time = np.arange(0, err.shape[-1]) / fs
+plt.plot(time,row['get_error'](get_what='sigA'))
+plt.plot(time,row['get_error'](get_what='sigB'))
+plt.plot(time,row['get_error'](get_what='sigAB'))
+plt.plot(time,row['get_error'](get_what='pred'))
+plt.legend(('Bg','Fg','Both','Weight Model'))
+
+#to plot error function
+plt.figure();plt.plot(time,row['get_error']()/np.sqrt(row['nf']))
+
+
+#PSTH plotting function:
+def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
+    if plot_error:
+        nr=2
+    else:
+        nr=1
+    f, ax = plt.subplots(nr,1)
+    if nr==1: ax=[ax]
+    cellid,stimA,stimB = cellid_and_stim_str.split(':')
+    cell_df=weight_df.loc[cellid]
+    this_cell_stim=cell_df[(cell_df['namesA']==stimA) & (cell_df['namesB']==stimB)].iloc[0]
+    err=this_cell_stim['get_error']()
+    time = np.arange(0, err.shape[-1]) / fs
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigA'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigB'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='sigAB'))
+    ax[0].plot(time,this_cell_stim['get_error'](get_what='pred'))
+    ax[0].legend(('Bg, weight={:.2f}'.format(this_cell_stim.weightsA),
+      'Fg, weight={:.2f}'.format(this_cell_stim.weightsB),
+      'Both',
+      'Weight Model, r={:.2f}'.format(this_cell_stim.r)))
+    ax[0].set_title(cellid_and_stim_str)
+    
+    if plot_error:
+        ax[1].plot(time,this_cell_stim['get_error']()/np.sqrt(this_cell_stim['nf']))
+
+#Make interactive scatterplot of weights
+cellid_and_str_strs= [index[0]+':'+nameA+':'+nameB for index,nameA,nameB in \
+                      zip(weight_df.index.values,
+                          weight_df['namesA'],weight_df['namesB'])]
+
+f, ax = plt.subplots(1,1)
+fnargs={'plot_error':False}
+phi=ts.scatterplot_print(weight_df['weightsA'].values,
+                         weight_df['weightsB'].values,
+                         cellid_and_str_strs,
+                         ax=ax,fn=plot_psth,fnargs=fnargs)
 
 #from pdb import set_trace
 #set_trace() 

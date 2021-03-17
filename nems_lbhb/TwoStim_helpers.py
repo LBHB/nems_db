@@ -504,6 +504,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     thresh=np.array((SR/resp.fs + 0.1 * (SinglesMax - SR/resp.fs),
             (SR - SR_av_std)/resp.fs))
             #SR/resp.fs - 0.5 * (np.nanmax(val['resp'].as_continuous()) - SR/resp.fs)]
+    
     types=['A','B','I']
     excitatory_percentage={}
     inhibitory_percentage={}
@@ -847,12 +848,12 @@ def r_noise_corrected(X,Y,N_ac=200):
     #plt.figure(); plt.imshow(rs)
     return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
     
-def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False):
+def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False,fs=200):
     print('load {}'.format(row.name))
     modelspecs,est,val = load_TwoStim(int(row.batch),
                                       row.name,
                                       ['A','B','C','I'],
-                                      None,fs=200,
+                                      None,fs=fs,
                                       get_est=False,
                                       get_stim=False)
     #smooth and subtract SR
@@ -911,12 +912,12 @@ def type_by_psth(row):
         inds=np.array((0,1))
     elif t[0]=='I' and t[1]=='E': #IE
         inds=np.array((1,0))
-        t=['E','I']
+        #t=['E','I']
     elif t[0]=='E' and t[1]=='O': #EO
         inds=np.array((0,1))
     elif t[0]=='O' and t[1]=='E': #OE
         inds=np.array((1,0))
-        t=['E','O']
+        #t=['E','O']
     elif t.count('O')==2: #OO
         if row['Max_A'] > row['Max_B']:
             inds=np.array((0,1))
@@ -927,14 +928,21 @@ def type_by_psth(row):
         #inds = None
         raise RuntimeError('Unknown type {}'.format(t))
     row['Rtype']=''.join(t)
-    row['inds']=inds
+    #row['inds']=inds
     #return pd.Series({'Rtype': ''.join(t), 'inds': inds})
     return row
         
 def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=False,find_mse_confidence=True,get_nrmse_fn=True):
-    prestimtime=1;
-    duration=3
-    post_duration_pad=.5
+    #prestimtime=0.5;#1;
+    PSS=val[signame].epochs[val[signame].epochs['name']=='PreStimSilence'].iloc[0]
+    prestimtime = PSS['end'] - PSS['start']
+    REF=val[signame].epochs[val[signame].epochs['name']=='REFERENCE'].iloc[0]
+    total_duration= REF['end'] - REF['start']
+    POSS=val[signame].epochs[val[signame].epochs['name']=='PostStimSilence'].iloc[0]
+    poststimtime = POSS['end'] - POSS['start']
+    duration = total_duration - prestimtime - poststimtime
+    
+    post_duration_pad=.5 #Include stim much post-stim time in weight calcs
     time = np.arange(0, val[signame].extract_epoch(names[0][0]).shape[-1]) / val[signame].fs - prestimtime    
     xc_win=(time>0) & (time < (duration + post_duration_pad))
     #names = [ [n[0]] for n in names]
@@ -956,28 +964,50 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     #residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
     
     #calc CC between weight model and actual response
-    sigF2 = np.dot(weights,fsigs[ff,:].T)
-    cc = np.corrcoef(sigF2, sigO[ff])
+    pred = np.dot(weights,fsigs[ff,:].T)
+    cc = np.corrcoef(pred, sigO[ff])
     r_weight_model = cc[0, 1]
 
-    norm_factor = np.std(sigO[ff])    
+    #norm_factor = np.std(sigO[ff])    
+    norm_factor = np.mean(sigO[ff]**2)   
 
     if rank==1:
-        min_nrmse=1
+        min_nMSE=1
+        min_nRMSE=1
     else:
-        min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor #minimim normalized mean squared error
+        #min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor 
+        pred=np.dot(weights,fsigs[ff,:].T)
+        min_nRMSE = np.sqrt(((sigO[ff]-pred)**2).mean()) / np.sqrt(norm_factor) #minimim normalized root mean squared error
+        min_nMSE = ((sigO[ff]-pred)**2).mean() / norm_factor #minimim normalized mean squared error
+    
     #create NMSE caclulator for later
     if get_nrmse_fn:
         def get_nrmse(weights=weights):
-            sigF2 = np.dot(weights,fsigs[ff,:].T)
-            nrmse = np.sqrt(((sigF2-sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
+            pred = np.dot(weights,fsigs[ff,:].T)
+            nrmse = np.sqrt(((pred-sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
             return nrmse
     else:
         get_nrmse = np.nan
-        
+    
+    def get_error(weights=weights,get_what='error'):
+            
+            if get_what is 'sigA':
+                return fsigs[ff,0]
+            elif get_what is 'sigB':
+                return fsigs[ff,1]
+            elif get_what is 'sigAB':
+                return sigO[ff]
+            elif get_what is 'pred':
+                return np.dot(weights,fsigs[ff,:].T)
+            elif get_what is 'error':
+                pred = np.dot(weights,fsigs[ff,:].T)
+                return pred-sigO[ff]
+            else:
+                raise RuntimeError('Invalid get_what parameter')
+            
     if not find_mse_confidence:
         weights[close_to_zero] = np.nan
-        return weights, np.nan, min_nrmse, norm_factor, get_nrmse, r_weight_model
+        return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
 #    sigF=weights[0]*sig1 + weights[1]*sig2 + weights[2]
 #    plt.figure();
 #    plt.plot(np.vstack((sig1,sig2,sigO,sigF)).T)
@@ -1018,7 +1048,7 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
             Bs=wB[(nrmse<thresh[1]) & (nrmse>thresh[0])]
         return nrmse, As, Bs, wA_, wB_
     
-    if min_nrmse < 1:
+    if min_nRMSE < 1:
         this_threshtype='ReChance'
     else:
         this_threshtype='Absolute'         
@@ -1083,7 +1113,7 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
 #    plt.figure();plt.plot(get_nrmse(weights=(xx,yy)))
 #    plt.figure();plt.plot(get_nrmse(weights=(As,Bs)))
     weights[close_to_zero] = np.nan
-    return weights, epars, nrmse.min(), norm_factor, get_nrmse, r_weight_model
+    return weights, epars, nrmse.min(), norm_factor, get_nrmse, r_weight_model, get_error
 
 def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_mse_confidence=True,get_nrmse_fn=True):
     #weights_C=np.ones((2,3))
@@ -1114,13 +1144,15 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     #Calculate weights
     weights = np.zeros((2,len(AB)))
     Efit = np.zeros((5,len(AB)))
-    nrmse = np.zeros(len(AB))
+    nMSE = np.zeros(len(AB))
     nf = np.zeros(len(AB))
     r = np.zeros(len(AB))
+    get_error=[]
     for i in range(len(AB)):
         names=[[A[i]],[B[i]],[AB[i]]]
-        weights[:,i], Efit[:,i], nrmse[i], nf[i], get_nrmse, r[i] = calc_psth_weights_of_model_responses_list(
+        weights[:,i], Efit[:,i], nMSE[i], nf[i], get_nrmse, r[i], ge = calc_psth_weights_of_model_responses_list(
             val,names,signame,do_plot=do_plot,find_mse_confidence=find_mse_confidence,get_nrmse_fn=get_nrmse_fn)
+        get_error.append(ge)
         if do_plot and find_mse_confidence:
             plt.title('{}, signame={}'.format(AB[i],signame))
 #    names=[A,B,AB]    
@@ -1134,14 +1166,14 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     #names=['STIM_T+si516+null','STIM_T+null+si464','STIM_T+si516+si464']
     #weights_I[1,:]=calc_psth_weights_of_model_responses_single(val,names)
     
-    weight_df=pd.DataFrame([epcs_twostim['nameA'].values,epcs_twostim['nameB'].values,weights[0,:],weights[1,:],Efit,nrmse,nf,r])
+    weight_df=pd.DataFrame([epcs_twostim['nameA'].values,epcs_twostim['nameB'].values,weights[0,:],weights[1,:],Efit,nMSE,nf,r,get_error])
     weight_df = weight_df.T
-    weight_df.columns=['namesA','namesB','weightsA','weightsB','Efit','nrmse','nf','r']
-    cols=['namesA','namesB','weightsA','weightsB']
+    weight_df.columns=['namesA','namesB','weightsA','weightsB','Efit','nMSE','nf','r','get_error']
+    cols=['namesA','namesB','weightsA','weightsB','nMSE']
     print(weight_df[cols])
     
     
-    weight_df=weight_df.astype({'weightsA':float,'weightsB':float})
+    weight_df=weight_df.astype({'weightsA':float,'weightsB':float,'nMSE':float,'nf':float,'r':float})
     val_range = lambda x: max(x)-min(x)
     val_range.__name__ = 'range'
     MI = lambda x: np.mean([np.abs(np.diff(pair))/np.abs(np.sum(pair)) for pair in itertools.combinations(x,2)])
@@ -1169,7 +1201,7 @@ def calc_psth_weights_of_model_responses(val,signame='pred',do_plot=False,find_m
     namesA=A
     namesB=B
     D=locals()
-    D={k: D[k] for k in ('weights', 'Efit', 'nrmse', 'nf', 'get_nrmse', 'r','names','namesA','namesB','weight_df','WeightAgroups','WeightBgroups')}
+    D={k: D[k] for k in ('weights', 'Efit', 'nMSE', 'nf', 'get_nrmse', 'r','names','namesA','namesB','weight_df','WeightAgroups','WeightBgroups')}
     return D
     #return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
@@ -1298,6 +1330,8 @@ def generate_weighted_model_signals(sig_in,weights,epcs_offsets):
     orig_epcs=sig_in.epochs.copy()
     sig_in.epochs['start']=sig_in.epochs['start']+epcs_offsets[0]
     sig_in.epochs['end']=sig_in.epochs['end']+epcs_offsets[1]
+    from pdb import set_trace
+    set_trace() 
     EA=np.array([n.split('+')[1] for n in epcs['name']])
     EB=np.array([n.split('+')[2] for n in epcs['name']])
     corrs={}
@@ -1329,50 +1363,38 @@ def generate_weighted_model_signals(sig_in,weights,epcs_offsets):
     sig_out.epochs=orig_epcs.copy()
     return sig_out, corrs
 
-def plot_linear_and_weighted_psths(batch,cellid,weights=None,subset=None,rec_file=None):
-    #options = {}
-    #options['cellid']=cellid
-    #options['batch']=batch
-    #options["stimfmt"] = "envelope"
-    #options["chancount"] = 0
-    #options["rasterfs"] = 100
-    #rec_file=nb.baphy_data_path(options)  
-
+def plot_linear_and_weighted_psths(row,weights=None,subset=None,rec_file=None):
 
     #from pdb import set_trace
     #set_trace() 
-    if rec_file is None:
-        rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100')
-    rec=recording.load_recording(rec_file)
-    rec['resp'] = rec['resp'].extract_channels([cellid])
-    rec['resp'].fs=200
-    
-    epcs=rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].copy()
-    spike_times=rec['resp']._data[cellid]
-    count=0
-    for index, row in epcs.iterrows():
-        count+=np.sum((spike_times > row['start']) & (spike_times < row['end']))
-    SR=count/(epcs['end']-epcs['start']).sum()
-     
-    #COMPUTE ALL FOLLOWING metrics using smoothed driven rate
-    est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
-    val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
-    
+    print('load {}'.format(row.name))
+    modelspecs,est,val = load_TwoStim(int(row.batch),
+                                      row.name,
+                                      ['A','B','C','I'],
+                                      None,fs=200,
+                                      get_est=False,
+                                      get_stim=False)
     #smooth and subtract SR
-    fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR/rec['resp'].fs)
+    fn = lambda x : np.atleast_2d(ts.smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
+    val=val[0]
+    #fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val['resp']=val['resp'].transform(fn)
-    val['resp']=add_stimtype_epochs(val['resp'])
+    
+    from pdb import set_trace
+    set_trace() 
+    epcs=val['resp'].epochs[val['resp'].epochs['name'] == 'PreStimSilence'].copy()
 
     lin_weights=[[1,1],[1,1]]
     epcs_offsets=[epcs['end'].iloc[0], 0]
-    val['lin_model'], l_corrs=sp.generate_weighted_model_signals(val['resp'],lin_weights,epcs_offsets)    
+    val['weighted_model'], w_corrs=generate_weighted_model_signals(val['resp'],weights,epcs_offsets)
+    val['lin_model'], l_corrs=generate_weighted_model_signals(val['resp'],lin_weights,epcs_offsets)    
     if weights is None:
         sigz=['resp','lin_model']
         plot_singles_on_dual=True
         plot_singles_on_dual=False
         w_corrs=None
     else:
-        val['weighted_model'], w_corrs=sp.generate_weighted_model_signals(val['resp'],weights,epcs_offsets)
+        val['weighted_model'], w_corrs=generate_weighted_model_signals(val['resp'],weights,epcs_offsets)
         sigz=['resp','lin_model','weighted_model']
         plot_singles_on_dual=False
     from pdb import set_trace
@@ -1457,8 +1479,8 @@ def plot_psth_weights(df,ax=None,s='R',lengthscale=10,fnargs=None,fn=None,norm_m
     return phc,phi
 
 def plot_weighted_psths_and_weightplot(row,weights,batch=306):
-    weights2=[w[row['inds']] for w in weights]
-    fh,w_corrs,l_corrs=plot_linear_and_weighted_psths(batch,row.name,weights2)
+    #weights2=[w[row['inds']] for w in weights]
+    fh,w_corrs,l_corrs=plot_linear_and_weighted_psths(row,weights)
     
     ax=fh.axes
     for ax_ in ax:
