@@ -771,7 +771,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, split_per_stim=False, add_per_stim=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -785,6 +785,13 @@ def pupil_large_small_masks(rec, evoked_only=True, split_per_stim=False, add_per
     r = rec.copy()
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    if 0 & (ev_bins>0):
+        _m = r['mask_large'].as_continuous()[0,:]
+        _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
+        r['mask_large'] = r['mask_large']._modified_copy(_dm)
+        _m = r['mask_small'].as_continuous()[0,:]
+        _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
+        r['mask_small'] = r['mask_small']._modified_copy(_dm)
     
     if add_per_stim or split_per_stim:
         e = epoch_names_matching(r['resp'].epochs, '^STIM_')
@@ -796,6 +803,11 @@ def pupil_large_small_masks(rec, evoked_only=True, split_per_stim=False, add_per
             _r = _r.and_mask(e)
             if evoked_only:
                 _r=_r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
+            if ev_bins>0:
+                _m = _r['mask'].as_continuous()[0,:]
+                _dm = np.concatenate(([0],np.diff(_m.astype(float))>0)).astype(bool)
+                _r = _r.and_mask(_dm)
+                
             if split_per_stim:
                 r['mask_'+e+'_lg'] = r['mask']._modified_copy(_r['mask']._data * r['mask_large']._data)
                 r['mask_'+e+'_sm'] = r['mask']._modified_copy(_r['mask']._data * r['mask_small']._data)
