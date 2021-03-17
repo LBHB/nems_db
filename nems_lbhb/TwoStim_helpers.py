@@ -415,7 +415,10 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     import nems.metrics.api as nmet
     import nems.metrics.corrcoef
     import copy
-    
+    import nems.epoch as ep
+    import scipy.stats as sst
+    from nems_lbhb.gcmodel.figures.snr import compute_snr
+
     start_win_offset=0  #Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
     #start_win_offset=0.5 (HCT-stimuli)
     
@@ -427,27 +430,83 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     #options["rasterfs"] = 100
     #rec_file=nb.baphy_data_path(options)
 
-    if rec_file is None and parmfile is None:
-        rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100')  #'was 'env.fs100'
-        rec=recording.load_recording(rec_file)
-    elif rec_file is None and parmfile is not None:
-        options = {'rasterfs': 100, 'resp': True}
-        manager = BAPHYExperiment(parmfile=parmfile)
-        rec = manager.get_recording(**options)
-    elif rec_file is not None and parmfile is None:
-        rec=recording.load_recording(rec_file)
-    else:
-        raise RuntimeError('load options invalid')    
-        
+    #Greg added loader that doesn't need parmfile
+    manager = BAPHYExperiment(cellid=cellid, batch=batch)
+    options = {'rasterfs': 100,
+               'stim': False,
+               'resp': True}
+    rec = manager.get_recording(**options)
+    # if rec_file is None and parmfile is None:
+    #     rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100')  #'was 'env.fs100'
+    #     rec=recording.load_recording(rec_file)
+    # elif rec_file is None and parmfile is not None:
+    #     options = {'rasterfs': 100, 'resp': True}
+    #     manager = BAPHYExperiment(parmfile=parmfile)
+    #     rec = manager.get_recording(**options)
+    # elif rec_file is not None and parmfile is None:
+    #     rec=recording.load_recording(rec_file)
+    # else:
+    #     raise RuntimeError('load options invalid')
+
     #uri = nb.baphy_load_recording_uri(cellid=cellid, batch=batch, **options)
     
     rec['resp'] = rec['resp'].extract_channels([cellid])
-    rec['resp'].fs=200
-    
+    resp = copy.copy(rec['resp'].rasterize())
+    rec['resp'].fs=100
+
+    #Greg spont rate subtraction with std norm
+    prestimsilence = resp.extract_epoch('PreStimSilence')
+    # average over reps(0) and time(-1), preserve neurons
+    spont_rate = np.expand_dims(np.nanmean(prestimsilence, axis=(0, -1)), axis=1)
+    ##STD OVER PRESETIM ONLY
+    std_per_neuron = resp._data.std(axis=1, keepdims=True)
+    std_per_neuron[std_per_neuron == 0] = 1
+    norm_spont = resp._modified_copy(data=(resp._data - spont_rate) / std_per_neuron)
+
+    file = os.path.splitext(rec.meta['files'][0])[0]
+    experiment_name = file[-3:]
+    #get dictionary of parameters for experiment
+    if experiment_name == 'OLP':
+        params = get_expt_params(resp, manager, cellid)
+    else:
+        params = {}
+
     epcs=rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].copy()
     ep2=rec['resp'].epochs[rec['resp'].epochs['name'] == 'PostStimSilence'].iloc[0].copy()
     prestim=epcs.iloc[0]['end']
     poststim=ep2['end']-ep2['start']
+    lenstim=ep2['end']
+
+    stim_epochs = ep.epoch_names_matching(resp.epochs, 'STIM_')
+    epoch_repetitions = [resp.count_epoch(cc) for cc in stim_epochs]
+    full_resp = np.empty((max(epoch_repetitions), len(stim_epochs),
+                          (int(lenstim) * rec['resp'].fs)))
+    full_resp[:] = np.nan
+    for cnt, epo in enumerate(stim_epochs):
+        resps_list = resp.extract_epoch(epo)
+        full_resp[:resps_list.shape[0], cnt, :] = resps_list[:, 0, :]
+
+    ##base reliability
+    # gets two subsamples across repetitions, and takes the mean across reps
+    rep1 = np.nanmean(full_resp[0:-1:2, ...], axis=0)
+    rep2 = np.nanmean(full_resp[1:full_resp.shape[0] + 1:2, ...], axis=0)
+
+    resh1 = np.reshape(rep1, [-1])
+    resh2 = np.reshape(rep2, [-1])
+
+    corcoef = sst.pearsonr(resh1[:], resh2[:])[0]
+
+    ##average response
+    pre_bin = int(prestim * rec['resp'].fs)
+    post_bin = int(full_resp.shape[-1] - (poststim * rec['resp'].fs))
+
+    raster = np.squeeze(full_resp[..., pre_bin:post_bin])
+
+    S = tuple([*range(0, len(raster.shape), 1)])
+    avg_resp = np.nanmean(np.absolute(raster), axis=S)
+
+    ##signal to noise
+    snr = compute_snr(resp)
     
     spike_times=rec['resp']._data[cellid]
     count=0
@@ -825,7 +884,9 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
 #           'rCC':rCC            
             'rAA_nc':rAA_nc,'rBB_nc':rBB_nc,
             'mean_nsA':mean_nsA,'mean_nsB':mean_nsB,'min_nsA':min_nsA,'min_nsB':min_nsB,
-            'SR':SR, 'SR_std':SR_std, 'SR_av_std':SR_av_std}    
+            'SR':SR, 'SR_std':SR_std, 'SR_av_std':SR_av_std,
+            'norm_spont': norm_spont, 'params': params,
+            'corcoef': corcoef, 'avg_resp': avg_resp, 'snr': snr}
     
 def r_noise_corrected(X,Y,N_ac=200):
     import nems.metrics.corrcoef
@@ -1575,3 +1636,31 @@ def calc_psth_weight_cell(cell,do_plot=False,get_nrmse_only=False):
             cell[k]=v
     
     return cell
+
+def get_expt_params(resp, manager, cellid):
+    '''Greg added function that takes a loaded response and returns a dict that
+    contains assorted parameters that are useful for plotting'''
+    params = {}
+
+    e = resp.epochs
+    expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
+    ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+
+    params['experiment'], params['fs'] = cellid.split('-')[0], resp.fs
+    params['PreStimSilence'], params['PostStimSilence'] = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']
+    params['Duration'], params['SilenceOnset'] = ref_handle['Duration'], ref_handle['SilenceOnset']
+    params['max reps'] = e[e.name.str.startswith('STIM')].pivot_table(index=['name'], aggfunc='size').max()
+    params['stim length'] = int(e.loc[e.name.str.startswith('REF')].iloc[0]['end']
+                - e.loc[e.name.str.startswith('REF')].iloc[0]['start'])
+    params['combos'] = ['Full BG', 'Full FG', 'Full BG/Full FG', 'Half BG/Full FG', 'Half BG', 'Half FG',
+          'Half BG/Half FG', 'Full BG/Half FG']
+    params['Background'], params['Foreground'] = ref_handle['Background'], ref_handle['Foreground']
+
+    soundies = list(ref_handle['SoundPairs'].values())
+    params['pairs'] = [tuple([j for j in (soundies[s]['bg_sound_name'].split('.')[0],
+                                  soundies[s]['fg_sound_name'].split('.')[0])])
+                                    for s in range(len(soundies))]
+    params['units'], params['response'] = resp.chans, resp
+    params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
+
+    return params
