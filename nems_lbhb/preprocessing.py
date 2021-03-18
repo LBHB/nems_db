@@ -220,7 +220,7 @@ def mask_subset_by_epoch(rec,epoch_list):
 
 def getPrePostSilence(sig):
     """
-    Figure out Pre- and PostStimSilence (units of time bins) for a signal
+    Figure out Pre- and PostStimSilence (units of sec) for a signal
 
     input:
         sig : Signal (required)
@@ -785,6 +785,57 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = rec.copy()
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    
+    if ev_bins>1:
+        # special case, find stim with high pupil variance, mask in individual bins from them
+        # generate list of tuples in rec.meta with [(epoch, bin), ... ]
+        epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
+        epoch_names=list(r['resp'].extract_epochs(epoch_names, mask=r['mask']).keys())
+        pstd=np.zeros(len(epoch_names))
+
+        for i,e in enumerate(epoch_names):
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            pstd[i] = p.mean(axis=0).std()
+        epoch_bins=p.shape[2]
+        pre,post = getPrePostSilence(r['resp'])
+        prebins = int(pre*r['resp'].fs)
+        postbins = int(post*r['resp'].fs)
+        durbins = epoch_bins-prebins-postbins
+        pkeep = np.array([s>np.max(pstd)/3 for s in pstd])
+        if pkeep.sum()<3:
+            pkeep = np.array([s>np.max(pstd)/6 for s in pstd])
+        if pkeep.sum()<3:
+            pkeep=np.ones(len(epoch_names), dtype=bool)
+        epoch_names=[epoch_names[j] for j,p in enumerate(pkeep) if p]
+        pstd=pstd[pkeep]
+        epoch_count=len(epoch_names)
+        total_bins=durbins * epoch_count
+        choose_bins = np.linspace(0,total_bins-1,ev_bins)
+        choose_epoch=np.floor(choose_bins/durbins).astype(int)
+        choose_bin = (choose_bins % durbins + prebins).astype(int)
+        mask_bins=[]
+        for i,eidx in enumerate(choose_epoch):
+            e = epoch_names[eidx]
+            mask_bins.append((e, int(choose_bin[i])))
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            b = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            p = np.squeeze(p.mean(axis=2))
+
+            _m_lg = np.zeros(r['pupil'].shape)
+            _m_sm = np.zeros(r['pupil'].shape)
+            for j,_b in enumerate(b):
+                if p[j]<np.median(p):
+                    _m_sm[0,b[j][0]+choose_bin[i]] = 1
+                else:
+                    _m_lg[0,b[j][0]+choose_bin[i]] = 1
+
+            r['mask_'+e+':'+str(choose_bin[i])+'_sm'] = r['mask']._modified_copy((r['mask']._data * _m_sm).astype(bool))
+            r['mask_'+e+':'+str(choose_bin[i])+'_lg'] = r['mask']._modified_copy((r['mask']._data * _m_lg).astype(bool))
+            log.info(f"{e} {choose_bin[i]} sm={r['mask_'+e+':'+str(choose_bin[i])+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(choose_bin[i])+'_lg'].as_continuous().sum()}")
+        r.meta['mask_bins'] = mask_bins
+    
+        return {'rec': r}
+    
     if 0 & (ev_bins>0):
         _m = r['mask_large'].as_continuous()[0,:]
         _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
@@ -803,7 +854,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
             _r = _r.and_mask(e)
             if evoked_only:
                 _r=_r.and_mask(['PreStimSilence', 'PostStimSilence'], invert=True)
-            if ev_bins>0:
+            if ev_bins==1:
                 _m = _r['mask'].as_continuous()[0,:]
                 _dm = np.concatenate(([0],np.diff(_m.astype(float))>0)).astype(bool)
                 _r = _r.and_mask(_dm)
