@@ -18,7 +18,9 @@ import copy
 sb.color_palette 
 sb.color_palette('colorblind')
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind')) 
-OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat_A1_v1.h5'
+# OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat_A1_v1.h5'
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/a1_celldat1.h5'
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/peg_celldat1.h5'
 
 #Decide which cell:
 #UPDATE THE LINE BELOW TO POINT TO THE FILE
@@ -30,6 +32,7 @@ OLP_cell_metrics_db_path='/auto/users/luke/Projects/OLP/NEMS/celldat_A1_v1.h5'
 batch=328
 cell_df=nd.get_batch_cells(batch)
 cell_list=cell_df['cellid'].tolist()
+cell_list = [cell for cell in cell_list if cell[:3] != 'HOD']
 fs=100
 #cell_list=cell_df['cellid'].tolist()[-10:-8]
 #cell_list=['ARM013b-03-1','ARM013b-04-1']
@@ -104,18 +107,19 @@ plt.xlim((-2, 2))
 plt.ylim((-2, 2))
 plt.gca().set_aspect(1)
 
-#weights=np.concatenate(df.weightsR.values,axis=1)
-#weights=weights[:,~np.any(np.isnan(weights),axis=0)]
-#plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=200)
-#plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
-#plt.gca().set_aspect(1)
-#plt.xlabel('Background Weights')
-#plt.ylabel('Foreground Weights')
+# weights=np.concatenate(df.weightsR.values,axis=1)
+# weights=weights[:,~np.any(np.isnan(weights),axis=0)]
+# plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=bins)
+# plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
+# plt.gca().set_aspect(1)
+# plt.xlabel('Background Weights')
+# plt.ylabel('Foreground Weights')
 
 #Same plot as the previous one but using the weight dataframe
+bins=np.arange(-2,2,.05)
 gi=~np.isnan(weight_df['weightsA']) & ~np.isnan(weight_df['weightsB'])
-weights=weights[:,~np.any(np.isnan(weights),axis=0)]
-plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=200)
+# weights=weights[:,~np.any(np.isnan(weights),axis=0)]
+plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=bins)
 plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
 plt.xlabel('Background Weight')
@@ -133,7 +137,7 @@ plt.hist(weights[1,:],bins=bins,histtype='step')
 plt.legend(('Background','Foreground'))
 plt.xlabel('Weight')
 
-plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=400,histtype='step')
+plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=bins,histtype='step')
 plt.xlim((-2, 2));
 plt.xlabel('Paired Foreground - Background')
 
@@ -285,4 +289,13 @@ phi=ts.scatterplot_print(weight_df['weightsA'].values,
                          ax=ax,fn=plot_psth,fnargs=fnargs)
 
 #from pdb import set_trace
-#set_trace() 
+#set_trace()
+
+
+##Greg added to check exclusion metrics
+snrs, coefs, avgs = df['snr'], df['corcoef'], df['avg_resp']
+fig, ax = plt.subplots(2,2)
+ax = ax.ravel('F')
+ax[0].hist(snrs.values, bins=75), ax[0].set_title('SNR', fontweight='bold')
+ax[1].hist(coefs.values, bins=75), ax[1].set_title('Corr Coef', fontweight='bold')
+ax[2].hist(avgs.values, bins=75), ax[2].set_title('Average Response', fontweight='bold')
