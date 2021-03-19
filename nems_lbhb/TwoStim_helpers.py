@@ -421,7 +421,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
 
     start_win_offset=0  #Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
     #start_win_offset=0.5 (HCT-stimuli)
-    
+
     options = {}
     #options['cellid']=cellid
     #options['batch']=batch
@@ -449,7 +449,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     #     raise RuntimeError('load options invalid')
 
     #uri = nb.baphy_load_recording_uri(cellid=cellid, batch=batch, **options)
-    
+
     rec['resp'] = rec['resp'].extract_channels([cellid])
     resp = copy.copy(rec['resp'].rasterize())
     rec['resp'].fs=100
@@ -507,7 +507,29 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
 
     ##signal to noise
     snr = compute_snr(resp)
-    
+
+    #Calculate suppression for each sound pair.
+    # epochs with two sounds in them
+    epcs_twostim = resp.epochs[resp.epochs['name'].str.count('-0-1') == 2].copy()
+    twostims = np.unique(epcs_twostim.name.values.tolist())
+    supp_array = np.empty((len(twostims)))
+    supp_array[:] = np.nan
+
+    for cnt, stimmy in enumerate(twostims.tolist()):
+        ABepo = resp.extract_epoch(stimmy)
+        sep = get_sep_stim_names(stimmy)
+        Aepo = resp.extract_epoch('STIM_'+sep[0]+'_null')
+        Bepo = resp.extract_epoch('STIM_null_'+sep[1])
+        lenA, lenB = Aepo.shape[0], Bepo.shape[0]
+        min_rep = np.min((Aepo.shape[0], Bepo.shape[0]))
+        lin_resp = (Aepo[:min_rep, :, :] + Bepo[:min_rep, :, :])
+
+        mean_lin = np.nanmean(np.squeeze(lin_resp), axis=(0,1))
+        mean_combo = np.nanmean(np.squeeze(ABepo), axis=(0,1))
+        supp_array[cnt] = mean_lin - mean_combo
+
+
+
     spike_times=rec['resp']._data[cellid]
     count=0
     for index, row in epcs.iterrows():
@@ -886,7 +908,8 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
             'mean_nsA':mean_nsA,'mean_nsB':mean_nsB,'min_nsA':min_nsA,'min_nsB':min_nsB,
             'SR':SR, 'SR_std':SR_std, 'SR_av_std':SR_av_std,
             'norm_spont': norm_spont, 'params': params,
-            'corcoef': corcoef, 'avg_resp': avg_resp, 'snr': snr}
+            'corcoef': corcoef, 'avg_resp': avg_resp, 'snr': snr,
+            'pair_names': twostims, 'suppression': supp_array}
     
 def r_noise_corrected(X,Y,N_ac=200):
     import nems.metrics.corrcoef

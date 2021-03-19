@@ -71,7 +71,13 @@ if True:
     df = df.apply(ts.type_by_psth, axis=1);
     df['batch']=batch
     
-    df=df.apply(ts.calc_psth_weight_resp,axis=1,fs=fs)   
+    df=df.apply(ts.calc_psth_weight_resp,axis=1,fs=fs)
+
+    ##get suppression AB
+
+
+
+
     # df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
     # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
     # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
