@@ -158,17 +158,9 @@ def split_pop_rec_by_mask(rec, **contex):
 
 def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
-    rec_cells = rec['resp'].chans
+    cell_set = rec['resp'].chans
     random.seed(12345 + seed_mod)
-    if exclusions is None:
-        # don't exclude any cellids
-        exclusions = []
-    elif isinstance(exclusions, int):
-        # pick random subset to exclude
-        exclusions = random.sample(rec_cells, exclusions)
-    # else: exclusions should be a list of siteids to exclude
 
-    cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
     if cell_count == 0:
         cell_count = len(cell_set)
     random_selection = random.sample(cell_set, cell_count)
@@ -178,10 +170,49 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
         rec['mask_est'].chans = random_selection
     meta = context['meta']
     meta['cellids'] = random_selection
+
+    return {'rec': rec, 'meta': meta}
+
+
+def holdout_cells(est, val, exclusions, seed_mod=0, **context):
+    rec_cells = est['resp'].chans
+    random.seed(12345 + seed_mod)
+    if isinstance(exclusions, int):
+        # pick random subset to exclude
+        exclusions = random.sample(rec_cells, exclusions)
+    # else: exclusions should be a list of siteids to exclude
+
+    cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
+    holdout_set = list(set(rec_cells) - set(cell_set))
+    est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
+    val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
+
+    meta = context['meta']
+    meta['cellids'] = cell_set
+    meta['holdout_cellids'] = holdout_cells
+
     if exclusions is not None:
         meta['excluded_cellids'] = exclusions
 
-    return {'rec': rec, 'meta': meta}
+    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val, 'meta': meta}
+
+
+def _get_holdout_recs(est, cell_set, holdout_set):
+    holdout_rec = rec.copy()
+    rec['resp'] = rec['resp'].extract_channels(cell_set)
+    holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
+
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = cell_set
+        holdout_rec['mask_est'].chans = holdout_set
+
+    return rec, holdout_rec
+
+
+def switch_to_heldout_data(holdout_est, holdout_val, meta, **context):
+    '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
+    meta['cellids'] = meta['holdout_cellids']
+    return {'est': holdout_est, 'val': holdout_val}
 
 
 def pop_file(stimfmt='ozgf', batch=None,

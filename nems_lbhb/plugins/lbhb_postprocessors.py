@@ -54,3 +54,8 @@ def popspc(loadkey):
             ['nems.xforms.plot_summary', {}],
             ['nems_lbhb.analysis.pop_models.pop_space_summary', {'n_pc': 5}]]
 
+
+@xform()
+def tfheld(loadkey):
+    xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {}]]
+    return xfspec
