@@ -174,7 +174,7 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
-def holdout_cells(est, val, exclusions, seed_mod=0, **context):
+def holdout_cells(rec, est, val, exclusions, seed_mod=0, **context):
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
@@ -186,18 +186,21 @@ def holdout_cells(est, val, exclusions, seed_mod=0, **context):
     holdout_set = list(set(rec_cells) - set(cell_set))
     est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
     val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
+    # also have to do rec b/c init from keywords uses it for some checks
+    rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
 
     meta = context['meta']
     meta['cellids'] = cell_set
-    meta['holdout_cellids'] = holdout_cells
+    meta['holdout_cellids'] = holdout_set
 
     if exclusions is not None:
         meta['excluded_cellids'] = exclusions
 
-    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val, 'meta': meta}
+    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
+            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta}
 
 
-def _get_holdout_recs(est, cell_set, holdout_set):
+def _get_holdout_recs(rec, cell_set, holdout_set):
     holdout_rec = rec.copy()
     rec['resp'] = rec['resp'].extract_channels(cell_set)
     holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
@@ -209,10 +212,18 @@ def _get_holdout_recs(est, cell_set, holdout_set):
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(holdout_est, holdout_val, meta, **context):
+def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
     meta['cellids'] = meta['holdout_cellids']
-    return {'est': holdout_est, 'val': holdout_val}
+
+    # Reinitialize trainable layers so that .R options are adjusted to new cell count
+    temp_ms = nems.initializers.from_keywords(**meta, **context)
+    if trainable_layers is None:
+        trainable_layers = list(range(len(temp_ms)))
+    for i in trainable_layers:
+        modelspec[i] = temp_ms[i]
+
+    return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
 
 
 def pop_file(stimfmt='ozgf', batch=None,

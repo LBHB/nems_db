@@ -347,7 +347,7 @@ def hc(loadkey):
                 else:
                     exclusions += site
 
-    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions}]]
+    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod}]]
 
     return xfspec
 
