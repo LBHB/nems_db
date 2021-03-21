@@ -217,7 +217,8 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
     meta['cellids'] = meta['holdout_cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
-    temp_ms = nems.initializers.from_keywords(**meta, **context)
+    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
+                                              output_name=context['output_name'])
     if trainable_layers is None:
         trainable_layers = list(range(len(temp_ms)))
     for i in trainable_layers:
