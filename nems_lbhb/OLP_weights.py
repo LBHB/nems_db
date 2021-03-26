@@ -73,11 +73,6 @@ if True:
     
     df=df.apply(ts.calc_psth_weight_resp,axis=1,fs=fs)
 
-    ##get suppression AB
-
-
-
-
     # df2 = ts.calc_psth_weight_resp(df.iloc[0])  #apply to one cell by index number
     # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'])  #apply to one cell by name
     # df2 = ts.calc_psth_weight_resp(df.loc['ARM031a-39-1'],find_mse_confidence=False,do_plot=True)  #apply to one cell by name and plot
@@ -103,21 +98,23 @@ df[cols2]
 
 ##subtract metrics
 #check if my thresholds are reliably getting rid of the same 'bad' units
-the_data = df
-corco_df = df.loc[df['corcoef'] >= 0.1]
-bad_corco = df.loc[df['corcoef'] < 0.1]
-avg_df = df.loc[df['avg_resp'] >= 0.025]
-bad_avg = df.loc[df['avg_resp'] < 0.025]
-snr_df = df.loc[df['snr'] >= 0.03]
-bad_snr = df.loc[df['snr'] < 0.03]
+# the_data = df
+# corco_df = df.loc[df['corcoef'] >= 0.1]
+# bad_corco = df.loc[df['corcoef'] < 0.1]
+# avg_df = df.loc[df['avg_resp'] >= 0.025]
+# bad_avg = df.loc[df['avg_resp'] < 0.025]
+# snr_df = df.loc[df['snr'] >= 0.03]
+# bad_snr = df.loc[df['snr'] < 0.03]
+#
+# bad_corc_set = set(bad_corco.index)
+# bad_avg_set = set(bad_avg.index)
+# bad_snr_set = set(bad_snr.index)
+# consistent_bad = bad_corc_set.intersection(bad_avg_set)
+# bad_set = bad_corc_set.union(bad_avg_set)
+# consistent_bad = bad_corc_set.intersection(bad_avg_set, bad_snr_set)
+# bad_set = bad_corc_set.union(bad_avg_set, bad_snr_set)
 
-bad_corc_set = set(bad_corco.index)
-bad_avg_set = set(bad_avg.index)
-bad_snr_set = set(bad_snr.index)
-consistent_bad = bad_corc_set.intersection(bad_avg_set)
-bad_set = bad_corc_set.union(bad_avg_set)
-consistent_bad = bad_corc_set.intersection(bad_avg_set, bad_snr_set)
-bad_set = bad_corc_set.union(bad_avg_set, bad_snr_set)
+
 
 #filter dataframe
 df = df.loc[(df['corcoef'] >= 0.1) & (df['avg_resp'] >= 0.025)]
@@ -126,6 +123,28 @@ Wcols=['namesA','namesB','weightsA','weightsB']
 weight_df = pd.concat(df['weight_dfR'].values,keys=df.index)
 BGgroups = pd.concat(df['WeightAgroupsR'].values,keys=df.index)
 FGgroups = pd.concat(df['WeightBgroupsR'].values,keys=df.index)
+
+#ADD suppression column to weights_df
+supp_df = pd.DataFrame()
+for cll in df.index:
+    supp = df.loc[cll,'suppression']
+    names = [ts.get_sep_stim_names(sn) for sn in df.loc[cll,'pair_names']]
+    BGs, FGs = [rr[0] for rr in names], [qq[1] for qq in names]
+    cell_df = pd.DataFrame({'suppression': supp,
+                           'namesA': BGs,
+                           'namesB': FGs,
+                           'cellid': cll})
+    supp_df = supp_df.append(cell_df)
+supp_df = supp_df.set_index('cellid', append=True)
+supp_df = supp_df.swaplevel(0,1)
+
+supp_df = supp_df.set_index(['namesA','namesB'], append=True)
+weight_df = weight_df.set_index(['namesA','namesB'], append=True)
+
+joint = pd.concat([weight_df, supp_df], axis=1)
+weight_df = joint.reset_index(['namesA','namesB'])
+
+
 
 plt.figure()
 for i in range(len(df)):
@@ -471,3 +490,156 @@ plt.hlines(type_weights.loc[type_weights.index == 'fg']['weight'],
 
 g.set_xticklabels(g.get_xticklabels(), rotation=60)
 ax.set_ylim(bottom=-0.75, top=1.75)
+
+#weights vs supp
+plt.figure()
+g = sns.regplot(x='weightsA', y='suppression', data=weight_df, color='black')
+g.set_xlabel('BG Weight')
+plt.figure()
+g = sns.regplot(x='weightsB', y='suppression', data=weight_df, color='black')
+g.set_xlabel('FG Weight')
+
+
+
+
+
+
+#regression
+reg_df = weight_df.reset_index(['cellid'])
+reg_df = sm.add_constant(reg_df)
+
+results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                          'weightsB + const', data=reg_df).fit()
+
+
+
+
+
+
+
+y = supp_array.reshape(1, -1)  # flatten
+stimulus = np.tile(np.arange(0, supp_array.shape[1]), supp_array.shape[0])
+neuron = np.concatenate([np.ones(supp_array.shape[1]) * i for i in
+                         range(supp_array.shape[0])], axis=0)
+
+X = np.stack([neuron, stimulus])
+X = pd.DataFrame(data=X.T, columns=['neuron', 'stimulus'])
+X = sm.add_constant(X)
+X['suppression'] = y.T
+
+if not shuffle:
+    results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                              'weightsB + const', data=reg_df).fit()
+
+if shuffle == 'neuron':
+    Xshuff = X.copy()
+    Xshuff['neuron'] = Xshuff['neuron'].iloc[np.random.choice(
+        np.arange(X.shape[0]), X.shape[0], replace=False)].values
+    results = smf.ols(formula='suppression ~ C(neuron) + C(stimulus) + const', data=Xshuff).fit()
+
+if shuffle == 'stimulus':
+    Xshuff = X.copy()
+    Xshuff['stimulus'] = Xshuff['stimulus'].iloc[np.random.choice(
+        np.arange(X.shape[0]), X.shape[0], replace=False)].values
+    results = smf.ols(formula='suppression ~ C(neuron) + C(stimulus) + const', data=Xshuff).fit()
+
+reg_results = _regression_results(results, shuffle, params)
+
+
+
+#@#####
+reg_df = weight_df.reset_index(['cellid'])
+reg_df = sm.add_constant(reg_df)
+
+results = pd.DataFrame()
+shuffles = [None, 'neuron', 'weightsA', 'weightsB']
+for shuf in shuffles:
+    reg_results = neur_stim_reg(weight_df, shuf)
+    site_results = site_results.append(reg_results, ignore_index=True)
+
+def neur_stim_reg(reg_df, shuffle=None):
+    if not shuffle:
+        results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                                  'weightsB + const', data=reg_df).fit()
+    if shuffle == 'neuron':
+        neur_shuff = reg_df.copy()
+        neur_shuff['cellid'] = neur_shuff['cellid'].iloc[np.random.choice(
+            np.arange(reg_df.shape[0]),reg_df.shape[0], replace=False)].values
+        results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                                  'weightsB + const', data=neur_shuff).fit()
+    if shuffle == 'weightsA':
+        A_shuff = reg_df.copy()
+        A_shuff['weightsA'] = A_shuff['weightsA'].iloc[np.random.choice(
+            np.arange(reg_df.shape[0]),reg_df.shape[0], replace=False)].values
+        results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                                  'weightsB + const', data=A_shuff).fit()
+    if shuffle == 'weightsB':
+        B_shuff = reg_df.copy()
+        B_shuff['weightsB'] = B_shuff['weightsB'].iloc[np.random.choice(
+            np.arange(reg_df.shape[0]),reg_df.shape[0], replace=False)].values
+        results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
+                                  'weightsB + const', data=B_shuff).fit()
+
+    reg_results = _regression_results(results, shuffle)
+
+    return reg_results
+
+
+
+##I'm here vvv
+def _regression_results(results, shuffle):
+    intercept = results.params.loc[results.params.index.str.contains('Intercept')].values
+    int_err = results.bse.loc[results.bse.index.str.contains('Intercept')].values
+    int_conf = results.conf_int().loc[results.conf_int().index.str.contains('Intercept')].values[0]
+    neuron_coeffs = results.params.loc[results.params.index.str.contains('cellid')].values
+    neuron_coeffs = np.concatenate(([0], neuron_coeffs))
+    stim_coeffs = results.params.loc[results.params.index.str.contains('stimulus')].values
+    stim_coeffs = np.concatenate(([0], stim_coeffs))
+    neur_coeffs = neuron_coeffs + intercept + stim_coeffs.mean()
+    stim_coeffs = stim_coeffs + intercept + neuron_coeffs.mean()
+    coef_list = np.concatenate((neur_coeffs, stim_coeffs))
+
+    neuron_err = results.bse.loc[results.bse.index.str.contains('neuron')].values
+    stim_err = results.bse.loc[results.bse.index.str.contains('stimulus')].values
+    neuron_err = np.concatenate((int_err, neuron_err))
+    stim_err = np.concatenate((int_err, stim_err))
+    err_list = np.concatenate((neuron_err, stim_err))
+
+    neur_low_conf = results.conf_int()[0].loc[results.conf_int().index.str.contains('neuron')].values
+    neur_low_conf = np.concatenate(([int_conf[0]], neur_low_conf))
+    stim_low_conf = results.conf_int()[0].loc[results.conf_int().index.str.contains('stimulus')].values
+    stim_low_conf = np.concatenate(([int_conf[0]], stim_low_conf))
+    low_list = np.concatenate((neur_low_conf, stim_low_conf))
+
+    neur_high_conf = results.conf_int()[1].loc[results.conf_int().index.str.contains('neuron')].values
+    neur_high_conf = np.concatenate(([int_conf[1]], neur_high_conf))
+    stim_high_conf = results.conf_int()[1].loc[results.conf_int().index.str.contains('stimulus')].values
+    stim_high_conf = np.concatenate(([int_conf[1]], stim_high_conf))
+    high_list = np.concatenate((neur_high_conf, stim_high_conf))
+
+    neur_list = ['neuron'] * len(neur_coeffs)
+    stim_list = ['stimulus'] * len(stim_coeffs)
+    name_list = np.concatenate((neur_list, stim_list))
+
+    if shuffle == None:
+        shuffle = 'full'
+    shuff_list = [f"{shuffle}"] * len(name_list)
+    site_list = [f"{params['experiment']}"] * len(name_list)
+    r_list = [f"{np.round(results.rsquared,4)}"] * len(name_list)
+
+    name_list_actual = list(params['good_units'])
+    name_list_actual.extend(params['pairs'])
+
+    reg_results = pd.DataFrame(
+        {'name': name_list_actual,
+         'id': name_list,
+         'site': site_list,
+         'shuffle': shuff_list,
+         'coeff': coef_list,
+         'error': err_list,
+         'conf_low': low_list,
+         'conf_high': high_list,
+         'rsquare': r_list
+        })
+
+    return reg_results
