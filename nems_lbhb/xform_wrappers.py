@@ -200,7 +200,7 @@ def holdout_cells(rec, est, val, exclusions, seed_mod=0, **context):
             'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta}
 
 
-def _get_holdout_recs(rec, cell_set, holdout_set):
+def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
     holdout_rec = rec.copy()
     rec['resp'] = rec['resp'].extract_channels(cell_set)
     holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
@@ -215,6 +215,7 @@ def _get_holdout_recs(rec, cell_set, holdout_set):
 def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
     meta['cellids'] = meta['holdout_cellids']
+    modelspec.meta['cellids'] = meta['holdout_cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
     temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
