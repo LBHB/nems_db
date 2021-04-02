@@ -223,7 +223,7 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
     if trainable_layers is None:
         trainable_layers = list(range(len(temp_ms)))
     for i in trainable_layers:
-        modelspec[i] = temp_ms[i]
+        modelspec[i].update(temp_ms[i])
 
     return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
 
