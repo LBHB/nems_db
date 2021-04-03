@@ -174,22 +174,37 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
-def holdout_cells(rec, est, val, exclusions, seed_mod=0, **context):
+def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
         # pick random subset to exclude
-        exclusions = random.sample(rec_cells, exclusions)
-    # else: exclusions should be a list of siteids to exclude
+        if match_to_site is not None:
+            batch = meta['batch']
+            if exclusions == 0:
+                cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
+            else:
+                cell_count = exclusions
 
-    cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
-    holdout_set = list(set(rec_cells) - set(cell_set))
+            cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
+                batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count
+            )
+            exclusions = alt_cellid
+        else:
+            exclusions = random.sample(rec_cells, exclusions)
+    # else: exclusions should be a list of siteids to exclude
+    if match_to_site is None:
+        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
+        holdout_set = list(set(rec_cells) - set(cell_set))
+    else:
+        cell_set = list(set(rec_cells) - set(exclusions))
+        holdout_set = exclusions
+
     est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
     val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
     # also have to do rec b/c init from keywords uses it for some checks
     rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
 
-    meta = context['meta']
     meta['cellids'] = cell_set
     meta['holdout_cellids'] = holdout_set
 

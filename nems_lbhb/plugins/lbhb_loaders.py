@@ -331,10 +331,16 @@ def hc(loadkey):
     seed_mod = 0
     exclusions = None
     options = loadkey.split('.')
+    match_to_site = None
 
     for op in options[1:]:
         if op.startswith('sd'):
             seed_mod = int(op[2:])
+        elif op.startswith('ms'):
+            # Ex:  hc.10.msTAR009d  would hold out 10 random cells with performance similar to site TAR009d
+            #      hc.0.msTAR009d   would hold out X random cells with performance similar to site TAR009d,
+            #                       where X is the number of cells in site TAR009d.
+            match_to_site = op[2:]
         else:
             try:
                 # int for random number of cellids to exclude (all sites)
@@ -347,7 +353,8 @@ def hc(loadkey):
                 else:
                     exclusions += site
 
-    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod}]]
+    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod,
+                                                          'match_to_site': match_to_site}]]
 
     return xfspec
 
