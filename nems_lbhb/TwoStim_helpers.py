@@ -449,6 +449,17 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     #     raise RuntimeError('load options invalid')
 
     #uri = nb.baphy_load_recording_uri(cellid=cellid, batch=batch, **options)
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
+    rec['resp'] = rec['resp'].extract_channels([cellid])
+
+    if passive.shape[0] == 2:
+        #if OLP test was sorted in here as well, slice it out of the epochs and data
+        print(f"Multiple OLPs found in {cellid}, dropping the first 'test' run.")
+        good_start = passive.iloc[1,1]
+        rec['resp']._data = {key: val[val >= good_start] - good_start for key,val in rec['resp']._data.items()}
+        rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start,:].reset_index(drop=True)
+        rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
+        rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
 
     rec['resp'] = rec['resp'].extract_channels([cellid])
     resp = copy.copy(rec['resp'].rasterize())
@@ -1667,7 +1678,10 @@ def get_expt_params(resp, manager, cellid):
 
     e = resp.epochs
     expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
-    ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+    if len(expt_params) == 1:
+        ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+    if len(expt_params) == 2:
+        ref_handle = expt_params[1]['TrialObject'][1]['ReferenceHandle'][1]
 
     params['experiment'], params['fs'] = cellid.split('-')[0], resp.fs
     params['PreStimSilence'], params['PostStimSilence'] = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']

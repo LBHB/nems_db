@@ -28,11 +28,11 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'
 #cellid='fre197c-105-1_705-1024'; rf='fre197c_f94fb643b4cb6380b8eb3286fc30d908a1940ea2.tgz' #Neuron 1 on poster
 #rec_file = rec_file_dir + rf
 
-batch=328
+batch=329
 if batch == 328:
-    OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/a1_celldat1.h5'
+    OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/a1_new_celldat1.h5'
 if batch == 329:
-    OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/peg_celldat1.h5'
+    OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/peg_new_celldat1.h5'
 cell_df=nd.get_batch_cells(batch)
 cell_list=cell_df['cellid'].tolist()
 cell_list = [cell for cell in cell_list if cell[:3] != 'HOD']
@@ -124,7 +124,7 @@ weight_df = pd.concat(df['weight_dfR'].values,keys=df.index)
 BGgroups = pd.concat(df['WeightAgroupsR'].values,keys=df.index)
 FGgroups = pd.concat(df['WeightBgroupsR'].values,keys=df.index)
 
-#ADD suppression column to weights_df
+#Add suppression column to weights_df
 supp_df = pd.DataFrame()
 for cll in df.index:
     supp = df.loc[cll,'suppression']
@@ -137,15 +137,21 @@ for cll in df.index:
     supp_df = supp_df.append(cell_df)
 supp_df = supp_df.set_index('cellid', append=True)
 supp_df = supp_df.swaplevel(0,1)
-
 supp_df = supp_df.set_index(['namesA','namesB'], append=True)
 weight_df = weight_df.set_index(['namesA','namesB'], append=True)
-
 joint = pd.concat([weight_df, supp_df], axis=1)
 weight_df = joint.reset_index(['namesA','namesB'])
 
 
+#Beginning plotting, these first lines are general and helpful
+bins=np.arange(-2,2,.05)
+if batch == 328:
+    titles = 'A1'
+if batch == 329:
+    titles = 'PEG'
 
+
+#Colorful scatter plot of BG weights v FG weights
 plt.figure()
 for i in range(len(df)):
     plt.plot(df.iloc[i].weightsR[0,:],df.iloc[i].weightsR[1,:],'.')
@@ -153,8 +159,10 @@ plt.xlabel('Background Weights')
 plt.ylabel('Foreground Weights')
 plt.xlim((-2, 2))
 plt.ylim((-2, 2))
+plt.title(f"{titles}")
 plt.gca().set_aspect(1)
 
+#Heatmap version of BG/FG weight scatter
 weights=np.concatenate(df.weightsR.values,axis=1)
 weights=weights[:,~np.any(np.isnan(weights),axis=0)]
 plt.figure();  plt.hist2d(weights[0,:],weights[1,:],bins=bins)
@@ -162,9 +170,9 @@ plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
 plt.xlabel('Background Weights')
 plt.ylabel('Foreground Weights')
+plt.title(f"{titles}")
 
 #Same plot as the previous one but using the weight dataframe
-bins=np.arange(-2,2,.05)
 gi=~np.isnan(weight_df['weightsA']) & ~np.isnan(weight_df['weightsB'])
 # weights=weights[:,~np.any(np.isnan(weights),axis=0)]
 plt.figure();  plt.hist2d(weight_df['weightsA'][gi],weight_df['weightsB'][gi],bins=bins)
@@ -172,25 +180,29 @@ plt.xlim((-.5, 1.5)); plt.ylim((-.5, 1.5))
 plt.gca().set_aspect(1)
 plt.xlabel('Background Weight')
 plt.ylabel('Foreground Weight')
+plt.title(f"{titles}")
 
 #WARNING, LEGEND BACKWARDS???!
 #plt.figure();  plt.hist(weights.T,bins=400,histtype='step')
 #plt.legend(('Background','Foreground'))
 #plt.xlim((-1, 2));
 
+#Histogram of BG weights and FG weights
 bins=np.arange(-2,2,.05)
 plt.figure();
 plt.hist(weights[0,:],bins=bins,histtype='step')
 plt.hist(weights[1,:],bins=bins,histtype='step')
 plt.legend(('Background','Foreground'))
 plt.xlabel('Weight')
+plt.title(f"{titles}")
 
+#Histogram of difference between FG and BG weights
 plt.figure();  plt.hist(np.diff(weights,axis=0).T,bins=bins,histtype='step')
 plt.xlim((-2, 2));
 plt.xlabel('Paired Foreground - Background')
+plt.title(f"{titles}")
 
 ## Plots based on differences
-
 # Scatterplot of range of weights over constant bg
 plt.figure()
 for cellid in BGgroups.index.levels[0]:
@@ -264,7 +276,7 @@ ax[1].step(np.insert(bins,0,bins[0]), np.insert(np.append(N,0),0,0),where='post'
 ax[1].legend(('range(Fg) - range(Bg) over constant Bg','range(Fg) - range(Bg) over constant Fg'), bbox_to_anchor=(1.05,1.15))
 ax[1].set_xlabel('Diff in range of weights (range(Fg)-range(Bg))')
 ax[1].plot((0,0),(0,np.max(np.abs(ax[1].get_ylim()))),'k',linewidth=.5)
-
+#ends here
 
 #Get and plot error functions
 err = weight_df.iloc[0]['get_error']()
@@ -274,16 +286,16 @@ for i in range(len(weight_df)):
     norm_factor = weight_df.iloc[i]['nf'] #mean of resp to Fg+Bg squared
     squared_errors[:,i] = err**2/norm_factor
 
-
 time = np.arange(0, err.shape[-1]) / fs
 plt.figure();
 #plt.plot(time,squared_errors,linewidth=.5)
 plt.plot(time,np.nanmean(squared_errors,axis=1),'k',LineWidth=1)
 plt.xlabel('Time (s)')
 plt.ylabel('Normalized Squared Error')
+plt.title(f"{titles}")
 
-#To plot PSTHs and weight model
-cellid='ARM031a-33-1';
+#To plot PSTHs and weight model for a given cell
+cellid=cell_list[4];
 row=df.loc[cellid]['weight_dfR'].iloc[0]
 plt.figure();
 err=row['get_error']()
@@ -296,7 +308,6 @@ plt.legend(('Bg','Fg','Both','Weight Model'))
 
 #to plot error function
 plt.figure();plt.plot(time,row['get_error']()/np.sqrt(row['nf']))
-
 
 #PSTH plotting function:
 def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
@@ -336,11 +347,8 @@ phi=ts.scatterplot_print(weight_df['weightsA'].values,
                          cellid_and_str_strs,
                          ax=ax,fn=plot_psth,fnargs=fnargs)
 
-#from pdb import set_trace
-#set_trace()
 
-
-##Greg added to check exclusion metrics
+#Check and plot the exclusion metrics
 snrs, coefs, avgs = df['snr'], df['corcoef'], df['avg_resp']
 fig, ax = plt.subplots(2,2)
 ax = ax.ravel('F')
@@ -349,7 +357,8 @@ ax[1].hist(coefs.values, bins=75), ax[1].set_title('Corr Coef', fontweight='bold
 ax[2].hist(avgs.values, bins=75), ax[2].set_title('Average Response', fontweight='bold')
 fig.suptitle(f'Batch {batch}', fontweight='bold')
 
-#Make interactive scatterplot of weights
+###########################################################################
+#Make interactive scatterplot of weights - UNFINISHED######################
 X = df['corcoef']
 Y = df['avg_resp']
 idx_df = df
@@ -396,7 +405,7 @@ def plot_psth(cellid_and_stim_str, weight_df=weight_df, df=df, plot_error=True):
 
     if plot_error:
         ax[1].plot(time, this_cell_stim['get_error']() / np.sqrt(this_cell_stim['nf']))
-
+##########################################################################
 
 ##Plot weights by individual sound
 import seaborn as sns
@@ -411,10 +420,6 @@ for cellid in cell_list:
     bb = df.namesAR[cellid]
     ff = df.namesBR[cellid]
     ww = df.weightsR[cellid]
-
-    # bb = df.namesAR['ARM017a-01-10']
-    # ff = df.namesBR['ARM017a-01-10']
-    # ww = df.weightsR['ARM017a-01-10']
 
     bgs = [bg.split('_', 1)[1].replace('_null', '').split('-', 1)[0] for bg in bb]
     fgs = [fg.split('_', 1)[1].replace('null_', '').split('-', 1)[0] for fg in ff]
@@ -435,13 +440,11 @@ for cellid in cell_list:
          })
 
     bgfg_weight = pd.concat([bg_weights, fg_weights], ignore_index=True)
-
     sound_weights = sound_weights.append(bgfg_weight, ignore_index=True)
-
 sound_weights = sound_weights.sort_values(['type', 'idx'], ascending=[True, True])
 
-PEG_path = Path('/auto/users/hamersky/olp_analysis/PEG_weights')
-A1_path = Path('/auto/users/hamersky/olp_analysis/A1_weights')
+PEG_path = Path('/auto/users/hamersky/olp_analysis/PEG_new_weights')
+A1_path = Path('/auto/users/hamersky/olp_analysis/A1_new_weights')
 if PEG_path.parent.exists() is False and batch == 329:
     PEG_path.parent.mkdir()
 if A1_path.parent.exists() is False and batch == 328:
@@ -456,16 +459,13 @@ if batch == 329:
 if batch == 328:
     a1_sound_weights = jl.load(A1_path)
 
-
 fig, ax = plt.subplots()
-# g = sns.stripplot(x='name', y='weight', hue='type', data=sound_weights, ax=ax)
 if batch == 329:
     g = sns.stripplot(x='name', y='weight', hue='type', data=peg_sound_weights, ax=ax)
     ax.set_ylim(-3, 2.5)
     ax.set_title('PEG', fontweight='bold')
     mean_weights = peg_sound_weights.groupby(by='name').agg('mean')
     type_weights = peg_sound_weights.groupby(by='type').agg('mean')
-
 if batch == 328:
     g = sns.stripplot(x='name', y='weight', hue='type', data=a1_sound_weights, ax=ax)
     ax.set_ylim(-3, 2.5)
@@ -487,76 +487,61 @@ plt.hlines(type_weights.loc[type_weights.index == 'bg']['weight'],
 plt.hlines(type_weights.loc[type_weights.index == 'fg']['weight'],
            bg_count - 0.5, (bg_count+fg_count) - 0.5, lw=2, linestyles=':',
            color='yellowgreen')
-
 g.set_xticklabels(g.get_xticklabels(), rotation=60)
 ax.set_ylim(bottom=-0.75, top=1.75)
 
-#weights vs supp
+
+#weights vs suppression quick plots with regression
 plt.figure()
 g = sns.regplot(x='weightsA', y='suppression', data=weight_df, color='black')
 g.set_xlabel('BG Weight')
+g.set_title(f'{titles} -- BG', fontweight='bold')
 plt.figure()
 g = sns.regplot(x='weightsB', y='suppression', data=weight_df, color='black')
 g.set_xlabel('FG Weight')
+g.set_title(f'{titles} -- FG', fontweight='bold')
 
 
+#Plots all weights for each cell -- Messy and doesn't look good, maybe order it
+fig, ax = plt.subplots()
+weighties = copy.copy(weight_df)
+cell_weights = weighties.reset_index()
+g = sns.stripplot(x='cellid', y='weightsA', color='deepskyblue', data=cell_weights, ax=ax)
+g = sns.stripplot(x='cellid', y='weightsB', color='yellowgreen', data=cell_weights, ax=ax)
+ax.set_ylim(-3, 2.5)
+ax.set_title(f'{titles}', fontweight='bold')
 
 
+#Regression
+import statsmodels.formula.api as smf
+import statsmodels.api as sm
 
-
-#regression
 reg_df = weight_df.reset_index(['cellid'])
 reg_df = sm.add_constant(reg_df)
 
 results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
                           'weightsB + const', data=reg_df).fit()
 
-
-
-
-
-
-
-y = supp_array.reshape(1, -1)  # flatten
-stimulus = np.tile(np.arange(0, supp_array.shape[1]), supp_array.shape[0])
-neuron = np.concatenate([np.ones(supp_array.shape[1]) * i for i in
-                         range(supp_array.shape[0])], axis=0)
-
-X = np.stack([neuron, stimulus])
-X = pd.DataFrame(data=X.T, columns=['neuron', 'stimulus'])
-X = sm.add_constant(X)
-X['suppression'] = y.T
-
-if not shuffle:
-    results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
-                              'weightsB + const', data=reg_df).fit()
-
-if shuffle == 'neuron':
-    Xshuff = X.copy()
-    Xshuff['neuron'] = Xshuff['neuron'].iloc[np.random.choice(
-        np.arange(X.shape[0]), X.shape[0], replace=False)].values
-    results = smf.ols(formula='suppression ~ C(neuron) + C(stimulus) + const', data=Xshuff).fit()
-
-if shuffle == 'stimulus':
-    Xshuff = X.copy()
-    Xshuff['stimulus'] = Xshuff['stimulus'].iloc[np.random.choice(
-        np.arange(X.shape[0]), X.shape[0], replace=False)].values
-    results = smf.ols(formula='suppression ~ C(neuron) + C(stimulus) + const', data=Xshuff).fit()
-
-reg_results = _regression_results(results, shuffle, params)
-
-
-
-#@#####
-reg_df = weight_df.reset_index(['cellid'])
-reg_df = sm.add_constant(reg_df)
-
+#Do with shuffles
 results = pd.DataFrame()
 shuffles = [None, 'neuron', 'weightsA', 'weightsB']
+shuffles = ['weightsA', 'weightsB', 'neuron', None]
+rr = {}
 for shuf in shuffles:
-    reg_results = neur_stim_reg(weight_df, shuf)
-    site_results = site_results.append(reg_results, ignore_index=True)
+    reg_results = neur_stim_reg(reg_df, shuf)
+    rr[shuf] = reg_results.rsquared
 
+#Plot small line plot of rsquare with different shuffle conditions
+fig,ax = plt.subplots()
+ax.plot(rr.values(), linestyle='-', color='black')
+ax.set_ylabel('R_squared', fontweight='bold', size=12)
+ax.set_xticks([0, 1, 2, 3])
+ax.set_xticklabels(['WeightBG\nShuffled', 'WeightFG\nShuffled',
+                    'Neuron\nShuffled', 'Full\nModel'],
+                   fontweight='bold', size=8)
+ax.set_title(f"{titles}", fontweight='bold', size=15)
+
+#Function for implementing each shuffle
 def neur_stim_reg(reg_df, shuffle=None):
     if not shuffle:
         results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
@@ -580,13 +565,12 @@ def neur_stim_reg(reg_df, shuffle=None):
         results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
                                   'weightsB + const', data=B_shuff).fit()
 
-    reg_results = _regression_results(results, shuffle)
-
-    return reg_results
-
+    # reg_results = _regression_results(results, shuffle)
+    return results
 
 
-##I'm here vvv
+
+##I'm here vvv trying to make dataframe of relevant reg results
 def _regression_results(results, shuffle):
     intercept = results.params.loc[results.params.index.str.contains('Intercept')].values
     int_err = results.bse.loc[results.bse.index.str.contains('Intercept')].values
