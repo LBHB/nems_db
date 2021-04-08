@@ -28,7 +28,7 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'
 #cellid='fre197c-105-1_705-1024'; rf='fre197c_f94fb643b4cb6380b8eb3286fc30d908a1940ea2.tgz' #Neuron 1 on poster
 #rec_file = rec_file_dir + rf
 
-batch=329
+batch=328
 if batch == 328:
     OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/a1_new_celldat1.h5'
 if batch == 329:
@@ -314,8 +314,8 @@ def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
     if plot_error:
         nr=2
     else:
-        nr=1
-    f, ax = plt.subplots(nr,1)
+        nr=2
+    f, ax = plt.subplots(1,nr, figsize=(15,5))
     if nr==1: ax=[ax]
     cellid,stimA,stimB = cellid_and_stim_str.split(':')
     cell_df=weight_df.loc[cellid]
@@ -326,14 +326,31 @@ def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
     ax[0].plot(time,this_cell_stim['get_error'](get_what='sigB'))
     ax[0].plot(time,this_cell_stim['get_error'](get_what='sigAB'))
     ax[0].plot(time,this_cell_stim['get_error'](get_what='pred'))
+    ax[0].plot(time, this_cell_stim['get_error'](get_what='sigA') +
+               this_cell_stim['get_error'](get_what='sigB'), linestyle=":",
+               color='black')
     ax[0].legend(('Bg, weight={:.2f}'.format(this_cell_stim.weightsA),
       'Fg, weight={:.2f}'.format(this_cell_stim.weightsB),
       'Both',
-      'Weight Model, r={:.2f}'.format(this_cell_stim.r)))
-    ax[0].set_title(cellid_and_stim_str)
+      'Weight Model, r={:.2f}'.format(this_cell_stim.r),
+      'Linear Sum'))
+    ax[0].set_title(f"{cellid_and_stim_str} sup:{this_cell_stim['suppression']}")
     
     if plot_error:
         ax[1].plot(time,this_cell_stim['get_error']()/np.sqrt(this_cell_stim['nf']))
+
+    bg = this_cell_stim['get_error'](get_what='sigA')
+    fg = this_cell_stim['get_error'](get_what='sigB')
+    ab = this_cell_stim['get_error'](get_what='sigAB')
+    binweights = pd.DataFrame({'bg': bg, 'fg': fg, 'combo': ab})
+    # fig,ax = plt.subplots()
+    a = ax[1].scatter(bg, fg, c=ab, cmap='inferno', s=15)
+    ax[1].set_xlabel('r(BG)'), ax[1].set_ylabel('r(FG)')
+    f.colorbar(a)
+    # plt.gca().set_aspect(1)
+    f.tight_layout()
+
+
 
 #Make interactive scatterplot of weights
 cellid_and_str_strs= [index[0]+':'+nameA+':'+nameB for index,nameA,nameB in \
@@ -508,7 +525,39 @@ weighties = copy.copy(weight_df)
 cell_weights = weighties.reset_index()
 g = sns.stripplot(x='cellid', y='weightsA', color='deepskyblue', data=cell_weights, ax=ax)
 g = sns.stripplot(x='cellid', y='weightsB', color='yellowgreen', data=cell_weights, ax=ax)
-ax.set_ylim(-3, 2.5)
+ax.set_ylim(2, -1)
+ax.set_title(f'{titles}', fontweight='bold')
+
+bee = pd.DataFrame({'cellid': cell_weights['cellid'],
+                    'type': 'bg',
+                    'weight': cell_weights['weightsA']})
+
+eff = pd.DataFrame({'cellid': cell_weights['cellid'],
+                    'type': 'fg',
+                    'weight': cell_weights['weightsB']})
+beef = bee.append(eff)
+
+grouped = beef.groupby('cellid').agg('mean')
+sorted = grouped.sort_values('weight')
+sortorder = sorted.index
+
+
+fig, ax = plt.subplots()
+g = sns.stripplot(x='cellid', y='weight', hue='type', data=beef, ax=ax, order=sortorder)
+ax.set_ylim(-1, 2)
+ax.set_title(f'{titles}', fontweight='bold')
+
+groupie = beef.groupby(['cellid','type']).agg('mean')
+groupie = groupie.reset_index()
+pivy = groupie.pivot(index='cellid', columns='type', values='weight')
+fig, ax = plt.subplots()
+g = sns.scatterplot(x='bg', y='fg', data=pivy)
+plt.gca().set_aspect(1)
+mini = min(pivy.min())
+maxi = max(pivy.max())
+ax.set_ylim(mini,maxi)
+ax.set_xlim(mini,maxi)
+ax.plot([mini,maxi],[mini,maxi], linestyle=':', color='black')
 ax.set_title(f'{titles}', fontweight='bold')
 
 
@@ -526,10 +575,13 @@ results = smf.ols(formula='suppression ~ C(cellid) + weightsA + '
 results = pd.DataFrame()
 shuffles = [None, 'neuron', 'weightsA', 'weightsB']
 shuffles = ['weightsA', 'weightsB', 'neuron', None]
-rr = {}
+rr, res = {}, {}
+regres = pd.DataFrame()
 for shuf in shuffles:
     reg_results = neur_stim_reg(reg_df, shuf)
     rr[shuf] = reg_results.rsquared
+    res[shuf] = reg_results
+    regres['results'], regres['r'] = reg_results, reg_results.rsquared
 
 #Plot small line plot of rsquare with different shuffle conditions
 fig,ax = plt.subplots()
