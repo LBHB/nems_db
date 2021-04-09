@@ -180,13 +180,12 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
     if isinstance(exclusions, int):
         # pick random subset to exclude
         if match_to_site is not None:
-            batch = meta['batch']
+            batch = int(meta['batch'])
             if exclusions == 0:
                 cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
             else:
                 cell_count = exclusions
 
-            log.info("in holdout_cells, batch=%d"%batch)
             cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
                 batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count
             )
