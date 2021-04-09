@@ -741,7 +741,7 @@ class lv_norm(NemsModule):
             x = x.copy()
             # faster(?): compute all scaling terms then apply at once (outside of loop)
             for l in range(d.shape[1]):
-                sf = (d[:,l:(l+1)] + g[:,l:(l+1)]*state[l:(l+1),:]) * lv[l:(l+1),:] 
+                sf = (d[:,l:(l+1)] + g[:,l:(l+1)]*state[l:(l+1),:]) * lv[l:(l+1),:]
                 x *= np.exp(sf)
             return x
 

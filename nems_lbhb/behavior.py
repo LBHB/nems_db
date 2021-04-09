@@ -49,7 +49,7 @@ def create_trial_labels(exptparams, exptevents):
                              # trial gets labeled as is what the trial outcome will be
         catch = False        # make sure a hit on a REF/TAR following a CR of a Catch doesn't overwrite trial outcome
         target = False       # make sure that sounds following a target hit / miss don't cause the trial to be misclassified
-        if sum(ev.name.str.contains('LICK'))>0:
+        if sum(ev.name=='LICK')>0:
             # lick(s) detected
             fl = ev[ev.name=='LICK']['start'].values[0]
             # decide what each sound is, then use this to classify the trial
