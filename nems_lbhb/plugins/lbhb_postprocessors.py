@@ -59,6 +59,7 @@ def popspc(loadkey):
 def tfheld(loadkey):
     trainable_layers = None
     options = loadkey.split('.')
+    use_matched_site = False
     for op in options[1:]:
         if op.startswith('TL'):
             if ':' in op:
@@ -68,6 +69,9 @@ def tfheld(loadkey):
             else:
                 # ex: TL2x6x9  would be trainable_layers = [2, 6, 9]
                 trainable_layers = [int(i) for i in op[2:].split('x')]
+        elif op == 'ms':
+            use_matched_site = True
 
-    xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'trainable_layers': trainable_layers}]]
+    xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'trainable_layers': trainable_layers,
+                                                                   'use_matched_site': use_matched_site}]]
     return xfspec

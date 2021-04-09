@@ -207,6 +207,7 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
 
     meta['cellids'] = cell_set
     meta['holdout_cellids'] = holdout_set
+    meta['matched_site'] = match_to_site
 
     if exclusions is not None:
         meta['excluded_cellids'] = exclusions
@@ -227,9 +228,15 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None, **context):
+def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None,
+                           use_matched_site=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
-    meta['cellids'] = meta['holdout_cellids']
+    if use_matched_site:
+        site = meta['matched_site']
+        cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+        meta['cellids'] = cellids
+    else:
+        meta['cellids'] = meta['holdout_cellids']
     modelspec.meta['cellids'] = meta['holdout_cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
