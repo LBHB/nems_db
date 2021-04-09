@@ -186,6 +186,7 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
             else:
                 cell_count = exclusions
 
+            log.info("in holdout_cells, batch=%d"%batch)
             cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
                 batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count
             )
