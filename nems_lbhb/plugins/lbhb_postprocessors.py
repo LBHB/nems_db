@@ -54,3 +54,24 @@ def popspc(loadkey):
             ['nems.xforms.plot_summary', {}],
             ['nems_lbhb.analysis.pop_models.pop_space_summary', {'n_pc': 5}]]
 
+
+@xform()
+def tfheld(loadkey):
+    trainable_layers = None
+    options = loadkey.split('.')
+    use_matched_site = False
+    for op in options[1:]:
+        if op.startswith('TL'):
+            if ':' in op:
+                # ex: TL0:5  would be trainable_layers = [0,1,2,3,4]
+                lower, upper = [int(i) for i in op[2:].split(':')]
+                trainable_layers = list(range(lower, upper))
+            else:
+                # ex: TL2x6x9  would be trainable_layers = [2, 6, 9]
+                trainable_layers = [int(i) for i in op[2:].split('x')]
+        elif op == 'ms':
+            use_matched_site = True
+
+    xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'trainable_layers': trainable_layers,
+                                                                   'use_matched_site': use_matched_site}]]
+    return xfspec

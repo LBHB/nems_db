@@ -158,17 +158,9 @@ def split_pop_rec_by_mask(rec, **contex):
 
 def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
-    rec_cells = rec['resp'].chans
+    cell_set = rec['resp'].chans
     random.seed(12345 + seed_mod)
-    if exclusions is None:
-        # don't exclude any cellids
-        exclusions = []
-    elif isinstance(exclusions, int):
-        # pick random subset to exclude
-        exclusions = random.sample(rec_cells, exclusions)
-    # else: exclusions should be a list of siteids to exclude
 
-    cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
     if cell_count == 0:
         cell_count = len(cell_set)
     random_selection = random.sample(cell_set, cell_count)
@@ -178,10 +170,85 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
         rec['mask_est'].chans = random_selection
     meta = context['meta']
     meta['cellids'] = random_selection
+
+    return {'rec': rec, 'meta': meta}
+
+
+def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
+    rec_cells = est['resp'].chans
+    random.seed(12345 + seed_mod)
+    if isinstance(exclusions, int):
+        # pick random subset to exclude
+        if match_to_site is not None:
+            batch = int(meta['batch'])
+            if exclusions == 0:
+                cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
+            else:
+                cell_count = exclusions
+
+            cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
+                batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count
+            )
+            exclusions = alt_cellid
+        else:
+            exclusions = random.sample(rec_cells, exclusions)
+    # else: exclusions should be a list of siteids to exclude
+    if match_to_site is None:
+        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
+        holdout_set = list(set(rec_cells) - set(cell_set))
+    else:
+        cell_set = list(set(rec_cells) - set(exclusions))
+        holdout_set = exclusions
+
+    est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
+    val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
+    # also have to do rec b/c init from keywords uses it for some checks
+    rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
+
+    meta['cellids'] = cell_set
+    meta['holdout_cellids'] = holdout_set
+    meta['matched_site'] = match_to_site
+
     if exclusions is not None:
         meta['excluded_cellids'] = exclusions
 
-    return {'rec': rec, 'meta': meta}
+    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
+            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta}
+
+
+def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
+    holdout_rec = rec.copy()
+    rec['resp'] = rec['resp'].extract_channels(cell_set)
+    holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
+
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = cell_set
+        holdout_rec['mask_est'].chans = holdout_set
+
+    return rec, holdout_rec
+
+
+def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None,
+                           use_matched_site=False, **context):
+    '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
+    if use_matched_site:
+        site = meta['matched_site']
+        cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+        meta['cellids'] = cellids
+    else:
+        meta['cellids'] = meta['holdout_cellids']
+    modelspec.meta['cellids'] = meta['holdout_cellids']
+
+    # Reinitialize trainable layers so that .R options are adjusted to new cell count
+    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
+                                              output_name=context['output_name'])
+    temp_ms[0].pop('meta')  # don't overwrite metadata in first module
+    if trainable_layers is None:
+        trainable_layers = list(range(len(temp_ms)))
+    for i in trainable_layers:
+        modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
+
+    return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
 
 
 def pop_file(stimfmt='ozgf', batch=None,
