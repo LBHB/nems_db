@@ -67,8 +67,11 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
 
         # get the first value of BF from cellDB TODO this is a temporary cludge, in the future, with all BFs set, a more elegant approach is required
         BF_querry = "select bf, area from gCellMaster where siteid=%s"
-        raw_BF, raw_area = db.pd_query(BF_querry, params=(site,)).iloc[0, :]
-
+        try:
+            raw_BF, raw_area = db.pd_query(BF_querry, params=(site,)).iloc[0, :]
+        except:
+            raw_BF = None
+            raw_area = None
         # Sanitize best frequency in case of missing values
         if raw_BF is None:
             print(f'site {site} has undefined best frequency')
@@ -264,3 +267,14 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
 # fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=landmarks)
 # plt.show()
 # 
+'''
+ref = [0.91, 5.27, 4.99]
+tr = [42,0]
+sites = ['JLY002', 'JLY003', 'JLY004', 'JLY006', 'JLY008']
+landmarks = {'MidLine'     : ref+[1.384, 4.53, 4.64]+tr,
+              'OccCrest': ref+[0.076, 5.27, 5.28]+tr,
+              'Occ_Crest_in' : ref+[0.490, 5.27, 5.28]+tr}
+fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=landmarks)
+fig.axes[0].grid()
+plt.show()
+'''
