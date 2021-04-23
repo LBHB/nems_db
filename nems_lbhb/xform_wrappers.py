@@ -257,15 +257,12 @@ def pop_file(stimfmt='ozgf', batch=None,
     siteid = siteid.split("-")[0]
     if ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
         subsetstr = "NAT1"
-    # elif siteid in ['none', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
-    #                 'bbl099g','bbl104h',
-    #                 'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c',
-    #                 'AMT031a','AMT032a']:
-    elif siteid in ['none', 'NAT3']:
-        # Should use NAT3 as siteid going forward,
-        # but left 'none' as an option here for backwards compatibility.
-        # Can't use other siteids as indication anymore
-        # b/c several of them are shared between  NAT3 and NAT4.
+    elif siteid in ['none', 'NAT3', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
+                    'bbl099g','bbl104h',
+                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c',
+                    'AMT031a','AMT032a']:
+        # Should use NAT3 as siteid going forward for better readability,
+        # but left other options here for backwards compatibility.
         subsetstr = "NAT3"
     elif siteid == 'NAT4':
         subsetstr = "NAT4"
