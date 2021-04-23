@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from nems import db
 
 
-def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, landmarks={}):
+def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, landmarks=None):
     """
     Plots a 3d map of the list of specified sites, displaying the best frequency as color, and the brain region as
     maker type (NA: circle, A1: triangle, PEG: square).
@@ -100,7 +100,7 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
         good_sites.append(site)
 
     # adds manual landmarks specified in dictionary
-    if landmarks:
+    if landmarks is not None:
         X0 = []
         Y0 = []
         for landname, all_coords in landmarks.items():
@@ -142,8 +142,9 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
     center = np.mean(coordinates, axis=1)
 
     # uses landmarks as zero values if any
-    if X0: center[0] = X0[0]
-    if Y0: center[1] = Y0[0]
+    if landmarks is not None:
+        if X0: center[0] = X0[0]
+        if Y0: center[1] = Y0[0]
 
     coordinates = coordinates - center[:, None]
     coordinates = coordinates * 10
@@ -212,7 +213,7 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
         pc1 = PCA().fit_transform(coordinates[1:,:].T)[:,0]
 
         # uses midline zero as pc1 zero
-        if Y0:
+        if landmarks is not None:
             pc1 = pc1 - pc1[np.argwhere(coordinates[1,:] == 0)].squeeze()
 
         flat_coords = np.stack((coordinates[0,:], pc1), axis=0)
@@ -270,11 +271,11 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
 '''
 ref = [0.91, 5.27, 4.99]
 tr = [42,0]
-sites = ['JLY002', 'JLY003', 'JLY004', 'JLY006', 'JLY008']
+sites = ['JLY002', 'JLY003', 'JLY004', 'JLY007d', 'JLY008', 'JLY009b', 'JLY010b', 'JLY011c', 'JLY012d', 'JLY013c', 'JLY014d']
 landmarks = {'MidLine'     : ref+[1.384, 4.53, 4.64]+tr,
               'OccCrest': ref+[0.076, 5.27, 5.28]+tr,
               'Occ_Crest_in' : ref+[0.490, 5.27, 5.28]+tr}
-fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=landmarks)
+fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=None)
 fig.axes[0].grid()
 plt.show()
 '''
