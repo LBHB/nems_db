@@ -1,13 +1,14 @@
 from math import cos, sin, radians
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from sklearn.decomposition import PCA
 from nems import db
 
 
-def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, landmarks=None):
+def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, flip_YZ=False, landmarks=None):
     """
     Plots a 3d map of the list of specified sites, displaying the best frequency as color, and the brain region as
     maker type (NA: circle, A1: triangle, PEG: square).
@@ -18,11 +19,12 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
     antero posterior (X) axis can be flipped with the according parameter.
     :param sites: list of str specifying sites, with the format "ABC001a"
     :param equal_aspect: boolean. whether to constrain the data to a cubic/square space i.e. equal dimensions in XYZ/XY
-    :flip_X: Boolean. whether to flip the direction labels for the antero-posterior (X) axis. The default is A > P .
+    :flip_X: Boolean. Flips the direction labels for the antero-posterior (X) axis. The default is A > P .
     Y. Lateral > Medial, Z. Dorsal > Ventral.
     :flatten: Boolean. PCA 2d projection. Work in progress.
+    :flip_YZ: Boolean. Flips the direction and labels of the YZ principal component when flattening.
     :landmarks: dict of vectors, where the key specifies the landmark name, and the vector has the values
-    [x0, y0, z0, x, y, z, tilt, rot]. If the larnmark name is 'OccCrest' or 'MidLine' uses the AP and ML values as zeros
+    [x0, y0, z0, x, y, z, tilt, rot]. If the landmark name is 'OccCrest' or 'MidLine' uses the AP and ML values as zeros
     respectively.
     :return: matplotlib figure
     """
@@ -188,23 +190,31 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
         ax.set_zlabel('Dorsal ventral (mm)')
 
         fig.canvas.draw()
-        xlab = [item.get_text() for item in ax.get_xticklabels() if item.get_text() != '']
+        x_tick_loc = ax.get_xticks().tolist()
+        xlab = [f'{x:.1f}' for x in x_tick_loc]
+
         if flip_X:
             xlab[0] = 'A'
             xlab[-1] = 'P'
         else:
             xlab[0] = 'P'
             xlab[-1] = 'A'
+
+        _ = ax.xaxis.set_major_locator(mticker.FixedLocator(x_tick_loc))
         _ = ax.set_xticklabels(xlab)
 
-        ylab = [item.get_text() for item in ax.get_yticklabels() if item.get_text() != '']
+        y_tick_loc = ax.get_yticks().tolist()
+        ylab = [f'{x:.1f}' for x in y_tick_loc]
         ylab[0] = 'M'
         ylab[-1] = 'L'
+        _ = ax.yaxis.set_major_locator(mticker.FixedLocator(y_tick_loc))
         _ = ax.set_yticklabels(ylab)
 
-        zlab = [item.get_text() for item in ax.get_zticklabels() if item.get_text() != '']
+        z_tick_loc = ax.get_zticks().tolist()
+        zlab = [f'{x:.1f}' for x in z_tick_loc]
         zlab[0] = 'V'
         zlab[-1] = 'D'
+        _ = ax.zaxis.set_major_locator(mticker.FixedLocator(z_tick_loc))
         _ = ax.set_zticklabels(zlab)
 
     elif flatten is True:
@@ -213,13 +223,15 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
         pc1 = PCA().fit_transform(coordinates[1:,:].T)[:,0]
 
         # uses midline zero as pc1 zero
-        if landmarks is not None:
+        if landmarks is not None and 'MidLine' in landmarks.keys():
             pc1 = pc1 - pc1[np.argwhere(coordinates[1,:] == 0)].squeeze()
 
         flat_coords = np.stack((coordinates[0,:], pc1), axis=0)
 
-        if flip_X is True:
-            flat_coords = flat_coords * np.array([[-1],[ 1]])
+        # FLips data on axes since 2d plots cannot be rotated interactively
+        fx = -1 if flip_X is True else 1
+        fyz = -1 if flip_YZ is True else 1
+        flat_coords = flat_coords * np.array([[fx],[fyz]])
 
 
         fig, ax = plt.subplots()
@@ -252,30 +264,22 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
     return fig, coordinates
 
 # # test_set
-# sites = ['ARM012d', 'ARM013b', 'ARM014b', 'ARM015b', 'ARM016c', 'ARM017a', 'ARM018a', 'ARM019a', 'ARM020a',
-#          'ARM021b', 'ARM022b', 'ARM023a', 'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b', 'ARM029a', 'ARM030a']
 #
-# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=False)
-# fig, coords = penetration_map(sites, cubic=False, flip_X=True, flatten=True)
-
-# test landmarks
-# ref = [0.84,6.91,3.93]
-# tr = [49,0]
-# sites = []
-# landmarks = {'MidLine'     : ref+[1.45,5.75,3.49]+tr,
-#              'OccCrest': ref+[0.045,6.39,4.26]+tr,
-#              'Occ_Crest_in' : ref+[0.352,6.39,4.26]+tr}
-# fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=landmarks)
+# ref = [0.91, 5.27, 4.99]
+# tr = [42,0]
+# sites = ['JLY002', 'JLY003', 'JLY004', 'JLY007d', 'JLY008', 'JLY009b', 'JLY010b', 'JLY011c', 'JLY012d', 'JLY013c', 'JLY014d']
+# landmarks = {'MidLine'     : ref+[1.384, 4.53, 4.64]+tr,
+#               'OccCrest': ref+[0.076, 5.27, 5.28]+tr,
+#               'Occ_Crest_in' : ref+[0.490, 5.27, 5.28]+tr}
+# fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=None)
+# fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=False, landmarks=None)
+# fig.axes[0].grid()
 # plt.show()
-# 
-'''
-ref = [0.91, 5.27, 4.99]
-tr = [42,0]
-sites = ['JLY002', 'JLY003', 'JLY004', 'JLY007d', 'JLY008', 'JLY009b', 'JLY010b', 'JLY011c', 'JLY012d', 'JLY013c', 'JLY014d']
-landmarks = {'MidLine'     : ref+[1.384, 4.53, 4.64]+tr,
-              'OccCrest': ref+[0.076, 5.27, 5.28]+tr,
-              'Occ_Crest_in' : ref+[0.490, 5.27, 5.28]+tr}
-fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=None)
-fig.axes[0].grid()
-plt.show()
-'''
+
+
+
+# sites = ['TNC001a', 'TNC002b', 'TNC003b']
+# landmarks = {'viral0': [0.39, 5.25, 1.37, 0.70, 5.96, 1.12, 42, 0],
+#              'viral1': [0.39, 5.25, 1.37, 0.67, 6.14, 1.15, 42, 0]}
+# fig, coords = penetration_map(sites, equal_aspect=True, flip_X=True, flatten=False, landmarks=landmarks)
+# fig, coords = penetration_map(sites, equal_aspect=True, flip_X=True, flatten=True, flip_YZ=True, landmarks=landmarks)
