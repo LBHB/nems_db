@@ -271,11 +271,11 @@ def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, land
 '''
 ref = [0.91, 5.27, 4.99]
 tr = [42,0]
-sites = ['JLY002', 'JLY003', 'JLY004', 'JLY007d', 'JLY008', 'JLY009b', 'JLY010b', 'JLY011c', 'JLY012d', 'JLY013c', 'JLY014d']
+sites = ['JLY002', 'JLY003', 'JLY004', 'JLY007d', 'JLY008b', 'JLY009b', 'JLY010b', 'JLY011c', 'JLY012d', 'JLY013c', 'JLY014d', 'JLY019a']
 landmarks = {'MidLine'     : ref+[1.384, 4.53, 4.64]+tr,
               'OccCrest': ref+[0.076, 5.27, 5.28]+tr,
               'Occ_Crest_in' : ref+[0.490, 5.27, 5.28]+tr}
-fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=None)
+fig, coords = penetration_map(sites, equal_aspect=True, flip_X=False, flatten=True, landmarks=landmarks)
 fig.axes[0].grid()
 plt.show()
 '''
