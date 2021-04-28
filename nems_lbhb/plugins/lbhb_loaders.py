@@ -363,17 +363,20 @@ def hc(loadkey):
 def loadpred(loadkey):
     ops = loadkey.split('.')[1:]
 
-    #modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
-    modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+    if 'z' in ops:
+        modelname_existing = "psth.fs4.pup-ld-norm.r.ms-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+    else:
+        # modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     for op in ops:
         if op=='rnd':
             rand_match = True
+
 
     xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
               {'modelname_existing': modelname_existing}]]
 
     return xfspec
-
 
 
 # TODO: delete after finished deprecating, no longer used in this module.

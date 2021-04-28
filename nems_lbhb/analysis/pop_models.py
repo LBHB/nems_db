@@ -250,11 +250,14 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                 for i1 in range(0,n1):
                     if c is not None:
                         col = c[i1,i0]
-                        if np.abs(col)>0.2:
+                        if np.abs(col)>0.3:
                             if col>0:
-                                col = [(1-col), 1-0.5*col, 1-0.5*col]
+                                #col = [(1-col), 1-0.5*col, 1-0.5*col]
+                                col = [1-0.1*col, 1-col, 1-col]
                             else:
-                                col = [1+0.5*col, 1+0.5*col, 1+col]
+                                #col = [1+0.5*col, 1+0.5*col, 1+col]
+                                col = [1+col, 1+col, 1+0.1*col]
+
                             ax1.plot([x0[i0], x1[i1]],[rows - (i), rows - (i+1)], 
                                      color=col, linewidth=0.5)
                     else:
@@ -278,7 +281,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
         #print(x1[0], x1[-1])
     ax1.set_ylim([1.5, rows-0.5])
     ax1.set_axis_off()
-    modelname = modelspec.meta['modelname'].split("_")[1] 
+    try:
+        modelname = modelspec.meta['modelname'].split("_")[1] 
+    except:
+        modelname = modelspec.meta['modelname']
     f.suptitle(f"{modelspec.meta['cellid']} {modelname} {index_range[0]}-{index_range[-1]}")
     return f
 
