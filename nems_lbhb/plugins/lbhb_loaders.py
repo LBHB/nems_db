@@ -363,16 +363,20 @@ def hc(loadkey):
 def loadpred(loadkey):
     ops = loadkey.split('.')[1:]
 
-    if 'z' in ops:
+    pc_count=0
+    for op in ops:
+        if op=='rnd':
+            rand_match = True
+        if op[:2]=='pc':
+            pc_count = int(op[2:])
+    if pc_count>0:
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-hrc-pca.psth.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
+    elif 'z' in ops:
         modelname_existing = "psth.fs4.pup-ld-norm.r.ms-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     else:
         # modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
         modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
-    for op in ops:
-        if op=='rnd':
-            rand_match = True
-
-
+            
     xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
               {'modelname_existing': modelname_existing}]]
 
