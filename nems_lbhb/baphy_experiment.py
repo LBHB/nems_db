@@ -447,7 +447,7 @@ class BAPHYExperiment:
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
 
         #import pdb; pdb.set_trace()
 
@@ -760,7 +760,7 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
@@ -771,7 +771,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     epochs = []
 
     log.info('Creating trial epochs')
-    trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
+    trial_epochs = _make_trial_epochs(exptevents, exptparams, fidx, **options)
     epochs.append(trial_epochs)
 
     log.info('Creating stim epochs')
@@ -843,7 +843,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     return epochs
 
 
-def _make_trial_epochs(exptevents, exptparams, **options):
+def _make_trial_epochs(exptevents, exptparams, fidx=None, **options):
     """
     Define baphy trial epochs
     """
@@ -865,7 +865,14 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
             ).reset_index()
+    baphy_trials = trial_events.copy()
+    names = [f'BAPHYTRIAL{i+1}_FILE{fidx+1}' for i in range(baphy_trials.shape[0])]
+    baphy_trials.name = names
+    trial_events = pd.concat([trial_events, baphy_trials]).sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
     trial_events = trial_events.drop(columns=['index'])
+    trial_events = trial_events.drop(columns=['level_0'])
 
     return trial_events
 
