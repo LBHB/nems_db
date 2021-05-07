@@ -447,7 +447,7 @@ class BAPHYExperiment:
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
 
         #import pdb; pdb.set_trace()
 
@@ -459,6 +459,9 @@ class BAPHYExperiment:
                 # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
                 # but it will update this local exptparams that gets used for signal generation
                 baphy_events[i], exptparams[i] = runclass.TBP(bev, param)
+            if param['runclass']=='CPN':
+                #ToDo: format epochs for clarity and define if AllPermutations or Triplets
+                baphy_events[i], exptparams[i] = runclass.CPN(bev, param)
         
     
         signals = {}
@@ -760,7 +763,7 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
@@ -771,7 +774,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     epochs = []
 
     log.info('Creating trial epochs')
-    trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
+    trial_epochs = _make_trial_epochs(exptevents, exptparams, fidx, **options)
     epochs.append(trial_epochs)
 
     log.info('Creating stim epochs')
@@ -843,7 +846,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     return epochs
 
 
-def _make_trial_epochs(exptevents, exptparams, **options):
+def _make_trial_epochs(exptevents, exptparams, fidx=None, **options):
     """
     Define baphy trial epochs
     """
@@ -865,7 +868,14 @@ def _make_trial_epochs(exptevents, exptparams, **options):
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
             ).reset_index()
+    baphy_trials = trial_events.copy()
+    names = [f'BAPHYTRIAL{i+1}_FILE{fidx+1}' for i in range(baphy_trials.shape[0])]
+    baphy_trials.name = names
+    trial_events = pd.concat([trial_events, baphy_trials]).sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
     trial_events = trial_events.drop(columns=['index'])
+    trial_events = trial_events.drop(columns=['level_0'])
 
     return trial_events
 
@@ -895,7 +905,9 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     ref_ends = exptevents[exptevents.name.isin(ref_e_tags)].copy()
 
     ref_events = exptevents[exptevents.name.isin(ref_tags)].copy()
-    new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    # new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    new_tags = [f"STIM_{'-'.join([b.strip().replace(' ', '') for b in t.split(',')[1:-1]])}" for t in ref_events.name]
+
     ref_events.at[:, 'name'] = new_tags
     ref_events.at[:, 'start'] = ref_starts.start.values
     ref_events.at[:, 'end'] = ref_ends.end.values
