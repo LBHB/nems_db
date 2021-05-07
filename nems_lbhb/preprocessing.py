@@ -17,6 +17,7 @@ import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
+import pickle
 
 from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
 from nems.epoch import epoch_names_matching
@@ -771,7 +772,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -786,6 +787,41 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
     
+    if custom_epochs:
+        # special case, masking pupil per epoch/bin using a custom set of epochs.
+        site = rec.name
+        fn = f'/auto/users/hellerc/results/nat_pupil_ms/reliable_epochs/{site}.pickle'
+        log.info(f"Loading sorted epochs / bins for site {site} from {fn}")
+        reliable_epochs = pickle.load(open(fn, "rb"))
+
+        # Use the best <ev_bins> epochs, or default of 5
+        if ev_bins == 0: 
+            ev_bins = 5
+
+        mask_bins = []
+        reliable = []
+        for i in range(ev_bins):
+            # add pupil masks for these individual bins
+            (e, b) = reliable_epochs['sorted_epochs'][i]
+            p = r['pupil'].extract_epoch(str(e), mask=r['mask'])[:, :, int(b)]
+            idx = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            m = np.zeros(r['pupil']._data.shape[-1])
+            m[idx[:, 0] + int(b)] = 1
+            m = m.astype(bool)
+            m_sm = (r['pupil']._data.squeeze() < np.median(p)) & m
+            m_lg = (r['pupil']._data.squeeze() >= np.median(p)) & m
+            r['mask_'+e+':'+b+'_sm'] = r['mask']._modified_copy((r['mask']._data * m_sm).astype(bool))
+            r['mask_'+e+':'+b+'_lg'] = r['mask']._modified_copy((r['mask']._data * m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+b+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+b+'_lg'].as_continuous().sum()}")
+            mask_bins.append((e, int(b)))
+            reliable.append(reliable_epochs['reliable_mask'][i])
+
+        r.meta['mask_bins'] = mask_bins
+        r.meta['reliable_bin'] = reliable
+
+        return {'rec': r}
+        
+
     if ev_bins>1:
         # special case, find stim with high pupil variance, mask in individual bins from them
         # generate list of tuples in rec.meta with [(epoch, bin), ... ]
@@ -795,7 +831,10 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
 
         for i,e in enumerate(epoch_names):
             p = r['pupil'].extract_epoch(e, mask=r['mask'])
-            pstd[i] = p.mean(axis=0).std()
+            # pstd[i] = p.mean(axis=0).std()
+            # crh 05.07.2021. Think the previous line should be:
+            pstd[i] = p.mean(axis=-1).std() # for variance across trials
+
         epoch_bins=p.shape[2]
         pre,post = getPrePostSilence(r['resp'])
         prebins = int(pre*r['resp'].fs)

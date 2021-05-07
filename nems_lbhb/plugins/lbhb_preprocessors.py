@@ -468,8 +468,8 @@ def plgsm(load_key):
     Create masks for large and small pupl
     """
     ops = load_key.split('.')[1:]
-    kwargs = {}
     evoked_only = False
+    custom_epochs = False
     ev_bins = 0
     add_per_stim = ('s' in ops)
     split_per_stim = ('sp' in ops)
@@ -477,9 +477,11 @@ def plgsm(load_key):
         if op[:1] == 'e':
             evoked_only=True
             if len(op) > 1:
-                ev_bins = int(op[1:])
+                ev_bins = int(op[1:].strip('g'))
+                if 'g' in op:
+                    custom_epochs = True
     xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
-               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim}]]
+               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs}]]
 
     return xfspec
 
