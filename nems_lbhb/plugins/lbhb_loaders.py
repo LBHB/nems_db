@@ -363,14 +363,19 @@ def hc(loadkey):
 def loadpred(loadkey):
     ops = loadkey.split('.')[1:]
 
-    pc_count=0
+    pc_count = 0
+    pc_format = "psth"
     for op in ops:
-        if op=='rnd':
+        if op == 'rnd':
             rand_match = True
-        if op[:2]=='pc':
+        if op[:2] == 'pc':
             pc_count = int(op[2:])
-    if pc_count>0:
-        modelname_existing = f"psth.fs4.pup-ld-st.pup-hrc-pca.psth.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
+        if op == 'n':
+            pc_format="noise"
+        if op == 'a':
+            pc_format="all"
+    if pc_count > 0:
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-hrc-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
     elif 'z' in ops:
         modelname_existing = "psth.fs4.pup-ld-norm.r.ms-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     else:
