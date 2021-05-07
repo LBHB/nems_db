@@ -6,6 +6,7 @@ Seems easiest to stick these "speciality" loading protocols all in one place, to
 cluttering the main loader.
 """
 import numpy as np
+import pandas as pd
 import copy
 
 # ================================== TBP LOADING ================================
@@ -94,5 +95,19 @@ def TBP(exptevents, exptparams):
     # updata params
     params['TrialObject'][1]['TargetHandle'][1]['Names'] = baphy_tar_strings
     new_params = params
+
+    return new_events, new_params
+
+
+
+def CPN (exptevents, exptparams):
+    """
+    adds an epoch defining AllPermutations or Triplets
+    """
+    structure = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SequenceStructure']
+    line = pd.DataFrame({'name': structure.strip(), 'start': exptevents.iloc[0,1], 'end': exptevents.iloc[0,2]}, index=[0])
+
+    new_events = pd.concat([line, exptevents], ignore_index=True)
+    new_params = copy.deepcopy(exptparams)
 
     return new_events, new_params

@@ -459,6 +459,9 @@ class BAPHYExperiment:
                 # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
                 # but it will update this local exptparams that gets used for signal generation
                 baphy_events[i], exptparams[i] = runclass.TBP(bev, param)
+            if param['runclass']=='CPN':
+                #ToDo: format epochs for clarity and define if AllPermutations or Triplets
+                baphy_events[i], exptparams[i] = runclass.CPN(bev, param)
         
     
         signals = {}
@@ -895,7 +898,9 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     ref_ends = exptevents[exptevents.name.isin(ref_e_tags)].copy()
 
     ref_events = exptevents[exptevents.name.isin(ref_tags)].copy()
-    new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    # new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    new_tags = [f"STIM_{'-'.join([b.strip().replace(' ', '') for b in t.split(',')[1:-1]])}" for t in ref_events.name]
+
     ref_events.at[:, 'name'] = new_tags
     ref_events.at[:, 'start'] = ref_starts.start.values
     ref_events.at[:, 'end'] = ref_ends.end.values
