@@ -356,6 +356,7 @@ def pca(loadkey):
     pc_count=None
     pc_idx=None
     compute_power = 'no'
+    whiten = True
     for op in ops:
         if op == "psth":
             pc_source = "psth"
@@ -377,11 +378,11 @@ def pca(loadkey):
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power, 'whiten': whiten}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'compute_power': compute_power}]]
+                    'pc_count': pc_count, 'compute_power': compute_power, 'whiten': whiten}]]
 
     return xfspec
 
