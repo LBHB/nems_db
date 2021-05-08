@@ -18,6 +18,7 @@ import scipy.fftpack as fp
 import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
 import pickle
+import pandas as pd
 
 from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
 from nems.epoch import epoch_names_matching
@@ -38,6 +39,60 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
+def fix_cpn_epochs(rec, **kwargs):
+    """
+    Specialized preprocessor for CPN data to make the epoch names match more 
+    "traditional" baphy format.
+
+    Also, some specialized tweaking of epochs to work with NAT
+    sounds decoding anlaysis
+
+    crh - 05.08.2021
+    """
+    newrec = copy.deepcopy(rec)
+    new_epochs = copy.deepcopy(newrec.epochs)
+
+    # now that it's masked, fixed the epochs
+    new_epochs = copy.deepcopy(newrec.epochs)
+
+    # Name the "trial" pre/post differently to distinguish from each STIM
+    prepost = new_epochs.name.str.startswith('PreStimSilence') | new_epochs.name.str.startswith('PostStimSilence')
+    new_epochs.at[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
+
+    # strip the seq. epochs and sub pre/post stim
+    new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
+
+    # remove "sub" labels
+    sub = new_epochs.name.str.startswith('Sub')
+    new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
+
+    # Clean up the actual sound epochs 
+    stim_mask = new_epochs.name.str.startswith('STIM_')
+    new_epochs.at[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
+
+    # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence) 
+    one_bin = np.float(1 / rec['resp'].fs)
+    new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
+    new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+
+    # strip old references and make new ones
+    ref = new_epochs.name.str.startswith('REFERENCE')
+    new_epochs = new_epochs.loc[~ref]
+    stim_mask = new_epochs.name.str.startswith('STIM_')
+    stim_epochs = new_epochs.loc[stim_mask]
+    stim_epochs.name = 'REFERENCE'
+    new_epochs = pd.concat([new_epochs, stim_epochs])
+    
+    # clean up index
+    new_epochs = new_epochs.sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
+
+    # assign to new recording
+    for signal in newrec.signals.keys():
+        newrec[signal].epochs = new_epochs
+
+    return newrec
 
 #
 # BUNCH OF MASKING FUNCTIONS

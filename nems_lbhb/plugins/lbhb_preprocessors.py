@@ -450,6 +450,18 @@ def hrc(load_key):
 
     return xfspec
 
+@xform()
+def epcpn(load_key):
+    """
+    Fix epoch naming for cpn data
+    """
+
+    xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
+               {},
+                 ['rec'], ['rec']]]
+
+    return xfspec
+
 
 @xform()
 def pbal(load_key):
