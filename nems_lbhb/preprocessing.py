@@ -845,8 +845,11 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     if custom_epochs:
         # special case, masking pupil per epoch/bin using a custom set of epochs.
         site = kwargs['meta']['cellid']
-        fn = f'/auto/users/hellerc/results/nat_pupil_ms/reliable_epochs/{site}.pickle'
-        log.info(f"Loading sorted epochs / bins for site {site} from {fn}")
+        batch = kwargs['meta']['batch']
+        if (batch==322) | (batch==str(322)):
+            batch = 289
+        fn = f'/auto/users/hellerc/results/nat_pupil_ms/reliable_epochs/{batch}/{site}.pickle'
+        log.info(f"Loading sorted epochs / bins for batch / site {batch}/{site} from {fn}")
         reliable_epochs = pickle.load(open(fn, "rb"))
 
         # Use the best <ev_bins> epochs, or default of 5
