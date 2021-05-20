@@ -216,6 +216,8 @@ def st(loadkey):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
             this_sig = ["p_x_f"]
+        elif l.startswith("drf"):
+            this_sig = ["drift"]
         elif l.startswith("pre"):
             this_sig = ["pre_passive"]
         elif l.startswith("dif"):
