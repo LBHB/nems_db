@@ -17,6 +17,8 @@ import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 from scipy.ndimage import gaussian_filter1d
+import pickle
+import pandas as pd
 
 from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
 from nems.epoch import epoch_names_matching
@@ -37,6 +39,60 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
+def fix_cpn_epochs(rec, **kwargs):
+    """
+    Specialized preprocessor for CPN data to make the epoch names match more 
+    "traditional" baphy format.
+
+    Also, some specialized tweaking of epochs to work with NAT
+    sounds decoding anlaysis
+
+    crh - 05.08.2021
+    """
+    newrec = copy.deepcopy(rec)
+    new_epochs = copy.deepcopy(newrec.epochs)
+
+    # now that it's masked, fixed the epochs
+    new_epochs = copy.deepcopy(newrec.epochs)
+
+    # Name the "trial" pre/post differently to distinguish from each STIM
+    prepost = new_epochs.name.str.startswith('PreStimSilence') | new_epochs.name.str.startswith('PostStimSilence')
+    new_epochs.at[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
+
+    # strip the seq. epochs and sub pre/post stim
+    new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
+
+    # remove "sub" labels
+    sub = new_epochs.name.str.startswith('Sub')
+    new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
+
+    # Clean up the actual sound epochs 
+    stim_mask = new_epochs.name.str.startswith('STIM_')
+    new_epochs.at[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
+
+    # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence) 
+    one_bin = np.float(1 / rec['resp'].fs)
+    new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
+    new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+
+    # strip old references and make new ones
+    ref = new_epochs.name.str.startswith('REFERENCE')
+    new_epochs = new_epochs.loc[~ref]
+    stim_mask = new_epochs.name.str.startswith('STIM_')
+    stim_epochs = new_epochs.loc[stim_mask]
+    stim_epochs.name = 'REFERENCE'
+    new_epochs = pd.concat([new_epochs, stim_epochs])
+    
+    # clean up index
+    new_epochs = new_epochs.sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
+
+    # assign to new recording
+    for signal in newrec.signals.keys():
+        newrec[signal].epochs = new_epochs
+
+    return newrec
 
 #
 # BUNCH OF MASKING FUNCTIONS
@@ -771,7 +827,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -786,6 +842,44 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
     
+    if custom_epochs:
+        # special case, masking pupil per epoch/bin using a custom set of epochs.
+        site = kwargs['meta']['cellid']
+        batch = kwargs['meta']['batch']
+        if (batch==322) | (batch==str(322)):
+            batch = 289
+        fn = f'/auto/users/hellerc/results/nat_pupil_ms/reliable_epochs/{batch}/{site}.pickle'
+        log.info(f"Loading sorted epochs / bins for batch / site {batch}/{site} from {fn}")
+        reliable_epochs = pickle.load(open(fn, "rb"))
+
+        # Use the best <ev_bins> epochs, or default of 5
+        if ev_bins == 0: 
+            ev_bins = 5
+
+        mask_bins = []
+        reliable = []
+        for i in range(ev_bins):
+            # add pupil masks for these individual bins
+            (e, b) = reliable_epochs['sorted_epochs'][i]
+            p = r['pupil'].extract_epoch(str(e), mask=r['mask'])[:, :, int(b)]
+            idx = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            m = np.zeros(r['pupil']._data.shape[-1])
+            m[idx[:, 0] + int(b)] = 1
+            m = m.astype(bool)
+            m_sm = (r['pupil']._data.squeeze() < np.median(p)) & m
+            m_lg = (r['pupil']._data.squeeze() >= np.median(p)) & m
+            r['mask_'+e+':'+b+'_sm'] = r['mask']._modified_copy((r['mask']._data * m_sm).astype(bool))
+            r['mask_'+e+':'+b+'_lg'] = r['mask']._modified_copy((r['mask']._data * m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+b+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+b+'_lg'].as_continuous().sum()}")
+            mask_bins.append((e, int(b)))
+            reliable.append(reliable_epochs['reliable_mask'][i])
+
+        r.meta['mask_bins'] = mask_bins
+        #r.meta['reliable_bin'] = reliable
+
+        return {'rec': r}
+        
+
     if ev_bins>1:
         # special case, find stim with high pupil variance, mask in individual bins from them
         # generate list of tuples in rec.meta with [(epoch, bin), ... ]
@@ -795,7 +889,10 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
 
         for i,e in enumerate(epoch_names):
             p = r['pupil'].extract_epoch(e, mask=r['mask'])
-            pstd[i] = p.mean(axis=0).std()
+            # pstd[i] = p.mean(axis=0).std()
+            # crh 05.07.2021. Think the previous line should be:
+            pstd[i] = p.mean(axis=-1).std() # for variance across trials
+
         epoch_bins=p.shape[2]
         pre,post = getPrePostSilence(r['resp'])
         prebins = int(pre*r['resp'].fs)

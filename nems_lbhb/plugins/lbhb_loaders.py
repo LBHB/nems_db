@@ -365,6 +365,7 @@ def loadpred(loadkey):
 
     pc_count = 0
     pc_format = "psth"
+    dmask = 'hrc'
     for op in ops:
         if op == 'rnd':
             rand_match = True
@@ -374,13 +375,15 @@ def loadpred(loadkey):
             pc_format="noise"
         if op == 'a':
             pc_format="all"
+        if op == 'cpn':
+            dmask = 'epcpn-hrc'
     if pc_count > 0:
-        modelname_existing = f"psth.fs4.pup-ld-st.pup-hrc-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
     elif 'z' in ops:
-        modelname_existing = "psth.fs4.pup-ld-norm.r.ms-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+        modelname_existing = f"psth.fs4.pup-ld-norm.r.ms-st.pup-{dmask}-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     else:
         # modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
-        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
             
     xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
               {'modelname_existing': modelname_existing}]]
