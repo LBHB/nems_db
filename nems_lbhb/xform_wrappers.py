@@ -176,11 +176,11 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
 def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
     rec_cells = est['resp'].chans
+    batch = int(meta['batch'])
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
         # pick random subset to exclude
         if match_to_site is not None:
-            batch = int(meta['batch'])
             if exclusions == 0:
                 cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
             else:
@@ -194,7 +194,17 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
             exclusions = random.sample(rec_cells, exclusions)
     # else: exclusions should be a list of siteids to exclude
     if match_to_site is None:
-        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in exclusions])]
+        updated_exclusions = []
+        for e in exclusions:
+            if ':' in e:
+                # Have to parse DRX siteids that contain subsite specifications like e1:64
+                cellid_options = {'batch': batch, 'cellid': e, 'rawid': None}
+                cells_to_extract, _ = io.parse_cellid(cellid_options)
+                updated_exclusions.extend(cells_to_extract)
+            else:
+                updated_exclusions.append(e)
+
+        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in updated_exclusions])]
         holdout_set = list(set(rec_cells) - set(cell_set))
     else:
         cell_set = list(set(rec_cells) - set(exclusions))
