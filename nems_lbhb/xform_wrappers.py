@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 
 def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
-                    cell_count=None, best_cells=False):
+                    cell_count=None, best_cells=False, manual_cell_list=None):
 
     if batch==289:
        pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
@@ -51,7 +51,10 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         all_cells = list(single_perf.index)
     log.info("Batch: %d", batch)
     log.info("Per-cell modelname: %s", pmodelname)
-    cellid = [c for c in all_cells if c.split("-")[0]==siteid]
+    if manual_cell_list is None:
+        cellid = [c for c in all_cells if c.split("-")[0]==siteid]
+    else:
+        cellid = manual_cell_list
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -182,12 +185,20 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
         # pick random subset to exclude
         if match_to_site is not None:
             if exclusions == 0:
-                cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
+                if ':' in match_to_site:
+                    cellid_options = {'batch': batch, 'cellid': match_to_site, 'rawid': None}
+                    cells_to_extract, _ = io.parse_cellid(cellid_options)
+                    cell_count = len(cells_to_extract)
+                    manual_cell_list = cells_to_extract
+                else:
+                    cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
+                    manual_cell_list = None
             else:
                 cell_count = exclusions
 
             cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
-                batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count
+                batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count,
+                manual_cell_list=manual_cell_list
             )
             exclusions = alt_cellid
         else:
