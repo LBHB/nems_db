@@ -338,7 +338,7 @@ def hc(loadkey):
             # special fix for DRX split siteids, they'll get split on the '.' but they shouldn't be
             op2 = options.pop(i+1)
             op1 = options.pop(i)
-            options.append(op1 + op2)
+            options.append(op1 + '.' +  op2)
 
     for op in options[1:]:
         if op.startswith('sd'):
