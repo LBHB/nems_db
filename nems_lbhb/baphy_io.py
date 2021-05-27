@@ -2125,7 +2125,10 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
         raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
 
     # get all waveforms for this sorted file
-    w = np.load(path + results_dir + '/results/wft_mwf.npy')
+    try:
+        w = np.load(path + results_dir + '/results/wft_mwf.npy')
+    except:
+        w = np.load(path + results_dir + '/results/mean_waveforms.npy')
     clust_ids = pd.read_csv(path + results_dir + '/results/cluster_group.tsv', '\t').cluster_id
     kidx = np.argwhere(clust_ids.values == kid)[0][0]
     
