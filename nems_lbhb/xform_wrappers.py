@@ -68,7 +68,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         cellid=cellid[:cell_count]
         this_perf = this_perf[:cell_count]
 
-    out_cellid = [c for c in all_cells if c.split("-")[0]!=siteid]
+    out_cellid = [c for c in all_cells if c not in cellid]#c.split("-")[0]!=siteid]
     out_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0]
                        if c in single_perf.index else 0.0
                        for c in out_cellid])
@@ -197,13 +197,15 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
                 cell_count = exclusions
 
             cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
-                batch=batch, siteid=match_to_site, alt_cells_available=rec['resp'].chans, cell_count=cell_count,
+                # alt_cells_available = rec_cells   # causes problems if not all cells in rec have been fit
+                batch=batch, siteid=match_to_site, alt_cells_available=None, cell_count=cell_count,
                 manual_cell_list=manual_cell_list
             )
             exclusions = alt_cellid
         else:
             exclusions = random.sample(rec_cells, exclusions)
     # else: exclusions should be a list of siteids to exclude
+
     if match_to_site is None:
         updated_exclusions = []
         for e in exclusions:
@@ -255,11 +257,15 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
     if use_matched_site:
         site = meta['matched_site']
         batch = meta['batch']
-        cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+        if ':' in site:
+            cellid_options = {'batch': batch, 'cellid': site, 'rawid': None}
+            cellids, _ = io.parse_cellid(cellid_options)
+        else:
+            cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
         meta['cellids'] = cellids
     else:
         meta['cellids'] = meta['holdout_cellids']
-    modelspec.meta['cellids'] = meta['holdout_cellids']
+    modelspec.meta['cellids'] = meta['cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
     temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
