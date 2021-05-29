@@ -1013,7 +1013,13 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     else:
                         unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                     spiketimes.append(unit_spike_events / spikefs)
-
+                else:
+                    # append empty list for units that had no spikes
+                    if chancount <= 8:
+                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                    else:
+                        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                    spiketimes.append([])
     return exptevents, spiketimes, unit_names
 
 
