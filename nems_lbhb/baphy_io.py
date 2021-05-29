@@ -1013,13 +1013,18 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     else:
                         unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                     spiketimes.append(unit_spike_events / spikefs)
-                else:
-                    # append empty list for units that had no spikes
-                    if chancount <= 8:
-                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                    else:
-                        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
-                    spiketimes.append([])
+                
+                #else:
+                # TODO - Incorporate this, but deal with cases of truly missing data. This is
+                # designed only for cases where e.g. a single cellid doens't spike during one
+                # of many files (for example during a passive), not cases where the cellid
+                # is just missed (like cases due to append units)
+                #    # append empty list for units that had no spikes
+                #    if chancount <= 8:
+                #        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                #    else:
+                #        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                #    spiketimes.append([])
     return exptevents, spiketimes, unit_names
 
 
