@@ -251,9 +251,10 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, trainable_layers=None,
+def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, freeze_layers=None,
                            use_matched_site=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
+
     if use_matched_site:
         site = meta['matched_site']
         batch = meta['batch']
@@ -271,10 +272,14 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
     temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
                                               output_name=context['output_name'])
     temp_ms[0].pop('meta')  # don't overwrite metadata in first module
-    if trainable_layers is None:
-        trainable_layers = list(range(len(temp_ms)))
-    for i in trainable_layers:
-        modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
+    all_idx = list(range(len(temp_ms)))
+    if freeze_layers is None:
+        freeze_layers = all_idx
+    for i in all_idx:
+        if i not in freeze_layers:
+            modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
+
+    import pdb; pdb.set_trace()
 
     return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
 
