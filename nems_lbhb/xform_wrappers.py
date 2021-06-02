@@ -279,8 +279,6 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
         if i not in freeze_layers:
             modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
 
-    import pdb; pdb.set_trace()
-
     return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
 
 
