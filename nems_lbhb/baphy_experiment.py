@@ -783,7 +783,8 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options
 
     log.info('Creating Light epochs')
     light_epochs = _make_light_epochs(exptevents, exptparams, **options)
-    if light_epochs != []:
+    #if light_epochs != []:
+    if light_epochs is not None:
         epochs.append(light_epochs)
 
     # this step includes removing post lick events for 
@@ -999,7 +1000,7 @@ def _make_light_epochs(exptevents, exptparams, **options):
         return light_events
 
     else:
-        return []
+        return None
 
 
 def _make_behavior_epochs(exptevents, exptparams, **options):
