@@ -178,6 +178,7 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
 
 def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
+
     rec_cells = est['resp'].chans
     batch = int(meta['batch'])
     random.seed(12345 + seed_mod)
@@ -191,8 +192,8 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
                     cell_count = len(cells_to_extract)
                     manual_cell_list = cells_to_extract
                 else:
-                    cell_count = len(nd.get_batch_cells(batch, cellid=match_to_site, as_list=True))
-                    manual_cell_list = None
+                    manual_cell_list = [c for c in rec_cells if c.startswith(match_to_site)]
+                    cell_count = len(manual_cell_list)
             else:
                 cell_count = exclusions
 
@@ -227,16 +228,24 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
     val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
     # also have to do rec b/c init from keywords uses it for some checks
     rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
+    #if matched_to_site is not None:
 
     meta['cellids'] = cell_set
     meta['holdout_cellids'] = holdout_set
     meta['matched_site'] = match_to_site
+    if (match_to_site is not None):
+        _, matched_est = _get_holdout_recs(est, cell_set, manual_cell_list)
+        _, matched_val = _get_holdout_recs(val, cell_set, manual_cell_list)
+        _, matched_rec = _get_holdout_recs(rec, cell_set, manual_cell_list)
+    else:
+        matched_est, matched_val, matched_rec = (None, None, None)
 
     if exclusions is not None:
         meta['excluded_cellids'] = exclusions
 
     return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
-            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta}
+            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta, 'matched_est': matched_est,
+            'matched_val': matched_val, 'matched_rec': matched_rec}
 
 
 def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
@@ -251,9 +260,10 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspec, freeze_layers=None,
-                           use_matched_site=False, **context):
+def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
+
+    import pdb; pdb.set_trace()
 
     if use_matched_site:
         site = meta['matched_site']
@@ -269,8 +279,8 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
     modelspec.meta['cellids'] = meta['cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
-    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=holdout_rec, input_name=context['input_name'],
-                                              output_name=context['output_name'])
+    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=context['holdout_rec'],
+                                              input_name=context['input_name'], output_name=context['output_name'])
     temp_ms[0].pop('meta')  # don't overwrite metadata in first module
     all_idx = list(range(len(temp_ms)))
     if freeze_layers is None:
@@ -279,7 +289,16 @@ def switch_to_heldout_data(holdout_est, holdout_val, holdout_rec, meta, modelspe
         if i not in freeze_layers:
             modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
 
-    return {'est': holdout_est, 'val': holdout_val, 'rec': holdout_rec, 'modelspec': modelspec, 'meta': meta}
+    if use_matched_site:
+        new_est = context['matched_est']
+        new_val = context['matched_val']
+        new_rec = context['matched_rec']
+    else:
+        new_est = context['holdout_est']
+        new_val = context['holdout_val']
+        new_rec = context['holdout_rec']
+
+    return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta}
 
 
 def pop_file(stimfmt='ozgf', batch=None,
