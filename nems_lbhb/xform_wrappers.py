@@ -263,8 +263,6 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
 def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
-    import pdb; pdb.set_trace()
-
     if use_matched_site:
         site = meta['matched_site']
         batch = meta['batch']
