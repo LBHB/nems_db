@@ -685,19 +685,24 @@ class lv_norm(NemsModule):
         state = 'state'
         set_bounds = False
         additive=False
+        single_offset=False
         for o in options[2:]:
             if o == 'bound':
                 set_bounds = True
             elif o == 'd':
                 additive=True
+            elif o == 'so':
+                single_offset=True
 
         # init gain/dc params
-        zeros = np.zeros([n_chans, n_states])
-        ones = np.ones([n_chans, n_states])
-        mean_g = zeros.copy()
-        sd_g = ones.copy()
-        mean_d = zeros.copy()
-        sd_d = ones.copy()
+        mean_g = np.zeros([n_chans, n_states])
+        sd_g = np.ones([n_chans, n_states])
+        if single_offset:
+            mean_d = np.zeros([1, n_states])
+            sd_d = np.ones([1, n_states])
+        else:
+            mean_d = np.zeros([n_chans, n_states])
+            sd_d = np.ones([n_chans, n_states])
 
         template = {
             'fn_kwargs': {'i': 'pred',
