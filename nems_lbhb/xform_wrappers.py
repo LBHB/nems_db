@@ -179,8 +179,11 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
 def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
 
-    rec_cells = est['resp'].chans
     batch = int(meta['batch'])
+    rec_cells = est['resp'].chans
+    # TODO: should probably figure out a smarter way to do this, don't really
+    #       need to keep 3 copies of the recordings. Just a copy of which cells to extract.
+
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
         # pick random subset to exclude
@@ -260,10 +263,20 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, **context):
+def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, use_matched_random=False,
+                           fit_all_cells=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
-    if use_matched_site:
+    if use_matched_site:  # fit to included site cells, save as site cells
+        if use_matched_random:  # fit to excluded match cells, save as site cells
+            new_est = context['holdout_est']
+            new_val = context['holdout_val']
+            new_rec = context['holdout_rec']
+        else:
+            new_est = context['matched_est']
+            new_val = context['matched_val']
+            new_rec = context['matched_rec']
+
         site = meta['matched_site']
         batch = meta['batch']
         if ':' in site:
@@ -271,14 +284,20 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site
             cellids, _ = io.parse_cellid(cellid_options)
         else:
             cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
-        meta['cellids'] = cellids
-    else:
-        meta['cellids'] = meta['holdout_cellids']
+
+    else:  # fit to excluded site cells, save as site cells
+        new_est = context['holdout_est']
+        new_val = context['holdout_val']
+        new_rec = context['holdout_rec']
+
+        cellids = meta['holdout_cellids']
+
+    meta['cellids'] = cellids
     modelspec.meta['cellids'] = meta['cellids']
 
     # Reinitialize trainable layers so that .R options are adjusted to new cell count
-    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=context['holdout_rec'],
-                                              input_name=context['input_name'], output_name=context['output_name'])
+    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
+                                              output_name=context['output_name'])
     temp_ms[0].pop('meta')  # don't overwrite metadata in first module
     all_idx = list(range(len(temp_ms)))
     if freeze_layers is None:
@@ -286,15 +305,6 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site
     for i in all_idx:
         if i not in freeze_layers:
             modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
-
-    if use_matched_site:
-        new_est = context['matched_est']
-        new_val = context['matched_val']
-        new_rec = context['matched_rec']
-    else:
-        new_est = context['holdout_est']
-        new_val = context['holdout_val']
-        new_rec = context['holdout_rec']
 
     return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta}
 

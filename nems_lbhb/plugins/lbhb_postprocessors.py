@@ -60,6 +60,7 @@ def tfheld(loadkey):
     freeze_layers = None
     options = loadkey.split('.')
     use_matched_site = False
+    use_matched_random = False
     for op in options[1:]:
         if op.startswith('FL'):
             if ':' in op:
@@ -71,7 +72,10 @@ def tfheld(loadkey):
                 freeze_layers = [int(i) for i in op[2:].split('x')]
         elif op == 'ms':
             use_matched_site = True
+        elif op == 'rnd':
+            use_matched_random = True
 
     xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'freeze_layers': freeze_layers,
-                                                                   'use_matched_site': use_matched_site}]]
+                                                                   'use_matched_site': use_matched_site,
+                                                                   'use_matched_random': use_matched_random}]]
     return xfspec
