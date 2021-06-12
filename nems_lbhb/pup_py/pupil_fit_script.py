@@ -51,9 +51,8 @@ if __name__ == '__main__':
     modelname = sys.argv[2]
     animal = sys.argv[3]
 
-    # load the keras model (this is hardcoded rn but should be flexible at some point
-    #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
-    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+    # load the keras model 
+    project_dir = ps.ROOT_DIRECTORY 
     if (modelname == 'current') | (modelname == 'Current'):
         if (animal != '') & (animal != 'None') & (animal != 'All') & (animal != None):
             this_model_dir = 'animal_specific_fits/{}/'.format(animal)
@@ -65,6 +64,8 @@ if __name__ == '__main__':
             name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
             modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
     else:
+        # load an older model fit for this pupil video. Probably not used often, but nice 
+        # to have the option...
         date = modelname
         datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
         modelname = [m for m in datefolder if 'weights' in m][0]

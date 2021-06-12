@@ -631,7 +631,6 @@ def create_pupil_mask(rec, evoked_only=False, **options):
 
     elif (collapse is True) & (epoch is not None):
         log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
-
         # In this case, fold pupil first based on the epoch(s)
         folded_pupil = r['pupil'].extract_epochs(epoch)
 

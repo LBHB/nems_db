@@ -1117,6 +1117,7 @@ def set_default_pupil_options(options):
     options["rem_min_saccades_per_minute"] = options.get('rem_min_saccades_per_minute', 0.01)
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
+    options["pupil_artifacts"] = options.get("pupil_artifacts", False) # load boolean signal indicating "bad" pupil chunks
     options["verbose"] = options.get('verbose', False)
 
     return options
@@ -1140,6 +1141,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     pupil_median = options["pupil_median"]
     pupil_mm = options["pupil_mm"]
     pupil_eyespeed = options["pupil_eyespeed"]
+    pupil_artifacts = options["pupil_artifacts"]
     verbose = options["verbose"]
     options['pupil'] = options.get('pupil', True)
     #rasterfs = options.get('rasterfs', 100)
@@ -1219,7 +1221,15 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_diameter[arg] = pupil_diameter[arg - 1]
 
         pupil_diameter = pupil_diameter[:-1, np.newaxis]
-
+        if pupildata['cnn']['excluded_frames'].size:
+            # there are frames that were excluded. Make a bool signal
+            # indicating these frames so that they can be removed if 
+            # wanted
+            log.info("Found pupil artifacts -- frames labeled as 'bad' in pupil_browser")
+            artifacts = np.zeros(pupil_diameter.shape).astype(bool)
+            for a in pupildata['cnn']['excluded_frames']:
+                artifacts[a[0]:a[1]] = True
+            
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
 
         if pupil_eyespeed:
@@ -1314,11 +1324,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if pupil_eyespeed:
             eye_speed = deblinked_eye_speed
 
-    if pupil_eyespeed:
-        returned_measurement = eye_speed
-    else:
-        returned_measurement = pupil_diameter
-
     # resample and remove dropped frames
 
     # find and parse pupil events
@@ -1371,6 +1376,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         l = ['pupil']
     elif pupil_eyespeed & options['pupil']:
         l = ['pupil', 'pupil_eyespeed']
+    elif pupil_artifacts & options['pupil']:
+        l = ['pupil', 'artifacts']
     elif pupil_eyespeed:
         l = ['pupil_eyespeed']
     elif options['pupil']:
@@ -1383,7 +1390,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             pupil_eyespeed = True
         else:
             pupil_eyespeed = False
-
         # warp/resample each trial to compensate for dropped frames
         strialidx = np.zeros([ntrials + 1])
         #big_rs = np.array([[]])
@@ -1398,6 +1404,10 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
             elif signal == 'pupil_eyespeed':
                 d = eye_speed[
+                        int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
+                        ]
+            elif signal == 'artifacts':
+                d = artifacts[
                         int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
                         ]
             else:
@@ -1427,7 +1437,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
             strialidx[ii+1] = big_rs.shape[0]
 
-        if pupil_median:
+        if (pupil_median) & (signal!='artifacts'):
             kernel_size = int(round(pupil_median*rasterfs/2)*2+1)
             big_rs = scipy.signal.medfilt(big_rs, kernel_size=(kernel_size,1))
 
