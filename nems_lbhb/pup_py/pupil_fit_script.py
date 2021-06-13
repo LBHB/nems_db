@@ -171,7 +171,7 @@ if __name__ == '__main__':
             'b': np.array(b_cnn),
             'x': np.array(x_cnn),
             'y': np.array(y_cnn),
-            'phi': np.array(phi_cnn)
+            'phi': np.array(phi_cnn),
             'eyelid_left_x': lx,
             'eyelid_left_y': ly,
             'eyelid_top_x': tx,
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             'eyelid_right_x': rx,
             'eyelid_right_y': ry,
             'eyelid_bottom_x': bx,
-            'eyelid_bottom_y': by,
+            'eyelid_bottom_y': by
         },
         'cnn_modelpath': modelpath
     }
