@@ -51,7 +51,17 @@ class DataGenerator(keras.utils.Sequence):
             long_axis = current_frame['ellipse_zack']['b'] * 2
             short_axis = current_frame['ellipse_zack']['a'] * 2
             phi = current_frame['ellipse_zack']['phi']
-            y[i, :] = np.asarray([Y0_in, X0_in, long_axis, short_axis, phi])
+            # eyelid keypoints
+            lx = current_frame['ellipse_zack']['eyelid_left_x']
+            ly = current_frame['ellipse_zack']['eyelid_left_y']
+            tx = current_frame['ellipse_zack']['eyelid_top_x']
+            ty = current_frame['ellipse_zack']['eyelid_top_y']
+            rx = current_frame['ellipse_zack']['eyelid_right_x']
+            ry = current_frame['ellipse_zack']['eyelid_right_y']
+            bx = current_frame['ellipse_zack']['eyelid_bottom_x']
+            by = current_frame['ellipse_zack']['eyelid_bottom_y']
+            y[i, :] = np.asarray([Y0_in, X0_in, long_axis, short_axis, phi,
+                            lx, ly, tx, ty, rx, ry, bx, by])
 
             if self.augment:
                 # randomly augment mini-batches by performing transformations on each image
@@ -63,7 +73,16 @@ class DataGenerator(keras.utils.Sequence):
                 scale_fact, im = ut.resize(current_frame['frame'], size=self.image_dim)
 
             y[i, ] = np.asarray([y[i, 0] * scale_fact[1], y[i, 1] * scale_fact[0], y[i, 2] * scale_fact[1],
-                                y[i, 3] * scale_fact[0], y[i, 4]])
+                                y[i, 3] * scale_fact[0], y[i, 4],
+                                y[i, 5] * scale_fact[0],
+                                y[i, 6] * scale_fact[1],
+                                y[i, 7] * scale_fact[0],
+                                y[i, 8] * scale_fact[1],
+                                y[i, 9] * scale_fact[0],
+                                y[i, 10] * scale_fact[1],
+                                y[i, 11] * scale_fact[0],
+                                y[i, 12] * scale_fact[1],
+                                ])
 
             im = keras.applications.densenet.preprocess_input(im)
 
@@ -74,6 +93,7 @@ class DataGenerator(keras.utils.Sequence):
             y[i, 2] = y[i, 2] / (self.image_dim[1] / 2)
             y[i, 3] = y[i, 3] / (self.image_dim[1] / 2)
             y[i, 4] = (y[i, 4] / (np.pi)) 
+            y[i, 5:] = y[i, 5:] / self.image_dim[1]
 
             y[i, :] = y[i, :] * 100
             

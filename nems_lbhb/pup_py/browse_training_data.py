@@ -3,13 +3,14 @@ Script meant to be used for browsing saved training data and manually manipulati
 useful when you notice there is frame the must be manually annotated.
 '''
 import tkinter as tk
-import matplotlib.backends.tkagg as tkagg
+from matplotlib.backends import _backend_tk as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Ellipse
+from matplotlib.figure import Figure
 from PIL import Image
 import pickle
 import sys
@@ -30,7 +31,7 @@ class TrainingDataBrowser:
         # these 50 frames from this range. train frame range is tuple (start_frame, end_frame)
 
         self.plot_calls = 0
-
+        self.edgepoints = []        
         if (animal is None) and (video_name is None):
             self.from_browser = False
             default_frame = os.listdir(train_data_path)[0].split('.')[0]
@@ -82,15 +83,15 @@ class TrainingDataBrowser:
                 os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}{3}%d.jpg".format(t, video, tmp_save, video_name))
 
                 # load, convert to grayscale, cut off artifact, extact/save first channel only
-                img = Image.open(tmp_save + video_name + '1' + '.jpg').convert('LA')
+                img = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
                 frame = np.asarray(img)[:, :-10, 0]
                 output_dict['frame'] = frame
-                img2 = Image.open(tmp_save + video_name + '1' + '.jpg').convert('LA')
+                img2 = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
                 frame2 = np.asarray(img2)[:, :-10, 0]
                 output_dict['frame2'] = frame2  # for display purposes
                 output_dict['ellipse_zack'] = {
                                 'a': parms['cnn']['a'][f],
-                                'b': parms['cnn']['b'][f],
+                                'b': parms['cnn']['b'][f],  
                                 'X0_in': parms['cnn']['x'][f],
                                 'Y0_in': parms['cnn']['y'][f],
                                 'phi': parms['cnn']['phi'][f]
@@ -112,12 +113,13 @@ class TrainingDataBrowser:
         self.master = master
         master.title("Training data browser")
         master.geometry('950x400')
+        #master.geometry('1200x500')
 
         # create a plot attributemod
         self.pupil_plot = None
 
-        self.pupil_canvas = tk.Canvas(master, width=400, height=400)
-        self.pupil_canvas.grid(row=0, column=4, rowspan=11)
+        #self.pupil_canvas = tk.Canvas(master, width=300, height=300)
+        #self.pupil_canvas.grid(row=0, column=4, rowspan=11)
 
         self.load_button = tk.Button(master, text="Display current frame", command=self.browse_files)
         self.load_button.grid(row=0, column=1)
@@ -207,7 +209,7 @@ class TrainingDataBrowser:
         self.set_ellipse_prev.grid(row=9, column=1)
 
         # save new ellipse params for this frame
-        self.save_ellipse = tk.Button(master, text="Save new ellipse", command=self.save_ellipse_params)
+        self.save_ellipse = tk.Button(master, text="Save new parameters", command=self.save_ellipse_params)
         self.save_ellipse.grid(row=10, column=1)
 
         self.close_button = tk.Button(master, text="Close", command=master.destroy)
@@ -219,7 +221,7 @@ class TrainingDataBrowser:
         self.long_axis_value.delete(0, 'end')
         self.long_axis_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_la(self):
@@ -228,7 +230,7 @@ class TrainingDataBrowser:
         self.long_axis_value.delete(0, 'end')
         self.long_axis_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_sa(self):
@@ -237,7 +239,7 @@ class TrainingDataBrowser:
         self.short_axis_value.delete(0, 'end')
         self.short_axis_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_sa(self):
@@ -246,7 +248,7 @@ class TrainingDataBrowser:
         self.short_axis_value.delete(0, 'end')
         self.short_axis_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_x(self):
@@ -255,7 +257,7 @@ class TrainingDataBrowser:
         self.x_pos_value.delete(0, 'end')
         self.x_pos_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_x(self):
@@ -264,7 +266,7 @@ class TrainingDataBrowser:
         self.x_pos_value.delete(0, 'end')
         self.x_pos_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_y(self):
@@ -273,7 +275,7 @@ class TrainingDataBrowser:
         self.y_pos_value.delete(0, 'end')
         self.y_pos_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_y(self):
@@ -282,7 +284,7 @@ class TrainingDataBrowser:
         self.y_pos_value.delete(0, 'end')
         self.y_pos_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_phi(self):
@@ -291,7 +293,7 @@ class TrainingDataBrowser:
         self.phi_value.delete(0, 'end')
         self.phi_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_phi(self):
@@ -300,7 +302,7 @@ class TrainingDataBrowser:
         self.phi_value.delete(0, 'end')
         self.phi_value.insert(0, string=str(round(val, 2)))
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
 
@@ -347,7 +349,7 @@ class TrainingDataBrowser:
         
         self.update_ellipse_params(prev_params['ellipse_zack'])
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def save_ellipse_params(self):
@@ -357,13 +359,27 @@ class TrainingDataBrowser:
         long_axis = np.float(self.long_axis_value.get())
         short_axis = np.float(self.short_axis_value.get())
         phi = np.float(self.phi_value.get()) / 180 * np.pi
-
+        # save eyelid key points
+        self.sort_edgepoints()
+        left = self.edgepoints[0]
+        top = self.edgepoints[1]
+        right = self.edgepoints[2]
+        bottom = self.edgepoints[3]
+        print(self.edgepoints)
         e_params = {
             'X0_in': X0_in,
             'Y0_in': Y0_in,
             'b': (long_axis / 2),
             'a': (short_axis / 2),
-            'phi': phi
+            'phi': phi,
+            'eyelid_left_x': left[0],
+            'eyelid_left_y': left[1],
+            'eyelid_top_x': top[0],
+            'eyelid_top_y': top[1],
+            'eyelid_right_x': right[0],
+            'eyelid_right_y': right[1],
+            'eyelid_bottom_x': bottom[0],
+            'eyelid_bottom_y': bottom[1],
         }
 
         frame_file = self.frame_name.get()
@@ -372,6 +388,8 @@ class TrainingDataBrowser:
             current_params = pickle.load(fp)
 
         new_params = current_params.copy()
+        # old naming convention leftover from Leah's MATLAB pupil analysis 
+        # which served as first training data for this.
         new_params['ellipse_zack'] = e_params
 
         with open(train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
@@ -390,8 +408,8 @@ class TrainingDataBrowser:
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
 
-        canvas = self.pupil_canvas
-        canvas.delete('all') # prevent memory leak
+        #canvas = self.pupil_canvas
+        #canvas.delete('all') # prevent memory leak
         loc = (0, 0)
 
         X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
@@ -400,50 +418,38 @@ class TrainingDataBrowser:
         short_axis = np.float(self.short_axis_value.get())
         phi = np.float(self.phi_value.get()) / 180 * np.pi
 
+        if self.edgepoints == []:
+            self.edgepoints = get_eyelid_keypoints(frame_data)
 
-        if self.plot_calls == 0:
-            self.plot_calls += 1
-            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
-            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
-            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
-            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-            self.ax_handle.add_patch(ellipse)
+        self.plot_calls += 1
+        self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+        self.ax_handle = self.figure_handle.add_subplot(111)
+        self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
+                                np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
+        self.ax_handle.add_patch(ellipse)
 
-            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
-        else:
-            self.pupil_handle.set_data(frame_data['frame'])
-            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-            self.ax_handle.patches[0].remove()
-            self.ax_handle.add_patch(ellipse)
+        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
 
         self.figure_canvas_agg.draw()
-
-        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
-        figure_w, figure_h = int(figure_w), int(figure_h)
-        photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
-
-        # Position: convert from top-left anchor to center anchor
-        canvas.create_image(loc[0] + figure_w / 2, loc[1] + figure_h / 2, image=photo)
-
-        # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
-
-        # self.pupil_canvas = canvas
-
-        return photo
+        self.figure_canvas_agg.mpl_connect(
+                "button_press_event", self.button_press_callback)
+        self.figure_canvas_agg.mpl_connect(
+                "key_press_event", self.key_press_callback)
+        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=11, ipadx=0, ipady=0, pady=0, padx=0)
 
     def plot_frame(self, frame_file):
         '''
         with open(data_dict, 'rb') as fp:
             data = pickle.load(fp)
         '''
-
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
             fp.close()
 
-        canvas = self.pupil_canvas
-        canvas.delete('all')  # prevent memory leak
+        #canvas = self.pupil_canvas
+        #canvas.delete('all')  # prevent memory leak
         #if 'AMT003c11_p_NAT10995' in frame_file:
         #    import pdb; pdb.set_trace()
 
@@ -453,47 +459,83 @@ class TrainingDataBrowser:
         short_axis = frame_data['ellipse_zack']['a'] * 2
         phi = frame_data['ellipse_zack']['phi']
 
+        # load eyelid keypoints and pack into list of x, y coordinates
+        self.edgepoints = get_eyelid_keypoints(frame_data)
+
         # update the ellipse params display to correspond to the current frame
         self.update_ellipse_params(frame_data['ellipse_zack'])
 
         loc = (0, 0)
 
-        if self.plot_calls == 0:
-            self.plot_calls += 1
-            self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
-            self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
-            try:
-                self.pupil_handle = self.ax_handle.imshow(frame_data['frame2'])
-            except:
-                self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
-            self.ax_handle.axis('off')
-            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-            self.ax_handle.add_patch(ellipse)
-            self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
-        else:
-            try:
-                self.pupil_handle.set_data(frame_data['frame2'])
-            except:
-                self.pupil_handle.set_data(frame_data['frame'])
-            ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-            self.ax_handle.patches[0].remove()
-            self.ax_handle.add_patch(ellipse)
+        self.plot_calls += 1
+        #self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+        #self.figure_handle = plt.Figure(figsize=(4, 4))
+        self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+        #self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
+        self.ax_handle = self.figure_handle.add_subplot(111)
+        try:
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame2'])
+        except:
+            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+        #self.ax_handle.axis('off')
+        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
+                                np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
+        ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
+        self.ax_handle.add_patch(ellipse)
+        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
 
         self.figure_canvas_agg.draw()
+        self.figure_canvas_agg.mpl_connect(
+                "button_press_event", self.button_press_callback)
+        self.figure_canvas_agg.mpl_connect(
+                "key_press_event", self.key_press_callback)
+        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=11, ipadx=0, ipady=0, pady=0, padx=0)
 
-        figure_x, figure_y, figure_w, figure_h = self.figure_handle.bbox.bounds
-        figure_w, figure_h = int(figure_w), int(figure_h)
-        photo = tk.PhotoImage(master=canvas, width=figure_w, height=figure_h)
 
-        # Position: convert from top-left anchor to center anchor
-        canvas.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
+    # button press callbacks
+    def button_press_callback(self, event):
+        # append location to polygon
+        try:
+            self.ax_handle.lines.pop(0)
+        except:
+            pass
 
-        # Unfortunately, there's no accessor for the pointer to the native renderer
-        tkagg.blit(photo, self.figure_canvas_agg.get_renderer()._renderer, colormode=2)
+        if len(self.edgepoints)>=4:
+            self.edgepoints = []
+            
+        self.edgepoints.append((event.xdata, event.ydata))
+        ep = np.array(self.edgepoints)
+        self.edgeline = self.ax_handle.plot(ep[:, 0], ep[:, 1], lw=0, marker='o', markersize=5, color='red')
+        
+        self.figure_canvas_agg.draw()
 
-        # self.pupil_canvas = canvas
+    def key_press_callback(self, event):
+        # remove polygon
+        if event.key == 'escape':
+            # empty the polygon array
+            self.edgepoints = []
+            try:
+                self.ax_handle.lines.pop(0)
+            except:
+                pass
+            self.figure_canvas_agg.draw()
 
-        return photo
+
+    def sort_edgepoints(self):
+        # helper function for sorting edgepoints so that the order is:
+        # 1 - left, 2 - top, 3 - right and 4 - bottom
+        # that way they're always in the same position for the fitter
+        # also, make sure they're not Nan (placeholders)
+        if (len(self.edgepoints)!=4) | np.any(np.isnan(np.array(self.edgepoints))):
+            raise ValueError("Must label all for edgepoints of the eyelid (left corner, middle-top, right corner, middle-bottom")
+        xlocs = np.array(self.edgepoints)[:,0]
+        ylocs = np.array(self.edgepoints)[:,1]
+        left = np.argmin(xlocs)
+        right = np.argmax(xlocs)
+        top = np.argmax(ylocs)
+        bottom = np.argmin(ylocs)
+        edgepoints = np.array(self.edgepoints)
+        self.edgepoints = [edgepoints[left], edgepoints[top], edgepoints[right], edgepoints[bottom]]
 
 
     def browse_files(self):
@@ -503,7 +545,7 @@ class TrainingDataBrowser:
 
         frame_file = self.frame_name.get()
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.plot_frame(frame_file)
         self.master.mainloop()
 
@@ -540,7 +582,7 @@ class TrainingDataBrowser:
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
 
-        self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.plot_frame(new_frame_root)
 
     def display_prev_frame(self):
@@ -572,9 +614,25 @@ class TrainingDataBrowser:
         new_frame_root = new_frame.split('.')[0]
         self.frame_name.insert(0, new_frame_root)
 
-        #self.pupil_canvas.delete(self.pupil_plot)
-        self.pupil_canvas.delete("all")
+        ##self.pupil_canvas.delete(self.pupil_plot)
+        #self.pupil_canvas.delete("all")
         self.pupil_plot = self.plot_frame(new_frame_root)
+
+
+def get_eyelid_keypoints(frame):
+    try:
+        lx = frame['ellipse_zack']['eyelid_left_x']
+        ly = frame['ellipse_zack']['eyelid_left_y']
+        tx = frame['ellipse_zack']['eyelid_top_x']
+        ty = frame['ellipse_zack']['eyelid_top_y']
+        rx = frame['ellipse_zack']['eyelid_right_x']
+        ry = frame['ellipse_zack']['eyelid_right_y']
+        bx = frame['ellipse_zack']['eyelid_bottom_x']
+        by = frame['ellipse_zack']['eyelid_bottom_y']
+        return [[lx, ly], [tx, ty], [rx, ry], [bx, by]]
+    except:
+        print("WARNING: Can't find labeled keypoints for eyelid. Make sure to label keypoints by clicking on corners of eyelids")
+        return [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]
 
 root = tk.Tk()
 
@@ -584,3 +642,4 @@ if len(sys.argv) > 1:
 else:
     my_gui = TrainingDataBrowser(root)
     root.mainloop()
+

@@ -165,7 +165,9 @@ if __name__ == '__main__':
         # add global average pooling layer
         x = GlobalAveragePooling2D()(x)
         # add output layer
-        predictions = Dense(5, activation='linear')(x)
+        #predictions = Dense(5, activation='linear')(x)
+        # 5 ellipse params + 8 new params for the eyelid keypoints
+        predictions = Dense(13, activation='linear')(x)
 
         model = Model(inputs=base_model.input, outputs=predictions)
 
