@@ -67,11 +67,11 @@ if __name__ == '__main__':
         dt = datetime.datetime.now().isoformat()
         this_model_directory = 'animal_specific_fits/{}'.format(animal_name)
         
-        if os.path.isdir('{0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory)):
-            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        if os.path.isdir('{0}{1}/'.format(ps.ROOT_DIRECTORY, this_model_directory)):
+            os.system('mkdir {0}{1}/{2}'.format(ps.ROOT_DIRECTORY, this_model_directory, dt))
         else:
-            os.system('mkdir {0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
-            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+            os.system('mkdir {0}{1}/'.format(ps.ROOT_DIRECTORY, this_model_directory))
+            os.system('mkdir {0}{1}/{2}'.format(ps.ROOT_DIRECTORY, this_model_directory, dt))
 
     else:
         video_code = None
@@ -218,7 +218,7 @@ if __name__ == '__main__':
                 name = os.listdir(project_dir + this_model_directory + '/default_trained_model/{0}'.format(old_date))[0]
                 default_name = project_dir + this_model_directory + '/default_trained_model/{0}/{1}'.format(old_date, name)
             except FileNotFoundError:
-                os.system('mkdir {0}{1}/default_trained_model/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
+                os.system('mkdir {0}{1}/default_trained_model/'.format(ps.ROOT_DIRECTORY, this_model_directory))
                 default_name = None # no default exists yet
             except IndexError:
                 default_name = None
