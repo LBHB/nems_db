@@ -86,7 +86,9 @@ if __name__ == '__main__':
         # get current date/time so that we can save the model results in the correct place
         dt = datetime.datetime.now().isoformat()
         this_model_directory = 'old_model_fits'
-        os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        out = os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        if out!=0:
+            raise ValueError("Can't make new directory here")
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True
