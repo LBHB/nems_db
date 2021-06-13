@@ -89,22 +89,32 @@ class TrainingDataBrowser:
                 img2 = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
                 frame2 = np.asarray(img2)[:, :-10, 0]
                 output_dict['frame2'] = frame2  # for display purposes
-                output_dict['ellipse_zack'] = {
-                                'a': parms['cnn']['a'][f],
-                                'b': parms['cnn']['b'][f],  
-                                'X0_in': parms['cnn']['x'][f],
-                                'Y0_in': parms['cnn']['y'][f],
-                                'phi': parms['cnn']['phi'][f],
-                                'eyelid_left_x': parms['cnn']['eyelid_left_x'][f],
-                                'eyelid_left_y': parms['cnn']['eyelid_left_y'][f],
-                                'eyelid_top_x': parms['cnn']['eyelid_top_x'][f],
-                                'eyelid_top_y': parms['cnn']['eyelid_top_y'][f],
-                                'eyelid_right_x': parms['cnn']['eyelid_right_x'][f],
-                                'eyelid_right_y': parms['cnn']['eyelid_right_y'][f],
-                                'eyelid_bottom_x': parms['cnn']['eyelid_bottom_x'][f],
-                                'eyelid_bottom_y': parms['cnn']['eyelid_bottom_y'][f]
+                try:
+                    output_dict['ellipse_zack'] = {
+                                    'a': parms['cnn']['a'][f],
+                                    'b': parms['cnn']['b'][f],  
+                                    'X0_in': parms['cnn']['x'][f],
+                                    'Y0_in': parms['cnn']['y'][f],
+                                    'phi': parms['cnn']['phi'][f],
+                                    'eyelid_left_x': parms['cnn']['eyelid_left_x'][f],
+                                    'eyelid_left_y': parms['cnn']['eyelid_left_y'][f],
+                                    'eyelid_top_x': parms['cnn']['eyelid_top_x'][f],
+                                    'eyelid_top_y': parms['cnn']['eyelid_top_y'][f],
+                                    'eyelid_right_x': parms['cnn']['eyelid_right_x'][f],
+                                    'eyelid_right_y': parms['cnn']['eyelid_right_y'][f],
+                                    'eyelid_bottom_x': parms['cnn']['eyelid_bottom_x'][f],
+                                    'eyelid_bottom_y': parms['cnn']['eyelid_bottom_y'][f]
 
-                }
+                    }
+                except:
+                    output_dict['ellipse_zack'] = {
+                                    'a': parms['cnn']['a'][f],
+                                    'b': parms['cnn']['b'][f],  
+                                    'X0_in': parms['cnn']['x'][f],
+                                    'Y0_in': parms['cnn']['y'][f],
+                                    'phi': parms['cnn']['phi'][f],
+
+                    }
                 name = train_data_path + video_name + str(f) + '.pickle'
 
                 # if this frame isn't already in the training set, add it
@@ -418,6 +428,8 @@ class TrainingDataBrowser:
 
         print("saved new ellipse parameters for {0}".format(frame_file))
 
+        self.display_next_frame()
+
 
     def update_ellipse_plot(self):
         '''
@@ -633,7 +645,6 @@ def get_eyelid_keypoints(frame):
         by = frame['ellipse_zack']['eyelid_bottom_y']
         return [[lx, ly], [tx, ty], [rx, ry], [bx, by]]
     except:
-        import pdb; pdb.set_trace()
         print("WARNING: Can't find labeled keypoints for eyelid. Make sure to label keypoints by clicking on corners of eyelids")
         return [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]
 
