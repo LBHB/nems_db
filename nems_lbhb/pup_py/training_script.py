@@ -103,7 +103,7 @@ if __name__ == '__main__':
     params = {
         'batch_size': 16,
         'image_dim': (224, 224),
-        'n_parms': 5,
+        'n_parms': 13,
         'n_channels': 3,
         'shuffle': True,
         'augment_minibatches': True
