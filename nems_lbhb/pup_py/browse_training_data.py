@@ -94,7 +94,16 @@ class TrainingDataBrowser:
                                 'b': parms['cnn']['b'][f],  
                                 'X0_in': parms['cnn']['x'][f],
                                 'Y0_in': parms['cnn']['y'][f],
-                                'phi': parms['cnn']['phi'][f]
+                                'phi': parms['cnn']['phi'][f],
+                                'eyelid_left_x': parms['cnn']['eyelid_left_x'][f],
+                                'eyelid_left_y': parms['cnn']['eyelid_left_y'][f],
+                                'eyelid_top_x': parms['cnn']['eyelid_top_x'][f],
+                                'eyelid_top_y': parms['cnn']['eyelid_top_y'][f],
+                                'eyelid_right_x': parms['cnn']['eyelid_right_x'][f],
+                                'eyelid_right_y': parms['cnn']['eyelid_right_y'][f],
+                                'eyelid_bottom_x': parms['cnn']['eyelid_bottom_x'][f],
+                                'eyelid_bottom_y': parms['cnn']['eyelid_bottom_y'][f]
+
                 }
                 name = train_data_path + video_name + str(f) + '.pickle'
 
@@ -120,6 +129,18 @@ class TrainingDataBrowser:
 
         #self.pupil_canvas = tk.Canvas(master, width=300, height=300)
         #self.pupil_canvas.grid(row=0, column=4, rowspan=11)
+
+        # just build the figure here to try to prevent mem leak
+        self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
+        self.ax_handle = self.figure_handle.add_subplot(111)
+        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
+        self.figure_canvas_agg.draw()
+        self.figure_canvas_agg.mpl_connect(
+                "button_press_event", self.button_press_callback)
+        self.figure_canvas_agg.mpl_connect(
+                "key_press_event", self.key_press_callback)
+        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=11, ipadx=0, ipady=0, pady=0, padx=0)
+
 
         self.load_button = tk.Button(master, text="Display current frame", command=self.browse_files)
         self.load_button.grid(row=0, column=1)
@@ -349,7 +370,7 @@ class TrainingDataBrowser:
         
         self.update_ellipse_params(prev_params['ellipse_zack'])
 
-        #self.pupil_canvas.delete(self.pupil_plot)
+        ##self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
     def save_ellipse_params(self):
@@ -408,8 +429,6 @@ class TrainingDataBrowser:
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
 
-        #canvas = self.pupil_canvas
-        #canvas.delete('all') # prevent memory leak
         loc = (0, 0)
 
         X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
@@ -422,22 +441,18 @@ class TrainingDataBrowser:
             self.edgepoints = get_eyelid_keypoints(frame_data)
 
         self.plot_calls += 1
-        self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
-        self.ax_handle = self.figure_handle.add_subplot(111)
-        self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+        # clear items on the canvas / axes
+        try:
+            self.ax_handle.clear()
+        except:
+            pass
+
+        self.ax_handle.imshow(frame_data['frame'])
         ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
-        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
-                                np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
         self.ax_handle.add_patch(ellipse)
-
-        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
-
+        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
+                        np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
         self.figure_canvas_agg.draw()
-        self.figure_canvas_agg.mpl_connect(
-                "button_press_event", self.button_press_callback)
-        self.figure_canvas_agg.mpl_connect(
-                "key_press_event", self.key_press_callback)
-        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=11, ipadx=0, ipady=0, pady=0, padx=0)
 
     def plot_frame(self, frame_file):
         '''
@@ -447,11 +462,6 @@ class TrainingDataBrowser:
         with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
             frame_data = pickle.load(fp)
             fp.close()
-
-        #canvas = self.pupil_canvas
-        #canvas.delete('all')  # prevent memory leak
-        #if 'AMT003c11_p_NAT10995' in frame_file:
-        #    import pdb; pdb.set_trace()
 
         Y0_in = frame_data['ellipse_zack']['Y0_in']
         X0_in = frame_data['ellipse_zack']['X0_in']
@@ -468,29 +478,21 @@ class TrainingDataBrowser:
         loc = (0, 0)
 
         self.plot_calls += 1
-        #self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
-        #self.figure_handle = plt.Figure(figsize=(4, 4))
-        self.figure_handle = mpl.figure.Figure(figsize=(4, 4))
-        #self.ax_handle = self.figure_handle.add_axes([0, 0, 1, 1])
-        self.ax_handle = self.figure_handle.add_subplot(111)
+        # clear items on the canvas / axes
         try:
-            self.pupil_handle = self.ax_handle.imshow(frame_data['frame2'])
+            self.ax_handle.clear()
         except:
-            self.pupil_handle = self.ax_handle.imshow(frame_data['frame'])
+            pass
+        try:
+            self.ax_handle.imshow(frame_data['frame2'])
+        except:
+            self.ax_handle.imshow(frame_data['frame'])
         #self.ax_handle.axis('off')
-        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
-                                np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
         ellipse = Ellipse((Y0_in, X0_in), long_axis, - short_axis, 180 * phi / np.pi, fill=False, color='red')
         self.ax_handle.add_patch(ellipse)
-        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=self.master)
-
+        self.ax_handle.plot(np.array(self.edgepoints)[:, 0],
+                                np.array(self.edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
         self.figure_canvas_agg.draw()
-        self.figure_canvas_agg.mpl_connect(
-                "button_press_event", self.button_press_callback)
-        self.figure_canvas_agg.mpl_connect(
-                "key_press_event", self.key_press_callback)
-        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=11, ipadx=0, ipady=0, pady=0, padx=0)
-
 
     # button press callbacks
     def button_press_callback(self, event):
@@ -631,6 +633,7 @@ def get_eyelid_keypoints(frame):
         by = frame['ellipse_zack']['eyelid_bottom_y']
         return [[lx, ly], [tx, ty], [rx, ry], [bx, by]]
     except:
+        import pdb; pdb.set_trace()
         print("WARNING: Can't find labeled keypoints for eyelid. Make sure to label keypoints by clicking on corners of eyelids")
         return [[np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan], [np.nan, np.nan]]
 

@@ -164,9 +164,26 @@ class PupilBrowser:
         x = self.parms['cnn']['x'][fn]
         y = self.parms['cnn']['y'][fn]
         phi = self.parms['cnn']['phi'][fn]
+        try:
+            edgepoints = [
+                        [self.parms['cnn']['eyelid_left_x'][fn], self.parms['cnn']['eyelid_left_y'][fn]],
+                        [self.parms['cnn']['eyelid_top_x'][fn], self.parms['cnn']['eyelid_top_y'][fn]],
+                        [self.parms['cnn']['eyelid_right_x'][fn], self.parms['cnn']['eyelid_right_y'][fn]],
+                        [self.parms['cnn']['eyelid_bottom_x'][fn], self.parms['cnn']['eyelid_bottom_y'][fn]],
+            ]
+        except:
+            # for backwards compatibility with fits that don't have eyelid keypoints
+            edgepoints = None
 
         ellipse = Ellipse((y, x), b * 2, - a * 2, 180 * phi / np.pi, fill=False, color='red')
         ax.add_patch(ellipse)
+
+        if edgepoints is None:
+            print("Old model fit. Doesn't have eyelide keypoint detection")
+        else:
+            ax.plot(np.array(edgepoints)[:, 0],
+                                    np.array(edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
+
         ax.axis('off')
 
         figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
