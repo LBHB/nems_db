@@ -92,6 +92,7 @@ if __name__ == '__main__':
     x_cnn = []
     y_cnn = []
     phi_cnn = []
+    lx=[];ly=[];tx=[];ty=[];rx=[];ry=[];bx=[];by=[];
 
     # reopen the video with pyav
     container = av.open(video)
@@ -132,6 +133,7 @@ if __name__ == '__main__':
             ellipse_parms[3] = ellipse_parms[3] * (size[0] / 2)
 
             ellipse_parms[4] = ellipse_parms[4] * np.pi
+            ellipse_parms[5:] = ellipse_parms[5:] * size[0] # eyelid keypoints
 
             # undo scaling and save
             y_cnn.append(ellipse_parms[0] / sf[1])
@@ -139,7 +141,14 @@ if __name__ == '__main__':
             b_cnn.append(ellipse_parms[2] / sf[1] / 2)
             a_cnn.append(ellipse_parms[3] / sf[0] / 2)
             phi_cnn.append(ellipse_parms[4])
-
+            lx.append(ellipse_parms[5] / sf[0])
+            ly.append(ellipse_parms[6] / sf[1])
+            tx.append(ellipse_parms[7] / sf[0])
+            ty.append(ellipse_parms[8] / sf[1])
+            rx.append(ellipse_parms[9] / sf[0])
+            ry.append(ellipse_parms[10] / sf[1])
+            bx.append(ellipse_parms[11] / sf[0])
+            by.append(ellipse_parms[12] / sf[1])
         except:
             log.info("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
 
@@ -148,7 +157,14 @@ if __name__ == '__main__':
             b_cnn.append(np.nan)
             a_cnn.append(np.nan)
             phi_cnn.append(np.nan)
-
+            lx.append(np.nan)
+            ly.append(np.nan)
+            tx.append(np.nan)
+            ty.append(np.nan)
+            rx.append(np.nan)
+            ry.append(np.nan)
+            bx.append(np.nan)
+            by.append(np.nan)
     results = {
         'cnn': {
             'a': np.array(a_cnn),
@@ -156,6 +172,14 @@ if __name__ == '__main__':
             'x': np.array(x_cnn),
             'y': np.array(y_cnn),
             'phi': np.array(phi_cnn)
+            'eyelid_left_x': lx,
+            'eyelid_left_y': ly,
+            'eyelid_top_x': tx,
+            'eyelid_top_y': ty,
+            'eyelid_right_x': rx,
+            'eyelid_right_y': ry,
+            'eyelid_bottom_x': bx,
+            'eyelid_bottom_y': by,
         },
         'cnn_modelpath': modelpath
     }

@@ -229,7 +229,7 @@ if __name__ == '__main__':
                 default_name = project_dir + 'default_trained_model/{0}/{1}'.format(old_date, name)
             except:
                 default_name = None
-                print("No old model fits, don't need to purge")
+                log.info("No old model fits, don't need to purge")
 
         # delete the current model from defaults (it is still saved in the
         # parent (probably "old_model_fits") folder under the date it was fit on), along with
