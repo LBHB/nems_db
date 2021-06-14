@@ -536,18 +536,26 @@ class TrainingDataBrowser:
 
 
     def sort_edgepoints(self):
-        # helper function for sorting edgepoints so that the order is:
-        # 1 - left, 2 - top, 3 - right and 4 - bottom
-        # that way they're always in the same position for the fitter
+        # helper function for sorting edgepoints so that the order is
+        # based on the x position.
+        # that way they're (basically) always in the same position for the fitter,
+        # with the exception that the middle point can go high or low
+        # this is necessary (I think) because due to tilt, the y axis is ambiguous
+        # meaning, "top" isn't necessarily always higher than left / right
         # also, make sure they're not Nan (placeholders)
         if (len(self.edgepoints)!=4) | np.any(np.isnan(np.array(self.edgepoints))):
             raise ValueError("Must label all for edgepoints of the eyelid (left corner, middle-top, right corner, middle-bottom")
-        xlocs = np.array(self.edgepoints)[:,0]
-        ylocs = np.array(self.edgepoints)[:,1]
-        left = np.argmin(xlocs)
-        right = np.argmax(xlocs)
-        top = np.argmax(ylocs)
-        bottom = np.argmin(ylocs)
+        xlocs = np.array(edgepoints)[:,0]
+        sidx = np.argsort(xlocs)
+        left = sidx[0]
+        right = sidx[3]
+        top = sidx[1]
+        bottom = sidx[2]
+        if edgepoints[top][1]>edgepoints[bottom][1]:
+            pass
+        else:
+            top = sidx[2]
+            bottom = sidx[1]
         edgepoints = np.array(self.edgepoints)
         self.edgepoints = [edgepoints[left], edgepoints[top], edgepoints[right], edgepoints[bottom]]
 
