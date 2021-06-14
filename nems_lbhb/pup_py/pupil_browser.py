@@ -41,7 +41,7 @@ class PupilBrowser:
     def __init__(self, master):
         self.master = master
         master.title("Pupil browser")
-        master.geometry('1050x600')
+        master.geometry('1050x900')
 
         # create a plot attributemod
         self.pupil_plot = None
@@ -58,6 +58,15 @@ class PupilBrowser:
         self.hline = None
         self.a_plot = None
         self.b_plot = None
+
+        # set up figure for eye movements
+        fig = mpl.figure.Figure(figsize=(10.5, 3), dpi=100)
+        self.eye_movement_ax = fig.add_subplot(1,1,1)
+        self.eye_movements = FigureCanvasTkAgg(fig, master=root)
+        self.eye_movements.draw()
+        self.eye_movements.get_tk_widget().grid(row=16, column=0, rowspan=5, columnspan=8, sticky='nwes')
+        self.top_plot = None
+        self.bottom_plot = None
 
         master.grid_columnconfigure(3, weight=1)
         master.grid_rowconfigure(10, weight=1)
@@ -247,6 +256,39 @@ class PupilBrowser:
         canvas.mpl_connect('key_release_event', self.off_key)
         canvas.draw()
 
+    def plot_eyelid_movement(self, params_file, exclude=False):
+
+        predictions_folder = (os.path.sep).join(self.processed_video.split(os.path.sep)[:-1])
+
+        params_file = os.path.join(predictions_folder, params_file + '_pred.pickle')
+        with open(params_file, 'rb') as fp:
+            ellipse_preds = pickle.load(fp)
+
+        top = np.array(ellipse_preds['cnn']['eyelid_top_y'])
+        bottom = np.array(ellipse_preds['cnn']['eyelid_bottom_y'])
+
+        self.max_frame = len(bottom)
+
+        canvas = self.eye_movements
+
+        if hasattr(self, 'top_plot'):
+            try:
+                self.top_plot.pop(0).remove()
+                self.bottom_plot.pop(0).remove()
+            except:
+                pass
+
+        self.top_eyelid_plot = self.eye_movement_ax.plot(top, 'tab:orange')
+        self.bottom_eyelid_plot = self.eye_movement_ax.plot(bottom, color='tab:blue')
+        self.eye_movement_ax.set_ylim((np.nanmin([np.nanmin(top), np.nanmin(bottom)]),
+                         np.nanmax([np.nanmax(top), np.nanmax(bottom)])))
+        self.eye_movement_ax.set_xlim((0, len(top)))
+
+        self.eye_movement_ax.legend(['bottom eyelid', 'top eyelid'])
+
+        canvas.draw()
+
+
     def get_coords(self, event):
         self.frame_n_value.delete(0, 'end')
         self.frame_n_value.insert(0, str(int(event.mouseevent.xdata)))
@@ -363,7 +405,11 @@ class PupilBrowser:
         print(self.raw_video)
 
         self.plot_trace(params_file)
-
+        try:
+            self.plot_eyelid_movement(params_file)
+        except:
+            log.info("Couldn't load eyelid keypoints -- old fit?")
+            pass
         self.frame_n_value.insert(0, str(0))
 
         # reset exclusion frames
