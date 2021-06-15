@@ -11,7 +11,8 @@ except:
 #import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends import _backend_tk as tkagg
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from tkinter import Frame
 import os
 import sys
 import matplotlib as mpl
@@ -23,6 +24,10 @@ import nems.db as nd
 import scipy.io
 import sys
 from tkinter import filedialog, simpledialog, messagebox
+import matplotlib as mpl
+mpl.rcParams['axes.spines.right'] = False
+mpl.rcParams['axes.spines.top'] = False
+mpl.rcParams['font.size'] = 8
 
 import nems_db
 nems_db_path = nems_db.__path__[0]
@@ -41,16 +46,17 @@ class PupilBrowser:
     def __init__(self, master):
         self.master = master
         master.title("Pupil browser")
-        master.geometry('1050x900')
+        master.geometry('1050x750')
 
-        # create a plot attributemod
-        self.pupil_plot = None
-        self.pupil_trace_plot = None
+        # set up a figure for pupil image
+        self.figure_handle = mpl.figure.Figure(figsize=(4, 3))
+        self.ax_handle = self.figure_handle.add_subplot(111)
+        self.figure_canvas_agg = FigureCanvasTkAgg(self.figure_handle, master=root)
+        self.figure_canvas_agg.draw()
+        self.figure_canvas_agg.get_tk_widget().grid(row=0, column=4, rowspan=6, columnspan=6, sticky='nwes')
 
-        self.pupil_canvas = tk.Canvas(master, width=400, height=300)
-        self.pupil_canvas.grid(row=0, column=4, rowspan=6, columnspan=5)
-
-        fig = mpl.figure.Figure(figsize=(10.5, 3), dpi=100)
+        # set up figure for pupil trace
+        fig = mpl.figure.Figure(figsize=(12, 2), dpi=100)
         self.ax = fig.add_subplot(1,1,1)
         self.pupil_trace = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
         self.pupil_trace.draw()
@@ -60,13 +66,19 @@ class PupilBrowser:
         self.b_plot = None
 
         # set up figure for eye movements
-        fig = mpl.figure.Figure(figsize=(10.5, 3), dpi=100)
-        self.eye_movement_ax = fig.add_subplot(1,1,1)
+        fig = mpl.figure.Figure(figsize=(12, 2), dpi=100)
+        self.eye_movement_ax = fig.add_subplot(1,1,1, sharex=self.ax)
         self.eye_movements = FigureCanvasTkAgg(fig, master=root)
         self.eye_movements.draw()
         self.eye_movements.get_tk_widget().grid(row=16, column=0, rowspan=5, columnspan=8, sticky='nwes')
+        self.hline2 = None
         self.top_plot = None
         self.bottom_plot = None
+
+        # TOOLBAR for zooming
+        toolbarFrame = Frame(master=root)
+        toolbarFrame.grid(row=22,column=0, columnspan=8)
+        self.toolbar = NavigationToolbar2Tk(self.eye_movements, toolbarFrame)
 
         master.grid_columnconfigure(3, weight=1)
         master.grid_rowconfigure(10, weight=1)
@@ -132,31 +144,29 @@ class PupilBrowser:
                 self.hline.remove()
             except:
                 pass
+        if hasattr(self, 'hline2'):
+            try:
+                self.hline2.remove()
+            except:
+                pass        
         self.hline = self.ax.axvline(frame, color='k')
+        self.hline2 = self.eye_movement_ax.axvline(frame, color='k')
         self.pupil_trace.draw()
+        self.eye_movements.draw()
 
         # save new frames
         os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
 
         frame_file = tmp_frame_folder + 'frame1.jpg'
 
-        self.pupil_canvas.delete(self.pupil_plot)
-        self.pupil_plot = self.plot_frame(frame_file)
-
-        # to reactivate key bindings (I think)
-        self.plot_trace(self.video_name.get(), exclude=True)
-
+        self.plot_frame(frame_file)
 
     def plot_frame(self, frame_file):
 
         frame = mpimg.imread(frame_file)
-        canvas2 = self.pupil_canvas
-        canvas2.delete('all')  # prevent memory leak
-        loc = (0, 0)
 
-        figure = mpl.figure.Figure(figsize=(4, 3))
-        ax = figure.add_axes([0, 0, 1, 1])
-        ax.imshow(frame)
+        self.ax_handle.clear()
+        self.ax_handle.imshow(frame)
 
         # get frame number
         fn = int(self.frame_n_value.get())
@@ -185,34 +195,17 @@ class PupilBrowser:
             edgepoints = None
 
         ellipse = Ellipse((y, x), b * 2, - a * 2, 180 * phi / np.pi, fill=False, color='red')
-        ax.add_patch(ellipse)
+        self.ax_handle.add_patch(ellipse)
 
         if edgepoints is None:
             print("Old model fit. Doesn't have eyelide keypoint detection")
         else:
-            ax.plot(np.array(edgepoints)[:, 0],
+            self.ax_handle.plot(np.array(edgepoints)[:, 0],
                                     np.array(edgepoints)[:, 1], lw=0, marker='o', markersize=5, color='red')
 
-        ax.axis('off')
+        self.ax_handle.axis('off')
 
-        figure_canvas_agg = FigureCanvasTkAgg(figure, master=self.master)
-        figure_canvas_agg.draw()
-
-        figure_x, figure_y, figure_w, figure_h = figure.bbox.bounds
-
-        figure_w = self.pupil_canvas.winfo_width()
-        figure_h = self.pupil_canvas.winfo_height()
-        photo = tk.PhotoImage(master=canvas2, width=figure_w, height=figure_h)
-
-        # Position: convert from top-left anchor to center anchor
-        canvas2.create_image(loc[0] + figure_w/2, loc[1] + figure_h/2, image=photo)
-
-        # Unfortunately, there's no accessor for the pointer to the native renderer
-        # svd replaced with this line to fix mpl/tk versioning bug. 2020-09-04
-        #tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer, colormode=2)
-        tkagg.blit(photo, figure_canvas_agg.get_renderer()._renderer,  (0, 1, 2, 3))
-
-        return photo
+        self.figure_canvas_agg.draw()
 
     def plot_trace(self, params_file, exclude=False):
 
@@ -248,7 +241,7 @@ class PupilBrowser:
                          np.nanmax([np.nanmax(a), np.nanmax(b)])))
         self.ax.set_xlim((0, len(a)))
 
-        self.ax.legend(['minor axis', 'major axis'])
+        self.ax.legend(['minor axis', 'major axis'], bbox_to_anchor=(1,1), loc='upper left', frameon=False)
 
         canvas.get_tk_widget().focus_force()
         canvas.mpl_connect('key_press_event', self.on_key)
@@ -284,7 +277,7 @@ class PupilBrowser:
                          np.nanmax([np.nanmax(top), np.nanmax(bottom)])))
         self.eye_movement_ax.set_xlim((0, len(top)))
 
-        self.eye_movement_ax.legend(['bottom eyelid', 'top eyelid'])
+        self.eye_movement_ax.legend(['bottom eyelid', 'top eyelid'], bbox_to_anchor=(1,1), loc='upper left', frameon=False)
 
         canvas.draw()
 
@@ -299,28 +292,59 @@ class PupilBrowser:
                     self.hline.remove()
                 except:
                     pass
+            if hasattr(self, 'hline2'):
+                try:
+                    self.hline2.remove()
+                except:
+                    pass
             self.hline = self.ax.axvline(event.ind[0], color='k')
+            self.hline2 = self.eye_movement_ax.axvline(event.ind[0], color='k')
             self.pupil_trace.draw()
+            self.eye_movements.draw()
 
             self.get_frame()
 
         elif self.shift_is_held == True:
             if event.mouseevent.button == 1:
                 if hasattr(self, 'hline_start'):
-                    self.hline_start.remove()
-                    del self.start_val
+                    try:
+                        self.hline_start.remove()
+                        del self.start_val
+                    except:
+                        pass
+                if hasattr(self, 'hline2_start'):
+                    try:
+                        self.hline2_start.remove()
+                        del self.start_val
+                    except:
+                        pass
 
                 self.hline_start = self.ax.axvline(int(event.mouseevent.xdata),
                                              color='red')
+                self.hline2_start = self.eye_movement_ax.axvline(int(event.mouseevent.xdata),
+                                             color='red')
                 self.start_val = int(event.mouseevent.xdata)
                 self.pupil_trace.draw()
+                self.eye_movements.draw()
 
             elif event.mouseevent.button == 3:
                 if hasattr(self, 'hline_end'):
-                    self.hline_end.remove()
-                    self.hline_fill.remove()
-                    del self.end_val
-
+                    try:
+                        self.hline_end.remove()
+                        self.hline_fill.remove()
+                        del self.end_val
+                    except:
+                        pass
+                if hasattr(self, 'hline2_end'):
+                    try:
+                        self.hline2_end.remove()
+                        self.hline2_fill.remove()
+                        del self.end_val
+                    except:
+                        pass
+                
+                self.pupil_trace.draw()
+                self.eye_movements.draw()
                 if hasattr(self, 'hline_start') == False:
                     print("First specify start using shift+left-click!")
                 else:
@@ -335,11 +359,23 @@ class PupilBrowser:
                                                 self.start_val, color='grey',
                                                 alpha=0.5)
                     self.pupil_trace.draw()
+                if hasattr(self, 'hline2_start') == False:
+                    print("First specify start using shift+left-click!")
+                else:
+                    self.hline2_end = self.eye_movement_ax.axvline(int(event.mouseevent.xdata),
+                                                 color='red')
+                    mi, ma = self.ax.get_ylim()
+                    mi = int(mi)
+                    ma = int(ma)+1
+                    self.end_val = int(event.mouseevent.xdata)
+                    self.hline2_fill = self.eye_movement_ax.fill_betweenx(range(mi, ma),
+                                                self.end_val,
+                                                self.start_val, color='grey',
+                                                alpha=0.5)                
+                    self.eye_movements.draw()
 
     def on_key(self, event):
-        if event.key=='shift':
-            self.shift_is_held=True
-        elif event.key=='enter':
+        if event.key=='enter':
             # check if exclusion thing exists and delete it on the plot
             if hasattr(self, 'hline_start') & hasattr(self, 'hline_end'):
                 self.hline_start.remove()
@@ -351,13 +387,46 @@ class PupilBrowser:
                 self.pupil_trace.draw()
                 # save the currently stored start/end values to self.exclude_starts
                 # and self.exclude_ends
-                self.exclude_starts.append(self.start_val)
-                self.exclude_ends.append(self.end_val)
+                if self.start_val not in self.exclude_starts:
+                    self.exclude_starts.append(self.start_val)
+                if self.end_val not in self.exclude_ends:
+                    self.exclude_ends.append(self.end_val)   
 
                 self.plot_trace(self.video_name.get(), exclude=True)
             else:
                 pass
+            if hasattr(self, 'hline2_start') & hasattr(self, 'hline2_end'):
+                self.hline2_start.remove()
+                del self.hline2_start
+                self.hline2_end.remove()
+                del self.hline2_end
+                self.hline2_fill.remove()
+                del self.hline2_fill
+                self.eye_movements.draw()
+                # save the currently stored start/end values to self.exclude_starts
+                # and self.exclude_ends
+                if self.start_val not in self.exclude_starts:
+                    self.exclude_starts.append(self.start_val)
+                if self.end_val not in self.exclude_ends:
+                    self.exclude_ends.append(self.end_val)    
 
+                self.plot_trace(self.video_name.get(), exclude=True)
+            else:
+                pass
+        elif event.key=='escape':
+            for attr in ['hline_start', 'hline_end', 'hline2_start', 'hline2_end', 'hline_fill', 'hline2_fill']:
+                try:
+                    getattr(self, attr).remove()
+                    if 'end' in attr:
+                        self.exclude_ends.pop()
+                    if 'start' in attr:
+                        self.exclude_starts.pop()
+                except:
+                    pass
+            self.eye_movements.draw()
+            self.pupil_trace.draw()
+        elif event.key=='shift':
+            self.shift_is_held=True
         else:
             pass
 
@@ -423,8 +492,7 @@ class PupilBrowser:
 
         frame_file = tmp_frame_folder + 'frame1.jpg'
 
-        self.pupil_canvas.delete(self.pupil_plot)
-        self.pupil_plot = self.plot_frame(frame_file)
+        self.plot_frame(frame_file)
         self.master.mainloop()
 
     def get_next_frame(self):

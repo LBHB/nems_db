@@ -10,14 +10,15 @@ import sys
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 
+from batch_norm import NORM_FACTORS
+
 # define global variables for data
 path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
 data_frames = os.listdir(path)
 
-
 class DataGenerator(keras.utils.Sequence):
 
-    def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=5, n_channels=3, shuffle=True,
+    def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=13, n_channels=3, shuffle=True,
                  augment_minibatches=False):
         self.batch_size = batch_size
         self.list_IDs = list_IDs
@@ -88,6 +89,11 @@ class DataGenerator(keras.utils.Sequence):
 
             # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others            
             # normalize the params to live between 0 and 1
+            for j, (_, v) in enumerate(NORM_FACTORS.items()):
+                # these should be sorted in the same order as y, so no need to use the
+                # dict keys in NORM_FACTORS
+                y[i, j] = (y[i, j] / v[2]) #/ v[1]
+            '''
             y[i, 0] = y[i, 0] / self.image_dim[1]
             y[i, 1] = y[i, 1] / self.image_dim[1]
             y[i, 2] = y[i, 2] / (self.image_dim[1] / 2)
@@ -96,7 +102,7 @@ class DataGenerator(keras.utils.Sequence):
             y[i, 5:] = y[i, 5:] / self.image_dim[1]
 
             y[i, :] = y[i, :] * 100
-            
+            '''
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])
 
         return X, y

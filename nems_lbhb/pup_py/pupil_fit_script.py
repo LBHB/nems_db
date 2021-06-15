@@ -19,6 +19,7 @@ import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
+from batch_norm import NORM_FACTORS
 
 import logging
 log = logging.getLogger(__name__)
@@ -125,7 +126,12 @@ if __name__ == '__main__':
             ellipse_parms = model.predict(np.tile(im[np.newaxis, :, :, np.newaxis], [1, 1, 1, 3]))[0]
 
             # rescale parms correctly (based on the resizing and normalizing that was done for the fit)
-            # undo normalization (WIP - CRH 1/30/19)
+            # undo normalization (WIP - CRH 1/30/19 -- update on 6/15/2021, using z-scores per param)
+            for j, (_, v) in enumerate(NORM_FACTORS.items()):
+                # these should be sorted in the same order as y, so no need to use the
+                # dict keys in NORM_FACTORS
+                ellipse_parms[j] = (ellipse_parms[j] * v[2]) #+ v[0]
+            '''
             ellipse_parms /= 100
             ellipse_parms[0] = ellipse_parms[0] * size[0]
             ellipse_parms[1] = ellipse_parms[1] * size[0]
@@ -134,8 +140,9 @@ if __name__ == '__main__':
 
             ellipse_parms[4] = ellipse_parms[4] * np.pi
             ellipse_parms[5:] = ellipse_parms[5:] * size[0] # eyelid keypoints
+            '''
 
-            # undo scaling and save
+            # Finally, undo image scaling and save
             y_cnn.append(ellipse_parms[0] / sf[1])
             x_cnn.append(ellipse_parms[1] / sf[0])
             b_cnn.append(ellipse_parms[2] / sf[1] / 2)
