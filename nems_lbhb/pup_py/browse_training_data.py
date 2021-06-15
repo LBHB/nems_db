@@ -545,13 +545,13 @@ class TrainingDataBrowser:
         # also, make sure they're not Nan (placeholders)
         if (len(self.edgepoints)!=4) | np.any(np.isnan(np.array(self.edgepoints))):
             raise ValueError("Must label all for edgepoints of the eyelid (left corner, middle-top, right corner, middle-bottom")
-        xlocs = np.array(edgepoints)[:,0]
+        xlocs = np.array(self.edgepoints)[:,0]
         sidx = np.argsort(xlocs)
         left = sidx[0]
         right = sidx[3]
         top = sidx[1]
         bottom = sidx[2]
-        if edgepoints[top][1]>edgepoints[bottom][1]:
+        if self.edgepoints[top][1]>self.edgepoints[bottom][1]:
             pass
         else:
             top = sidx[2]

@@ -278,8 +278,8 @@ class PupilBrowser:
             except:
                 pass
 
-        self.top_eyelid_plot = self.eye_movement_ax.plot(top, 'tab:orange')
-        self.bottom_eyelid_plot = self.eye_movement_ax.plot(bottom, color='tab:blue')
+        self.top_plot = self.eye_movement_ax.plot(top, 'tab:orange')
+        self.bottom_plot = self.eye_movement_ax.plot(bottom, color='tab:blue')
         self.eye_movement_ax.set_ylim((np.nanmin([np.nanmin(top), np.nanmin(bottom)]),
                          np.nanmax([np.nanmax(top), np.nanmax(bottom)])))
         self.eye_movement_ax.set_xlim((0, len(top)))
