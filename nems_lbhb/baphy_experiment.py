@@ -498,17 +498,27 @@ class BAPHYExperiment:
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             if type(p_traces[0][0]) is not np.ndarray:
                 # multiple 'pupil signals'
-                for sig in p_traces[0][0].keys():
-                    pupil_sigs = [nems.signal.RasterizedSignal(
-                                fs=kwargs['rasterfs'], data=p[0][sig],
-                                name=sig, recording=rec_name, chans=[sig],
-                                epochs=baphy_events[i])
-                                for (i, p) in enumerate(p_traces)]
-                    # make sure each pupil signal is the same len as resp, if resp exists
-                    if resp:
-                        pupil_sigs = check_length(pupil_sigs, resp_sigs)
+                # one always has to be the pupil trace itself
+                pupil_sigs = [nems.signal.RasterizedSignal(
+                        fs=kwargs['rasterfs'], data=p[0]['pupil'],
+                        name='pupil', recording=rec_name, chans=['pupil'],
+                        epochs=baphy_events[i])
+                        for (i, p) in enumerate(p_traces)]
 
-                    signals[sig] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+                # the rest are "pupil" extras to be packed into a single signal
+                extra_sigs = [sig for sig in p_traces[0][0].keys() if sig!='pupil']        
+                extra_sigs = [nems.signal.RasterizedSignal(
+                            fs=kwargs['rasterfs'], data=np.concatenate([p[0][sig] for sig in extra_sigs], axis=0),
+                            name='pupil_extras', recording=rec_name, chans=extra_sigs,
+                            epochs=baphy_events[i])
+                            for (i, p) in enumerate(p_traces)]
+                # make sure each pupil signal is the same len as resp, if resp exists
+                if resp:
+                    pupil_sigs = check_length(pupil_sigs, resp_sigs)
+                    extra_sigs = check_length(extra_sigs, resp_sigs)
+
+                signals['pupil_extras'] = nems.signal.RasterizedSignal.concatenate_time(extra_sigs)
+                signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
             else:
                 pupil_sigs = [nems.signal.RasterizedSignal(
