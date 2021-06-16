@@ -235,13 +235,13 @@ class PupilBrowser:
             except:
                 pass
 
-        self.a_plot = self.ax.plot(a, 'r')
-        self.b_plot = self.ax.plot(b, color='b', picker=5)
+        self.a_plot = self.ax.plot(a, 'r', label='minor axis')
+        self.b_plot = self.ax.plot(b, color='b', picker=5, label='major axis')
         self.ax.set_ylim((np.nanmin([np.nanmin(a), np.nanmin(b)]),
                          np.nanmax([np.nanmax(a), np.nanmax(b)])))
         self.ax.set_xlim((0, len(a)))
 
-        self.ax.legend(['minor axis', 'major axis'], bbox_to_anchor=(1,1), loc='upper left', frameon=False)
+        self.ax.legend(bbox_to_anchor=(1,1), loc='upper left', frameon=False)
 
         canvas.get_tk_widget().focus_force()
         canvas.mpl_connect('key_press_event', self.on_key)
@@ -271,13 +271,13 @@ class PupilBrowser:
             except:
                 pass
 
-        self.top_plot = self.eye_movement_ax.plot(top, 'tab:orange')
-        self.bottom_plot = self.eye_movement_ax.plot(bottom, color='tab:blue')
+        self.top_plot = self.eye_movement_ax.plot(top, 'tab:orange', label='top eyelid')
+        self.bottom_plot = self.eye_movement_ax.plot(bottom, color='tab:blue', label='bottom eyelid')
         self.eye_movement_ax.set_ylim((np.nanmin([np.nanmin(top), np.nanmin(bottom)]),
                          np.nanmax([np.nanmax(top), np.nanmax(bottom)])))
         self.eye_movement_ax.set_xlim((0, len(top)))
 
-        self.eye_movement_ax.legend(['bottom eyelid', 'top eyelid'], bbox_to_anchor=(1,1), loc='upper left', frameon=False)
+        self.eye_movement_ax.legend(bbox_to_anchor=(1,1), loc='upper left', frameon=False)
 
         canvas.draw()
 
@@ -477,7 +477,7 @@ class PupilBrowser:
         try:
             self.plot_eyelid_movement(params_file)
         except:
-            log.info("Couldn't load eyelid keypoints -- old fit?")
+            print("Couldn't load eyelid keypoints -- old fit?")
             pass
         self.frame_n_value.insert(0, str(0))
 
