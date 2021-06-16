@@ -100,9 +100,9 @@ class DataGenerator(keras.utils.Sequence):
             y[i, 3] = y[i, 3] / (self.image_dim[1] / 2)
             y[i, 4] = (y[i, 4] / (np.pi)) 
             y[i, 5:] = y[i, 5:] / self.image_dim[1]
-
-            y[i, :] = y[i, :] * 100
             '''
+            y[i, :] = y[i, :] * 100
+            
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])
 
         return X, y

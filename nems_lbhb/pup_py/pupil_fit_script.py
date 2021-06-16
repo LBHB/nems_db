@@ -131,6 +131,7 @@ if __name__ == '__main__':
                 # these should be sorted in the same order as y, so no need to use the
                 # dict keys in NORM_FACTORS
                 ellipse_parms[j] = (ellipse_parms[j] * v[2]) #+ v[0]
+            ellipse_parms /= 100
             '''
             ellipse_parms /= 100
             ellipse_parms[0] = ellipse_parms[0] * size[0]

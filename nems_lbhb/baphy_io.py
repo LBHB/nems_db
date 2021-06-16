@@ -1221,15 +1221,24 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_diameter[arg] = pupil_diameter[arg - 1]
 
         pupil_diameter = pupil_diameter[:-1, np.newaxis]
-        if pupildata['cnn']['excluded_frames'].size:
-            # there are frames that were excluded. Make a bool signal
-            # indicating these frames so that they can be removed if 
-            # wanted
-            log.info("Found pupil artifacts -- frames labeled as 'bad' in pupil_browser")
-            artifacts = np.zeros(pupil_diameter.shape).astype(bool)
-            for a in pupildata['cnn']['excluded_frames']:
-                artifacts[a[0]:a[1]] = True
-            
+        pupil_extras_keys = ['excluded_frames', 'pupil_eyespeed', 
+                                'eyelid_left_x', 'eyelid_left_y',
+                                'eyelid_top_x', 'eyelid_top_y',
+                                'eyelid_right_x', 'eyelid_right_y',
+                                'eyelid_bottom_x', 'eyelid_bottom_y']
+        pupil_extras = {}
+        for k in pupil_extras_keys:
+            if pupildata['cnn'][k].size:
+                log.info("Found extra pupil signal: {k}, loading into signal pupil extras")
+                if k == 'excluded_frames':
+                    # special case here, because not a time course
+                    artifacts = np.zeros(pupil_diameter.shape).astype(bool)
+                    for a in pupildata['cnn']['excluded_frames']:
+                        artifacts[a[0]:a[1]] = True
+                    pupil_extras[k] = artifacts
+                else:
+                    pupil_extras[k] = pupildata['cnn'][k]
+        
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
 
         if pupil_eyespeed:
