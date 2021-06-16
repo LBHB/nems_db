@@ -49,4 +49,3 @@ for frame in frames:
 
     with open(f"{filename}", 'wb') as fp:
         pickle.dump(newdata, fp, protocol=pickle.HIGHEST_PROTOCOL)
-

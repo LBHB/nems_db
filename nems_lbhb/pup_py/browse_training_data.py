@@ -3,6 +3,7 @@ Script meant to be used for browsing saved training data and manually manipulati
 useful when you notice there is frame the must be manually annotated.
 '''
 import tkinter as tk
+from tkinter import filedialog, simpledialog, messagebox
 from matplotlib.backends import _backend_tk as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
@@ -29,6 +30,8 @@ class TrainingDataBrowser:
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
         # the training directory and then display the first of these frames. if train_frame_range is not None, choose 
         # these 50 frames from this range. train frame range is tuple (start_frame, end_frame)
+
+        self.master = master
 
         self.plot_calls = 0
         self.edgepoints = []        
@@ -187,6 +190,8 @@ class TrainingDataBrowser:
         self.long_axis_value = tk.Entry(master)
         self.long_axis_value.grid(row=3, column=1)
         self.long_axis_value.focus_set()
+        self.long_axis_value.bind("<Button-4>", self.long_axis_scroll)
+        self.long_axis_value.bind("<Button-5>", self.long_axis_scroll)
         self.long_axis_ua = tk.Button(master, text=u"\u25B2", command=self.increase_la)
         self.long_axis_ua.grid(row=3, column=2)
         self.long_axis_da = tk.Button(master, text=u"\u25BC", command=self.decrease_la)
@@ -197,6 +202,8 @@ class TrainingDataBrowser:
         self.short_axis_value = tk.Entry(master)
         self.short_axis_value.grid(row=4, column=1)
         self.short_axis_value.focus_set()
+        self.short_axis_value.bind("<Button-4>", self.short_axis_scroll)
+        self.short_axis_value.bind("<Button-5>", self.short_axis_scroll)
         self.short_axis_ua = tk.Button(master, text=u"\u25B2", command=self.increase_sa)
         self.short_axis_ua.grid(row=4, column=2)
         self.short_axis_da = tk.Button(master, text=u"\u25BC", command=self.decrease_sa)
@@ -207,6 +214,8 @@ class TrainingDataBrowser:
         self.x_pos_value = tk.Entry(master)
         self.x_pos_value.grid(row=5, column=1)
         self.x_pos_value.focus_set()
+        self.x_pos_value.bind("<Button-4>", self.x_scroll)
+        self.x_pos_value.bind("<Button-5>", self.x_scroll)
         self.x_pos_ua = tk.Button(master, text=u"\u25B2", command=self.increase_x)
         self.x_pos_ua.grid(row=5, column=2)
         self.x_pos_da = tk.Button(master, text=u"\u25BC", command=self.decrease_x)
@@ -217,6 +226,8 @@ class TrainingDataBrowser:
         self.y_pos_value = tk.Entry(master)
         self.y_pos_value.grid(row=6, column=1)
         self.y_pos_value.focus_set()
+        self.y_pos_value.bind("<Button-4>", self.y_scroll)
+        self.y_pos_value.bind("<Button-5>", self.y_scroll)
         self.y_pos_ua = tk.Button(master, text=u"\u25B2", command=self.increase_y)
         self.y_pos_ua.grid(row=6, column=2)
         self.y_pos_da = tk.Button(master, text=u"\u25BC", command=self.decrease_y)
@@ -227,6 +238,8 @@ class TrainingDataBrowser:
         self.phi_value = tk.Entry(master)
         self.phi_value.grid(row=7, column=1)
         self.phi_value.focus_set()
+        self.phi_value.bind("<Button-4>", self.phi_scroll)
+        self.phi_value.bind("<Button-5>", self.phi_scroll)
         self.phi_ua = tk.Button(master, text=u"\u25B2", command=self.increase_phi)
         self.phi_ua.grid(row=7, column=2)
         self.phi_da = tk.Button(master, text=u"\u25BC", command=self.decrease_phi)
@@ -243,8 +256,20 @@ class TrainingDataBrowser:
         self.save_ellipse = tk.Button(master, text="Save new parameters", command=self.save_ellipse_params)
         self.save_ellipse.grid(row=10, column=1)
 
-        self.close_button = tk.Button(master, text="Close", command=master.destroy)
+        self.close_button = tk.Button(master, text="Close", command=self.close_browser)
         self.close_button.grid(row=10, column=0)
+    
+    def long_axis_scroll(self, event):
+        val = np.float(self.long_axis_value.get())
+        if event.num == 5 or event.delta == -120:
+            val -= 1
+        if event.num == 4 or event.delta == 120:
+            val += 1
+        self.long_axis_value.delete(0, 'end')
+        self.long_axis_value.insert(0, string=str(round(val, 2)))
+
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_plot = self.update_ellipse_plot()
 
     def increase_la(self):
         val = np.float(self.long_axis_value.get())
@@ -263,7 +288,19 @@ class TrainingDataBrowser:
 
         #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
+    
+    def short_axis_scroll(self, event):
+        val = np.float(self.short_axis_value.get())
+        if event.num == 5 or event.delta == -120:
+            val -= 1
+        if event.num == 4 or event.delta == 120:
+            val += 1
+        self.short_axis_value.delete(0, 'end')
+        self.short_axis_value.insert(0, string=str(round(val, 2)))
 
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_plot = self.update_ellipse_plot()
+    
     def increase_sa(self):
         val = np.float(self.short_axis_value.get())
         val += 0.5
@@ -278,6 +315,18 @@ class TrainingDataBrowser:
         val -= 0.5
         self.short_axis_value.delete(0, 'end')
         self.short_axis_value.insert(0, string=str(round(val, 2)))
+
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_plot = self.update_ellipse_plot()
+
+    def x_scroll(self, event):
+        val = np.float(self.x_pos_value.get())
+        if event.num == 5 or event.delta == -120:
+            val -= 1
+        if event.num == 4 or event.delta == 120:
+            val += 1
+        self.x_pos_value.delete(0, 'end')
+        self.x_pos_value.insert(0, string=str(round(val, 2)))
 
         #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
@@ -300,6 +349,18 @@ class TrainingDataBrowser:
         #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
 
+    def y_scroll(self, event):
+        val = np.float(self.y_pos_value.get())
+        if event.num == 5 or event.delta == -120:
+            val -= 1
+        if event.num == 4 or event.delta == 120:
+            val += 1
+        self.y_pos_value.delete(0, 'end')
+        self.y_pos_value.insert(0, string=str(round(val, 2)))
+
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_plot = self.update_ellipse_plot()
+
     def increase_y(self):
         val = np.float(self.y_pos_value.get())
         val += 0.5
@@ -314,6 +375,18 @@ class TrainingDataBrowser:
         val -= 0.5
         self.y_pos_value.delete(0, 'end')
         self.y_pos_value.insert(0, string=str(round(val, 2)))
+
+        #self.pupil_canvas.delete(self.pupil_plot)
+        self.pupil_plot = self.update_ellipse_plot()
+
+    def phi_scroll(self, event):
+        val = np.float(self.phi_value.get())
+        if event.num == 5 or event.delta == -120:
+            val -= 1
+        if event.num == 4 or event.delta == 120:
+            val += 1
+        self.phi_value.delete(0, 'end')
+        self.phi_value.insert(0, string=str(round(val, 2)))
 
         #self.pupil_canvas.delete(self.pupil_plot)
         self.pupil_plot = self.update_ellipse_plot()
@@ -396,7 +469,6 @@ class TrainingDataBrowser:
         top = self.edgepoints[1]
         right = self.edgepoints[2]
         bottom = self.edgepoints[3]
-        print(self.edgepoints)
         e_params = {
             'X0_in': X0_in,
             'Y0_in': Y0_in,
@@ -544,7 +616,8 @@ class TrainingDataBrowser:
         # meaning, "top" isn't necessarily always higher than left / right
         # also, make sure they're not Nan (placeholders)
         if (len(self.edgepoints)!=4) | np.any(np.isnan(np.array(self.edgepoints))):
-            raise ValueError("Must label all for edgepoints of the eyelid (left corner, middle-top, right corner, middle-bottom")
+            messagebox.showerror("Error", "Must label all for edgepoints of the eyelid (left corner, middle-top, right corner, middle-bottom)")
+            raise ValueError
         xlocs = np.array(self.edgepoints)[:,0]
         sidx = np.argsort(xlocs)
         left = sidx[0]
@@ -639,7 +712,14 @@ class TrainingDataBrowser:
         ##self.pupil_canvas.delete(self.pupil_plot)
         #self.pupil_canvas.delete("all")
         self.pupil_plot = self.plot_frame(new_frame_root)
-
+    
+    def close_browser(self):
+        answer = answer = messagebox.askokcancel("Question", "STOP! Are all training frames labeled correctly?"
+                                        "If not, please go back and verify that all data is labeled correctly before closing the browser")
+        if answer:
+            self.master.destroy()
+        else:
+            pass
 
 def get_eyelid_keypoints(frame):
     try:

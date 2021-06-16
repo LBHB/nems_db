@@ -271,13 +271,18 @@ class PupilBrowser:
             except:
                 pass
 
-        self.top_plot = self.eye_movement_ax.plot(top, 'tab:orange', label='top eyelid')
+        self.top_plot = self.eye_movement_ax.plot(top, 'tab:orange', label='top eyelid', picker=5)
         self.bottom_plot = self.eye_movement_ax.plot(bottom, color='tab:blue', label='bottom eyelid')
         self.eye_movement_ax.set_ylim((np.nanmin([np.nanmin(top), np.nanmin(bottom)]),
                          np.nanmax([np.nanmax(top), np.nanmax(bottom)])))
         self.eye_movement_ax.set_xlim((0, len(top)))
 
         self.eye_movement_ax.legend(bbox_to_anchor=(1,1), loc='upper left', frameon=False)
+
+        canvas.get_tk_widget().focus_force()
+        canvas.mpl_connect('key_press_event', self.on_key)
+        canvas.mpl_connect('pick_event', self.get_coords)
+        canvas.mpl_connect('key_release_event', self.off_key)
 
         canvas.draw()
 
@@ -364,7 +369,7 @@ class PupilBrowser:
                 else:
                     self.hline2_end = self.eye_movement_ax.axvline(int(event.mouseevent.xdata),
                                                  color='red')
-                    mi, ma = self.ax.get_ylim()
+                    mi, ma = self.eye_movement_ax.get_ylim()
                     mi = int(mi)
                     ma = int(ma)+1
                     self.end_val = int(event.mouseevent.xdata)
@@ -410,7 +415,7 @@ class PupilBrowser:
                 if self.end_val not in self.exclude_ends:
                     self.exclude_ends.append(self.end_val)    
 
-                self.plot_trace(self.video_name.get(), exclude=True)
+                self.plot_eyelid_movement(self.video_name.get(), exclude=True)
             else:
                 pass
         elif event.key=='escape':
