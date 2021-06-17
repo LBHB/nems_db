@@ -21,6 +21,7 @@ sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
 tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
+temp_train_data_path = ps.TMP_TRAIN
 
 class TrainingDataBrowser:
 
@@ -40,6 +41,8 @@ class TrainingDataBrowser:
             default_frame = os.listdir(train_data_path)[0].split('.')[0]
 
         else:
+            # clear temp training directory
+            os.system(f"rm -R {temp_train_data_path}*")
             self.from_browser = True
             self.video_name = video_name
             # where the prediction will be stored if this vid has already been
@@ -55,9 +58,6 @@ class TrainingDataBrowser:
             with open(params_file, 'rb') as fp:
                 parms = pickle.load(fp)
             
-            # delete all videos in the training folder that have this video name (Do this inside the loop instead
-            # e.g. just check for duplicate frames)
-            # os.system("rm {}*".format(train_data_path + video_name))
             if (n_frames is not None) & (n_frames != 'None'):
                 n_frames = int(n_frames)
             fps = 30
@@ -120,6 +120,21 @@ class TrainingDataBrowser:
                     }
                 name = train_data_path + video_name + str(f) + '.pickle'
 
+
+                # check to see if frame already exists in training directory. 
+                # If so, we should skip it
+                tmp_name = temp_train_data_path + video_name + str(f) + '.pickle'
+                if os.path.isfile(name):
+                    pass
+                else:
+                    with open(tmp_name, 'wb') as fp:
+                        pickle.dump(output_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+                    if n_frames_added == 0:
+                        default_frame = video_name + str(f)
+                    n_frames_added += 1
+                # remove this. Don't want to automatically add to the training
+                # directory. Only do this once the video is labeled.
+                '''
                 # if this frame isn't already in the training set, add it
                 if os.path.isfile(name):
                     pass
@@ -129,8 +144,8 @@ class TrainingDataBrowser:
                     if n_frames_added == 0:
                         default_frame = video_name + str(f)
                     n_frames_added += 1
-
-            print("Added {0} video frames to training set".format(n_frames_added))
+                '''
+            print("Added {0} video frames to temp training set for labeling".format(n_frames_added))
 
         self.master = master
         master.title("Training data browser")
@@ -160,7 +175,7 @@ class TrainingDataBrowser:
 
         if self.from_browser:
             self.frame_count = tk.Text(master, height=1, width=12)
-            all_frames = os.listdir(train_data_path)
+            all_frames = os.listdir(temp_train_data_path)
             all_frames = [f for f in all_frames if self.video_name in f]
             self.frame_count.grid(row=0, column=2)
             self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
@@ -435,12 +450,13 @@ class TrainingDataBrowser:
     def set_to_previous(self):
 
         current_frame = self.frame_name.get()+'.pickle'
-        all_frames = os.listdir(train_data_path)
+
         if self.from_browser:
-            all_frames = [f for f in all_frames if self.video_name in f]
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(temp_train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
         else:
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
 
         all_frames = np.array(all_frames)[inds]
 
@@ -487,8 +503,12 @@ class TrainingDataBrowser:
 
         frame_file = self.frame_name.get()
 
-        with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
-            current_params = pickle.load(fp)
+        if self.from_browser:
+            with open('{0}/{1}.pickle'.format(temp_train_data_path, frame_file), 'rb') as fp:
+                current_params = pickle.load(fp)       
+        else:
+            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+                current_params = pickle.load(fp)
 
         new_params = current_params.copy()
         # old naming convention leftover from Leah's MATLAB pupil analysis 
@@ -497,6 +517,11 @@ class TrainingDataBrowser:
 
         with open(train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
             pickle.dump(new_params, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        
+        # also update temp params
+        if self.from_browser:
+            with open(temp_train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
+                pickle.dump(new_params, fp, protocol=pickle.HIGHEST_PROTOCOL)            
 
         print("saved new ellipse parameters for {0}".format(frame_file))
 
@@ -510,8 +535,12 @@ class TrainingDataBrowser:
 
         frame_file = self.frame_name.get()
 
-        with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
-            frame_data = pickle.load(fp)
+        if self.from_browser:
+            with open('{0}/{1}.pickle'.format(temp_train_data_path, frame_file), 'rb') as fp:
+                frame_data = pickle.load(fp)
+        else:
+            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+                frame_data = pickle.load(fp)
 
         loc = (0, 0)
 
@@ -543,9 +572,14 @@ class TrainingDataBrowser:
         with open(data_dict, 'rb') as fp:
             data = pickle.load(fp)
         '''
-        with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
-            frame_data = pickle.load(fp)
-            fp.close()
+        if self.from_browser:
+            with open('{0}/{1}.pickle'.format(temp_train_data_path, frame_file), 'rb') as fp:
+                frame_data = pickle.load(fp)
+                fp.close()
+        else:
+            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+                frame_data = pickle.load(fp)
+                fp.close()
 
         Y0_in = frame_data['ellipse_zack']['Y0_in']
         X0_in = frame_data['ellipse_zack']['X0_in']
@@ -651,22 +685,22 @@ class TrainingDataBrowser:
         '''
 
         current_frame = self.frame_name.get()
-        all_frames = os.listdir(train_data_path)
+
         if self.from_browser:
-            all_frames = [f for f in all_frames if self.video_name in f]
-            #frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
-            #inds = np.argsort(np.array(frame_numbers))
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(temp_train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
         else:
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index + 1
         self.frame_count.delete('1.0', tk.END)
-        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
-        if new_index == len(all_frames):
+        if new_index == (len(all_frames)):
             new_index = 0
+        self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
 
@@ -686,19 +720,19 @@ class TrainingDataBrowser:
         '''
 
         current_frame = self.frame_name.get()
-        all_frames = os.listdir(train_data_path)
         if self.from_browser:
-            all_frames = [f for f in all_frames if self.video_name in f]
-            #frame_numbers = [int(f[15:].split('.')[0]) for f in all_frames]
-            #inds = np.argsort(np.array(frame_numbers))
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(temp_train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
         else:
-            inds = np.argsort(np.array(all_frames))
+            all_frames = os.listdir(train_data_path)
+            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
         new_index = cur_index - 1
         self.frame_count.delete('1.0', tk.END)
+        if new_index == - 1:
+            new_index = len(all_frames)-1
         self.frame_count.insert(tk.END, "{0}/{1}".format(new_index+1, len(all_frames)))
         new_frame = all_frames[new_index]
         self.frame_name.delete(0, 'end')
