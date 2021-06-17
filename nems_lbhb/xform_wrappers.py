@@ -264,7 +264,7 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
 
 
 def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, use_matched_random=False,
-                           fit_all_cells=False, **context):
+                           fit_all_cells=False, use_same_recording=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
     if use_matched_site:  # fit to included site cells, save as site cells
@@ -284,12 +284,17 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site
             cellids, _ = io.parse_cellid(cellid_options)
         else:
             cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+    elif use_same_recording:
+        # for dummy LN version, just resets parameters for frozen layers
+        new_est = context['est']
+        new_val = context['val']
+        new_rec = context['rec']
+        cellids = meta['cellids']
 
     else:  # fit to excluded site cells, save as site cells
         new_est = context['holdout_est']
         new_val = context['holdout_val']
         new_rec = context['holdout_rec']
-
         cellids = meta['holdout_cellids']
 
     meta['cellids'] = cellids
