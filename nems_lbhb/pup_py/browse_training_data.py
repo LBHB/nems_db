@@ -255,7 +255,7 @@ class TrainingDataBrowser:
         # save new ellipse params for this frame
         self.save_ellipse = tk.Button(master, text="Save new parameters", command=self.save_ellipse_params)
         self.save_ellipse.grid(row=10, column=1)
-
+    
         self.close_button = tk.Button(master, text="Close", command=self.close_browser)
         self.close_button.grid(row=10, column=0)
     
