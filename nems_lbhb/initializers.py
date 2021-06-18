@@ -40,7 +40,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
     pre_parts = modelname_parts[0].split("-")
     post_parts = modelname_parts[2].split("-")
     post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"
-    model_search = pre_parts[0] + ".pop%" + modelname_parts[1] + "%" + post_part
+    model_search = pre_parts[0] + ".pop%%" + modelname_parts[1] + "%%" + post_part
 
     # hard-coded to use an A1 model!!!!
     if area == "A1":
@@ -48,11 +48,12 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
         pre_batch=322
     else:
         raise ValueError(f"area {area} prefit not implemented")
+    
+    sql = f"SELECT * FROM Results WHERE batch={batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    log.info(sql)
+    d = nd.pd_query(sql)
 
-    d = nd.pd_query(
-        f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'")
-
-    old_uri = ddjust_uri_prefix(['modelpath'][0] + '/modelspec.0000.json')
+    old_uri = adjust_uri_prefix(['modelpath'][0] + '/modelspec.0000.json')
     log.info(f"Importing parameters from {old_uri}")
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
