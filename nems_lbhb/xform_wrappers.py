@@ -42,7 +42,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
     if batch==289:
        pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
     else:
-       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4.es20"
+       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
@@ -55,6 +55,10 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     else:
         cellid = manual_cell_list
+
+    import pdb;
+    pdb.set_trace()
+
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -183,6 +187,9 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
     rec_cells = est['resp'].chans
     # TODO: should probably figure out a smarter way to do this, don't really
     #       need to keep 3 copies of the recordings. Just a copy of which cells to extract.
+
+
+    import pdb; pdb.set_trace()
 
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
