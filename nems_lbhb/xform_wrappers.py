@@ -56,9 +56,6 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
     else:
         cellid = manual_cell_list
 
-    import pdb;
-    pdb.set_trace()
-
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -187,9 +184,6 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
     rec_cells = est['resp'].chans
     # TODO: should probably figure out a smarter way to do this, don't really
     #       need to keep 3 copies of the recordings. Just a copy of which cells to extract.
-
-
-    import pdb; pdb.set_trace()
 
     random.seed(12345 + seed_mod)
     if isinstance(exclusions, int):
