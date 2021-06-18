@@ -36,16 +36,17 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
     pre_parts = modelname_parts[0].split("-")
     post_parts = modelname_parts[2].split("-")
     post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"
-    model_search = pre_parts[0] + ".pop%" + modelname_parts[1] + "%" + post_part
+    model_search = pre_parts[0] + ".pop%%" + modelname_parts[1] + "%%" + post_part
 
     # hard-coded to use an A1 model!!!!
     if area == "A1":
         pre_cellid = 'ARM029a-07-6'
     else:
         raise ValueError(f"area {area} prefit not implemented")
-
-    d = nd.pd_query(
-        f"SELECT * FROM Results WHERE batch={batch} and cellid='{pre_cellid}' and modelname like '{model_search}'")
+    
+    sql = f"SELECT * FROM Results WHERE batch={batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    log.info(sql)
+    d = nd.pd_query(sql)
 
     old_uri = d['modelpath'][0] + '/modelspec.0000.json'
 
