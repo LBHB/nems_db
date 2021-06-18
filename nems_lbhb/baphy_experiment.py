@@ -357,7 +357,8 @@ class BAPHYExperiment:
         kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.2'})
+        # kwargs.update({'version': 'BAPHYExperiment.2'})
+        kwargs.update({'version': 'BAPHYExperiment.3'}) # version 3 added pupil extras to recording signals
 
         # add parmfiles / cells_to_load list - these are unique ids for the recording
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})

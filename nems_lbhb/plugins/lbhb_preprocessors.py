@@ -499,6 +499,35 @@ def plgsm(load_key):
 
     return xfspec
 
+@xform()
+def mvm(load_key):
+    """
+    Create masks for movement artifacts
+    """
+    ops = load_key.split('.')[1:]
+    binsize = 1
+    threshold = 0.25
+    for op in ops:
+        if op.startswith('t'):
+            # threshold
+            tkey = float(op[1:])
+            if tkey == 1:
+                threshold = tkey
+            else:
+                threshold = tkey / 100
+        if op.startswith('w'):
+            # window size in sec
+            wkey = float(op[1:])
+            if tkey > 10:
+                binsize = wkey / 100
+            else:
+                binsize = wkey 
+
+    xfspec = [['nems_lbhb.preprocessing.movement_mask', 
+               {'threshold': threshold, 'binsize': binsize}]]
+
+    return xfspec
+
 
 @xform()
 def ev(load_key):

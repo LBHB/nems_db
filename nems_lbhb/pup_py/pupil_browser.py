@@ -624,9 +624,24 @@ class PupilBrowser:
         script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()
 
+        default_epochs = 500
+        n_training_epochs = simpledialog.askstring('TrainingEpochs', 'How many training epochs would you like to use? Default is 500')
+        try:
+            n_training_epochs = int(n_training_epochs)
+            print(f"using {n_training_epochs} training epochs")
+        except:
+            print("using default -- 500 training epochs")
+            n_training_epochs = default_epochs
+
         # add job to queue
-        nd.add_job_to_queue([], note="Pupil Job: Training CNN", executable_path=py_path,
-                            user=username, force_rerun=True, script_path=script_path, GPU_job=1)
+        # nd.add_job_to_queue([], note="Pupil Job: Training CNN", executable_path=py_path,
+        #                    user=username, force_rerun=True, script_path=script_path, GPU_job=1)
+        import datetime
+        date = str(datetime.datetime.now())
+        nd.enqueue_single_model(cellid='PupilTrainingJob', batch=n_training_epochs, modelname=date, 
+                                user=username, force_rerun=True, script_path=script_path, 
+                                executable_path=py_path, GPU_job=1)
+        
         print("Queueing new model training. Check status on queue. When finished, re-fit the pupil for this recording")
         # self.master.destroy
 
@@ -636,6 +651,7 @@ class PupilBrowser:
         # data from this animal in the database.
         # This will lead to a model that is *likely* very over-fit to this particular animal. So, you should 
         # really only use this if nothing else is working for you.
+        raise DeprecationWarning("This never seemed to work well. Should probably be purged.")
         py_path = sys.executable
         script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
         script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')

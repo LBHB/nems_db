@@ -970,6 +970,43 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         
     return {'rec': r}
 
+def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
+    '''
+    Use pupil_extras signals to mask the recording during periods of movement (eg blinks)
+    binsize - window size in seconds over which to compute variance of eye position traces
+    threshold - number of std of the variance trace over which data is excluded
+
+    crh 06.18.2021
+    '''
+    if 'pupil_extras' not in rec.signals.keys():
+        raise ValueError("Pupil extras do not exist for this recording. Old recording? Old pupil analysis?")
+    r = rec.copy()
+    # before masking, take raw signals and compute variance of an eyelid over a sliding window
+    binsize = int(binsize * r['resp'].fs)
+    signal = r['pupil_extras'].extract_channels(['eyelid_top_y'])._data 
+    signal2 = r['pupil_extras'].extract_channels(['eyelid_bottom_y'])._data
+    varsig = np.zeros(signal.shape)
+    for i in range(varsig.shape[-1]):
+        varsig[0, i] = np.var(signal[0, i:(i+binsize)])+np.var(signal2[0, i:(i+binsize)])
+    varsig = np.roll(varsig, int(binsize/2))
+    r['varsig'] = r['pupil']._modified_copy(varsig)
+    threshold = np.std(varsig) * threshold
+    mask = varsig >= threshold
+
+    # tile mask over generic epochs (REFERENCE, TARGET, CATCH)
+    epochs = [e for e in ['REFERENCE', 'TARGET', 'CATCH'] if e in r['resp'].epochs.name.unique()]
+    
+    rec['var_mask'] = r['pupil']._modified_copy(mask)
+    fm = rec['var_mask'].extract_epochs(epochs)
+    # tile bool across full reference so not to split up epochs in weird ways
+    fm = {k: np.concatenate([np.zeros(v[[i]].shape).astype(bool) if np.any(v[[i]]==True) else np.ones(v[[i]].shape).astype(bool) 
+                        for i in range(v.shape[0])], axis=0) 
+                        for k, v in fm.items()}
+    rec['var_mask'] = rec['var_mask'].replace_epochs(fm)
+    r['mask'] = r['mask']._modified_copy(r['mask']._data & rec['var_mask']._data)
+
+    return {'rec': r}
+
 def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):
     
     r = rec.copy()

@@ -51,7 +51,7 @@ if __name__ == '__main__':
    
 
     # check for sys arguments to determine how to fit model / where to save results
-    if len(sys.argv) > 1:
+    if 0: #len(sys.argv) > 2:
         # get the animal / animal video key for figuring out which videos to use for training
         animal_name = sys.argv[2]
         video_code = sys.argv[3]
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
         training_files = os.listdir(path)
         n_training_files = len(training_files)
-        training_epochs = 250  # used to be 500. Make this a user def param?
+        training_epochs = int(sys.argv[2])  # used to be 500. Make this a user def param?
 
         # get current date/time so that we can save the model results in the correct place
         dt = datetime.datetime.now().isoformat()
