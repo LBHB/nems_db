@@ -1003,6 +1003,8 @@ def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
                         for i in range(v.shape[0])], axis=0) 
                         for k, v in fm.items()}
     rec['var_mask'] = rec['var_mask'].replace_epochs(fm)
+    if 'mask' not in r.signals:
+        r = r.create_mask(True)
     r['mask'] = r['mask']._modified_copy(r['mask']._data & rec['var_mask']._data)
 
     return {'rec': r}
