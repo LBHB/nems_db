@@ -17,15 +17,19 @@ import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 
-from nems.utils import find_module
+from nems.utils import find_module, adjust_uri_prefix
 from nems.preprocessing import resp_to_pc
 from nems.initializers import load_phi
 import nems.db as nd
 
 log = logging.getLogger(__name__)
 
-def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
 
+def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
+    """
+    replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
+    to the NAT4 dataset
+    """
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")
@@ -41,14 +45,15 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
     # hard-coded to use an A1 model!!!!
     if area == "A1":
         pre_cellid = 'ARM029a-07-6'
+        pre_batch=322
     else:
         raise ValueError(f"area {area} prefit not implemented")
     
-    sql = f"SELECT * FROM Results WHERE batch={batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
-    log.info(sql)
+    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    #log.info(sql)
     d = nd.pd_query(sql)
-
-    old_uri = d['modelpath'][0] + '/modelspec.0000.json'
+    old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
+    log.info(f"Importing parameters from {old_uri}")
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
     new_ctx['freeze_layers'] = list(np.arange(copy_layers))

@@ -428,7 +428,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-    elif force_old_loader: # | (batch==307):
+    elif force_old_loader: #  | (batch==316):
         log.info("Using 'old' baphy.py loader")
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
     else:
