@@ -49,11 +49,10 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
     else:
         raise ValueError(f"area {area} prefit not implemented")
     
-    sql = f"SELECT * FROM Results WHERE batch={batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
-    log.info(sql)
+    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    #log.info(sql)
     d = nd.pd_query(sql)
-
-    old_uri = adjust_uri_prefix(['modelpath'][0] + '/modelspec.0000.json')
+    old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
     log.info(f"Importing parameters from {old_uri}")
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
