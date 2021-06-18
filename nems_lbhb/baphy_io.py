@@ -1096,6 +1096,7 @@ def set_default_pupil_options(options):
     options["rasterfs"] = options.get('rasterfs', 100)
     options['pupil'] = options.get('pupil', 1)
     options['pupil_analysis_method'] = options.get('pupil_analysis_method', 'cnn')  # or 'matlab'
+    options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
@@ -1191,11 +1192,17 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
-        options['pupil_variable_name'] = 'minor_axis'
-        log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
+        log.debug("Using pupil_variable_name: %s", options['pupil_variable_name'])
         log.info("Using CNN results for pupiltrace")
-
-        pupil_diameter = pupildata['cnn']['a'] * 2
+        if options['pupil_variable_name']=='minor_axis':
+            pupil_diameter = pupildata['cnn']['a'] * 2
+        elif options['pupil_variable_name']=='major_axis':
+            pupil_diameter = pupildata['cnn']['b'] * 2
+        elif options['pupil_variable_name']=='area':
+            pupil_diameter = np.pi * pupildata['cnn']['b'] * pupildata['cnn']['a']
+        else:
+            raise ValueError(f"Pupil variable name {options['pupil_variable_name']} is unknown")
         # missing frames/frames that couldn't be decoded were saved as nans
         # pad them here
         nan_args = np.argwhere(np.isnan(pupil_diameter))

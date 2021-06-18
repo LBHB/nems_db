@@ -453,10 +453,10 @@ class TrainingDataBrowser:
 
         if self.from_browser:
             all_frames = os.listdir(temp_train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
             all_frames = os.listdir(train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
 
         all_frames = np.array(all_frames)[inds]
 
@@ -685,13 +685,12 @@ class TrainingDataBrowser:
         '''
 
         current_frame = self.frame_name.get()
-
         if self.from_browser:
             all_frames = os.listdir(temp_train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
             all_frames = os.listdir(train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
 
         all_frames = np.array(all_frames)[inds]
 
@@ -722,10 +721,10 @@ class TrainingDataBrowser:
         current_frame = self.frame_name.get()
         if self.from_browser:
             all_frames = os.listdir(temp_train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
             all_frames = os.listdir(train_data_path)
-            inds = np.argsort(np.array([int(x[15:].strip('.pickle')) for x in all_frames]))
+            inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         all_frames = np.array(all_frames)[inds]
 
         cur_index = np.argwhere(all_frames == current_frame + '.pickle')[0][0]
