@@ -1096,7 +1096,10 @@ def set_default_pupil_options(options):
     options["rasterfs"] = options.get('rasterfs', 100)
     options['pupil'] = options.get('pupil', 1)
     options['pupil_analysis_method'] = options.get('pupil_analysis_method', 'cnn')  # or 'matlab'
-    options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
+    if options['pupil_analysis_method'] == 'cnn':
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'area')
+    else:
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
