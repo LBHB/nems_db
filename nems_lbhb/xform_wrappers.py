@@ -42,7 +42,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
     if batch==289:
        pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
     else:
-       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4.es20"
+       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
@@ -55,6 +55,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     else:
         cellid = manual_cell_list
+
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -264,7 +265,7 @@ def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
 
 
 def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, use_matched_random=False,
-                           fit_all_cells=False, **context):
+                           fit_all_cells=False, use_same_recording=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
     if use_matched_site:  # fit to included site cells, save as site cells
@@ -284,12 +285,17 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site
             cellids, _ = io.parse_cellid(cellid_options)
         else:
             cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+    elif use_same_recording:
+        # for dummy LN version, just resets parameters for frozen layers
+        new_est = context['est']
+        new_val = context['val']
+        new_rec = context['rec']
+        cellids = meta['cellids']
 
     else:  # fit to excluded site cells, save as site cells
         new_est = context['holdout_est']
         new_val = context['holdout_val']
         new_rec = context['holdout_rec']
-
         cellids = meta['holdout_cellids']
 
     meta['cellids'] = cellids

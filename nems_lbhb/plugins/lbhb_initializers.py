@@ -29,5 +29,8 @@ def init(kw):
 
 @xform()
 def pclast(kw):
-
     return [['nems_lbhb.initializers.pca_proj_layer', {}]]
+
+@xform()
+def prefit(kw):
+    return [['nems_lbhb.initializers.initialize_with_prefit', {}]]
