@@ -749,7 +749,9 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
     
     if exptparams['runclass']=='CPN':
         # clean up NTI sequence tags
-        tags=[ "".join(t.split(" ")[:2]) if t.startswith("sequence") else t for t in tags]
+        #import pdb; pdb.set_trace()
+        #sequence001:5-6-2-3-5
+        tags=[ "-".join(t.split("  ")).replace(" ","") if t.startswith("sequence") else t for t in tags]
 
     if (epochs is not None):
         # additional processing steps to convert stim into a dictionary with keys that match epoch names
