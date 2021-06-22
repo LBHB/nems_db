@@ -167,7 +167,11 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
     else:
         strfdata = strf0
 
+<<<<<<< HEAD
+    axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
+=======
     axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower')
+>>>>>>> 84f0ee15ff44ef5ce02ebbadbbd841b990728629
 
     if lfreq:
         freqappend = lfreq

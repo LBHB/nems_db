@@ -27,16 +27,23 @@ import nems.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
+import nems_lbhb.baphy_io as io
 from nems import get_setting
+from nems_lbhb.baphy_experiment import BAPHYExperiment
+
 
 import logging
 log = logging.getLogger(__name__)
 
 
 def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
-                    cell_count=None, best_cells=False):
+                    cell_count=None, best_cells=False, manual_cell_list=None):
 
-    pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
+    if batch==289:
+       pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
+    else:
+       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
         all_cells = alt_cells_available
@@ -44,7 +51,11 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         all_cells = list(single_perf.index)
     log.info("Batch: %d", batch)
     log.info("Per-cell modelname: %s", pmodelname)
-    cellid = [c for c in all_cells if c.split("-")[0]==siteid]
+    if manual_cell_list is None:
+        cellid = [c for c in all_cells if c.split("-")[0]==siteid]
+    else:
+        cellid = manual_cell_list
+
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -58,7 +69,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         cellid=cellid[:cell_count]
         this_perf = this_perf[:cell_count]
 
-    out_cellid = [c for c in all_cells if c.split("-")[0]!=siteid]
+    out_cellid = [c for c in all_cells if c not in cellid]#c.split("-")[0]!=siteid]
     out_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0]
                        if c in single_perf.index else 0.0
                        for c in out_cellid])
@@ -85,10 +96,14 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
                  whiten=True, meta={}, manual_cellids=None, **context):
 
     rec = load_recording(recording_uri_list[0])
+
     if type(cellid) is list:
+        #if len(cellid[0].split("-"))>1:
+        #    manual_cellids = cellid.copy()
+
         # convert back to siteid
         cellid = cellid[0].split("-")[0]
-
+        
     # Can't do these steps w/o access to LBHB database,
     # so have to skip this step when fitting models locally.
     # TODO: handle this better. Ideally, cellids should just be saved
@@ -145,16 +160,196 @@ def split_pop_rec_by_mask(rec, **contex):
     return {'est': est, 'val': val}
 
 
+def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
+
+    cell_set = rec['resp'].chans
+    random.seed(12345 + seed_mod)
+
+    if cell_count == 0:
+        cell_count = len(cell_set)
+    random_selection = random.sample(cell_set, cell_count)
+    rec['resp'] = rec['resp'].extract_channels(random_selection)
+
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = random_selection
+    meta = context['meta']
+    meta['cellids'] = random_selection
+
+    return {'rec': rec, 'meta': meta}
+
+
+def max_cells(rec, est, val, meta, n_cells, seed_mod=0, **context):
+    '''
+    Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
+    '''
+
+    rec_cells = est['resp'].chans
+    random.seed(12345 + seed_mod)
+    keep_these_cells = random.sample(rec_cells, n_cells)
+
+    est, keep_these_est = _get_holdout_recs(est, keep_these_cells, None)
+    val, keep_these_val = _get_holdout_recs(val, keep_these_cells, None)
+    rec, keep_these_rec = _get_holdout_recs(rec, keep_these_cells, None)
+
+    meta['cellids'] = keep_these_cells
+
+    return {'est': est, 'val': val, 'rec': rec, 'meta': meta}
+
+
+def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
+
+    batch = int(meta['batch'])
+    rec_cells = est['resp'].chans
+    # TODO: should probably figure out a smarter way to do this, don't really
+    #       need to keep 3 copies of the recordings. Just a copy of which cells to extract.
+
+    random.seed(12345 + seed_mod)
+    if isinstance(exclusions, int):
+        # pick random subset to exclude
+        if match_to_site is not None:
+            if exclusions == 0:
+                if ':' in match_to_site:
+                    cellid_options = {'batch': batch, 'cellid': match_to_site, 'rawid': None}
+                    cells_to_extract, _ = io.parse_cellid(cellid_options)
+                    cell_count = len(cells_to_extract)
+                    manual_cell_list = cells_to_extract
+                else:
+                    manual_cell_list = [c for c in rec_cells if c.startswith(match_to_site)]
+                    cell_count = len(manual_cell_list)
+            else:
+                cell_count = exclusions
+
+            cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
+                # alt_cells_available = rec_cells   # causes problems if not all cells in rec have been fit
+                batch=batch, siteid=match_to_site, alt_cells_available=None, cell_count=cell_count,
+                manual_cell_list=manual_cell_list
+            )
+            exclusions = alt_cellid
+        else:
+            exclusions = random.sample(rec_cells, exclusions)
+    # else: exclusions should be a list of siteids to exclude
+
+    if match_to_site is None:
+        updated_exclusions = []
+        for e in exclusions:
+            if ':' in e:
+                # Have to parse DRX siteids that contain subsite specifications like e1:64
+                cellid_options = {'batch': batch, 'cellid': e, 'rawid': None}
+                cells_to_extract, _ = io.parse_cellid(cellid_options)
+                updated_exclusions.extend(cells_to_extract)
+            else:
+                updated_exclusions.append(e)
+
+        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in updated_exclusions])]
+        holdout_set = list(set(rec_cells) - set(cell_set))
+    else:
+        cell_set = list(set(rec_cells) - set(exclusions))
+        holdout_set = exclusions
+
+    est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
+    val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
+    # also have to do rec b/c init from keywords uses it for some checks
+    rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
+    #if matched_to_site is not None:
+
+    meta['cellids'] = cell_set
+    meta['holdout_cellids'] = holdout_set
+    meta['matched_site'] = match_to_site
+    if (match_to_site is not None):
+        _, matched_est = _get_holdout_recs(est, cell_set, manual_cell_list)
+        _, matched_val = _get_holdout_recs(val, cell_set, manual_cell_list)
+        _, matched_rec = _get_holdout_recs(rec, cell_set, manual_cell_list)
+    else:
+        matched_est, matched_val, matched_rec = (None, None, None)
+
+    if exclusions is not None:
+        meta['excluded_cellids'] = exclusions
+
+    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
+            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta, 'matched_est': matched_est,
+            'matched_val': matched_val, 'matched_rec': matched_rec}
+
+
+def _get_holdout_recs(rec, cell_set, holdout_set=None) -> object:
+    holdout_rec = rec.copy()
+    rec['resp'] = rec['resp'].extract_channels(cell_set)
+    if holdout_set is not None:
+        holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
+
+    if 'mask_est' in rec.signals:
+        rec['mask_est'].chans = cell_set
+        if holdout_set is not None:
+            holdout_rec['mask_est'].chans = holdout_set
+
+    return rec, holdout_rec
+
+
+def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, use_matched_random=False,
+                           fit_all_cells=False, use_same_recording=False, **context):
+    '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
+
+    if use_matched_site:  # fit to included site cells, save as site cells
+        if use_matched_random:  # fit to excluded match cells, save as site cells
+            new_est = context['holdout_est']
+            new_val = context['holdout_val']
+            new_rec = context['holdout_rec']
+        else:
+            new_est = context['matched_est']
+            new_val = context['matched_val']
+            new_rec = context['matched_rec']
+
+        site = meta['matched_site']
+        batch = meta['batch']
+        if ':' in site:
+            cellid_options = {'batch': batch, 'cellid': site, 'rawid': None}
+            cellids, _ = io.parse_cellid(cellid_options)
+        else:
+            cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+    elif use_same_recording:
+        # for dummy LN version, just resets parameters for frozen layers
+        new_est = context['est']
+        new_val = context['val']
+        new_rec = context['rec']
+        cellids = meta['cellids']
+
+    else:  # fit to excluded site cells, save as site cells
+        new_est = context['holdout_est']
+        new_val = context['holdout_val']
+        new_rec = context['holdout_rec']
+        cellids = meta['holdout_cellids']
+
+    meta['cellids'] = cellids
+    modelspec.meta['cellids'] = meta['cellids']
+
+    # Reinitialize trainable layers so that .R options are adjusted to new cell count
+    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
+                                              output_name=context['output_name'])
+    temp_ms[0].pop('meta')  # don't overwrite metadata in first module
+    all_idx = list(range(len(temp_ms)))
+    if freeze_layers is None:
+        freeze_layers = all_idx
+    for i in all_idx:
+        if i not in freeze_layers:
+            modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
+
+    return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta}
+
+
 def pop_file(stimfmt='ozgf', batch=None,
              rasterfs=50, chancount=18, siteid=None, **options):
 
+    siteid = siteid.split("-")[0]
     if ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
         subsetstr = "NAT1"
-    elif siteid in ['none', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
+    elif siteid in ['none', 'NAT3', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
                     'bbl099g','bbl104h',
-                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c', 
+                    'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c',
                     'AMT031a','AMT032a']:
+        # Should use NAT3 as siteid going forward for better readability,
+        # but left other options here for backwards compatibility.
         subsetstr = "NAT3"
+    elif siteid == 'NAT4':
+        subsetstr = "NAT4"
     else:
         raise ValueError('site not known for popfile')
 
@@ -175,7 +370,7 @@ def pop_file(stimfmt='ozgf', batch=None,
 
 
 def generate_recording_uri(cellid=None, batch=None, loadkey=None,
-                           siteid=None, **options):
+                           siteid=None, force_old_loader=False, **options):
     """
     required parameters (passed through to nb.baphy_data_path):
         cellid: string or list
@@ -207,6 +402,8 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
             options['stimfmt'] = 'ozgf'
         elif op=='parm':
             options['stimfmt'] = 'parm'
+        elif op=='ll':
+            options['stimfmt'] = 'll'
         elif op=='env':
             options['stimfmt'] = 'envelope'
         elif op in ['nostim','psth','ns', 'evt']:
@@ -251,8 +448,12 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-    else:
+    elif force_old_loader: #  | (batch==316):
+        log.info("Using 'old' baphy.py loader")
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
+    else:
+        manager = BAPHYExperiment(batch=batch, cellid=cellid)
+        recording_uri = manager.get_recording_uri(**options)
 
     return recording_uri
 
@@ -278,7 +479,7 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
     t_ops = options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    cells_to_extract, _ = nb.parse_cellid(t_ops)
+    cells_to_extract, _ = io.parse_cellid(t_ops)
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
     if pc_idx is not None:
@@ -286,6 +487,42 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
 
     return context
 
+def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=None, **kwargs):
+    """
+    designed to be called by xforms keyword loadpred 
+    cellid/siteid - one or the other required
+    batch - required
+    default modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+    
+    makes new signal 'pred0' from evaluated 'pred', returns in updated rec
+    returns ctx-compatible dict {'rec': nems.Recording, 'input_name': 'pred0'}
+    """
+    if (batch is None):
+        raise ValueError("must specify cellid/siteid and batch")
+
+    if cellid is None:
+        if siteid is None:
+            raise ValueError("must specify cellid/siteid and batch")
+        d = nd.pd_query("SELECT batch,cellid FROM Batches WHERE batch=%s AND cellid like %s",
+                        (batch, siteid+"%",))
+        cellid=d['cellid'].values[0]
+    elif type(cellid) is list:
+        cellid = cellid[0]
+
+    if modelname_existing is None:
+        #modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+        modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+
+    xf,ctx = xhelp.load_model_xform(cellid, batch, modelname_existing)
+    for k in ctx['val'].signals.keys():
+        if k not in ctx['rec'].signals.keys():
+           ctx['rec'].signals[k] = ctx['val'].signals[k].copy()
+    s = ctx['rec']['pred'].copy()
+    s.name='pred0'
+    ctx['rec'].add_signal(s)
+
+    #return {'rec': ctx['rec'],'val': ctx['val'],'est': ctx['est']}
+    return {'rec': ctx['rec'], 'input_name': 'pred0'}
 
 def model_pred_comp(cellid, batch, modelnames, occurrence=None,
                     pre_dur=None, dur=None):

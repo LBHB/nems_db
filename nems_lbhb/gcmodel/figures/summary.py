@@ -5,6 +5,7 @@ import matplotlib.patches as mpatch
 import matplotlib.patheffects as pe
 import numpy as np
 import scipy.stats as st
+import pandas as pd
 
 import nems.db as nd
 from nems.utils import ax_remove_box
@@ -237,7 +238,8 @@ def gc_stp_scatter(batch, gc, stp, LN, combined,
 
 def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                     LN_filter=False, plot_stat='r_ceiling',
-                    legend=False, improved_only=True):
+                    legend=False, improved_only=True, exclude_low_snr=False,
+                    snr_path=None):
 
     df_r, df_c, df_e = get_dataframes(batch, gc, stp, LN, combined)
 #    cellids, under_chance, less_LN = get_filtered_cellids(df_r, df_e, gc, stp,
@@ -249,6 +251,13 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
                                            LN_filter=LN_filter)
     improved = c
     not_improved = list(set(a) - set(c))
+    if exclude_low_snr:
+        snr_df = pd.read_pickle(snr_path)
+        med_snr = snr_df['snr'].median()
+        high_snr = snr_df.loc[snr_df['snr'] >= med_snr]
+        high_snr_cells = high_snr.index.values.tolist()
+        improved = list(set(improved) & set(high_snr_cells))
+        not_improved = list(set(not_improved) & set(high_snr_cells))
 
     if plot_stat == 'r_ceiling':
         plot_df = df_c
@@ -271,6 +280,9 @@ def combined_vs_max(batch, gc, stp, LN, combined, se_filter=True,
     imp_T, imp_p = st.wilcoxon(gc_stp_imp, max_imp)
     med_combined = np.nanmedian(gc_stp_imp)
     med_max = np.nanmedian(max_imp)
+
+
+    import pdb; pdb.set_trace()
 
     fig1 = plt.figure()
     c_not = model_colors['LN']

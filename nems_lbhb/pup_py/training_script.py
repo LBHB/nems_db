@@ -14,6 +14,15 @@ sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import keras_classes as kc
 import pupil_settings as ps
 
+# set up tensorflow session so that it is not "greedy"
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+from keras import backend as K
+K.set_session(sess)
+
+
 import logging
 log = logging.getLogger(__name__)
 

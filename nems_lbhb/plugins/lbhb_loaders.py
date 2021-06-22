@@ -2,6 +2,7 @@ import logging
 import re
 
 from nems.registry import xform, xmodule
+import nems.db as nd
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
 
     from nems_lbhb.xform_wrappers import generate_recording_uri
     import nems_lbhb.baphy as nb
+    from nems_lbhb import baphy_io
 
     pc_idx = None
 
@@ -41,10 +43,10 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     t_ops = {} # options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    if cellid == 'none':
-        cells_to_extract = 'none'
+    if cellid in ['none', 'NAT3', 'NAT4']:
+        cells_to_extract = cellid
     else:
-        cells_to_extract, _ = nb.parse_cellid(t_ops)
+        cells_to_extract, _ = baphy_io.parse_cellid(t_ops)
 
     context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
 
@@ -96,6 +98,16 @@ def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
 def parm(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     parm spectrogram
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+    d = _load_dict(loadkey, cellid, batch)
+    xfspec = [['nems_lbhb.xform_wrappers.baphy_load_wrapper', d]]
+    return xfspec
+
+@xform()
+def ll(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    labeled line spectrogram
        extra parameters handled by loadkey parser in baphy_load_wrapper
     """
     d = _load_dict(loadkey, cellid, batch)
@@ -259,6 +271,8 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
 #              ['nems.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
+
+
 @xform()
 def loadpop(loadkey):
     ops = loadkey.split('.')[1:]
@@ -281,6 +295,124 @@ def loadpop(loadkey):
               {'loadkey': loadkey,
                'rand_match': rand_match, 'cell_count': cell_count,
                'best_cells': best_cells}]]
+
+    return xfspec
+
+
+@xform()
+def cc(loadkey):
+    options = loadkey.split('.')
+    # First option is to pick # random cells, ex: cc.10
+    # cell count of 0 loads all cells
+    cell_count = int(options[1])
+    seed_mod = 0
+    for op in options[2:]:
+        if op.startswith('sd'):
+            seed_mod = int(op[2:])
+        if op.startswith('xx'):
+            try:
+                # int for random number of cellids to exclude (all sites)
+                exclusions = int(op[2:])
+            except ValueError:
+                # or specify a site to exclude. repeat option to exclude more than one.
+                site = op[2:]
+                if exclusions is None:
+                    exclusions = [site]
+                else:
+                    exclusions += site
+
+    xfspec = [['nems_lbhb.xform_wrappers.select_cell_count', {'cell_count': cell_count, 'seed_mod': seed_mod}]]
+
+    return xfspec
+
+
+@xform()
+def mc(loadkey):
+    seed_mod = 0
+    options = loadkey.split('.')
+    n_cells = -1
+    for op in options[1:]:
+        if op.startswith('sd'):
+            seed_mod = int(op[2:])
+        else:
+            n_cells = int(op)
+
+    if n_cells == -1:
+        raise ValueError('an n_cells option must be specified for keyword: mc. ex:  mc.5')
+
+    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod}]]
+
+    return xfspec
+
+
+@xform()
+def hc(loadkey):
+    seed_mod = 0
+    exclusions = None
+    options = loadkey.split('.')
+    match_to_site = None
+
+    for i, op in enumerate(options[1:]):
+        if ':' in op and 'DRX' in options[i]:
+            # special fix for DRX split siteids, they'll get split on the '.' but they shouldn't be
+            op2 = options.pop(i+1)
+            op1 = options.pop(i)
+            options.append(op1 + '.' +  op2)
+
+    for op in options[1:]:
+        if op.startswith('sd'):
+            seed_mod = int(op[2:])
+        elif op.startswith('ms'):
+            # Ex:  hc.10.msTAR009d  would hold out 10 random cells with performance similar to site TAR009d
+            #      hc.0.msTAR009d   would hold out X random cells with performance similar to site TAR009d,
+            #                       where X is the number of cells in site TAR009d.
+            match_to_site = op[2:]
+        else:
+            try:
+                # int for random number of cellids to exclude (all sites)
+                exclusions = int(op)
+            except ValueError:
+                # or specify a site to exclude. repeat option to exclude more than one.
+                site = op
+                if exclusions is None:
+                    exclusions = [site]
+                else:
+                    exclusions += site
+
+    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod,
+                                                          'match_to_site': match_to_site}]]
+
+    return xfspec
+
+
+@xform()
+def loadpred(loadkey):
+    ops = loadkey.split('.')[1:]
+
+    pc_count = 0
+    pc_format = "psth"
+    dmask = 'hrc'
+    for op in ops:
+        if op == 'rnd':
+            rand_match = True
+        if op[:2] == 'pc':
+            pc_count = int(op[2:])
+        if op == 'n':
+            pc_format="noise"
+        if op == 'a':
+            pc_format="all"
+        if op == 'cpn':
+            dmask = 'epcpn-hrc'
+    if pc_count > 0:
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
+    elif 'z' in ops:
+        modelname_existing = f"psth.fs4.pup-ld-norm.r.ms-st.pup-{dmask}-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+    else:
+        # modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont"
+        modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
+            
+    xfspec = [['nems_lbhb.xform_wrappers.load_existing_pred',
+              {'modelname_existing': modelname_existing}]]
 
     return xfspec
 

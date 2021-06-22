@@ -19,6 +19,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
+from nems_lbhb import runclass
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
@@ -29,11 +30,14 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
+import nems_lbhb.behavior_plots as bplot
 import nems_lbhb.baphy_io as io
 from nems.utils import recording_filename_hash
 from nems import get_setting
 
 log = logging.getLogger(__name__)
+
+stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 
 # special decorator that returns copies of cached objects.
 # this is useful for cases where you don't want to accidentally
@@ -95,37 +99,82 @@ class BAPHYExperiment:
 
         return cls(parmfile)
 
-    def __init__(self, parmfile=None, batch=None, siteid=None, rawid=None):
+    def __init__(self, parmfile=None, batch=None, cellid=None, rawid=None):
         # Make sure that the '.m' suffix is present! In baphy_load data I see
         # that there's care to make sure it's present so I assume not all
         # functions are careful about the suffix.
 
         # New init options. CRH 2/15/2020. Want to be able to load 
         #   1) multiple parmfiles into single baphy experiment
-        #   2) find parmfiles using batch/siteid
+        #   2) find parmfiles using batch/cellid
 
-        # if don't pass parmfile, must pass both batch and siteid (can 
+        # if don't pass parmfile, must pass both batch and cellid (can 
         # extract individual cellids later if needed). rawid is optional
 
         if parmfile is None:
+            # use database to find the correct parmfiles / cellids to load
+            parse_cellid_options = {
+                'batch': batch,
+                'cellid': cellid,
+                'rawid': rawid
+            }
+            cells_to_extract, nops = io.parse_cellid(parse_cellid_options)
             self.batch = batch
-            self.siteid = siteid
-            self.rawid = rawid
-            d = db.get_batch_cell_data(batch=batch, cellid=siteid, label='parm',
-                                   rawid=rawid)
+            self.siteid = cellid[:7]
+            self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
+            self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
+            self.rawid = nops['rawid']
+            # get list of corresponding parmfiles at this site for these rawids
+            d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
             files = list(set(list(d['parm'])))
             files.sort()
-            self.parmfile = [Path(f) for f in files]
+            self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
+
+        # db-free options for loading specific cellids / parmfiles
+        # here, must assume cellid = cells_to_load = cells_to_extract 
+        # (so, might end up caching an extra, redundant, recording,
+        # but this is the 'safe' way to do it.)
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-            self.siteid = os.path.split(parmfile[0])[-1][:7]
+            self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.siteid = os.path.split(parmfile[0])[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
         else:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
-           
-        if np.any([not p.exists() for p in self.parmfile]):
-            raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+            self.batch = None
+            if cellid is not None:
+                if type(cellid) is list:
+                    self.cells_to_extract = cellid
+                    self.cells_to_load = cellid
+                    self.siteid = cellid[0][:7]
+                elif type(cellid) is str:
+                    self.cells_to_extract = [cellid]
+                    self.cells_to_load = [cellid]
+                    self.siteid = cellid[:7]
+                else:
+                    raise TypeError
+            else:
+                self.sited = os.path.split(parmfile)[-1][:7]
+                self.cells_to_load = None
+                self.cells_to_extract = None
+
+        #if np.any([not p.exists() for p in self.parmfile]):
+        #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
 
         # we can assume all parmfiles come from same folder/experiment (site)
         self.folder = self.parmfile[0].parent
@@ -133,8 +182,19 @@ class BAPHYExperiment:
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
-    
 
+        # add some new attributes for purposes of caching recordings
+        self.animal = str(self.parmfile[0].parent).split(os.path.sep)[4]
+        penname = str(self.parmfile[0].parent).split(os.path.sep)[5]
+        # if batch is None, set batch = 'animal/siteid', unless "training" in parmfile.
+        # If training, save in training director by setting batch = 'animal/trainingXXXX'
+        if (self.batch is None) & ('training' in penname):
+            self.batch = os.path.sep.join([self.animal, penname])
+        elif self.batch is None:
+            self.batch = os.path.sep.join([self.animal, self.siteid])
+        else:
+            pass
+    
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
@@ -213,6 +273,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def get_baphy_events(self, correction_method='openephys', **kw):
         baphy_events = self.get_baphy_exptevents()
+    
         if correction_method is None:
             return baphy_events
         if correction_method == 'baphy':
@@ -250,9 +311,31 @@ class BAPHYExperiment:
         return behavior_events
 
     @copying_lru_cache(maxsize=128)
-    def get_baphy_exptevents(self):
+    def get_baphy_exptevents(self, raw=False):
         exptevents = [ep[-1] for ep in self._get_baphy_parameters(userdef_convert=False)]
-        return exptevents
+        if raw:
+            return exptevents
+        else: 
+            # do basic preprocessing of baphy events. For example, in PTD data,
+            # when OverlapRefTar = Yes, two overlapping events are created (Ref / Target).
+            # We want to merge these for the sake of behavior analysis etc.
+            exptparams = self.get_baphy_exptparams()
+            
+            # deal with overlapping ref/tar epochs
+            OverlapRefTar = [e['TrialObject'][1].get('OverlapRefTar','No') for e in exptparams]
+            exptevents = [_merge_refTar_epochs(e, o) for e, o in zip(exptevents, OverlapRefTar)]
+            
+            # truncate FA trials
+            log.info('Remove post-response events')
+            # typically, this isn't an issue with OEP recordings. However, for MANTA recordings,
+            # where spikes aren't collected continuously, not removing these post-response epochs
+            # will mess up time alignment, which occurs within `get_baphy_events`, which calls
+            # baphy_io.baphy_align_time -- crh 01.04.2021
+            exptevents = [_truncate_trials(e) for e in exptevents]
+
+            #other preprocessing steps...
+
+            return exptevents
 
     @copying_lru_cache(maxsize=128)
     def get_baphy_exptparams(self):
@@ -264,8 +347,53 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, recache=False, **kwargs):
+        '''
+        This is where the kwargs contents are critical (for generating the correct 
+        recording file hash)
+
+        TODO: loadkey parsing?
+        '''
+        kwargs = io.fill_default_options(kwargs)
+
+        # add BAPHYExperiment version to recording options
+        kwargs.update({'version': 'BAPHYExperiment.2'})
+
+        # add parmfiles / cells_to_load list - these are unique ids for the recording
+        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'cell_list': self.cells_to_load})
+
+        # add batch to cache recording in the correct location
+        kwargs.update({'siteid': self.siteid})
+        kwargs.update({'batch': self.batch})
+
+        # see if can load from cache, if not, call generate_recording
+        data_file = recording_filename_hash(
+                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+
+        if use_API:
+            _, f = os.path.split(data_file)
+            host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+            data_uri = host + '/recordings/' + str(self.batch) + '/' + f
+            log.info('Cached recording: %s', data_uri)
+        else:
+            if ((not os.path.exists(data_file)) & generate_if_missing) | recache:
+                # strip unhashable fields (list) from the kwargs (to play nice with lru_caching / copying)
+                del kwargs['mfiles']; del kwargs['cell_list']
+                rec = self.generate_recording(**kwargs)
+                log.info('Caching recording: %s', data_file)
+                rec.save(data_file)
+            else:
+                log.info('Cached recording: %s', data_file)
+            data_uri = data_file
+
+        return data_uri
+
+
     @lru_cache(maxsize=128)
-    def get_recording(self, **kwargs):
+    def get_recording(self, recache=False, generate_if_missing=True, **kwargs):
         '''
         Steps to building a recording:
             1) Figure out which signals to load
@@ -276,24 +404,23 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
-        # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.1'})
-        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
         # see if can load from cache, if not, call generate_recording
-        data_file = recording_filename_hash(
-                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+        data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
         
-        if (not os.path.exists(data_file)) | kwargs.get('recache', False):
+        # take care of the recache inside get_recording_uri 
+        # do we even need this if/else block here??? crh 01.22.2021
+        if (not os.path.exists(data_file)): # | recache:
             kwargs.update({'mfiles': None})
             rec = self.generate_recording(**kwargs)
             log.info('Caching recording: %s', data_file)
             rec.save(data_file)
-            return rec
-        
         else:
             log.info('Cached recording found')
             rec = load_recording(data_file)
-            return rec
+
+        rec.meta['cells_to_extract'] = self.cells_to_extract
+
+        return rec
 
     def generate_recording(self, **kwargs):
         rec_name = self.experiment[:7]      
@@ -301,6 +428,8 @@ class BAPHYExperiment:
         # figure out signals to load, then load them (as lists)
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
+        stim = kwargs.get('stim', False)
+
         # stim, lfp, photometry etc.
 
         # get correction method
@@ -318,7 +447,20 @@ class BAPHYExperiment:
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, **kwargs) for (bev, parm, gparm) in zip(exptevents, exptparams, globalparams)]
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
+
+        # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
+        for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
+            if param['runclass']=='TBP':
+                # for TBP, we need to update events to tweak certain target names if they belong to targetDistSet 2, i.e. reminder targets
+                # also need to update the soundObject names accordingly in exptparams. 
+                # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
+                # but it will update this local exptparams that gets used for signal generation
+                baphy_events[i], exptparams[i] = runclass.TBP(bev, param)
+            if param['runclass']=='CPN':
+                #ToDo: format epochs for clarity and define if AllPermutations or Triplets
+                baphy_events[i], exptparams[i] = runclass.CPN(bev, param)
+        
     
         signals = {}
         if resp:
@@ -345,7 +487,6 @@ class BAPHYExperiment:
                           name='pupil', recording=rec_name, chans=['pupil'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(p_traces)]
-
             # make sure each pupil signal is the same len as resp, if resp exists
             if resp:
                 for i, (p, r) in enumerate(zip(pupil_sigs, resp_sigs)):
@@ -359,6 +500,16 @@ class BAPHYExperiment:
                                                 np.ones([pcount, rlen - plen]) * np.nan, axis=1))
 
             signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+
+        if stim:
+            #import pdb; pdb.set_trace()
+            stim_sigs = [nems.signal.TiledSignal(
+                            data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **kwargs)[0],
+                            fs=kwargs['rasterfs'], name='stim',
+                            epochs=baphy_events[i], recording=rec_name)
+                        for i, p in enumerate(self.parmfile)]
+
+            signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
 
         if len(signals)==0:
             # make a dummy signal
@@ -441,6 +592,9 @@ class BAPHYExperiment:
             spike_dict = []
             for sd in spikedicts:
                 units = sd[1]
+                if self.cells_to_load is not None:
+                    # only keep units included in self.cells_to_load
+                    units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
                 spiketimes = sd[0]
                 d = {}
                 for i, unit in enumerate(units):
@@ -476,14 +630,28 @@ class BAPHYExperiment:
         if not self.behavior:
             raise ValueError("No behavior detected in this experiment")
 
+        # add dummy rasterfs for creating aligned timestamps. Not critically important what
+        # this is for the behavior metrics
+        rasterfs = kwargs.get('rasterfs', 100)
+        kwargs['rasterfs'] = rasterfs
+
         # get aligned exptevents for behavior files
         events = self.get_behavior_events(correction_method=self.correction_method, **kwargs)
         params = self.get_baphy_exptparams()
+
+        for i, (bev, param) in enumerate(zip(events, params)):
+            if param['runclass']=='TBP':
+                # for TBP, we need to update events to tweak certain target names if they belong to targetDistSet 2, i.e. reminder targets
+                # also need to update the soundObject names accordingly in exptparams. 
+                # NOTE: This will not update the result returned by self.get_baphy_exptparams, 
+                # but it will update this local exptparams that gets used for signal generation
+                events[i], params[i] = runclass.TBP(bev, param)
+
         behave_file = [True if (p['BehaveObjectClass'] != 'Passive') else False for p in params]
         if len(behave_file) > 1:
             events = [e for i, e in enumerate(events) if behave_file[i]]
         elif behave_file[0] == True:
-            events = events
+            pass
         # assume params same for all files. This is a bit kludgy... Think it
         # should work?
         beh_params = params[np.min(np.where(behave_file)[0])]
@@ -493,7 +661,7 @@ class BAPHYExperiment:
 
         # run behavior analysis
         kwargs.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
-
+        
         metrics = behavior.compute_metrics(beh_params, events, **kwargs)    
 
         return metrics
@@ -535,6 +703,41 @@ class BAPHYExperiment:
         return pd.concat(epochs, ignore_index=True)
         '''
 
+    # ======================= PLOTTING METHODS ======================
+    def plot_RT_histogram(self, trials=None, tokens=None, bins=None, ax=None, **options):
+        """
+        extract RTs and pass to behavior_plots.plot_RT_histogram fn
+
+        options:    behavioral trial options (e.g. which trials are invalid -- see behavior.compute_metrics)
+        trials:     BAPHY trials (list/array of ints) over which to compute metrics. If None, use all valid trials specified in options dict.
+        tokens:     epoch tokens (list/array of ints) over which to compute metrics. If None, use all valid sound tokens according to options dict.
+        bins:       int or range for specifying histogram resolution. If int, 
+                        histogram will be plotted from 0 to 2 sec in "bins" number of time bins
+        """
+        bev = self.get_behavior_events(**options)
+        bev = self._stack_events(bev)
+        options.update({'trial_numbers': trials, 'sound_trial_numbers': tokens})
+        bev = behavior.mark_invalid_trials(self.get_baphy_exptparams()[0], bev, **options)
+
+        # get RTs for each sound
+        tars = bev.loc[bev.name.str.contains('Target') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        catch =bev.loc[bev.name.str.contains('Catch') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        ref = bev.loc[bev.name.str.contains('Reference') & (bev.invalidSoundTrial == False), 'name'].unique().tolist()
+        epochs = tars + catch
+        keys = [k.split(' , ')[1] for k in epochs]
+        RTs = {k: [] for k in keys + ['Reference']}
+        for e in epochs + ref:
+            if e in ref:
+                RTs['Reference'].extend(bev.loc[(bev.name==e) & (bev.invalidSoundTrial == False), 'RT'])
+            else:
+                RTs[e.split(' , ')[1]].extend(bev.loc[(bev.name==e) & (bev.invalidSoundTrial == False), 'RT'])
+        
+        perf = self.get_behavior_performance(trials=trials, tokens=tokens, **options)
+        di = perf['DI']
+        ax = bplot.plot_RT_histogram(RTs, bins=bins, DI=di, ax=ax)
+
+        return ax
+
     # ===================================================================
     # Methods below this line just pass through to the functions for now.
     def _get_baphy_parameters(self, userdef_convert=False):
@@ -558,7 +761,7 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
@@ -567,14 +770,20 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     """
 
     epochs = []
-    
+
     log.info('Creating trial epochs')
-    trial_epochs = _make_trial_epochs(exptevents, exptparams, **options)
+    trial_epochs = _make_trial_epochs(exptevents, exptparams, fidx, **options)
     epochs.append(trial_epochs)
 
     log.info('Creating stim epochs')
     stim_epochs = _make_stim_epochs(exptevents, exptparams, **options)
     epochs.append(stim_epochs)
+
+    log.info('Creating Light epochs')
+    light_epochs = _make_light_epochs(exptevents, exptparams, **options)
+    #if light_epochs != []:
+    if light_epochs is not None:
+        epochs.append(light_epochs)
 
     # this step includes removing post lick events for 
     # active files
@@ -636,30 +845,36 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, **options):
     return epochs
 
 
-def _make_trial_epochs(exptevents, exptparams, **options):
+def _make_trial_epochs(exptevents, exptparams, fidx=None, **options):
     """
     Define baphy trial epochs
     """
     # sort of hacky. This means that if behavior classification 
     # was run and it's NOT classical conditioning, you should truncate
     # trials after licks
-    remove_post_lick = ('soundTrial' in exptevents.columns) & \
-                            (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
-    
+    #remove_post_lick = ('soundTrial' in exptevents.columns) & \
+    #                        (exptparams['BehaveObjectClass'] != 'ClassicalConditioning')
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
     end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
     trial_events.at[:, 'end'] = end_events['start'].values
     trial_events.at[:, 'name'] = 'TRIAL'
 
-    if remove_post_lick:
-       trial_events =  _remove_post_lick(trial_events, exptevents)
-       trial_events =  _remove_post_stim_off(trial_events, exptevents)
+    #if remove_post_lick:
+    #   trial_events =  _remove_post_lick(trial_events, exptevents, **options)
+    #   trial_events =  _remove_post_stim_off(trial_events, exptevents, **options)
 
     trial_events = trial_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
             ).reset_index()
+    baphy_trials = trial_events.copy()
+    names = [f'BAPHYTRIAL{i+1}_FILE{fidx+1}' for i in range(baphy_trials.shape[0])]
+    baphy_trials.name = names
+    trial_events = pd.concat([trial_events, baphy_trials]).sort_values(
+            by=['start', 'end'], ascending=[1, 0]
+            ).reset_index()
     trial_events = trial_events.drop(columns=['index'])
+    trial_events = trial_events.drop(columns=['level_0'])
 
     return trial_events
 
@@ -679,7 +894,9 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     # reference events (including spont)
     ref_tags = exptevents[exptevents.name.str.contains('Reference') & \
-                            ~exptevents.name.str.contains('Silence')].name.unique()
+                            (~exptevents.name.str.contains('PreStimSilence') & \
+                            ~exptevents.name.str.contains('PostStimSilence'))].name.unique()
+
     ref_s_tags = exptevents[exptevents.name.str.contains('Reference') & \
                             exptevents.name.str.contains('PreStimSilence')].name.unique()
     ref_e_tags = exptevents[exptevents.name.str.contains('Reference') & \
@@ -688,12 +905,17 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     ref_ends = exptevents[exptevents.name.isin(ref_e_tags)].copy()
 
     ref_events = exptevents[exptevents.name.isin(ref_tags)].copy()
-    new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    # new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
+    new_tags = [f"STIM_{'-'.join([b.strip().replace(' ', '') for b in t.split(',')[1:-1]])}" for t in ref_events.name]
+
+    #import pdb; pdb.set_trace()
+
     ref_events.at[:, 'name'] = new_tags
     ref_events.at[:, 'start'] = ref_starts.start.values
     ref_events.at[:, 'end'] = ref_ends.end.values
     ref_events2 = ref_events.copy()
     ref_events2.at[:, 'name'] = 'REFERENCE'
+
     ref_events = pd.concat([ref_events, ref_events2], ignore_index=True)
 
     # target events (including spont)
@@ -730,8 +952,8 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     cat_events.at[:, 'name'] = new_tags
     cat_events.at[:, 'start'] = cat_starts.start.values
     cat_events.at[:, 'end'] = cat_ends.end.values
-    cat_events2 = tar_events.copy()
-    cat_events2.at[:, 'name'] = 'TARGET'
+    cat_events2 = cat_events.copy()
+    cat_events2.at[:, 'name'] = 'CATCH'
     cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
 
     # pre/post stim events
@@ -743,12 +965,18 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
 
+    #if remove_post_lick:
+        # crh 01.05.2021 - this should get taken care of in exptevents loading now
+        #ref_events = _remove_post_lick(stim_events, exptevents)
+        #cat_events = _remove_post_stim_off(cat_events, exptevents)
+        #ref_events = _remove_post_stim_off(ref_events, exptevents)
+
     # concatenate events together
     stim_events = pd.concat([ref_events, tar_events, cat_events, sil_events, lick_events], ignore_index=True)
 
-    if remove_post_lick:
-        stim_events = _remove_post_lick(stim_events, exptevents)
-        stim_events = _remove_post_stim_off(stim_events, exptevents)
+    #if remove_post_lick:
+    #    stim_events = _remove_post_lick(stim_events, exptevents)
+    #    stim_events = _remove_post_stim_off(stim_events, exptevents)
 
     stim_events = stim_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -758,13 +986,31 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     return stim_events
 
 
+def _make_light_epochs(exptevents, exptparams, **options):
+    """
+    Look for / define light epochs (for optogenetics).
+    Quick and dirty, probably needs improvment -- CRH 10.21.2020
+    """ 
+    light_events = exptevents[exptevents['name'].str.contains('LightStim')].copy()
+    
+    if light_events.shape[0] >= 1:
+        light_events.at[:, 'name'] = 'LIGHTON'
+        light_events = light_events.sort_values(
+                by=['start', 'end'], ascending=[1, 0]
+                ).reset_index()
+        light_events = light_events.drop(columns=['index'])
+        return light_events
+
+    else:
+        return None
+
+
 def _make_behavior_epochs(exptevents, exptparams, **options):
     """
     Add soundTrial events to the epochs dataframe. i.e. move them into 
     the name column so that they stick around when these columns get
     stripped later for nems packaging.
     """
-
     if 'soundTrial' not in exptevents.columns:
         raise KeyError("soundTrial not in exptevents. Behavior analysis code \
                         has not been run yet, shouldn't be making \
@@ -795,8 +1041,8 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     behavior_events = pd.concat([baphy_behavior_events,
                                 behavior_events, invalid_events], ignore_index=True)
 
-    behavior_events = _remove_post_lick(behavior_events, exptevents)
-    behavior_events = _remove_post_stim_off(behavior_events, exptevents)
+    #behavior_events = _remove_post_lick(behavior_events, exptevents)
+    #behavior_events = _remove_post_stim_off(behavior_events, exptevents)
 
     behavior_events = behavior_events.sort_values(
             by=['start', 'end'], ascending=[1, 0]
@@ -806,7 +1052,7 @@ def _make_behavior_epochs(exptevents, exptparams, **options):
     return behavior_events
 
 
-def _remove_post_lick(events, exptevents):
+def _remove_post_lick(events, exptevents, **options):
     # screen for FA / Early trials in which we need to truncate / chop out references
     trunc_trials = exptevents[exptevents.name.isin(['FALSE_ALARM_TRIAL', 'EARLY_TRIAL', 'CORRECT_REJECT_TRIAL'])].Trial.unique()
     #lick_time = exptevents[exptevents.Trial.isin(trunc_trials) & (exptevents.name=='LICK')].start
@@ -820,28 +1066,152 @@ def _remove_post_lick(events, exptevents):
         fl = exptevents[(exptevents.Trial==t) & (exptevents.name=='LICK')].iloc[0]['start']
         e = events[events.Trial==t]
         # truncate events that overlapped with lick
-        events.at[e[e.end > fl].index, 'end'] = fl
-        # remove events that started after the lick completely
-        events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
-    
+        if options.get('truncate_postlick', False):
+            events.at[e[e.end > fl].index, 'end'] = fl
+            # remove events that started after the lick completely
+            events = events.drop(e[(e.start.values > fl) & (e.end.values >= fl)].index)
+        else:
+            events = events.drop(e[e.end >= fl].index)
+
     return events
 
 
-def _remove_post_stim_off(events, exptevents):
+def _truncate_trials(exptevents, **options):
+    """
+    Catch-all for removing stim epoch data post stim-off. Meant to replace former baphy code that
+    deals with MANTA recordings. This operates on exptevents (raw) before running align time.
+    For compatibility later on, need to make sure you never orphan a prestim / sound / poststim on
+    its own. They need to be in triplets.
+    """
+    log.info("Removing post-reponse data")
+    
+    trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
+    events = exptevents.copy()
+    for t in trunc_trials:
+        toff = exptevents[(exptevents.Trial==t) & exptevents.name.isin(['STIM,OFF', 'TRIALSTOP'])]['start'].min()
+        e = events[events.Trial==t]
+
+        # for "stim" events, make sure to not orphan a 
+        # pre/post/stim epoch (keep all, or delete all)
+        for idx, r in e.iterrows():
+            name = r.loc['name']
+            if 'Stim , ' in name:
+                if toff > r.loc['start']:
+                    # keep all stim events for this sound and
+                    # if toff < poststim end, set toff to poststim end
+                    if (toff < events.loc[idx+1, 'end']):
+                        toff = events.loc[idx+1, 'end']
+                    pass
+                else:
+                    events = events.drop(idx)
+                    events = events.drop(idx-1)
+                    events = events.drop(idx+1)
+
+        # for remaining events, just brute force truncate
+        # truncate partial events
+        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
+            #print(t)
+            #import pdb; pdb.set_trace()
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start']=toff
+            events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'end']=toff
+        # remove events that start after toff
+        events = events.drop(e[(e.start.values > toff) &
+                               (e.end.values >= toff) &
+                                ~e.name.str.contains('.*Stim.*') &
+                                ~e.name.str.contains('TRIALSTOP')].index)
+        
+    return events
+'''
+# this is the old code in baphy.py. Seems to break stuff for some batch 309 because it
+# removes some TRIALSTOPS which screws up aligning time. (e.g. see BRT006d-a1)
+    keepevents = np.full(len(exptevents), True, dtype=bool)
+    TrialCount = exptevents.Trial.max()
+    for trialidx in range(1, TrialCount+1):
+        # remove stimulus events after TRIALSTOP or STIM,OFF event
+        fftrial_stop = (exptevents['Trial'] == trialidx) & \
+            ((exptevents['name'] == "STIM,OFF") |
+                (exptevents['name'] == "OUTCOME,VEARLY") |
+                (exptevents['name'] == "OUTCOME,EARLY") |
+                (exptevents['name'] == "TRIALSTOP"))
+        if np.sum(fftrial_stop):
+            trialstoptime = np.min(exptevents[fftrial_stop]['start'])
+
+            fflate = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] > trialstoptime)
+            fftrunc = (exptevents['Trial'] == trialidx) & \
+                exptevents['name'].str.startswith('Stim , ') & \
+                (exptevents['start'] <= trialstoptime) & \
+                (exptevents['end'] > trialstoptime)
+
+        for i, d in exptevents.loc[fflate].iterrows():
+            # print("{0}: {1} - {2} - {3}>{4}"
+            #       .format(i, d['Trial'], d['name'], d['end'], start))
+            # remove Pre- and PostStimSilence as well
+            keepevents[(i-1):(i+2)] = False
+
+        for i, d in exptevents.loc[fftrunc].iterrows():
+            log.debug("Truncating event %d early at %.3f", i, trialstoptime)
+            exptevents.loc[i, 'end'] = trialstoptime
+            # also trim post stim silence
+            exptevents.loc[i + 1, 'start'] = trialstoptime
+            exptevents.loc[i + 1, 'end'] = trialstoptime
+
+    log.info("Keeping {0}/{1} events that precede responses"
+            .format(np.sum(keepevents), len(keepevents)))
+    exptevents = exptevents[keepevents].reset_index()
+
+    return exptevents
+'''
+
+
+def _remove_post_stim_off(events, exptevents, **options):
     # screen for trials where sound was turned off early. These will largey overlap with the events
     # detected by _remove_post_lick, except in weird cases, for example, in catch behaviors where
     # targets can come in the middle of a string of refs, but refs are turned off post target hit
+
     log.info("Removing data post stim-off")
     trunc_trials = exptevents[exptevents.name.isin(['STIM,OFF'])].Trial.unique()
     for t in trunc_trials:
         toff = exptevents[(exptevents.Trial==t) & (exptevents.name=='STIM,OFF')].iloc[0]['start']
         e = events[events.Trial==t]
-        events.at[e[e.end > toff].index, 'end'] = toff
-        events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
-    
+        if options.get('truncate_postlick', False):
+            # truncate partial events
+            events.at[e[e.end > toff].index, 'end'] = toff
+            # remove events that start after toff
+            events = events.drop(e[(e.start.values > toff) & (e.end.values >= toff)].index)
+        else:
+            #import pdb; pdb.set_trace()
+            # cruder, but simpler. remove events that end after toff
+            events = events.drop(e[e.end >= toff].index)
     return events
 
 
 def _trim_epoch_columns(epochs):
     cols = [c for c in epochs.columns if c not in ['start', 'end', 'name']]
     return epochs.drop(columns=cols)
+
+
+def _merge_refTar_epochs(exptevents, OverlapRefTar):
+    """
+    If OverlapRefTar = Yes, merge overlapping reference / target events
+    """
+    if OverlapRefTar=='No':
+        return exptevents
+    else:
+        # for every target, if there's a preceding reference with an identical start time, merge them
+        target_prestims = exptevents[exptevents.name.str.contains('PreStimSilence , .* , Target', regex=True)]
+        # get preceding ref stim names (if prestim time stamp matches)
+        ref_idx = target_prestims.index-3
+        refs = exptevents.loc[ref_idx]
+        refs = refs[refs.start.values == target_prestims.start.values]
+
+        # set the poststim duration to the ref post stim (to get rid of long poststim tails)
+        exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
+
+        exptevents = exptevents.drop(refs.index)   # drop ref pre stim
+        exptevents = exptevents.drop(refs.index+1) # drop ref stim
+        exptevents = exptevents.drop(refs.index+2) # drop ref poststim
+
+        return exptevents

@@ -15,7 +15,7 @@ from itertools import product
 import nems_lbhb.stateplots as stateplots
 import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
-
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 
 
 def preprocess_stategain_dump(df_name, batch, full_model=None, p0=None, b0=None, shuf_model=None, octave_cutoff=0.5, r0_threshold=0,
@@ -268,6 +268,9 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
     # =================== get overall task model params / MI ===============================
     if p0 is not None:
         cols = ['cellid', 'state_chan_alt', 'MI', 'gain_mod', 'dc_mod', 'r', 'r_se']
+        if 'DI' in dMI.columns:
+            cols += ['DI']
+
         task_merge = dMI[(dMI['state_sig']==p0) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols].merge(\
                         dMI[(dMI['state_sig']==shuf_model) & (dMI['state_chan_alt'].str.contains(task_regex, regex=True))][cols], \
                         on=['cellid', 'state_chan_alt'])
@@ -279,7 +282,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
         task_merge['sig_task'] = [True if ((task_merge.iloc[i]['r_x'] - task_merge.iloc[i]['r_y']) > 
                                             (task_merge.iloc[i]['r_se_x'] + task_merge.iloc[i]['r_se_y'])) else False for i in range(task_merge.shape[0])]
         # add task rpred
-        task_merge['r_task'] = task_merge['r_x'].pow(2)
+        task_merge['r_task'] = task_merge['r_x'].pow(2) - task_merge['r_y'].pow(2)
+
+        if 'DI' in cols:
+            task_merge['DI'] = task_merge['DI_y']
 
         # strip extraneous columns
         task_merge = task_merge.drop(columns=[c for c in task_merge.columns if ('_x' in c) | ('_y' in c)])
@@ -350,7 +356,7 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
 
     # =========================== get sig sensory cells ============================
     psth_cells = dMI[(dMI.state_sig==shuf_model) & (dMI.r > r0_threshold)].cellid.unique()
-    
+
     # merge results into single df
     if ('beh' in full_model) | pas_model:
         # "target freq is meaningless because could change between files"
@@ -424,7 +430,10 @@ def preprocess_sdexp_dump(df_name, batch, full_model=None, p0=None, b0=None, shu
             df = df.drop(columns=['cellid'])
 
     df['sig_psth'] = df.index.isin(psth_cells)
-    
+    df['animal']=df.index.copy().str[:3]
+    if 'MI_task_unique' in df.columns.tolist():
+        df['MI_task_unique_abs'] = np.abs(df['MI_task_unique'])
+
     return df
 
 
@@ -634,10 +643,18 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
                      ax=ax3, highlight=mfull[:,-1], hist_range=[-0.1, 1], markersize=4)
     if not norm_by_null:
         ax3.plot([1,0], [0,1], 'k--', linewidth=0.5)
+        
     slope, intercept, r, p, std_err = st.linregress(mfull[:,0],d)
+
+    dr['site'] = [c[:7] for c in dr.index.get_level_values(0)]
+    
+    x = get_bootstrapped_sample({s: mfull[(dr.site==s).values, 0] for s in dr.site.unique()}, 
+                                        {s: d[(dr.site==s).values] for s in dr.site.unique()}, metric='corrcoef', nboot=10000)
+    pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
+    
     mm = np.array([np.min(mfull[:,0]), np.max(mfull[:,0])])
     ax3.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
-    plt.title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
+    plt.title('n={} cc={:.3} p={:.4}, pboot={:.5f}'.format(len(d),r,p,1-pboot),fontsize=7)
 
     ax4 = plt.subplot(2,2,4)
     if norm_by_null:
@@ -652,11 +669,16 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
     #stateplots.beta_comp(snr[_ok], d[_ok], n1='SNR',n2='dep - indep',
     #                 ax=ax4, highlight=mfull[_ok,-1], hist_range=[-0.1, 1], markersize=4)
     slope, intercept, r, p, std_err = st.linregress(snr[_ok], d[_ok])
+        
+    x = get_bootstrapped_sample({s: snr[(dr.site==s).values & _ok] for s in dr.site.unique()}, 
+                                        {s: d[(dr.site==s).values & _ok] for s in dr.site.unique()}, metric='corrcoef', nboot=10000)
+    pboot, _ = get_direct_prob(x, np.zeros(x.shape[0]))
+
     mm = np.array([np.min(snr[_ok]), np.max(snr[_ok])])
     ax4.plot(mm,intercept+slope*mm,'k--', linewidth=0.5)
     ax4.set_xlabel('log(SNR)')
     ax4.set_ylabel(ylabel)
-    ax4.set_title('n={} cc={:.3} p={:.4}'.format(len(d),r,p))
+    ax4.set_title('n={} cc={:.3} p={:.4}, pboot={:.5f}'.format(len(d),r,p, 1-pboot),fontsize=7)
     nplt.ax_remove_box(ax4)
 
     f.tight_layout()
@@ -665,7 +687,7 @@ def aud_vs_state(df, nb=5, title=None, state_list=None,
 
 
 def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
-                 sig_cells_only=False, states=None, scatter_sig_cells=None):
+                 sig_cells_only=False, states=None, scatter_sig_cells=None, bootstats=False):
     """
     Copied/modified version of mod_per_state.hlf_analysis. Rewritten by crh 04/17/2020
     """
@@ -798,6 +820,20 @@ def hlf_analysis(df, state_list, pas_df=None, norm_sign=True,
     sn=np.sign(_dmi+_dmiu)
     stat, p = st.wilcoxon(_dmi*sn,_dmiu*sn)
     print(f' postall vs postu: Wilcoxon stat={stat} p={p:.3e}')
+    print(f' mean: {_dmi.mean():.3f} mean0: {_dmiu.mean():.3f}')
+
+    if bootstats: 
+        # also do hierarchical bootstrap test
+        _dmi_df = pd.DataFrame((_dmi*sn).values, index=_dmi.index, columns=['mi'])
+        _dmiu_df = pd.DataFrame((_dmiu*sn).values, index=_dmiu.index, columns=['miu'])
+        _dmi_df['siteid'] = [c[:7] for c in _dmi_df.index]
+        _dmiu_df['siteid'] = [c[:7] for c in _dmiu_df.index]
+        diff = {s: _dmi_df.loc[(_dmi_df.siteid==s), 'mi'].values - _dmiu_df.loc[(_dmiu_df.siteid==s), 'miu'].values for s in _dmi_df.siteid.unique()}
+        bootsamp = get_bootstrapped_sample(diff, nboot=500)
+        p = get_direct_prob(bootsamp, np.zeros(bootsamp.shape[0]))[0]
+        print(f"Hierarchical bootstrap probability unique > block only: {p}")
+        
+
     ax[0].legend(frameon=False, fontsize=5)
     ax[0].set_xlabel('Pre vs. post MI, task only')
     ax[0].set_ylabel('Pre vs. post MI, task unique')

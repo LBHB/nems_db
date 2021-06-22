@@ -222,7 +222,7 @@ def _todict(matobj):
 
 def baphy_mat2py(s):
 
-    s3 = re.sub(r';', r'', s.rstrip())
+    s3 = re.sub(r';$', r'', s.rstrip())
     s3 = re.sub(r'%', r'#', s3)
     s3 = re.sub(r'\\', r'/', s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
@@ -237,8 +237,21 @@ def baphy_mat2py(s):
     s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
 
     s6 = re.sub(r'([0-9]+) ', r"\g<0>,", s5)
-    s6 = re.sub(r'NaN ', r"np.nan,", s6)
-    s6 = re.sub(r'Inf ', r"np.inf,", s6)
+    x = s6.split('=')
+    if len(x) > 1:
+        if ';' in x[1]:
+            x[1] = re.sub(r'\[', r"np.array([[", x[1])
+            x[1] = re.sub(r'\]', r"]])", x[1])
+            x[1] = re.sub(r';','],[', x[1])
+        x[1] = re.sub('true','True', x[1])
+        x[1] = re.sub('false','False', x[1])
+        x[1] = re.sub(r'NaN ', r"np.nan,", x[1])
+        x[1] = re.sub(r'Inf ', r"np.inf,", x[1])
+        x[1] = re.sub(r'NaN,', r"np.nan,", x[1])
+        x[1] = re.sub(r'Inf,', r"np.inf,", x[1])
+        x[1] = re.sub(r'NaN\]', r"np.nan]", x[1])
+        x[1] = re.sub(r'Inf\]', r"np.inf]", x[1])
+        s6 = "=".join(x)
 
     s7 = re.sub(r"XX([a-zA-Z0-9]+)'", r".\g<1>'", s6)
     s7 = re.sub(r"XX([a-zA-Z0-9]+)\+", r".\g<1>+", s7)
@@ -326,7 +339,7 @@ def baphy_parm_read(filepath, evpread=True):
             evpfile = Path(filepath).with_suffix('.evp')
             lick_events = get_lick_events(evpfile, name='LICK')
             log.info("evp file for licks: %s", evpfile)
-
+            
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
             exptevents = exptevents.append(lick_events, ignore_index=True)
@@ -386,6 +399,43 @@ def baphy_convert_user_definable_fields(x):
     elif isinstance(x, (tuple, list)):
         for v in x:
             baphy_convert_user_definable_fields(v)
+
+
+def fill_default_options(options):
+    """
+    fill in default options. use options after adding defaults to specify
+    metadata hash
+    """
+
+    options = options.copy()
+
+    # set default options if missing
+    options['rasterfs'] = int(options.get('rasterfs', 100))
+    options['stimfmt'] = options.get('stimfmt', 'ozgf')
+    options['chancount'] = int(options.get('chancount', 18))
+    options['pertrial'] = int(options.get('pertrial', False))
+    options['includeprestim'] = options.get('includeprestim', 1)
+    options['pupil'] = int(options.get('pupil', False))
+    options['rem'] = int(options.get('rem', False))
+    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
+    if options['pupil'] or options['rem']:
+        options = set_default_pupil_options(options)
+
+    #options['pupil_deblink'] = int(options.get('pupil_deblink', 1))
+    #options['pupil_deblink_dur'] = options.get('pupil_deblink_dur', 1)
+    #options['pupil_median'] = options.get('pupil_median', 0)
+    #options["pupil_offset"] = options.get('pupil_offset', 0.75)
+    options['resp'] = int(options.get('resp', True))
+    options['stim'] = int(options.get('stim', True))
+    options['runclass'] = options.get('runclass', None)
+    options['rawid'] = options.get('rawid', None)
+    options['facemap'] = options.get('facemap', False)
+
+    if options['stimfmt'] in ['envelope', 'parm']:
+        log.info("Setting chancount=0 for stimfmt=%s", options['stimfmt'])
+        options['chancount'] = 0
+
+    return options
 
 
 def baphy_load_specgram(stimfilepath):
@@ -462,13 +512,25 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
 
     # include all parameter values, even defaults, in filename
     fields = RefObject['UserDefinableFields']
+    if options['stimfmt']=='envelope':
+        x_these_fields=['F0s','ComponentsNumber'];
+    else:
+        x_these_fields=[];
+
     for cnt1 in range(0, len(fields), 3):
         if RefObject[fields[cnt1]] == 0:
             RefObject[fields[cnt1]] = int(0)
             # print(fields[cnt1])
             # print(RefObject[fields[cnt1]])
             # print(dstr)
-        dstr = "{0}-{1}".format(dstr, RefObject[fields[cnt1]])
+        if fields[cnt1] in x_these_fields:
+            if type(RefObject[fields[cnt1]]) is int:
+                l=['X']
+            else:
+                l = ['X' for i in range(len(RefObject[fields[cnt1]]))]
+            dstr = "{0}-{1}".format(dstr, "__".join(l))
+        else:
+            dstr = "{0}-{1}".format(dstr, RefObject[fields[cnt1]])
 
     dstr = re.sub(r":", r"", dstr)
 
@@ -489,6 +551,238 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
     dstr = re.sub(r"[\[\]]", r"", dstr)
 
     return stim_cache_dir + dstr + '.mat'
+
+def parm_tbp(exptparams, **options):
+    """
+    generate parameterized spectrograms for TBP ref/tar stimuli in stim_dict format
+
+    :param exptparams:
+    :param options:
+    :return:
+    """
+    ref = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    tar = exptparams['TrialObject'][1]['TargetHandle'][1]
+
+    ref_names = ref['Names']
+    tar_names = tar['Names']
+    if tar['descriptor'] == 'ToneInNoise':
+        tar_tone_names = tar['Tone'][1]['Names']
+        tar_noise_bands = np.array(tar['ToneBands'])-1
+        tar_fixed_band = tar['ToneFixedBand']
+        if len(tar_fixed_band) == 0:
+            tar_tone_bands = tar_noise_bands
+        else:
+            tar_tone_bands = [int(tar_fixed_band)-1] * len(tar_noise_bands)
+
+        #_, tar_tone_channels = np.unique(tar_tone_bands, return_index=True)
+        # assume there's only one target tone frequency!
+        tar_tone_channels = np.full_like(tar_tone_bands, 0)
+
+        tar_snrs = tar['SNRs']
+        #import pdb; pdb.set_trace()
+    elif tar['descriptor'] == 'Tone':
+        #import pdb;
+        #pdb.set_trace()
+        tar_tone_names = tar['Names']
+        tar_noise_bands = np.arange(len(tar_tone_names))
+        tar_tone_bands = np.arange(len(tar_tone_names))
+        tar_tone_channels = tar_tone_bands.copy()
+        tar_snrs = np.full(len(tar_tone_names), np.inf)
+
+    else:
+        raise ValueError(f"Unsupported TargetClass {tar['descriptor']}")
+
+    stim_dict = {}
+    total_bands = len(ref_names) + len(set(tar_tone_bands))
+    fs = options['rasterfs']
+    prebins = int(fs * ref['PreStimSilence'])
+    durbins = int(fs * ref['Duration'])
+    postbins = int(fs * ref['PostStimSilence'])
+    total_bins = prebins + durbins + postbins
+    for i, r in enumerate(ref_names):
+        s = np.zeros((total_bands, total_bins))
+        s[i, prebins] = 1
+        stim_dict[r] = s
+    for i, t in enumerate(tar_names):
+        s = np.zeros((total_bands, total_bins))
+        if np.isfinite(tar_snrs[i]):
+            s[tar_noise_bands[i], prebins] = 1
+            s[len(ref_names)+tar_tone_channels[i], prebins] = 10 ** (tar_snrs[i] / 20)
+        elif tar_snrs[i] > 0:
+            s[len(ref_names)+tar_tone_channels[i], prebins] = 1
+        else:
+            s[tar_noise_bands[i], prebins] = 1
+        stim_dict[t] = s
+    tags = list(stim_dict.keys())
+    stimparam = {'chans': ref_names + list(set(tar_tone_names))}
+
+    return stim_dict, tags, stimparam
+
+def labeled_line_stim(exptparams, **options):
+    """
+    generate parameterized "spectrogram" of stimulus where onset of each unique stim/tar/ref/cat event
+    is coded in each row
+
+    :param exptparams:
+    :param options:
+    :return:
+    """
+    ref = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+    tar = exptparams['TrialObject'][1]['TargetHandle'][1]
+
+    ref_names = ref['Names']
+    tar_names = tar['Names']
+    all_names = ref_names+tar_names
+
+    stim_dict = {}
+    total_bands = len(ref_names) + len(tar_names)
+    fs = options['rasterfs']
+    prebins = int(fs * ref['PreStimSilence'])
+    durbins = int(fs * ref['Duration'])
+    postbins = int(fs * ref['PostStimSilence'])
+    total_bins = prebins + durbins + postbins
+    for i, r in enumerate(all_names):
+        if i==0:
+            prebins = int(fs * ref['PreStimSilence'])
+            durbins = int(fs * ref['Duration'])
+            postbins = int(fs * ref['PostStimSilence'])
+            total_bins = prebins + durbins + postbins
+        elif i==len(ref_names):
+            # shift to using tar lengths
+            prebins = int(fs * tar['PreStimSilence'])
+            durbins = int(fs * tar['Duration'])
+            postbins = int(fs * tar['PostStimSilence'])
+            total_bins = prebins + durbins + postbins
+
+        s = np.zeros((total_bands, total_bins))
+        s[i, prebins] = 1
+        stim_dict[r] = s
+    tags = list(stim_dict.keys())
+    stimparam = {'chans': all_names}
+
+    return stim_dict, tags, stimparam
+
+
+def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
+
+    if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
+        import nems_lbhb.strf.torc_subfunctions as tsf
+        TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
+        stim, tags, stimparam = tsf.generate_torc_spectrograms(
+                  TorcObject, rasterfs=options['rasterfs'], single_cycle=False)
+        # adjust so that all power is >0
+        for k in stim.keys():
+            stim[k]=stim[k]+5
+
+        # NB stim is a dict rather than a 3-d array
+
+    elif (options['stimfmt']=='parm') & \
+            (exptparams['TrialObject'][1]['ReferenceClass']=='NoiseBurst'):
+
+        # NB stim is a dict rather than a 3-d array
+        stim, tags, stimparam = parm_tbp(exptparams, **options)
+
+    elif (options['stimfmt']=='ll'):
+
+        # NB stim is a dict rather than a 3-d array
+        stim, tags, stimparam = labeled_line_stim(exptparams, **options)
+
+    elif exptparams['runclass']=='VOC_VOC':
+        stimfilepath1 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=False, **options)
+        stimfilepath2 = baphy_stim_cachefile(exptparams, parmfilepath, use_target=True, **options)
+        log.info("Cached stim: {0}, {1}".format(stimfilepath1, stimfilepath2))
+        # load stimulus spectrogram
+        stim1, tags1, stimparam1 = baphy_load_specgram(stimfilepath1)
+        stim2, tags2, stimparam2 = baphy_load_specgram(stimfilepath2)
+        stim = np.concatenate((stim1,stim2), axis=2)
+        if exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR'] >= 100:
+            t2 = [t+'_0dB' for t in tags2]
+            tags = np.concatenate((tags1,t2))
+            eventmatch='Reference1'
+        else:
+            t1 = [t+'_0dB' for t in tags1]
+            tags = np.concatenate((t1,tags2))
+            eventmatch = 'Reference2'
+        #import pdb
+        #pdb.set_trace()
+        for i in range(len(exptevents)):
+            if eventmatch in exptevents.loc[i,'name']:
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('.wav','.wav_0dB')
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference1','Reference')
+                exptevents.loc[i,'name'] = exptevents.loc[i,'name'].replace('Reference2','Reference')
+
+        stimparam = stimparam1
+    else:
+        stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
+        print("Cached stim: {0}".format(stimfilepath))
+        # load stimulus spectrogram
+        stim, tags, stimparam = baphy_load_specgram(stimfilepath)
+
+    if options["stimfmt"]=='envelope' and \
+        exptparams['TrialObject'][1]['ReferenceClass']=='SSA':
+        # SSA special case
+        stimo=stim.copy()
+        maxval=np.max(np.reshape(stimo,[2,-1]),axis=1)
+        print('special case for SSA stim!')
+        ref=exptparams['TrialObject'][1]['ReferenceHandle'][1]
+        stimlen=ref['PipDuration']+ref['PipInterval']
+        stimbins=int(stimlen*options['rasterfs'])
+
+        stim=np.zeros([2,stimbins,6])
+        prebins=int(ref['PipInterval']/2*options['rasterfs'])
+        durbins=int(ref['PipDuration']*options['rasterfs'])
+        stim[0,prebins:(prebins+durbins),0:3]=maxval[0]
+        stim[1,prebins:(prebins+durbins),3:]=maxval[1]
+        tags=["{}+ONSET".format(ref['Frequencies'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][0],ref['F1Rates'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][0],ref['F1Rates'][1]),
+              "{}+ONSET".format(ref['Frequencies'][1]),
+              "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][0]),
+              "{}+{:.2f}".format(ref['Frequencies'][1],ref['F1Rates'][1])]
+
+    snr_suff=""
+    if 'SNR' in exptparams['TrialObject'][1]['ReferenceHandle'][1].keys():
+        SNR = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SNR']
+        if SNR<100:
+            log.info('Noisy stimulus (SNR<100), appending tag to epoch names')
+            snr_suff="_{}dB".format(SNR)
+    
+    if exptparams['runclass']=='CPN':
+        # clean up NTI sequence tags
+        #import pdb; pdb.set_trace()
+        #sequence001:5-6-2-3-5
+        tags=[ "-".join(t.split("  ")).replace(" ","") if t.startswith("sequence") else t for t in tags]
+
+    if (epochs is not None):
+        # additional processing steps to convert stim into a dictionary with keys that match epoch names
+        # specific to BAPHYExperiment loader.
+                
+        if (type(stim) is not dict):
+            stim_dict = {}
+            for eventidx in range(0, len(tags)):
+                # save stimulus for this event as separate dictionary entry
+                stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+            stim = stim_dict
+
+        if (type(stim) is dict):
+            keys = list(stim.keys())
+            new_stim={}
+            new_keys=[]
+            for k in keys:
+                matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
+                for nk in matches:
+                    new_stim[nk] = stim[k]
+            stim = new_stim
+
+    #stim_dict = {}
+    #for eventidx in range(0, len(tags)):
+    #    # save stimulus for this event as separate dictionary entry
+    #    if type(stim) is dict:
+    #        stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[tags[eventidx]]
+    #    else:
+    #        stim_dict["STIM_" + tags[eventidx] + snr_suff] = stim[:, :, eventidx]
+
+    return stim, tags, stimparam
 
 
 def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
@@ -613,7 +907,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
     hit_trials = exptevents[exptevents.name=="BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-
+    #import pdb; pdb.set_trace()
     TrialLen_sec = np.array(
             exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
             )
@@ -721,12 +1015,23 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                     else:
                         unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                     spiketimes.append(unit_spike_events / spikefs)
-
+                
+                #else:
+                # TODO - Incorporate this, but deal with cases of truly missing data. This is
+                # designed only for cases where e.g. a single cellid doens't spike during one
+                # of many files (for example during a passive), not cases where the cellid
+                # is just missed (like cases due to append units)
+                #    # append empty list for units that had no spikes
+                #    if chancount <= 8:
+                #        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                #    else:
+                #        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
+                #    spiketimes.append([])
     return exptevents, spiketimes, unit_names
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
-    TrialCount = np.max(exptevents['Trial'])
+    TrialCount = int(np.max(exptevents['Trial']))
 
     TrialStarts = exptevents.loc[exptevents['name'].str.startswith("TRIALSTART")]['name']
 
@@ -1529,7 +1834,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
 
     parmfilepath = pupilfilepath.replace(".pup.mat",".m")
     pp, bb = os.path.split(parmfilepath)
-
+    
     globalparams, exptparams, exptevents = baphy_parm_read(parmfilepath)
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
@@ -1784,5 +2089,169 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
+def get_mean_spike_waveform(cellid, animal, usespkfile=False):
+    """
+    Return 1-D numpy array containing the mean sorted
+    spike waveform
+    """
+    if type(cellid) != str:
+        raise ValueError("cellid must be string type")
+
+    if usespkfile:
+        cparts=cellid.split("-")
+        chan=int(cparts[1])
+        unit=int(cparts[2])
+        sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
+        d = db.pd_query(sql)
+        spkfilepath=os.path.join(d['path'][0], d['respfile'][0])
+        matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
+        sortinfo = matdata['sortinfo']
+        if sortinfo.shape[0] > 1:
+            sortinfo = sortinfo.T
+        try:
+           mwf=sortinfo[0][chan-1][0][0][unit-1]['Template'][0][chan-1,:]
+
+        except:
+           import pdb
+           pdb.set_trace()
+        return mwf
+
+    # get KS_cluster (if it exists... this is a new feature)
+    sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
+    kid = db.pd_query(sql).iloc[0][0]
+    
+    # find phy results
+    site = cellid[:7]
+    path = f'/auto/data/daq/{animal}/{site[:-1]}/tmp/KiloSort/'
+    res_dirs = os.listdir(path)
+    res_dirs = [p for p in res_dirs if site in p]
+    results_dir = []
+    for r in res_dirs:
+        # find results dir with this cellid
+        rns = r.split(f'{site}_')[1].split('KiloSort')[0].split('_')[:-1]
+        rns = np.sort([int(r) for r in rns])
+        sql = f"SELECT stimfile from sCellFile WHERE cellid = '{cellid}'"
+        _rns = np.sort(db.pd_query(sql)['stimfile'].apply(lambda x: int(x.split(site)[1].split('_')[0])))
+        if np.all(_rns == rns):
+            results_dir = r
+    if results_dir == []:
+        raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
+
+    # get all waveforms for this sorted file
+    try:
+        w = np.load(path + results_dir + '/results/wft_mwf.npy')
+    except:
+        w = np.load(path + results_dir + '/results/mean_waveforms.npy')
+    clust_ids = pd.read_csv(path + results_dir + '/results/cluster_group.tsv', '\t').cluster_id
+    kidx = np.argwhere(clust_ids.values == kid)[0][0]
+    
+
+    # get waveform
+    mwf = w[:, kidx]
+
+    return mwf
 
 
+def parse_cellid(options):
+    """
+    figure out if cellid is
+        1) single cellid
+        2) list of cellids
+        3) a siteid
+
+    using this, add the field 'siteid' to the options dictionary. If siteid was passed,
+    define cellid as a list of all cellids recorded at this site, for this batch.
+
+    options: dictionary
+            batch - (int) batch number
+            cellid - single cellid string, list of cellids, or siteid
+                If siteid is passed, return superset of cells. i.e. if some
+                cells aren't present in one of the files that is found for this batch,
+                don't load that file. To override this behavior, pass rawid list.
+
+    returns updated options dictionary and the cellid to extract from the recording
+        NOTE: The reason we keep "cellid to extract" distinct from the options dictionary
+        is so that it doesn't muck with the cached recording hash. e.g. if you want to analyze
+        cell1 from a site where you recorded cells1-4, you don't want a different recording
+        cached for each cell.
+    """
+
+    options = options.copy()
+
+    mfilename = options.get('mfilename', None)
+    cellid = options.get('cellid', None)
+    batch = options.get('batch', None)
+    rawid = options.get('rawid', None)
+    cells_to_extract = None
+
+    if ((cellid is None) | (batch is None)) & (mfilename is None):
+        raise ValueError("must provide cellid and batch or mfilename")
+
+    siteid = None
+    cell_list = None
+    if type(cellid) is list:
+        cell_list = cellid
+    elif (type(cellid) is str) & ('%' in cellid):
+        cell_data = db.pd_query(f"SELECT cellid FROM Batches WHERE batch=%s and cellid like %s",
+                (batch, cellid))
+        cell_list = cell_data['cellid'].to_list()
+    elif (type(cellid) is str) & ('-' not in cellid):
+        siteid = cellid
+
+    if mfilename is not None:
+        # simple, db-free case. Just a pass through.
+        pass
+        if batch is None:
+            options['batch'] = 0
+
+    elif cell_list is not None:
+        # list of cells was passed
+        siteid = cellid.split('-')[0]
+        cell_list_all, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
+                                             rawid=rawid)
+        options['cellid'] = cell_list_all
+        options['rawid'] = rawid
+        options['siteid'] = cell_list[0].split('-')[0]
+        cells_to_extract = cell_list
+
+    elif siteid is not None:
+        # siteid was passed, figure out if electrode numbers were specified.
+        chan_nums = None
+        if '.e' in siteid:
+            args = siteid.split('.')
+            siteid = args[0]
+            chan_lims = args[1].replace('e', '').split(':')
+            chan_nums = np.arange(int(chan_lims[0]), int(chan_lims[1])+1)
+
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                             rawid=rawid)
+
+        if chan_nums is not None:
+            cells_to_extract = [c for c in cell_list if int(c.split('-')[1]) in chan_nums]
+        else:
+            cells_to_extract = cell_list
+
+        options['cellid'] = cell_list
+        if len(rawid) != 0:
+            options['rawid'] = rawid
+        options['siteid'] = siteid
+
+    elif cellid is not None:
+        # single cellid was passed, want list of all cellids. First, get rawids
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
+                                                     rawid=rawid)
+        # now, use rawid to get all stable cellids across these files
+        siteid = cell_list[0].split('-')[0]
+        cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
+                                                     rawid=rawid)
+
+        options['cellid'] = cell_list
+        options['rawid'] = rawid
+        options['siteid'] = siteid
+        cells_to_extract = [cellid]
+
+    if (len(cells_to_extract) == 0) & (mfilename is None):
+        raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "
+                            "or that you've specified an mfile.")
+
+    return list(cells_to_extract), options

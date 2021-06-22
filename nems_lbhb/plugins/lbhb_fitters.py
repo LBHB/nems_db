@@ -1,8 +1,7 @@
 import re
 import numpy as np
 
-from nems.plugins.default_fitters import basic
-from nems.plugins.default_fitters import iter
+from nems.plugins.default_fitters import basic, iter, _parse_basic, _parse_iter, _extract_options
 from nems.utils import escaped_split
 from nems.registry import xform, xmodule
 
@@ -136,7 +135,7 @@ def gc4(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -254,76 +253,6 @@ def popiter(fitkey):
     return xfspec
 
 
-def _extract_options(fitkey):
-    if fitkey == 'basic' or fitkey == 'iter':
-        # empty options (i.e. just use defualts)
-        options = []
-    else:
-        chunks = escaped_split(fitkey, '.')
-        options = chunks[1:]
-    return options
-
-
-def _parse_basic(options):
-    '''Options specific to basic.'''
-    max_iter = 1000
-    tolerance = 1e-7
-    fitter = 'scipy_minimize'
-    choose_best = False
-    fast_eval = False
-    for op in options:
-        if op.startswith('mi'):
-            pattern = re.compile(r'^mi(\d{1,})')
-            max_iter = int(re.match(pattern, op).group(1))
-        elif op.startswith('t'):
-            # Should use \ to escape going forward, but keep d-sub in
-            # for backwards compatibility.
-            num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
-            tolerance = 10**tolpower
-        elif op == 'cd':
-            fitter = 'coordinate_descent'
-        elif op == 'b':
-            choose_best = True
-        elif op == 'f':
-            fast_eval = True
-
-    return max_iter, tolerance, fitter, choose_best, fast_eval
-
-
-def _parse_iter(options):
-    '''Options specific to iter.'''
-    tolerances = []
-    module_sets = []
-    fit_iter = 10
-    tol_iter = 50
-    fitter = 'scipy_minimize'
-
-    for op in options:
-        if op.startswith('ti'):
-            tol_iter = int(op[2:])
-        elif op.startswith('fi'):
-            fit_iter = int(op[2:])
-        elif op.startswith('T'):
-            # Should use \ to escape going forward, but keep d-sub in
-            # for backwards compatibility.
-            nums = op.replace('d', '.').replace('\\', '')
-            powers = [float(i) for i in nums[1:].split(',')]
-            tolerances.extend([10**(-1*p) for p in powers])
-        elif op.startswith('S'):
-            indices = [int(i) for i in op[1:].split(',')]
-            module_sets.append(indices)
-        elif op == 'cd':
-            fitter = 'coordinate_descent'
-
-    if not tolerances:
-        tolerances = None
-    if not module_sets:
-        module_sets = None
-
-    return tolerances, module_sets, fit_iter, tol_iter, fitter
-
-
 @xform()
 def pupLVbasic(fitkey):
     """
@@ -436,3 +365,5 @@ def _parse_pupLVbasic(options):
                      'slow_alpha': slow_alpha}
 
     return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation
+
+

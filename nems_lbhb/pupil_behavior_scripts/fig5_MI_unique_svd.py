@@ -19,6 +19,7 @@ from nems import get_setting
 import nems.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 
 # set path to dump file
 dump_path = get_setting('NEMS_RESULTS_DIR')
@@ -91,7 +92,8 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             title='A1',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
-            ax=axs[0])
+            ax=axs[0],
+            bootstats=True)
 
 common.scat_states_crh(df, x_model='MI_pupil_unique',
             y_model='MI_task_unique',
@@ -102,7 +104,9 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             title='IC',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
-            ax=axs[1])
+            ax=axs[1],
+            bootstats=True)
+
 common.scat_states_crh(df, x_model='MI_pupil_unique',
             y_model='MI_task_unique',
             area='ICX',
@@ -113,18 +117,55 @@ common.scat_states_crh(df, x_model='MI_pupil_unique',
             xlim=(-0.45,0.45),
             ylim=(-0.45,0.45),
             marker='v',
-            ax=axs[1])
+            ax=axs[1],
+            bootstats=True)
 
-for s_area in ['A1', 'ICC|ICX']:
+# CRH adding scipy test for correlation significance -- it's in the ms, but code doesn't seem to exist?
+a1cc, p = sci.pearsonr(df[df.area=='A1']['MI_task_unique'], df[df.area=='A1']['MI_pupil_unique'])     
+print(f"A1 \n   correlation MI_task_unique vs. MI_pupil_unique: {round(a1cc, 3)}, {round(p, 3)}")       
+
+iccc, p = sci.pearsonr(df[df.area.isin(['ICX', 'ICC'])]['MI_task_unique'], df[df.area.isin(['ICX', 'ICC'])]['MI_pupil_unique'])     
+print(f"IC \n   correlation MI_task_unique vs. MI_pupil_unique: {round(iccc, 3)}, {round(p, 3)}")  
+
+# test correlation using hierarchical bootstrap
+np.random.seed(123)
+print("Using hierarchical bootstrap:")
+da1_task = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_pupil_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+da1_pupil = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+a1_boot_cc = get_bootstrapped_sample(da1_task, da1_pupil, metric='corrcoef', nboot=100)
+p = 1 - get_direct_prob(a1_boot_cc, np.zeros(a1_boot_cc.shape[0]))[0]
+print(f"A1 \n   correlation MI_task_unique vs. MI_pupil_unique: {round(a1cc, 3)}, {round(p, 5)}")  
+
+dic_task = {s: df.loc[(df.siteid==s) & (df.area.isin(['ICC', 'ICX'])), 'MI_pupil_unique'].values for s in df[(df.area.isin(['ICC', 'ICX']))].siteid.unique()}
+dic_pupil = {s: df.loc[(df.siteid==s) & (df.area.isin(['ICC', 'ICX'])), 'MI_task_unique'].values for s in df[(df.area.isin(['ICC', 'ICX']))].siteid.unique()}
+ic_boot_cc = get_bootstrapped_sample(dic_task, dic_pupil, metric='corrcoef', nboot=100)
+p = 1 - get_direct_prob(ic_boot_cc, np.zeros(ic_boot_cc.shape[0]))[0]
+print(f"IC \n   correlation MI_task_unique vs. MI_pupil_unique: {round(iccc, 3)}, {round(p, 5)}")  
+
+for s_area in ['A1', 'ICC|ICX', 'ICC', 'ICX']:
     for varname in ['MI_task_unique','MI_pupil_unique']:
 
         area = df.area.str.contains(s_area, regex=True) & df['sig_state']
         m=df.loc[area, varname].mean()
-        stat,p = sci.wilcoxon(df.loc[area, varname])
+        stat,p = sci.wilcoxon(df.loc[area, varname].values)
+        d = {s: df.loc[(df.siteid==s) & area, varname].values for s in df[area].siteid.unique()}
+        bs = get_bootstrapped_sample(d, nboot=100)
+        pboot = get_direct_prob(bs, np.zeros(bs.shape[0]))[0]
         npos=np.sum(df.loc[area, varname] > 0)
         n=len(df.loc[area, varname])
-        print(f"{s_area} {varname}: mean={m:.3f} p={p:.3e}")
+        print(f"{s_area} {varname}: mean={m:.3f} W={stat:.3f} p={p:.3e}, pboot={pboot:.3f}")
         print(f"  npos={npos}/{n}")
+
+# A1 vs. IC change in task unique
+a1 = {s: df.loc[(df.siteid==s) & (df.area=='A1'), 'MI_task_unique'].values for s in df[(df.area=='A1')].siteid.unique()}
+ic = {s: df.loc[(df.siteid==s) & df.area.isin(['ICC', 'ICX']), 'MI_task_unique'].values for s in df[df.area.isin(['ICC', 'ICX'])].siteid.unique()}
+a1 = get_bootstrapped_sample(a1, nboot=100)
+ic = get_bootstrapped_sample(ic, nboot=100)
+pboot = get_direct_prob(a1, ic)[0]
+print(f"A1 task unique vs. IC task unique, pboot: {pboot}")
+
+# fig S5 -- ICC / ICX task only vs. task unique
+
 
 if save_fig:
     fh.savefig(os.path.join(save_path, 'fig5_MI_unique.pdf'))

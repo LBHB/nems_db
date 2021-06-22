@@ -9,11 +9,12 @@ import helpers as helper
 
 from nems import get_setting
 import nems.plots.api as nplt
-
+from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
+np.random.seed(123)
 dump_path = get_setting('NEMS_RESULTS_DIR')
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
-save_fig = True
+save_fig = False
 
 r0_threshold = 0.5
 octave_cutoff = 0.5
@@ -80,13 +81,24 @@ easy_v_medium = round(ss.ranksums(A1[A1.difficulty.isin(easy) & A1[sig_col]][yax
 medium_v_hard = round(ss.ranksums(A1[A1.difficulty.isin(medium) & A1[sig_col]][yaxis], A1[A1.difficulty.isin(hard) & A1[sig_col]][yaxis]).pvalue, 3)
 easy_v_hard = round(ss.ranksums(A1[A1.difficulty.isin(easy) & A1[sig_col]][yaxis], A1[A1.difficulty.isin(hard) & A1[sig_col]][yaxis]).pvalue, 3)
 
+A1['site'] = [c[:7] for c in A1.index]
+e = get_bootstrapped_sample({s: A1[A1.difficulty.isin(easy) & (A1.site==s)][yaxis] for s in A1.site.unique()}, nboot=1000)
+m = get_bootstrapped_sample({s: A1[A1.difficulty.isin(medium) & (A1.site==s)][yaxis] for s in A1.site.unique()}, nboot=1000)
+h = get_bootstrapped_sample({s: A1[A1.difficulty.isin(hard) & (A1.site==s)][yaxis] for s in A1.site.unique()}, nboot=1000)
+
+em, _ = get_direct_prob(e, m)
+mh, _ = get_direct_prob(m, h)
+eh, _ = get_direct_prob(e, h)
+
 ax[0].set_title('A1 \n HARD: {0}, MEDIUM: {1}, EASY: {2}, \n'
-                'p_em = {3}, p_mh = {4}, p_eh = {5}'.format(easy_med,
+                'p_em = {3}, p_mh = {4}, p_eh = {5} \n'
+                'boot pvals: p_em = {6:.4f}, p_mh = {7:.4f}, p_eh = {8:.4f}'.format(easy_med,
                                                             medium_med,
                                                             hard_med,
                                                             easy_v_medium,
                                                             medium_v_hard,
-                                                            easy_v_hard))
+                                                            easy_v_hard,
+                                                            em, mh, eh))
 nplt.ax_remove_box(ax[0])
 
 _a=sns.stripplot(x=sig_col, y=yaxis, data=IC, hue='difficulty', dodge=True, edgecolor='white', linewidth=0.5,
@@ -104,13 +116,25 @@ easy_v_medium = round(ss.ranksums(IC[IC.difficulty.isin(easy) & IC[sig_col]][yax
 medium_v_hard = round(ss.ranksums(IC[IC.difficulty.isin(medium) & IC[sig_col]][yaxis], IC[IC.difficulty.isin(hard) & IC[sig_col]][yaxis]).pvalue, 3)
 easy_v_hard = round(ss.ranksums(IC[IC.difficulty.isin(easy) & IC[sig_col]][yaxis], IC[IC.difficulty.isin(hard) & IC[sig_col]][yaxis]).pvalue, 3)
 
+IC['site'] = [c[:7] for c in IC.index]
+e = get_bootstrapped_sample({s: IC[IC.difficulty.isin(easy) & (IC.site==s)][yaxis] for s in IC.site.unique()}, nboot=1000)
+m = get_bootstrapped_sample({s: IC[IC.difficulty.isin(medium) & (IC.site==s)][yaxis] for s in IC.site.unique()}, nboot=1000)
+h = get_bootstrapped_sample({s: IC[IC.difficulty.isin(hard) & (IC.site==s)][yaxis] for s in IC.site.unique()}, nboot=1000)
+
+em, _ = get_direct_prob(e, m)
+mh, _ = get_direct_prob(m, h)
+eh, _ = get_direct_prob(e, h)
+
+
 ax[1].set_title('IC \n HARD: {0}, MEDIUM: {1}, EASY: {2}, \n'
-                'p_em = {3}, p_mh = {4}, p_eh = {5}'.format(easy_med,
+                'p_em = {3}, p_mh = {4}, p_eh = {5} \n'
+                'boot pvals: p_em = {6:.4f}, p_mh = {7:.4f}, p_eh = {8:.4f}'.format(easy_med,
                                                             medium_med,
                                                             hard_med,
                                                             easy_v_medium,
                                                             medium_v_hard,
-                                                            easy_v_hard))
+                                                            easy_v_hard,
+                                                            em, mh, eh))
 nplt.ax_remove_box(ax[1])
 f.tight_layout()
 

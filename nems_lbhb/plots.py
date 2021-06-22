@@ -16,7 +16,7 @@ import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import (find_module)
+from nems.utils import find_module, get_setting
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -451,7 +451,7 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
 
 
 def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cbar=True,
-                     overlap_method='offset', s=25, ax=None):
+                     overlap_method='offset', s=25, logscale=False, ax=None):
 
     '''
     given a weight vector, h, plot the weights on the appropriate electrode channel
@@ -497,6 +497,12 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
         plt.figure()
     plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
 
+    # plot outline
+    plt.plot([-0.32, -0.4], [-.075, 5.2], 'k-')
+    plt.plot([0.32, 0.4], [-.075, 5.2], 'k-')
+    plt.plot([-0.4, 0.4], [5.2, 5.2], 'k-')
+    plt.plot([-0.32, 0], [-0.075, -0.7], 'k-')
+    plt.plot([0.32, 0], [-0.075, -0.7], 'k-')
     # Now, color appropriately
     electrodes = np.zeros(len(cellids))
 
@@ -571,7 +577,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     plt.scatter(dup_locations[0,:],dup_locations[1,:],facecolor='none',edgecolor='k',s=s)
 
     plt.axis('scaled')
-    plt.xlim(-max_-.3,max_+.3)
+    plt.xlim(-max_-.42,max_+.42)
 
     c_id = np.sort([int(x) for x in electrodes if electrodes.count(x)==1])
     electrodes = [int(x) for x in electrodes]
@@ -588,7 +594,10 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
 
     # plot the unique ones
     import matplotlib
-    norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
+    if logscale:
+        norm = matplotlib.colors.LogNorm(vmin=vmin,vmax=vmax)
+    else:
+        norm = matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
     cmap = matplotlib.cm.jet
     mappable = matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap)
     mappable.set_array(h[indexes])
@@ -597,7 +606,6 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     plt.scatter(locations[:,c_id][0,:],locations[:,c_id][1,:],
                           c=colors,vmin=vmin,vmax=vmax,s=s,edgecolor='none')
     # plot the duplicates
-    norm =matplotlib.colors.Normalize(vmin=vmin,vmax=vmax)
     cmap = matplotlib.cm.jet
     mappable = matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap)
     mappable.set_array(h[mask])
@@ -615,6 +623,61 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
         plt.colorbar(mappable)
 
     plt.axis('off')
+
+def plot_waveforms_64D(waveforms, cellids, ax=None):
+    if type(cellids) is not np.ndarray:
+        cellids = np.array(cellids)
+
+    # Make a vector for each column of electrodes
+
+    # left column + right column are identical
+    lr_col = np.arange(0,21*0.25,0.25)  # 25 micron vertical spacing
+    left_ch_nums = np.arange(3,64,3)
+    right_ch_nums = np.arange(4,65,3)
+    center_ch_nums = np.insert(np.arange(5, 63, 3),obj=slice(0,1),values =[1,2],axis=0)
+    center_col = np.arange(-0.25,20.25*.25,0.25)-0.125
+    ch_nums = np.hstack((left_ch_nums, center_ch_nums, right_ch_nums))
+    sort_inds = np.argsort(ch_nums)
+
+    l_col = np.vstack((np.ones(21)*-0.2,lr_col))
+    r_col = np.vstack((np.ones(21)*0.2,lr_col))
+    c_col = np.vstack((np.zeros(22),center_col))
+    locations = np.hstack((l_col,c_col,r_col))[:,sort_inds]
+    if ax is None:
+        f, ax = plt.subplots(1, 1, figsize=(2, 6))
+    
+    #plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
+
+    electrodes = [int(x.split('-')[1]) for x in cellids]
+
+    # for duplicate (multiple spikes on one electrode), plot all waveforms, just in different
+    # colors    
+    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+    for l in range(locations.shape[-1]):
+        if locations[0, l] == -0.2:
+            t = np.linspace(-0.25, -0.15, waveforms.shape[1])
+        elif locations[0, l] == 0.2:
+            t = np.linspace(0.15, 0.25, waveforms.shape[1])
+        elif locations[0, l] == 0:
+            t = np.linspace(-0.05, 0.05, waveforms.shape[1])
+        else:
+            raise ValueError
+        y = locations[1, l]
+
+        chan = l+1
+        cidxs = np.argwhere(np.array(electrodes)==chan)
+        ax.plot(t, np.zeros(t.shape[0])+y, color='lightgrey', linestyle='--', lw=0.5)
+        for j, cidx in enumerate(cidxs):
+            cidx = cidx.squeeze()
+            mwf = waveforms[cidx, :]
+            mwf /= np.abs(np.max(np.abs(mwf))) 
+            mwf *= 0.1
+            ax.plot(t, mwf + y, color=colors[j], lw=1)
+    
+    ax.axis('off')
+
+    return ax
+
 
 
 def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, title=None):
@@ -1114,7 +1177,7 @@ def LN_plot(ctx, ax1=None, ax2=None, ax3=None, ax4=None):
 
     nplt.ax_remove_box(ax4)
 
-def LN_pop_plot(ctx):
+def LN_pop_plot(ctx, ctx0=None):
     """
     compact summary plot for model fit to a single dim of a population subspace
 
@@ -1143,6 +1206,7 @@ def LN_pop_plot(ctx):
 
 
     fig = plt.figure()
+    # input layer filters as STRFs
     for chanidx in range(filter_count):
 
         tmodelspec=copy.deepcopy(modelspec[:(fir_idx+1)])
@@ -1157,8 +1221,10 @@ def LN_pop_plot(ctx):
                    tmodelspec[fir_idx]['phi']['coefficients'][rr,:]
 
         ax = fig.add_subplot(filter_count, 6, chanidx*6+1)
-        nplt.strf_heatmap(tmodelspec, title=None, interpolation=(2,5),
-                          show_factorized=False, fs=fs, ax=ax, show_cbar=False)
+        interpolation=(2,5)
+        interpolation=(1,2)
+        nplt.strf_heatmap(tmodelspec, title=None, interpolation=interpolation,
+                          show_factorized=False, fs=fs, ax=ax, show_cbar=False, cmap=get_setting('FILTER_CMAP'))
         nplt.ax_remove_box(ax)
         if chanidx < chan_count-1:
             plt.xticks([])
@@ -1177,7 +1243,7 @@ def LN_pop_plot(ctx):
         wcc = modelspec[wc_idx[-2]]['phi']['coefficients'].copy().T
         wcc *= fcc_std
         mm = np.std(wcc)*2.5
-        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+        im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
         #plt.colorbar(im)
         plt.title('L2')
         nplt.ax_remove_box(ax)
@@ -1190,13 +1256,16 @@ def LN_pop_plot(ctx):
     wcc = modelspec[wc_idx[-1]]['phi']['coefficients'].copy().T
     wcc *= fcc_std
     mm = np.std(wcc)*2.5
-    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr')
+    im = ax.imshow(wcc, clim=[-mm, mm], cmap='bwr',interpolation='none')
     plt.colorbar(im)
     plt.title('L3')
     nplt.ax_remove_box(ax)
 
     ax = fig.add_subplot(6, 6, 21)
-    plt.plot(modelspec.meta['r_test'])
+    if ctx0 is not None:
+        ax.plot(ctx0['modelspec'].meta['r_test'],'--',color='lightgray')
+
+    plt.plot(modelspec.meta['r_test'],'k')
     plt.xlabel('cell')
     plt.ylabel('r test')
     nplt.ax_remove_box(ax)
@@ -1207,20 +1276,36 @@ def LN_pop_plot(ctx):
 
     # or just plot the PSTH for an example stimulus
     raster = resp.extract_epoch(epoch)
-    psth = np.mean(raster, axis=0)
-    praster = pred.extract_epoch(epoch)
-    ppsth = np.mean(praster, axis=0)
-    spec = stim.extract_epoch(epoch)[0,:,:]
-    trimbins=0
-    if trimbins > 0:
-        ppsth=ppsth[:,trimbins:]
-        psth=psth[:,trimbins:]
-        spec=spec[:,trimbins:]
+    if raster.shape[-1]>50:
+       psth = np.mean(raster, axis=0)
+       praster = pred.extract_epoch(epoch)
+       ppsth = np.mean(praster, axis=0)
+       spec = stim.extract_epoch(epoch)[0,:,:]
+       trimbins=0
+       if trimbins > 0:
+           ppsth=ppsth[:,trimbins:]
+           psth=psth[:,trimbins:]
+           spec=spec[:,trimbins:]
+    else:
+       rr = slice(0,400)
+       psth = resp.as_continuous()[:,rr]
+       ppsth = pred.as_continuous()[:,rr]
+       spec = stim.as_continuous()[:,rr]
 
     ax = plt.subplot(6, 2, 8)
     #nplt.plot_spectrogram(spec, fs=resp.fs, ax=ax, title=epoch)
     extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
-    im=ax.imshow(spec, origin='lower', interpolation='none',
+    if np.mean(spec==0)>0.05:
+       from nems_lbhb.tin_helpers import make_tbp_colormaps
+       BwG, gR = make_tbp_colormaps()
+       x,y=np.where(spec.T)
+       colors = [BwG(i) for i in range(0,256,int(256/spec.shape[0]))]
+       colors[-1]=gR(256) 
+       for yy,cc in enumerate(colors):
+           ax.plot(x[y==yy]/fs, y[y==yy],'s',color=cc, markersize=2)
+       ax.set_xlim((extent[0],extent[1]))
+    else:
+       im=ax.imshow(spec, origin='lower', interpolation='none',
                  aspect='auto', extent=extent)
     nplt.ax_remove_box(ax)
     plt.ylabel('stim')
@@ -1306,25 +1391,44 @@ def LN_pop_plot(ctx):
 
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
-                      offset=0.5, max=0.85, ax=None):
+                      offset=None, dot_colors=None, dot_markers=None, max=None, ax=None,
+                      check_single_cell=False, plot_stat='r_test', mean_per_model=False):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
-        modelgroups={'ALL': modelnames}
-    modelnames=[]
-    for k, m in modelgroups.items():
-        modelnames.extend(m)
+        #modelgroups={'ALL': modelnames}
+        pass
+    else:
+        modelnames = []
+        single_cell = []
+        for k, m in modelgroups.items():
+            if '_single' in k:
+                single_cell.extend([True]*len(m))
+            else:
+                single_cell.extend([False]*len(m))
+            modelnames.extend(m)
 
-    dot_colors = ['k','b','r','g','purple','orange','lightblue']
+    key_list = list(modelgroups.keys())
+    if dot_colors is None:
+        dot_colors = ['k','b','r','g','purple','orange','lightblue','pink','teal']
+        dot_markers = ['.','o','^','s','v','*','x','>','<']
+    if type(dot_colors) is list:
+        dot_colors={k: c for k,c in zip(key_list, dot_colors[:len(key_list)])}
+    if type(dot_markers) is list:
+        dot_markers={k: c for k,c in zip(key_list, dot_markers[:len(key_list)])}
+
     if ax is None:
-        ax = plt.gca()
+        fig,ax = plt.subplots()
 
     if goodcells is None:
         cellids=None
+    elif type(goodcells) is list:
+        cellids = goodcells
     else:
         cellids=list(goodcells.index)
-    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat='r_ceiling')
+
+    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
     b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
@@ -1334,36 +1438,102 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
-            b_goodcells[:,i] = td[m] > 2*td[m+'_se']
-        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 1
+            b_goodcells[:,i] = td[m] > 4*td[m+'_se']
+        goodcells = np.sum(b_goodcells, axis=1)/(len(modelnames)*0.05) > 2
+
+        print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
-    b_m = np.array((b_ceiling.loc[goodcells]).mean()[modelnames])
+    # consider converting to r^2 with **2
+    model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
+    b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+
+    cellids = b_n.index.tolist()
+    siteids = list(set([c.split("-")[0] for c in cellids]))
+    if mean_per_model:
+        mean_cells_per_site = len(cellids)
+    else:
+        mean_cells_per_site = len(cellids)/len(siteids)
     n_parms = np.array([np.mean(b_n[m]) for m in modelnames])
 
-    #u_modelgroups = np.unique(modelgroups)
-    #for i, g in enumerate(u_modelgroups):
-    i=0
-    for k, m in modelgroups.items():
-        jj = [m0 in m for m0 in modelnames]
-        modelset=[]
-        for jjj in range(len(jj)):
-            if jj[jjj]:
-                modelset.append(modelnames[jjj])
-        print("{} : {}".format(k, modelset))
-        ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
-        ax.plot(n_parms[jj], b_m[jj], '.', color=dot_colors[i], label=k)
-        i+=1
+    # don't divide by cells per site if only one cell was fit
+    # (e.g. the way Jacob is fitting dnn1 models).
+    if check_single_cell and modelgroups is not None:
+        for i, (single, m) in enumerate(zip(single_cell, modelnames)):
+            if not single:
+                n_parms[i] = n_parms[i] / mean_cells_per_site
+    else:
+        n_parms[n_parms>200] = n_parms[n_parms>200]/mean_cells_per_site
 
-    handles, labels = ax.get_legend_handles_labels()
-    # reverse the order
-    ax.legend(handles, labels, loc='lower right')
+    if max is None:
+        max = b_m.max() * 1.05
+    if offset is None:
+        offset = b_m.min() * 0.9
 
+    if modelgroups is None:
+        sc = ax.scatter(n_parms, b_m, s=100)
+
+        annot = ax.annotate("", xy=(0, 0), xytext=(0, 0.05), textcoords="offset points",
+                            fontsize=7, ha="center", bbox=dict(boxstyle="round", fc="w"),
+                            arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+
+        def update_annot(ind):
+
+            pos = sc.get_offsets()[ind["ind"][0]]
+            annot.xy = pos
+            text = "{}".format(" ".join([modelnames[n] for n in ind["ind"]]))
+            annot.set_text(text)
+            #annot.get_bbox_patch().set_facecolor(cmap(norm(c[ind["ind"][0]])))
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = sc.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+
+    else:
+        i=0
+        for k, m in modelgroups.items():
+            jj = [m0 in m for m0 in modelnames]
+            modelset=[]
+            for jjj in range(len(jj)):
+                if jj[jjj]:
+                    modelset.append(modelnames[jjj])
+            #print("{} : {}".format(k, modelset))
+            #ax.plot(n_parms[jj], b_m[jj], '-', color=dot_colors[i])
+            ax.plot(n_parms[jj], b_m[jj], '-', marker=dot_markers[k], color=dot_colors[k],
+                    label=k.split('_single')[0],  # don't print special _single flag in legend
+                    markersize=6)
+            i+=1
+
+            if np.sum(np.isfinite(b_m[jj]))<len(b_m[jj]):
+                import pdb; pdb.set_trace()
+            best_mean = np.nanmax(b_m[jj])
+            best_model = modelnames[np.where((b_m == best_mean) & jj)[0][0]]
+            #print(f"{k} best: {best_mean:.3f} {best_model}")
+            worst_mean = np.nanmin(b_m[jj])
+            worst_model = modelnames[np.where((b_m == worst_mean) & jj)[0][0]]
+            #print(f"{k} worst: {worst_mean:.3f} {worst_model}")
+
+        handles, labels = ax.get_legend_handles_labels()
+        # reverse the order
+        ax.legend(handles, labels, loc='lower right', fontsize=8, frameon=False)
     ax.set_xlabel('Free parameters')
-    ax.set_ylabel('Mean var explained')
-    ax.set_ylim((offset-0.05, max))
+    ax.set_ylabel('Mean pred corr')
+    ax.set_ylim((offset, max))
     nplt.ax_remove_box(ax)
 
-    return ax, b_ceiling
+    return ax, b_ceiling, model_mean
 
 
 @scrollable

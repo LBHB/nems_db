@@ -208,10 +208,16 @@ def st(loadkey):
             this_sig = ["pupil2"]
         elif l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("pvp"):
+            this_sig = ["pupil_dup"]
+        elif l.startswith("pwp"):
+            this_sig = ["pupil_dup2"]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
             this_sig = ["p_x_f"]
+        elif l.startswith("drf"):
+            this_sig = ["drift"]
         elif l.startswith("pre"):
             this_sig = ["pre_passive"]
         elif l.startswith("dif"):
@@ -264,6 +270,33 @@ def st(loadkey):
                 'permute_signals': permute_signals,
                 'new_signalname': 'state'}]]
     return xfspec
+
+
+@xform()
+def sml(kw):
+    """
+    set sm_win_len variable
+    """
+    ops = kw.split(".")[1:]
+    sm_win_len = 180
+    for op in ops:
+        sm_win_len = float(op)
+    xfspec = [['nems.xforms.init_context', {'sm_win_len': sm_win_len}]]
+
+    return xfspec
+
+
+@xform()
+def rstate(kw):
+    ops = kw.split(".")[1:]
+    dopt = {}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.state_resp_outer', dopt]]
 
 
 @xform()
@@ -325,6 +358,7 @@ def pca(loadkey):
     pc_count=None
     pc_idx=None
     compute_power = 'no'
+    whiten = True
     for op in ops:
         if op == "psth":
             pc_source = "psth"
@@ -346,11 +380,11 @@ def pca(loadkey):
     if pc_idx is not None:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power}]]
+                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power, 'whiten': whiten}]]
     else:
         xfspec = [['nems.preprocessing.resp_to_pc',
                    {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'compute_power': compute_power}]]
+                    'pc_count': pc_count, 'compute_power': compute_power, 'whiten': whiten}]]
 
     return xfspec
 
@@ -418,6 +452,19 @@ def hrc(load_key):
 
     return xfspec
 
+@xform()
+def epcpn(load_key):
+    """
+    Fix epoch naming for cpn data
+    """
+    ops = load_key.split('.')[1:]
+    sequence_only = ('seq' in ops)
+    xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
+               {'sequence_only': sequence_only},
+              ['rec'], ['rec']]]
+
+    return xfspec
+
 
 @xform()
 def pbal(load_key):
@@ -427,6 +474,29 @@ def pbal(load_key):
     xfspec = [['nems_lbhb.preprocessing.mask_pupil_balanced_epochs',
                 {},
                 ['rec'], ['rec']]]
+
+    return xfspec
+
+@xform()
+def plgsm(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    ops = load_key.split('.')[1:]
+    evoked_only = False
+    custom_epochs = False
+    ev_bins = 0
+    add_per_stim = ('s' in ops)
+    split_per_stim = ('sp' in ops)
+    for op in ops:
+        if op[:1] == 'e':
+            evoked_only=True
+            if len(op) > 1:
+                ev_bins = int(op[1:].strip('g'))
+                if 'g' in op:
+                    custom_epochs = True
+    xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
+               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs}]]
 
     return xfspec
 
@@ -559,12 +629,13 @@ def psthfr(load_key):
     use_as_input = ('ni' not in options)
     channel_per_stim = ('sep' in options)
     if 'tar' in options:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
         #epoch_regex='^TAR_'
     elif 'stimtar' not in options:
-        epoch_regex = '^STIM_'
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
+        #epoch_regex = '^STIM_'
     else:
-        epoch_regex = ['^STIM_', '^TAR_']
+        epoch_regex = '^(STIM_|TAR_|REF_|CAT_)'
 
     if hilo:
         if jackknife:
