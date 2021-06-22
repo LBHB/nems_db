@@ -36,6 +36,10 @@ api.add_resource(GetRecording,
                  '/recordings/<string:batch>/<string:file>',
                  resource_class_kwargs={})
 
+#api.add_resource(GetResults,
+#                 '/results/<string:batch>/<string:path>/<string:file>',
+#                 resource_class_kwargs={})
+
 api.add_resource(UploadResults,
                  '/results/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  resource_class_kwargs={})
@@ -44,5 +48,4 @@ api.add_resource(UploadQueueLog,
                  '/queuelog/<string:queueid>',
                  resource_class_kwargs={})
 
-app.run(port=int(creds['NEMS_BAPHY_API_PORT']),
-        host=creds['NEMS_BAPHY_API_HOST'])
+app.run(port=int(creds['NEMS_BAPHY_API_PORT']), host=creds['NEMS_BAPHY_API_HOST'])
