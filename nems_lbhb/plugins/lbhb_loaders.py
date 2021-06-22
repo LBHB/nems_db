@@ -327,6 +327,25 @@ def cc(loadkey):
 
 
 @xform()
+def mc(loadkey):
+    seed_mod = 0
+    options = loadkey.split('.')
+    n_cells = -1
+    for op in options[1:]:
+        if op.startswith('sd'):
+            seed_mod = int(op[2:])
+        else:
+            n_cells = int(op)
+
+    if n_cells == -1:
+        raise ValueError('an n_cells option must be specified for keyword: mc. ex:  mc.5')
+
+    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod}]]
+
+    return xfspec
+
+
+@xform()
 def hc(loadkey):
     seed_mod = 0
     exclusions = None

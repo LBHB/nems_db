@@ -450,8 +450,6 @@ class BAPHYExperiment:
         globalparams = self.get_baphy_globalparams()
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
 
-        #import pdb; pdb.set_trace()
-
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
             if param['runclass']=='TBP':
@@ -928,6 +926,7 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     ref_tags = exptevents[exptevents.name.str.contains('Reference') & \
                             (~exptevents.name.str.contains('PreStimSilence') & \
                             ~exptevents.name.str.contains('PostStimSilence'))].name.unique()
+
     ref_s_tags = exptevents[exptevents.name.str.contains('Reference') & \
                             exptevents.name.str.contains('PreStimSilence')].name.unique()
     ref_e_tags = exptevents[exptevents.name.str.contains('Reference') & \
@@ -939,11 +938,14 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     # new_tags = ['STIM_'+t.split(',')[1].replace(' ', '') for t in ref_events.name]
     new_tags = [f"STIM_{'-'.join([b.strip().replace(' ', '') for b in t.split(',')[1:-1]])}" for t in ref_events.name]
 
+    #import pdb; pdb.set_trace()
+
     ref_events.at[:, 'name'] = new_tags
     ref_events.at[:, 'start'] = ref_starts.start.values
     ref_events.at[:, 'end'] = ref_ends.end.values
     ref_events2 = ref_events.copy()
     ref_events2.at[:, 'name'] = 'REFERENCE'
+
     ref_events = pd.concat([ref_events, ref_events2], ignore_index=True)
 
     # target events (including spont)
