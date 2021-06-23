@@ -331,16 +331,20 @@ def mc(loadkey):
     seed_mod = 0
     options = loadkey.split('.')
     n_cells = -1
+    match_to_site = None
     for op in options[1:]:
         if op.startswith('sd'):
             seed_mod = int(op[2:])
+        elif op.startswith('ms'):
+            match_to_site = op[2:]
         else:
             n_cells = int(op)
 
     if n_cells == -1:
         raise ValueError('an n_cells option must be specified for keyword: mc. ex:  mc.5')
 
-    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod}]]
+    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod,
+                                                      'match_to_site': match_to_site}]]
 
     return xfspec
 

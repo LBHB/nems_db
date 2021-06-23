@@ -167,7 +167,7 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
 
     if cell_count == 0:
         cell_count = len(cell_set)
-    random_selection = random.sample(cell_set, cell_count)
+
     rec['resp'] = rec['resp'].extract_channels(random_selection)
 
     if 'mask_est' in rec.signals:
@@ -178,14 +178,31 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
-def max_cells(rec, est, val, meta, n_cells, seed_mod=0, **context):
+def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **context):
     '''
     Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
     '''
 
+    import pdb; pdb.set_trace()
+
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
-    keep_these_cells = random.sample(rec_cells, n_cells)
+
+    if match_to_site is None:
+        keep_these_cells = random.sample(rec_cells, n_cells)
+    else:
+        if ':' in match_to_site:
+            cellid_options = {'batch': batch, 'cellid': match_to_site, 'rawid': None}
+            cells_to_extract, _ = io.parse_cellid(cellid_options)
+            site_cells = cells_to_extract
+        else:
+            site_cells = [c for c in rec_cells if c.startswith(match_to_site)]
+        n_site = len(site_cells)
+
+        if n_cells <= n_site:
+            keep_these_cells = random.sample(site_cells, n_cells)
+        else:
+            keep_these_cells = random.sample(rec_cells, n_cells-n_site) + site_cells
 
     est, keep_these_est = _get_holdout_recs(est, keep_these_cells, None)
     val, keep_these_val = _get_holdout_recs(val, keep_these_cells, None)
