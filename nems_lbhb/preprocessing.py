@@ -39,7 +39,7 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
-def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
+def fix_cpn_epochs(rec, sequence_only=False, **kwargs):
     """
     Specialized preprocessor for CPN data to make the epoch names match more 
     "traditional" baphy format.
