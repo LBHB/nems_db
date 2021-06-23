@@ -183,8 +183,6 @@ def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **co
     Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
     '''
 
-    import pdb; pdb.set_trace()
-
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
 
