@@ -42,7 +42,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
     if batch==289:
        pmodelname = "ozgf.fs100.ch18-ld-sev_dlog-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic"
     else:
-       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4.es20"
+       pmodelname = "ozgf.fs100.ch18.pop-ld-norm.l1-popev_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
     single_perf = nd.batch_comp(batch=batch, modelnames=[pmodelname], stat='r_test')
     if alt_cells_available is not None:
@@ -55,6 +55,7 @@ def _matching_cells(batch=289, siteid=None, alt_cells_available=None,
         cellid = [c for c in all_cells if c.split("-")[0]==siteid]
     else:
         cellid = manual_cell_list
+
     this_perf=np.array([single_perf[single_perf.index==c][pmodelname].values[0] for c in cellid])
 
     if cell_count is None:
@@ -177,6 +178,24 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
+def max_cells(rec, est, val, meta, n_cells, seed_mod=0, **context):
+    '''
+    Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
+    '''
+
+    rec_cells = est['resp'].chans
+    random.seed(12345 + seed_mod)
+    keep_these_cells = random.sample(rec_cells, n_cells)
+
+    est, keep_these_est = _get_holdout_recs(est, keep_these_cells, None)
+    val, keep_these_val = _get_holdout_recs(val, keep_these_cells, None)
+    rec, keep_these_rec = _get_holdout_recs(rec, keep_these_cells, None)
+
+    meta['cellids'] = keep_these_cells
+
+    return {'est': est, 'val': val, 'rec': rec, 'meta': meta}
+
+
 def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
 
     batch = int(meta['batch'])
@@ -251,14 +270,16 @@ def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=Non
             'matched_val': matched_val, 'matched_rec': matched_rec}
 
 
-def _get_holdout_recs(rec, cell_set, holdout_set) -> object:
+def _get_holdout_recs(rec, cell_set, holdout_set=None) -> object:
     holdout_rec = rec.copy()
     rec['resp'] = rec['resp'].extract_channels(cell_set)
-    holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
+    if holdout_set is not None:
+        holdout_rec['resp'] = holdout_rec['resp'].extract_channels(holdout_set)
 
     if 'mask_est' in rec.signals:
         rec['mask_est'].chans = cell_set
-        holdout_rec['mask_est'].chans = holdout_set
+        if holdout_set is not None:
+            holdout_rec['mask_est'].chans = holdout_set
 
     return rec, holdout_rec
 
@@ -427,7 +448,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)
-    elif force_old_loader: # | (batch==307):
+    elif force_old_loader: #  | (batch==316):
         log.info("Using 'old' baphy.py loader")
         recording_uri, _ = nb.baphy_load_recording_uri(**options)
     else:

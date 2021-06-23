@@ -457,10 +457,11 @@ def epcpn(load_key):
     """
     Fix epoch naming for cpn data
     """
-
+    ops = load_key.split('.')[1:]
+    sequence_only = ('seq' in ops)
     xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
-               {},
-                 ['rec'], ['rec']]]
+               {'sequence_only': sequence_only},
+              ['rec'], ['rec']]]
 
     return xfspec
 
