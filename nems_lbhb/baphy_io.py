@@ -2109,7 +2109,7 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
         if sortinfo.shape[0] > 1:
             sortinfo = sortinfo.T
         try:
-           mwf=sortinfo[0][chan-1][0][0][unit-1]['Template'][0][chan-1,:]
+           mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
 
         except:
            import pdb
