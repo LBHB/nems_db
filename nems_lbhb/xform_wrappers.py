@@ -190,7 +190,7 @@ def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **co
         keep_these_cells = random.sample(rec_cells, n_cells)
     else:
         if ':' in match_to_site:
-            cellid_options = {'batch': batch, 'cellid': match_to_site, 'rawid': None}
+            cellid_options = {'batch': meta['batch'], 'cellid': match_to_site, 'rawid': None}
             cells_to_extract, _ = io.parse_cellid(cellid_options)
             site_cells = cells_to_extract
         else:
