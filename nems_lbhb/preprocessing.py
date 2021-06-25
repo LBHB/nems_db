@@ -1002,7 +1002,7 @@ def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
     r['varsig'] = r['pupil']._modified_copy(varsig)
     threshold = np.std(varsig) * threshold
     mask = varsig >= threshold
-    log.info(f"Found {mask.sum() / mask.shape[-1]} bins that violated movement threshold")
+    log.info(f"Found {mask.sum()} / {mask.shape[-1]} bins that violated movement threshold")
 
     # tile mask over generic epochs (REFERENCE, TARGET, CATCH)
     epochs = [e for e in ['REFERENCE', 'TARGET', 'CATCH'] if e in r['resp'].epochs.name.unique()]
