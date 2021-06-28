@@ -519,11 +519,11 @@ def mvm(load_key):
         if op.startswith('w'):
             # window size in sec
             wkey = float(op[1:])
-            if tkey > 10:
+            if wkey > 10:
                 binsize = wkey / 100
             else:
                 binsize = wkey 
-
+    
     xfspec = [['nems_lbhb.preprocessing.movement_mask', 
                {'threshold': threshold, 'binsize': binsize}]]
 
