@@ -63,7 +63,7 @@ def fix_cpn_epochs(rec, sequence_only=False, **kwargs):
         # strip the seq. epochs and sub pre/post stim
         new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
 
-        # remove "sub" labels
+        # remove "sub" labels -- sub masks finds SubPreStimSilence and SubPostStimSilence
         sub = new_epochs.name.str.startswith('Sub')
         new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
 
@@ -75,6 +75,11 @@ def fix_cpn_epochs(rec, sequence_only=False, **kwargs):
         one_bin = np.float(1 / rec['resp'].fs)
         new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
         new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+        # looks like was never actually dealing with prestim silence correctly, which resulted
+        # in prestim silence epochs with negative length. Oops. Fixing that now -- crh 06.28.2021
+        # reason this happened is that sub pre/post stim are length zero for this data, so I forgot
+        # to update the end timestamp too.
+        new_epochs.at[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
 
     else:
         new_epochs = new_epochs[~new_epochs.name.str.contains('_probe')]
