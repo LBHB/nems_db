@@ -10,16 +10,16 @@ import sys
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 
-from batch_norm import NORM_FACTORS
+from batch_norm import get_batch_norm_params
 
 # define global variables for data
-path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
-data_frames = os.listdir(path)
+#path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+#data_frames = os.listdir(path)
 
 class DataGenerator(keras.utils.Sequence):
 
     def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=13, n_channels=3, shuffle=True,
-                 augment_minibatches=False):
+                 augment_minibatches=False, species='ferret'):
         self.batch_size = batch_size
         self.list_IDs = list_IDs
         self.n_parms = n_parms
@@ -28,6 +28,10 @@ class DataGenerator(keras.utils.Sequence):
         self.shuffle = shuffle
         self.augment = augment_minibatches
         self.on_epoch_end()
+        global NORM_FACTORS, data_frames, path
+        NORM_FACTORS = get_batch_norm_params(species)
+        path = os.path.join(ps.ROOT_DIRECTORY, species, 'training_data/')  #'/auto/data/nems_db/pup_py/training_data/'
+        data_frames = os.listdir(path)
 
     def on_epoch_end(self):
         'Update index after each epoch'

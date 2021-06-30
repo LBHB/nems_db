@@ -76,9 +76,10 @@ if __name__ == '__main__':
     else:
         video_code = None
         # project directory
-        project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+        species = sys.argv[1].split('_')[1]
+        project_dir = os.path.join(ps.ROOT_DIRECTORY, species)+ '/'  #'/auto/data/nems_db/pup_py/'
         # data path
-        path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+        path = os.path.join(ps.ROOT_DIRECTORY, species, 'training_data/')  #'/auto/data/nems_db/pup_py/training_data/'
         training_files = os.listdir(path)
         n_training_files = len(training_files)
         training_epochs = int(sys.argv[2])  # used to be 500. Make this a user def param?
@@ -86,7 +87,7 @@ if __name__ == '__main__':
         # get current date/time so that we can save the model results in the correct place
         dt = datetime.datetime.now().isoformat()
         this_model_directory = 'old_model_fits'
-        out = os.system('mkdir {0}{1}/{2}'.format(ps.ROOT_DIRECTORY, this_model_directory, dt))
+        out = os.system('mkdir {0}{1}/{2}'.format(project_dir, this_model_directory, dt))
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     controlled = False
 
     if load_from_past:
-        model_to_load = os.path.join(ps.ROOT_DIRECTORY, 'default_trained_model.hdf5')  
+        model_to_load = os.path.join(project_dir, 'default_trained_model.hdf5')  
     else:
         model_to_load = None
 
@@ -106,7 +107,8 @@ if __name__ == '__main__':
         'n_parms': 13,
         'n_channels': 3,
         'shuffle': True,
-        'augment_minibatches': True
+        'augment_minibatches': True,
+        'species': species
         }
 
     # To make val/train specific to certain videos or not
@@ -218,7 +220,7 @@ if __name__ == '__main__':
                 name = os.listdir(project_dir + this_model_directory + '/default_trained_model/{0}'.format(old_date))[0]
                 default_name = project_dir + this_model_directory + '/default_trained_model/{0}/{1}'.format(old_date, name)
             except FileNotFoundError:
-                os.system('mkdir {0}{1}/default_trained_model/'.format(ps.ROOT_DIRECTORY, this_model_directory))
+                os.system('mkdir {0}{1}/default_trained_model/'.format(project_dir, this_model_directory))
                 default_name = None # no default exists yet
             except IndexError:
                 default_name = None

@@ -497,6 +497,9 @@ class PupilBrowser:
 
         frame_file = tmp_frame_folder + 'frame1.jpg'
 
+        # define the species for this animal by querying the database
+        self.species = nd.pd_query(f"SELECT species from gAnimal where animal='{self.animal_name.get()}'").values[0][0]
+
         self.plot_frame(frame_file)
         self.master.mainloop()
 
@@ -605,8 +608,8 @@ class PupilBrowser:
                                  parent=self.master,
                                  minvalue=0, maxvalue=100)
             os.system("{0} \
-                {1} {2} {3} {4} {5} {6} {7} {8}".format(executable_path, training_browser_path,
-            self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame, frame_range, int(n_frames)))
+                {1} {2} {3} {4} {5} {6} {7} {8} {9}".format(executable_path, training_browser_path,
+            self.species, self.animal_name.get(), self.video_name.get(), self.raw_video, 0, self.max_frame, frame_range, int(n_frames)))
 
             # clear selection so that you can choose for frames, if desired.
             self.exclude_ends = []
@@ -638,7 +641,7 @@ class PupilBrowser:
         #                    user=username, force_rerun=True, script_path=script_path, GPU_job=1)
         import datetime
         date = str(datetime.datetime.now())
-        nd.enqueue_single_model(cellid='PupilTrainingJob', batch=n_training_epochs, modelname=date, 
+        nd.enqueue_single_model(cellid=f'PupilTrainingJob_{self.species}', batch=n_training_epochs, modelname=date, 
                                 user=username, force_rerun=True, script_path=script_path, 
                                 executable_path=py_path, GPU_job=1)
         
