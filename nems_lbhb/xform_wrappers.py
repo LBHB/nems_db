@@ -178,7 +178,7 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
-def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **context):
+def max_cells(rec, est, val, meta, n_cells, seed_mod=0, matched_site=None, **context):
     '''
     Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
     '''
@@ -186,15 +186,15 @@ def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **co
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
 
-    if match_to_site is None:
+    if matched_site is None:
         keep_these_cells = random.sample(rec_cells, n_cells)
     else:
-        if ':' in match_to_site:
-            cellid_options = {'batch': meta['batch'], 'cellid': match_to_site, 'rawid': None}
+        if ':' in matched_site:
+            cellid_options = {'batch': meta['batch'], 'cellid': matched_site, 'rawid': None}
             cells_to_extract, _ = io.parse_cellid(cellid_options)
             site_cells = cells_to_extract
         else:
-            site_cells = [c for c in rec_cells if c.startswith(match_to_site)]
+            site_cells = [c for c in rec_cells if c.startswith(matched_site)]
         n_site = len(site_cells)
 
         if n_cells <= n_site:
@@ -211,81 +211,59 @@ def max_cells(rec, est, val, meta, n_cells, seed_mod=0, match_to_site=None, **co
     return {'est': est, 'val': val, 'rec': rec, 'meta': meta}
 
 
-def holdout_cells(rec, est, val, exclusions, meta, seed_mod=0, match_to_site=None, **context):
+def holdout_cells(rec, est, val, site, meta, exclude_matched_cells=False, **context):
 
     batch = int(meta['batch'])
     rec_cells = est['resp'].chans
-    # TODO: should probably figure out a smarter way to do this, don't really
-    #       need to keep 3 copies of the recordings. Just a copy of which cells to extract.
 
-    random.seed(12345 + seed_mod)
-    if isinstance(exclusions, int):
-        # pick random subset to exclude
-        if match_to_site is not None:
-            if exclusions == 0:
-                if ':' in match_to_site:
-                    cellid_options = {'batch': batch, 'cellid': match_to_site, 'rawid': None}
-                    cells_to_extract, _ = io.parse_cellid(cellid_options)
-                    cell_count = len(cells_to_extract)
-                    manual_cell_list = cells_to_extract
-                else:
-                    manual_cell_list = [c for c in rec_cells if c.startswith(match_to_site)]
-                    cell_count = len(manual_cell_list)
-            else:
-                cell_count = exclusions
-
-            cellid, this_perf, alt_cellid, alt_perf = _matching_cells(
-                # alt_cells_available = rec_cells   # causes problems if not all cells in rec have been fit
-                batch=batch, siteid=match_to_site, alt_cells_available=None, cell_count=cell_count,
-                manual_cell_list=manual_cell_list
-            )
-            exclusions = alt_cellid
-        else:
-            exclusions = random.sample(rec_cells, exclusions)
-    # else: exclusions should be a list of siteids to exclude
-
-    if match_to_site is None:
-        updated_exclusions = []
-        for e in exclusions:
-            if ':' in e:
-                # Have to parse DRX siteids that contain subsite specifications like e1:64
-                cellid_options = {'batch': batch, 'cellid': e, 'rawid': None}
-                cells_to_extract, _ = io.parse_cellid(cellid_options)
-                updated_exclusions.extend(cells_to_extract)
-            else:
-                updated_exclusions.append(e)
-
-        cell_set = [c for c in rec_cells if not np.any([c.startswith(x) for x in updated_exclusions])]
-        holdout_set = list(set(rec_cells) - set(cell_set))
+    if ':' in site:
+        cellid_options = {'batch': batch, 'cellid': site, 'rawid': None}
+        cellids, _ = io.parse_cellid(cellid_options)
+        cell_count = len(cellids)
     else:
-        cell_set = list(set(rec_cells) - set(exclusions))
-        holdout_set = exclusions
+        cellids = [c for c in rec_cells if c.startswith(site)]
+        cell_count = len(cellids)
 
-    est, holdout_est = _get_holdout_recs(est, cell_set, holdout_set)
-    val, holdout_val = _get_holdout_recs(val, cell_set, holdout_set)
-    # also have to do rec b/c init from keywords uses it for some checks
-    rec, holdout_rec = _get_holdout_recs(rec, cell_set, holdout_set)
-    #if matched_to_site is not None:
+    _, _, alt_cellid, _ = _matching_cells(
+                # alt_cells_available = rec_cells   # causes problems if not all cells in rec have been fit
+                batch=batch, siteid=site, alt_cells_available=None, cell_count=cell_count,
+                manual_cell_list=cellids
+    )
+    matched_set = alt_cellid
+    holdout_set = cellids
+
+    cell_set1 = list(set(rec_cells) - set(matched_set))
+    cell_set2 = list(set(rec_cells) - set(holdout_set))
+
+    # first rec all except holdout_set, second rec only holdout_set
+    est1, holdout_est = _get_holdout_recs(est, cell_set1, holdout_set)
+    val1, holdout_val = _get_holdout_recs(val, cell_set1, holdout_set)
+    rec1, holdout_rec = _get_holdout_recs(rec, cell_set1, holdout_set)
+
+    # first rec all except matched_set, second rec only matched_set
+    est2, matched_est = _get_holdout_recs(est, cell_set2, matched_set)
+    val2, matched_val = _get_holdout_recs(val, cell_set2, matched_set)
+    rec2, matched_rec = _get_holdout_recs(rec, cell_set2, matched_set)
+
+    if exclude_matched_cells:
+        cell_set = cell_set1
+        new_est, new_val, new_rec = (est1, val1, rec1)
+    else:
+        cell_set = cell_set2
+        new_est, new_val, new_rec = (est2, val2, rec2)
 
     meta['cellids'] = cell_set
     meta['holdout_cellids'] = holdout_set
-    meta['matched_site'] = match_to_site
-    if (match_to_site is not None):
-        _, matched_est = _get_holdout_recs(est, cell_set, manual_cell_list)
-        _, matched_val = _get_holdout_recs(val, cell_set, manual_cell_list)
-        _, matched_rec = _get_holdout_recs(rec, cell_set, manual_cell_list)
-    else:
-        matched_est, matched_val, matched_rec = (None, None, None)
+    meta['matched_cellids'] = matched_set
+    meta['matched_site'] = site
 
-    if exclusions is not None:
-        meta['excluded_cellids'] = exclusions
-
-    return {'est': est, 'val': val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
-            'rec': rec, 'holdout_rec': holdout_rec, 'meta': meta, 'matched_est': matched_est,
+    return {'est': new_est, 'val': new_val, 'holdout_est': holdout_est, 'holdout_val': holdout_val,
+            'rec': new_rec, 'holdout_rec': holdout_rec, 'meta': meta, 'matched_est': matched_est,
             'matched_val': matched_val, 'matched_rec': matched_rec}
 
 
 def _get_holdout_recs(rec, cell_set, holdout_set=None) -> object:
+    rec = rec.copy()
     holdout_rec = rec.copy()
     rec['resp'] = rec['resp'].extract_channels(cell_set)
     if holdout_set is not None:
@@ -299,35 +277,22 @@ def _get_holdout_recs(rec, cell_set, holdout_set=None) -> object:
     return rec, holdout_rec
 
 
-def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site=False, use_matched_random=False,
-                           fit_all_cells=False, use_same_recording=False, **context):
+def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_recording=False, use_same_recording=False,
+                           **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
-    if use_matched_site:  # fit to included site cells, save as site cells
-        if use_matched_random:  # fit to excluded match cells, save as site cells
-            new_est = context['holdout_est']
-            new_val = context['holdout_val']
-            new_rec = context['holdout_rec']
-        else:
-            new_est = context['matched_est']
-            new_val = context['matched_val']
-            new_rec = context['matched_rec']
-
-        site = meta['matched_site']
-        batch = meta['batch']
-        if ':' in site:
-            cellid_options = {'batch': batch, 'cellid': site, 'rawid': None}
-            cellids, _ = io.parse_cellid(cellid_options)
-        else:
-            cellids = nd.get_batch_cells(batch, cellid=site, as_list=True)
+    if use_matched_recording:
+        new_est = context['matched_est']
+        new_val = context['matched_val']
+        new_rec = context['matched_rec']
+        cellids = meta['holdout_cellids']  # this intentionally doesn't match the recording, for easier comparisons
     elif use_same_recording:
         # for dummy LN version, just resets parameters for frozen layers
         new_est = context['est']
         new_val = context['val']
         new_rec = context['rec']
         cellids = meta['cellids']
-
-    else:  # fit to excluded site cells, save as site cells
+    else:
         new_est = context['holdout_est']
         new_val = context['holdout_val']
         new_rec = context['holdout_rec']
@@ -347,7 +312,8 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_site
         if i not in freeze_layers:
             modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
 
-    return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta}
+    return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta,
+            'freeze_layers': freeze_layers}
 
 
 def pop_file(stimfmt='ozgf', batch=None,

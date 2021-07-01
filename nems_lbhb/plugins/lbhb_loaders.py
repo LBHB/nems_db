@@ -331,7 +331,7 @@ def mc(loadkey):
     seed_mod = 0
     options = loadkey.split('.')
     n_cells = -1
-    match_to_site = None
+    matched_site = None
 
     for i, op in enumerate(options[1:]):
         if ':' in op and 'DRX' in options[i]:
@@ -344,15 +344,16 @@ def mc(loadkey):
         if op.startswith('sd'):
             seed_mod = int(op[2:])
         elif op.startswith('ms'):
-            match_to_site = op[2:]
+            matched_site = op[2:]
         else:
             n_cells = int(op)
 
     if n_cells == -1:
         raise ValueError('an n_cells option must be specified for keyword: mc. ex:  mc.5')
 
-    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod,
-                                                      'match_to_site': match_to_site}]]
+    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod}]]
+    if matched_site is not None:
+        xfspec[0][1]['matched_site'] = matched_site
 
     return xfspec
 
@@ -360,9 +361,9 @@ def mc(loadkey):
 @xform()
 def hc(loadkey):
     seed_mod = 0
-    exclusions = None
+    site = None
     options = loadkey.split('.')
-    match_to_site = None
+    exclude_matched_cells = False
 
     for i, op in enumerate(options[1:]):
         if ':' in op and 'DRX' in options[i]:
@@ -372,27 +373,12 @@ def hc(loadkey):
             options.append(op1 + '.' +  op2)
 
     for op in options[1:]:
-        if op.startswith('sd'):
-            seed_mod = int(op[2:])
-        elif op.startswith('ms'):
-            # Ex:  hc.10.msTAR009d  would hold out 10 random cells with performance similar to site TAR009d
-            #      hc.0.msTAR009d   would hold out X random cells with performance similar to site TAR009d,
-            #                       where X is the number of cells in site TAR009d.
-            match_to_site = op[2:]
+        if op == 'ms':
+            exclude_matched_cells = True
         else:
-            try:
-                # int for random number of cellids to exclude (all sites)
-                exclusions = int(op)
-            except ValueError:
-                # or specify a site to exclude. repeat option to exclude more than one.
-                site = op
-                if exclusions is None:
-                    exclusions = [site]
-                else:
-                    exclusions += site
+            site = op
 
-    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod,
-                                                          'match_to_site': match_to_site}]]
+    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'site': site, 'exclude_matched_cells': exclude_matched_cells}]]
 
     return xfspec
 
