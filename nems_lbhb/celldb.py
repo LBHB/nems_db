@@ -45,47 +45,30 @@ def update_table(tablename, key, value, **datadict):
     :return:
     """
     session = db.Session()
-    gSingleCell = LBHB_Tables()['gSingleCell']
+    t = LBHB_Tables()[tablename]
 
-    session.query(gSingleCell).\
-        filter(gSingleCell.cellid == cellid).\
-        update(datadict)
+    session.query(t).filter(getattr(t, key) == value).update(datadict)
 
     session.commit()
-
-
-
 
 
 def update_single_cell_data(cellid, **datadict):
     """
     :param cellid: eg, 'TAR010c-01-1' (should be an existing cellid)
     :param datadict: eg, {'layer': '2/3', 'phototag': 'E, mdlx', 'spikeshape': '0.122,0.328,0.309'}
-          keys must match existing columns of gSingleCell (the table that stores site properties)
+        keys must match existing columns of gSingleCell (the table that stores cell properties)
     :return:
     """
-    session = db.Session()
-    gSingleCell = LBHB_Tables()['gSingleCell']
+    update_table('gSingleCell', 'cellid', cellid, **datadict)
 
-    session.query(gSingleCell).\
-        filter(gSingleCell.cellid == cellid).\
-        update(datadict)
-
-    session.commit()
+    return
 
 def update_site_data(siteid, **datadict):
     """
     :param siteid: eg, 'TAR010c' (should be an existing siteid)
-    :param datadict: eg, {'layer': '2/3', 'phototag': 'E, mdlx', 'spikeshape': '0.122,0.328,0.309'}
-        keys must match existing columns of gSingleCell (the table that stores site properties)
+    :param datadict: eg, {'channeldepths': '1050,1000,1000,...0', 'layerboundaries': '200,500,800'}
+        keys must match existing columns of gCellMaster (the table that stores site properties)
     :return:
     """
-    session = db.Session()
-    gSingleCell = LBHB_Tables()['gSingleCell']
-
-    session.query(gSingleCell).\
-        filter(gSingleCell.cellid == cellid).\
-        update(datadict)
-
-    session.commit()
+    update_table('gCellMaster', 'siteid', siteid, **datadict)
 
