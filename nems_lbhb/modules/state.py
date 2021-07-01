@@ -36,10 +36,10 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
     _n = np.newaxis
     for i in range(n_inputs):
         _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s - offset_g[i,:,_n]))), 
+                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
                      axis=0, keepdims=True)
         _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s - offset_d[i,:,_n]))), 
+                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
                      axis=0, keepdims=True)
         if i == 0:
            sg = _sg
