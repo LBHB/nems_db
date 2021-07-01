@@ -499,7 +499,7 @@ def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=
         if k not in ctx['rec'].signals.keys():
            ctx['rec'].signals[k] = ctx['val'].signals[k].copy()
     s = ctx['rec']['pred'].copy()
-    s.name='pred0'
+    s.name = 'pred0'
     ctx['rec'].add_signal(s)
 
     #return {'rec': ctx['rec'],'val': ctx['val'],'est': ctx['est']}

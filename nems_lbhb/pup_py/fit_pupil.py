@@ -9,19 +9,22 @@ import nems.db as nd
 import getpass
 from tkinter import filedialog, messagebox
 
+import nems_db
 import sys
 import os
-import nems_db
 executable_path = sys.executable
 script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
 script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'pupil_fit_script.py')
+nems_db_path = nems_db.__path__[0]
+sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
+import pupil_settings as ps
 
 class queue_pupil_job:
 
     def __init__(self, master):
         self.master = master
         master.title("Queue pupil job")
-        master.geometry('400x150')
+        master.geometry('700x175')
 
         self.filename = tk.Label(master, text="Filename: ")
         self.filename.grid(row=1, column=0)
@@ -40,30 +43,39 @@ class queue_pupil_job:
         self.fitDate_value.focus_set()
         self.fitDate_value.insert(0, "Current")
 
+        self.species_label = tk.Label(master, text="Species: ")
+        self.species_label.grid(row=3, column=0)
+        self.species = tk.StringVar(master)
+        self.species.set('ferret') # default value
+        options = os.listdir(ps.ROOT_DIRECTORY)
+        self.species_dd = tk.OptionMenu(master, self.species, *options)
+        self.species_dd.grid(row=3, column=1, sticky='ew')
+        self.species_dd.focus_set()
+
 
         self.animal_fit = tk.Label(master, text="Animal: ")
-        self.animal_fit.grid(row=3, column=0)
+        self.animal_fit.grid(row=4, column=0)
         self.animal_fit_value = tk.Entry(master)
-        self.animal_fit_value.grid(row=3, column=1, sticky='ew')
+        self.animal_fit_value.grid(row=4, column=1, sticky='ew')
         self.animal_fit_value.focus_set()
         self.animal_fit_value.insert(0, "All")
 
         self.executable_path = tk.Label(master, text="Python path: ")
-        self.executable_path.grid(row=4, column=0)
+        self.executable_path.grid(row=5, column=0)
         self.executable_path_value = tk.Entry(master)
-        self.executable_path_value.grid(row=4, column=1, sticky='ew')
+        self.executable_path_value.grid(row=5, column=1, sticky='ew')
         self.executable_path_value.focus_set()
         self.executable_path_value.insert(0, executable_path)
 
         self.script_path = tk.Label(master, text="Fit script: ")
-        self.script_path.grid(row=5, column=0)
+        self.script_path.grid(row=6, column=0)
         self.script_path_value = tk.Entry(master)
-        self.script_path_value.grid(row=5, column=1, sticky='ew')
+        self.script_path_value.grid(row=6, column=1, sticky='ew')
         self.script_path_value.focus_set()
         self.script_path_value.insert(0, script_path)
 
         self.fit_button = tk.Button(master, text="Start fit", command=self.start_fit)
-        self.fit_button.grid(row=6, column=0)
+        self.fit_button.grid(row=7, column=0)
 
         master.grid_columnconfigure(1, weight=1)
 
@@ -74,6 +86,7 @@ class queue_pupil_job:
         fn = self.video_file
         modeldate = self.fitDate_value.get()
         animal = self.animal_fit_value.get()
+        species = self.species.get()
         answer = True
         if (animal != '') & (animal != 'All') & (animal != 'all'):
             answer = messagebox.askokcancel("Question", "You've asked to fit this video using the model architecture that was overfit"
@@ -88,7 +101,7 @@ class queue_pupil_job:
 
         # add job to queue
         if answer:
-            nd.add_job_to_queue([fn, modeldate, animal], note="Pupil Job: {}".format(fn),
+            nd.add_job_to_queue([fn, modeldate, f"{species}_{animal}"], note="Pupil Job: {}".format(fn),
                                 executable_path=py_path, user=username,
                                 force_rerun=True, script_path=script_path, GPU_job=1)
             print("added job to queue")
