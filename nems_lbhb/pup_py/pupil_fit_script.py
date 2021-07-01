@@ -19,7 +19,7 @@ import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
-from batch_norm import NORM_FACTORS
+from batch_norm import get_batch_norm_params
 
 import logging
 log = logging.getLogger(__name__)
@@ -50,10 +50,10 @@ if __name__ == '__main__':
     # perform pupil fit
     video_file = sys.argv[1]
     modelname = sys.argv[2]
-    animal = sys.argv[3]
+    species, animal = sys.argv[3].split('_')
 
     # load the keras model 
-    project_dir = ps.ROOT_DIRECTORY 
+    project_dir = os.path.join(ps.ROOT_DIRECTORY, species+'/') 
     if (modelname == 'current') | (modelname == 'Current'):
         if (animal != '') & (animal != 'None') & (animal != 'All') & (animal != None):
             this_model_dir = 'animal_specific_fits/{}/'.format(animal)
@@ -71,6 +71,8 @@ if __name__ == '__main__':
         datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
         modelname = [m for m in datefolder if 'weights' in m][0]
         modelpath = project_dir + 'old_model_fits/{0}/{1}'.format(date, modelname)
+
+    NORM_FACTORS = get_batch_norm_params(species)
 
     model = keras.models.load_model(modelpath)
 
@@ -93,7 +95,7 @@ if __name__ == '__main__':
     x_cnn = []
     y_cnn = []
     phi_cnn = []
-    lx=[];ly=[];tx=[];ty=[];rx=[];ry=[];bx=[];by=[];
+    lx=[];ly=[];tx=[];ty=[];rx=[];ry=[];bx=[];by=[]
 
     # reopen the video with pyav
     container = av.open(video)

@@ -19,13 +19,14 @@ import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
-train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
-tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
+#train_data_path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+#tmp_save = ps.TMP_SAVE                #'/auto/data/nems_db/pup_py/tmp/'
+#temp_train_data_path = ps.TMP_TRAIN
+tmp_save = ps.TMP_SAVE                
 temp_train_data_path = ps.TMP_TRAIN
-
 class TrainingDataBrowser:
 
-    def __init__(self, master, animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000, train_frame_range=None, n_frames=None):
+    def __init__(self, master, species='ferret', animal=None, video_name=None, raw_video=None, min_frame=0, max_frame=5000, train_frame_range=None, n_frames=None):
 
         # figure out which frames to display. If animal and video_name are none, display first frame from training
         # directory. If animal and video_name are specified, add 50 random frames from this video to the end of
@@ -33,12 +34,14 @@ class TrainingDataBrowser:
         # these 50 frames from this range. train frame range is tuple (start_frame, end_frame)
 
         self.master = master
+        # Default paths to ferret. Else, use species as directory
+        self.train_data_path = os.path.join(ps.ROOT_DIRECTORY, species, 'training_data/') 
 
         self.plot_calls = 0
         self.edgepoints = []        
         if (animal is None) and (video_name is None):
             self.from_browser = False
-            default_frame = os.listdir(train_data_path)[0].split('.')[0]
+            default_frame = os.listdir(self.train_data_path)[0].split('.')[0]
 
         else:
             # clear temp training directory
@@ -118,7 +121,7 @@ class TrainingDataBrowser:
                                     'phi': parms['cnn']['phi'][f],
 
                     }
-                name = train_data_path + video_name + str(f) + '.pickle'
+                name = self.train_data_path + video_name + str(f) + '.pickle'
 
 
                 # check to see if frame already exists in training directory. 
@@ -182,7 +185,7 @@ class TrainingDataBrowser:
         else:
             self.frame_count = tk.Text(master, height=1, width=12)
             self.frame_count.grid(row=0, column=2)
-            all_frames = os.listdir(train_data_path)
+            all_frames = os.listdir(self.train_data_path)
             self.frame_count.insert(tk.END, "1/{0}".format(len(all_frames)))
 
         self.frame_name = tk.Entry(master)
@@ -455,7 +458,7 @@ class TrainingDataBrowser:
             all_frames = os.listdir(temp_train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
-            all_frames = os.listdir(train_data_path)
+            all_frames = os.listdir(self.train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
 
         all_frames = np.array(all_frames)[inds]
@@ -464,7 +467,7 @@ class TrainingDataBrowser:
         prev_index = cur_index - 1
         prev_frame = all_frames[prev_index]
 
-        with open('{0}/{1}'.format(train_data_path, prev_frame), 'rb') as fp:
+        with open('{0}/{1}'.format(self.train_data_path, prev_frame), 'rb') as fp:
             prev_params = pickle.load(fp)
         
         self.update_ellipse_params(prev_params['ellipse_zack'])
@@ -507,7 +510,7 @@ class TrainingDataBrowser:
             with open('{0}/{1}.pickle'.format(temp_train_data_path, frame_file), 'rb') as fp:
                 current_params = pickle.load(fp)       
         else:
-            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+            with open('{0}/{1}.pickle'.format(self.train_data_path, frame_file), 'rb') as fp:
                 current_params = pickle.load(fp)
 
         new_params = current_params.copy()
@@ -515,7 +518,7 @@ class TrainingDataBrowser:
         # which served as first training data for this.
         new_params['ellipse_zack'] = e_params
 
-        with open(train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
+        with open(self.train_data_path+'{0}.pickle'.format(frame_file), 'wb') as fp:
             pickle.dump(new_params, fp, protocol=pickle.HIGHEST_PROTOCOL)
         
         # also update temp params
@@ -539,7 +542,7 @@ class TrainingDataBrowser:
             with open('{0}/{1}.pickle'.format(temp_train_data_path, frame_file), 'rb') as fp:
                 frame_data = pickle.load(fp)
         else:
-            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+            with open('{0}/{1}.pickle'.format(self.train_data_path, frame_file), 'rb') as fp:
                 frame_data = pickle.load(fp)
 
         loc = (0, 0)
@@ -577,7 +580,7 @@ class TrainingDataBrowser:
                 frame_data = pickle.load(fp)
                 fp.close()
         else:
-            with open('{0}/{1}.pickle'.format(train_data_path, frame_file), 'rb') as fp:
+            with open('{0}/{1}.pickle'.format(self.train_data_path, frame_file), 'rb') as fp:
                 frame_data = pickle.load(fp)
                 fp.close()
 
@@ -689,7 +692,7 @@ class TrainingDataBrowser:
             all_frames = os.listdir(temp_train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
-            all_frames = os.listdir(train_data_path)
+            all_frames = os.listdir(self.train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
 
         all_frames = np.array(all_frames)[inds]
@@ -723,7 +726,7 @@ class TrainingDataBrowser:
             all_frames = os.listdir(temp_train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         else:
-            all_frames = os.listdir(train_data_path)
+            all_frames = os.listdir(self.train_data_path)
             inds = np.argsort(np.array([int(''.join([s for s in x[9:] if s.isdigit()])) for x in all_frames]))
         all_frames = np.array(all_frames)[inds]
 
@@ -772,7 +775,7 @@ def get_eyelid_keypoints(frame):
 root = tk.Tk()
 
 if len(sys.argv) > 1:
-    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
+    my_gui = TrainingDataBrowser(root, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8])
     root.mainloop()
 else:
     my_gui = TrainingDataBrowser(root)
