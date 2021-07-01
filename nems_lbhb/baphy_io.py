@@ -1248,9 +1248,11 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         matdata = scipy.io.loadmat(pupilfilepath)
 
+        pupil_extras = {} # for backwards compaitbility with the new pupil fits
+
         p = matdata['pupil_data']
         params = p['params']
-        if 'pupil_variable_name' not in options:
+        if ('pupil_variable_name' not in options) | (options['pupil_variable_name']=='area'):
             options['pupil_variable_name'] = params[0][0]['default_var'][0][0][0]
             log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         if 'pupil_algorithm' not in options:
