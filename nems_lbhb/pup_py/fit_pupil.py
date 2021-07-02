@@ -48,6 +48,7 @@ class queue_pupil_job:
         self.species = tk.StringVar(master)
         self.species.set('ferret') # default value
         options = os.listdir(ps.ROOT_DIRECTORY)
+        options = [o for o in options if 'tmp' not in o]
         self.species_dd = tk.OptionMenu(master, self.species, *options)
         self.species_dd.grid(row=3, column=1, sticky='ew')
         self.species_dd.focus_set()
