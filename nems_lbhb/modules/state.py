@@ -599,14 +599,21 @@ class sdexp_new(NemsModule):
 
         # kludgy backwards compatibility
         try:
-            pred, gain, dc = fn(rec[i]._data)
-            pred = rec[i]._modified_copy(pred)
+            p, gain, dc = fn(rec[i]._data)
+            pred = rec[i]._modified_copy(p)
             pred.name = o
             gain = pred._modified_copy(gain)
             gain.name = 'gain'
             dc = pred._modified_copy(dc)
             dc.name = 'dc'
-            return [pred, gain, dc]
+            # uncomment to save first-order pred for use by LV models.
+            pred0 = rec[i]._modified_copy(p)
+            pred0.name = 'pred0'
+            return [pred, gain, dc, pred0]
+
+            # uncomment to skip saving first-order pred for use by LV models.
+            #return [pred, gain, dc]
+
         except:
             return [rec[i].transform(fn, o)]
 
