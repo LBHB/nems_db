@@ -39,7 +39,7 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
-def fix_cpn_epochs(rec, sequence_only=False, **kwargs):
+def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
     """
     Specialized preprocessor for CPN data to make the epoch names match more 
     "traditional" baphy format.
@@ -79,7 +79,8 @@ def fix_cpn_epochs(rec, sequence_only=False, **kwargs):
         # in prestim silence epochs with negative length. Oops. Fixing that now -- crh 06.28.2021
         # reason this happened is that sub pre/post stim are length zero for this data, so I forgot
         # to update the end timestamp too.
-        new_epochs.at[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
+        if not use_old:
+            new_epochs.at[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
 
     else:
         new_epochs = new_epochs[~new_epochs.name.str.contains('_probe')]

@@ -459,8 +459,10 @@ def epcpn(load_key):
     """
     ops = load_key.split('.')[1:]
     sequence_only = ('seq' in ops)
+    use_old = ('old' in ops) # use old (buggy) code
     xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
-               {'sequence_only': sequence_only},
+               {'sequence_only': sequence_only, 
+               'use_old': use_old},
               ['rec'], ['rec']]]
 
     return xfspec
