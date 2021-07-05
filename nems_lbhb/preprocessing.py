@@ -985,6 +985,42 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         
     return {'rec': r}
 
+
+def mask_time_segments(rec, segment_count=8, evoked_only=True, **kwargs):
+    """
+    Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
+      reproduce desired pattern of noise correlations in different conditions.
+    By default, creates signals that mask trials according to whether pupil is smaller or larger than the mean.
+    Added to whatever mask already exists in rec.
+    Inputs: rec: Recording from NEMS
+    Returns rec: Recording with new signals 'mask_large' and 'mask_small'
+    Option: add_per_stim: if True, also returns signals 'mask_<epoch>' matching each epoch that 
+       starts with "STIM_". Currently these masks span both large and small pupil
+    """
+    r = rec.copy()
+    
+    if 'mask' in r.signals.keys():
+        m = r['mask']._data.copy()
+    else:
+        m = np.ones((1,r['resp'].shape[1]))
+    r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
+    r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    
+    nbins = m.sum()
+    validbins = np.where(m[0,:]>0)[0]
+    chunksize = nbins / segment_count
+    log.info(f"nbins/segmentcount: {nbins}/{segment_count} = {chunksize}")
+    #log.info(f"{validbins[:100]}")
+    for s in range(segment_count):
+        _m = np.zeros_like(m)
+        #log.info(f'{s}: {validbins[int(s*chunksize):int((s+1)*chunksize)]}')
+        _m[0, validbins[int(s*chunksize):int((s+1)*chunksize)]]=1
+        log.info(f'{s}: {_m.sum()}')
+        r[f'mask_{s}'] = r['mask']._modified_copy(_m.astype(bool))
+               
+    return {'rec': r}
+
+
 def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
     '''
     Use pupil_extras signals to mask the recording during periods of movement (eg blinks)

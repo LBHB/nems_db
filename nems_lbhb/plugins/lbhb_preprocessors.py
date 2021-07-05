@@ -501,6 +501,22 @@ def plgsm(load_key):
     return xfspec
 
 @xform()
+def tseg(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    ops = load_key.split('.')[1:]
+    segment_count = 8
+    for op in ops:
+        if op[:1] == 's':
+            segment_count = int(op[1:])
+
+    xfspec = [['nems_lbhb.preprocessing.mask_time_segments', 
+               {'segment_count': segment_count}]]
+
+    return xfspec
+
+@xform()
 def mvm(load_key):
     """
     Create masks for movement artifacts
