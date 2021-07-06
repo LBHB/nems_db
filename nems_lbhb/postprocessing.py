@@ -1,5 +1,11 @@
+# LBHB-specific post-processors
+import logging
+
 import nems.analysis as na
 import nems.db as nd
+
+log = logging.getLogger(__name__)
+
 
 
 def add_summary_statistics_by_condition(est,val,modelspec,evaluation_conditions,rec=None,**context):
@@ -8,10 +14,13 @@ def add_summary_statistics_by_condition(est,val,modelspec,evaluation_conditions,
     return {'modelspec': modelspec}
 
 
-def run_decoding_analysis(**kwargs):
+def run_decoding_analysis(IsReload=False, **kwargs):
     """
     Specialized postprocessor to queue decoding analysis for the model pred data
     """
+    if IsReload:
+        log.info("Reload, skipping rda")
+        return {}
     modelname = kwargs['meta']['modelname']
     # figure out movement keywords
     threshold = 25
@@ -54,8 +63,8 @@ def run_decoding_analysis(**kwargs):
                     user='hellerc',
                     force_rerun=True,
                     reserve_gb=2)
-
-
+    log.info('Queued decoding analysis')
+    return {}
 
             
 

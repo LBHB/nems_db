@@ -89,5 +89,5 @@ def rda(loadkey):
     """
     Run Decoding Analysis
     """
-    xfspec = [['nems_lbhb.postprocessors.run_decoding_analysis', {}]]
+    xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
     return xfspec
