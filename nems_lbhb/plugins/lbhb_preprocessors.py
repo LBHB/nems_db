@@ -457,10 +457,13 @@ def epcpn(load_key):
     """
     Fix epoch naming for cpn data
     """
-
+    ops = load_key.split('.')[1:]
+    sequence_only = ('seq' in ops)
+    use_old = ('old' in ops) # use old (buggy) code
     xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
-               {},
-                 ['rec'], ['rec']]]
+               {'sequence_only': sequence_only, 
+               'use_old': use_old},
+              ['rec'], ['rec']]]
 
     return xfspec
 
@@ -496,6 +499,51 @@ def plgsm(load_key):
                     custom_epochs = True
     xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
                {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs}]]
+
+    return xfspec
+
+@xform()
+def tseg(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    ops = load_key.split('.')[1:]
+    segment_count = 8
+    for op in ops:
+        if op[:1] == 's':
+            segment_count = int(op[1:])
+
+    xfspec = [['nems_lbhb.preprocessing.mask_time_segments', 
+               {'segment_count': segment_count}]]
+
+    return xfspec
+
+@xform()
+def mvm(load_key):
+    """
+    Create masks for movement artifacts
+    """
+    ops = load_key.split('.')[1:]
+    binsize = 1
+    threshold = 0.25
+    for op in ops:
+        if op.startswith('t'):
+            # threshold
+            tkey = float(op[1:])
+            if tkey == 1:
+                threshold = tkey
+            else:
+                threshold = tkey / 100
+        if op.startswith('w'):
+            # window size in sec
+            wkey = float(op[1:])
+            if wkey > 10:
+                binsize = wkey / 100
+            else:
+                binsize = wkey 
+    
+    xfspec = [['nems_lbhb.preprocessing.movement_mask', 
+               {'threshold': threshold, 'binsize': binsize}]]
 
     return xfspec
 

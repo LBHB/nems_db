@@ -59,8 +59,8 @@ def popspc(loadkey):
 def tfheld(loadkey):
     freeze_layers = None
     options = loadkey.split('.')
-    use_matched_site = False
-    use_matched_random = False
+    use_matched_recording = False
+    #use_matched_random = False
     use_same_recording = False
     for op in options[1:]:
         if op.startswith('FL'):
@@ -72,14 +72,22 @@ def tfheld(loadkey):
                 # ex: TL2x6x9  would be trainable_layers = [2, 6, 9]
                 freeze_layers = [int(i) for i in op[2:].split('x')]
         elif op == 'ms':
-            use_matched_site = True
-        elif op == 'rnd':
-            use_matched_random = True
+            use_matched_recording = True
+        # elif op == 'rnd':
+        #     use_matched_random = True
         elif op == 'same':
             use_same_recording = True
 
     xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'freeze_layers': freeze_layers,
-                                                                   'use_matched_site': use_matched_site,
-                                                                   'use_matched_random': use_matched_random,
+                                                                   'use_matched_recording': use_matched_recording,
+                                                                   #'use_matched_random': use_matched_random,
                                                                    'use_same_recording': use_same_recording}]]
+    return xfspec
+
+@xform()
+def rda(loadkey):
+    """
+    Run Decoding Analysis
+    """
+    xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
     return xfspec

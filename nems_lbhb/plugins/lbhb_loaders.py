@@ -327,11 +327,11 @@ def cc(loadkey):
 
 
 @xform()
-def hc(loadkey):
+def mc(loadkey):
     seed_mod = 0
-    exclusions = None
     options = loadkey.split('.')
-    match_to_site = None
+    n_cells = -1
+    matched_site = None
 
     for i, op in enumerate(options[1:]):
         if ':' in op and 'DRX' in options[i]:
@@ -344,24 +344,41 @@ def hc(loadkey):
         if op.startswith('sd'):
             seed_mod = int(op[2:])
         elif op.startswith('ms'):
-            # Ex:  hc.10.msTAR009d  would hold out 10 random cells with performance similar to site TAR009d
-            #      hc.0.msTAR009d   would hold out X random cells with performance similar to site TAR009d,
-            #                       where X is the number of cells in site TAR009d.
-            match_to_site = op[2:]
+            matched_site = op[2:]
         else:
-            try:
-                # int for random number of cellids to exclude (all sites)
-                exclusions = int(op)
-            except ValueError:
-                # or specify a site to exclude. repeat option to exclude more than one.
-                site = op
-                if exclusions is None:
-                    exclusions = [site]
-                else:
-                    exclusions += site
+            n_cells = int(op)
 
-    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'exclusions': exclusions, 'seed_mod': seed_mod,
-                                                          'match_to_site': match_to_site}]]
+    if n_cells == -1:
+        raise ValueError('an n_cells option must be specified for keyword: mc. ex:  mc.5')
+
+    xfspec = [['nems_lbhb.xform_wrappers.max_cells', {'n_cells': n_cells, 'seed_mod': seed_mod}]]
+    if matched_site is not None:
+        xfspec[0][1]['matched_site'] = matched_site
+
+    return xfspec
+
+
+@xform()
+def hc(loadkey):
+    seed_mod = 0
+    site = None
+    options = loadkey.split('.')
+    exclude_matched_cells = False
+
+    for i, op in enumerate(options[1:]):
+        if ':' in op and 'DRX' in options[i]:
+            # special fix for DRX split siteids, they'll get split on the '.' but they shouldn't be
+            op2 = options.pop(i+1)
+            op1 = options.pop(i)
+            options.append(op1 + '.' +  op2)
+
+    for op in options[1:]:
+        if op == 'ms':
+            exclude_matched_cells = True
+        else:
+            site = op
+
+    xfspec = [['nems_lbhb.xform_wrappers.holdout_cells', {'site': site, 'exclude_matched_cells': exclude_matched_cells}]]
 
     return xfspec
 
@@ -383,7 +400,13 @@ def loadpred(loadkey):
         if op == 'a':
             pc_format="all"
         if op == 'cpn':
-            dmask = 'epcpn-hrc'
+            dmask = 'epcpn-'+dmask
+        if op.startswith('cpnmvm'):
+            mvmmask = op[3:].replace(',', '.')
+            dmask = f'epcpn-{mvmmask}-hrc'
+        if op.startswith('cpnOldmvm'):
+            mvmmask = op[6:].replace(',', '.')
+            dmask = f'epcpn.old-{mvmmask}-hrc'
     if pc_count > 0:
         modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
     elif 'z' in ops:

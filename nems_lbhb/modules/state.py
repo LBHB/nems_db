@@ -36,10 +36,10 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
     _n = np.newaxis
     for i in range(n_inputs):
         _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s - offset_g[i,:,_n]))), 
+                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
                      axis=0, keepdims=True)
         _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s - offset_d[i,:,_n]))), 
+                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
                      axis=0, keepdims=True)
         if i == 0:
            sg = _sg
@@ -599,14 +599,21 @@ class sdexp_new(NemsModule):
 
         # kludgy backwards compatibility
         try:
-            pred, gain, dc = fn(rec[i]._data)
-            pred = rec[i]._modified_copy(pred)
+            p, gain, dc = fn(rec[i]._data)
+            pred = rec[i]._modified_copy(p)
             pred.name = o
             gain = pred._modified_copy(gain)
             gain.name = 'gain'
             dc = pred._modified_copy(dc)
             dc.name = 'dc'
-            return [pred, gain, dc]
+            # uncomment to save first-order pred for use by LV models.
+            pred0 = rec[i]._modified_copy(p)
+            pred0.name = 'pred0'
+            return [pred, gain, dc, pred0]
+
+            # uncomment to skip saving first-order pred for use by LV models.
+            #return [pred, gain, dc]
+
         except:
             return [rec[i].transform(fn, o)]
 

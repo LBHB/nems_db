@@ -23,7 +23,7 @@ for i, f in enumerate(training_files):
     sf, im = ut.resize(d['frame'], size=(224, 224))
     par = d['ellipse_zack']
     params[i, :] = [par['X0_in'] * sf[0], par['Y0_in'] * sf[1], par['b'] * sf[1], par['a'] * sf[0], par['phi']]
-
+PARMS = params
 
 f, ax = plt.subplots(1, 1, figsize=(8, 4))
 

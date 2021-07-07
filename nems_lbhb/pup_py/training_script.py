@@ -51,7 +51,7 @@ if __name__ == '__main__':
    
 
     # check for sys arguments to determine how to fit model / where to save results
-    if len(sys.argv) > 1:
+    if 0: #len(sys.argv) > 2:
         # get the animal / animal video key for figuring out which videos to use for training
         animal_name = sys.argv[2]
         video_code = sys.argv[3]
@@ -67,26 +67,27 @@ if __name__ == '__main__':
         dt = datetime.datetime.now().isoformat()
         this_model_directory = 'animal_specific_fits/{}'.format(animal_name)
         
-        if os.path.isdir('{0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory)):
-            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        if os.path.isdir('{0}{1}/'.format(ps.ROOT_DIRECTORY, this_model_directory)):
+            os.system('mkdir {0}{1}/{2}'.format(ps.ROOT_DIRECTORY, this_model_directory, dt))
         else:
-            os.system('mkdir {0}{1}/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
-            os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+            os.system('mkdir {0}{1}/'.format(ps.ROOT_DIRECTORY, this_model_directory))
+            os.system('mkdir {0}{1}/{2}'.format(ps.ROOT_DIRECTORY, this_model_directory, dt))
 
     else:
         video_code = None
         # project directory
-        project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+        species = sys.argv[1].split('_')[1]
+        project_dir = os.path.join(ps.ROOT_DIRECTORY, species)+ '/'  #'/auto/data/nems_db/pup_py/'
         # data path
-        path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+        path = os.path.join(ps.ROOT_DIRECTORY, species, 'training_data/')  #'/auto/data/nems_db/pup_py/training_data/'
         training_files = os.listdir(path)
         n_training_files = len(training_files)
-        training_epochs = 250  # used to be 500. Make this a user def param?
+        training_epochs = int(sys.argv[2])  # used to be 500. Make this a user def param?
 
         # get current date/time so that we can save the model results in the correct place
         dt = datetime.datetime.now().isoformat()
         this_model_directory = 'old_model_fits'
-        os.system('mkdir {0}{1}/{2}'.format('/auto/data/nems_db/pup_py/', this_model_directory, dt))
+        out = os.system('mkdir {0}{1}/{2}'.format(project_dir, this_model_directory, dt))
 
     load_from_past = False
     # what iteration is this for the current model. Only matters if load_from_past = True
@@ -96,17 +97,18 @@ if __name__ == '__main__':
     controlled = False
 
     if load_from_past:
-        model_to_load = os.path.join(ps.ROOT_DIRECTORY, 'default_trained_model.hdf5')  
+        model_to_load = os.path.join(project_dir, 'default_trained_model.hdf5')  
     else:
         model_to_load = None
 
     params = {
         'batch_size': 16,
         'image_dim': (224, 224),
-        'n_parms': 5,
+        'n_parms': 13,
         'n_channels': 3,
         'shuffle': True,
-        'augment_minibatches': True
+        'augment_minibatches': True,
+        'species': species
         }
 
     # To make val/train specific to certain videos or not
@@ -165,7 +167,9 @@ if __name__ == '__main__':
         # add global average pooling layer
         x = GlobalAveragePooling2D()(x)
         # add output layer
-        predictions = Dense(5, activation='linear')(x)
+        #predictions = Dense(5, activation='linear')(x)
+        # 5 ellipse params + 8 new params for the eyelid keypoints
+        predictions = Dense(13, activation='linear')(x)
 
         model = Model(inputs=base_model.input, outputs=predictions)
 
@@ -216,14 +220,18 @@ if __name__ == '__main__':
                 name = os.listdir(project_dir + this_model_directory + '/default_trained_model/{0}'.format(old_date))[0]
                 default_name = project_dir + this_model_directory + '/default_trained_model/{0}/{1}'.format(old_date, name)
             except FileNotFoundError:
-                os.system('mkdir {0}{1}/default_trained_model/'.format('/auto/data/nems_db/pup_py/', this_model_directory))
+                os.system('mkdir {0}{1}/default_trained_model/'.format(project_dir, this_model_directory))
                 default_name = None # no default exists yet
             except IndexError:
                 default_name = None
         else:
-            old_date = os.listdir(project_dir + 'default_trained_model/')[0]
-            name = os.listdir(project_dir + 'default_trained_model/{0}'.format(old_date))[0]
-            default_name = project_dir + 'default_trained_model/{0}/{1}'.format(old_date, name)
+            try:
+                old_date = os.listdir(project_dir + 'default_trained_model/')[0]
+                name = os.listdir(project_dir + 'default_trained_model/{0}'.format(old_date))[0]
+                default_name = project_dir + 'default_trained_model/{0}/{1}'.format(old_date, name)
+            except:
+                default_name = None
+                log.info("No old model fits, don't need to purge")
 
         # delete the current model from defaults (it is still saved in the
         # parent (probably "old_model_fits") folder under the date it was fit on), along with
