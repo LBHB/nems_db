@@ -891,7 +891,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     return exptevents, spiketimes, unit_names
 
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
 
     # number of channels in recording (not all necessarily contain spikes)
     chancount = len(sortinfo)
@@ -917,8 +917,8 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             )
 
     for ch in range(0, chancount):
-        if len(sortinfo[ch]) and sortinfo[ch][0].size:
-            s = sortinfo[ch][0][0]['unitSpikes']
+        if len(sortinfo[ch]) and len(sortinfo[ch][0])>=sortidx+1 and sortinfo[ch][0][sortidx].size:
+            s = sortinfo[ch][0][sortidx]['unitSpikes']
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
             for u in range(0, unitcount):
@@ -973,9 +973,9 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     unit_names = []  # string suffix for each unit (CC-U)
     chan_names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     for c in range(0, chancount):
-        if len(sortinfo[c]) and sortinfo[c][0].size:
-            s = sortinfo[c][0][0]['unitSpikes']
-            comment = sortinfo[c][0][0][0][0][2][0]
+        if len(sortinfo[c]) and len(sortinfo[c][0])>=sortidx+1 and sortinfo[c][0][sortidx].size:
+            s = sortinfo[c][0][sortidx]['unitSpikes']
+            comment = sortinfo[c][0][sortidx][0][0][2][0]
             log.debug('Comment: %s', comment)
 
             s = np.reshape(s, (-1, 1))
@@ -2247,6 +2247,31 @@ def parse_cellid(options):
         options['rawid'] = rawid
         options['siteid'] = siteid
         cells_to_extract = [cellid]
+
+    if options['cellid'] is not None:
+        cellids = options['cellid'] if (type(options['cellid']) is list) \
+            else [options['cellid']]
+        units = []
+        channels = []
+        sortidxs = []
+        for cellid in cellids:
+            t = cellid.split("_")
+            # test for special case where psuedo cellid suffix has been added to
+            # cellid by stripping anything after a "_" underscore in the cellid (list)
+            # provided
+            # get sort idx from database
+            scf = []
+            for rawid_ in rawid:  # rawid is actually a list of rawids
+                scf.append(db.get_cell_files(t[0], rawid=rawid_))
+            assert len(scf) == len(rawid)
+            channels.append(scf[0].iloc[0].channum)
+            units.append(scf[0].iloc[0].unit)
+            sortidxs.append([scf_.iloc[0].sortidx for scf_ in scf])
+            if scf[0].iloc[0].sortidx > 1:
+                print('Sortidx is {} for {}', scf[0].iloc[0].sortidx, cellid)
+        options['channels'] = channels
+        options['units'] = units
+        options['sortidxs'] = sortidxs
 
     if (len(cells_to_extract) == 0) & (mfilename is None):
         raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "
