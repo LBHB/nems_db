@@ -125,7 +125,6 @@ class BAPHYExperiment:
             self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
             self.channels_to_load = nops['channels']
             self.units_to_load = nops['units']
-            self.sortidxs_to_load = nops['sortidxs']
             self.rawid = nops['rawid']
             # get list of corresponding parmfiles at this site for these rawids
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
@@ -175,6 +174,7 @@ class BAPHYExperiment:
                 self.sited = os.path.split(parmfile)[-1][:7]
                 self.cells_to_load = None
                 self.cells_to_extract = None
+                self.units_to_load = None
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
@@ -285,9 +285,9 @@ class BAPHYExperiment:
             trial_starts = self.get_trial_starts('openephys')
             return io.baphy_align_time_openephys(baphy_events, trial_starts, **kw)
         if correction_method == 'spikes':
-            spikes_fs = self._get_spikes()
-            exptevents = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[0] for (ev, (sp, fs)) 
-                                in zip(baphy_events, spikes_fs)]
+            spikedata = self._get_spikes()
+            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], kw['rasterfs'])[0] for (ev, spd)
+                                in zip(baphy_events, spikedata)]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
@@ -616,8 +616,7 @@ class BAPHYExperiment:
         #for i, f in enumerate(self.parmfile):
         #    fn = str(f).split('/')[-1]
         #    exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
-        spikes_fs = self._get_spikes()
-        max_sortidx = max([max(si) for si in self.sortidxs_to_load])
+        spikedata = self._get_spikes()
         if self.correction_method == 'spikes':
             spikedicts = []
             for file_ind in range(len(exptevents)):
@@ -625,32 +624,23 @@ class BAPHYExperiment:
                 spikedict = {}
                 spiketimes = []
                 unit_names = []
-                _, spiketimes_, unit_names_ = io.baphy_align_time(exptevents[file_ind], spikes_fs[file_ind][0],
-                                                                  spikes_fs[file_ind][1], kw['rasterfs'])
-                spiketimes.append(spiketimes_)
-                unit_names.append(unit_names_)
-                for i in range(1, max_sortidx):  # load sortidxs greater than 1 if max_sortidx is greater than 1
-                    _, spiketimes_, unit_names_ = io.baphy_align_time(exptevents[file_ind], spikes_fs[file_ind][0],
-                                                                      spikes_fs[file_ind][1], kw['rasterfs'], sortidx=i)
-                    spiketimes.append(spiketimes_)
-                    unit_names.append(unit_names_)
+                _, spiketimes, unit_names = io.baphy_align_time(exptevents[file_ind], spikedata[file_ind]['sortinfo'],
+                                                                  spikedata[file_ind]['spikefs'], kw['rasterfs'])
 
                 if self.cells_to_load is not None:
                     for i in range(len(self.cells_to_load)):
                         if self.channels_to_load is not None:
                             # Use channel_to_load and units_to_load
                             chan_unit_str = '{:02d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
-                            sortidx_to_load = self.sortidxs_to_load[i][file_ind]
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]
-                            sortidx_to_load = 1
                         try:
-                            mi = unit_names[sortidx_to_load - 1].index(chan_unit_str)
+                            mi = unit_names.index(chan_unit_str)
                         except ValueError:
                             raise RuntimeError(
-                                f'{chan_unit_str} sortidx {sortidx_to_load} was asked to be loaded, but wasn''t found in the spk.mat file')
-                        spikedict[self.cells_to_load[i]] = spiketimes[sortidx_to_load - 1][mi]
+                                f'{chan_unit_str} was asked to be loaded, but wasn''t found in the spk.mat file')
+                        spikedict[self.cells_to_load[i]] = spiketimes[mi]
                 else:
                     for i, unit_name in enumerate(unit_names):
                         spikedict[self.siteid + "-" + unit_name] = spiketimes[i]

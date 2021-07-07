@@ -792,11 +792,16 @@ def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
     if sortinfo.shape[0] > 1:
         sortinfo = sortinfo.T
     sortinfo = sortinfo[0]
-
+    spikedata = {}
+    spikedata['sortinfo'] = sortinfo
     # figure out sampling rate, used to convert spike times into seconds
-    spikefs = matdata['rate'][0][0]
+    spikedata['spikefs'] = matdata['rate'][0][0]
+    if 'baphy_fmt' in matdata:
+        spikedata['baphy_fmt'] = matdata['baphy_fmt']
+    else:
+        spikedata['baphy_fmt'] = 1
 
-    return sortinfo, spikefs
+    return spikedata
 
 
 def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
@@ -1814,11 +1819,11 @@ def baphy_pupil_uri(pupilfilepath, **options):
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
     # load spike times
-    sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+    spikedata = baphy_load_spike_data_raw(spkfilepath)
     # adjust spike and event times to be in seconds since experiment started
 
     exptevents, spiketimes, unit_names = baphy_align_time(
-            exptevents, sortinfo, spikefs, options["rasterfs"])
+            exptevents, spikedata['sortinfo'], spikedata['spikefs'], options["rasterfs"])
     log.info('Creating trial events')
     tag_mask_start = "TRIALSTART"
     tag_mask_stop = "TRIALSTOP"
@@ -2230,25 +2235,19 @@ def parse_cellid(options):
             else [options['cellid']]
         units = []
         channels = []
-        sortidxs = []
         for cellid in cellids:
             t = cellid.split("_")
             # test for special case where psuedo cellid suffix has been added to
             # cellid by stripping anything after a "_" underscore in the cellid (list)
             # provided
-            # get sort idx from database
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
                 scf.append(db.get_cell_files(t[0], rawid=rawid_))
             assert len(scf) == len(rawid)
             channels.append(scf[0].iloc[0].channum)
             units.append(scf[0].iloc[0].unit)
-            sortidxs.append([scf_.iloc[0].sortidx for scf_ in scf])
-            if scf[0].iloc[0].sortidx > 1:
-                print('Sortidx is {} for {}', scf[0].iloc[0].sortidx, cellid)
         options['channels'] = channels
         options['units'] = units
-        options['sortidxs'] = sortidxs
 
     if (len(cells_to_extract) == 0) & (mfilename is None):
         raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "
