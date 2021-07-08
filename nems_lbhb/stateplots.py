@@ -26,10 +26,14 @@ params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
           'axes.labelsize': font_size,
           'axes.titlesize': font_size,
+          'axes.spines.right': False,
+          'axes.spines.top': False,
           'xtick.labelsize': font_size,
           'ytick.labelsize': font_size,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
+
+
 plt.rcParams.update(params)
 
 line_colors = {'actual_psth': (0,0,0),
@@ -74,7 +78,8 @@ fill_colors = {'actual_psth': (.8,.8,.8),
 
 def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
               hist_range=[-1, 1], title=None,
-              highlight=None, ax=None, click_fun=None):
+              highlight=None, ax=None, click_fun=None,
+              markersize=6):
     """
     beta1, beta2 are T x 1 vectors
     scatter plot comparing beta1 vs. beta2
@@ -137,16 +142,21 @@ def beta_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
     set1i = np.where(set1)
     evs = set1i[0]
 
-    ax.plot(hist_range, zz, 'k--',linewidth=0.5)
-    ax.plot(zz, hist_range, 'k--',linewidth=0.5)
-    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5)
+    ax.plot(hist_range, zz, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(zz, hist_range, 'k--',linewidth=0.5, dashes=(4,2))
+    ax.plot(hist_range,hist_range, 'k--',linewidth=0.5, dashes=(4,2))
 
-    ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=6,
-            markeredgecolor='white', markeredgewidth=0.5)
-    ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
-            markeredgewidth=0.5, markersize=6)
-    ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=10,
-            markeredgecolor='white', markeredgewidth=0.5)
+    if markersize>=5:
+        ax.plot(beta1[set2], beta2[set2], '.', color='lightgray', markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markeredgecolor='white',
+                markeredgewidth=0.25, markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize,
+                markeredgecolor='white', markeredgewidth=0.25)
+    else:
+        ax.plot(beta1[set2], beta2[set2], '.', color='gray', markersize=markersize)
+        ax.plot(beta1[outcells], beta2[outcells], '.', color='red', markersize=markersize)
+        ax.plot(beta1[set1], beta2[set1], 'k.', picker=5, markersize=markersize)
 
     ax.set_aspect('equal', 'box')
     #plt.ylim(hist_range)
@@ -517,7 +527,7 @@ def model_per_time_wrapper(cellid, batch=307,
                            fitter = "_jk.nf20-basic",
                            basemodel = "-ref-psthfr_stategain.S",
                            state_list=None, plot_halves=True,
-                           colors=None):
+                           colors=None, epoch="REFERENCE", max_states=100):
     """
     batch = 307  # A1 SUA and MUA
     batch = 309  # IC SUA and MUA
@@ -556,36 +566,118 @@ def model_per_time_wrapper(cellid, batch=307,
         #import pdb;
         #pdb.set_trace()
 
-    plt.figure()
     #if ('hlf' in state_list[0]) or ('fil' in state_list[0]):
     if plot_halves:
         files_only=True
     else:
         files_only=False
-        
+
+    f, ax = plt.subplots(len(contexts)+2, 1)
     for i, ctx in enumerate(contexts):
 
         rec = ctx['val'].apply_mask()
         modelspec = ctx['modelspec']
-        epoch="REFERENCE"
         rec = ms.evaluate(rec, modelspec)
         if i == len(contexts)-1:
-            ax = plt.subplot(len(contexts)+1, 1, 1)
-            nplt.state_vars_timeseries(rec, modelspec, ax=ax)
-            ax.set_title('{} {}'.format(cellid, modelnames[-1]))
 
-        ax = plt.subplot(len(contexts)+1, 1, 2+i)
+            nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
+                                         rec=rec, sig_name='pupil', ax=ax[0])
+            ax[0].set_title('{} {}'.format(cellid, modelnames[-1]))
+
+            nplt.state_vars_timeseries(rec, modelspec, ax=ax[1])
+
         nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
                             psth_name2='pred', state_sig='state_f',
                             colors=colors, channel=None, decimate_by=1,
-                            ax=ax, files_only=files_only, modelspec=modelspec)
-        ax.set_ylabel(state_list[i])
-        ax.set_xticks([])
+                            ax=ax[2+i], files_only=files_only, modelspec=modelspec, max_states=max_states)
+        ax[2+i].set_ylabel(state_list[i])
+        ax[2+i].set_xticks([])
 
     #plt.tight_layout()
-    
+    return f
 
-def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
+
+def epochs_per_time(cellid, batch=307, modelname=None,
+                           plot_halves=True,
+                           colors=None, epoch_list=None):
+    """
+    batch = 307  # A1 SUA and MUA
+    batch = 309  # IC SUA and MUA
+
+    alternatives:
+        basemodels = ["-ref-psthfr.s_stategain.S",
+                      "-ref-psthfr.s_sdexp.S",
+                      "-ref.a-psthfr.s_sdexp.S"]
+        state_list = ['st.pup0.hlf0','st.pup0.hlf','st.pup.hlf0','st.pup.hlf']
+        state_list = ['st.pup0.far0.hit0.hlf0','st.pup0.far0.hit0.hlf',
+                      'st.pup.far.hit.hlf0','st.pup.far.hit.hlf']
+        state_list = ['st.pup0.fil0','st.pup0.fil','st.pup.fil0','st.pup.fil']
+
+    """
+    if epoch_list is None:
+        epoch_list_regex = ["REFERENCE", "TARGET"]
+    else:
+        epoch_list_regex = epoch_list.copy()
+    if plot_halves:
+        files_only = True
+    else:
+        files_only = True
+
+    # load the model and evaluate almost to end
+    xf, ctx = xhelp.load_model_xform(cellid, batch, modelname,
+                                     eval_model=False)
+    ctx, l = xforms.evaluate(xf, ctx, start=0, stop=-2)
+    if plot_halves:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_half'], new_signalname='state_f')
+    else:
+        ctx['val'] = preproc.make_state_signal(
+            ctx['val'], state_signals=['each_file'], new_signalname='state_f')
+
+    modelspec = ctx['modelspec']
+    rec = ctx['val'].apply_mask()
+    rec = ms.evaluate(rec, modelspec)
+
+    epoch_list = []
+    for e in epoch_list_regex:
+        epoch_list.extend(ep.epoch_names_matching(rec.epochs, e))
+    print('epoch_list: ', epoch_list)
+
+    f, axs = plt.subplots(len(epoch_list) + 2, 1, figsize=(8,10))
+
+    nplt.timeseries_from_signals(signals=[rec['pupil']], no_legend=True,
+                                 rec=rec, sig_name='pupil', ax=axs[0])
+    axs[0].set_title('{} {}'.format(cellid, modelname))
+    try:
+        nplt.state_vars_timeseries(rec, modelspec, ax=axs[1])
+    except:
+        print('Error with state_vars_timeseries')
+    ylims = np.zeros((len(epoch_list),2))
+    for i, epoch in enumerate(epoch_list):
+        nplt.state_vars_psth_all(rec, epoch, psth_name='resp',
+                                 psth_name2='pred', state_sig='state_f',
+                                 colors=colors, channel=None, decimate_by=1,
+                                 ax=axs[i+2], files_only=files_only,
+                                 modelspec=modelspec)
+        ylims[i] = axs[i+2].get_ylim()
+        axs[i+2].set_ylabel(epoch)
+        axs[i+2].set_xticks([])
+        ff = np.where([c==epoch for c in rec['stim'].chans])[0]
+        if len(ff)>0:
+            if plot_halves:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,2:6],3))
+            else:
+                print(epoch, np.round(modelspec.phi[0]['g'][ff,:],3))
+
+
+    for i, epoch in enumerate(epoch_list):
+        axs[i+2].set_ylim((np.min(ylims[:,0]), np.max(ylims[:,1])))
+    #plt.tight_layout()
+
+    return f, modelspec
+
+
+def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None, show_ref_tar=False):
     """
     state_colors : N x 2 list
        color spec for high/low lines in each of the N states
@@ -643,9 +735,11 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
                                        psth_name='pred_pb0', state_chan=var)
             mod2_pb = state_mod_index(val, epoch='REFERENCE',
                                       psth_name='pred', state_chan=var)
+            pred_mod[i] = np.concatenate((mod2_pb-mod2_p0b, mod2_pb-mod2_pb0))
+            pred_mod_full[i] = np.concatenate((mod2_pb0, mod2_p0b))
 
-            pred_mod[i] = np.array([mod2_pb-mod2_p0b, mod2_pb-mod2_pb0])
-            pred_mod_full[i] = np.array([mod2_pb0, mod2_p0b])
+    # STOP HERE TO PULL OUT MI AND R2
+    #import pdb; pdb.set_trace()
 
     pred_mod_norm = pred_mod / (state_std + (state_std == 0).astype(float))
     pred_mod_full_norm = pred_mod_full / (state_std +
@@ -653,6 +747,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
 
     if 'each_passive' in factors:
         psth_names_ctl = ["pred_p0b"]
+        psth_names_exp = ["pred_pb0"]
         factors.remove('each_passive')
         for v in state_var_list:
             if v.startswith('FILE_'):
@@ -660,6 +755,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
                 psth_names_ctl.append("pred_pb0")
     else:
         psth_names_ctl = ["pred_p0b", "pred_pb0"]
+        psth_names_exp = ["pred_pb0", "pred_p0b"]
 
     col_count = len(factors) - 1
     if state_colors is None:
@@ -679,7 +775,7 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
            varlbl = var[5:]
         else:
            varlbl = var
-        ax = plt.subplot(4, col_count, col_count+i+1)
+        ax = plt.subplot(4, col_count, col_count + i+1)
 
         nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
                                        psth_name="resp",
@@ -703,28 +799,52 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
         ax.xaxis.label.set_visible(False)
         nplt.ax_remove_box(ax)
 
-        ax = plt.subplot(4, col_count, col_count*2+i+1)
+        ax = plt.subplot(4, col_count, col_count*2 + i+1)
         nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
                                        psth_name="resp",
-                                       psth_name2="pred",
+                                       psth_name2=psth_names_exp[i],
                                        state_chan=var, ax=ax,
                                        colors=state_colors[i])
         if i == 0:
-            ax.set_ylabel("Full Model")
+            ax.set_ylabel("Experimental model")
+            ax.set_title("{} exp r={:.3f}"
+                         .format(varlbl.lower(),
+                                 ctx_p0b['modelspec'].meta['r_test'][0]),
+                         fontsize=6)
         else:
             ax.yaxis.label.set_visible(False)
+            ax.set_title("{} exp r={:.3f}"
+                         .format(varlbl.lower(),
+                                 ctx_pb0['modelspec'].meta['r_test'][0]),
+                         fontsize=6)
         if ax.legend_:
             ax.legend_.remove()
+        ax.xaxis.label.set_visible(False)
+        nplt.ax_remove_box(ax)
 
-        if psth_names_ctl[i] == "pred_p0b":
-            j=0
-        else:
-            j=1
+        if not show_ref_tar:
+            ax = plt.subplot(4, col_count, col_count*3+i+1)
+            nplt.state_var_psth_from_epoch(val, epoch="REFERENCE",
+                                           psth_name="resp",
+                                           psth_name2="pred",
+                                           state_chan=var, ax=ax,
+                                           colors=state_colors[i])
+            if i == 0:
+                ax.set_ylabel("Full Model")
+            else:
+                ax.yaxis.label.set_visible(False)
+            if ax.legend_:
+                ax.legend_.remove()
 
-        ax.set_title("r={:.3f} rawmod={:.3f} umod={:.3f}"
-                     .format(ctx_pb['modelspec'].meta['r_test'][0],
-                             pred_mod_full_norm[i+1][j], pred_mod_norm[i+1][j]),
-                     fontsize=6)
+            if psth_names_ctl[i] == "pred_p0b":
+                j=0
+            else:
+                j=1
+
+            ax.set_title("r={:.3f} rawmod={:.3f} umod={:.3f}"
+                         .format(ctx_pb['modelspec'].meta['r_test'][0],
+                                 pred_mod_full_norm[i+1][j], pred_mod_norm[i+1][j]),
+                         fontsize=6)
 
         if var == 'active':
             ax.legend(('pas', 'act'))
@@ -780,34 +900,38 @@ def _model_step_plot(cellid, batch, modelnames, factors, state_colors=None):
     spont = np.nanmean(all_ref_resp[:,0,:prebins])
     ref_mean = np.nanmean(ref_resp[:,0,prebins:durbins])-spont
     all_ref_mean = np.nanmean(all_ref_resp[:,0,prebins:durbins])-spont
+
     #print(spont)
     #print(np.nanmean(ref_resp[:,0,prebins:-postbins]))
-    ax1=plt.subplot(4, 2, 7)
     ref_psth = [np.nanmean(ref_resp[:, 0, :], axis=0),
                 np.nanmean(all_ref_resp[:, 0, :], axis=0)]
-    ll = ["{} {:.1f}".format(ref_name, ref_mean),
-          "all refs {:.1f}".format(all_ref_mean)]
-    nplt.timeseries_from_vectors(ref_psth, fs=fs, legend=ll, ax=ax1,
-                                 time_offset=prebins/fs)
-
-    ax2=plt.subplot(4, 2, 8)
-    ll = []
-    tar_mean = np.zeros(np.max([2,len(keys)])) * np.nan
+    tar_mean = np.zeros(np.max([2, len(keys)])) * np.nan
     tar_psth = []
     for ii, k in enumerate(keys):
         tar_psth.append(np.nanmean(tar_resp[k][:, 0, :], axis=0))
-        tar_mean[ii] = np.nanmean(tar_resp[k][:, 0, prebins:durbins])-spont
-        ll.append("{} {:.1f}".format(k, tar_mean[ii]))
-    nplt.timeseries_from_vectors(tar_psth, fs=fs, legend=ll, ax=ax2,
-                                 time_offset=prebins/fs)
-    # plt.legend(ll, fontsize=6)
+        tar_mean[ii] = np.nanmean(tar_resp[k][:, 0, prebins:durbins]) - spont
 
-    ymin=np.min([ax1.get_ylim()[0], ax2.get_ylim()[0]])
-    ymax=np.max([ax1.get_ylim()[1], ax2.get_ylim()[1]])
-    ax1.set_ylim([ymin, ymax])
-    ax2.set_ylim([ymin, ymax])
-    nplt.ax_remove_box(ax1)
-    nplt.ax_remove_box(ax2)
+    if show_ref_tar:
+        ax1=plt.subplot(4, 2, 7)
+        ll = ["{} {:.1f}".format(ref_name, ref_mean),
+              "all refs {:.1f}".format(all_ref_mean)]
+        nplt.timeseries_from_vectors(ref_psth, fs=fs, legend=ll, ax=ax1,
+                                     time_offset=prebins/fs)
+
+        ax2=plt.subplot(4, 2, 8)
+        ll = []
+        for ii, k in enumerate(keys):
+            ll.append("{} {:.1f}".format(k, tar_mean[ii]))
+        nplt.timeseries_from_vectors(tar_psth, fs=fs, legend=ll, ax=ax2,
+                                     time_offset=prebins/fs)
+        # plt.legend(ll, fontsize=6)
+
+        ymin=np.min([ax1.get_ylim()[0], ax2.get_ylim()[0]])
+        ymax=np.max([ax1.get_ylim()[1], ax2.get_ylim()[1]])
+        ax1.set_ylim([ymin, ymax])
+        ax2.set_ylim([ymin, ymax])
+        nplt.ax_remove_box(ax1)
+        nplt.ax_remove_box(ax2)
 
     plt.tight_layout()
 
@@ -1090,3 +1214,220 @@ def quick_pop_state_plot(modelspec=None, **ctx):
     ax.set_xticklabels(rec['stim'].chans)
 
     return {}
+
+def state_resp_coefs(rec, modelspec, ax=None,
+                     channel=None, **options):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    if ax is None:
+        f, ax = plt.subplots()
+
+    d = modelspec.phi[-1]['d']
+    n_inputs = d.shape[0]
+    total_states = d.shape[1]
+    true_states = int(total_states / (n_inputs + 1))
+
+    d_new = d[:, 0::true_states]
+    for _i in range(1, true_states):
+        d_new = np.concatenate((d_new,np.full((n_inputs,1),np.nan),
+                                d[:,_i::true_states]), axis=1)
+    mm = np.max(np.abs(d))
+    im = ax.imshow(d_new, origin='lower', clim=[-mm, mm])
+    state_chans = modelspec.meta['state_chans']
+    for _i in range(len(state_chans)):
+        ax.text(_i*(n_inputs+2)+1, n_inputs, state_chans[_i], va='top')
+    plt.colorbar(im, ax=ax)
+    nplt.ax_remove_box(ax)
+    ax.set_ylabel('output chan')
+    ax.set_xticks([])
+
+    """
+    g = modelspec.phi[-1]['g']
+    g[:, 0] = 0
+    mm = np.max(np.abs(g))
+    ax[1, 0].imshow(g[:, 0::3], clim=[-mm, mm])
+    ax[1, 0].set_ylabel('channel out')
+    ax[1, 1].imshow(g[:, 1::3], clim=[-mm, mm])
+    im = ax[1, 2].imshow(g[:, 2::3], clim=[-mm, mm])
+    plt.colorbar(im, ax=ax[1, 2])
+    """
+
+
+def cc_comp(val, modelspec, ax=None, extra_epoch=None, **options):
+    ## display noise corr. matrices
+    f,ax = plt.subplots(4,3, figsize=(9,12))
+    #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
+
+    if extra_epoch is not None:
+        rec=val.copy()
+        rec=rec.and_mask(extra_epoch)
+        rec = rec.apply_mask()
+        print(f"masked {extra_epoch} len from {val['mask'].as_continuous().sum()} to {val['mask'].as_continuous().sum()}")
+        large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+        small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+        mask = rec['mask'].as_continuous()[0,:].astype(bool)
+        large_idx *= mask
+        small_idx *= mask
+    else:
+        rec = val.apply_mask()
+        large_idx=rec['mask_large'].as_continuous()[0,:].astype(bool)
+        small_idx=rec['mask_small'].as_continuous()[0,:].astype(bool)
+    pred0=rec['pred0'].as_continuous()
+    pred=rec['pred'].as_continuous()
+    resp=rec['resp'].as_continuous()
+    siteid = modelspec.meta['cellid'].split("-")[0]
+    large_cc = np.cov(resp[:,large_idx]-pred0[:,large_idx])
+    small_cc = np.cov(resp[:,small_idx]-pred0[:,small_idx])
+    mm=np.max(np.abs(small_cc)) * 0.5
+
+    ax[0,0].imshow(small_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[1,0].imshow(large_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[2,0].imshow(large_cc-small_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[0,0].set_title(siteid + ' resp')
+
+    ax[0,0].set_ylabel('small')
+    ax[1,0].set_ylabel('large')
+    ax[2,0].set_ylabel('large-small')
+    ax[3,0].set_ylabel('d_sim-d_act')
+    ax[2,0].set_title(f"std={np.mean((large_cc-small_cc)**2):.3f}")
+
+    sm_cc = np.cov(pred[:,small_idx]-pred0[:,small_idx])
+    lg_cc = np.cov(pred[:,large_idx]-pred0[:,large_idx])
+    ax[0,1].imshow(sm_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[1,1].imshow(lg_cc,aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[2,1].imshow((lg_cc-sm_cc),aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[3,1].imshow((large_cc-small_cc) - (lg_cc-sm_cc),aspect='auto',interpolation='none',clim=[-mm,mm], cmap='bwr', origin='lower')
+    ax[0,1].set_title(siteid + ' pred');
+    ax[2,1].set_title(f"std={np.mean((lg_cc-sm_cc)**2):.3f}")
+    ax[3,1].set_title(f"E={np.mean(((large_cc-small_cc) - (lg_cc-sm_cc))**2):.3f}");
+
+    dact=large_cc-small_cc
+    dpred=lg_cc-sm_cc
+    ax[1,2].plot(np.diag(dact),label='act')
+    ax[1,2].plot(np.diag(dpred),label='pred')
+    ax[1,2].set_title('mean lg-sm var')
+    ax[1,2].legend(frameon=False)
+    np.fill_diagonal(dact, 0)
+    ax[2,2].plot(dact.mean(axis=0),label='act')
+    np.fill_diagonal(dpred, 0)
+    ax[2,2].plot(dpred.mean(axis=0),label='pred')
+    ax[2,2].set_title('mean lg-sm cc')
+    ax[2,2].set_xlabel('unit')
+ 
+    triu = np.triu_indices(dpred.shape[0], 1)
+    cc_avg = (large_cc[triu] + small_cc[triu])/2
+    h,b=np.histogram(cc_avg,bins=20,range=[-0.3,0.3])
+    ax[0,2].bar(b[1:],h,width=b[1]-b[0])
+    ax[0,2].set_title(f"median cc={np.median(cc_avg):.3f}")
+
+    d_each = dact[triu]
+    h,b=np.histogram(d_each,bins=20,range=[-0.3,0.3])
+    ax[3,2].bar(b[1:],h,width=b[1]-b[0])
+    ax[3,2].set_xlabel(f"median d_cc={np.median(d_each):.3f}")
+    f.suptitle(f"{modelspec.meta['cellid']} - {modelspec.meta['modelname']}", fontsize=8)
+
+    return f
+
+
+def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **options):
+    from nems_lbhb.dimensionality_reduction import TDR
+    from sklearn.decomposition import PCA
+    import re
+    from nems_lbhb.tin_helpers import make_tbp_colormaps, compute_ellipse
+
+    rt=rec.copy()
+    siteid = modelspec.meta['cellid'].split("-")[0]
+
+    print(f"Computing PCs pc_base={pc_base}")
+
+    stims = (rt.epochs['name'].value_counts() >= 8)
+    stims = [stims.index[i] for i, s in enumerate(stims) if bool(re.search(epoch_regex, stims.index[i])) and s == True]
+
+    # can't simply extract evoked for refs because can be longer/shorted if it came after target 
+    # and / or if it was the last stim. So, masking prestim / postim doesn't work. Do it manually
+    d = rt['resp'].extract_epochs(stims, mask=rt['mask'])
+    if pc_base=="stim":
+        R = [v.mean(axis=0) for (k, v) in d.items()]
+    else:
+        d0 = rt['psth'].extract_epochs(stims, mask=rt['mask'])
+        d = {k: d[k]-d0[k] for k in d.keys()}
+        R = [np.reshape(np.transpose(v,[1,0,2]),[v.shape[1],-1]) for (k, v) in d.items()]
+    Rall_u = np.hstack(R).T
+
+    pca = PCA(n_components=2)
+    pca.fit(Rall_u)
+    pc_axes = pca.components_
+
+    #a=tdr_axes
+    a=pc_axes
+
+    # project onto first two PCs
+    print("Projecting onto first two PCs")
+    pred0 = rt['pred0'].as_continuous()
+    pred = rt['pred'].as_continuous()
+    resp = rt['resp'].as_continuous()
+    rt['rpc'] = rt['resp']._modified_copy((resp).T.dot(a.T).T[0:2, :])
+    rt['ppc_pred0'] = rt['pred0']._modified_copy((pred0).T.dot(a.T).T[0:2, :])
+    rt['ppc_pred'] = rt['pred']._modified_copy((pred).T.dot(a.T).T[0:2, :])
+
+    units = rt['resp'].chans
+    e=rt['resp'].epochs
+    r_large = rt.copy()
+    r_large['mask']=r_large['mask_large']
+    r_small = rt.copy()
+    r_small['mask']=r_small['mask_small']
+
+    conditions = ['small', 'large']
+    cond_recs = [r_small, r_large]
+
+    d = rec['resp'].get_epoch_bounds('PreStimSilence')
+    PreStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+    d = rec['resp'].get_epoch_bounds('PostStimSilence')
+    PostStimBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+    d = rec['resp'].get_epoch_bounds('REFERENCE')
+    ReferenceBins = int(np.round(np.mean(np.diff(d))*rec['resp'].fs))
+
+    ChunkSec=0.25
+    ChunkBins = int(np.round(ChunkSec*rec['resp'].fs))
+    PreStimBins, PostStimBins, ChunkBins
+
+    #cmaps = [[BwG(int(c)) for c in np.linspace(0,255,len(ref_stims))], 
+    #         [gR(int(c)) for c in np.linspace(0,255,len(sounds))]]
+    siglist = ['ppc_pred0', 'ppc_pred', 'rpc']
+    f,ax=plt.subplots(len(conditions),len(siglist),sharex=True,sharey=True, figsize=(2*len(siglist),4))
+    for ci, to, r in zip(range(len(conditions)), conditions, cond_recs):
+        for j, sig in enumerate(siglist):
+            #colors = cmaps[0]
+            for i,k in enumerate(stims):
+                try:
+                    p = r[sig].extract_epoch(k, mask=r['mask'], allow_incomplete=True)
+                    if p.shape[0]>2:
+                        psamples = p.shape[2]
+                        if psamples<ReferenceBins:
+                            PreStimBins=0
+                            PostStimBins=0
+                        for c in range(np.max((PreStimBins-ChunkBins,0)),psamples-PostStimBins,ChunkBins):
+                            g = np.isfinite(p[:,0,c])
+                            x = np.nanmean(p[g,0,c:(c+ChunkBins)], axis=1)
+                            y = np.nanmean(p[g,1,c:(c+ChunkBins)], axis=1)
+                            #c=list(colors(i))
+                            #c[-1]=0.2
+                            #ax[ci, j].plot(x,y,'.', color=c, label=k)
+                            e = compute_ellipse(x, y)
+                            ax[ci, j].plot(e[0], e[1])
+                            if c==(PreStimBins-ChunkBins):
+                                ax[ci,j].plot(x.mean(),y.mean(),'k*',markersize=5)
+                except:
+                    #print(f'no matches for {k}')
+                    pass
+
+            ax[ci,j].set_title(f"{to}-{sig}")
+    #ax[ci, 0].legend()
+    #ax[ci, 0].set_title(to + " REF/TAR")
+
+    ax[0,0].set_ylabel(siteid)
+    ax[1,0].set_xlabel('PC1')
+    ax[1,0].set_ylabel('PC2')    
+ 
+    return rt
+

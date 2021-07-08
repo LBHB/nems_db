@@ -139,17 +139,18 @@ def reformat_epochs(epochs, target_id):
         e['name'] = 'target_{}'.format(i)
         new_epochs.append(e)
 
-        # extract all occurances of the target across all trials. find out what
-        # the actual (intended) target was for each particular trial.
-        x = target_id.extract_epoch(target_name)[:, 0, 0]
-        m = x == target
-        c = e.loc[m].copy()
-        c['name'] = 'current_target'
-        new_epochs.append(c)
-
-        c = e.loc[~m].copy()
-        c['name'] = 'other_target'
-        new_epochs.append(c)
+        # # SVD Commenting out this, which was buggy and not used anywhere that I can tell
+        # # extract all occurrences of the target across all trials. find out what
+        # # the actual (intended) target was for each particular trial.
+        # x = target_id.extract_epoch(target_name)[:, 0, 0]
+        # m = x == target
+        # c = e.loc[m].copy()
+        # c['name'] = 'current_target'
+        # new_epochs.append(c)
+        #
+        # c = e.loc[~m].copy()
+        # c['name'] = 'other_target'
+        # new_epochs.append(c)
 
     repeating = extract_repeating(epochs)
     new_epochs.append(repeating)

@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 @app.route('/batch_performance', methods=['GET', 'POST'])
 def batch_performance():
     session = Session()
-    NarfResults = Tables()['NarfResults']
+    Results = Tables()['Results']
 
     cSelected = request.form['cSelected']
     bSelected = request.form['bSelected'][:3]
@@ -35,22 +35,22 @@ def batch_performance():
     if int(findAll):
         results = psql.read_sql_query(
                 session.query(
-                        NarfResults.cellid, NarfResults.modelname,
-                        NarfResults.r_test
+                        Results.cellid, Results.modelname,
+                        Results.r_test
                         )
-                .filter(NarfResults.batch == bSelected)
+                .filter(Results.batch == bSelected)
                 .statement,
                 session.bind
                 )
     else:
         results = psql.read_sql_query(
                 session.query(
-                        NarfResults.cellid, NarfResults.modelname,
-                        NarfResults.r_test
+                        Results.cellid, Results.modelname,
+                        Results.r_test
                         )
-                .filter(NarfResults.batch == bSelected)
-                .filter(NarfResults.cellid.in_(cSelected))
-                .filter(NarfResults.modelname.in_(mSelected))
+                .filter(Results.batch == bSelected)
+                .filter(Results.cellid.in_(cSelected))
+                .filter(Results.modelname.in_(mSelected))
                 .statement,
                 session.bind
                 )
@@ -81,7 +81,7 @@ def fit_report():
     session = Session()
     db_tables = Tables()
     tQueue = db_tables['tQueue']
-    NarfResults = db_tables['NarfResults']
+    Results = db_tables['Results']
 
     cSelected = request.args.getlist('cSelected[]')
     bSelected = request.args.get('bSelected')[:3]
@@ -104,12 +104,12 @@ def fit_report():
 
     results = psql.read_sql_query(
             session.query(
-                    NarfResults.cellid, NarfResults.batch,
-                    NarfResults.modelname,
+                    Results.cellid, Results.batch,
+                    Results.modelname,
                     )
-            .filter(NarfResults.batch == bSelected)
-            .filter(NarfResults.cellid.in_(cSelected))
-            .filter(NarfResults.modelname.in_(mSelected))
+            .filter(Results.batch == bSelected)
+            .filter(Results.cellid.in_(cSelected))
+            .filter(Results.modelname.in_(mSelected))
             .statement,
             session.bind
             )

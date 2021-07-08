@@ -6,27 +6,54 @@ wsu_gray_light = '#586469'
 wsu_crimson = '#981e32'
 ohsu_navy = '#0e4d8f'
 
-greys = plt.get_cmap('Greys')
-contrast_cmap = plt.get_cmap('plasma')
-model_cmap = plt.get_cmap('viridis')
-model_color_spacing = [0.0, 0.25, 0.45, 0.65, 0.85]
-model_colors = {k: model_cmap(n) for k, n in
-                zip(['combined', 'stp', 'max', 'gc', 'LN'],
-                    model_color_spacing)}
+#greys = plt.get_cmap('Greys')
+contrast_cmap = plt.get_cmap('Reds')
+spectrogram_cmap = plt.get_cmap('Blues')
+#model_cmap = plt.get_cmap('viridis')
+#model_color_spacing = [0.0, 0.25, 0.45, 0.65, 0.85]
+#model_colors = {k: model_cmap(n) for k, n in
+#                zip(['combined', 'stp', 'max', 'gc', 'LN'],
+#                    model_color_spacing)}
+model_cmap = plt.get_cmap('tab20c')
+max_cmap = plt.get_cmap('tab10')
+model_colors = {
+        'LN': model_cmap(0.86),
+        #'LN_trans': tuple([i + j for i, j in zip(model_cmap(0.86), (0, 0, 0, -0.25))]),
+        #'max': model_cmap(0.21),
+        'max': max_cmap(0.31),
+        #'max_trans': tuple([i + j for i, j in zip(model_cmap(0.31), (0, 0, 0, -0.25))]),
+        'gc': model_cmap(0.41),
+        'stp': model_cmap(0),
+        'combined': model_cmap(0.61)
+        }
+
+imp_color = model_colors['max']
+notimp_color = model_colors['LN']
 base_LN = model_colors['LN']
 base_max = model_colors['max']
+base_gc = model_colors['gc']
+base_stp = model_colors['stp']
+base_combined = model_colors['combined']
 dark_LN = tuple([max(0, i + j) for i, j in zip(base_LN, (-0.2, -0.2, -0.2, 0))])
 dark_max = tuple([max(0, i +j) for i, j in zip(base_max, (-0.2, -0.2, -0.2, 0))])
+dark_gc = tuple([max(0, i +j) for i, j in zip(base_gc, (-0.2, -0.2, -0.2, 0))])
+dark_stp = tuple([max(0, i +j) for i, j in zip(base_stp, (-0.2, -0.2, -0.2, 0))])
+dark_combined = tuple([max(0, i +j) for i, j in zip(base_combined, (-0.2, -0.2, -0.2, 0))])
 faded_LN = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_LN)])
 faded_max = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_max)])
+faded_gc = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_gc)])
+faded_stp = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_stp)])
+faded_combined = tuple([i if j != 3 else 0.5 for j, i in enumerate(base_combined)])
 
 small_scatter = 2
 big_scatter = 3
 
 standard_fig = [2.25, 2.25]
+tall_fig = [2.25, 3.00]
 small_fig = [1.75, 1.75]
 short_fig = [2.25, 1.75]
 text_fig = [6, 6]
+wide_fig = [4, 1.9]
 
 params = {  # small version for screens
         #'font.weight': 'bold',
@@ -63,6 +90,25 @@ ln_dexp1 = 'ozgf.fs100.ch18-ld-sev_dlog.f-wc.18x1.g-fir.1x15-lvl.1-dexp.1_init-b
 default_args = [289, summed3, stp_dexp3, ln_dexp3, summed_stp3]
 kernel_args = [289, gc_PF3_o1, stp_dexp3, ln_dexp3, gc_stp_PF3_o1]
 
+
+# self-equivalence analysis
+gc_h1 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n.off0-csum-sev-esth1_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dsig.d_gc4'
+gc_h2 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n.off0-csum-sev-esth2_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dsig.d_gc4'
+stp_h1 = 'ozgf.fs100.ch18-ld-sev-esth1_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic'
+stp_h2 = 'ozgf.fs100.ch18-ld-sev-esth2_dlog.f-wc.18x3.g-stp.3-fir.3x15-lvl.1-dexp.1_init-basic'
+LN_h1 = 'ozgf.fs100.ch18-ld-sev-esth1_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic'
+LN_h2 = 'ozgf.fs100.ch18-ld-sev-esth2_dlog.f-wc.18x3.g-fir.3x15-lvl.1-dexp.1_init-basic'
+eq_gc = [gc_h1, gc_h2, LN_h1, LN_h2]
+eq_stp = [stp_h1, stp_h2, LN_h1, LN_h2]
+eq_both = [stp_h1, stp_h2, gc_h1, gc_h2, LN_h1, LN_h2]
+eq_kwargs = {'batch': 289, 'stp1': stp_h1, 'stp2': stp_h2, 'gc1': gc_h1,
+             'gc2': gc_h2, 'LN1': LN_h1, 'LN2': LN_h2,
+             'stp_load':  '/auto/users/jacob/notes/gc_rank3/histogram_arrays/2_18_stp_seq.pkl',
+             'gc_load': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/2_18_gc_seq.pkl'}
+cross_all = [gc_h1, stp_h2, stp_h1, gc_h2, LN_h1, LN_h2]
+cross_kwargs = eq_kwargs.copy()
+cross_kwargs['stp_load'] = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/3_13_gc1_stp2.pkl'
+cross_kwargs['gc_load'] = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/3_13_gc2_stp1.pkl'
 
 gc_ms30 = 'ozgf.fs100.ch18-ld-contrast.ms30.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
 gc_ms70 = 'ozgf.fs100.ch18-ld-contrast.ms70.cont.n-sev_dlog.f-wc.18x3.g-fir.3x15-lvl.1-ctk.off1.f-dsig.d_gc2.PF'
@@ -125,11 +171,12 @@ eq_289 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/12_18_summed_b289.pk
 eq_263 = '/auto/users/jacob/notes/gc_rank3/histogram_arrays/12_19_summed_b263.pkl'
 
 # response stats
-max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'
-spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/8_15_b289.pkl'
-#max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/9_27_b289.pkl'
+#max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/8_15_b289.pkl'
+max_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/max/9_27_b289.pkl'
 #spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/9_27_b289.pkl'
-mean_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/mean/9_27_b289.pkl'
+#mean_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/mean/9_27_b289.pkl'
+mean_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/mean/3_6_b289.pkl'
+spont_289 = '/auto/users/jacob/notes/gc_rank3/response_stats/spont/3_6_b289.pkl'
 
 # sigmoid ratio histogram
 sigmoid_hist_o1 = '/auto/users/jacob/notes/gc_rank3/sigmoid_ratio_arrays/8_6_b289_gc_PF3_o1.npy'
@@ -159,10 +206,28 @@ load_paths = {'AC': autocorrelation, 'CF': cf_load_paths, 'max': max_289,
                       'kernel': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/8_15_kernel_b289.pkl',
                       '263': eq_263
                       },
+              'self_equivalence': {
+                      'stp': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/2_18_stp_seq.pkl',
+                      'gc': '/auto/users/jacob/notes/gc_rank3/histogram_arrays/2_18_gc_seq.pkl'
+                      },
               'sound_stats': {
                       '289': ss_289,
                       '263': ss_263
                       },
+              'simulations': {
+                      'stp_cell': {
+                              'stp': '/auto/users/jacob/notes/gc_rank3/simulations/stp_AMT005c-20-1.pickle',
+                              'gc': '/auto/users/jacob/notes/gc_rank3/simulations/gc_AMT005c-20-1.pickle',
+                              },
+                      'gc_cell': {
+                              'gc': '/auto/users/jacob/notes/gc_rank3/simulations/gc_TAR009d-22-1.pickle',
+                              'stp': '/auto/users/jacob/notes/gc_rank3/simulations/stp_TAR009d-22-1.pickle'
+                              },
+                      'LN_cell': {
+                              'LN': '/auto/users/jacob/notes/gc_rank3/simulations/LN_TAR010c-40-1.pickle'
+                              }
+                      },
+              'snrs': '/auto/users/jacob/notes/gc_rank3/snrs/7_17_20_289.pkl'
 
               }
 

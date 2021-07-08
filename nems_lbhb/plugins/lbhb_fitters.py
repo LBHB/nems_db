@@ -1,11 +1,12 @@
 import re
 import numpy as np
 
-from nems.plugins.default_fitters import basic
-from nems.plugins.default_fitters import iter
+from nems.plugins.default_fitters import basic, iter, _parse_basic, _parse_iter, _extract_options
 from nems.utils import escaped_split
+from nems.registry import xform, xmodule
 
 
+@xform()
 def lnp(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -23,6 +24,7 @@ def lnp(fitkey):
     return [['nems_lbhb.lnp_helpers.lnp_basic', kwargs]]
 
 
+@xform()
 def gc(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -49,6 +51,7 @@ def gc(fitkey):
     return [['nems_lbhb.gcmodel.fitters.fit_gc', kwargs]]
 
 
+@xform()
 def gc2(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -60,7 +63,7 @@ def gc2(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -89,6 +92,7 @@ def gc2(fitkey):
     return xfspec
 
 
+@xform()
 def gc3(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -119,6 +123,7 @@ def gc3(fitkey):
     return xfspec
 
 
+@xform()
 def gc4(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -130,7 +135,7 @@ def gc4(fitkey):
             kwargs['tolerance'] = 10**tolpower
         elif op.startswith('pt'):
             num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
+            tolpower = float(num[2:])*(-1)
             kwargs['prefit_tolerance'] = 10**tolpower
         elif op.startswith('mi'):
             pattern = re.compile(r'^mi(\d{1,})')
@@ -143,6 +148,7 @@ def gc4(fitkey):
     return xfspec
 
 
+@xform()
 def testLN(fitkey):
     ops = fitkey.split('.')[1:]
     kwargs = {}
@@ -168,6 +174,8 @@ def testLN(fitkey):
     xfspec.append(['nems_lbhb.gcmodel.fitters.test_LN', kwargs])
     return xfspec
 
+
+@xform()
 def strfc(fitkey):
     return [['nems_lbhb.contrast_helpers.strf_to_contrast', {}]]
 
@@ -192,6 +200,7 @@ def _aliased_fitter(fn, fitkey):
 fitjk01 = _aliased_fitter(basic, 'basic.nf5.epREFERENCE')
 
 
+@xform()
 def popiter(fitkey):
     '''
     Perform a fit_iteratively analysis on a model.
@@ -232,8 +241,8 @@ def popiter(fitkey):
         flip_pcs = True
     else:
         flip_pcs = False
-    xfspec = [['nems_lbhb.fit_wrappers.init_pop_pca', {'flip_pcs': flip_pcs}],
-              ['nems_lbhb.fit_wrappers.fit_population_iteratively',
+    xfspec = [['nems.analysis.fit_pop_model.init_pop_pca', {'flip_pcs': flip_pcs}],
+              ['nems.analysis.fit_pop_model.fit_population_iteratively',
                {'module_sets': module_sets, 'fitter': fitter,
                 'tolerances': tolerances, 'tol_iter': tol_iter,
                 'fit_iter': fit_iter}]]
@@ -244,76 +253,7 @@ def popiter(fitkey):
     return xfspec
 
 
-def _extract_options(fitkey):
-    if fitkey == 'basic' or fitkey == 'iter':
-        # empty options (i.e. just use defualts)
-        options = []
-    else:
-        chunks = escaped_split(fitkey, '.')
-        options = chunks[1:]
-    return options
-
-
-def _parse_basic(options):
-    '''Options specific to basic.'''
-    max_iter = 1000
-    tolerance = 1e-7
-    fitter = 'scipy_minimize'
-    choose_best = False
-    fast_eval = False
-    for op in options:
-        if op.startswith('mi'):
-            pattern = re.compile(r'^mi(\d{1,})')
-            max_iter = int(re.match(pattern, op).group(1))
-        elif op.startswith('t'):
-            # Should use \ to escape going forward, but keep d-sub in
-            # for backwards compatibility.
-            num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
-            tolerance = 10**tolpower
-        elif op == 'cd':
-            fitter = 'coordinate_descent'
-        elif op == 'b':
-            choose_best = True
-        elif op == 'f':
-            fast_eval = True
-
-    return max_iter, tolerance, fitter, choose_best, fast_eval
-
-
-def _parse_iter(options):
-    '''Options specific to iter.'''
-    tolerances = []
-    module_sets = []
-    fit_iter = 10
-    tol_iter = 50
-    fitter = 'scipy_minimize'
-
-    for op in options:
-        if op.startswith('ti'):
-            tol_iter = int(op[2:])
-        elif op.startswith('fi'):
-            fit_iter = int(op[2:])
-        elif op.startswith('T'):
-            # Should use \ to escape going forward, but keep d-sub in
-            # for backwards compatibility.
-            nums = op.replace('d', '.').replace('\\', '')
-            powers = [float(i) for i in nums[1:].split(',')]
-            tolerances.extend([10**(-1*p) for p in powers])
-        elif op.startswith('S'):
-            indices = [int(i) for i in op[1:].split(',')]
-            module_sets.append(indices)
-        elif op == 'cd':
-            fitter = 'coordinate_descent'
-
-    if not tolerances:
-        tolerances = None
-    if not module_sets:
-        module_sets = None
-
-    return tolerances, module_sets, fit_iter, tol_iter, fitter
-
-
+@xform()
 def pupLVbasic(fitkey):
     """
     exact same as fit basic, but add constraint that the latent variable (LV)
@@ -345,13 +285,15 @@ def pupLVbasic(fitkey):
                   {'max_iter': max_iter,
                    'fitter': fitter, 'tolerance': tolerance,
                    'metric': metric,
-                   'fit_function': 'nems_lbhb.lv_helpers.fit_pupil_lv', 
+                   'fit_function': 'nems_lbhb.lv_helpers.fit_pupil_lv',
                    'alpha': alpha,
                    'signed_correlation': signed_correlation}])
+
     if choose_best:
-        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn, 
-                                                                       'alpha': alpha, 
-                                                                       'signed_correlation': signed_correlation}])
+        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn,
+                                                                       'alpha': alpha,
+                                                                       'signed_correlation': signed_correlation
+                                                                       }])
 
     return xfspec
 
@@ -390,10 +332,10 @@ def _parse_pupLVbasic(options):
             else:
                 rand_count = int(op[2:])
             choose_best = True
-            
+
         elif op.startswith('af'):
             fast_alpha = np.float('.'.join(op[2:].split(':')))
-        
+
         elif op.startswith('as'):
             slow_alpha = np.float('.'.join(op[2:].split(':')))
 
@@ -403,7 +345,7 @@ def _parse_pupLVbasic(options):
         elif op.startswith('sc'):
             # force fast LV variance to be (-) corr. with pupil
             signed_correlation = True
-        
+
         elif op.startswith('constr'):
             pc = op[6:]
             if pc == 'LV':
@@ -419,7 +361,9 @@ def _parse_pupLVbasic(options):
         elif (slow_alpha is None):
             alpha = fast_alpha
         else:
-            alpha = {'fast_alpha': fast_alpha, 
+            alpha = {'fast_alpha': fast_alpha,
                      'slow_alpha': slow_alpha}
 
     return max_iter, tolerance, fitter, choose_best, fast_eval, alpha, rand_count, pup_constraint, signed_correlation
+
+

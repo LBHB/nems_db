@@ -8,8 +8,11 @@ a non-standard configuration or generate a non-standard plot.
 import logging
 import re
 
+from nems.registry import xform, xmodule
+
 log = logging.getLogger(__name__)
 
+@xform()
 def ebc(loadkey):
     """
     ebc = evaluate_by_condition
@@ -26,6 +29,7 @@ def ebc(loadkey):
     ]
     return xfspec
 
+@xform()
 def SPOpf(loadkey):
     xfspec = [['nems.xforms.predict', {}]]
     xfspec = xfspec + ebc('ebc.rmM')
@@ -35,9 +39,55 @@ def SPOpf(loadkey):
 
     return xfspec
 
+@xform()
 def popsum(loadkey):
 
     return [['nems.xforms.predict', {}],
             ['nems.xforms.add_summary_statistics', {}],
             ['nems.xforms.plot_summary', {}],
             ['nems_lbhb.stateplots.quick_pop_state_plot', {}]]
+
+@xform()
+def popspc(loadkey):
+    return [['nems.xforms.predict', {}],
+            ['nems.xforms.add_summary_statistics', {}],
+            ['nems.xforms.plot_summary', {}],
+            ['nems_lbhb.analysis.pop_models.pop_space_summary', {'n_pc': 5}]]
+
+
+@xform()
+def tfheld(loadkey):
+    freeze_layers = None
+    options = loadkey.split('.')
+    use_matched_recording = False
+    #use_matched_random = False
+    use_same_recording = False
+    for op in options[1:]:
+        if op.startswith('FL'):
+            if ':' in op:
+                # ex: FL0:5  would be freeze_layers = [0,1,2,3,4]
+                lower, upper = [int(i) for i in op[2:].split(':')]
+                freeze_layers = list(range(lower, upper))
+            else:
+                # ex: TL2x6x9  would be trainable_layers = [2, 6, 9]
+                freeze_layers = [int(i) for i in op[2:].split('x')]
+        elif op == 'ms':
+            use_matched_recording = True
+        # elif op == 'rnd':
+        #     use_matched_random = True
+        elif op == 'same':
+            use_same_recording = True
+
+    xfspec = [['nems_lbhb.xform_wrappers.switch_to_heldout_data', {'freeze_layers': freeze_layers,
+                                                                   'use_matched_recording': use_matched_recording,
+                                                                   #'use_matched_random': use_matched_random,
+                                                                   'use_same_recording': use_same_recording}]]
+    return xfspec
+
+@xform()
+def rda(loadkey):
+    """
+    Run Decoding Analysis
+    """
+    xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
+    return xfspec

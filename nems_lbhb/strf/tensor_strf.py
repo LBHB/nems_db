@@ -1,5 +1,5 @@
 import nems_lbhb.baphy as nb
-import nems_lbhb.io as nio
+import nems_lbhb.baphy_io as nio
 from nems import epoch as ep
 import os
 
@@ -11,9 +11,9 @@ from nems_lbhb.strf.torc_subfunctions import strfplot
 from nems_lbhb.strf.tensor_subfunctions import strf_plot_prepare,model_strf,strf_input_gen
 
 ####Sample Data- works as test#####
-# mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
-# cellid = 'AMT005c-12-1' #one being used in Matlab
-# fs=1000
+mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
+cellid = 'AMT005c-12-1' #one being used in Matlab
+fs=1000
 ###########################
 
 def strf_tensor(mfilename,cellid,plot=False,linalg=False,real=False):
@@ -53,7 +53,7 @@ def strf_tensor(mfilename,cellid,plot=False,linalg=False,real=False):
 
     if plot == True:
         #bf = strf_plot_prepare(fitH,Params)
-        [_,_] = strfplot(fitH, Params['lfreq'], Params['basep'], 1, Params['octaves'])
+        [_,_] = strfplot(fitH, Params['lfreq'], Params['basep'],smooth=1, noct=Params['octaves'])
         plt.title('%s - Linear Regression' % (os.path.basename(mfilename)), fontweight='bold')
 
     if linalg == True:

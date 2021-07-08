@@ -1,6 +1,8 @@
 import re
 import os
 import io
+from pathlib import Path
+import mimetypes
 
 from flask import abort, Response, request
 from flask_restful import Resource
@@ -123,11 +125,12 @@ class GetRecording(Resource):
     def delete(self, batch, file):
         abort(400, 'Not yet Implemented')
 
+
 class UploadResults(Resource):
     '''
-    An interface to BAPHY that returns NEMS-compatable signal objects
+    An interface for uploading and downloading NEMS results
     '''
-    ALLOWED_EXTENSIONS = set(['tgz'])
+    ALLOWED_EXTENSIONS = set(['tgz','json','png'])
 
     def __init__(self, **kwargs):
         pass
@@ -137,17 +140,56 @@ class UploadResults(Resource):
                filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
     def get(self, batch, cellid, path, file):
-       abort(400, 'Not yet implemented')
+        '''
+        find the right path
+        '''
+        fullpath = os.path.join(nems_results_dir, batch, cellid, path, file)
+        mimetype, encoding = mimetypes.guess_type(file)
+        print(f"Guessing mimetype {mimetype}")
+        try:
+            f = io.open(fullpath, 'rb')
+            return Response(f, status=200, mimetype=mimetype)
+        except:
+            abort(400, 'file not found')
 
     def put(self, batch, cellid, path, file):
         data = request.data
         print('data received: len: {}'.format(len(data)))
         fullpath = os.path.join(nems_results_dir, batch, cellid, path)
-        filename = os.path.join(fullpath, file)
+        filename = os.path.abspath(os.path.join(fullpath, file))
         print('save to : ' + filename)
         if not os.path.exists(fullpath):
            os.makedirs(fullpath, 0o777)
         f = os.open(filename, os.O_RDWR|os.O_CREAT)
+        os.write(f, data)
+        os.close(f)
+
+    def delete(self, batch, file):
+        abort(400, 'Not yet Implemented')
+
+
+class UploadQueueLog(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    def __init__(self, **kwargs):
+        pass
+
+    def get(self, batch, cellid, path, file):
+       abort(400, 'Not yet implemented')
+
+    def put(self, queueid):
+        data = request.data
+        print('data received: len: {}'.format(len(data)))
+        log_dir = Path('/auto/data/web/celldb/queue')
+        rounded_queueid = int(queueid) // 1000 * 1000
+        log_dir /= str(rounded_queueid)
+        if not log_dir.exists():
+            log_dir.mkdir(parents=True)
+        log_loc = log_dir / (str(queueid) + '.out')
+
+        print('save to : ' + str(log_loc))
+        f = os.open(log_loc, os.O_RDWR|os.O_CREAT)
         os.write(f, data)
         os.close(f)
 

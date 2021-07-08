@@ -1028,8 +1028,13 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
 
     '''
     if IsReload:
-        _store_gain_info(modelspec, est, val)
-        return {'modelspec': modelspec}
+#        _store_gain_info(modelspec, est, val)
+#        return {'modelspec': modelspec}
+        return {}
+
+    # TODO: replace the first few steps with just loading the equivalent
+    #       LN or GC model (e.g. require that they be fit already)
+
 
     wc_idx = nems.utils.find_module('weight_channels', modelspec)
     fir_idx = nems.utils.find_module('fir', modelspec)
@@ -1038,6 +1043,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
+
     # TODO: Be able to handle this case somehow
     if (('coefficients' in modelspec[wc_idx]['phi'])
         and ('coefficients' in modelspec[fir_idx]['phi'])):
@@ -1110,7 +1116,22 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         fb_kwargs['metric'] = metric_fn
     modelspec = fit_basic(*fb_args, **fb_kwargs)
 
+
+
+
+
+
+    # TODO: remove me, just testing
+    return {'modelspec': modelspec}
+
+
+
+
+
+
+
     # 3b: Freeze STRF parameters before continuing
+    # TODO: should STP parameters be frozen here too?
     log.info('Freezing STRF parameters ...\n')
     modelspec[wc_idx]['fn_kwargs'].update(modelspec[wc_idx]['phi'])
     frozen_wc = modelspec[wc_idx]['phi'].keys()
