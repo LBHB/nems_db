@@ -1,3 +1,4 @@
+import shutil
 from functools import lru_cache
 from pathlib import Path
 import logging
@@ -199,7 +200,9 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def openephys_folder(self):
         path = self.folder / 'raw' / self.experiment
-        candidates = list(path.glob(self.experiment_with_runclass + '*'))
+        # cludge, since self.experiment takes the first listed experiment, here runclass does the same
+        # todo: make compatible with list of runs?
+        candidates = list(path.glob(f'{self.experiment_with_runclass[0]}*'))
         if len(candidates) > 1:
             raise ValueError('More than one candidate found')
         if len(candidates) == 0:
@@ -430,6 +433,7 @@ class BAPHYExperiment:
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
         stim = kwargs.get('stim', False)
+        volt = kwargs.get('volt', False)
 
         # stim, lfp, photometry etc.
 
@@ -541,6 +545,51 @@ class BAPHYExperiment:
 
             signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
 
+        if volt:
+
+
+            # passes all channels for loading, TODO should pass a list of good channesl?
+            chans = np.s_[:]
+            raw_voltage, continuous_meta = self.get_continuous_data(chans, **kwargs)
+            raw_voltage  = raw_voltage - np.mean(raw_voltage, axis=0)
+
+            continuous_ts = continuous_meta[0]['timestamps']
+
+            events_meta = oe.load(str(self.openephys_folder / 'all_channels.events'))
+            fs = int(events_meta['header']['sampleRate'])
+            events_ts = events_meta['timestamps']
+
+            # crops the raw voltage to align with already created epochs
+            # Uses the first trial openephys timestamp to define the start of the relevant raw voltage
+            # Used the duration of the baphy_ epochs to coherce the sumber of samples of raw voltage
+
+            on_mask = np.logical_and(events_meta['eventType'] == 3,
+                                     events_meta['eventId'] == 1)  # eventType == 3 : TTL, AKA trial Onset
+            first_trial_start_smp = int(events_ts[on_mask][0] - continuous_ts[0])
+            exp_dur_smp = int(baphy_events[0].iloc[0,2] * fs)
+
+            aligned = raw_voltage[:, first_trial_start_smp:first_trial_start_smp+exp_dur_smp]
+
+            # # plots signal plus onseof offsets
+            # off_mask = np.logical_and(events_meta['eventType'] == 3, events_meta['eventId'] == 0)
+            # fig, ax = plt.subplots()
+            # ax.plot(raw_voltage[30,:1000000])
+            # onsets = (events_ts[on_mask] -  continuous_ts[0]).astype(int)
+            # offsets = (events_ts[off_mask] -  continuous_ts[0]).astype(int)
+            # for on in onsets:
+            #     if on >=1000000:
+            #         break
+            #     ax.axvline(on, color='green')
+            #
+            # for off in offsets:
+            #     if off >=1000000:
+            #         break
+            #     ax.axvline(off, color='red')
+
+            signals['volt'] = nems.signal.RasterizedSignal(data=aligned, fs=fs, name='volt',
+                                                           epochs=baphy_events[i], recording=rec_name)
+            pass
+
         if len(signals)==0:
             # make a dummy signal
             fs = kwargs['rasterfs']
@@ -560,11 +609,12 @@ class BAPHYExperiment:
 
     # ==================== DATA EXTRACTION METHODS =====================
 
-    def get_continuous_data(self, chans):
+    def get_continuous_data(self, chans, **kwargs):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
         chans (list or numpy slice): which electrodes to load data from
+        currently can deal only with a single run file
         '''
         # get filenames (TODO: can this be sped up?)
         #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
@@ -593,23 +643,73 @@ class BAPHYExperiment:
         idx = all_chans[chans].tolist()
         selected_data = np.take(data_files, idx)
         continuous_data = []
+        continuous_meta = []
         for filename in selected_data:
-            full_filename = self.openephys_folder / filename
-            if os.path.isfile(full_filename):
+            remote_full_filename = self.openephys_folder / filename
+            local_full_filename = Path('/tmp/evpread') / Path(*self.openephys_folder.parts[4:]) / filename
+            if os.path.isfile(remote_full_filename):
                 log.info('%s already extracted, load faster...', filename)
-                data = io.load_continuous_openephys(str(full_filename))
-                continuous_data.append(data['data'][np.newaxis, :])
+                data = io.load_continuous_openephys(str(remote_full_filename))
+                time_series = data.pop('data')
+                continuous_data.append(time_series[np.newaxis, :])
+                continuous_meta.append(data)
+
+            # old approach, slow
+            # else:
+            #     with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+            #         log.info("Extracting / loading %s...", filename)
+            #         full_filename = self.openephys_tarfile_relpath / filename
+            #         with tar_fh.extractfile(str(full_filename)) as fh:
+            #             data = io.load_continuous_openephys(fh)
+            #             continuous_data.append(data['data'][np.newaxis, :])
+
             else:
-                with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-                    log.info("Extracting / loading %s...", filename)
-                    full_filename = self.openephys_tarfile_relpath / filename
-                    with tar_fh.extractfile(str(full_filename)) as fh:
-                        data = io.load_continuous_openephys(fh)
-                        continuous_data.append(data['data'][np.newaxis, :])
+                self.make_raw_copy()
+                data = io.load_continuous_openephys(str(local_full_filename))
+                time_series = data.pop('data')
+                continuous_data.append(time_series[np.newaxis, :])
+                continuous_meta.append(data)
 
         continuous_data = np.concatenate(continuous_data, axis=0)
 
-        return continuous_data         
+        return continuous_data, continuous_meta
+
+
+    def make_raw_copy(self):
+        '''
+        Makes a local copy of the compressed raw open ephys data and uncompress locally for a speed gain
+        :return:
+        '''
+
+        self.local_OEP_folder = Path('/tmp/evpread') / Path(*self.openephys_folder.parts[4:])
+
+        if  not self.local_OEP_folder.exists():
+
+            local_OEP_tarfile = Path('/tmp/evpread') / Path(*self.openephys_tarfile.parts[4:]).with_suffix('.tar')
+
+            log.info(f"making local copy and untarrig: {self.openephys_tarfile} to {self.local_OEP_folder}")
+
+            if  not local_OEP_tarfile.parent.exists():
+                local_OEP_tarfile.parent.mkdir(parents=True)
+
+            # copy over
+            cmd = f'gzip -dc {self.openephys_tarfile} > {local_OEP_tarfile}'
+            os.system(cmd)
+
+            # Uncompress
+            cmd = f'tar xf {local_OEP_tarfile} -C {local_OEP_tarfile.parent}'
+            os.system(cmd)
+
+            # set permissions, chmod codes are arcane
+            untarredfolder = local_OEP_tarfile.with_suffix('')
+            untarredfolder.chmod(17389) # set permissions to drwxr-xr-t
+            for subfolder in untarredfolder.glob('*'):
+                subfolder.chmod(16877)  # set permissions to drwxr-xr-x
+
+            local_OEP_tarfile.unlink()
+        else:
+            return
+
 
     def get_spike_data(self, exptevents, **kw):
         #for i, f in enumerate(self.parmfile):
