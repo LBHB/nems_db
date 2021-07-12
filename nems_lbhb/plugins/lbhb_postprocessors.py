@@ -83,3 +83,11 @@ def tfheld(loadkey):
                                                                    #'use_matched_random': use_matched_random,
                                                                    'use_same_recording': use_same_recording}]]
     return xfspec
+
+@xform()
+def rda(loadkey):
+    """
+    Run Decoding Analysis
+    """
+    xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
+    return xfspec

@@ -39,7 +39,7 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
-def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
+def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
     """
     Specialized preprocessor for CPN data to make the epoch names match more 
     "traditional" baphy format.
@@ -63,7 +63,7 @@ def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
         # strip the seq. epochs and sub pre/post stim
         new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
 
-        # remove "sub" labels
+        # remove "sub" labels -- sub masks finds SubPreStimSilence and SubPostStimSilence
         sub = new_epochs.name.str.startswith('Sub')
         new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
 
@@ -75,6 +75,12 @@ def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
         one_bin = np.float(1 / rec['resp'].fs)
         new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
         new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+        # looks like was never actually dealing with prestim silence correctly, which resulted
+        # in prestim silence epochs with negative length. Oops. Fixing that now -- crh 06.28.2021
+        # reason this happened is that sub pre/post stim are length zero for this data, so I forgot
+        # to update the end timestamp too.
+        if not use_old:
+            new_epochs.at[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
 
     else:
         new_epochs = new_epochs[~new_epochs.name.str.contains('_probe')]
@@ -641,7 +647,6 @@ def create_pupil_mask(rec, evoked_only=False, **options):
 
     elif (collapse is True) & (epoch is not None):
         log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
-
         # In this case, fold pupil first based on the epoch(s)
         folded_pupil = r['pupil'].extract_epochs(epoch)
 
@@ -979,6 +984,82 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #import pdb;
         #pdb.set_trace()
         
+    return {'rec': r}
+
+
+def mask_time_segments(rec, segment_count=8, evoked_only=True, **kwargs):
+    """
+    Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
+      reproduce desired pattern of noise correlations in different conditions.
+    By default, creates signals that mask trials according to whether pupil is smaller or larger than the mean.
+    Added to whatever mask already exists in rec.
+    Inputs: rec: Recording from NEMS
+    Returns rec: Recording with new signals 'mask_large' and 'mask_small'
+    Option: add_per_stim: if True, also returns signals 'mask_<epoch>' matching each epoch that 
+       starts with "STIM_". Currently these masks span both large and small pupil
+    """
+    r = rec.copy()
+    
+    if 'mask' in r.signals.keys():
+        m = r['mask']._data.copy()
+    else:
+        m = np.ones((1,r['resp'].shape[1]))
+    r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
+    r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    
+    nbins = m.sum()
+    validbins = np.where(m[0,:]>0)[0]
+    chunksize = nbins / segment_count
+    log.info(f"nbins/segmentcount: {nbins}/{segment_count} = {chunksize}")
+    #log.info(f"{validbins[:100]}")
+    for s in range(segment_count):
+        _m = np.zeros_like(m)
+        #log.info(f'{s}: {validbins[int(s*chunksize):int((s+1)*chunksize)]}')
+        _m[0, validbins[int(s*chunksize):int((s+1)*chunksize)]]=1
+        log.info(f'{s}: {_m.sum()}')
+        r[f'mask_{s}'] = r['mask']._modified_copy(_m.astype(bool))
+               
+    return {'rec': r}
+
+
+def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
+    '''
+    Use pupil_extras signals to mask the recording during periods of movement (eg blinks)
+    binsize - window size in seconds over which to compute variance of eye position traces
+    threshold - number of std of the variance trace over which data is excluded
+
+    crh 06.18.2021
+    '''
+    if 'pupil_extras' not in rec.signals.keys():
+        raise ValueError("Pupil extras do not exist for this recording. Old recording? Old pupil analysis?")
+    r = rec.copy()
+    # before masking, take raw signals and compute variance of an eyelid over a sliding window
+    binsize = int(binsize * r['resp'].fs)
+    signal = r['pupil_extras'].extract_channels(['eyelid_top_y'])._data 
+    signal2 = r['pupil_extras'].extract_channels(['eyelid_bottom_y'])._data
+    varsig = np.zeros(signal.shape)
+    for i in range(varsig.shape[-1]):
+        varsig[0, i] = np.var(signal[0, i:(i+binsize)])+np.var(signal2[0, i:(i+binsize)])
+    varsig = np.roll(varsig, int(binsize/2))
+    r['varsig'] = r['pupil']._modified_copy(varsig)
+    threshold = np.std(varsig) * threshold
+    mask = varsig >= threshold
+    log.info(f"Found {mask.sum()} / {mask.shape[-1]} bins that violated movement threshold")
+
+    # tile mask over generic epochs (REFERENCE, TARGET, CATCH)
+    epochs = [e for e in ['REFERENCE', 'TARGET', 'CATCH'] if e in r['resp'].epochs.name.unique()]
+    
+    rec['var_mask'] = r['pupil']._modified_copy(mask)
+    fm = rec['var_mask'].extract_epochs(epochs)
+    # tile bool across full reference so not to split up epochs in weird ways
+    fm = {k: np.concatenate([np.zeros(v[[i]].shape).astype(bool) if np.any(v[[i]]==True) else np.ones(v[[i]].shape).astype(bool) 
+                        for i in range(v.shape[0])], axis=0) 
+                        for k, v in fm.items()}
+    rec['var_mask'] = rec['var_mask'].replace_epochs(fm)
+    if 'mask' not in r.signals:
+        r = r.create_mask(True)
+    r['mask'] = r['mask']._modified_copy(r['mask']._data & rec['var_mask']._data)
+
     return {'rec': r}
 
 def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):

@@ -123,6 +123,8 @@ class BAPHYExperiment:
             self.siteid = cellid[:7]
             self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
             self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
+            self.channels_to_load = nops['channels']
+            self.units_to_load = nops['units']
             self.rawid = nops['rawid']
             # get list of corresponding parmfiles at this site for these rawids
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
@@ -172,6 +174,7 @@ class BAPHYExperiment:
                 self.sited = os.path.split(parmfile)[-1][:7]
                 self.cells_to_load = None
                 self.cells_to_extract = None
+                self.units_to_load = None
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
@@ -282,9 +285,9 @@ class BAPHYExperiment:
             trial_starts = self.get_trial_starts('openephys')
             return io.baphy_align_time_openephys(baphy_events, trial_starts, **kw)
         if correction_method == 'spikes':
-            spikes_fs = self._get_spikes()
-            exptevents = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[0] for (ev, (sp, fs)) 
-                                in zip(baphy_events, spikes_fs)]
+            spikedata = self._get_spikes()
+            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], kw['rasterfs'])[0] for (ev, spd)
+                                in zip(baphy_events, spikedata)]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
@@ -357,7 +360,8 @@ class BAPHYExperiment:
         kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
-        kwargs.update({'version': 'BAPHYExperiment.2'})
+        # kwargs.update({'version': 'BAPHYExperiment.2'})
+        kwargs.update({'version': 'BAPHYExperiment.3'}) # version 3 added pupil extras to recording signals
 
         # add parmfiles / cells_to_load list - these are unique ids for the recording
         kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
@@ -465,8 +469,6 @@ class BAPHYExperiment:
         signals = {}
         if resp:
             spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)
-            spike_dicts = [dict(zip([self.siteid + "-" + x for x in d.keys()], d.values())) for
-                                    d in spike_dicts]
             resp_sigs = [nems.signal.PointProcess(
                          fs=kwargs['rasterfs'], data=sp,
                          name='resp', recording=rec_name, chans=list(sp.keys()),
@@ -480,26 +482,55 @@ class BAPHYExperiment:
                     signals['resp'] = signals['resp'].append_time(r)
             
         if pupil:
-            
-            p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
-            pupil_sigs = [nems.signal.RasterizedSignal(
-                          fs=kwargs['rasterfs'], data=p[0],
-                          name='pupil', recording=rec_name, chans=['pupil'],
-                          epochs=baphy_events[i])
-                          for (i, p) in enumerate(p_traces)]
-            # make sure each pupil signal is the same len as resp, if resp exists
-            if resp:
-                for i, (p, r) in enumerate(zip(pupil_sigs, resp_sigs)):
+
+            def check_length(ps, rs):
+                for i, (p, r) in enumerate(zip(ps, rs)):
                     rlen = r.ntimes
                     plen = p.as_continuous().shape[1]
                     if plen > rlen:
-                        pupil_sigs[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
+                        ps[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
                     elif rlen > plen:
                         pcount = p.as_continuous().shape[0]
-                        pupil_sigs[i] = p._modified_copy(np.append(p.as_continuous(), 
+                        ps[i] = p._modified_copy(np.append(p.as_continuous(), 
                                                 np.ones([pcount, rlen - plen]) * np.nan, axis=1))
+                return ps
+            
+            p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
+            if type(p_traces[0][0]) is not np.ndarray:
+                # multiple 'pupil signals'
+                # one always has to be the pupil trace itself
+                pupil_sigs = [nems.signal.RasterizedSignal(
+                        fs=kwargs['rasterfs'], data=p[0]['pupil'],
+                        name='pupil', recording=rec_name, chans=['pupil'],
+                        epochs=baphy_events[i])
+                        for (i, p) in enumerate(p_traces)]
 
-            signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+                # the rest are "pupil" extras to be packed into a single signal
+                extra_sigs = [sig for sig in p_traces[0][0].keys() if sig!='pupil']        
+                extra_sigs = [nems.signal.RasterizedSignal(
+                            fs=kwargs['rasterfs'], data=np.concatenate([p[0][sig] for sig in extra_sigs], axis=0),
+                            name='pupil_extras', recording=rec_name, chans=extra_sigs,
+                            epochs=baphy_events[i])
+                            for (i, p) in enumerate(p_traces)]
+                # make sure each pupil signal is the same len as resp, if resp exists
+                if resp:
+                    pupil_sigs = check_length(pupil_sigs, resp_sigs)
+                    extra_sigs = check_length(extra_sigs, resp_sigs)
+
+                signals['pupil_extras'] = nems.signal.RasterizedSignal.concatenate_time(extra_sigs)
+                signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+
+            else:
+                pupil_sigs = [nems.signal.RasterizedSignal(
+                            fs=kwargs['rasterfs'], data=p[0],
+                            name='pupil', recording=rec_name, chans=['pupil'],
+                            epochs=baphy_events[i])
+                            for (i, p) in enumerate(p_traces)]
+                # make sure each pupil signal is the same len as resp, if resp exists
+                if resp:
+                    pupil_sigs = check_length(pupil_sigs, resp_sigs)
+
+                signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
         if stim:
             #import pdb; pdb.set_trace()
@@ -585,25 +616,40 @@ class BAPHYExperiment:
         #for i, f in enumerate(self.parmfile):
         #    fn = str(f).split('/')[-1]
         #    exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
-        spikes_fs = self._get_spikes()
+        spikedata = self._get_spikes()
         if self.correction_method == 'spikes':
-            spikedicts = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
-                                    in zip(exptevents, spikes_fs)]
-            spike_dict = []
-            for sd in spikedicts:
-                units = sd[1]
+            spikedicts = []
+            for file_ind in range(len(exptevents)):
+                # (ev, (sp, fs)) in zip(exptevents, spikes_fs):
+                spikedict = {}
+                spiketimes = []
+                unit_names = []
+                _, spiketimes, unit_names = io.baphy_align_time(exptevents[file_ind], spikedata[file_ind]['sortinfo'],
+                                                                  spikedata[file_ind]['spikefs'], kw['rasterfs'])
+
                 if self.cells_to_load is not None:
-                    # only keep units included in self.cells_to_load
-                    units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
-                spiketimes = sd[0]
-                d = {}
-                for i, unit in enumerate(units):
-                    d[unit] = spiketimes[i]
-                spike_dict.append(d)
+                    for i in range(len(self.cells_to_load)):
+                        if self.channels_to_load is not None:
+                            # Use channel_to_load and units_to_load
+                            chan_unit_str = '{:02d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                        else:
+                            # Use cells_to_load, strip out siteid
+                            chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]
+                        try:
+                            mi = unit_names.index(chan_unit_str)
+                        except ValueError:
+                            #import pdb; pdb.set_trace()
+                            raise RuntimeError(
+                                f'{chan_unit_str} was asked to be loaded, but wasn''t found in the spk.mat file')
+                        spikedict[self.cells_to_load[i]] = spiketimes[mi]
+                else:
+                    for i, unit_name in enumerate(unit_names):
+                        spikedict[self.siteid + "-" + unit_name] = spiketimes[i]
+                spikedicts.append(spikedict)
         else:
             raise NotImplementedError
+        return spikedicts
 
-        return spike_dict
 
     def get_pupil_trace(self, exptevents=None, **kwargs):
         if exptevents is not None:

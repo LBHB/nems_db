@@ -417,7 +417,6 @@ def fill_default_options(options):
     options['includeprestim'] = options.get('includeprestim', 1)
     options['pupil'] = int(options.get('pupil', False))
     options['rem'] = int(options.get('rem', False))
-    options['pupil_eyespeed'] = int(options.get('pupil_eyespeed', False))
     if options['pupil'] or options['rem']:
         options = set_default_pupil_options(options)
 
@@ -793,11 +792,16 @@ def baphy_load_spike_data_raw(spkfilepath, channel=None, unit=None):
     if sortinfo.shape[0] > 1:
         sortinfo = sortinfo.T
     sortinfo = sortinfo[0]
-
+    spikedata = {}
+    spikedata['sortinfo'] = sortinfo
     # figure out sampling rate, used to convert spike times into seconds
-    spikefs = matdata['rate'][0][0]
+    spikedata['spikefs'] = matdata['rate'][0][0]
+    if 'baphy_fmt' in matdata:
+        spikedata['baphy_fmt'] = matdata['baphy_fmt']
+    else:
+        spikedata['baphy_fmt'] = 1
 
-    return sortinfo, spikefs
+    return spikedata
 
 
 def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
@@ -893,7 +897,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     return exptevents, spiketimes, unit_names
 
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
+def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
 
     # number of channels in recording (not all necessarily contain spikes)
     chancount = len(sortinfo)
@@ -919,8 +923,8 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
             )
 
     for ch in range(0, chancount):
-        if len(sortinfo[ch]) and sortinfo[ch][0].size:
-            s = sortinfo[ch][0][0]['unitSpikes']
+        if len(sortinfo[ch]) and len(sortinfo[ch][0])>=sortidx+1 and sortinfo[ch][0][sortidx].size:
+            s = sortinfo[ch][0][sortidx]['unitSpikes']
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
             for u in range(0, unitcount):
@@ -975,9 +979,9 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
     unit_names = []  # string suffix for each unit (CC-U)
     chan_names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     for c in range(0, chancount):
-        if len(sortinfo[c]) and sortinfo[c][0].size:
-            s = sortinfo[c][0][0]['unitSpikes']
-            comment = sortinfo[c][0][0][0][0][2][0]
+        if len(sortinfo[c]) and len(sortinfo[c][0])>=sortidx+1 and sortinfo[c][0][sortidx].size:
+            s = sortinfo[c][0][sortidx]['unitSpikes']
+            comment = sortinfo[c][0][sortidx][0][0][2][0]
             log.debug('Comment: %s', comment)
 
             s = np.reshape(s, (-1, 1))
@@ -1011,7 +1015,9 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
 
                     totalunits += 1
                     if chancount <= 8:
-                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                        # svd -- avoid letter channel names from now on?
+                        #unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                     else:
                         unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                     spiketimes.append(unit_spike_events / spikefs)
@@ -1099,6 +1105,10 @@ def set_default_pupil_options(options):
     options["rasterfs"] = options.get('rasterfs', 100)
     options['pupil'] = options.get('pupil', 1)
     options['pupil_analysis_method'] = options.get('pupil_analysis_method', 'cnn')  # or 'matlab'
+    if options['pupil_analysis_method'] == 'cnn':
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'area')
+    else:
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
     options["pupil_offset"] = options.get('pupil_offset', 0.75)
     options["pupil_deblink"] = options.get('pupil_deblink', True)
     options["pupil_deblink_dur"] = options.get('pupil_deblink_dur', 1)
@@ -1109,7 +1119,6 @@ def set_default_pupil_options(options):
     options["pupil_bandpass"] = options.get('pupil_bandpass', 0)
     options["pupil_derivative"] = options.get('pupil_derivative', '')
     options["pupil_mm"] = options.get('pupil_mm', False)
-    options["pupil_eyespeed"] = options.get('pupil_eyespeed', False)
     options["rem"] = options.get('rem', True)
     options["rem_units"] = options.get('rem_units', 'mm')
     options["rem_min_pupil"] = options.get('rem_min_pupil', 0.2)
@@ -1119,6 +1128,7 @@ def set_default_pupil_options(options):
     options["rem_min_saccades_per_minute"] = options.get('rem_min_saccades_per_minute', 0.01)
     options["rem_max_gap_s"] = options.get('rem_max_gap_s', 15)
     options["rem_min_episode_s"] = options.get('rem_min_episode_s', 30)
+    options["pupil_artifacts"] = options.get("pupil_artifacts", False) # load boolean signal indicating "bad" pupil chunks
     options["verbose"] = options.get('verbose', False)
 
     return options
@@ -1141,17 +1151,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     pupil_deblink_dur = options["pupil_deblink_dur"]
     pupil_median = options["pupil_median"]
     pupil_mm = options["pupil_mm"]
-    pupil_eyespeed = options["pupil_eyespeed"]
     verbose = options["verbose"]
     options['pupil'] = options.get('pupil', True)
-    #rasterfs = options.get('rasterfs', 100)
-    #pupil_offset = options.get('pupil_offset', 0.75)
-    #pupil_deblink = options.get('pupil_deblink', True)
-    #pupil_deblink_dur = options.get('pupil_deblink_dur', (1/3))
-    #pupil_median = options.get('pupil_median', 0)
-    #pupil_mm = options.get('pupil_mm', False)
-    #pupil_eyespeed = options.get('pupil_eyespeed', False)
-    #verbose = options.get('verbose', False)
 
     if options["pupil_smooth"]:
         raise ValueError('pupil_smooth not implemented. try pupil_median?')
@@ -1203,11 +1204,17 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             pupildata = pickle.load(fp)
 
         # hard code to use minor axis for now
-        options['pupil_variable_name'] = 'minor_axis'
-        log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
+        options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
+        log.debug("Using pupil_variable_name: %s", options['pupil_variable_name'])
         log.info("Using CNN results for pupiltrace")
-
-        pupil_diameter = pupildata['cnn']['a'] * 2
+        if options['pupil_variable_name']=='minor_axis':
+            pupil_diameter = pupildata['cnn']['a'] * 2
+        elif options['pupil_variable_name']=='major_axis':
+            pupil_diameter = pupildata['cnn']['b'] * 2
+        elif options['pupil_variable_name']=='area':
+            pupil_diameter = np.pi * pupildata['cnn']['b'] * pupildata['cnn']['a']
+        else:
+            raise ValueError(f"Pupil variable name {options['pupil_variable_name']} is unknown")
         # missing frames/frames that couldn't be decoded were saved as nans
         # pad them here
         nan_args = np.argwhere(np.isnan(pupil_diameter))
@@ -1221,24 +1228,38 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 pupil_diameter[arg] = pupil_diameter[arg - 1]
 
         pupil_diameter = pupil_diameter[:-1, np.newaxis]
-
+        # figure out which extra pupil signals to load
+        # keep these in a signal called pupil_extras where
+        # each channel name corresponds to one of these signals
+        pupil_extras_keys = ['excluded_frames', 'eyespeed', 
+                                'eyelid_left_x', 'eyelid_left_y',
+                                'eyelid_top_x', 'eyelid_top_y',
+                                'eyelid_right_x', 'eyelid_right_y',
+                                'eyelid_bottom_x', 'eyelid_bottom_y']
+        pupil_extras = {}
+        for k in pupil_extras_keys:
+            if k in pupildata['cnn'].keys():
+                log.info(f"Found extra pupil signal: {k}, loading into signal pupil extras")
+                if k == 'excluded_frames':
+                    # special case here, because not a time course
+                    artifacts = np.zeros(pupil_diameter.shape).astype(bool)
+                    for a in pupildata['cnn']['excluded_frames']:
+                        artifacts[a[0]:a[1]] = True
+                    pupil_extras[k] = artifacts
+                else:
+                    pupil_extras[k] = np.array(pupildata['cnn'][k])[:-1, np.newaxis]
+        
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
-
-        if pupil_eyespeed:
-            try:
-                eye_speed = pupildata['cnn']['eyespeed'][:-1, np.newaxis]
-                log.info("loaded eye_speed")
-            except:
-                pupil_eyespeed = False
-                log.info("eye_speed requested but file does not exist!")
 
     elif '.pup.mat' in pupilfilepath:
 
         matdata = scipy.io.loadmat(pupilfilepath)
 
+        pupil_extras = {} # for backwards compaitbility with the new pupil fits
+
         p = matdata['pupil_data']
         params = p['params']
-        if 'pupil_variable_name' not in options:
+        if ('pupil_variable_name' not in options) | (options['pupil_variable_name']=='area'):
             options['pupil_variable_name'] = params[0][0]['default_var'][0][0][0]
             log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
         if 'pupil_algorithm' not in options:
@@ -1250,14 +1271,6 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if pupil_diameter.shape[0] == 1:
             pupil_diameter = pupil_diameter.T
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
-
-        if pupil_eyespeed:
-            try:
-                eye_speed = np.array(results[0]['eye_speed'][0][0])
-                log.debug("loaded eye_speed")
-            except:
-                pupil_eyespeed = False
-                log.info("eye_speed requested but file does not exist!")
 
     fs_approximate = 30  # approx video framerate
     if pupil_deblink & ~loading_pcs:
@@ -1280,8 +1293,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if len(onidx) > len(offidx):
             offidx = np.concatenate((offidx, np.array([len(blink)])))
         deblinked = pupil_diameter.copy()
-        if pupil_eyespeed:
-            deblinked_eye_speed = eye_speed.copy()
+
         for i, x1 in enumerate(onidx):
             x2 = offidx[i]
             if x2 < x1:
@@ -1292,34 +1304,16 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 deblinked[x1:x2, 0] = np.linspace(
                         deblinked[x1], deblinked[x2-1], x2-x1
                         ).squeeze()
-                if pupil_eyespeed:
-                    deblinked_eye_speed[x1:x2, 0] = np.nan
 
         if verbose:
             plt.figure()
-            if pupil_eyespeed:
-                plt.subplot(2, 1, 1)
             plt.plot(pupil_diameter, label='Raw')
             plt.plot(deblinked, label='Deblinked')
             plt.xlabel('Frame')
             plt.ylabel('Pupil')
             plt.legend()
             plt.title("Artifacts detected: {}".format(len(onidx)))
-            if pupil_eyespeed:
-                plt.subplot(2, 1, 2)
-                plt.plot(eye_speed, label='Raw')
-                plt.plot(deblinked_eye_speed, label='Deblinked')
-                plt.xlabel('Frame')
-                plt.ylabel('Eye speed')
-                plt.legend()
         pupil_diameter = deblinked
-        if pupil_eyespeed:
-            eye_speed = deblinked_eye_speed
-
-    if pupil_eyespeed:
-        returned_measurement = eye_speed
-    else:
-        returned_measurement = pupil_diameter
 
     # resample and remove dropped frames
 
@@ -1370,47 +1364,35 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     frame_count = np.diff(firstframe)
 
     if loading_pcs:
+        # facemap stuff
         l = ['pupil']
-    elif pupil_eyespeed & options['pupil']:
-        l = ['pupil', 'pupil_eyespeed']
-    elif pupil_eyespeed:
-        l = ['pupil_eyespeed']
     elif options['pupil']:
-        l = ['pupil']
+        l = ['pupil'] + list(pupil_extras.keys())
 
     big_rs_dict = {}
-
     for signal in l:
-        if signal == 'pupil_eyespeed':
-            pupil_eyespeed = True
-        else:
-            pupil_eyespeed = False
-
+        extras = False
         # warp/resample each trial to compensate for dropped frames
         strialidx = np.zeros([ntrials + 1])
         #big_rs = np.array([[]])
         all_fs = np.empty([ntrials])
 
-        #import pdb;
-        #pdb.set_trace()
-
         for ii in range(0, ntrials):
             if loading_pcs:
                 d = pupil_diameter[int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), :]
-
-            elif signal == 'pupil_eyespeed':
-                d = eye_speed[
-                        int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
-                        ]
-            else:
+            elif signal == 'pupil':
                 d = pupil_diameter[
                         int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
                         ]
+            elif signal in pupil_extras_keys:
+                extras = True
+                d = pupil_extras[signal][
+                        int(firstframe[ii]):int(firstframe[ii]+frame_count[ii]), 0
+                        ]
+
             fs = frame_count[ii] / duration[ii]
             all_fs[ii] = fs
             t = np.arange(0, d.shape[0]) / fs
-            if pupil_eyespeed:
-                d = d * fs  # convert to px/s before resampling
             ti = np.arange(
                     (1/rasterfs)/2, duration[ii]+(1/rasterfs)/2, 1/rasterfs
                     )
@@ -1429,11 +1411,11 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
             strialidx[ii+1] = big_rs.shape[0]
 
-        if pupil_median:
+        if (pupil_median) & (signal == 'pupil'):
             kernel_size = int(round(pupil_median*rasterfs/2)*2+1)
             big_rs = scipy.signal.medfilt(big_rs, kernel_size=(kernel_size,1))
 
-        # shift pupil (or eye speed) trace by offset, usually 0.75 sec
+        # shift pupil (or extras) trace by offset, usually 0.75 sec
         offset_frames = int(pupil_offset*rasterfs)
         big_rs = np.roll(big_rs, -offset_frames, axis=0)
 
@@ -1465,10 +1447,10 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if verbose:
             plt.show()
 
-        if len(l)==2:
+        if len(l)>=2:
             big_rs_dict[signal] = big_rs
 
-    if len(l)==2:
+    if len(l)>=2:
         return big_rs_dict, strialidx
     else:
         return big_rs, strialidx
@@ -1839,11 +1821,11 @@ def baphy_pupil_uri(pupilfilepath, **options):
     spkfilepath = pp + '/' + spk_subdir + re.sub(r"\.m$", ".spk.mat", bb)
     log.info("Spike file: {0}".format(spkfilepath))
     # load spike times
-    sortinfo, spikefs = baphy_load_spike_data_raw(spkfilepath)
+    spikedata = baphy_load_spike_data_raw(spkfilepath)
     # adjust spike and event times to be in seconds since experiment started
 
     exptevents, spiketimes, unit_names = baphy_align_time(
-            exptevents, sortinfo, spikefs, options["rasterfs"])
+            exptevents, spikedata['sortinfo'], spikedata['spikefs'], options["rasterfs"])
     log.info('Creating trial events')
     tag_mask_start = "TRIALSTART"
     tag_mask_stop = "TRIALSTOP"
@@ -2249,6 +2231,25 @@ def parse_cellid(options):
         options['rawid'] = rawid
         options['siteid'] = siteid
         cells_to_extract = [cellid]
+
+    if options['cellid'] is not None:
+        cellids = options['cellid'] if (type(options['cellid']) is list) \
+            else [options['cellid']]
+        units = []
+        channels = []
+        for cellid in cellids:
+            t = cellid.split("_")
+            # test for special case where psuedo cellid suffix has been added to
+            # cellid by stripping anything after a "_" underscore in the cellid (list)
+            # provided
+            scf = []
+            for rawid_ in rawid:  # rawid is actually a list of rawids
+                scf.append(db.get_cell_files(t[0], rawid=rawid_))
+            assert len(scf) == len(rawid)
+            channels.append(scf[0].iloc[0].channum)
+            units.append(scf[0].iloc[0].unit)
+        options['channels'] = channels
+        options['units'] = units
 
     if (len(cells_to_extract) == 0) & (mfilename is None):
         raise ValueError("No cellids found! Make sure cellid/batch is specified correctly, "

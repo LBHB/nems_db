@@ -278,7 +278,7 @@ def _get_holdout_recs(rec, cell_set, holdout_set=None) -> object:
 
 
 def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_recording=False, use_same_recording=False,
-                           **context):
+                           IsReload=False, **context):
     '''Make heldout data the "primary" for final fit. Requires `holdout_cells` during preprocessing.'''
 
     if use_matched_recording:
@@ -301,16 +301,19 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_reco
     meta['cellids'] = cellids
     modelspec.meta['cellids'] = meta['cellids']
 
-    # Reinitialize trainable layers so that .R options are adjusted to new cell count
-    temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
-                                              output_name=context['output_name'])
-    temp_ms[0].pop('meta')  # don't overwrite metadata in first module
-    all_idx = list(range(len(temp_ms)))
-    if freeze_layers is None:
-        freeze_layers = all_idx
-    for i in all_idx:
-        if i not in freeze_layers:
-            modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
+    if IsReload:
+        log.info('Skipping reinitialization of modelspec on reload')
+    else:
+        # Reinitialize trainable layers so that .R options are adjusted to new cell count
+        temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
+                                                  output_name=context['output_name'])
+        temp_ms[0].pop('meta')  # don't overwrite metadata in first module
+        all_idx = list(range(len(temp_ms)))
+        if freeze_layers is None:
+            freeze_layers = all_idx
+        for i in all_idx:
+            if i not in freeze_layers:
+                modelspec[i].update(temp_ms[i])  # overwrite phi, kwargs, etc
 
     return {'est': new_est, 'val': new_val, 'rec': new_rec, 'modelspec': modelspec, 'meta': meta,
             'freeze_layers': freeze_layers}
@@ -499,7 +502,7 @@ def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=
         if k not in ctx['rec'].signals.keys():
            ctx['rec'].signals[k] = ctx['val'].signals[k].copy()
     s = ctx['rec']['pred'].copy()
-    s.name='pred0'
+    s.name = 'pred0'
     ctx['rec'].add_signal(s)
 
     #return {'rec': ctx['rec'],'val': ctx['val'],'est': ctx['est']}

@@ -19,6 +19,7 @@ import nems_db
 nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
+from batch_norm import get_batch_norm_params
 
 import logging
 log = logging.getLogger(__name__)
@@ -49,11 +50,10 @@ if __name__ == '__main__':
     # perform pupil fit
     video_file = sys.argv[1]
     modelname = sys.argv[2]
-    animal = sys.argv[3]
+    species, animal = sys.argv[3].split('_')
 
-    # load the keras model (this is hardcoded rn but should be flexible at some point
-    #model = keras.models.load_model('/auto/data/nems_db/pup_py/default_trained_model.hdf5')
-    project_dir = ps.ROOT_DIRECTORY  #'/auto/data/nems_db/pup_py/'
+    # load the keras model 
+    project_dir = os.path.join(ps.ROOT_DIRECTORY, species+'/') 
     if (modelname == 'current') | (modelname == 'Current'):
         if (animal != '') & (animal != 'None') & (animal != 'All') & (animal != None):
             this_model_dir = 'animal_specific_fits/{}/'.format(animal)
@@ -65,10 +65,14 @@ if __name__ == '__main__':
             name = os.listdir(project_dir + 'default_trained_model/{0}'.format(default_date))[0]
             modelpath = project_dir + 'default_trained_model/{0}/{1}'.format(default_date, name)
     else:
+        # load an older model fit for this pupil video. Probably not used often, but nice 
+        # to have the option...
         date = modelname
         datefolder = os.listdir(project_dir + 'old_model_fits/' + date)
         modelname = [m for m in datefolder if 'weights' in m][0]
         modelpath = project_dir + 'old_model_fits/{0}/{1}'.format(date, modelname)
+
+    NORM_FACTORS = get_batch_norm_params(species)
 
     model = keras.models.load_model(modelpath)
 
@@ -91,6 +95,7 @@ if __name__ == '__main__':
     x_cnn = []
     y_cnn = []
     phi_cnn = []
+    lx=[];ly=[];tx=[];ty=[];rx=[];ry=[];bx=[];by=[]
 
     # reopen the video with pyav
     container = av.open(video)
@@ -123,7 +128,13 @@ if __name__ == '__main__':
             ellipse_parms = model.predict(np.tile(im[np.newaxis, :, :, np.newaxis], [1, 1, 1, 3]))[0]
 
             # rescale parms correctly (based on the resizing and normalizing that was done for the fit)
-            # undo normalization (WIP - CRH 1/30/19)
+            # undo normalization (WIP - CRH 1/30/19 -- update on 6/15/2021, using z-scores per param)
+            for j, (_, v) in enumerate(NORM_FACTORS.items()):
+                # these should be sorted in the same order as y, so no need to use the
+                # dict keys in NORM_FACTORS
+                ellipse_parms[j] = (ellipse_parms[j] * v[2]) #+ v[0]
+            ellipse_parms /= 100
+            '''
             ellipse_parms /= 100
             ellipse_parms[0] = ellipse_parms[0] * size[0]
             ellipse_parms[1] = ellipse_parms[1] * size[0]
@@ -131,14 +142,23 @@ if __name__ == '__main__':
             ellipse_parms[3] = ellipse_parms[3] * (size[0] / 2)
 
             ellipse_parms[4] = ellipse_parms[4] * np.pi
+            ellipse_parms[5:] = ellipse_parms[5:] * size[0] # eyelid keypoints
+            '''
 
-            # undo scaling and save
+            # Finally, undo image scaling and save
             y_cnn.append(ellipse_parms[0] / sf[1])
             x_cnn.append(ellipse_parms[1] / sf[0])
             b_cnn.append(ellipse_parms[2] / sf[1] / 2)
             a_cnn.append(ellipse_parms[3] / sf[0] / 2)
             phi_cnn.append(ellipse_parms[4])
-
+            lx.append(ellipse_parms[5] / sf[0])
+            ly.append(ellipse_parms[6] / sf[1])
+            tx.append(ellipse_parms[7] / sf[0])
+            ty.append(ellipse_parms[8] / sf[1])
+            rx.append(ellipse_parms[9] / sf[0])
+            ry.append(ellipse_parms[10] / sf[1])
+            bx.append(ellipse_parms[11] / sf[0])
+            by.append(ellipse_parms[12] / sf[1])
         except:
             log.info("video decoding failed for frame {0}. Frame dropped? Pad with nans for now...".format(i))
 
@@ -147,14 +167,29 @@ if __name__ == '__main__':
             b_cnn.append(np.nan)
             a_cnn.append(np.nan)
             phi_cnn.append(np.nan)
-
+            lx.append(np.nan)
+            ly.append(np.nan)
+            tx.append(np.nan)
+            ty.append(np.nan)
+            rx.append(np.nan)
+            ry.append(np.nan)
+            bx.append(np.nan)
+            by.append(np.nan)
     results = {
         'cnn': {
             'a': np.array(a_cnn),
             'b': np.array(b_cnn),
             'x': np.array(x_cnn),
             'y': np.array(y_cnn),
-            'phi': np.array(phi_cnn)
+            'phi': np.array(phi_cnn),
+            'eyelid_left_x': lx,
+            'eyelid_left_y': ly,
+            'eyelid_top_x': tx,
+            'eyelid_top_y': ty,
+            'eyelid_right_x': rx,
+            'eyelid_right_y': ry,
+            'eyelid_bottom_x': bx,
+            'eyelid_bottom_y': by
         },
         'cnn_modelpath': modelpath
     }

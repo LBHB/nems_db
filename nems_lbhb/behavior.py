@@ -373,7 +373,7 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         # same for single sounds and overall trials
         # TODO add logic to use new structure in exptparams['TrialParams'][1]['CueSeg']
         # to determine cue trials for newer baphy files (after Luke's modifications)
-        nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
+        nCueTrials = exptparams['TrialObject'][1].get('CueTrialCount',0)
         if nCueTrials > 0:
             cue_hit_trials = events[events.name.str.contains('HIT_TRIAL')]['Trial'][:(nCueTrials+1)].values
             iv = events.Trial.isin(np.arange(1, cue_hit_trials.max()))

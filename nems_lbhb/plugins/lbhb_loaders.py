@@ -400,7 +400,13 @@ def loadpred(loadkey):
         if op == 'a':
             pc_format="all"
         if op == 'cpn':
-            dmask = 'epcpn-hrc'
+            dmask = 'epcpn-'+dmask
+        if op.startswith('cpnmvm'):
+            mvmmask = op[3:].replace(',', '.')
+            dmask = f'epcpn-{mvmmask}-hrc'
+        if op.startswith('cpnOldmvm'):
+            mvmmask = op[6:].replace(',', '.')
+            dmask = f'epcpn.old-{mvmmask}-hrc'
     if pc_count > 0:
         modelname_existing = f"psth.fs4.pup-ld-st.pup-{dmask}-pca.{pc_format}.cc{pc_count}-psthfr-aev_sdexp2.SxR_newtf.n.lr3e4.cont.et5.i50000"
     elif 'z' in ops:
