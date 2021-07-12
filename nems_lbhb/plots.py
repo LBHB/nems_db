@@ -1392,7 +1392,8 @@ def LN_pop_plot(ctx, ctx0=None):
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
                       offset=None, dot_colors=None, dot_markers=None, max=None, ax=None,
-                      check_single_cell=False, plot_stat='r_test', mean_per_model=False):
+                      check_single_cell=False, plot_stat='r_test', mean_per_model=False,
+                      plot_medians=False):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
@@ -1444,8 +1445,12 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
     # consider converting to r^2 with **2
-    model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
-    b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+    if not plot_medians:
+        model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
+        b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+    else:
+        model_mean = (b_ceiling.loc[goodcells, modelnames]).median()
+        b_m = np.array((b_ceiling.loc[goodcells, modelnames]).median())
 
     cellids = b_n.index.tolist()
     siteids = list(set([c.split("-")[0] for c in cellids]))
