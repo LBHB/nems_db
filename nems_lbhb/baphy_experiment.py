@@ -638,6 +638,7 @@ class BAPHYExperiment:
                         try:
                             mi = unit_names.index(chan_unit_str)
                         except ValueError:
+                            #import pdb; pdb.set_trace()
                             raise RuntimeError(
                                 f'{chan_unit_str} was asked to be loaded, but wasn''t found in the spk.mat file')
                         spikedict[self.cells_to_load[i]] = spiketimes[mi]
