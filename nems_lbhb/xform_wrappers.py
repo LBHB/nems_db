@@ -178,7 +178,7 @@ def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
     return {'rec': rec, 'meta': meta}
 
 
-def max_cells(rec, est, val, meta, n_cells, seed_mod=0, matched_site=None, **context):
+def max_cells(rec, est, val, meta, n_cells, seed_mod=0, **context):
     '''
     Similar to holdout_cells, but for fitting up to n_cells and does not separately save cells that are not removed.
     '''
@@ -186,21 +186,22 @@ def max_cells(rec, est, val, meta, n_cells, seed_mod=0, matched_site=None, **con
     rec_cells = est['resp'].chans
     random.seed(12345 + seed_mod)
 
-    if matched_site is None:
+    if meta['matched_site'] is None:
         keep_these_cells = random.sample(rec_cells, n_cells)
     else:
-        if ':' in matched_site:
-            cellid_options = {'batch': meta['batch'], 'cellid': matched_site, 'rawid': None}
-            cells_to_extract, _ = io.parse_cellid(cellid_options)
-            site_cells = cells_to_extract
-        else:
-            site_cells = [c for c in rec_cells if c.startswith(matched_site)]
-        n_site = len(site_cells)
+        # if ':' in matched_site:
+        #     cellid_options = {'batch': meta['batch'], 'cellid': matched_site, 'rawid': None}
+        #     cells_to_extract, _ = io.parse_cellid(cellid_options)
+        #     site_cells = cells_to_extract
+        # else:
+        #     site_cells = [c for c in rec_cells if c.startswith(matched_site)]
+        matched_cells = meta['matched_cellids']
+        n_site = len(matched_cells)
 
         if n_cells <= n_site:
-            keep_these_cells = random.sample(site_cells, n_cells)
+            keep_these_cells = random.sample(matched_cells, n_cells)
         else:
-            keep_these_cells = random.sample(rec_cells, n_cells-n_site) + site_cells
+            keep_these_cells = random.sample(rec_cells, n_cells-n_site) + matched_cells
 
     est, keep_these_est = _get_holdout_recs(est, keep_these_cells, None)
     val, keep_these_val = _get_holdout_recs(val, keep_these_cells, None)
@@ -229,6 +230,7 @@ def holdout_cells(rec, est, val, site, meta, exclude_matched_cells=False, **cont
                 batch=batch, siteid=site, alt_cells_available=None, cell_count=cell_count,
                 manual_cell_list=cellids
     )
+
     matched_set = alt_cellid
     holdout_set = cellids
 
