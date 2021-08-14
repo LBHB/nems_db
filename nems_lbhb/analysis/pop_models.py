@@ -58,11 +58,19 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     stimchans = rec['stim'].shape[0]
     bincount = rec['pred'].shape[1]
     stim_mean = np.mean(rec['stim'].as_continuous(), axis=1, keepdims=True)
+    
+    
     if index_range is None:
-        index_range = np.arange(bincount)
-        if sample_count is not None:
+        stim_mag = rec['stim'].as_continuous().sum(axis=0)
+        stim_big = stim_mag > np.max(stim_mag) / 1000
+        index_range = np.arange(0, len(stim_mag))
+        index_range = index_range[(index_range > memory) & stim_big[index_range]]
+        print(f"big frames in index_range: {len(index_range)}")
+        if (sample_count is not None) and (len(index_range)>sample_count):
             np.random.shuffle(index_range)
             index_range = index_range[:sample_count]
+            print(f"trimmed to {sample_count} random subset")
+
     sample_count = len(index_range)
     dstrf = np.zeros((sample_count, stimchans, memory, len(out_channel)))
     for i, index in enumerate(index_range):
@@ -295,6 +303,98 @@ def force_signal_silence(rec, signal='stim'):
         s[:,:,:]=0
         rec[signal]=rec[signal].replace_epoch(e, s)
     return rec
+
+
+def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purple', labels='model'):
+
+    if type(ctx) is list:
+        mult_ctx=True
+        rec=ctx[0]['val']
+        modelspec=ctx[0]['modelspec']
+    else:
+        mult_ctx=False
+        rec = ctx['val']
+        modelspec=ctx['modelspec']
+
+    cellids = rec['resp'].chans
+    match=[c==cellid for c in cellids]
+    c = np.where(match)[0][0]
+    
+    if rr is None:
+        rr=np.arange(np.min((1000,rec['resp'].shape[1])))
+        
+    f,ax = plt.subplots(2,1, figsize=(12,4), sharex=True)
+    rr_orig=rr
+    tt=np.arange(len(rr))/rec['resp'].fs
+    
+    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower', cmap="gray_r", 
+                 extent=[tt[0],tt[-1],0,rec['stim'].shape[0]])
+    ax[0].set_title(cellid + "/" + modelspec.meta['modelname'].split("_")[1])
+    
+    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], color=respcolor, label='resp');
+    if mult_ctx:
+        for e in range(len(ctx)):
+            print(f"{labels[e]} {predcolor[e]}")
+            r=ctx[e]['modelspec'].meta['r_test'][c][0]
+            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
+    else: 
+        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
+
+    ax[1].legend(frameon=False, fontsize=8)
+    ax[1].set_xlabel('Time (s)')
+    
+    return f
+    
+from nems.utils import get_setting
+from scipy.ndimage import zoom
+
+
+def dstrf_pca_plot(pcs, pc_mag, cellids, clist=None, rows=1):
+    channel_count=pcs.shape[-1]
+    ccmax=rows*10
+    if clist is None:
+        clist=np.arange(np.min([ccmax,channel_count]))
+        
+    if len(clist)>ccmax:
+        clist=clist[:ccmax]
+        
+    f2,axs=plt.subplots(3*rows, 10, figsize=(12,3.5*rows))
+    for c,cadj in enumerate(clist):
+        cellid = cellids[cadj]
+        pc_rat = pc_mag[:,cadj]/pc_mag[:,cadj].sum()
+        for i in range(3):
+            mm=np.max(np.abs(pcs[i,:,:,cadj]))
+            _p = pcs[i,:,:,cadj]
+            _p *= np.sign(_p.sum())
+            os = int(c/10)*3
+            _c = c % 10
+            
+            rat=(pc_rat[i] / pc_mag[0,cadj]) #  ** 2
+            #print(rat, mm)
+
+            strf = np.fliplr(_p)
+            strf[np.abs(strf)<np.std(strf)]=0
+            strf = zoom(strf, [2,2])*rat
+            if np.abs(strf.min())>strf.max():
+                strf=-strf
+                
+            axs[i+os,_c].imshow(strf,cmap='bwr', aspect='auto',origin='lower', clim=[-mm, mm])
+            if i==0:
+               axs[i+os,_c].set_title(f'{cellid}', fontsize=8)
+            
+            axs[i+os,_c].text(axs[i+os,_c].get_xlim()[1],axs[i+os,_c].get_ylim()[0],
+                              f'{pc_rat[i]:.2f}', ha='right',va='bottom', fontsize=8)
+            if i+os<7:
+                axs[i+os,_c].set_xticks([])
+            if (c>0) or (i+os<7):
+                axs[i+os,_c].set_yticks([])
+            #axs[i+os,_c].set_axis_off()
+            axs[i+os,_c].set_xticks([])
+            axs[i+os,_c].set_yticks([])
+            
+    plt.show()
+    return f2
+
 
 def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
     cellids = rec['resp'].chans
@@ -994,4 +1094,89 @@ def db_pca():
             axs[i,c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
             axs[i,c].set_title(f'pc {i}: {pc_mag[i,c]:.3f}')
 
+def simulate_pop(n=10, modelstring=None):
 
+    from nems_lbhb.baphy_experiment import BAPHYExperiment
+    from nems.initializers import from_keywords, rand_phi
+    from nems_lbhb.baphy_io import fill_default_options
+
+    parmfile = '/auto/data/daq/Amanita/AMT004/AMT004b13_p_NAT.m'
+
+    options = {'stimfmt': 'ozgf', 'rasterfs': 100,
+               'chancount': 18, 'resp': False, 'pupil': False, 'stim': True
+              }
+    options = fill_default_options(options)
+
+    e=BAPHYExperiment(parmfile=parmfile)
+    rec=e.get_recording(**options)
+    rec['stim']=rec['stim'].rasterize().normalize()
+
+    if modelstring is None:
+        #modelstring = "wc.18x3.g-fir.3x10-lvl.1-dexp.1"
+        #modelstring = "wc.18x3.g-fir.3x10-lvl.1"
+        #modelstring = "wc.18x3.g-stp.3.q.s-do.3x20-lvl.1"
+        modelstring = "wc.18x3.g-stp.3.q.s-do.3x20-lvl.1-dexp.1"
+        
+    modelspec = from_keywords(modelstring)
+    
+    modelspec = rand_phi(modelspec, rand_count=n)['modelspec']
+
+    preds = []
+    for fitidx in range(modelspec.fit_count):
+        modelspec.set_fit(fitidx)
+        if 'gaussian' in modelspec[0]['fn']:
+            modelspec.phi[0]['mean'] = np.random.rand(modelspec.phi[0]['mean'].shape[0])
+            modelspec.phi[0]['sd'] /= 3
+            print(fitidx, "wc.g", modelspec.phi[0])
+
+        if 'stp' in modelspec[1]['fn']:
+            tau = modelspec.phi[1]['tau']
+            tau[tau<0.001]=0.001
+            modelspec.phi[1]['tau'] = tau * 1
+            modelspec.phi[1]['u'] *= 1
+            print(fitidx, "stp", modelspec.phi[1])
+            
+        if 'relu' in modelspec[2]['fn']:
+            modelspec.phi[2]['offset'] -= 0.05
+            print(fitidx, "relu offset", modelspec.phi[2]['offset'].T)
+
+        rec_ = modelspec.evaluate(rec=rec)
+        rec_['pred'].chans = [f'SIM000a-{fitidx:02d}-1']
+        d = rec_['pred']._data.copy()
+        d -= d[:10].mean()
+        d += np.random.randn(d.shape[0],d.shape[1])*d.std()/2 + d.std()/2
+        d[d<0]=0
+        preds.append(rec_['pred']._modified_copy(data=d))
+        
+    resp = preds[0].concatenate_channels(preds)
+    resp.name='resp'
+
+    if True:
+        stim = rec['stim']
+        m=stim._data.mean(axis=1,keepdims=True)
+        s=stim._data.std(axis=1,keepdims=True)
+        print(f'Stim mean/std={m.mean()}/{s.mean()}')
+        noise = np.random.randn(stim.shape[0],stim.shape[1])*m + s
+        nstim = stim._modified_copy(data=stim._data + noise)
+        nstim.epochs = stim.epochs.copy()
+        for i,e in nstim.epochs.iterrows():
+            if e['name'].endswith('.wav'):
+                k = e['name']
+                nstim.epochs.loc[i,'name']=k + "_noise"
+                #nstim._data[k + "_noise"] = nstim._data[k]
+
+        stim = stim.concatenate_time((stim,nstim))
+        resp = resp.concatenate_time((resp,resp))
+        resp.epochs = stim.epochs.copy()
+
+        rec.signals['stim']=stim
+    
+    rec.add_signal(resp)
+    rec.name = 'SIM000a'
+
+    plt.figure(figsize=(12, 3))
+    plt.plot(resp.as_continuous()[:, :1500].T)
+    for i in range(resp.shape[0]):
+        plt.text(0,resp._data[i,0],f"{i}", ha='right')
+        
+    return {'rec': rec, 'modelspec': modelspec}

@@ -16,38 +16,94 @@ import nems.epoch as ep
 import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
+import hashlib
 
 from nems.utils import find_module, adjust_uri_prefix
 from nems.preprocessing import resp_to_pc
 from nems.initializers import load_phi
 import nems.db as nd
+from nems_lbhb.xform_wrappers import _matching_cells
+from nems.uri import save_resource
+from nems.utils import get_default_savepath
 
 log = logging.getLogger(__name__)
 
 
-def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
+def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, use_matched=False, use_simulated=False, **ctx):
     """
     replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
     to the NAT4 dataset
+    
+    for dnn single:
+    initial model:
+    modelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+    
+    use initial as pre-fit:
+    modelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_prefit-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.es20"
+
     """
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")
 
     copy_layers = xi[-1]
-    batch = meta['batch']
+    batch = int(meta['batch'])
     modelname_parts = meta['modelname'].split("_")
-    pre_parts = modelname_parts[0].split("-")
-    post_parts = modelname_parts[2].split("-")
-    post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"
-    model_search = pre_parts[0] + ".pop%%" + modelname_parts[1] + "%%" + post_part
+    
+    if use_simulated:
+        guess = '.'.join(['SIM000a', modelname_parts[1]])
 
-    # hard-coded to use an A1 model!!!!
-    if area == "A1":
-        pre_cellid = 'ARM029a-07-6'
-        pre_batch=322
+        # remove problematic characters
+        guess = re.sub('[:]', '', guess)
+        guess = re.sub('[,]', '', guess)
+        if len(guess) > 100:
+            # If modelname is too long, causes filesystem errors.
+            guess = guess[:75] + '...' + str(hashlib.sha1(guess.encode('utf-8')).hexdigest()[:20])
+
+        old_uri = f"/auto/data/nems_db/modelspecs/{guess}/modelspec.0000.json"
+        log.info('loading saved modelspec from: ' + old_uri)
+
+        new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
+        
+        return new_ctx
+
+    elif modelname_parts[1].endswith(".1"):
+        
+        # this is a single-cell fit
+        if type(cellid) is list:
+            cellid = cellid[0]
+        
+        if use_matched:
+            # determine matched cell for this heldout cell
+            if siteid is None:
+                siteid=cellid.split("-")[0]
+            cellids, this_perf, alt_cellid, alt_perf = _matching_cells(batch=batch, siteid=siteid)
+
+            pre_cellid = [c_alt for c,c_alt in zip(cellids,alt_cellid) if c==cellid][0]
+            log.info(f"matched cell for {cellid} is {pre_cellid}")
+        else:
+            pre_cellid = cellid
+            log.info(f"cellid prefit for {cellid}")
+
+        pre_batch = batch
+        #postparts = modelname_parts[2].split("-")
+        #postparts = [s for s in postparts if not(s.startswith("prefit"))]
+        #modelname_parts[2]="-".join(postparts)
+        modelname_parts[2] = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+        model_search="_".join(modelname_parts)
+
     else:
-        raise ValueError(f"area {area} prefit not implemented")
+        pre_parts = modelname_parts[0].split("-")
+        post_parts = modelname_parts[2].split("-")    
+        post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"
+        model_search = pre_parts[0] + ".pop%%" + modelname_parts[1] + "%%" + post_part
+
+        # hard-coded to use an A1 model!!!!
+        if area == "A1":
+            pre_cellid = 'ARM029a-07-6'
+            pre_batch = 322
+        else:
+            raise ValueError(f"area {area} prefit not implemented")
     
     sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
     #log.info(sql)
@@ -57,6 +113,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", **ctx):
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
     new_ctx['freeze_layers'] = list(np.arange(copy_layers))
+    
     return new_ctx
 
 

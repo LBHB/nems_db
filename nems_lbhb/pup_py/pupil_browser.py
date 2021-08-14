@@ -445,7 +445,7 @@ class PupilBrowser:
         # get the pupil video file
         self.raw_video = filedialog.askopenfilename(initialdir = ps.ROOT_VIDEO_DIRECTORY,
                             title = "Select raw video file",
-                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+                            filetypes = (("avi files","*.avi"), ("mj2 files","*.mj2*") ))
 
         params_file = os.path.split(self.raw_video)[-1].split('.')[0]
         animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]

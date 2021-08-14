@@ -33,4 +33,9 @@ def pclast(kw):
 
 @xform()
 def prefit(kw):
-    return [['nems_lbhb.initializers.initialize_with_prefit', {}]]
+    ops = kw.split('.')[1:]
+    use_matched = 'm' in ops
+    use_simulated = 's' in ops
+    
+    return [['nems_lbhb.initializers.initialize_with_prefit', 
+             {'use_matched': use_matched, 'use_simulated': use_simulated}]]
