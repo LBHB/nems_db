@@ -36,6 +36,11 @@ def prefit(kw):
     ops = kw.split('.')[1:]
     use_matched = 'm' in ops
     use_simulated = 's' in ops
-    
+    use_full_model = 'f' in ops
+    if 'hm' in ops:
+        use_full_model='matched'
+    elif 'hs' in ops:
+        use_full_model='heldout'
+
     return [['nems_lbhb.initializers.initialize_with_prefit', 
-             {'use_matched': use_matched, 'use_simulated': use_simulated}]]
+             {'use_matched': use_matched, 'use_simulated': use_simulated, 'use_full_model': use_full_model}]]

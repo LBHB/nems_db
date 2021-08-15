@@ -29,7 +29,8 @@ from nems.utils import get_default_savepath
 log = logging.getLogger(__name__)
 
 
-def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, use_matched=False, use_simulated=False, **ctx):
+def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, 
+                           use_matched=False, use_simulated=False, use_full_model=False, **ctx):
     """
     replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
     to the NAT4 dataset
@@ -67,6 +68,31 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         
         return new_ctx
 
+    elif use_full_model:
+        
+        # use full pop file
+        
+        pre_parts = modelname_parts[0].split("-")
+        post_parts = modelname_parts[2].split("-")
+        if type(use_full_model) is bool:
+            pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
+        elif use_full_model=='heldout':
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev"
+        elif use_full_model=='matched':
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev"
+            
+        post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+
+        model_search = "_".join([pre_part, modelname_parts[1], post_part])
+        log.info("prefit model_search: "+model_search)
+        pre_batch = batch
+        if batch == 322:
+            pre_cellid = 'ARM029a-07-6'
+        elif pre_batch == 323:
+            pre_cellid = 'ARM017a-01-9'
+        else:
+            raise ValueError(f"batch {batch} prefit not implemented yet.")
+            
     elif modelname_parts[1].endswith(".1"):
         
         # this is a single-cell fit
@@ -107,6 +133,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     
     sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
     #log.info(sql)
+    
     d = nd.pd_query(sql)
     old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
     log.info(f"Importing parameters from {old_uri}")

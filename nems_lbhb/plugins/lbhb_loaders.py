@@ -280,6 +280,7 @@ def loadpop(loadkey):
     rand_match = False
     cell_count = 20
     best_cells = False
+    holdout = None
     for op in ops:
         if op=='rnd':
             rand_match = True
@@ -290,11 +291,16 @@ def loadpop(loadkey):
         elif op.startswith('bc'):
             cell_count = int(op[2:])
             best_cells=True
+        elif op=='hs':
+            holdout='site'
+        elif op=='hm':
+            holdout='matched'
+        
 
     xfspec = [['nems_lbhb.xform_wrappers.pop_selector',
               {'loadkey': loadkey,
                'rand_match': rand_match, 'cell_count': cell_count,
-               'best_cells': best_cells}]]
+               'best_cells': best_cells, 'holdout': holdout}]]
 
     return xfspec
 
