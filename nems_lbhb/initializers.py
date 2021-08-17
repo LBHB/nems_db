@@ -71,7 +71,6 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     elif use_full_model:
         
         # use full pop file
-        
         pre_parts = modelname_parts[0].split("-")
         post_parts = modelname_parts[2].split("-")
         if type(use_full_model) is bool:
@@ -84,15 +83,27 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
-        log.info("prefit model_search: "+model_search)
         pre_batch = batch
-        if batch == 322:
+        log.info(f"model_search: {model_search}")
+
+        # this is a single-cell fit
+        if type(cellid) is list:
+            cellid = cellid[0]
+        siteid = cellid.split("-")[0]
+        allsiteids, allcellids = nd.get_batch_sites(batch, modelname_filter=model_search)
+        
+        if siteid in allsiteids:
+            # don't need to generalize, load from actual fit
+            pre_cellid = cellid
+        elif batch == 322:            
             pre_cellid = 'ARM029a-07-6'
         elif pre_batch == 323:
             pre_cellid = 'ARM017a-01-9'
         else:
             raise ValueError(f"batch {batch} prefit not implemented yet.")
             
+        log.info(f"prefit cellid={pre_cellid}")
+
     elif modelname_parts[1].endswith(".1"):
         
         # this is a single-cell fit
