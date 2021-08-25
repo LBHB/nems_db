@@ -622,19 +622,23 @@ class PupilBrowser:
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
-        py_path = sys.executable
         script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
         script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()
 
         default_epochs = 500
-        n_training_epochs = simpledialog.askstring('TrainingEpochs', 'How many training epochs would you like to use? Default is 500')
+        n_training_epochs = simpledialog.askstring('TrainingEpochs', 'How many training epochs would you like to use?', 
+                                                    initialvalue='500')
+        
         try:
             n_training_epochs = int(n_training_epochs)
             print(f"using {n_training_epochs} training epochs")
         except:
             print("using default -- 500 training epochs")
             n_training_epochs = default_epochs
+
+        py_path = simpledialog.askstring('Python executable', 'Which python would you like to run the training on? Make sure it has gpu tf. See nems_db/README.md for details on setting up environment', 
+                                            initialvalue=sys.executable)
 
         # add job to queue
         # nd.add_job_to_queue([], note="Pupil Job: Training CNN", executable_path=py_path,
