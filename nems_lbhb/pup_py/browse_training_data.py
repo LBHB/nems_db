@@ -93,7 +93,7 @@ class TrainingDataBrowser:
                 img = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
 
                 if prev_frame is not None:
-                    if img == prev_frame:
+                    if np.array_equal(np.asarray(img), np.asarray(prev_frame)):
                         raise ValueError("Loading a duplicate frame. What's up??")
                     else:
                         pass
