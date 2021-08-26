@@ -157,6 +157,9 @@ class TrainingDataBrowser:
                         default_frame = video_name + str(f)
                     n_frames_added += 1
                 '''
+
+                # now that we've copied to the temp training directory, we can delete from tmp
+                os.system(f"rm {tmp_save + video_name + '1' + '.jpg'}")
             print("Added {0} video frames to temp training set for labeling".format(n_frames_added))
 
         self.master = master
