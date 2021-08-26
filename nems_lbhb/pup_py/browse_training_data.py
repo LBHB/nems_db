@@ -83,6 +83,7 @@ class TrainingDataBrowser:
                 frames = np.sort(np.random.choice(np.arange(t0, tend, 1/fps), n_frames, replace=False))
             output_dict = {}
             n_frames_added = 0
+            prev_frame = None
             for i, t in enumerate(frames):
                 f = int(t * fps)
                 # save temporarily
@@ -90,11 +91,19 @@ class TrainingDataBrowser:
 
                 # load, convert to grayscale, cut off artifact, extact/save first channel only
                 img = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
+
+                if prev_frame is not None:
+                    if img == prev_frame:
+                        raise ValueError("Loading a duplicate frame. What's up??")
+                    else:
+                        pass
+
                 frame = np.asarray(img)[:, :-10, 0]
                 output_dict['frame'] = frame
                 img2 = Image.open(tmp_save + video_name + '1' + '.jpg') #.convert('LA')
                 frame2 = np.asarray(img2)[:, :-10, 0]
                 output_dict['frame2'] = frame2  # for display purposes
+                prev_frame = img # for testing if a duplicate was just loaded for some bizarre reason??
                 try:
                     output_dict['ellipse_zack'] = {
                                     'a': parms['cnn']['a'][f],
