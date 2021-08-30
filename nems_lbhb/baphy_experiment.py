@@ -160,13 +160,19 @@ class BAPHYExperiment:
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
             if cellid is not None:
+                
                 if type(cellid) is list:
                     self.cells_to_extract = cellid
                     self.cells_to_load = cellid
+                    self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
+                    self.units_to_load = [int(c.split("-")[2]) for c in cellid]
                     self.siteid = cellid[0][:7]
                 elif type(cellid) is str:
+                    t = cellid.split("-")
                     self.cells_to_extract = [cellid]
                     self.cells_to_load = [cellid]
+                    self.channels_to_load = [int(t[1])]
+                    self.units_to_load = [int(t[2])]
                     self.siteid = cellid[:7]
                 else:
                     raise TypeError
