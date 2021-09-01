@@ -110,7 +110,7 @@ def CPN (exptevents, exptparams):
         '''
         Given epochs from a CPP or CPN experiments with names containing sequences of sub stimuli, creates new epochs
         specifying pairs of contiguous substimuli as context probe pairs, with adequate start and end times
-        e.g. from 'STIM_sequence001: 1 , 3 , 2 , 4 , 4'  to 'C0_P1', 'C1_P3', 'C3_P2', 'C2_P4', 'C4_P4' and 'C4_P0'.
+        e.g. from 'STIM_sequence001: 1 , 3 , 2 , 4 , 4'  to 'C00_P01', 'C01_P03', 'C03_P02', 'C02_P04', 'C04_P04' and 'C04_P00'.
 
         :param epochs: pandas DataFrame. original CPP or CPN epochs
         :return: pandas DataFrame. Modified epochs included context probe pairs
@@ -175,17 +175,17 @@ def CPN (exptevents, exptparams):
                 end = epoch[0] + PreStimSilence + (step * (ss + 1))
                 splited_times[cc, 1] = end
                 # name
-                new_names[cc, 0] = 'voc_{}'.format(sub_ep)
+                new_names[cc, 0] = f'voc_{sub_ep:02d}'
 
                 # second add as a pair
                 cc += 1
                 # stim_num start time
                 if ss == 0:  # special case for PreStimSilence as context
                     context = start - PreSilStep
-                    name = 'C0_P{}'.format(sub_ep)
+                    name = f'C00_P{sub_ep:02d}'
                 else:
                     context = start - step
-                    name = 'C{}_P{}'.format(this_ep_sub_eps[ss - 1], sub_ep)
+                    name = f'C{this_ep_sub_eps[ss - 1]:02d}_P{sub_ep:02d}'
 
                 splited_times[cc, 0] = context
                 splited_times[cc, 1] = end
@@ -196,7 +196,7 @@ def CPN (exptevents, exptparams):
 
             context = start
             end = end + PostSilStep
-            name = 'C{}_P0'.format(sub_ep)
+            name = f'C{sub_ep:02d}_P00'
 
             splited_times[cc, 0] = context
             splited_times[cc, 1] = end
