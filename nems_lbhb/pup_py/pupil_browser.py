@@ -154,10 +154,15 @@ class PupilBrowser:
         self.pupil_trace.draw()
         self.eye_movements.draw()
 
-        # save new frames
-        os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
 
-        frame_file = tmp_frame_folder + 'frame1.jpg'
+        # first make sure the tmp file doesn't exist for this user, just to avoid asking for overwrite permissions
+        os.system(f"rm {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+
+        # save new frames
+        #os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
+        os.system(f"ffmpeg -ss {t} -i {video} -vframes 1 {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+
+        frame_file = tmp_frame_folder + f'frame1_{getpass.getuser()}.jpg'
 
         self.plot_frame(frame_file)
 
@@ -493,9 +498,11 @@ class PupilBrowser:
         # save first ten frames and display the first
         video = self.raw_video
 
-        os.system("ffmpeg -ss 00:00:00 -i {0} -vframes 1 {1}frame%d.jpg".format(video, tmp_frame_folder))
+        # first make sure the tmp file doesn't exist for this user, just to avoid asking for overwrite permissions
+        os.system(f"rm {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+        os.system(f"ffmpeg -ss 00:00:00 -i {video} -vframes 1 {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
 
-        frame_file = tmp_frame_folder + 'frame1.jpg'
+        frame_file = tmp_frame_folder + f'frame1_{getpass.getuser()}.jpg'
 
         # define the species for this animal by querying the database
         self.species = nd.pd_query(f"SELECT species from gAnimal where animal='{self.animal_name.get()}'").values[0][0]
