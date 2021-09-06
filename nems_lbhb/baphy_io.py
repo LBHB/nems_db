@@ -2239,6 +2239,7 @@ def parse_cellid(options):
         channels = []
         for cellid in cellids:
             t = cellid.split("_")
+            #print(cellids)
             # test for special case where psuedo cellid suffix has been added to
             # cellid by stripping anything after a "_" underscore in the cellid (list)
             # provided
