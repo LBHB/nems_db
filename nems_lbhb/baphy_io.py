@@ -2157,7 +2157,6 @@ def parse_cellid(options):
         cell1 from a site where you recorded cells1-4, you don't want a different recording
         cached for each cell.
     """
-
     options = options.copy()
 
     mfilename = options.get('mfilename', None)
