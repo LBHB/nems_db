@@ -24,6 +24,7 @@ from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
+import nems.epoch as ep
 import nems.signal
 import nems.recording
 import nems.db as db
@@ -457,7 +458,35 @@ class BAPHYExperiment:
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
+    
+        # get good/bad trials, if database
+        goodtrials = [None] * len(self.parmfile)
+        try:
+            d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
+                                    rawid=self.rawid)
+            for i, parm in enumerate(self.parmfile):
+                
+                trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
+                s_goodtrials = d.loc[d['parm']==str(parm).strip('.m'), 'goodtrials'].values[0]
+                
+                if (s_goodtrials is not None) and len(s_goodtrials):
+                    log.info("goodtrials not empty: %s", s_goodtrials)
+                    s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                    g = s_goodtrials.split(" ")
+                    _goodtrials = np.zeros(trialcount, dtype=bool)
+                    
+                    for b in g:
+                        b1 = b.split(":")
+                        if len(b1) == 1:
+                            # single trial in list, simulate colon syntax
+                            b1 = b1 + b1
+                        _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+
+                    goodtrials[i] = list(_goodtrials)
+        except:
+            pass
+        
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, goodtrials=gtrials, **kwargs) for i, (bev, parm, gparm, gtrials) in enumerate(zip(exptevents, exptparams, globalparams, goodtrials))]
 
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
@@ -813,14 +842,15 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrials=None, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
     labels to name columnn, if they exist. This is basically
     just a (slightly) cleaned up version of baphy_load_dataset.
-    """
 
+    goodtrials (added 08.08.2021) -- which baphy trials to keep
+    """
     epochs = []
 
     log.info('Creating trial epochs')
@@ -891,8 +921,16 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options
     epochs.at[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
     epochs.at[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
 
-    # Final step, remove any duplicate epochs (that are getting created somewhere???)
+    # Remove any duplicate epochs (that are getting created somewhere???)
     epochs = epochs.drop_duplicates()
+
+    # if goodtrials exist, only keep epochs within "good" baphy trials
+    if goodtrials is not None:
+        bad_bounds = epochs[epochs.name=='TRIAL'][~np.array(goodtrials)][['start', 'end']].values
+        all_bounds = epochs[['start','end']].values
+
+        bad_epochs = ep.epoch_contained(all_bounds, bad_bounds)
+        epochs = epochs.drop(epochs.index[bad_epochs])
 
     return epochs
 
