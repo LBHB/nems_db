@@ -436,6 +436,82 @@ def fill_default_options(options):
 
     return options
 
+def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
+                  **options):
+    """
+    :param loadkey:  nems load string (eg, "ozgf.fs100.ch18")
+    :param options:  pre-loaded options, will be overwritten by loadkey contents
+    :return: options dictionary
+    """
+
+    options = fill_default_options(options)
+
+    # remove any preprocessing keywords in the loader string.
+    if '-' in loadkey:
+        loader = nems.utils.escaped_split(loadkey, '-')[0]
+    else:
+        loader = loadkey
+    log.info('loader=%s',loader)
+
+    ops = loader.split(".")
+
+    # updates some some defaults
+    options.update({'rasterfs': 100, 'chancount': 0})
+    load_pop_file = False
+
+    for op in ops:
+        if op=='ozgf':
+            options['stimfmt'] = 'ozgf'
+        elif op=='parm':
+            options['stimfmt'] = 'parm'
+        elif op=='ll':
+            options['stimfmt'] = 'll'
+        elif op=='env':
+            options['stimfmt'] = 'envelope'
+        elif op in ['nostim','psth','ns', 'evt']:
+            options.update({'stim': False, 'stimfmt': 'parm'})
+
+        elif op.startswith('fs'):
+            options['rasterfs'] = int(op[2:])
+        elif op.startswith('ch'):
+            options['chancount'] = int(op[2:])
+
+        elif op.startswith('fmap'):
+            options['facemap'] = int(op[4:])
+
+        elif op=='pup':
+            options.update({'pupil': True, 'rem': 1})
+            #options.update({'pupil': True, 'pupil_deblink': True,
+            #                'pupil_deblink_dur': 1,
+            #                'pupil_median': 0, 'rem': 1})
+        elif op=='rem':
+            options['rem'] = True
+
+        elif 'eysp' in ops:
+            options['pupil_eyespeed'] = True
+        elif op.startswith('pop'):
+            load_pop_file = True
+        elif op == 'voc':
+            options.update({'runclass': 'VOC'})
+
+    if 'stimfmt' not in options.keys():
+        raise ValueError('Valid stim format (ozgf, psth, parm, env, evt) not specified in loader='+loader)
+    if (options['stimfmt']=='ozgf') and (options['chancount'] <= 0):
+        raise ValueError('Stim format ozgf requires chancount>0 (.chNN) in loader='+loader)
+
+    # these fields are now optional (vs. xform_wrappers)
+    if siteid is not None:
+        options['siteid'] = siteid
+
+    if batch is not None:
+        options["batch"] = batch
+        if int(batch) in [263,294]:
+            options["runclass"] = "VOC"
+
+    if cellid is not None:
+        options["cellid"] = cellid
+
+    return options
 
 def baphy_load_specgram(stimfilepath):
 

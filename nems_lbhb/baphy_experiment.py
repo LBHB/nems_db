@@ -5,6 +5,7 @@ import re
 import os
 import os.path
 import pickle
+
 import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
@@ -19,7 +20,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
-from nems_lbhb import runclass
+from nems_lbhb import runclass, baphy_io
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
@@ -357,14 +358,17 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, generate_if_missing=True, cellid=None, recache=False, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, loadkey=None, recache=False, **kwargs):
         '''
         This is where the kwargs contents are critical (for generating the correct 
         recording file hash)
 
         TODO: loadkey parsing?
         '''
-        kwargs = io.fill_default_options(kwargs)
+        if loadkey is not None:
+            kwargs = baphy_io.parse_loadkey(loadkey=loadkey, batch=self.batch)
+        else:
+            kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
         # kwargs.update({'version': 'BAPHYExperiment.2'})
@@ -404,7 +408,7 @@ class BAPHYExperiment:
 
 
     @lru_cache(maxsize=128)
-    def get_recording(self, recache=False, generate_if_missing=True, **kwargs):
+    def get_recording(self, recache=False, generate_if_missing=True, loadkey=None, **kwargs):
         '''
         Steps to building a recording:
             1) Figure out which signals to load
@@ -415,6 +419,9 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
+        if loadkey is not None:
+            kwargs = baphy_io.parse_loadkey(loadkey=loadkey, batch=self.batch)
+
         # see if can load from cache, if not, call generate_recording
         data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
         
@@ -448,7 +455,7 @@ class BAPHYExperiment:
 
         # get raw exptevents
         raw_exptevents = self.get_baphy_exptevents()
-        
+
         # load aligned baphy events
         if self.behavior:
             exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
