@@ -468,30 +468,27 @@ class BAPHYExperiment:
     
         # get good/bad trials, if database
         goodtrials = [None] * len(self.parmfile)
-        try:
-            d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
-                                    rawid=self.rawid)
-            for i, parm in enumerate(self.parmfile):
-                
-                trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
-                s_goodtrials = d.loc[d['parm']==str(parm).strip('.m'), 'goodtrials'].values[0]
-                
-                if (s_goodtrials is not None) and len(s_goodtrials):
-                    log.info("goodtrials not empty: %s", s_goodtrials)
-                    s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
-                    g = s_goodtrials.split(" ")
-                    _goodtrials = np.zeros(trialcount, dtype=bool)
-                    
-                    for b in g:
-                        b1 = b.split(":")
-                        if len(b1) == 1:
-                            # single trial in list, simulate colon syntax
-                            b1 = b1 + b1
-                        _goodtrials[(int(b1[0])-1):int(b1[1])] = True
 
-                    goodtrials[i] = list(_goodtrials)
-        except:
-            pass
+        d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
+                                rawid=self.rawid)
+        for i, parm in enumerate(self.parmfile):
+            trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
+
+            s_goodtrials = d.loc[d['parm'].str.strip('.m')==str(parm).strip('.m'), 'goodtrials'].values[0]
+            if (s_goodtrials is not None) and (len(s_goodtrials)>0):
+                log.info("goodtrials not empty: %s", s_goodtrials)
+                s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                g = s_goodtrials.split(" ")
+                _goodtrials = np.zeros(trialcount, dtype=bool)
+
+                for b in g:
+                    b1 = b.split(":")
+                    if (len(b1) == 1) or (len(b1[1])==0):
+                        # single trial in list, simulate colon syntax
+                        b1[1] = str(trialcount+1)
+                    _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+
+                goodtrials[i] = list(_goodtrials)
         
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, goodtrials=gtrials, **kwargs) for i, (bev, parm, gparm, gtrials) in enumerate(zip(exptevents, exptparams, globalparams, goodtrials))]
 
