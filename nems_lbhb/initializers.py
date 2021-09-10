@@ -70,17 +70,20 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     elif use_full_model:
         
-        # use full pop file
-        pre_parts = modelname_parts[0].split("-")
-        post_parts = modelname_parts[2].split("-")
-        if type(use_full_model) is bool:
-            pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
-        elif use_full_model=='heldout':
+        # use full pop file - SVD work in progress. current best?
+        load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
+        fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+
+        if use_full_model == 'heldout':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev"
-        elif use_full_model=='matched':
+        elif use_full_model == 'matched':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev"
-            
-        post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+        else:
+            #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
+            pre_part = load_string_pop
+
+        #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+        post_part = fit_string_pop
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         pre_batch = batch
