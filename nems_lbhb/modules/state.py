@@ -917,3 +917,70 @@ class indep_noise(NemsModule):
         return []
 
 
+class save_prediction(NemsModule):
+    """
+    Save pred signal at this stage of model fit and add to recording.
+    Index based on the module? e.g. saving after first module is
+    pred0, after second is pred1. How to do that?
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.save_prediction')
+        options['tf_layer'] = options.get('tf_layer', None)
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred0'})
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Save pred signal at the current stage of model fitting to be used later by another module e.g. fit_ccnorm uses pred0"
+
+    @xmodule('spred')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the save prediction module
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: 'spred'
+        Options
+        -------
+        None
+        '''
+        template = {
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred0'
+                          },
+            'plot_fns': [],
+            'plot_fn_idx': None,
+            'prior': {}
+        }
+        return save_prediction(**template)
+
+    def eval(self, rec, i, o, **kw_args):
+        '''
+        Parameters
+        ----------
+        i name of input (baseline pred)
+        o name of output signal
+        '''
+
+        pred = rec[i].as_continuous()
+        pred0 = rec[i]._modified_copy(pred)
+        
+        def fn_dummy(x):
+            return x
+
+        return [pred0.transform(fn_dummy, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
