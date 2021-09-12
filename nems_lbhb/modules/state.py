@@ -952,13 +952,13 @@ class save_prediction(NemsModule):
         -------
         None
         '''
+        # note, dummy phi prior because otherwise will crash. This is pretty hacky
         template = {
             'fn_kwargs': {'i': 'pred',
                           'o': 'pred0'
                           },
             'plot_fns': [],
-            'plot_fn_idx': None,
-            'prior': {}
+            'prior': {'d': ('Normal', {'mean': np.zeros(10), 'sd': np.ones(10)})}
         }
         return save_prediction(**template)
 
@@ -970,13 +970,11 @@ class save_prediction(NemsModule):
         o name of output signal
         '''
 
-        pred = rec[i].as_continuous()
-        pred0 = rec[i]._modified_copy(pred)
-        
         def fn_dummy(x):
             return x
-
-        return [pred0.transform(fn_dummy, o)]
+        #import pdb; pdb.set_trace()
+        
+        return [rec[i].transform(fn_dummy, o)]
 
     def tflayer(self):
         """
