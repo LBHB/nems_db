@@ -187,11 +187,11 @@ def split_pop_rec_by_mask(rec, keepfrac=1, **contex):
         m=np.argwhere(d)
         print(d.sum())
         d[m[nkeep][0]:]=0
-        log.info('reducing emask by {keepfrac} {nkeep}/{nmask}')
+        log.info(f'reducing emask by {keepfrac} {nkeep}/{nmask}')
         emask=emask._modified_copy(data=d)
     est = rec.copy()
     est.add_signal(emask)
-    val=rec.copy()
+    val = rec.copy()
     val.add_signal(vmask)
 
     return {'est': est, 'val': val}
