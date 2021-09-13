@@ -101,7 +101,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             cellid = cellid[0]
         siteid = cellid.split("-")[0]
         allsiteids, allcellids = nd.get_batch_sites(batch, modelname_filter=model_search)
-        
+        allsiteids = [s.split(".")[0] for s in allsiteids]
+        #import pdb; pdb.set_trace()
         if siteid in allsiteids:
             # don't need to generalize, load from actual fit
             pre_cellid = cellid
