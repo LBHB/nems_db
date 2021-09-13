@@ -34,13 +34,31 @@ def pclast(kw):
 @xform()
 def prefit(kw):
     ops = kw.split('.')[1:]
+    use_heldout = 'h' in ops
     use_matched = 'm' in ops
     use_simulated = 's' in ops
     use_full_model = 'f' in ops
+    prefit_type=None
+    
+    # use_full_model means population model (vs. single-cell fit used for dnn-single)
     if 'hm' in ops:
-        use_full_model='matched'
+        use_full_model=True
+        prefit_type='matched'
     elif 'hs' in ops:
-        use_full_model='heldout'
+        use_full_model=True
+        prefit_type='heldout'
+    elif 'hhm' in ops:
+        use_full_model=True
+        prefit_type='matched_half'
+    elif 'hhs' in ops:
+        use_full_model=True
+        prefit_type='heldout_half'
+    
+    if 'm' in ops:
+        prefit_type='matched'
+    elif 'h' in ops:
+        prefit_type='heldout'
 
     return [['nems_lbhb.initializers.initialize_with_prefit', 
-             {'use_matched': use_matched, 'use_simulated': use_simulated, 'use_full_model': use_full_model}]]
+             {'use_matched': use_matched, 'use_simulated': use_simulated, 'use_full_model': use_full_model,
+             'prefit_type': prefit_type}]]

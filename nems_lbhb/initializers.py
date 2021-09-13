@@ -30,7 +30,8 @@ log = logging.getLogger(__name__)
 
 
 def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, 
-                           use_matched=False, use_simulated=False, use_full_model=False, **ctx):
+                           use_matched=False, use_simulated=False, use_full_model=False, 
+                           prefit_type=None, **ctx):
     """
     replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
     to the NAT4 dataset
@@ -74,10 +75,16 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
         fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
-        if use_full_model == 'heldout':
+        if prefit_type == 'heldout':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev"
-        elif use_full_model == 'matched':
+        elif prefit_type == 'matched':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev"
+        elif prefit_type == 'heldout_half':
+            # cell excluded from pop fit (is this a useful condition?)
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k50"
+        elif prefit_type == 'matched_half':
+            # cell included in pop fit (matched cell excluded)
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k50"
         else:
             #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
             pre_part = load_string_pop
@@ -106,9 +113,29 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             raise ValueError(f"batch {batch} prefit not implemented yet.")
             
         log.info(f"prefit cellid={pre_cellid}")
-
-    elif modelname_parts[1].endswith(".1"):
         
+    elif prefit_type is not None:
+        # this is a single-cell fit
+        if type(cellid) is list:
+            cellid = cellid[0]
+            
+        if prefit_type=='heldout':
+            if siteid is None:
+                siteid=cellid.split("-")[0]
+            cellids, this_perf, alt_cellid, alt_perf = _matching_cells(batch=batch, siteid=siteid)
+
+            pre_cellid = [c_alt for c,c_alt in zip(cellids,alt_cellid) if c==cellid][0]
+            log.info(f"heldout init for {cellid} is {pre_cellid}")
+        else:
+            pre_cellid = cellid
+            log.info(f"matched cellid prefit for {cellid}")
+            
+        pre_batch = batch
+        modelname_parts[2] = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+        model_search="_".join(modelname_parts)
+        
+    elif modelname_parts[1].endswith(".1"):
+        raise ValueError("deprecated prefit initialization?")
         # this is a single-cell fit
         if type(cellid) is list:
             cellid = cellid[0]
@@ -133,6 +160,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         model_search="_".join(modelname_parts)
 
     else:
+        raise ValueError("deprecated prefit initialization?")
         pre_parts = modelname_parts[0].split("-")
         post_parts = modelname_parts[2].split("-")    
         post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"

@@ -175,11 +175,20 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
     return {'rec': rec, 'meta': meta}
 
 
-def split_pop_rec_by_mask(rec, **contex):
+def split_pop_rec_by_mask(rec, keepfrac=1, **contex):
 
     emask = rec['mask_est']
     emask.name = 'mask'
     vmask = emask._modified_copy(1-emask._data)
+    if keepfrac<1:
+        d=emask._data[0,:].copy()
+        nmask=d.sum()
+        nkeep=int(np.ceil(nmask*keepfrac/150)*150)
+        m=np.argwhere(d)
+        print(d.sum())
+        d[m[nkeep][0]:]=0
+        log.info('reducing emask by {keepfrac} {nkeep}/{nmask}')
+        emask=emask._modified_copy(data=d)
     est = rec.copy()
     est.add_signal(emask)
     val=rec.copy()

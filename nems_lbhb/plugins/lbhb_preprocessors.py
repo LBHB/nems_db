@@ -391,7 +391,13 @@ def pca(loadkey):
 
 @xform()
 def popev(loadkey):
-    return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
+    ops = loadkey.split('.')[1:]
+    keepfrac = 1.0
+    for op in ops:
+        if op.startswith("k"):
+            keepfrac=int(op[1:]) / 100
+    
+    return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {'keepfrac': keepfrac}]]
 
 
 @xform()
