@@ -85,6 +85,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif prefit_type == 'matched_half':
             # cell included in pop fit (matched cell excluded)
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k50"
+        elif prefit_type == 'matched_quarter':
+            # cell included in pop fit (matched cell excluded)
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k25"
         else:
             #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
             pre_part = load_string_pop
