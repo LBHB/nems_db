@@ -677,6 +677,7 @@ def psthfr(load_key):
     """
     options = load_key.split('.')[1:]
     smooth = ('s' in options)
+    mean_zero = ('z' in options)
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
@@ -700,11 +701,11 @@ def psthfr(load_key):
     else:
         if jackknife:
             xfspec=[['nems.xforms.generate_psth_from_est_for_both_est_and_val_nfold',
-                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex, 'mean_zero': mean_zero}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
                      {'smooth_resp': smooth, 'use_as_input': use_as_input,
-                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim}]]
+                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim, 'mean_zero': mean_zero}]]
     return xfspec
 
 
