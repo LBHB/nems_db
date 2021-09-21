@@ -839,9 +839,15 @@ def rz(load_key):
     Transform resp into zscore. Add signal 'raw_resp' for original resp
     signal.
     """
-
+    options = load_key.split('.')
+    use_mask = False
+    for o in options:
+        if o=='m':
+            use_mask = True
+    
     xfspec = [['nems_lbhb.preprocessing.zscore_resp',
-                {}, ['rec'], ['rec']]]
+                {'use_mask': use_mask}, 
+                ['rec'], ['rec']]]
 
     return xfspec
 

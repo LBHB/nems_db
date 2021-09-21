@@ -1131,12 +1131,17 @@ def add_meta(rec):
     return rec
 
 
-def zscore_resp(rec):
+def zscore_resp(rec, use_mask=False):
     r = rec.copy()
     r['resp'] = r['resp'].rasterize()
     zscore = r['resp']._data
-    zscore = (zscore.T - zscore.mean()).T
-    zscore = (zscore.T / zscore.std(axis=-1)).T
+    if use_mask:
+        log.info("using recording mask to zscore")
+        _zscore = r.apply_mask()['resp']._data
+    else:
+        _zscore = zscore.copy()
+    zscore = (zscore.T - _zscore.mean()).T
+    zscore = (zscore.T / _zscore.std(axis=-1)).T
 
     r['resp_raw'] = rec['resp']
     r['resp'] = r['resp']._modified_copy(zscore)
