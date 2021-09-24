@@ -24,7 +24,7 @@ def db_session():
 
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path,
-                            script_path, time_limit=10, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
+                            script_path, time_limit=14, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
     """Enqueues models similarly to nems.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param celllist: List of cells to include in analysis.

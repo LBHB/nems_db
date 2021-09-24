@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, 
                            use_matched=False, use_simulated=False, use_full_model=False, 
-                           prefit_type=None, **ctx):
+                           prefit_type=None, IsReload=False, **ctx):
     """
     replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
     to the NAT4 dataset
@@ -44,6 +44,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     modelname = "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_prefit-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.es20"
 
     """
+    if IsReload:
+        return {}
+
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")

@@ -752,9 +752,11 @@ class lv_norm(NemsModule):
         def fn(x):
             x = x.copy()
             # faster(?): compute all scaling terms then apply at once (outside of loop)
+            sf = np.zeros_like(x)
             for l in range(d.shape[1]):
-                sf = (d[:,l:(l+1)] + g[:,l:(l+1)]*state[l:(l+1),:]) * lv[l:(l+1),:]
-                x *= np.exp(sf)
+                sf += (d[:,[l]] + g[:,[l]]*state[[l],:]) * lv[[l],:]
+            
+            x *= np.exp(sf)
             return x
 
         def fn_additive(x):
