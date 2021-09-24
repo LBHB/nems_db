@@ -493,6 +493,7 @@ def plgsm(load_key):
     ops = load_key.split('.')[1:]
     evoked_only = False
     custom_epochs = False
+    respsort = False
     ev_bins = 0
     add_per_stim = ('s' in ops)
     split_per_stim = ('sp' in ops)
@@ -500,11 +501,13 @@ def plgsm(load_key):
         if op[:1] == 'e':
             evoked_only=True
             if len(op) > 1:
-                ev_bins = int(op[1:].strip('g'))
+                ev_bins = int(op[1:].strip('g').strip('r'))
                 if 'g' in op:
                     custom_epochs = True
+                if 'r' in op:
+                    respsort = True
     xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
-               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs}]]
+               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs, 'respsort': respsort}]]
 
     return xfspec
 
@@ -839,9 +842,15 @@ def rz(load_key):
     Transform resp into zscore. Add signal 'raw_resp' for original resp
     signal.
     """
-
+    options = load_key.split('.')
+    use_mask = False
+    for o in options:
+        if o=='m':
+            use_mask = True
+    
     xfspec = [['nems_lbhb.preprocessing.zscore_resp',
-                {}, ['rec'], ['rec']]]
+                {'use_mask': use_mask}, 
+                ['rec'], ['rec']]]
 
     return xfspec
 

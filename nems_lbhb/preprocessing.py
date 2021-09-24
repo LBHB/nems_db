@@ -842,7 +842,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -893,9 +893,57 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #r.meta['reliable_bin'] = reliable
 
         return {'rec': r}
-        
 
-    if ev_bins>1:
+    if (ev_bins>1) & (respsort):
+        log.info(f"Sorting epochs by response magnitude and keeping the top {ev_bins} for lrg/sm splits")
+        # sort epoch / bin combinations by size of mean population response
+        # take the first ev_bins of these sorted epoch / bin combinations
+        epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
+
+        # for each epoch / bin, get the size of the response
+        resp = r['resp'].extract_epochs(epoch_names)
+        rmag = np.array([resp[e].mean(axis=(0,1)) for e in epoch_names])
+        
+        # sort responses from greatest to smallest
+        idx = np.unravel_index(np.argsort(rmag.ravel())[::-1], rmag.shape)
+
+        # remove any spont bins
+        pre,post = getPrePostSilence(r['resp'])
+        prebins = int(pre*r['resp'].fs)
+        postbins = int(post*r['resp'].fs)
+        durbins = rmag.shape[-1]-prebins-postbins
+        rridx = (idx[1] < prebins) | (idx[1] >= (prebins+durbins))
+        epoch_idx = idx[0][~rridx]
+        bin_idx = idx[1][~rridx]
+
+        # extract corresponding epoch / bin number
+        keep_epochs = np.array(epoch_names)[epoch_idx][:ev_bins]
+        keep_bins = np.array(bin_idx)[:ev_bins]
+
+        # for each epoch / bin, make a pupil mask
+        mask_bins=[]
+        for i, (e, b) in enumerate(zip(keep_epochs, keep_bins)):
+            e = str(e)
+            mask_bins.append((e, b))
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            eindices = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            p = np.squeeze(p.mean(axis=2))
+
+            _m_lg = np.zeros(r['pupil'].shape)
+            _m_sm = np.zeros(r['pupil'].shape)
+            for j, ei in enumerate(eindices):
+                if p[j] < np.median(p):
+                    _m_sm[0, ei[0] + b] = 1
+                else:
+                    _m_lg[0, ei[0] + b] = 1
+
+            r['mask_'+e+':'+str(b)+'_sm'] = r['mask']._modified_copy((r['mask']._data * _m_sm).astype(bool))
+            r['mask_'+e+':'+str(b)+'_lg'] = r['mask']._modified_copy((r['mask']._data * _m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
+        r.meta['mask_bins'] = mask_bins
+
+
+    elif ev_bins>1:
         # special case, find stim with high pupil variance, mask in individual bins from them
         # generate list of tuples in rec.meta with [(epoch, bin), ... ]
         epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
@@ -1131,12 +1179,17 @@ def add_meta(rec):
     return rec
 
 
-def zscore_resp(rec):
+def zscore_resp(rec, use_mask=False):
     r = rec.copy()
     r['resp'] = r['resp'].rasterize()
     zscore = r['resp']._data
-    zscore = (zscore.T - zscore.mean()).T
-    zscore = (zscore.T / zscore.std(axis=-1)).T
+    if use_mask:
+        log.info("using recording mask to zscore")
+        _zscore = r.apply_mask()['resp']._data
+    else:
+        _zscore = zscore.copy()
+    zscore = (zscore.T - _zscore.mean()).T
+    zscore = (zscore.T / _zscore.std(axis=-1)).T
 
     r['resp_raw'] = rec['resp']
     r['resp'] = r['resp']._modified_copy(zscore)
