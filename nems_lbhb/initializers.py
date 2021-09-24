@@ -82,9 +82,6 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev"
         elif prefit_type == 'matched':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev"
-        elif prefit_type == 'heldout_half':
-            # 50% est data, cell excluded (is this a useful condition?)
-            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k50"
         elif prefit_type == 'matched_half':
             # 50% est data (matched cell excluded)
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k50"
@@ -94,6 +91,18 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif prefit_type == 'matched_fifteen':
             # 15% est data
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k15"
+        elif prefit_type == 'matched_ten':
+            # 10% est data
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k10"
+        elif prefit_type == 'heldout_half':
+            # 50% est data, cell excluded (is this a useful condition?)
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k50"
+        elif prefit_type == 'heldout_quarter':
+            # 25% est data
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k25"
+        elif prefit_type == 'heldout_fifteen':
+            # 15% est data
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k15"
         else:
             #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
             pre_part = load_string_pop

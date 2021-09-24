@@ -56,11 +56,20 @@ def prefit(kw):
     elif 'hfm' in ops:
         use_full_model = True
         prefit_type = 'matched_fifteen'
+    elif 'hfm' in ops:
+        use_full_model = True
+        prefit_type = 'matched_ten'
     elif 'hhs' in ops:
         use_full_model = True
         prefit_type = 'heldout_half'
+    elif 'hqs' in ops:
+        use_full_model = True
+        prefit_type = 'heldout_quarter'
+    elif 'hfs' in ops:
+        use_full_model = True
+        prefit_type = 'heldout_fifteen'
     
-    if 'm' in ops:
+    elif 'm' in ops:
         prefit_type='matched'
     elif 'h' in ops:
         prefit_type='heldout'
