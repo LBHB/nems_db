@@ -56,7 +56,7 @@ def prefit(kw):
     elif 'hfm' in ops:
         use_full_model = True
         prefit_type = 'matched_fifteen'
-    elif 'hfm' in ops:
+    elif 'htm' in ops:
         use_full_model = True
         prefit_type = 'matched_ten'
     elif 'hhs' in ops:
