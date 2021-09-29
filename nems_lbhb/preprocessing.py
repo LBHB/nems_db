@@ -856,7 +856,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = rec.copy()
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
-    
+
     if custom_epochs:
         # special case, masking pupil per epoch/bin using a custom set of epochs.
         site = kwargs['meta']['cellid']
@@ -868,7 +868,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         reliable_epochs = pickle.load(open(fn, "rb"))
 
         # Use the best <ev_bins> epochs, or default of 5
-        if ev_bins == 0: 
+        if ev_bins == 0:
             ev_bins = 5
 
         mask_bins = []
@@ -894,7 +894,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
 
         return {'rec': r}
 
-    if (ev_bins>1) & (respsort):
+    if (ev_bins>=1) & (respsort):
         log.info(f"Sorting epochs by response magnitude and keeping the top {ev_bins} for lrg/sm splits")
         # sort epoch / bin combinations by size of mean population response
         # take the first ev_bins of these sorted epoch / bin combinations
@@ -942,8 +942,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
             log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
         r.meta['mask_bins'] = mask_bins
 
-
-    elif ev_bins>1:
+    elif ev_bins>=1:
         # special case, find stim with high pupil variance, mask in individual bins from them
         # generate list of tuples in rec.meta with [(epoch, bin), ... ]
         epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
@@ -994,9 +993,9 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
             log.info(f"{e} {choose_bin[i]} sm={r['mask_'+e+':'+str(choose_bin[i])+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(choose_bin[i])+'_lg'].as_continuous().sum()}")
         r.meta['mask_bins'] = mask_bins
     
-        return {'rec': r}
+        #return {'rec': r}
     
-    if 0 & (ev_bins>0):
+    elif 0 & (ev_bins>0):
         _m = r['mask_large'].as_continuous()[0,:]
         _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
         r['mask_large'] = r['mask_large']._modified_copy(_dm)
@@ -1004,7 +1003,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
         r['mask_small'] = r['mask_small']._modified_copy(_dm)
     
-    if add_per_stim or split_per_stim:
+    elif add_per_stim or split_per_stim:
         e = epoch_names_matching(r['resp'].epochs, '^STIM_')
         #e[:3]
 
@@ -1031,7 +1030,17 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #    plt.plot(rec['mask_'+e].as_continuous()[0,:]+i*1.1)
         #import pdb;
         #pdb.set_trace()
-        
+
+    # at the end, AND the large and small masks with the selected epochs
+    masks = [k for k in r.signals.keys()
+             if (k.startswith("mask_") and k!="mask_small" and k!="mask_large")]
+    m = np.zeros_like(r["mask"]._data)
+    for i in masks:
+        m += r[i]._data
+    r['mask_small'] = r['mask_small']._modified_copy(data=r['mask_small']._data * m)
+    r['mask_large'] = r['mask_large']._modified_copy(data=r['mask_large']._data * m)
+    #r['mask'] = r['mask']._modified_copy(data=r['mask_small']._data +r['mask_large']._data)
+    log.info(f"Masks trimmed: sm: {r['mask_small']._data.sum()}  lg: {r['mask_large']._data.sum()}")
     return {'rec': r}
 
 

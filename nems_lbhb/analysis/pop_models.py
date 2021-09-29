@@ -745,11 +745,12 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     index = index_range[i]
     memory = dstrf.shape[2]
 
-    stim=rec['stim'].as_continuous()-0.05
+    stim=rec['stim'].as_continuous() + 0.0  # -0.05
     stim[stim<0]=0
-    stim = np.exp(stim*2)-1
-    
-    stim_lim = np.max(stim[:, index_range])*0.5
+    #stim = stim/stim.max()
+    #stim = np.exp(stim*2)-1
+
+    stim_lim = np.max(stim[:, index_range])  # *0.5
 
     s = stim[:, (index - memory*3):index]
     print("stim_lim ", stim_lim)
@@ -780,13 +781,13 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         d = dstrf[i, :, :, cellidx].copy()
 
         pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) * 2.0
+        strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) * 1.0
 
         if mult:
             strf_lim = strf_lim * stim_lim
             d = d * s
-        d=zoom(d,[2,2])
-        print(f"strf_lim[{cellidx}]: {strf_lim} shape: {d.shape}")
+        d = zoom(d, [2,2])
+        print(f"strf_lim[{cellidx}]: {strf_lim} shape: {d.shape} reshape max: {np.abs(d).max()}")
         im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
                                                interpolation='none', origin='lower',
                                                aspect='auto', cmap='bwr'))
@@ -805,6 +806,11 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
            axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
+        """
+        plot a frame for saving the animation
+        :param i:
+        :return:
+        """
         index = index_range[i]
         s = stim[:, (index - memory*2):index]
         im_list[0].set_data(s)
@@ -849,11 +855,11 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
                d = dstrf[i, :, :, cellidx].copy()
 
                pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx]))  # /2
                if mult:
                    strf_lim = strf_lim * stim_lim
                    d = d * s
-               d=zoom(d,[2,2])
+               d=zoom(d, [2, 2])
                axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
                                         aspect='auto', cmap='bwr')
                axs[cellidx+1, i].set_yticks([])

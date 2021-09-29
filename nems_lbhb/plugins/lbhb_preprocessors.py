@@ -488,7 +488,7 @@ def pbal(load_key):
 @xform()
 def plgsm(load_key):
     """
-    Create masks for large and small pupl
+    Create masks for large and small pupil
     """
     ops = load_key.split('.')[1:]
     evoked_only = False
@@ -507,7 +507,11 @@ def plgsm(load_key):
                 if 'r' in op:
                     respsort = True
     xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
-               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs, 'respsort': respsort}]]
+               {'evoked_only': evoked_only, 'ev_bins': ev_bins,
+                'add_per_stim': add_per_stim,
+                'split_per_stim': split_per_stim,
+                'custom_epochs': custom_epochs,
+                'respsort': respsort}]]
 
     return xfspec
 
