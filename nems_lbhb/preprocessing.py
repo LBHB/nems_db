@@ -842,7 +842,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, reduce_mask=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -1039,8 +1039,10 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         m += r[i]._data
     r['mask_small'] = r['mask_small']._modified_copy(data=r['mask_small']._data * m)
     r['mask_large'] = r['mask_large']._modified_copy(data=r['mask_large']._data * m)
-    #r['mask'] = r['mask']._modified_copy(data=r['mask_small']._data +r['mask_large']._data)
     log.info(f"Masks trimmed: sm: {r['mask_small']._data.sum()}  lg: {r['mask_large']._data.sum()}")
+    if reduce_mask:
+        r['mask'] = r['mask']._modified_copy(data=r['mask_small']._data +r['mask_large']._data)
+        log.info('Including main mask')
     return {'rec': r}
 
 

@@ -497,6 +497,7 @@ def plgsm(load_key):
     ev_bins = 0
     add_per_stim = ('s' in ops)
     split_per_stim = ('sp' in ops)
+    reduce_mask = ('rm' in ops)
     for op in ops:
         if op[:1] == 'e':
             evoked_only=True
@@ -511,6 +512,7 @@ def plgsm(load_key):
                 'add_per_stim': add_per_stim,
                 'split_per_stim': split_per_stim,
                 'custom_epochs': custom_epochs,
+                'reduce_mask': reduce_mask,
                 'respsort': respsort}]]
 
     return xfspec
