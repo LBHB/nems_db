@@ -1431,7 +1431,7 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **
  
     return rt
 
-def ddr_pairs(val, modelspec, **ctx):
+def ddr_pairs(val, modelspec, figures=None, **ctx):
     rec = val.copy()
 
     masks = ["_".join(k.split("_")[:-1]) for k in rec.signals.keys()
@@ -1485,3 +1485,9 @@ def ddr_pairs(val, modelspec, **ctx):
             c+=1
     f.suptitle(modelspec.meta['modelname'])
     plt.tight_layout()
+
+    if figures is None:
+        figures = []
+    figures.append(fig2BytesIO(f))
+
+    return {'figures': figures, 'modelspec': modelspec}
