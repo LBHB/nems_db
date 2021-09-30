@@ -20,6 +20,7 @@ import nems.preprocessing as preproc
 from nems.metrics.state import state_mod_index
 from nems.utils import find_module
 import nems_lbhb.plots as lplt
+from nems.plots.file import save_figure, load_figure_img, load_figure_bytes, fig2BytesIO
 
 font_size=8
 params = {'legend.fontsize': font_size-2,
