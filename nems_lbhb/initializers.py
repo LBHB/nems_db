@@ -103,6 +103,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif prefit_type == 'heldout_fifteen':
             # 15% est data
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k15"
+        elif prefit_type == 'heldout_fifteen':
+            # 10% est data
+            pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k10"
         else:
             #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
             pre_part = load_string_pop
