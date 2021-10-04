@@ -129,6 +129,16 @@ def SPOld(loadkey, recording_uri=None, cellid=None):
     xfspec.append(['nems_lbhb.SPO_helpers.load',{}])
     return xfspec
 
+
+@xform()
+def SPOsev(kw):
+    epoch_regex = '^STIM'
+    xfspec = [['nems_lbhb.SPO_helpers.split_by_occurrence_counts_SPO',
+               {'epoch_regex': epoch_regex}]]
+    xfspec.append(['nems.xforms.average_away_stim_occurrences',
+     {'epoch_regex': epoch_regex}])
+    return xfspec
+
 #def ozgf(loadkey, recording_uri):
 #    recordings = [recording_uri]
 #    pattern = re.compile(r'^ozgf\.fs(\d{1,}).ch(\d{1,})([a-zA-Z0-9\.]*)?')
