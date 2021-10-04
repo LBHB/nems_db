@@ -13,7 +13,6 @@ import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with dat
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems.recording as recording
 import numpy as np
-import TwoStim_helpers as ts
 import nems.preprocessing as preproc
 import nems.metrics.api as nmet
 import pickle as pl
@@ -710,7 +709,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
         
         
 
-        if _type is 'C':
+        if _type == 'C':
             rCC = nems.metrics.corrcoef._r_single(r_st,200,0)
 
         else:
@@ -952,7 +951,7 @@ def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False,fs=200):
                                       get_est=False,
                                       get_stim=False)
     #smooth and subtract SR
-    fn = lambda x : np.atleast_2d(ts.smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
     
     #fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val[0]['resp']=val[0]['resp'].transform(fn)
@@ -1027,7 +1026,8 @@ def type_by_psth(row):
     #return pd.Series({'Rtype': ''.join(t), 'inds': inds})
     return row
         
-def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=False,find_mse_confidence=True,get_nrmse_fn=True):
+def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plot=False, find_mse_confidence=True,
+                                              get_nrmse_fn=True, window=None):
     #prestimtime=0.5;#1;
     PSS=val[signame].epochs[val[signame].epochs['name']=='PreStimSilence'].iloc[0]
     prestimtime = PSS['end'] - PSS['start']
@@ -1039,7 +1039,10 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     
     post_duration_pad=.5 #Include stim much post-stim time in weight calcs
     time = np.arange(0, val[signame].extract_epoch(names[0][0]).shape[-1]) / val[signame].fs - prestimtime    
-    xc_win=(time>0) & (time < (duration + post_duration_pad))
+    if window is None:
+        xc_win=(time>=0) & (time < (duration + post_duration_pad))
+    else:
+        xc_win = (time >= window[0]) & (time < window[1])
     #names = [ [n[0]] for n in names]
     sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[0]])
     sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[1]])
@@ -1086,15 +1089,15 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     
     def get_error(weights=weights,get_what='error'):
             
-            if get_what is 'sigA':
+            if get_what == 'sigA':
                 return fsigs[ff,0]
-            elif get_what is 'sigB':
+            elif get_what == 'sigB':
                 return fsigs[ff,1]
-            elif get_what is 'sigAB':
+            elif get_what == 'sigAB':
                 return sigO[ff]
-            elif get_what is 'pred':
+            elif get_what == 'pred':
                 return np.dot(weights,fsigs[ff,:].T)
-            elif get_what is 'error':
+            elif get_what == 'error':
                 pred = np.dot(weights,fsigs[ff,:].T)
                 return pred-sigO[ff]
             else:
@@ -1132,12 +1135,12 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
         w=np.stack((wA,wB),axis=2)
         nrmse = get_nrmse(w)
         #range_=mse.max()-mse.min()
-        if threshtype is 'Absolute':
+        if threshtype == 'Absolute':
             thresh=nrmse.min()*np.array((1.4,1.6))
             thresh=nrmse.min()*np.array((1.02,1.04))
             As=wA[(nrmse<thresh[1]) & (nrmse>thresh[0])]
             Bs=wB[(nrmse<thresh[1]) & (nrmse>thresh[0])]
-        elif threshtype is 'ReChance':
+        elif threshtype == 'ReChance':
             thresh=1-(1-nrmse.min())*np.array((.952,.948))
             As=wA[(nrmse<thresh[1]) & (nrmse>thresh[0])]
             Bs=wB[(nrmse<thresh[1]) & (nrmse>thresh[0])]
@@ -1470,7 +1473,7 @@ def plot_linear_and_weighted_psths(row,weights=None,subset=None,rec_file=None):
                                       get_est=False,
                                       get_stim=False)
     #smooth and subtract SR
-    fn = lambda x : np.atleast_2d(ts.smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
     val=val[0]
     #fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val['resp']=val['resp'].transform(fn)
