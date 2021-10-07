@@ -38,7 +38,7 @@ def prefit(kw):
     use_matched = 'm' in ops
     use_simulated = 's' in ops
     use_full_model = 'f' in ops
-    prefit_type=None
+    prefit_type = None
     
     # use_full_model means population model (vs. single-cell fit used for dnn-single)
     if 'hm' in ops:
