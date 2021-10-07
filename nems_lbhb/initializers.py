@@ -107,12 +107,11 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             # 10% est data
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k10"
         elif 'ch32' in modelname_parts[0]:
-            pre_part = "ozgf.fs100.ch32.pop-ld-norm.l1-popev"
+            pre_part = "ozgf.fs100.ch32.pop-loadpop-norm.l1-popev"
         elif 'ch64' in modelname_parts[0]:
-            pre_part = "ozgf.fs100.ch64.pop-ld-norm.l1-popev"
+            pre_part = "ozgf.fs100.ch64.pop-loadpop-norm.l1-popev"
         else:
             load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
-            #pre_part = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
             pre_part = load_string_pop
 
         #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
