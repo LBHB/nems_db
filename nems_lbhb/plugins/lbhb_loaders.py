@@ -37,18 +37,22 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid)
+    if type(recording_uri) is list:
+        recording_uri_list=recording_uri
+    else:
+        recording_uri_list=[recording_uri]
 
     # update the cellid in context so that we don't have to parse the cellid
     # again in xforms
     t_ops = {} # options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    if cellid in ['none', 'NAT3', 'NAT4']:
+    if cellid in ['none', 'NAT3', 'NAT4', 'NAT1', 'ALLCELLS']:
         cells_to_extract = cellid
     else:
         cells_to_extract, _ = baphy_io.parse_cellid(t_ops)
 
-    context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
+    context = {'recording_uri_list': recording_uri_list, 'cellid': cells_to_extract}
 
     if pc_idx is not None:
         context['pc_idx'] = pc_idx
