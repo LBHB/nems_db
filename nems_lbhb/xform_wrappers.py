@@ -412,7 +412,7 @@ def pop_file(stimfmt='ozgf', batch=None,
 
         if use_API:
             host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
-            recording_uri = host + '/recordings/' + str(batch) + '/' + recname
+            recording_uri = host + '/recordings/' + str(batch) + '/' + recname + '.tgz'
         else:
             recording_uri = '{}{}/{}.tgz'.format(uri_root, batch, recname)
         recording_uri_list.append(recording_uri)
