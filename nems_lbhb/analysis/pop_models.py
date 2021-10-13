@@ -750,7 +750,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     #stim = stim/stim.max()
     #stim = np.exp(stim*2)-1
 
-    stim_lim = np.max(stim[:, index_range])  # *0.5
+    stim_lim = np.max(stim[:, index_range]) *0.5
 
     s = stim[:, (index - memory*3):index]
     print("stim_lim ", stim_lim)
