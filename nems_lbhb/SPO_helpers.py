@@ -247,6 +247,7 @@ def add_coherence_as_state(rec, permute=False, baseline=True, **context):
     rec.signals['state'].chans = chans
     rec.signals['state_raw'].chans = chans
 
+    return {'rec': rec}
 
 
 def plot_all_vals_(modelspec, val, figures=None, IsReload=False, **context):
