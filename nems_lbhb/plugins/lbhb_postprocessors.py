@@ -18,20 +18,21 @@ def ebc(loadkey):
     ebc = evaluate_by_condition
        finds prediction correlations by condition
     """
-    ops = loadkey.split('.')[1:]
-    if ops[0] == 'rmM':
-        use_mask=False
-    else:
-        use_mask=True
+    options = loadkey.split('.')[1:]
+    use_mask=True
+    for op in options[1:]:
+        if op == 'rmM':
+            use_mask=False
     xfspec = [
         ['nems.xforms.add_summary_statistics', {'use_mask': use_mask}],
-        ['nems.xforms.add_summary_statistics_by_condition',{}]
+        ['nems.xforms.add_summary_statistics_by_condition',{'use_mask': use_mask}]
     ]
     return xfspec
 
 @xform()
 def SPOpf(loadkey):
-    xfspec = [['nems.xforms.predict', {}]]
+    xfspec = [['nems.xforms.predict', {'use_mask': False}]]
+    #xfspec.append(['nems_lbhb.SPO_helpers.mask_out_Squares', {}]) Not included in val anymore
     xfspec = xfspec + ebc('ebc.rmM')
     xfspec.append(['nems.xforms.plot_summary', {}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_all_vals_',{}])
