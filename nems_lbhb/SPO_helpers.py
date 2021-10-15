@@ -145,7 +145,7 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'pcellid', ax=None, fn=N
     if 'linestyle' not in kwargs:
         kwargs['linestyle'] = 'none'
     x = dfx[varnames[0]].values
-    y = dfy[varnames[0]].values
+    y = dfy[varnames[1]].values
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
@@ -155,6 +155,9 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'pcellid', ax=None, fn=N
             if 'pth' in fnargs[i].keys():
                 fnargs[i]['pth'] = [fnargs[i]['pth'][gi] for gi in good_inds]
     art, = ax.plot(x, y, picker=5, **kwargs)
+
+    ax.set_xlabel(f'dfx, {varnames[0]}')
+    ax.set_ylabel(f'dfx, {varnames[1]}')
 
     # art=ax.scatter(x,y,picker=5,**kwargs)
 
@@ -253,10 +256,14 @@ def add_coherence_as_state(rec, permute=False, baseline=True, **context):
 def plot_all_vals_(modelspec, val, figures=None, IsReload=False, **context):
     if figures is None:
         figures = []
+    IncSwitchTime = None
+    try:
+        IncSwitchTime = modelspec[0]['meta']['IncSwitchTime']
+    except:
+        pass
     if not IsReload:
         for i in range(len(val['resp'].chans)):
-            fig = plot_all_vals(val[0], modelspec, IncSwitchTime = modelspec[0]['meta']['IncSwitchTime'],
-                                channels=[i,i])
+            fig = plot_all_vals(val[0], modelspec, IncSwitchTime = IncSwitchTime, channels=[i,i])
             # Needed to make into a Bytes because you can't deepcopy figures!
             figures.append(nplt.fig2BytesIO(fig))
 
@@ -1846,6 +1853,34 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
                        plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
     return fh, w_corrs, l_corrs
 
+def plot_linear_and_weighted_psths_loaded(val,SR,signame='resp',weights=None,subset=None,addsig=None):
+    #WAS in nems_lbhb
+    #smooth and subtract SR
+    import copy
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[signame].fs)
+    val[signame]=val[signame].transform(fn)
+    if addsig is not None:
+        fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[addsig].fs)
+        val[addsig]=val[addsig].transform(fn)
+    lin_weights=[[1,1],[1,1]]
+    epcs=val[signame].epochs[val[signame].epochs['name'] == 'PreStimSilence'].copy()
+    epcs_offsets=[epcs['end'].iloc[0], 0]
+
+    inp=copy.deepcopy(val[signame])
+    out, l_corrs=generate_weighted_model_signals(inp,lin_weights,epcs_offsets)
+    val[signame+'_lin_model']=out
+    if weights is None:
+        sigz=[signame,signame+'_lin_model']
+        if addsig is not None:
+           sigz.append(addsig)
+        plot_singles_on_dual=True
+        w_corrs=None
+    else:
+        val[signame+'_weighted_model'], w_corrs=generate_weighted_model_signals(val[signame],weights,epcs_offsets)
+        sigz=[signame,signame+'_lin_model',signame+'_weighted_model']
+        plot_singles_on_dual=False
+    fh=plot_all_vals(val,None,signames=sigz,channels=[0,0,0],subset=subset,plot_singles_on_dual=plot_singles_on_dual)
+    return fh, w_corrs, l_corrs
 
 def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
     # options = {}
