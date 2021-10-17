@@ -78,6 +78,10 @@ def prefit(kw):
         prefit_type='matched'
     elif 'h' in ops:
         prefit_type='heldout'
+    
+    elif 'titan' in ops:
+        use_full_model = True
+        prefit_type='titan'
 
     return [['nems_lbhb.initializers.initialize_with_prefit', 
              {'use_matched': use_matched, 'use_simulated': use_simulated, 'use_full_model': use_full_model,

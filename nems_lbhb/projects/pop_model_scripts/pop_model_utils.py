@@ -41,6 +41,10 @@ SIG_TEST_MODELS = [
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
 
+#shortnames=['conv2d','conv1d','conv1dx2','ln-pop', 'dnn-sing']
+shortnames=['conv1d','conv1dx2','dnn-sing']
+shortnamesp=[s+"_p" for s in shortnames]
+
 # For correlation histograms
 EQUIVALENCE_MODELS_SINGLE = [
     f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single}",  #c2d
@@ -88,7 +92,8 @@ DOT_COLORS = {'conv2d': 'darkgreen', 'LN': 'black', 'conv1d': 'lightblue', #'con
               'c2d_filter_reps': 'darkgreen',
               'c2d_10f': 'darkgreen',
               'conv2d_v': 'darkgreen',
-              'conv2d_L2': 'darkgreen'
+              'conv2d_L2': 'darkgreen',
+              'stp': 'red',
               }
 
 DOT_MARKERS = {#'conv1dx2': '^',
@@ -106,6 +111,7 @@ DOT_MARKERS = {#'conv1dx2': '^',
                'c2d_10f': '<',
                'conv2d_v': 'o',
                'conv2d_L2': '+',
+               'stp': '.',
             }
 
 
@@ -140,6 +146,11 @@ params = [1, 2, 3, 4, 6, 8, 9, 10]#, 12, 14]
 MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 POP_MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 
+params = [2,3,4,5]
+MODELGROUPS['stp'] = [f'{load_string_single}_wc.18xR.g-stp.R.q.s-fir.1x12xR-lvl.R-dexp.R_{fit_string_nopre}'] + \
+    [f'{load_string_single}_wc.18x{p}R.g-stp.{p}R.q.s-fir.{p}x12xR-lvl.R-dexp.R_{fit_string_nopre}' for p in params]
+
+POP_MODELGROUPS['stp'] = MODELGROUPS['stp'].copy()
 
 # LN_pop ###############################################################################################################
 params = [4, 6, 10, 14, 30, 42, 60, 80, 100, 120, 150, 175, 200, 250, 300]

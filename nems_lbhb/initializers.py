@@ -106,6 +106,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif prefit_type == 'heldout_ten':
             # 10% est data
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k10"
+        elif 'R.q.s' in modelname_parts[1]:
+            pre_part = "ozgf.fs100.ch18-ld-norm.l1-sev"
         elif 'ch32' in modelname_parts[0]:
             pre_part = "ozgf.fs100.ch32.pop-loadpop-norm.l1-popev"
         elif 'ch64' in modelname_parts[0]:
@@ -114,8 +116,11 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
             pre_part = load_string_pop
 
-        #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
-        post_part = fit_string_pop
+        if prefit_type == 'titan':
+            post_part = "tfinit.n.mc25.lr1e3.es20-newtf.n.mc100.lr1e4.exa"
+        else:
+            #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
+            post_part = fit_string_pop
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         pre_batch = batch
