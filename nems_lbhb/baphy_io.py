@@ -2248,7 +2248,8 @@ def parse_cellid(options):
     cell_list = None
     if type(cellid) is list:
         cell_list = cellid
-    elif (type(cellid) is str) & ('%' in cellid):
+    elif (type(cellid) is str) & (('%' in cellid) | ('*' in cellid)):
+        cellid = cellid.replace('*','%')
         cell_data = db.pd_query(f"SELECT cellid FROM Batches WHERE batch=%s and cellid like %s",
                 (batch, cellid))
         cell_list = cell_data['cellid'].to_list()
