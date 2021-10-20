@@ -2170,8 +2170,8 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
            mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
 
         except:
-           import pdb
-           pdb.set_trace()
+           mwf = np.array([])
+           log.info("Cant get Mean Waveform, returning empty array")
         return mwf
 
     # get KS_cluster (if it exists... this is a new feature)
