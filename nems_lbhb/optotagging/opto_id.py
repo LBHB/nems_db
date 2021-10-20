@@ -88,24 +88,20 @@ class OptoIdModel():
 
     def list_all_recordings(self):
         print('listing all taggable sites...')
-        if taggable_recordings:
-            pass
-            self.taggable_recordings
-        else:
-            df = nd.pd_query("SELECT * FROM gSingleCell INNER JOIN sCellFile ON gSingleCell.cellid = sCellFile.cellid" +
-                             " WHERE sCellFile.RunClassid = 51 AND sCellFile.cellid LIKE %s",
-                             params=("TNC%",))
+        df = nd.pd_query("SELECT * FROM gSingleCell INNER JOIN sCellFile ON gSingleCell.cellid = sCellFile.cellid" +
+                         " WHERE sCellFile.RunClassid = 51 AND sCellFile.cellid LIKE %s",
+                         params=("TNC%",))
 
-            # clean up DF
-            DF = pd.DataFrame()
-            DF['cellid'] = df.cellid.iloc[:,0]
-            DF['siteid'] = df.siteid
-            DF['recording'] = df.stimfile.apply(lambda x: x.split('.')[0])
-            DF['parmfile'] = df.stimpath + df.stimfile # full path to parameter file.
-            DF['rawid'] = df.rawid.iloc[:,1]
+        # clean up DF
+        DF = pd.DataFrame()
+        DF['cellid'] = df.cellid.iloc[:,0]
+        DF['siteid'] = df.siteid
+        DF['recording'] = df.stimfile.apply(lambda x: x.split('.')[0])
+        DF['parmfile'] = df.stimpath + df.stimfile # full path to parameter file.
+        DF['rawid'] = df.rawid.iloc[:,1]
 
-            self.recordings = DF.recording.unique()
-            self.DF = DF
+        self.recordings = DF.recording.unique()
+        self.DF = DF
         print('done')
 
 
