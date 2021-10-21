@@ -898,10 +898,11 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         log.info(f"Sorting epochs by response magnitude and keeping the top {ev_bins} for lrg/sm splits")
         # sort epoch / bin combinations by size of mean population response
         # take the first ev_bins of these sorted epoch / bin combinations
-        epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
+        # 21.10.2021 -- using 'reset_epochs' here is kinda slow. Is there a better way?
+        epoch_names = epoch_names_matching(r.apply_mask(reset_epochs=True)['resp'].epochs, '^STIM_')
 
         # for each epoch / bin, get the size of the response
-        resp = r['resp'].extract_epochs(epoch_names)
+        resp = r['resp'].extract_epochs(epoch_names, mask=r['mask'])
         rmag = np.array([resp[e].mean(axis=(0,1)) for e in epoch_names])
         
         # sort responses from greatest to smallest
