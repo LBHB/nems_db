@@ -5,6 +5,7 @@ import re
 import os
 import os.path
 import pickle
+import pathlib as pl
 
 import scipy.io
 import scipy.io as spio
@@ -142,6 +143,15 @@ class BAPHYExperiment:
         elif type(parmfile) is list:
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
             self.batch = None
+            if rawid is None:
+                stems = [pl.Path(p).stem + '.m' for p in parmfile]
+                stemstring = "'" + "','".join(stems) + "'"
+                rawdata = db.pd_query(f"SELECT * from gDataRaw where parmfile in ({stemstring})")
+                rawid = []
+                for s in stems:
+                    rawid.append(rawdata.loc[rawdata.parmfile==s,'id'].values[0])
+
+            self.rawid = rawid # todo infer from parmfile instad of parsing
             if cellid is not None:
                 if type(cellid) is list:
                     self.cells_to_extract = cellid
@@ -161,6 +171,7 @@ class BAPHYExperiment:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
+            self.rawid = [rawid] # todo infer from parmfile instad of parsing
             if cellid is not None:
                 
                 if type(cellid) is list:
@@ -470,25 +481,26 @@ class BAPHYExperiment:
         goodtrials = [None] * len(self.parmfile)
 
         d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
-                                rawid=self.rawid)
-        for i, parm in enumerate(self.parmfile):
-            trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
+                                   rawid=self.rawid)
+        if len(d) > 0:
+            for i, parm in enumerate(self.parmfile):
+                trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
 
-            s_goodtrials = d.loc[d['parm'].str.strip('.m')==str(parm).strip('.m'), 'goodtrials'].values[0]
-            if (s_goodtrials is not None) and (len(s_goodtrials)>0):
-                log.info("goodtrials not empty: %s", s_goodtrials)
-                s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
-                g = s_goodtrials.split(" ")
-                _goodtrials = np.zeros(trialcount, dtype=bool)
+                s_goodtrials = d.loc[d['parm'].str.strip('.m')==str(parm).strip('.m'), 'goodtrials'].values[0]
+                if (s_goodtrials is not None) and (len(s_goodtrials)>0):
+                    log.info("goodtrials not empty: %s", s_goodtrials)
+                    s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                    g = s_goodtrials.split(" ")
+                    _goodtrials = np.zeros(trialcount, dtype=bool)
 
-                for b in g:
-                    b1 = b.split(":")
-                    if (len(b1) == 1) or (len(b1[1])==0):
-                        # single trial in list, simulate colon syntax
-                        b1[1] = str(trialcount+1)
-                    _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+                    for b in g:
+                        b1 = b.split(":")
+                        if (len(b1) == 1) or (len(b1[1])==0):
+                            # single trial in list, simulate colon syntax
+                            b1[1] = str(trialcount+1)
+                        _goodtrials[(int(b1[0])-1):int(b1[1])] = True
 
-                goodtrials[i] = list(_goodtrials)
+                    goodtrials[i] = list(_goodtrials)
         
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, goodtrials=gtrials, **kwargs) for i, (bev, parm, gparm, gtrials) in enumerate(zip(exptevents, exptparams, globalparams, goodtrials))]
 

@@ -297,6 +297,13 @@ def pupLVbasic(fitkey):
 
     return xfspec
 
+
+@xform()
+def SDB(fitkey):
+    # Do nothing. If SDB exists anywhere in the modelname fit_single.py will setting OPENBLAS_CORETYPE to sandybridge
+    return []
+
+
 def _parse_pupLVbasic(options):
     '''Options specific to basic.'''
     max_iter = 1000

@@ -96,6 +96,10 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
                  whiten=True, meta={}, manual_cellids=None, holdout=None,
                  **context):
 
+    if (cellid == "ALLCELLS"):
+        rec_list = [load_recording(uri) for uri in recording_uri_list]
+        return {'rec': rec_list[0], 'rec_list': rec_list}
+    
     rec = load_recording(recording_uri_list[0])
 
     if type(cellid) is list:
@@ -175,26 +179,40 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
     return {'rec': rec, 'meta': meta}
 
 
-def split_pop_rec_by_mask(rec, keepfrac=1, **contex):
+def split_pop_rec_by_mask(rec, rec_list=None, keepfrac=1, **contex):
 
-    emask = rec['mask_est']
-    emask.name = 'mask'
-    vmask = emask._modified_copy(1-emask._data)
-    if keepfrac<1:
-        d=emask._data[0,:].copy()
-        nmask=d.sum()
-        nkeep=int(np.ceil(nmask*keepfrac/150)*150)
-        m=np.argwhere(d)
-        print(d.sum())
-        d[m[nkeep][0]:]=0
-        log.info(f'reducing emask by {keepfrac} {nkeep}/{nmask}')
-        emask=emask._modified_copy(data=d)
-    est = rec.copy()
-    est.add_signal(emask)
-    val = rec.copy()
-    val.add_signal(vmask)
-
-    return {'est': est, 'val': val}
+    if rec_list is None:
+        rec_list = [rec]
+        return_reclist = False
+    else:
+        rec=rec_list[0]
+        return_reclist = True
+    est_list = []
+    val_list = []
+    for rec in rec_list:
+        emask = rec['mask_est']
+        emask.name = 'mask'
+        vmask = emask._modified_copy(1-emask._data)
+        if keepfrac<1:
+            d=emask._data[0,:].copy()
+            nmask=d.sum()
+            nkeep=int(np.ceil(nmask*keepfrac/150)*150)
+            m=np.argwhere(d)
+            print(d.sum())
+            d[m[nkeep][0]:]=0
+            log.info(f'reducing emask by {keepfrac} {nkeep}/{nmask}')
+            emask=emask._modified_copy(data=d)
+        est = rec.copy()
+        est.add_signal(emask)
+        val = rec.copy()
+        val.add_signal(vmask)
+        
+        est_list.append(est)
+        val_list.append(val)
+    if return_reclist:
+        return {'est': est_list[0], 'val': val_list[0], 'est_list': est_list, 'val_list': val_list}
+    else:
+        return {'est': est, 'val': val}
 
 
 def select_cell_count(rec, cell_count, seed_mod=0, exclusions=None, **context):
@@ -362,34 +380,46 @@ def pop_file(stimfmt='ozgf', batch=None,
              rasterfs=50, chancount=18, siteid=None, **options):
 
     siteid = siteid.split("-")[0]
-    if ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
-        subsetstr = "NAT1"
+    if siteid == 'ALLCELLS':
+        if (batch in [322]):
+            subsetstr = ["NAT4", "NAT3", "NAT1"]
+        elif (batch in [323]):
+            subsetstr = ["NAT4"]
+        else:
+            raise ValueError(f'ALLCELLS not supported for batch {batch}')
+    elif ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
+        subsetstr = ["NAT1"]
     elif siteid in ['none', 'NAT3', 'AMT003c','AMT005c','AMT018a','AMT020a','AMT023d',
                     'bbl099g','bbl104h',
                     'BRT026c','BRT032e','BRT033b','BRT034f','BRT037b','BRT038b','BRT039c',
                     'AMT031a','AMT032a']:
         # Should use NAT3 as siteid going forward for better readability,
         # but left other options here for backwards compatibility.
-        subsetstr = "NAT3"
+        subsetstr = ["NAT3"]
     elif (batch in [322,323]) or (siteid == 'NAT4'):
-        subsetstr = "NAT4"
+        subsetstr = ["NAT4"]
     else:
         raise ValueError('site not known for popfile')
 
     use_API = get_setting('USE_NEMS_BAPHY_API')
 
-    uri_path = '/auto/data/nems_db/recordings/'
-    recname="{}_{}.fs{}.ch{}".format(subsetstr, stimfmt, rasterfs, chancount)
-    data_file = '{}{}/{}.tgz'.format(uri_path, batch, recname)
+    uri_root = '/auto/data/nems_db/recordings/'
+    
+    recording_uri_list = []
+    for s in subsetstr:
+        recname="{}_{}.fs{}.ch{}".format(s, stimfmt, rasterfs, chancount)
+        #data_file = '{}{}/{}.tgz'.format(uri_root, batch, recname)
 
-    if use_API:
-        p, f = os.path.split(data_file)
-        host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
-        recording_uri = host + '/recordings/' + str(batch) + '/' + f
+        if use_API:
+            host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+            recording_uri = host + '/recordings/' + str(batch) + '/' + recname + '.tgz'
+        else:
+            recording_uri = '{}{}/{}.tgz'.format(uri_root, batch, recname)
+        recording_uri_list.append(recording_uri)
+    if len(subsetstr)==1:
+        return recording_uri
     else:
-        recording_uri = data_file
-
-    return recording_uri
+        return recording_uri_list
 
 
 def generate_recording_uri(cellid=None, batch=None, loadkey=None,
@@ -484,6 +514,7 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
 def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
                        siteid=None, normalize=False, options={}, **context):
     # check for special pop signal code
+    # DEPRECATED AND TAKEN CARE OF IN xform_helper ???
     pc_idx = None
     if type(cellid) is str:
         cc=cellid.split("_")
@@ -496,19 +527,28 @@ def baphy_load_wrapper(cellid=None, batch=None, loadkey=None,
 
     recording_uri = generate_recording_uri(cellid=cellid, batch=batch,
                                            loadkey=loadkey, siteid=siteid, **options)
-
+    if type(recording_uri) is list:
+        recording_uri_list=recording_uri
+    else:
+        recording_uri_list=[recording_uri]
+        
     # update the cellid in context so that we don't have to parse the cellid
     # again in xforms
     t_ops = options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
     cells_to_extract, _ = io.parse_cellid(t_ops)
-    context = {'recording_uri_list': [recording_uri], 'cellid': cells_to_extract}
+    context = {'recording_uri_list': recording_uri_list, 'cellid': cells_to_extract}
 
     if pc_idx is not None:
         context['pc_idx'] = pc_idx
 
     return context
+
+
+##
+## STUFF BELOW HERE CAN BE DELTED AND/OR MOVED?
+##
 
 def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=None, **kwargs):
     """

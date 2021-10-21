@@ -15,6 +15,7 @@ import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with dat
 import nems.recording as recording
 import nems.plots.api as nplt
 import numpy as np
+import nems
 import nems.preprocessing as preproc
 import nems.metrics.api as nmet
 import pickle as pl
@@ -26,6 +27,9 @@ import nems_lbhb.TwoStim_helpers as ts
 import nems.epoch as ep
 import seaborn as sb
 import scipy
+import nems_db.params
+import warnings
+import itertools
 
 sb.color_palette
 sb.color_palette('colorblind')
@@ -133,6 +137,63 @@ def scatterplot_print(x, y, names, ax=None, fn=None, fnargs={}, dv=None, **kwarg
     ax.figure.canvas.mpl_connect('pick_event', onpick)
     return art
 
+def scatterplot_print_df(dfx, dfy, varnames, dispname = 'pcellid', ax=None, fn=None, fnargs={}, dv=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+    if 'marker' not in kwargs:
+        kwargs['marker'] = '.'
+    if 'linestyle' not in kwargs:
+        kwargs['linestyle'] = 'none'
+    x = dfx[varnames[0]].values
+    y = dfy[varnames[1]].values
+    good_inds = np.where(np.isfinite(x + y))[0]
+    x = x[good_inds]
+    y = y[good_inds]
+    names = list(dfx[dispname].values[good_inds])
+    if type(fn) is list:
+        for i in range(len(fnargs)):
+            if 'pth' in fnargs[i].keys():
+                fnargs[i]['pth'] = [fnargs[i]['pth'][gi] for gi in good_inds]
+    art, = ax.plot(x, y, picker=5, **kwargs)
+
+    ax.set_xlabel(f'dfx, {varnames[0]}')
+    ax.set_ylabel(f'dfx, {varnames[1]}')
+
+    # art=ax.scatter(x,y,picker=5,**kwargs)
+
+    def onpick(event):
+        if event.artist == art:
+            # ind = good_inds[event.ind[0]]
+            ind = event.ind[0]
+            print('onpick scatter: {}: {} ({},{})'.format(ind, names[ind], np.take(x, ind), np.take(y, ind)))
+            if dv is not None:
+                dv[0] = names[ind]
+            if fn is None:
+                print('fn is none?')
+            elif type(fn) is list:
+                for fni, fna in zip(fn, fnargs):
+                    if 'data_series_dict' in fna:
+                        if fna['data_series_dict'] == 'dsx':
+                            fna = dict(dfx.iloc[ind]) | fna
+                        elif fna['data_series_dict'] == 'dsy':
+                            fna = dict(dfy.iloc[ind]) | fna
+                        else:
+                            raise RuntimeError('data_series_dict must be either dsx or dsy')
+                    fni(**fna)
+                    # fni(names[ind],**fna,ind=ind)
+            else:
+                fn(names[ind], **fnargs)
+
+    def on_plot_hover(event):
+
+        for curve in ax.get_lines():
+            if curve.contains(event)[0]:
+                print('over {0}'.format(curve.get_gid()))
+
+    ax.figure.canvas.mpl_connect('pick_event', onpick)
+    return art
+
+
 def load(rec, batch, cellid, meta, **context):
     eval_conds=[['A'],['B'],['C'],['I'],['A','B'],['C','I']]
     rec['resp'] = add_stimtype_epochs(rec['resp'])
@@ -147,23 +208,64 @@ def load(rec, batch, cellid, meta, **context):
     return {'rec':  rec, 'meta':meta, 'evaluation_conditions':eval_conds}
 
 def split_by_occurrence_counts_SPO(rec, epoch_regex='^STIM',**context):
-    N_per_epoch = ep.epoch_occurrences(rec.epochs, epoch_regex)
-    est_mask = N_per_epoch < N_per_epoch.max() / 9 #makes sure Square stimuli go into val set
-    epochs_for_est = N_per_epoch.index.values[est_mask]
-    epochs_for_val = N_per_epoch.index.values[~est_mask]
-    square_epochs = ep.epoch_names_matching(rec.epochs, '.*Square')
-    #epochs_for_val = [ep for ep in epochs_for_val if ep not in square_epochs]
+    if False:
+        #Just going by rep numbers sometimes is wrong when a few extra reps were recorded
+        N_per_epoch = ep.epoch_occurrences(rec.epochs, epoch_regex)
+        est_mask = N_per_epoch < N_per_epoch.max() / 9 #makes sure Square stimuli go into val set
+        epochs_for_est = N_per_epoch.index.values[est_mask]
+        epochs_for_val = N_per_epoch.index.values[~est_mask]
+        square_epochs = ep.epoch_names_matching(rec.epochs, '.*Square')
+        #epochs_for_val = [ep for ep in epochs_for_val if ep not in square_epochs]
+    else:
+        #Just do it explicitly
+        all_epochs = ep.epoch_names_matching(rec.epochs, '^STIM')
+        epochs_for_val = ['STIM_T+si464+null', 'STIM_T+null+si464', 'STIM_T+si464+si464',
+                      'STIM_T+si516+null', 'STIM_T+null+si516', 'STIM_T+si516+si516',
+                      'STIM_T+si464+si516', 'STIM_T+si516+si464',
+                      'STIM_T+si464+si464tosi516', 'STIM_T+si516+si516tosi464']
+        square_epochs = ep.epoch_names_matching(rec.epochs, '.*Square')
+        # epochs_for_val = epochs_for_val + square_epochs 10/7/21: Don't include square epochs in val, make a new recording for them later as needed
+        epochs_for_est = set(all_epochs) - set(epochs_for_val) - set(square_epochs)
     est, val = rec.split_by_epochs(epochs_for_est, epochs_for_val)
     return {'est': est, 'val': val}
+
+def mask_out_Squares(val, **context):
+    square_epochs = ep.epoch_names_matching(val.epochs, '.*Square')
+    return {'val': val.and_mask(epoch=square_epochs,invert=True)}
+
+
+def add_coherence_as_state(rec, permute=False, baseline=True, **context):
+    coh = rec['resp'].epoch_to_signal('C')
+    inc = rec['resp'].epoch_to_signal('I')
+    if permute:
+        coh = coh.shuffle_time(rand_seed=0, mask=rec['mask'])
+        inc = inc.shuffle_time(rand_seed=1, mask=rec['mask'])
+    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state', generate_baseline=baseline)
+    rec = preproc.concatenate_state_channel(rec, inc, state_signal_name='state')
+    rec = preproc.concatenate_state_channel(rec, coh, state_signal_name='state_raw', generate_baseline=baseline)
+    rec = preproc.concatenate_state_channel(rec, inc, state_signal_name='state_raw')
+    chans = ['Coherent', 'Incoherent']
+    if baseline:
+        chans.insert(0, 'baseline')
+    rec.signals['state'].chans = chans
+    rec.signals['state_raw'].chans = chans
+
+    return {'rec': rec}
 
 
 def plot_all_vals_(modelspec, val, figures=None, IsReload=False, **context):
     if figures is None:
         figures = []
+    IncSwitchTime = None
+    try:
+        IncSwitchTime = modelspec[0]['meta']['IncSwitchTime']
+    except:
+        pass
     if not IsReload:
-        fig = plot_all_vals(val[0], modelspec, IncSwitchTime = modelspec[0]['meta']['IncSwitchTime'])
-        # Needed to make into a Bytes because you can't deepcopy figures!
-        figures.append(nplt.fig2BytesIO(fig))
+        for i in range(len(val['resp'].chans)):
+            fig = plot_all_vals(val[0], modelspec, IncSwitchTime = IncSwitchTime, channels=[i,i])
+            # Needed to make into a Bytes because you can't deepcopy figures!
+            figures.append(nplt.fig2BytesIO(fig))
 
     return {'figures': figures}
 
@@ -286,7 +388,7 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
         return modelspecs, est_sub, val_sub
 
 
-def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 1], subset=None,
+def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0], subset=None,
                   plot_singles_on_dual=False, IncSwitchTime=None):
     # NOTE TO SELF: Not sure why channels=[0,0,1]. Setting it as default, but when called by plot_linear_and_weighted_psths it should be [0,0,0]
     from nems.plots.timeseries import timeseries_from_epoch
@@ -370,10 +472,12 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 1],
     else:
         [axi.set_prop_cycle(cycler('color', ['k', '#1f77b4', 'r']) + cycler('linestyle', ['-', '-', '--'])) for axi in
          ax]
-    allsigs = np.hstack([s.as_continuous()[-1, :] for s in sigs])
-    yl = [np.nanmin(allsigs), np.nanmax(allsigs)]
+
+    def minmax(x): return np.nanmin(x),np.nanmax(x)
+    mm = [minmax(s.as_continuous()[channels[0], :]) for s in sigs]
+    yl = [np.nanmin(np.array(mm)[:,0]), np.nanmax(np.array(mm)[:,1])]
     stimname = 'stim'  # LAS was this
-    stimname = 'resp'
+    #stimname = 'resp'
     prestimtime = val[stimname].epochs.loc[0].end
 
     for i in range(nplt):
@@ -383,6 +487,7 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 1],
         if names_short[order[i]] in ['1+_', '2+_']:
             # timeseries_from_epoch([val['stim']], epochname, title=title,
             #             occurrences=occurrences[order[i]],ax=ax[i])
+
             ep = val[stimname].extract_epoch(names[order[i]]).squeeze()
             ep = 80 + 20 * np.log10(ep.T)
             ep = ep / ep.max() * yl[1]
@@ -415,12 +520,13 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 1],
         ax[i].set_ylabel(names_short[order[i]], rotation=0, horizontalalignment='right', verticalalignment='bottom')
 
     if modelspec is not None:
-        ax[0].set_title('{}: {}'.format(modelspec[0]['meta']['cellid'], modelspec[0]['meta']['modelname']))
+        ax[0].set_title('{}: {}'.format(sigs[0].chans[channels[0]], modelspec[0]['meta']['modelname']))
     [axi.get_xaxis().set_visible(False) for axi in ax[:-1]]
     [axi.get_yaxis().set_ticks([]) for axi in ax]
     [axi.get_legend().set_visible(False) for axi in ax[:-1]]
     [axi.set_xlim([.8 - 1, 4.5 - 1]) for axi in ax]
     yl_margin = .01 * (yl[1] - yl[0])
+    [axi.set_ylim((yl[0] - yl_margin, yl[1] + yl_margin)) for axi in ax]
     [axi.set_ylim((yl[0] - yl_margin, yl[1] + yl_margin)) for axi in ax]
     if IncSwitchTime is not None:
         for i in range(nplt):
@@ -429,7 +535,7 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 1],
     if plot_singles_on_dual:
         ls = ['resp A', 'resp B']
     else:
-        ls = ['Stim']
+        ls = ['log(stim)']
     ax[nplt - 1].legend(signames + ls)
     return fig
 
@@ -1460,9 +1566,12 @@ def calc_psth_weights_of_model_responses(val, signame='pred', do_plot=False, fin
     # return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
 
+def test(**kwds):
+    print(kwds.keys())
+
 def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x15_lvl1_dexp1',
              loader='env.fs100-ld-sev-subset.A+B+C+I', fitter='fit_basic', pth=None,
-             ind=None, modelname=None, fignum=0, batch=306):
+             ind=None, modelname=None, fignum=0, batch=306, modelpath=None, **extras):
     ax_ = None
     if pth is None:
         print('pth is None')
@@ -1508,7 +1617,7 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
             else:
                 pth = pth.replace('.png', '_all_val.png')
         elif ft == 5:
-            pth = os.path.join(nd.get_results_file(batch, [modelname], [cellid])['modelpath'][0],
+                pth = os.path.join(nd.get_results_file(batch, [modelname], [cellid])['modelpath'][0],
                                'figure.{:04d}.png'.format(fignum))
         elif ft == 6:
             pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/{}.png'.format(cellid)
@@ -1533,6 +1642,15 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
                 pth2 = pth.replace('.png', '_all_val.png')
             else:
                 pth = pth.replace('.png', '_all_val.png')
+    if type(ax) == list:
+        print('ax is a list!')
+        ax_ = ax
+        ax = ax_[0]
+        if 'cellids' in extras:
+            ind = extras['cellids'].index(cellid)
+            pth2 = pth.replace('0000.png',f'{ind+1:04d}.png')
+        else:
+            pth2 = pth.replace('.png', '_all_val.png')
     print(pth)
     if pth.split('.')[1] == 'pickle':
         ax.figure = pl.load(open(pth, 'rb'))
@@ -1735,6 +1853,34 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
                        plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
     return fh, w_corrs, l_corrs
 
+def plot_linear_and_weighted_psths_loaded(val,SR,signame='resp',weights=None,subset=None,addsig=None):
+    #WAS in nems_lbhb
+    #smooth and subtract SR
+    import copy
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[signame].fs)
+    val[signame]=val[signame].transform(fn)
+    if addsig is not None:
+        fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[addsig].fs)
+        val[addsig]=val[addsig].transform(fn)
+    lin_weights=[[1,1],[1,1]]
+    epcs=val[signame].epochs[val[signame].epochs['name'] == 'PreStimSilence'].copy()
+    epcs_offsets=[epcs['end'].iloc[0], 0]
+
+    inp=copy.deepcopy(val[signame])
+    out, l_corrs=generate_weighted_model_signals(inp,lin_weights,epcs_offsets)
+    val[signame+'_lin_model']=out
+    if weights is None:
+        sigz=[signame,signame+'_lin_model']
+        if addsig is not None:
+           sigz.append(addsig)
+        plot_singles_on_dual=True
+        w_corrs=None
+    else:
+        val[signame+'_weighted_model'], w_corrs=generate_weighted_model_signals(val[signame],weights,epcs_offsets)
+        sigz=[signame,signame+'_lin_model',signame+'_weighted_model']
+        plot_singles_on_dual=False
+    fh=plot_all_vals(val,None,signames=sigz,channels=[0,0,0],subset=subset,plot_singles_on_dual=plot_singles_on_dual)
+    return fh, w_corrs, l_corrs
 
 def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
     # options = {}
@@ -2403,3 +2549,154 @@ def calc_psth_weight_cell(cell, do_plot=False,
             cell[k] = v
 
     return cell
+
+def load_modelspec_data(batch,cellids,modelnames):
+    msp = []
+    er = []
+    for mod_i, m in enumerate(modelnames):
+
+        try:
+            print('Loading modelname: {}'.format(m))
+            mds = nems_db.params._get_modelspecs(cellids, batch, m, multi='mean')
+        except ValueError as error:
+            er.append(error)
+            if error.args[0][:28] == 'No result exists for:\nbatch:':
+                print('No Results')
+            else:
+                raise (error)
+        else:
+            print('{} cells'.format(len(mds)))
+            msp.extend(mds)
+    dat = {}
+    dat['loader'] = [mx[0]['meta']['recording'] for mx in msp]
+    ss = []
+    for mx in msp:
+        s = mx[0]['meta']['recording'].split('subset')
+        if len(s) == 1:
+            ss.append('A+B+C+I')
+        else:
+            ss.append(s[1][1:].split('-')[0])
+    dat['subset'] = ss
+    dat['modelspecname'] = [mx[0]['meta']['modelspecname'] for mx in msp]
+    dat['modelname'] = [mx[0]['meta']['modelname'] for mx in msp]
+    dat['pcellid'] = [mx[0]['meta']['cellid'] for mx in msp]
+    dat['cellid'] = [mx[0]['meta']['cellid'] for mx in msp]
+    dat['modelpath'] = [mx[0]['meta']['modelpath'] for mx in msp]
+    # dat['fitter'] = [mx[0]['meta']['fitter'] for mx in msp]  #not saved anymore?
+    dat['fitkey'] = [mx[0]['meta']['fitkey'] for mx in msp]
+    dat['svn_branch'] = ['svd_fsDB' for mx in msp]
+    sg_un = []
+    for mx in msp:
+        gi = nems.utils.find_module('state_gain', mx)
+        if gi is None:
+            g = np.full((2, 3), np.NaN)
+        else:
+            g = mx.phi[gi]['g']
+            if g.shape[1] == 2:
+                g = np.hstack((np.full((2, 1), 1), g))
+        sg_un.append(g)
+    dat['sg_un'] = sg_un
+    dat['sg'] = [g / g[:, :1] + 1 for g in dat['sg_un']]
+    dat['sgCA'] = [sg[0, 1] for sg in dat['sg']]
+    dat['sgCB'] = [sg[1, 1] for sg in dat['sg']]
+    dat['sgIA'] = [sg[0, 2] for sg in dat['sg']]
+    dat['sgIB'] = [sg[1, 2] for sg in dat['sg']]
+    subsetnames = ['A', 'B', 'C', 'I', 'A+B', 'C+I']
+    varnames = ['r_fit', 'r_test', 'r_ceiling', 'r_floor', 'mse_fit', 'mse_test', 'se_mse_test', 'se_mse_fit']
+    varnames_no_ss = ['se_test', 'se_fit']
+    for vname in varnames:
+        for ssname in subsetnames:
+            if vname in mx[0]['meta'][ssname].keys():
+                dat[vname + '_' + ssname] = [mx[0]['meta'][ssname][vname] for mx in msp]
+            else:
+                warnings.warn(
+                    '{} not a variable for {},\nssname {}. Setting to NaN'.format(vname, mx[0]['meta']['xfspec'],
+                                                                                  ssname))
+                dat[vname + '_' + ssname] = [np.NaN] * len(msp)
+        # dat[vname] = [mx[0]['meta'][vname] for mx in msp]
+    for vname in (varnames + varnames_no_ss):
+        dat[vname] = [mx[0]['meta'][vname][0] for mx in msp]
+    return pd.DataFrame(data=dat)
+
+
+def load_modelspec_data_pop(batch,rep_cellids,pop_modelnames):
+    msp = []
+    er = []
+    for mod_i, m in enumerate(pop_modelnames):
+
+        try:
+            print('Loading modelname: {}'.format(m))
+            mds = nems_db.params._get_modelspecs(rep_cellids, batch, m, multi='mean')
+        except ValueError as error:
+            er.append(error)
+            if error.args[0][:28] == 'No result exists for:\nbatch:':
+                print('No Results')
+            else:
+                raise (error)
+        else:
+            print('{} cells'.format(len(mds)))
+            msp.extend(mds)
+    dat = {}
+    dat['loader'] = [mx[0]['meta']['recording'] for mx in msp]
+    ss = []
+    for mx in msp:
+        s = mx[0]['meta']['recording'].split('subset')
+        if len(s) == 1:
+            ss.append('A+B+C+I')
+        else:
+            ss.append(s[1][1:].split('-')[0])
+    dat['subset'] = ss
+    dat['modelspecname'] = [mx[0]['meta']['modelspecname'] for mx in msp]
+    dat['modelname'] = [mx[0]['meta']['modelname'] for mx in msp]
+    dat['popcellid'] = [mx[0]['meta']['cellid'] for mx in msp]
+    dat['pcellid'] = [mx[0]['meta']['cellid'] for mx in msp]
+    dat['cellids'] = [mx[0]['meta']['cellids'] for mx in msp]
+    dat['modelpath'] = [mx[0]['meta']['modelpath'] for mx in msp]
+    # dat['fitter'] = [mx[0]['meta']['fitter'] for mx in msp]  #not saved anymore?
+    dat['fitkey'] = [mx[0]['meta']['fitkey'] for mx in msp]
+    #dat['svn_branch'] = ['svd_fsDB' for mx in msp]
+    # sg_un = []
+    # for mx in msp:
+    #     gi = nems.utils.find_module('state_gain', mx)
+    #     if gi is None:
+    #         g = np.full((2, 3), np.NaN)
+    #     else:
+    #         g = mx.phi[gi]['g']
+    #         if g.shape[1] == 2:
+    #             g = np.hstack((np.full((2, 1), 1), g))
+    #     sg_un.append(g)
+    # dat['sg_un'] = sg_un
+    # dat['sg'] = [g / g[:, :1] + 1 for g in dat['sg_un']]
+    # dat['sgCA'] = [sg[0, 1] for sg in dat['sg']]
+    # dat['sgCB'] = [sg[1, 1] for sg in dat['sg']]
+    # dat['sgIA'] = [sg[0, 2] for sg in dat['sg']]
+    # dat['sgIB'] = [sg[1, 2] for sg in dat['sg']]
+    dat2 = {}
+    for k,v in dat.items():
+        if k == 'pcellid':
+            list_of_lists = [cid for vv, cid in zip(v, dat['cellids'])]
+        else:
+            list_of_lists  = [[vv]*len(cid) for vv, cid in zip(v,dat['cellids'])]
+        dat2[k] = list(itertools.chain(*list_of_lists))
+    dat2['cellid'] = dat2['pcellid']
+    subsetnames = ['A', 'B', 'C', 'I', 'A+B', 'C+I']
+    varnames = ['r_fit', 'r_test', 'r_ceiling', 'r_floor', 'mse_fit', 'mse_test', 'se_mse_test', 'se_mse_fit']
+    varnames_no_ss = ['se_test', 'se_fit']
+    for vname in varnames:
+        for ssname in subsetnames:
+            if vname in mx[0]['meta'][ssname].keys():
+                list_of_lists = [mx[0]['meta'][ssname][vname] for mx in msp]
+                vals_in_arrays = list(itertools.chain(*list_of_lists))
+                dat2[vname + '_' + ssname] = [v[0] for v in vals_in_arrays]
+            else:
+                warnings.warn(
+                    '{} not a variable for {},\nssname {}. Setting to NaN'.format(vname, mx[0]['meta']['xfspec'],
+                                                                                  ssname))
+                dat2[vname + '_' + ssname] = np.NaN
+        # dat[vname] = [mx[0]['meta'][vname] for mx in msp]
+    for vname in (varnames + varnames_no_ss):
+        list_of_lists = [mx[0]['meta'][vname] for mx in msp]
+        vals_in_arrays = list(itertools.chain(*list_of_lists))
+        dat2[vname] = [v[0] for v in vals_in_arrays]
+    dfm = pd.DataFrame(data=dat2)
+    return dfm
