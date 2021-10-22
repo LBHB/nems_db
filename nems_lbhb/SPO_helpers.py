@@ -137,7 +137,7 @@ def scatterplot_print(x, y, names, ax=None, fn=None, fnargs={}, dv=None, **kwarg
     ax.figure.canvas.mpl_connect('pick_event', onpick)
     return art
 
-def scatterplot_print_df(dfx, dfy, varnames, dispname = 'pcellid', ax=None, fn=None, fnargs={}, dv=None, **kwargs):
+def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, **kwargs):
     if ax is None:
         ax = plt.gca()
     if 'marker' not in kwargs:
@@ -149,7 +149,10 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'pcellid', ax=None, fn=N
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
-    names = list(dfx[dispname].values[good_inds])
+    if dispname is None:
+        names = list(dfx.index.values[good_inds])
+    else:
+        names = list(dfx[dispname].values[good_inds])
     if type(fn) is list:
         for i in range(len(fnargs)):
             if 'pth' in fnargs[i].keys():
@@ -1650,7 +1653,14 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
             ind = extras['cellids'].index(cellid)
             pth2 = pth.replace('0000.png',f'{ind+1:04d}.png')
         else:
-            pth2 = pth.replace('.png', '_all_val.png')
+            if os.path.exists(pth.replace('.png', '_all_val.png')):
+                pth2 = pth.replace('.png', '_all_val.png')
+            elif os.path.exists(pth.replace('0000.png', '0001.png')):
+                pth2 = pth.replace('0000.png', '0001.png')
+            else:
+                print(f'No second image file found for {pth}')
+                pth2 = None
+
     print(pth)
     if pth.split('.')[1] == 'pickle':
         ax.figure = pl.load(open(pth, 'rb'))
@@ -1663,7 +1673,7 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
     ax.figure.canvas.draw()
     ax.figure.canvas.show()
 
-    if type(ax_) == list:
+    if type(ax_) == list and pth2 is not None:
         im_data = plt.imread(pth2)
         ax_[1].clear()
         print(pth2);
@@ -2606,13 +2616,15 @@ def load_modelspec_data(batch,cellids,modelnames):
     varnames_no_ss = ['se_test', 'se_fit']
     for vname in varnames:
         for ssname in subsetnames:
-            if vname in mx[0]['meta'][ssname].keys():
+            has = [vname in mx[0]['meta'][ssname] for mx in msp]
+            if all(has):
                 dat[vname + '_' + ssname] = [mx[0]['meta'][ssname][vname] for mx in msp]
+            elif any(has):
+                dat[vname + '_' + ssname] = [mx[0]['meta'][ssname][vname] if vname in mx[0]['meta'][ssname] else np.NaN for mx in msp]
+                warnings.warn(f'[{ssname}][{vname}] not a variable for {sum(has)}/{len(has)} models/cells, setting to NaN')
             else:
-                warnings.warn(
-                    '{} not a variable for {},\nssname {}. Setting to NaN'.format(vname, mx[0]['meta']['xfspec'],
-                                                                                  ssname))
                 dat[vname + '_' + ssname] = [np.NaN] * len(msp)
+                warnings.warn(f'[{ssname}][{vname}] not a variable for all models/cells, setting to NaN')
         # dat[vname] = [mx[0]['meta'][vname] for mx in msp]
     for vname in (varnames + varnames_no_ss):
         dat[vname] = [mx[0]['meta'][vname][0] for mx in msp]
@@ -2700,3 +2712,31 @@ def load_modelspec_data_pop(batch,rep_cellids,pop_modelnames):
         dat2[vname] = [v[0] for v in vals_in_arrays]
     dfm = pd.DataFrame(data=dat2)
     return dfm
+
+def get_significant_cells(batch, models, as_list=False):
+
+    df_r = nd.batch_comp(batch, models, stat='r_test')
+    df_r.dropna(axis=0, how='any', inplace=True)
+    df_r.sort_index(inplace=True)
+    df_e = nd.batch_comp(batch, models, stat='se_test')
+    df_e.dropna(axis=0, how='any', inplace=True)
+    df_e.sort_index(inplace=True)
+    df_f = nd.batch_comp(batch, models, stat='r_floor')
+    df_f.dropna(axis=0, how='any', inplace=True)
+    df_f.sort_index(inplace=True)
+
+    masks = []
+    for m in models:
+        mask1 = df_r[m] > df_e[m] * 2
+        mask2 = df_r[m] > df_f[m]
+        mask = mask1 & mask2
+        masks.append(mask)
+
+    all_significant = masks[0]
+    for m in masks[1:]:
+        all_significant &= m
+
+    if as_list:
+        all_significant = all_significant[all_significant].index.values.tolist()
+
+    return all_significant
