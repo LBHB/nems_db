@@ -121,7 +121,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         else:
             #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
             post_part = fit_string_pop
-
+        if modelname_parts[2].endswith("ver2"):
+            post_part += ".ver2"
+            
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         pre_batch = batch
         log.info(f"model_search: {model_search}")
