@@ -47,7 +47,7 @@ def _parse_baphy_loadkey(loadkey, cellid=None, batch=None, siteid=None, **option
     t_ops = {} # options.copy()
     t_ops['cellid'] = cellid
     t_ops['batch'] = batch
-    if cellid in ['none', 'NAT3', 'NAT4', 'NAT1', 'ALLCELLS']:
+    if cellid in ['none', 'NAT3', 'NAT4', 'NAT4v2', 'NAT1', 'ALLCELLS']:
         cells_to_extract = cellid
     else:
         cells_to_extract, _ = baphy_io.parse_cellid(t_ops)

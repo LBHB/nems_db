@@ -1718,14 +1718,18 @@ def lv_logsig_plot(rec, modelspec, ax=None, **options):
     f.tight_layout()
 
     
-def scatter_bin_lin(data, x, y, bins=10, color='lightgray', color2=None, ax=None, regular_bins=True):
+def scatter_bin_lin(data, x, y, bins=10, s=3, color='lightgray', color2=None, ax=None, regular_bins=True):
 
+    if ax is None:
+        ax=plt.gca()
+        
     if data.shape[0]>1500:
         data_ = data.sample(1500, weights=data[x]**2)
         #data_ = data.sample(3000)
     else:
         data_ = data
-    sns.scatterplot(data=data_, x=x, y=y, s=3, ax=ax, color=color)
+    #sns.scatterplot(data=data_, x=x, y=y, s=3, ax=ax, color=color)
+    ax.scatter(data[x],data[y],s=s,color=color)
     #histplot(data=data_, x=x, y=y, ax=ax, bins=30)
 
     x = data[[x,y]].values
@@ -1740,9 +1744,10 @@ def scatter_bin_lin(data, x, y, bins=10, color='lightgray', color2=None, ax=None
 
     result = np.zeros((2,bins))
     resulte = np.zeros((2,bins))
+
     for i in range(bins):
         b_ = (x[:,0]>=bb[i]) & (x[:,0]<bb[i+1]) & np.isfinite(x[:,1])
         result[:,i] = np.nanmean(x[b_, :], axis=0)
         resulte[:,i] = np.nanstd(x[b_, :], axis=0)/np.sqrt(np.sum(b_))
-    ax.errorbar(result[0], result[1], resulte[1], color=color2)
+    ax.errorbar(result[0], result[1], resulte[1], linewidth=2, color=color2)
 

@@ -361,7 +361,7 @@ def dstrf_pca_plot(pcs, pc_mag, cellids, clist=None, rows=1):
         cols=len(clist)
     else:
         cols=10
-    f2,axs=plt.subplots(cols, 3*rows, figsize=(3*rows, cols*0.75))
+    f2,axs=plt.subplots(cols, 3*rows, figsize=(3*rows, cols*0.85))
     for c,cadj in enumerate(clist):
         cellid = cellids[cadj]
         pc_rat = pc_mag[:,cadj]/pc_mag[:,cadj].sum()

@@ -179,7 +179,7 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
     return {'rec': rec, 'meta': meta}
 
 
-def split_pop_rec_by_mask(rec, rec_list=None, keepfrac=1, **contex):
+def split_pop_rec_by_mask(rec, rec_list=None, keepfrac=1, **context):
 
     if rec_list is None:
         rec_list = [rec]
@@ -397,17 +397,17 @@ def pop_file(stimfmt='ozgf', batch=None,
         # but left other options here for backwards compatibility.
         subsetstr = ["NAT3"]
     elif (batch in [322,323]) or (siteid == 'NAT4'):
-        subsetstr = ["NAT4"]
+        subsetstr = [siteid]
     else:
         raise ValueError('site not known for popfile')
-
     use_API = get_setting('USE_NEMS_BAPHY_API')
 
     uri_root = '/auto/data/nems_db/recordings/'
     
     recording_uri_list = []
     for s in subsetstr:
-        recname="{}_{}.fs{}.ch{}".format(s, stimfmt, rasterfs, chancount)
+        recname=f"{s}_{stimfmt}.fs{rasterfs}.ch{chancount}"
+        log.info(f'loading {recname}')
         #data_file = '{}{}/{}.tgz'.format(uri_root, batch, recname)
 
         if use_API:

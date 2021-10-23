@@ -1,6 +1,7 @@
 from pathlib import Path
 import datetime
 import os
+import getpass
 
 import numpy as np
 import matplotlib as mpl
@@ -27,14 +28,25 @@ from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pare
 from nems_lbhb.projects.pop_model_scripts.pop_correlation import correlation_histogram
 from nems_lbhb.projects.pop_model_scripts.heldout_plots import generate_heldout_plots
 from nems_lbhb.projects.pop_model_scripts.matched_snr_plots import plot_matched_snr
+from nems_lbhb.projects.pop_model_scripts.partial_est_plot import partial_est_plot
+
+linux_user = getpass.getuser()
 
 a1 = 322
 peg = 323
 # TODO: adjust figure sizes
-single_column_short = (3.5, 3)
-single_column_tall = (3.5, 6)
-column_and_half_short = (5, 3)
-column_and_half_tall = (5, 6)
+if linux_user=='svd':
+    sf=2
+    single_column_short = (3.5*sf, 2.5*sf)
+    single_column_tall = (3.5*sf, 5*sf)
+    column_and_half_short = (5*sf, 2.5*sf)
+    column_and_half_tall = (5*sf, 5*sf)
+
+else:
+    single_column_short = (3.5, 3)
+    single_column_tall = (3.5, 6)
+    column_and_half_short = (5, 3)
+    column_and_half_tall = (5, 6)
 #inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
 
 ########################################################################################################################
@@ -131,12 +143,15 @@ print("matched snr Sig. tests:\n"
 
 # TODO  (SVD running new models, then will send a script for generating the plots
 
-
+fig5 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=column_and_half_short)
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
 ########################################################################################################################
-figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
+if linux_user=='svd':
+    figures_base_path = Path('/auto/users/svd/docs/current/uo_seminar/eps/')
+else:
+    figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
 date = str(datetime.datetime.now()).split(' ')[0]
 base_path = figures_base_path / date
 figures_to_save = [
@@ -144,8 +159,8 @@ figures_to_save = [
     (fig2, 'equivalence'),
     (fig3, 'heldout'),
     (fig4a, 'snr'),
-    (fig4b, 'snr_inset')
-    #(fig5, 'data_subsets') # TODO
+    (fig4b, 'snr_inset'),
+    (fig5, 'data_subsets') # TODO
 ]
 
 if not base_path.is_dir():
