@@ -34,55 +34,63 @@ def pclast(kw):
 @xform()
 def prefit(kw):
     ops = kw.split('.')[1:]
-    use_heldout = 'h' in ops
-    use_matched = 'm' in ops
-    use_simulated = 's' in ops
-    use_full_model = 'f' in ops
-    prefit_type = None
-    
+    kwargs = {}
+
     # use_full_model means population model (vs. single-cell fit used for dnn-single)
+    for op in ops:
+        if op.startswith("b"):
+            kwargs['pre_batch']=int(op[1:])
+        elif op=='nf':
+            kwargs['freeze_early']=False
+        elif op=='h':
+            kwargs['use_heldout'] = True
+        elif op=='m':
+            kwargs['use_matched'] = True
+        elif op=='s':
+            kwargs['use_simulated'] = True
+        elif op=='f':
+            kwargs['use_full_model'] = True
+
     if 'hm' in ops:
-        use_full_model=True
-        prefit_type='matched'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched'
     elif 'hs' in ops:
-        use_full_model=True
-        prefit_type='heldout'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout'
 
     elif 'hhm' in ops:
-        use_full_model=True
-        prefit_type='matched_half'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_half'
     elif 'hqm' in ops:
-        use_full_model = True
-        prefit_type = 'matched_quarter'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_quarter'
     elif 'hfm' in ops:
-        use_full_model = True
-        prefit_type = 'matched_fifteen'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_fifteen'
     elif 'htm' in ops:
-        use_full_model = True
-        prefit_type = 'matched_ten'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_ten'
 
     elif 'hhs' in ops:
-        use_full_model = True
-        prefit_type = 'heldout_half'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_half'
     elif 'hqs' in ops:
-        use_full_model = True
-        prefit_type = 'heldout_quarter'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_quarter'
     elif 'hfs' in ops:
-        use_full_model = True
-        prefit_type = 'heldout_fifteen'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_fifteen'
     elif 'hts' in ops:
-        use_full_model = True
-        prefit_type = 'heldout_ten'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_ten'
     
     elif 'm' in ops:
-        prefit_type='matched'
+        kwargs['prefit_type'] = 'matched'
     elif 'h' in ops:
-        prefit_type='heldout'
+        kwargs['prefit_type'] = 'heldout'
     
     elif 'titan' in ops:
-        use_full_model = True
-        prefit_type='titan'
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'titan'
 
-    return [['nems_lbhb.initializers.initialize_with_prefit', 
-             {'use_matched': use_matched, 'use_simulated': use_simulated, 'use_full_model': use_full_model,
-             'prefit_type': prefit_type}]]
+    return [['nems_lbhb.initializers.initialize_with_prefit', kwargs]]

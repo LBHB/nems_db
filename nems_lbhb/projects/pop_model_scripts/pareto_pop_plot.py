@@ -44,7 +44,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         y_max = b_m.max() * 1.05
         y_min = b_m.min() * 0.9
         overall_max = max(overall_max, y_max)
-        overall_min = min(overall_min, y_min)
+        overall_min = min(overall_min, y_min)Ok
 
         ax.plot(n_parms, b_m, color=dot_colors[k], marker=dot_markers[k], label=k.split('_single')[0], markersize=6)
         for m in labeled_models:

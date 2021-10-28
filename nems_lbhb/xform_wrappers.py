@@ -98,6 +98,12 @@ def pop_selector(recording_uri_list, batch=None, cellid=None,
 
     if (cellid == "ALLCELLS"):
         rec_list = [load_recording(uri) for uri in recording_uri_list]
+        for r in rec_list:
+            if 'cellids' not in r.meta.keys():
+                channels = r['resp'].chans
+                cellids = [str(c) for c in channels]
+                r.meta['cellids'] = cellids
+
         return {'rec': rec_list[0], 'rec_list': rec_list}
     
     rec = load_recording(recording_uri_list[0])
@@ -376,15 +382,30 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_reco
             'freeze_layers': freeze_layers}
 
 
-def pop_file(stimfmt='ozgf', batch=None,
-             rasterfs=50, chancount=18, siteid=None, **options):
+def pop_file(stimfmt='ozgf', batch=None, cellid=None,
+             rasterfs=50, chancount=18, siteid=None, loadkey=None, **options):
 
     siteid = siteid.split("-")[0]
+    subsetstr=[]
+    sitelist=[]
     if siteid == 'ALLCELLS':
         if (batch in [322]):
             subsetstr = ["NAT4", "NAT3", "NAT1"]
         elif (batch in [323]):
             subsetstr = ["NAT4"]
+        elif (batch in [333]):
+            runclass="OLP"
+            sql="SELECT sRunData.cellid,gData.svalue,gData.rawid FROM sRunData INNER JOIN" +\
+                    " sCellFile ON sRunData.cellid=sCellFile.cellid " +\
+                    " INNER JOIN gData ON" + \
+                    " sCellFile.rawid=gData.rawid AND gData.name='Ref_Combos'" +\
+                    " AND gData.svalue='Manual'" +\
+                    " INNER JOIN gRunClass on gRunClass.id=sCellFile.runclassid" +\
+                    f" WHERE sRunData.batch={batch} and gRunClass.name='{runclass}'"
+            d = nd.pd_query(sql)
+
+            d['siteid'] = d['cellid'].apply(nd.get_siteid)
+            sitelist = d['siteid'].unique()
         else:
             raise ValueError(f'ALLCELLS not supported for batch {batch}')
     elif ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
@@ -405,6 +426,17 @@ def pop_file(stimfmt='ozgf', batch=None,
     uri_root = '/auto/data/nems_db/recordings/'
     
     recording_uri_list = []
+    log.info("TRUNCATING AT FIVE RECORDINGS")
+    for s in sitelist[:5]:
+        recording_uri = generate_recording_uri(batch=batch, cellid=s, stimfmt=stimfmt,
+                     rasterfs=rasterfs, chancount=chancount, **options)
+        log.info(f'loading {recording_uri}')
+        #if use_API:
+        #    host = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT'))
+        #    recording_uri = host + '/recordings/' + str(batch) + '/' + recname + '.tgz'
+        #else:
+        #    recording_uri = '{}{}/{}.tgz'.format(uri_root, batch, recname)
+        recording_uri_list.append(recording_uri)
     for s in subsetstr:
         recname=f"{s}_{stimfmt}.fs{rasterfs}.ch{chancount}"
         log.info(f'loading {recname}')
@@ -422,7 +454,7 @@ def pop_file(stimfmt='ozgf', batch=None,
         return recording_uri_list
 
 
-def generate_recording_uri(cellid=None, batch=None, loadkey=None,
+def generate_recording_uri(cellid=None, batch=None, loadkey="",
                            siteid=None, force_old_loader=False, **options):
     """
     required parameters (passed through to nb.baphy_data_path):
@@ -442,12 +474,14 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
         loader = nems.utils.escaped_split(loadkey, '-')[0]
     else:
         loader = loadkey
-    log.info('loader=%s',loader)
+    if loader != '':
+        log.info('loader=%s',loader)
 
     ops = loader.split(".")
 
     # updates some some defaults
-    options.update({'rasterfs': 100, 'chancount': 0})
+    options['rasterfs'] = options.get('rasterfs', 100)
+    options['chancount'] = options.get('chancount', 0)
     load_pop_file = False
 
     for op in ops:

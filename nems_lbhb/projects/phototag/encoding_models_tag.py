@@ -66,7 +66,7 @@ dm = dpred.groupby(['siteid','phototag']).mean()
 
 recfile = '/auto/data/nems_db/recordings/334/NAT4_ozgf.fs100.ch18.tgz'
 tctx = {'rec': load_recording(recfile)}
-tctx = tctx.update(split_pop_rec_by_mask(**tctx))
+tctx.update(split_pop_rec_by_mask(**tctx))
 a_chans = dpred.loc[dpred['phototag']=='a','cellid'].to_list()
 s_chans = dpred.loc[dpred['phototag']=='s','cellid'].to_list()
 
@@ -78,7 +78,7 @@ dr = pd.DataFrame({'cellid': tctx['val']['resp'].chans,
                    'mean_resp': mean_resp})
 dpred = dpred.merge(dr, how='left', left_on='cellid', right_on='cellid')
 
-cmax=resp.max()
+cmax=mean_resp.max()
 f,ax = plt.subplots(3,1)
 ax[0].imshow(aresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
 ax[1].imshow(sresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
@@ -90,31 +90,44 @@ ax[2].legend()
 from seaborn import scatterplot, barplot, histplot
 
 _d = dpred.loc[(dpred['phototag']=='s') | (dpred['phototag']=='a')].reset_index()
+_d['hi_resp']=_d['mean_resp']>0.2
 
-f, ax = plt.subplots(2, 3, figsize=(12,8))
+_dm = _d.groupby(['siteid','phototag']).mean()
+
+f, ax = plt.subplots(2, 4, figsize=(12,6))
 ax = ax.flatten()
 
 ax[0].plot([0.0,1], [0.0,1],'k--')
 scatterplot(data=_d, x=shortnames[0], y=shortnames[1], hue='phototag', ax=ax[0]);
 plt.setp(ax[0].get_legend().get_texts(), fontsize='10')
 
-histplot(data=_d, x=shortnames[1], hue='phototag', ax=ax[1], hue_order=['s','a'])
+histplot(data=_d, x=shortnames[0], hue='phototag', ax=ax[1], hue_order=['s','a'])
 plt.setp(ax[1].get_xticklabels(), fontsize='10'); #, frameon=False)
+ax[1].set_ylabel(f'r_test ({shortnames[0]})',fontsize=10)
+
+histplot(data=_d, x=shortnames[1], hue='phototag', ax=ax[2], hue_order=['s','a'])
+plt.setp(ax[2].get_xticklabels(), fontsize='10'); #, frameon=False)
 ax[1].set_ylabel(f'r_test ({shortnames[1]})',fontsize=10)
 
-barplot(data=dm.reset_index(), x='siteid', y='diff', hue='phototag', ax=ax[2], hue_order=['s','n','a'])
-plt.setp(ax[2].get_xticklabels(), fontsize='10'); #, frameon=False)
-ax[2].set_ylabel(f'r difference ({shortnames[1]}-{shortnames[0]})',fontsize=10)
+histplot(data=_d, x='diff', hue='phototag', ax=ax[3], hue_order=['s','a'])
+plt.setp(ax[3].get_xticklabels(), fontsize='10'); #, frameon=False)
+ax[1].set_ylabel(f'r_test ({"diff"})', fontsize=10)
 
-#ax[3].plot([0.0,1], [0.0,1],'k--')
-scatterplot(data=_d, x='pc1', y='diff', hue='phototag', ax=ax[3]);
-plt.setp(ax[3].get_legend().get_texts(), fontsize='10')
+#ax[4].plot([0.0,1], [0.0,1],'k--')
+scatterplot(data=_d, x='pc1', y='diff', hue='phototag', ax=ax[4]);
+plt.setp(ax[4].get_legend().get_texts(), fontsize='10')
 
-histplot(data=_d, x='pc1', hue='phototag', ax=ax[4], hue_order=['s','a'])
-plt.setp(ax[4].get_xticklabels(), fontsize='10')
+histplot(data=_d, x='pc1', hue='phototag', ax=ax[5], hue_order=['s','a'])
+plt.setp(ax[5].get_xticklabels(), fontsize='10')
 
-scatterplot(data=_d, x='mean_resp', y=shortnames[1], hue='phototag', ax=ax[5]);
-plt.setp(ax[5].get_legend().get_texts(), fontsize='10')
+scatterplot(data=_d, x='mean_resp', y=shortnames[1], hue='phototag', ax=ax[6]);
+plt.setp(ax[6].get_legend().get_texts(), fontsize='10')
+scatterplot(data=_d, x='mean_resp', y='diff', hue='phototag', ax=ax[7])
+plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
+
+#barplot(data=_dm.reset_index(), x='siteid', y='diff', hue='phototag', ax=ax[7], hue_order=['s','a'])
+#plt.setp(ax[7].get_xticklabels(), fontsize='10'); #, frameon=False)
+#ax[7].set_ylabel(f'r difference ({shortnames[1]}-{shortnames[0]})',fontsize=10)
 
 f.suptitle(modelnames[1])
 

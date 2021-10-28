@@ -24,8 +24,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 import collections
 import json
-import sys
-import tarfile
+import hashlib
 import io
 import datetime
 import glob
@@ -625,7 +624,14 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
     dstr = re.sub(r"[ ,]", r"_", dstr)
     dstr = re.sub(r"[\[\]]", r"", dstr)
 
-    return stim_cache_dir + dstr + '.mat'
+    if len(dstr) > 250:
+        dhash = hashlib.sha1(dstr.encode('ascii')).hexdigest()
+        dstr = dstr[:200] + '_' + dhash
+
+    filepath = stim_cache_dir + dstr + '.mat'
+
+    return filepath
+
 
 def parm_tbp(exptparams, **options):
     """

@@ -29,9 +29,9 @@ from nems.utils import get_default_savepath
 log = logging.getLogger(__name__)
 
 
-def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, 
+def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, pre_batch=None,
                            use_matched=False, use_simulated=False, use_full_model=False, 
-                           prefit_type=None, IsReload=False, **ctx):
+                           prefit_type=None, freeze_early=True, IsReload=False, **ctx):
     """
     replace early layers of model with fit parameters from a "standard" model ... for now that's model with the same architecture fit
     to the NAT4 dataset
@@ -125,8 +125,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             post_part += ".ver2"
             
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
-        pre_batch = batch
-        log.info(f"model_search: {model_search}")
+        if pre_batch is None:
+            pre_batch = batch
 
         # this is a single-cell fit
         if type(cellid) is list:
@@ -162,8 +162,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         else:
             pre_cellid = cellid
             log.info(f"matched cellid prefit for {cellid}")
-            
-        pre_batch = batch
+        if pre_batch is None:
+            pre_batch = batch
         modelname_parts[2] = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
         model_search="_".join(modelname_parts)
         
@@ -184,8 +184,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         else:
             pre_cellid = cellid
             log.info(f"cellid prefit for {cellid}")
-
-        pre_batch = batch
+        if pre_batch is None:
+            pre_batch = batch
         #postparts = modelname_parts[2].split("-")
         #postparts = [s for s in postparts if not(s.startswith("prefit"))]
         #modelname_parts[2]="-".join(postparts)
@@ -193,19 +193,27 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         model_search="_".join(modelname_parts)
 
     else:
-        raise ValueError("deprecated prefit initialization?")
         pre_parts = modelname_parts[0].split("-")
         post_parts = modelname_parts[2].split("-")    
-        post_part = "tfinit.n.lr1e3.et3.rb5.es20-newtf.n.lr1e4"
+        post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.ver2"
         model_search = pre_parts[0] + ".pop%%" + modelname_parts[1] + "%%" + post_part
 
+        #ozgf.fs100.ch18.pop-loadpop-norm.l1-popev
+        #wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R
+        #tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.ver2
+
+
         # hard-coded to use an A1 model!!!!
-        if area == "A1":
+        if pre_batch == 322:
+            pre_cellid = 'ARM029a-07-6'
+        elif area == "A1":
             pre_cellid = 'ARM029a-07-6'
             pre_batch = 322
         else:
             raise ValueError(f"area {area} prefit not implemented")
-    
+
+    log.info(f"model_search: {model_search}")
+
     sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
     #log.info(sql)
     
@@ -214,7 +222,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     log.info(f"Importing parameters from {old_uri}")
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
-    new_ctx['freeze_layers'] = list(np.arange(copy_layers))
+    if freeze_early:
+        new_ctx['freeze_layers'] = list(np.arange(copy_layers))
     
     return new_ctx
 
