@@ -394,18 +394,20 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
         elif (batch in [323]):
             subsetstr = ["NAT4"]
         elif (batch in [333]):
-            runclass="OLP"
-            sql="SELECT sRunData.cellid,gData.svalue,gData.rawid FROM sRunData INNER JOIN" +\
-                    " sCellFile ON sRunData.cellid=sCellFile.cellid " +\
-                    " INNER JOIN gData ON" + \
-                    " sCellFile.rawid=gData.rawid AND gData.name='Ref_Combos'" +\
-                    " AND gData.svalue='Manual'" +\
-                    " INNER JOIN gRunClass on gRunClass.id=sCellFile.runclassid" +\
-                    f" WHERE sRunData.batch={batch} and gRunClass.name='{runclass}'"
-            d = nd.pd_query(sql)
+            #runclass="OLP"
+            #sql="SELECT sRunData.cellid,gData.svalue,gData.rawid FROM sRunData INNER JOIN" +\
+            #        " sCellFile ON sRunData.cellid=sCellFile.cellid " +\
+            #        " INNER JOIN gData ON" + \
+            #        " sCellFile.rawid=gData.rawid AND gData.name='Ref_Combos'" +\
+            #        " AND gData.svalue='Manual'" +\
+            #        " INNER JOIN gRunClass on gRunClass.id=sCellFile.runclassid" +\
+            #        f" WHERE sRunData.batch={batch} and gRunClass.name='{runclass}'"
+            #d = nd.pd_query(sql)
 
-            d['siteid'] = d['cellid'].apply(nd.get_siteid)
-            sitelist = d['siteid'].unique()
+            #d['siteid'] = d['cellid'].apply(nd.get_siteid)
+            #sitelist = d['siteid'].unique()
+            modelname_filter = 'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.4x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
+            sitelist, _ = nd.get_batch_sites(batch, modelname_filter=modelname_filter)
         else:
             raise ValueError(f'ALLCELLS not supported for batch {batch}')
     elif ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
@@ -426,8 +428,8 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
     uri_root = '/auto/data/nems_db/recordings/'
     
     recording_uri_list = []
-    log.info("TRUNCATING AT FIVE RECORDINGS")
-    for s in sitelist[:5]:
+    log.info("TRUNCATING AT TWELVE RECORDINGS")
+    for s in sitelist[:12]:
         recording_uri = generate_recording_uri(batch=batch, cellid=s, stimfmt=stimfmt,
                      rasterfs=rasterfs, chancount=chancount, **options)
         log.info(f'loading {recording_uri}')

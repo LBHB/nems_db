@@ -112,8 +112,10 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             pre_part = "ozgf.fs100.ch32.pop-loadpop-norm.l1-popev"
         elif 'ch64' in modelname_parts[0]:
             pre_part = "ozgf.fs100.ch64.pop-loadpop-norm.l1-popev"
+        elif batch==333:
+            pre_part = "ozgf.fs100.ch18-ld-norm.l1-sev"
         else:
-            load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
+            #load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
             pre_part = load_string_pop
 
         if prefit_type == 'titan':
