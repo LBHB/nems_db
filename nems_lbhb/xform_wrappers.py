@@ -417,7 +417,7 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
         # Should use NAT3 as siteid going forward for better readability,
         # but left other options here for backwards compatibility.
         subsetstr = ["NAT3"]
-    elif (batch in [322,323]) or (siteid == 'NAT4'):
+    elif (batch in [322,323, 333]) or (siteid == 'NAT4'):
         subsetstr = [siteid]
     else:
         raise ValueError('site not known for popfile')
