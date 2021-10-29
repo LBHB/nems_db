@@ -2167,17 +2167,26 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
         unit=int(cparts[2])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
-        spkfilepath=os.path.join(d['path'][0], d['respfile'][0])
-        matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
-        sortinfo = matdata['sortinfo']
-        if sortinfo.shape[0] > 1:
-            sortinfo = sortinfo.T
-        try:
-           mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
+        good_wf=False
+        for i in range(len(d)):
+            spkfilepath=os.path.join(d['path'][i], d['respfile'][i])
+            matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
+            sortinfo = matdata['sortinfo']
+            if sortinfo.shape[0] > 1:
+                sortinfo = sortinfo.T
+            try:
+                mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
+                if len(mwf)>0:
+                    good_wf=True
+                    #log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
 
-        except:
-           mwf = np.array([])
-           log.info("Cant get Mean Waveform, returning empty array")
+            except:
+                mwf = np.array([])
+                log.info(f"Can't get Mean Waveform for {cellid} {i} {d['respfile'][i]}")
+            if good_wf:
+                break
+        if not good_wf:
+            log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
         return mwf
 
     # get KS_cluster (if it exists... this is a new feature)

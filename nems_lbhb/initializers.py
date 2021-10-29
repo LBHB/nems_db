@@ -113,16 +113,23 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif 'ch64' in modelname_parts[0]:
             pre_part = "ozgf.fs100.ch64.pop-loadpop-norm.l1-popev"
         elif batch==333:
+            # not pre-concatenated recording. different stim for each site, 
+            # so fit each site separately (unless titan)
             pre_part = "ozgf.fs100.ch18-ld-norm.l1-sev"
         else:
             #load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
             pre_part = load_string_pop
 
         if prefit_type == 'titan':
-            post_part = "tfinit.n.mc25.lr1e3.es20-newtf.n.mc100.lr1e4.exa"
+            if batch==333:
+                pre_part = load_string_pop
+                post_part = "tfinit.n.mc50.lr1e3.et4.es20-newtf.n.mc100.lr1e4"
+            else:
+                post_part = "tfinit.n.mc25.lr1e3.es20-newtf.n.mc100.lr1e4.exa"
         else:
             #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
             post_part = fit_string_pop
+            
         if modelname_parts[2].endswith("ver2"):
             post_part += ".ver2"
             
