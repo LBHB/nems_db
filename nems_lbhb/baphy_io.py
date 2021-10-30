@@ -2175,7 +2175,11 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
             if sortinfo.shape[0] > 1:
                 sortinfo = sortinfo.T
             try:
-                mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
+                #import pdb;pdb.set_trace()
+                if sortinfo[0][chan-1][0][0].ndim==1:
+                    mwf=sortinfo[0][chan-1][0][0][unit-1]['MeanWaveform'][0].squeeze()
+                else:
+                    mwf=sortinfo[0][chan-1][0][0][0,unit-1]['MeanWaveform'].squeeze()
                 if len(mwf)>0:
                     good_wf=True
                     #log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
