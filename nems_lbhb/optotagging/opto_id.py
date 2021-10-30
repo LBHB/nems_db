@@ -61,7 +61,7 @@ class OptoIdModel():
 
         # rec loading parameters
         self.rasterfs = 5000
-        self.recache = False
+        self.recache = True
         self.options = {'resp': True, 'rasterfs': self.rasterfs, 'stim': False}
 
         # plotting parameters
@@ -104,7 +104,7 @@ class OptoIdModel():
 
         manager = BAPHYExperiment(parmfile=parmfile, rawid=rawid)
 
-        rec = manager.get_recording(recache=False, **self.options)
+        rec = manager.get_recording(recache=self.recache, **self.options)
         rec['resp'] = rec['resp'].rasterize()
         self.prestim = rec['resp'].extract_epoch('PreStimSilence').shape[-1] / self.rasterfs
 
@@ -116,9 +116,14 @@ class OptoIdModel():
             np.diff(opt_data.extract_epoch('REFERENCE')[self.opto_mask, :, :][0].squeeze())).squeeze() + 1
         self.opt_duration = np.diff(opt_start_stop_bins) / self.rasterfs
 
-        self.cell_id = rec['resp'].chans
+        # due to some database discrepancies a recordign might load neurons no longer preset, this compares vs sCellFile
+        # as the ground truth
+        rec_cellids = np.asarray(rec['resp'].chans)
+        true_cellids = self.DF.loc[self.DF.recording == site, 'cellid'].values
+        good_cells_maks =  np.isin(rec_cellids, true_cellids)
+        self.cell_id = rec_cellids[good_cells_maks].tolist()
 
-        raw_raster = rec['resp'].extract_epoch('REFERENCE').squeeze()
+        raw_raster = rec['resp'].extract_epoch('REFERENCE').squeeze()[:, good_cells_maks, :]
         start_time = self.prestim + self.tstart
         end_time = self.prestim + self.tend
         start_bin = np.floor(start_time * self.options['rasterfs']).astype(int)
