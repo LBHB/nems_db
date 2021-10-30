@@ -35,6 +35,7 @@ modelnames = [
 shortnames = ['ln_pop', 'conv1dx2']
 
 pca_file = '/auto/users/svd/python/scripts/NAT_pop_models/dpc334.csv'
+waveform_labels = pd.read_csv('phototag_waveform_labels.csv', index_col=0)
 
 
 runclass = "NAT"
@@ -54,6 +55,9 @@ dpred['siteid']=dpred['siteid'].apply(nd.get_siteid)
 dpred['diff'] = dpred[shortnames[1]]-dpred[shortnames[0]]
 
 dpred = dpred.merge(dtag, how='inner', left_index=True, right_index=True)
+dpred=dpred.merge(waveform_labels[['cellid','wshape']],how='left',left_index=True, right_on='cellid').set_index('cellid')
+#dpred['wshape']=dpred['wshape'].fillna("?")
+dpred['pw'] = dpred['phototag']+" "+dpred['wshape']
 
 dpc = pd.read_csv(pca_file, index_col=0)
 dpred = dpred.merge(dpc[['cellid','pc1','pc2','pc3','pc4','pc5']],
@@ -94,35 +98,37 @@ _d['hi_resp']=_d['mean_resp']>0.2
 
 _dm = _d.groupby(['siteid','phototag']).mean()
 
+huefilt='phototag'
+
 f, ax = plt.subplots(2, 4, figsize=(12,6))
 ax = ax.flatten()
 
 ax[0].plot([0.0,1], [0.0,1],'k--')
-scatterplot(data=_d, x=shortnames[0], y=shortnames[1], hue='phototag', ax=ax[0]);
+scatterplot(data=_d, x=shortnames[0], y=shortnames[1], hue=huefilt, ax=ax[0]);
 plt.setp(ax[0].get_legend().get_texts(), fontsize='10')
 
-histplot(data=_d, x=shortnames[0], hue='phototag', ax=ax[1], hue_order=['s','a'])
-plt.setp(ax[1].get_xticklabels(), fontsize='10'); #, frameon=False)
+histplot(data=_d, x=shortnames[0], hue=huefilt, ax=ax[1]) # , hue_order=['s','a'])
+plt.setp(ax[1].get_xticklabels(), fontsize='10')  #, frameon=False)
 ax[1].set_ylabel(f'r_test ({shortnames[0]})',fontsize=10)
 
-histplot(data=_d, x=shortnames[1], hue='phototag', ax=ax[2], hue_order=['s','a'])
-plt.setp(ax[2].get_xticklabels(), fontsize='10'); #, frameon=False)
+histplot(data=_d, x=shortnames[1], hue=huefilt, ax=ax[2]) #, hue_order=['s','a'])
+plt.setp(ax[2].get_xticklabels(), fontsize='10')  #, frameon=False)
 ax[1].set_ylabel(f'r_test ({shortnames[1]})',fontsize=10)
 
-histplot(data=_d, x='diff', hue='phototag', ax=ax[3], hue_order=['s','a'])
-plt.setp(ax[3].get_xticklabels(), fontsize='10'); #, frameon=False)
+histplot(data=_d, x='diff', hue=huefilt, ax=ax[3]) # , hue_order=['s','a'])
+plt.setp(ax[3].get_xticklabels(), fontsize='10')  #, frameon=False)
 ax[1].set_ylabel(f'r_test ({"diff"})', fontsize=10)
 
 #ax[4].plot([0.0,1], [0.0,1],'k--')
-scatterplot(data=_d, x='pc1', y='diff', hue='phototag', ax=ax[4]);
+scatterplot(data=_d, x='pc1', y='diff', hue=huefilt, ax=ax[4]);
 plt.setp(ax[4].get_legend().get_texts(), fontsize='10')
 
-histplot(data=_d, x='pc1', hue='phototag', ax=ax[5], hue_order=['s','a'])
+histplot(data=_d, x='pc1', hue=huefilt, ax=ax[5]) # , hue_order=['s','a'])
 plt.setp(ax[5].get_xticklabels(), fontsize='10')
 
-scatterplot(data=_d, x='mean_resp', y=shortnames[1], hue='phototag', ax=ax[6]);
+scatterplot(data=_d, x='mean_resp', y=shortnames[1], hue=huefilt, ax=ax[6]);
 plt.setp(ax[6].get_legend().get_texts(), fontsize='10')
-scatterplot(data=_d, x='mean_resp', y='diff', hue='phototag', ax=ax[7])
+scatterplot(data=_d, x='mean_resp', y='diff', hue=huefilt, ax=ax[7])
 plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 
 #barplot(data=_dm.reset_index(), x='siteid', y='diff', hue='phototag', ax=ax[7], hue_order=['s','a'])
@@ -130,6 +136,8 @@ plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 #ax[7].set_ylabel(f'r difference ({shortnames[1]}-{shortnames[0]})',fontsize=10)
 
 f.suptitle(modelnames[1])
+
+_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','pc1']].mean()
 
 
 
