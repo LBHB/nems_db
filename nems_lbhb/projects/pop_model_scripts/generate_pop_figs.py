@@ -25,6 +25,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (MODELGROUPS, P
                              NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS)
 
 from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pareto
+from nems_lbhb.projects.pop_model_scripts.summary_plots import scatter_bar
 from nems_lbhb.projects.pop_model_scripts.pop_correlation import correlation_histogram
 from nems_lbhb.projects.pop_model_scripts.heldout_plots import generate_heldout_plots
 from nems_lbhb.projects.pop_model_scripts.matched_snr_plots import plot_matched_snr
@@ -54,6 +55,7 @@ else:
 ########################################################################################################################
 means = []
 fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short)
+fig1b, axes1b = plt.subplots(2, 1, figsize=single_column_tall)
 xlims = []
 ylims = []
 for i, batch in enumerate([a1, peg]):
@@ -81,6 +83,7 @@ for a in axes1:
     a.set_xlim(min_x, max_x)
     a.set_ylim(min_y, max_y)
 
+scatter_bar([a1, peg], SIG_TEST_MODELS, axes=axes1b)
 
 
 ########################################################################################################################
@@ -156,6 +159,7 @@ date = str(datetime.datetime.now()).split(' ')[0]
 base_path = figures_base_path / date
 figures_to_save = [
     (fig1, 'pareto'),
+    (fig1b, 'scatter_bar'),
     (fig2, 'equivalence'),
     (fig3, 'heldout'),
     (fig4a, 'snr'),

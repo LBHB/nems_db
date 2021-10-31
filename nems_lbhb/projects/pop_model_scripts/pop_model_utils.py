@@ -591,3 +591,18 @@ def get_rceiling_correction(batch):
     rceiling_ratios.loc[rceiling_ratios < 1] = 1
 
     return rceiling_ratios
+
+
+def set_equal_axes(ax, aspect=1):
+    # Set same limits
+    ymin, ymax = ax.get_ylim()
+    xmin, xmax = ax.get_xlim()
+
+    ymin = min(ymin, xmin)
+    ymax = max(ymax, xmax)
+    xmin = ymin
+    xmax = ymax
+
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(xmin, xmax)
+    ax.set_aspect(aspect='equal')
