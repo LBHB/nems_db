@@ -2740,3 +2740,20 @@ def get_significant_cells(batch, models, as_list=False):
         all_significant = all_significant[all_significant].index.values.tolist()
 
     return all_significant
+
+def add_queueinfo_to_results_df(df):
+    machines = []
+    queueidx = []
+    for index, row in df.iterrows():
+        r = nd.pd_query('SELECT * FROM tQueue WHERE note like %s', [row['cellid'] + '/' + str(row['batch']) + '/' + row['modelname']])
+        machines.append(r['machinename'].values[0])
+        queueidx.append(r['id'].values[0])
+    df['machine'] = machines
+    df['queueidx'] = queueidx
+    queuelog = lambda x: f"/auto/data/web/celldb/queue/{str(x)[:-3]}000/{x}.out"
+    df['queuelog'] = df['queueidx'].apply(queuelog)
+
+    return df
+
+# for module_target,module_source in zip(ctx_re['modelspec'],ctxO['modelspec']):
+#     module_target['phi'] = module_source['phi']
