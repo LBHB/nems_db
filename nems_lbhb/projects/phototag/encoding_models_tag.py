@@ -22,6 +22,8 @@ from nems.utils import smooth
 from nems_lbhb import plots as nplt
 from nems.xform_helper import load_model_xform
 from nems_lbhb import baphy_experiment
+import pathlib as pl
+import joblib as jl
 
 # NEMS PSTH pup analysis:
 #  batch 331= CPN
@@ -36,6 +38,8 @@ shortnames = ['ln_pop', 'conv1dx2']
 
 pca_file = '/auto/users/svd/python/scripts/NAT_pop_models/dpc334.csv'
 waveform_labels = pd.read_csv('phototag_waveform_labels.csv', index_col=0)
+# waveform_labels = pd.read_csv(pl.Path('/auto/users/mateo/nems_db/nems_lbhb/projects/phototag/phototag_waveform_labels.csv'), index_col=0)
+
 
 
 runclass = "NAT"
@@ -67,28 +71,39 @@ dm = dpred.groupby(['siteid','phototag']).mean()
 #dmc = dpred.groupby(['siteid','phototag']).count()
 #dm = dm[['diff']].merge(dmc['label'],how='inner',left_index=True, right_index=True)
 
+df_file = pl.Path('/auto/users/mateo/nems_db/nems_lbhb/projects/phototag/rec_df')
+recache_rec = False
+if df_file.exists() and recache_rec == False:
+    print(f'load existing df from {df_file}')
+    dr = jl.load(df_file)
 
-recfile = '/auto/data/nems_db/recordings/334/NAT4_ozgf.fs100.ch18.tgz'
-tctx = {'rec': load_recording(recfile)}
-tctx.update(split_pop_rec_by_mask(**tctx))
-a_chans = dpred.loc[dpred['phototag']=='a','cellid'].to_list()
-s_chans = dpred.loc[dpred['phototag']=='s','cellid'].to_list()
+else:
+    print(f'creating df anew into {df_file}')
+    recfile = '/auto/data/nems_db/recordings/334/NAT4_ozgf.fs100.ch18.tgz'
+    tctx = {'rec': load_recording(recfile)}
+    tctx.update(split_pop_rec_by_mask(**tctx))
+    # a_chans = dpred.loc[dpred['phototag']=='a','cellid'].to_list()
+    # s_chans = dpred.loc[dpred['phototag']=='s','cellid'].to_list()
 
-aresp=tctx['val'].apply_mask()['resp'].extract_channels(a_chans)
-sresp=tctx['val'].apply_mask()['resp'].extract_channels(s_chans)
+    # aresp=tctx['val'].apply_mask()['resp'].extract_channels(a_chans)
+    # sresp=tctx['val'].apply_mask()['resp'].extract_channels(s_chans)
 
-mean_resp = tctx['val'].apply_mask()['resp']._data.mean(axis=1)
-dr = pd.DataFrame({'cellid': tctx['val']['resp'].chans,
-                   'mean_resp': mean_resp})
+    mean_resp = tctx['val'].apply_mask()['resp']._data.mean(axis=1)
+    dr = pd.DataFrame({'cellid': tctx['val']['resp'].chans,
+                       'mean_resp': mean_resp})
+
+    jl.dump(dr, df_file)
+
 dpred = dpred.merge(dr, how='left', left_on='cellid', right_on='cellid')
 
-cmax=mean_resp.max()
-f,ax = plt.subplots(3,1)
-ax[0].imshow(aresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
-ax[1].imshow(sresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
-ax[2].plot(aresp._data.mean(axis=0),label='a')
-ax[2].plot(sresp._data.mean(axis=0),label='s')
-ax[2].legend()
+
+# cmax=mean_resp.max()
+# f,ax = plt.subplots(3,1)
+# ax[0].imshow(aresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
+# ax[1].imshow(sresp._data, aspect='auto',interpolation='none', clim=[0,cmax])
+# ax[2].plot(aresp._data.mean(axis=0),label='a')
+# ax[2].plot(sresp._data.mean(axis=0),label='s')
+# ax[2].legend()
 
 
 from seaborn import scatterplot, barplot, histplot
@@ -128,6 +143,7 @@ plt.setp(ax[5].get_xticklabels(), fontsize='10')
 
 scatterplot(data=_d, x='mean_resp', y=shortnames[1], hue=huefilt, ax=ax[6]);
 plt.setp(ax[6].get_legend().get_texts(), fontsize='10')
+
 scatterplot(data=_d, x='mean_resp', y='diff', hue=huefilt, ax=ax[7])
 plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 
@@ -137,7 +153,54 @@ plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 
 f.suptitle(modelnames[1])
 
-_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','pc1']].mean()
+print(_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','pc1']].mean())
+
+##### Poster ready plot #####
+_d['mean_resp_hz'] = _d['mean_resp'] * 100
+
+from src.root_path import config_path
+from src.visualization.fancy_plots import savefig
+
+plt.style.use(['default', config_path / 'presentation.mplstyle'])
 
 
+fig, axes = plt.subplots(2,1, figsize=(6,9))
 
+modname = shortnames[0]
+
+_ = histplot(data=_d, x=modname,
+             hue='phototag',  hue_order=['s', 'a'], palette=['black', 'C0'],
+             common_norm=False, stat='probability',
+             ax=axes[0])
+axes[0].set_ylabel('proportion')
+axes[0].set_xlabel('LN model\nprediction accuracy')
+axes[0].get_legend().remove()
+
+
+_ = scatterplot(data=_d, x='mean_resp_hz', y=modname,
+                hue='phototag', hue_order=['s', 'a'], palette=['black', 'C0'],
+                ax=axes[1]);
+axes[1].set_xlabel('firing rate (Hz)')
+axes[1].set_ylabel('LN model\nprediction accuracy')
+axes[1].get_legend().remove()
+
+
+title = 'ln no pupil model performance'
+savefig(fig, 'SFN_poster', title, type='png')
+savefig(fig, 'SFN_poster', title, type='svg')
+
+import scipy.stats as sst
+
+x = _d.loc[(_d.phototag == 'a')&(_d.hi_resp), modname]
+y = _d.loc[(_d.phototag == 's')&(_d.hi_resp), modname]
+print(sst.ranksums(x, y))
+
+
+x = _d.loc[(_d.phototag == 'a')&~(_d.hi_resp), modname]
+y = _d.loc[(_d.phototag == 's')&~(_d.hi_resp), modname]
+print(sst.ranksums(x, y))
+
+
+x = _d.loc[(_d.phototag == 'a'), modname]
+y = _d.loc[(_d.phototag == 's'), modname]
+print(sst.ranksums(x, y))
