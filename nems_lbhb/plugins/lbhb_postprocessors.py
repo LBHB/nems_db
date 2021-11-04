@@ -34,7 +34,7 @@ def SPOpf(loadkey):
     xfspec = [['nems.xforms.predict', {'use_mask': False}]]
     #xfspec.append(['nems_lbhb.SPO_helpers.mask_out_Squares', {}]) Not included in val anymore
     xfspec = xfspec + ebc('ebc.rmM')
-    xfspec.append(['nems.xforms.plot_summary', {}])
+    xfspec.append(['nems.xforms.plot_summary', {'time_range':(5, 23.0)}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_all_vals_',{}])
     # xfspec.append(['nems_lbhb.SPO_helpers.plot_linear_and_weighted_psths_model', {}])
 
