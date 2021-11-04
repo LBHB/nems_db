@@ -545,7 +545,7 @@ class BAPHYExperiment:
                         ps[i] = p._modified_copy(np.append(p.as_continuous(), 
                                                 np.ones([pcount, rlen - plen]) * np.nan, axis=1))
                 return ps
-            
+
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             if np.all([type(p_traces[i][0]) is not np.ndarray for i in range(len(p_traces))]):
                 # multiple 'pupil signals'

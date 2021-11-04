@@ -1358,7 +1358,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         if pupil_diameter.shape[0] == 1:
             pupil_diameter = pupil_diameter.T
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
-
+    
     fs_approximate = 30  # approx video framerate
     if pupil_deblink & ~loading_pcs:
         dp = np.abs(np.diff(pupil_diameter, axis=0))
@@ -1375,32 +1375,35 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         onidx, = np.where(np.diff(blink) > 0)
         offidx, = np.where(np.diff(blink) < 0)
 
-        if onidx[0] > offidx[0]:
-            onidx = np.concatenate((np.array([0]), onidx))
-        if len(onidx) > len(offidx):
-            offidx = np.concatenate((offidx, np.array([len(blink)])))
-        deblinked = pupil_diameter.copy()
+        if (len(onidx)==0) and (len(offidx)==0):
+            log.info("WARNING - Tried to deblink but didn't find any blinks. Continue loading pupil trace...")
+        else:
+            if onidx[0] > offidx[0]:
+                onidx = np.concatenate((np.array([0]), onidx))
+            if len(onidx) > len(offidx):
+                offidx = np.concatenate((offidx, np.array([len(blink)])))
+            deblinked = pupil_diameter.copy()
 
-        for i, x1 in enumerate(onidx):
-            x2 = offidx[i]
-            if x2 < x1:
-                log.info([i, x1, x2])
-                log.info("WHAT'S UP??")
-            else:
-                # print([i,x1,x2])
-                deblinked[x1:x2, 0] = np.linspace(
-                        deblinked[x1], deblinked[x2-1], x2-x1
-                        ).squeeze()
+            for i, x1 in enumerate(onidx):
+                x2 = offidx[i]
+                if x2 < x1:
+                    log.info([i, x1, x2])
+                    log.info("WHAT'S UP??")
+                else:
+                    # print([i,x1,x2])
+                    deblinked[x1:x2, 0] = np.linspace(
+                            deblinked[x1], deblinked[x2-1], x2-x1
+                            ).squeeze()
 
-        if verbose:
-            plt.figure()
-            plt.plot(pupil_diameter, label='Raw')
-            plt.plot(deblinked, label='Deblinked')
-            plt.xlabel('Frame')
-            plt.ylabel('Pupil')
-            plt.legend()
-            plt.title("Artifacts detected: {}".format(len(onidx)))
-        pupil_diameter = deblinked
+            if verbose:
+                plt.figure()
+                plt.plot(pupil_diameter, label='Raw')
+                plt.plot(deblinked, label='Deblinked')
+                plt.xlabel('Frame')
+                plt.ylabel('Pupil')
+                plt.legend()
+                plt.title("Artifacts detected: {}".format(len(onidx)))
+            pupil_diameter = deblinked
 
     # resample and remove dropped frames
 
