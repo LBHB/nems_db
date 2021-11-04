@@ -547,7 +547,7 @@ class BAPHYExperiment:
                 return ps
             
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
-            if type(p_traces[0][0]) is not np.ndarray:
+            if np.all([type(p_traces[i][0]) is not np.ndarray for i in range(len(p_traces))]):
                 # multiple 'pupil signals'
                 # one always has to be the pupil trace itself
                 pupil_sigs = [nems.signal.RasterizedSignal(
@@ -572,8 +572,13 @@ class BAPHYExperiment:
                 signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
             else:
+                # at least one of the pupil files doesn't have "extras". Just load pupil
                 pupil_sigs = [nems.signal.RasterizedSignal(
                             fs=kwargs['rasterfs'], data=p[0],
+                            name='pupil', recording=rec_name, chans=['pupil'],
+                            epochs=baphy_events[i]) if type(p[0]) is np.ndarray else 
+                            nems.signal.RasterizedSignal(
+                            fs=kwargs['rasterfs'], data=p[0]['pupil'],
                             name='pupil', recording=rec_name, chans=['pupil'],
                             epochs=baphy_events[i])
                             for (i, p) in enumerate(p_traces)]

@@ -1287,7 +1287,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         # hard code to use minor axis for now
         options['pupil_variable_name'] = options.get('pupil_variable_name', 'minor_axis')
-        log.debug("Using pupil_variable_name: %s", options['pupil_variable_name'])
+        log.info("Using pupil_variable_name: %s", options['pupil_variable_name'])
         log.info("Using CNN results for pupiltrace")
         if options['pupil_variable_name']=='minor_axis':
             pupil_diameter = pupildata['cnn']['a'] * 2
@@ -1341,15 +1341,20 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
         p = matdata['pupil_data']
         params = p['params']
-        if ('pupil_variable_name' not in options) | (options['pupil_variable_name']=='area'):
+        if ('pupil_variable_name' not in options):
             options['pupil_variable_name'] = params[0][0]['default_var'][0][0][0]
             log.debug("Using default pupil_variable_name: %s", options['pupil_variable_name'])
+        elif (options['pupil_variable_name']=='area'):
+            log.info("Ignoring default pupil variable and using pupil area")
         if 'pupil_algorithm' not in options:
             options['pupil_algorithm'] = params[0][0]['default'][0][0][0]
             log.debug("Using default pupil_algorithm: %s", options['pupil_algorithm'])
 
         results = p['results'][0][0][-1][options['pupil_algorithm']]
-        pupil_diameter = np.array(results[0][options['pupil_variable_name']][0][0])
+        if options['pupil_variable_name']=='area':
+            pupil_diameter = np.pi * np.array(results[0]["minor_axis"][0][0]) * np.array(results[0]["major_axis"][0][0]) / 2
+        else:
+            pupil_diameter = np.array(results[0][options['pupil_variable_name']][0][0])
         if pupil_diameter.shape[0] == 1:
             pupil_diameter = pupil_diameter.T
         log.info("pupil_diameter.shape: " + str(pupil_diameter.shape))
