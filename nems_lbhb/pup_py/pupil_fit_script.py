@@ -74,6 +74,7 @@ if __name__ == '__main__':
 
     NORM_FACTORS = get_batch_norm_params(species)
 
+    print(f'loading model from {modelpath}')
     model = keras.models.load_model(modelpath)
 
     path = os.path.split(video_file)[0] 
