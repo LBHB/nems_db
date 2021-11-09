@@ -174,6 +174,15 @@ class OptoIdModel():
         self.artists.extend(axes[1].plot(self.t, off, color='grey'))
         self.artists.append(axes[1].fill_between(self.t, off - off_sem, off + off_sem, alpha=0.3, lw=0, color='grey'))
 
+        # forces y limit each time since the same canvas is being reused
+        lo = 0
+        hi = np.concatenate([on+on_sem, off+off_sem]).max()
+        span = hi - lo
+        lo -= span * 0.05
+        hi += span * 0.05
+        if hi == 0: hi = 1
+        axes[1].set_ylim([lo, hi])
+
         # spike raster / light onset/offset
         st = np.where(raster[self.opto_mask, :])
         x = (st[1] / self.rasterfs) + self.tstart
@@ -190,6 +199,14 @@ class OptoIdModel():
 
         # plots waveform in inset
         self.artists.extend(axes[2].plot(mean_waveform, color='red'))
+
+        # forces y limit each time since the same canvas is being reused
+        lo, hi = mean_waveform.min(), mean_waveform.max()
+        span = hi-lo
+        lo -= span*0.05
+        hi += span*0.05
+        axes[2].set_ylim([lo, hi])
+
         print('done')
 
     def clear_canvas(self):
@@ -210,7 +227,7 @@ class OptoIdCtrl():
             self._model.recordings)  # todo instead of using specific recordigns, full site if possible
 
     def site_load(self):
-        print('loading neurons in site')
+        print('loading neurons in site...')
         self._model.clear_canvas()
         self._view.canvas.draw()
 
