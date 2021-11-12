@@ -408,6 +408,9 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
             #sitelist = d['siteid'].unique()
             modelname_filter = 'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.4x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
             sitelist, _ = nd.get_batch_sites(batch, modelname_filter=modelname_filter)
+
+            #sitelist=sitelist[:4]
+            #log.info('limiting sitelist to 4 entries!!!!!!!!!!!!!!!!!')
         else:
             raise ValueError(f'ALLCELLS not supported for batch {batch}')
     elif ((batch==272) and (siteid=='none')) or (siteid in ['bbl086b','TAR009d','TAR010c','TAR017b']):
@@ -428,8 +431,10 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
     uri_root = '/auto/data/nems_db/recordings/'
     
     recording_uri_list = []
-    log.info("TRUNCATING AT TWELVE RECORDINGS")
-    for s in sitelist[:12]:
+    #max_sites = 2;
+    max_sites = 12
+    log.info(f"TRUNCATING MULTI-FILE DATA AT {max_sites} RECORDINGS")
+    for s in sitelist[:max_sites]:
         recording_uri = generate_recording_uri(batch=batch, cellid=s, stimfmt=stimfmt,
                      rasterfs=rasterfs, chancount=chancount, **options)
         log.info(f'loading {recording_uri}')
