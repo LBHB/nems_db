@@ -99,7 +99,13 @@ def load_trial_starts_openephys(openephys_folder):
     header = data.pop('header')
     df = pd.DataFrame(data)
     ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
-    return ts['timestamps'].values / float(header['sampleRate'])
+    
+    message_file = Path(openephys_folder) / 'messages.events'
+    event_data = pd.read_csv(message_file, sep=" ", header=None, names=['a','b','c'], index_col=None)
+    start_timestamp=event_data.index[0]
+    
+    # SVD subtract first event. Is this always the start of recording??
+    return (ts['timestamps'].values-start_timestamp) / float(header['sampleRate'])
 
 
 def load_continuous_openephys(fh):

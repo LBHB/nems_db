@@ -221,7 +221,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def openephys_folder(self):
         path = self.folder / 'raw' / self.experiment
-        candidates = list(path.glob(self.experiment_with_runclass + '*'))
+        candidates = list(path.glob(self.experiment_with_runclass[0].as_posix() + '*'))
         if len(candidates) > 1:
             raise ValueError('More than one candidate found')
         if len(candidates) == 0:
@@ -302,7 +302,7 @@ class BAPHYExperiment:
             return [io.baphy_align_time_baphyparm(ev) for ev in baphy_events]
         if correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
-            return io.baphy_align_time_openephys(baphy_events, trial_starts, **kw)
+            return [io.baphy_align_time_openephys(ev, trial_starts, **kw) for ev in baphy_events]
         if correction_method == 'spikes':
             spikedata = self._get_spikes()
             exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], kw['rasterfs'])[0] for (ev, spd)
