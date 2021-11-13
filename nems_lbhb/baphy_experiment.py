@@ -490,7 +490,7 @@ class BAPHYExperiment:
                 if (s_goodtrials is not None) and (len(s_goodtrials)>0):
                     log.info("goodtrials not empty: %s", s_goodtrials)
                     s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
-                    g = s_goodtrials.split(" ")
+                    g = re.split('" "|,',s_goodtrials)  #Split by space or by comma
                     _goodtrials = np.zeros(trialcount, dtype=bool)
 
                     for b in g:
@@ -650,12 +650,14 @@ class BAPHYExperiment:
         idx = all_chans[chans].tolist()
         selected_data = np.take(data_files, idx)
         continuous_data = []
+        timestamp0 = []
         for filename in selected_data:
             full_filename = self.openephys_folder / filename
             if os.path.isfile(full_filename):
                 log.info('%s already extracted, load faster...', filename)
                 data = io.load_continuous_openephys(str(full_filename))
                 continuous_data.append(data['data'][np.newaxis, :])
+                timestamp0.append(data['timestamps'][0])
             else:
                 with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
                     log.info("Extracting / loading %s...", filename)
@@ -663,10 +665,11 @@ class BAPHYExperiment:
                     with tar_fh.extractfile(str(full_filename)) as fh:
                         data = io.load_continuous_openephys(fh)
                         continuous_data.append(data['data'][np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0])
 
         continuous_data = np.concatenate(continuous_data, axis=0)
 
-        return continuous_data         
+        return continuous_data, timestamp0
 
     def get_spike_data(self, exptevents, **kw):
         #for i, f in enumerate(self.parmfile):
