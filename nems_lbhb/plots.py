@@ -625,10 +625,12 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
 
     plt.axis('off')
 
-def plot_waveforms_64D(waveforms, cellids, ax=None):
-    if type(cellids) is not np.ndarray:
+def plot_waveforms_64D(waveforms, cellids=None, chans=None, norm=True, ax=None):
+    if (cellids is None) and (chans is None):
+        raise ValueError('cellids OR chans required')
+    if (cellids is not None) and (type(cellids) is not np.ndarray):
         cellids = np.array(cellids)
-
+    
     # Make a vector for each column of electrodes
 
     # left column + right column are identical
@@ -648,8 +650,10 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
         f, ax = plt.subplots(1, 1, figsize=(2, 6))
     
     #plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
-
-    electrodes = [int(x.split('-')[1]) for x in cellids]
+    if chans is not None:
+        electrodes = [int(c) for c in chans]
+    else:
+        electrodes = [int(x.split('-')[1]) for x in cellids]
 
     # for duplicate (multiple spikes on one electrode), plot all waveforms, just in different
     # colors    
@@ -671,7 +675,10 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
         for j, cidx in enumerate(cidxs):
             cidx = cidx.squeeze()
             mwf = waveforms[cidx, :]
-            mwf /= np.abs(np.max(np.abs(mwf))) 
+            if norm:
+                mwf /= np.abs(np.max(np.abs(mwf))) 
+            else:
+                mwf /= np.abs(np.max(np.abs(waveforms))) 
             mwf *= 0.1
             ax.plot(t, mwf + y, color=colors[j], lw=1)
     
