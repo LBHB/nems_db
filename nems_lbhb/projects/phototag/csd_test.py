@@ -8,9 +8,14 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.baphy_io import load_continuous_openephys
 from nems_lbhb.plots import plot_waveforms_64D
 
-parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a16_p_BNB.m"
-#parmfile = "/auto/data/daq/Teonancatl/TNC020/TNC020a11_p_BNB.m"
+#parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a16_p_BNB.m"
+parmfile = "/auto/data/daq/Teonancatl/TNC020/TNC020a11_p_BNB.m"
 #parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a03_p_BNB.m"
+
+expt_name = "TNC020a11_p_BNB"
+expt_name = "TNC017a10_p_BNB"
+dparm = db.pd_query(f"SELECT * FROM gDataRaw where parmfile like '{expt_name}%'")
+parmfile = dparm.resppath[0] + dparm.parmfile[0]
 
 
 ## load the recording
