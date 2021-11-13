@@ -51,7 +51,7 @@ spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
 # =================================================================
 
-def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
+def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=None, baphy_legacy_format=False):
     '''
     Parameters
     ----------
@@ -65,13 +65,16 @@ def baphy_align_time_openephys(events, timestamps, baphy_legacy_format=False):
         times file. This results in the first trial having a start timestamp of
         0.
     '''
+    if rasterfs is not None:
+        timestamps = np.round(timestamps*rasterfs)/rasterfs
+        
     n_baphy = events['Trial'].max()
     n_oe = len(timestamps)
     if n_baphy != n_oe:
         mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
                 'OpenEphys ({n_oe}) do not match'
         raise ValueError(mesg)
-
+    
     if baphy_legacy_format:
         timestamps = timestamps - timestamps[0]
 
@@ -101,6 +104,20 @@ def load_trial_starts_openephys(openephys_folder):
     ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
     
     return (ts['timestamps'].values) / float(header['sampleRate'])
+
+
+def load_sampling_rate_openephys(openephys_folder):
+    '''
+    Load sampling rate (samples/sec) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = Path(openephys_folder) / 'all_channels.events'
+    data = oe.load(str(event_file))
+    return int(data['header']['sampleRate'])
 
 
 def load_continuous_openephys(fh):

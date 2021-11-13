@@ -28,11 +28,11 @@ import joblib as jl
 # NEMS PSTH pup analysis:
 #  batch 331= CPN
 
-batch = 334
+batch = 322
 cellid = "DRX006b-128-2"
 modelnames = [
-    "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-    "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+    "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.ver2",
+    "ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.ver2"
     ]
 shortnames = ['ln_pop', 'conv1dx2']
 
@@ -153,15 +153,15 @@ plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 
 f.suptitle(modelnames[1])
 
-print(_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','pc1']].mean())
+print(_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','diff','pc1']].mean())
 
 ##### Poster ready plot #####
 _d['mean_resp_hz'] = _d['mean_resp'] * 100
 
-from src.root_path import config_path
-from src.visualization.fancy_plots import savefig
+#from src.root_path import config_path
+#from src.visualization.fancy_plots import savefig
 
-plt.style.use(['default', config_path / 'presentation.mplstyle'])
+#plt.style.use(['default', config_path / 'presentation.mplstyle'])
 
 
 fig, axes = plt.subplots(2,1, figsize=(6,9))
@@ -185,9 +185,10 @@ axes[1].set_ylabel('LN model\nprediction accuracy')
 axes[1].get_legend().remove()
 
 
+#from matplotlib.pyplot import savefig
 title = 'ln no pupil model performance'
-savefig(fig, 'SFN_poster', title, type='png')
-savefig(fig, 'SFN_poster', title, type='svg')
+#savefig(fig, 'SFN_poster', title, type='png')
+#savefig(fig, 'SFN_poster', title, type='svg')
 
 import scipy.stats as sst
 
