@@ -842,7 +842,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, reduce_mask=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, pupsort=False, reduce_mask=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -913,6 +913,58 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         prebins = int(pre*r['resp'].fs)
         postbins = int(post*r['resp'].fs)
         durbins = rmag.shape[-1]-prebins-postbins
+        rridx = (idx[1] < prebins) | (idx[1] >= (prebins+durbins))
+        epoch_idx = idx[0][~rridx]
+        bin_idx = idx[1][~rridx]
+
+        # extract corresponding epoch / bin number
+        keep_epochs = np.array(epoch_names)[epoch_idx][:ev_bins]
+        keep_bins = np.array(bin_idx)[:ev_bins]
+
+        # for each epoch / bin, make a pupil mask
+        mask_bins=[]
+        for i, (e, b) in enumerate(zip(keep_epochs, keep_bins)):
+            e = str(e)
+            mask_bins.append((e, b))
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            eindices = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            p = np.squeeze(p.mean(axis=2))
+
+            _m_lg = np.zeros(r['pupil'].shape)
+            _m_sm = np.zeros(r['pupil'].shape)
+            for j, ei in enumerate(eindices):
+                if p[j] < np.median(p):
+                    _m_sm[0, ei[0] + b] = 1
+                else:
+                    _m_lg[0, ei[0] + b] = 1
+
+            r['mask_'+e+':'+str(b)+'_sm'] = r['mask']._modified_copy((r['mask']._data * _m_sm).astype(bool))
+            r['mask_'+e+':'+str(b)+'_lg'] = r['mask']._modified_copy((r['mask']._data * _m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
+        r.meta['mask_bins'] = mask_bins
+
+    if (ev_bins>=1) & (pupsort):
+        log.info(f"Sorting epochs by normalized pupil size")
+        # sort epoch / bin combinations by the range of normalized pupil range that they span
+        # crh 14.11.2021
+        epoch_names = epoch_names_matching(r.apply_mask(reset_epochs=True)['resp'].epochs, '^STIM_')
+
+        # for each epoch / bin, get the size of the response
+        pup = r['pupil_raw'].extract_epochs(epoch_names, mask=r['mask'])
+        pmax = r['pupil_raw']._data.max()
+        pup = {k: p / pmax for k, p in pup.items()}
+
+        # sort by how close the mean is to 0.5
+        pmdiff = np.array([np.abs(pup[e].mean(axis=(0,1)) - 0.5) for e in epoch_names])
+        
+        # sort diffs from smallest to greatest
+        idx = np.unravel_index(np.argsort(pmdiff.ravel()), pmdiff.shape)
+
+        # remove any spont bins
+        pre,post = getPrePostSilence(r['resp'])
+        prebins = int(pre*r['resp'].fs)
+        postbins = int(post*r['resp'].fs)
+        durbins = pmdiff.shape[-1]-prebins-postbins
         rridx = (idx[1] < prebins) | (idx[1] >= (prebins+durbins))
         epoch_idx = idx[0][~rridx]
         bin_idx = idx[1][~rridx]
