@@ -56,7 +56,7 @@ def write_batch_file(job_arguments,
         f.write('#!/bin/bash\n')
         f.write(f'#SBATCH --account=lbhb\n')
         f.write(f'#SBATCH --time={time_hours:02d}:{time_mins:02d}:00\n')
-        f.write(f'#SBATCH --cpus-per-task=1')
+        f.write(f'#SBATCH --cpus-per-task=1\n')
         f.write(f'#SBATCH --mem=4G\n')
         f.write(f'#SBATCH --job-name={job_name}\n')
         f.write(f'#SBATCH --comment="{job_comment}"\n')
