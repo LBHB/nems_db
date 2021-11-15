@@ -390,7 +390,7 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
     sitelist=[]
     if siteid == 'ALLCELLS':
         if (batch in [322]):
-            subsetstr = ["NAT4", "NAT3", "NAT1"]
+            subsetstr = ["NAT4v2", "NAT3", "NAT1"]
         elif (batch in [323]):
             subsetstr = ["NAT4"]
         elif (batch in [333]):

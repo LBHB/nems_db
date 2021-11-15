@@ -504,9 +504,17 @@ class BAPHYExperiment:
     
         # get good/bad trials, if database
         goodtrials = [None] * len(self.parmfile)
-
-        d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
-                                   rawid=self.rawid)
+        
+        # slightly convoluted steps to prevent warning
+        try:
+            batch=int(self.batch)
+        except:
+            batch=0
+        if batch>0:
+            d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
+                                       rawid=self.rawid)
+        else:
+            d=[]
         if len(d) > 0:
             for i, parm in enumerate(self.parmfile):
                 trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
