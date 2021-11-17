@@ -84,6 +84,8 @@ def prefit(kw):
         kwargs['use_full_model'] = True
         kwargs['prefit_type'] = 'heldout_ten'
     
+    elif 'init' in ops:
+        kwargs['prefit_type'] = 'init'
     elif 'm' in ops:
         kwargs['prefit_type'] = 'matched'
     elif 'h' in ops:

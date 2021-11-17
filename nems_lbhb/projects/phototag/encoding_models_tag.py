@@ -36,7 +36,7 @@ modelnames = [
     ]
 shortnames = ['ln_pop', 'conv1dx2']
 
-pca_file = '/auto/users/svd/python/scripts/NAT_pop_models/dpc334.csv'
+pca_file = '/auto/users/svd/python/scripts/NAT_pop_models/dpc322.csv'
 waveform_labels = pd.read_csv('phototag_waveform_labels.csv', index_col=0)
 # waveform_labels = pd.read_csv(pl.Path('/auto/users/mateo/nems_db/nems_lbhb/projects/phototag/phototag_waveform_labels.csv'), index_col=0)
 
@@ -64,6 +64,7 @@ dpred=dpred.merge(waveform_labels[['cellid','wshape']],how='left',left_index=Tru
 dpred['pw'] = dpred['phototag']+" "+dpred['wshape']
 
 dpc = pd.read_csv(pca_file, index_col=0)
+dpc = dpc.loc[dpc['type']=='avg']
 dpred = dpred.merge(dpc[['cellid','pc1','pc2','pc3','pc4','pc5']],
                     how='inner', left_index=True, right_on='cellid')
 
@@ -154,6 +155,7 @@ plt.setp(ax[7].get_legend().get_texts(), fontsize='10')
 f.suptitle(modelnames[1])
 
 print(_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','diff','pc1']].mean())
+print(_d.groupby(['hi_resp','phototag'])[['ln_pop','conv1dx2','diff','pc1']].count())
 
 ##### Poster ready plot #####
 _d['mean_resp_hz'] = _d['mean_resp'] * 100

@@ -52,6 +52,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         raise ValueError(f"modelspec has not weight_channels layer to align")
 
     copy_layers = xi[-1]
+    freeze_layer_count = xi[-1]
     batch = int(meta['batch'])
     modelname_parts = meta['modelname'].split("_")
     
@@ -71,6 +72,28 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
         
         return new_ctx
+
+    elif prefit_type == 'init':
+        # use full pop file - SVD work in progress. current best?
+        load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
+        fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+
+        pre_part = load_string_pop
+        post_part = "-".join(modelname_parts[2].split("-")[1:-1])
+
+        model_search = "_".join([pre_part, modelname_parts[1], post_part])
+
+        if pre_batch is None:
+            pre_batch = batch
+        if pre_batch in [322, 334]:
+            pre_cellid = 'ARM029a-07-6'
+        elif pre_batch == 323:
+            pre_cellid = 'ARM017a-01-9'
+        else:
+            raise ValueError(f"batch {pre_batch} prefit not implemented yet.")
+
+        log.info(f"prefit cellid={pre_cellid}, skipping init_fit")
+        copy_layers = len(modelspec)
 
     elif use_full_model:
         
@@ -232,8 +255,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
     if freeze_early:
-        new_ctx['freeze_layers'] = list(np.arange(copy_layers))
-    
+        new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
+    if prefit_type == 'init':
+        new_ctx['skip_init'] = True
     return new_ctx
 
 
