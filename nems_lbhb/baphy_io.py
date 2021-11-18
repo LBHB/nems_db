@@ -277,7 +277,10 @@ def baphy_mat2py(s):
     s7 = re.sub(r',Hz', r'Hz', s7)
     s7 = re.sub(r'NaN', r'np.nan', s7)
     s7 = re.sub(r'zeros\(([0-9,]+)\)', r'np.zeros([\g<1>])', s7)
-    s7 = re.sub(r'{(.*)}', r'[\g<1>]', s7)
+    if s7.count('{') == s7.count('}'):
+        s7 = re.sub(r'{(.*?)}', r'[\g<1>]', s7) # Replace {*} by [*]. (.*?) because that finds shortest matches possible.
+    else:
+        raise RuntimeError('matlab->python string conversion failed because there were an unequal number of { and }')
 
     s8 = re.sub(r" , REF-[0-9]+", r" , Reference", s7)
     s8 = re.sub(r" , TARG-[0-9]+", r" , Reference", s8)
@@ -328,7 +331,7 @@ def baphy_parm_read(filepath, evpread=True):
             exec(sout)
         except NameError:
             log.info("NameError on: {0}".format(sout))
-        except:
+        except Exception as e:
             log.info("Other error on: {0} to {1}".format(ts,sout))
 
     # special conversions
