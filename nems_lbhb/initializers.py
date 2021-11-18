@@ -23,6 +23,7 @@ from nems.preprocessing import resp_to_pc
 from nems.initializers import load_phi
 import nems.db as nd
 from nems_lbhb.xform_wrappers import _matching_cells
+from nems import xform_helper, xforms
 from nems.uri import save_resource
 from nems.utils import get_default_savepath
 
@@ -250,10 +251,18 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     #log.info(sql)
     
     d = nd.pd_query(sql)
-    old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
+    #old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
+    old_uri = adjust_uri_prefix(d['modelpath'][0])
     log.info(f"Importing parameters from {old_uri}")
 
-    new_ctx = load_phi(modelspec, prefit_uri=old_uri, copy_layers=copy_layers)
+    mspaths = [f"{d['modelpath'][0]}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
+    print(mspaths)
+    prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
+
+    #_, prefit_ctx = xform_helper.load_model_xform(
+    #    cellid=pre_cellid, batch=pre_batch,
+    #    modelname=d['modelname'][0], eval_model=False)
+    new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
     if prefit_type == 'init':
