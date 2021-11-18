@@ -321,7 +321,7 @@ class BAPHYExperiment:
                     for ev, ts, rfs in zip(baphy_events,trial_starts, raw_rasterfs)]
         elif correction_method == 'spikes':
             spikedata = self._get_spikes()
-            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], kw['rasterfs'])[0] for (ev, spd)
+            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], rasterfs)[0] for (ev, spd)
                                 in zip(baphy_events, spikedata)]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
