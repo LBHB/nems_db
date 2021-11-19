@@ -80,7 +80,10 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
         pre_part = load_string_pop
-        post_part = "-".join(modelname_parts[2].split("-")[1:-1])
+        if len(modelname_parts[2].split("-")) > 2:
+            post_part = "-".join(modelname_parts[2].split("-")[1:-1])
+        else:
+            post_part = "-".join(modelname_parts[2].split("-")[1:])
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
 
