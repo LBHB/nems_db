@@ -4,6 +4,7 @@ import requests
 import datetime
 import numpy as np
 import pandas as pd
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as st
@@ -13,12 +14,8 @@ import nems.db as nd
 import nems.xform_helper as xhelp
 
 from pop_model_utils import get_significant_cells, SIG_TEST_MODELS, \
-    ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, shortnames
+    ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, shortnames, base_path
 
-import matplotlib as mpl
-params = {'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
 
 def plot_conv_scatters(batch):
     significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
@@ -37,7 +34,7 @@ def plot_conv_scatters(batch):
     group2 = (ceiling_scores.loc[sig,ALL_FAMILY_MODELS[3]].values, ceiling_scores.loc[sig,ALL_FAMILY_MODELS[4]].values)
 
     scatter_groups([group1, group2], ['lightgray', 'black'], ax=ax[0])
-    ax[0].set_title('batch %d, %s, LN vs conv1dx2+d' % (batch, PLOT_STAT))
+    ax[0].set_title('batch %d, %s, LN vs DNN-single' % (batch, PLOT_STAT))
     ax[0].set_xlabel(f'LN pred. corr. ({ceiling_scores[ALL_FAMILY_MODELS[3]].mean():.3f})', color='orange')
     ax[0].set_ylabel(f'DNN single pred. corr. ({ceiling_scores[ALL_FAMILY_MODELS[4]].mean():.3f})', color='lightgreen')
 
@@ -112,10 +109,6 @@ peg = 323
 f1=plot_conv_scatters(322)
 f2=plot_conv_scatters(323)
 f3=scatter_titan(322)
-
-figures_base_path = Path('/auto/users/svd/docs/current/uo_seminar/eps/')
-date = str(datetime.datetime.now()).split(' ')[0]
-base_path = figures_base_path / date
 
 f1.savefig(base_path / 'A1_pred_scatter.pdf')
 f2.savefig(base_path / 'PEG_pred_scatter.pdf')

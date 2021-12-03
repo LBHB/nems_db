@@ -2,6 +2,21 @@ import logging
 
 import pandas as pd
 import numpy as np
+import getpass
+from pathlib import Path
+import datetime
+import os
+import matplotlib as mpl
+params = {'axes.spines.right': False,
+          'axes.spines.top': False,
+          'legend.fontsize': 12,
+          'axes.labelsize': 12,
+          'axes.titlesize': 12,
+          'xtick.labelsize': 12,
+          'ytick.labelsize': 12,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+mpl.rcParams.update(params)
 
 import nems
 import nems.epoch as ep
@@ -9,6 +24,21 @@ import nems.db as nd
 import nems_lbhb.xform_wrappers as xwrap
 
 log = logging.getLogger(__name__)
+
+# set to True to include expanded A1 set
+VERSION2_FLAG = True
+
+linux_user = getpass.getuser()
+
+if linux_user=='svd':
+    figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
+else:
+    figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
+date = str(datetime.datetime.now()).split(' ')[0]
+base_path = figures_base_path / date
+if not base_path.is_dir():
+    base_path.mkdir(parents=True, exist_ok=True)
+
 # old_fit_string = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
 # fit_string = "prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.et4"
 # #load_string = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
@@ -74,12 +104,6 @@ EQUIVALENCE_MODELS_POP = [
     f"{load_string_pop}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}",  # LN_pop
 ]
 
-HELDOUT = [m.replace("prefit.f", "prefit.hs") for m in SIG_TEST_MODELS[:-1]]  # leave out dnn, which is last
-dnn_single_held = SIG_TEST_MODELS[-1].replace('prefit.m', 'prefit.h')
-HELDOUT.append(dnn_single_held)
-MATCHED = [m.replace("prefit.f", "prefit.hm") for m in SIG_TEST_MODELS[:-1]]
-dnn_single_matched = SIG_TEST_MODELS[-1]
-MATCHED.append(dnn_single_matched)
 
 
 # TODO: make sure these match
@@ -88,6 +112,38 @@ MATCHED.append(dnn_single_matched)
 #         f"{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_prefit.h-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
 #         f"{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
 # ]
+
+DNN_SINGLE_MODELS = ['ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x2.g-fir.1x25x2-relu.2.f-wc.2x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x3.g-fir.1x25x3-relu.3.f-wc.3x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x9.g-fir.1x25x9-relu.9.f-wc.9x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x15.g-fir.1x25x15-relu.15.f-wc.15x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
+    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x18.g-fir.1x25x18-relu.18.f-wc.18x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
+                    ]
+DNN_SINGLE_STAGE2 = [m.replace("tfinit.n.lr1e3.et3.rb10.es20","prefit.m-tfinit.n.lr1e3.et3.es20") for m in DNN_SINGLE_MODELS]
+
+LN_SINGLE_MODELS = [f"{load_string_single}_wc.18x{rank}.g-fir.{rank}x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+                    for rank in range(1,13)]
+
+STP_SINGLE_MODELS =[
+    f"{load_string_single}_wc.18x1.g-stp.1.q.s-fir.1x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+    f"{load_string_single}_wc.18x2.g-stp.2.q.s-fir.2x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+    f"{load_string_single}_wc.18x3.g-stp.3.q.s-fir.3x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+    f"{load_string_single}_wc.18x4.g-stp.4.q.s-fir.4x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+    f"{load_string_single}_wc.18x5.g-stp.5.q.s-fir.5x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+]
+
+HELDOUT_pop = [m.replace("loadpop","loadpop.hs") for m in POP_MODELS]
+MATCHED_pop = [m.replace("loadpop","loadpop.hm") for m in POP_MODELS]
+
+HELDOUT = [m.replace("prefit.f","prefit.hs") for m in SIG_TEST_MODELS]
+HELDOUT[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.h-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+
+MATCHED = [m.replace("prefit.f","prefit.hm") for m in SIG_TEST_MODELS]
+MATCHED[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+
 
 
 fit_string2 = "tfinit.n.lr1e3.et3.rb10.es20.v-newtf.n.lr1e4.es20.v"
@@ -140,19 +196,45 @@ DOT_MARKERS = {#'conv1dx2': '^',
 #         f"{load_string}-mc.{c}_wc.18x30.g-fir.1x15x30-relu.30.f-wc.30x60-fir.1x10x60-relu.60.f-wc.60x80-relu.80-wc.80xR-lvl.R-dexp.R_{fit_string}", # c1dx2+d
 #     ])
 
-NAT4_A1_SITES = [
- 'ARM029a', 'ARM030a', 'ARM031a',
- 'ARM032a', 'ARM033a',
- 'CRD016d', 'CRD017c',
- 'DRX006b.e1:64', 'DRX006b.e65:128',
- 'DRX007a.e1:64', 'DRX007a.e65:128',
- 'DRX008b.e1:64', 'DRX008b.e65:128',
-]
+if VERSION2_FLAG:
+    NAT4_A1_SITES, _ = nd.get_batch_sites(322, POP_MODELS[2])
+else:
+    NAT4_A1_SITES = [
+     'ARM029a', 'ARM030a', 'ARM031a',
+     'ARM032a', 'ARM033a',
+     'CRD016d', 'CRD017c',
+     'DRX006b.e1:64', 'DRX006b.e65:128',
+     'DRX007a.e1:64', 'DRX007a.e65:128',
+     'DRX008b.e1:64', 'DRX008b.e65:128',
+    ]
 
 NAT4_PEG_SITES = [
     'ARM017a', 'ARM018a', 'ARM019a', 'ARM021b', 'ARM022b', 'ARM023a',
     'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b'
     ]
+
+####
+# A1 expanded dataset (v2)
+####
+
+if VERSION2_FLAG:
+    NAT4_A1_SITES, rep_cellids = nd.get_batch_sites(322, POP_MODELS[2])
+
+    # dnn single models are the same so don't tack ".ver2" onto the last model in the list
+    POP_MODELS = [m+'.ver2' for m in POP_MODELS[:-1]] + [POP_MODELS[-1]]
+    SIG_TEST_MODELS = [m+'.ver2' for m in SIG_TEST_MODELS[:-1]] + [SIG_TEST_MODELS[-1]]
+    ALL_FAMILY_POP = [m+'.ver2' for m in ALL_FAMILY_POP[:-1]] + [ALL_FAMILY_POP[-1]]
+    ALL_FAMILY_MODELS = [m+'.ver2' for m in ALL_FAMILY_MODELS[:-1]] + [ALL_FAMILY_MODELS[-1]]
+
+    EQUIVALENCE_MODELS_POP = [m+'.ver2' for m in EQUIVALENCE_MODELS_POP]
+    EQUIVALENCE_MODELS_SINGLE = [m+'.ver2' for m in EQUIVALENCE_MODELS_SINGLE]
+
+    # dnn single models are the same
+    HELDOUT = [m+'.ver2' for m in HELDOUT[:-1]] + [HELDOUT[-1]]
+    MATCHED = [m+'.ver2' for m in MATCHED[:-1]] + [MATCHED[-1]]
+    HELDOUT_pop = [m+'.ver2' for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
+    MATCHED_pop = [m+'.ver2' for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
+
 
 # Build modelnames
 MODELGROUPS = {}

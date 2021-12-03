@@ -1,7 +1,6 @@
 from pathlib import Path
 import datetime
 import os
-import getpass
 
 import numpy as np
 import matplotlib as mpl
@@ -22,7 +21,7 @@ from nems.utils import ax_remove_box
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE,
                              EQUIVALENCE_MODELS_POP, SIG_TEST_MODELS, get_significant_cells, snr_by_batch,
-                             NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS)
+                             NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path, linux_user)
 
 from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pareto
 from nems_lbhb.projects.pop_model_scripts.summary_plots import scatter_bar
@@ -31,7 +30,6 @@ from nems_lbhb.projects.pop_model_scripts.heldout_plots import generate_heldout_
 from nems_lbhb.projects.pop_model_scripts.matched_snr_plots import plot_matched_snr
 from nems_lbhb.projects.pop_model_scripts.partial_est_plot import partial_est_plot
 
-linux_user = getpass.getuser()
 
 a1 = 322
 peg = 323
@@ -151,12 +149,7 @@ fig5 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=column_and_half
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
 ########################################################################################################################
-if linux_user=='svd':
-    figures_base_path = Path('/auto/users/svd/docs/current/uo_seminar/eps/')
-else:
-    figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
-date = str(datetime.datetime.now()).split(' ')[0]
-base_path = figures_base_path / date
+
 figures_to_save = [
     (fig1, 'pareto'),
     (fig1b, 'scatter_bar'),
@@ -167,8 +160,6 @@ figures_to_save = [
     (fig5, 'data_subsets') # TODO
 ]
 
-if not base_path.is_dir():
-    base_path.mkdir(parents=True, exist_ok=True)
 pdf = PdfPages(base_path / 'all_figs.pdf')
 for fig, name in figures_to_save:
     full_path = (base_path / name).with_suffix('.pdf')
