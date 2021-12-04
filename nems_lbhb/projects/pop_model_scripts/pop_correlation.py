@@ -62,7 +62,8 @@ def generate_psth_correlations_pop(batch, modelnames, save_path=None, load_path=
 
 
 # Use this for second stage of fit (single cell)
-def generate_psth_correlations_single(batch, modelnames, save_path=None, load_path=None, test_limit=None, force_rerun=False):
+def generate_psth_correlations_single(batch, modelnames, save_path=None, load_path=None, test_limit=None, force_rerun=False,
+                                      skip_new_cells=True):
     if load_path is not None:
         corrs = pd.read_pickle(load_path)
         cellids = corrs.index.values.tolist()
@@ -79,6 +80,10 @@ def generate_psth_correlations_single(batch, modelnames, save_path=None, load_pa
     for cellid in significant_cells[:test_limit]:
         if (cellid in cellids) and (not force_rerun):
             #print(f'skipping cellid: {cellid}')
+            continue
+        if skip_new_cells:
+            # Don't stop to add new correlations for cells that weren't included in
+            # a previous analysis (like if new recordings have been done for the same batch).
             continue
 
         # Load and evaluate each model, pull out validation pred signal for each one.
@@ -104,15 +109,15 @@ def generate_psth_correlations_single(batch, modelnames, save_path=None, load_pa
 
 def get_significance_scores(correlations):
     # Run wilcoxon test on each pair of correlations, return p-values and t-scores
-    t1, p1 = st.wilcoxon(correlations['c2d_c1d'], correlations['c2d_LN'], alternative='two-sided')
+    #t1, p1 = st.wilcoxon(correlations['c2d_c1d'], correlations['c2d_LN'], alternative='two-sided')
     t2, p2 = st.wilcoxon(correlations['c2d_c1d'], correlations['c1d_LN'], alternative='two-sided')
-    t3, p3 = st.wilcoxon(correlations['c2d_LN'], correlations['c1d_LN'], alternative='two-sided')
+    #t3, p3 = st.wilcoxon(correlations['c2d_LN'], correlations['c1d_LN'], alternative='two-sided')
 
-    return [p1, p2, p3], [t1, t2, t3]
+    return [p2], [t2]
 
 
 def correlation_histogram(batch, batch_name, save_path=None, load_path=None, test_limit=None, force_rerun=False,
-                          use_pop_models=False, ax=None):
+                          use_pop_models=False, ax=None, skip_new_cells=True, do_scatter=False):
     # Load correlations and significance tests
     if use_pop_models:
         correlations = generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=save_path,
@@ -120,7 +125,14 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     else:
         correlations = generate_psth_correlations_single(batch, EQUIVALENCE_MODELS_SINGLE, save_path=save_path,
                                                          load_path=load_path, test_limit=test_limit,
-                                                         force_rerun=force_rerun)
+                                                         force_rerun=force_rerun, skip_new_cells=skip_new_cells)
+
+    # TODO: if this analysis is redone, should edit the above functions to just remove
+    #       this comparison altogether.
+    #       Alternatively, talked about doing *all* comparisons and then adding a separate
+    #       triangular heatmap to represent them.
+    correlations = correlations.drop('c2d_LN', axis=1)
+
     p_values, t_scores = get_significance_scores(correlations)
 
     # Plot all distributions of correlations on common bins
@@ -129,15 +141,24 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     else:
         plt.sca(ax)
     bins = np.histogram(np.hstack([c.values for _, c in correlations.items()]), bins=20)[1]
-    for l, c in correlations.items():
-        # One histogram for each column in correlations, each column is correlation between one pair of models
-        # l, c  is column name, column values
-        ax.hist(c, bins=bins, label=l, alpha=0.5)
-        ax.axvline(np.median(c), color='black', linestyle='dashed')
+
+    if do_scatter:
+        ax.scatter(correlations['c2d_c1d'], correlations['c1d_LN'], c='black', s=2)
+        ax.plot([[0,0], [1,1]], c='black', linestyle='dashed', linewidth=1)
+        ax.set_xlabel('R(conv1Dx2, conv2D)')
+        ax.set_ylabel('R(conv1Dx2, LN_pop')
+        ax.set_ylim(0,1)
+        ax.set_xlim(0,1)
+    else:
+        for l, c in correlations.items():
+                # One histogram for each column in correlations, each column is correlation between one pair of models
+                # l, c  is column name, column values
+                ax.hist(c, bins=bins, label=l, alpha=0.5)
+                ax.axvline(np.median(c), color='black', linestyle='dashed')
+        plt.xlabel('Pearson Correlation between PSTHs')
+        plt.ylabel('Count')
 
     plt.title('%s' % batch_name)
-    plt.xlabel('Pearson Correlation between PSTHs')
-    plt.ylabel('Count')
     plt.legend()
     plt.tight_layout()
 
@@ -177,8 +198,10 @@ if __name__ == '__main__':
     # peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=None, test_limit=None, load_path=peg_corr_path, force_rerun=True)
 
     # To run plot when everything is done
-    a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False)
-    peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False)
+    a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
+                                                skip_new_cells=True, do_scatter=False)
+    peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
+                                                   skip_new_cells=True, do_scatter=False)
 
     print("A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
     print("PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))

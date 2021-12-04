@@ -19,9 +19,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from nems.utils import ax_remove_box
 
-from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE,
-                             EQUIVALENCE_MODELS_POP, SIG_TEST_MODELS, get_significant_cells, snr_by_batch,
-                             NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path, linux_user)
+from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
+    MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP, SIG_TEST_MODELS,
+    get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
+    linux_user, ALL_FAMILY_MODELS
+)
 
 from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pareto
 from nems_lbhb.projects.pop_model_scripts.summary_plots import scatter_bar
@@ -81,7 +83,7 @@ for a in axes1:
     a.set_xlim(min_x, max_x)
     a.set_ylim(min_y, max_y)
 
-scatter_bar([a1, peg], SIG_TEST_MODELS, axes=axes1b)
+scatter_bar([a1, peg], ALL_FAMILY_MODELS, axes=axes1b)
 
 
 ########################################################################################################################
