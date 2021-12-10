@@ -26,7 +26,7 @@ import nems_lbhb.xform_wrappers as xwrap
 log = logging.getLogger(__name__)
 
 # set to True to include expanded A1 set
-VERSION2_FLAG = True
+VERSION2_FLAG = False
 
 linux_user = getpass.getuser()
 
@@ -235,6 +235,12 @@ if VERSION2_FLAG:
     HELDOUT_pop = [m+'.ver2' for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
     MATCHED_pop = [m+'.ver2' for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
 
+    fit_string_pop += '.ver2'
+    fit_string_single += '.ver2'
+    #fit_string_nopre += '.ver2'
+    vsuffix = '.ver2'
+else:
+    vsuffix = ''
 
 # Build modelnames
 MODELGROUPS = {}
@@ -425,7 +431,7 @@ MODELGROUPS['dnn1_single'] = [
     for p in params
 ]
 POP_MODELGROUPS['dnn1_single'] = [
-    f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_pop}"
+    f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_nopre}"
     for p in params
 ]
 # _single flag tells pareto plot function not to divide by cells per site
@@ -554,6 +560,67 @@ POP_MODELGROUPS['dnn1_single'] = [
 #
 # # LN dummy heldout #####################################################################################################
 # LN_HELDOUT = (f"{load_string}_wc.18x4R.g-fir.4x25xR-lvl.R-dexp.R_{fit_string}" + "-tfheld.same.FL0:1-" + fs1 + '-' + fs2)
+
+
+#
+# Partial est data models
+#
+# tentative: use best conv1dx2+d
+half_test_modelspec = "wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R"
+_tfitter = "tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4" + vsuffix
+_tfitter_rb = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4" + vsuffix
+
+# test condition: take advantage of larger model population fit (hs: heldout), then fit single cell with half a dataset
+# fit last layer on half the data, using prefit with the current site held-out, run per cell
+modelname_half_prefit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hs-{_tfitter}"]
+
+# control condition: fit pop model then single cell with half the data. hm/hhm: exclude matched to preserve balance with heldout
+# fit held-out pop model with half the est data, run per site
+modelname_half_pop=[f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k10_{half_test_modelspec}_{_tfitter_rb}",
+                    f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k15_{half_test_modelspec}_{_tfitter_rb}",
+                    f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k25_{half_test_modelspec}_{_tfitter_rb}",
+                    f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k50_{half_test_modelspec}_{_tfitter_rb}",
+                    f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev_{half_test_modelspec}_{_tfitter_rb}"]
+
+# then fit last layer on heldout cell with half the data (same est data as for modelname_half_prefit), run per cell
+modelname_half_fullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.htm-{_tfitter}",
+                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfm-{_tfitter}",
+                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqm-{_tfitter}",
+                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhm-{_tfitter}",
+                        f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hm-{_tfitter}"]
+
+# control condition: fit pop model then single cell with half the data. hm/hhm: exclude matched to preserve balance with heldout
+# fit held-out pop model with half the est data, run per site
+modelname_half_heldoutpop=[f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k10_{half_test_modelspec}_{_tfitter_rb}",
+                           f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k15_{half_test_modelspec}_{_tfitter_rb}",
+                           f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k25_{half_test_modelspec}_{_tfitter_rb}",
+                           f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k50_{half_test_modelspec}_{_tfitter_rb}",
+                           f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev_{half_test_modelspec}_{_tfitter_rb}"]
+
+# then fit last layer on heldout cell with half the data (same est data as for modelname_half_prefit), run per cell
+modelname_half_heldoutfullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hts-{_tfitter}",
+                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfs-{_tfitter}",
+                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqs-{_tfitter}",
+                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhs-{_tfitter}",
+                               f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hs-{_tfitter}"]
+
+ln_half_models = [
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k15_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k25_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k50_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+]
+dnns_half_models = [
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k15_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k25_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f'ozgf.fs100.ch18-ld-norm.l1-sev.k50_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f"{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_prefit.m-{_tfitter}"
+]
+
 
 
 def get_significant_cells(batch, models, as_list=False):
