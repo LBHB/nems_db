@@ -943,7 +943,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
             log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
         r.meta['mask_bins'] = mask_bins
 
-    if (ev_bins>=1) & (pupsort):
+    elif (ev_bins>=1) & (pupsort):
         log.info(f"Sorting epochs by normalized pupil size")
         # sort epoch / bin combinations by the range of normalized pupil range that they span
         # crh 14.11.2021
