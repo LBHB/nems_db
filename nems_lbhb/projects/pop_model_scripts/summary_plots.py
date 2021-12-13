@@ -15,19 +15,19 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
 #       4) truncate lims at 1.0 for r_ceiling? (a few cells over)
 
 
-def scatter_bar(batches, modelnames, axes=None):
+def scatter_bar(batches, modelnames, stest=SIG_TEST_MODELS, axes=None):
     if axes is None:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 6))
     else:
         ax1, ax2 = axes
 
-    cellids = [get_significant_cells(batch, SIG_TEST_MODELS, as_list=True) for batch in batches]
+    cellids = [get_significant_cells(batch, stest, as_list=True) for batch in batches]
     r_values = [nd.batch_comp(batch, modelnames, cellids=cells, stat=PLOT_STAT) for batch, cells in zip(batches, cellids)]
     all_r_values = pd.concat(r_values)
 
-    # NOTE: if SIG_TEST_MODELS changes, the 1, 0 indices will need to be updated
+    # NOTE: if ALL_FAMILY_MODELS changes, the 3, 2 indices will need to be updated
     # Scatter Plot -- LN vs c1dx2+d
-    ax1.scatter(all_r_values[modelnames[1]], all_r_values[modelnames[0]], s=2, c='black')
+    ax1.scatter(all_r_values[modelnames[3]], all_r_values[modelnames[2]], s=2, c='black')
     ax1.plot([[0, 0], [1, 1]], c='black', linestyle='dashed', linewidth=1)
     ax_remove_box(ax1)
     #set_equal_axes(ax1)
