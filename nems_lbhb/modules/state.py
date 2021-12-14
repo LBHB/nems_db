@@ -700,8 +700,8 @@ class lv_norm(NemsModule):
 
         state = 'state'
         set_bounds = False
-        additive=False
-        single_offset=False
+        additive = False
+        single_offset = False
         for o in options[2:]:
             if o == 'bound':
                 set_bounds = True
@@ -709,6 +709,8 @@ class lv_norm(NemsModule):
                 additive=True
             elif o == 'so':
                 single_offset=True
+            elif o.startswith('sm'):
+                state = 'state_mod'
 
         # init gain/dc params
         mean_g = np.zeros([n_chans, n_states])
@@ -859,6 +861,8 @@ class indep_noise(NemsModule):
                 set_bounds = True
             elif o == 'g':
                 additive = False
+            elif o.startswith("sm"):
+                state = "state_mod"
 
         # init gain/dc params
         zeros = np.zeros([n_chans, n_states])
@@ -1061,11 +1065,11 @@ class state_mod(NemsModule):
             if ("x" not in option):
                 if ":" in option:
                     sidx, eidx = option.split(":")
-                    modchans = list(np.arange(int(sidx), int(eidx)+1))
+                    modchans = list(np.arange(int(sidx)+1, int(eidx)+1+1)) # +1 bc don't want to modify baseline state, +1 again to be inclusive on range end
                 elif "," in option:
-                    modchans = [int(k) for k in option.split(",")]
+                    modchans = [int(k)+1 for k in option.split(",")]
                 else:
-                    modchans = [int(option)]
+                    modchans = [int(option)+1]
 
         if modchans == None:
             raise ValueError("Must specify which")
