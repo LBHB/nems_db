@@ -748,7 +748,7 @@ class lv_norm(NemsModule):
 
         lv = rec[lv].as_continuous()
         state = rec[s].as_continuous()
-
+        #import pdb; pdb.set_trace()
         def fn(x):
             x = x.copy()
             # faster(?): compute all scaling terms then apply at once (outside of loop)
@@ -977,6 +977,148 @@ class save_prediction(NemsModule):
         #import pdb; pdb.set_trace()
         
         return [rec[i].transform(fn_dummy, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
+
+
+class state_rep(NemsModule):
+    """
+    input / output: state -- add / modify state channels
+    Replicate a given state channel nTimes.
+    Specify shuffle/not for each channel.
+    Specify nonlinearity/not (sdexp) for each channel.
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.state_rep')
+        options['tf_layer'] = options.get('tf_layer', None)
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'state', 
+                                                         'o': 'state_mod', 
+                                                         'sdexp': False, 
+                                                         'chan': 'pupil',
+                                                         'nReps': 1}
+                                                         )
+        options['plot_fns'] = options.get('plot_fns', [])
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Pass state variable(s) through sigmoid then apply dc/gain to pred"
+
+    @xmodule('inoise')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the lv_norm module
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: r'^inoise\.?(\d{1,})x(\d{1,})$'
+            e.g., "lvnorm.SxR" or "lvnorm.S":
+                S : number of state channels (required)
+                R : number of channels to modulate (default = 1)
+        Options
+        -------
+        None
+        '''
+        options = kw.split('.')
+        pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+        parsed = re.match(pattern, options[1])
+        if parsed is None:
+            # backward compatible parsing if R not specified
+            pattern = re.compile(r'^(\d{1,})$')
+            parsed = re.match(pattern, options[1])
+        try:
+            n_states = int(parsed.group(1))
+            if len(parsed.groups()) > 1:
+                n_chans = int(parsed.group(2))
+            else:
+                n_chans = 1
+
+        except TypeError:
+            raise ValueError("Got TypeError when parsing inoise keyword.\n"
+                             "Make sure keyword is of the form: \n"
+                             "inoise.{n_state_variables}x{n_resp_chans} \n"
+                             "keyword given: %s" % kw)
+
+        state = 'state'
+        set_bounds = False
+        additive = True
+        for o in options[2:]:
+            if o == 'bound':
+                set_bounds = True
+            elif o == 'g':
+                additive = False
+
+        # init gain/dc params
+        zeros = np.zeros([n_chans, n_states])
+        ones = np.ones([n_chans, n_states])
+        mean_g = zeros.copy()
+        sd_g = ones.copy()
+        if additive:
+            mean_g[:,0]=0.5
+        else:
+            mean_g[:,0]=0.1
+
+        template = {
+            'fn_kwargs': {'i': 'pred',
+                          'o': 'pred',
+                          's': state,
+                          'indep': 'indep',
+                          'additive': additive,
+                          'n_inputs': n_chans,
+                          'n_states': n_states},
+            'plot_fns': ['nems.plots.api.mod_output',
+                         'nems.plots.api.before_and_after',
+                         'nems.plots.api.pred_resp',
+                         'nems.plots.api.state_vars_timeseries',
+                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fn_idx': 3,
+            'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g})}
+        }
+        if set_bounds:
+            template['bounds'] = {'g': (None, None)}
+
+        return indep_noise(**template)
+
+    def eval(self, rec, i, o, s, indep, g=None, additive=True, **kw_args):
+        '''
+        Parameters
+        ----------
+        i name of input (baseline pred)
+        o name of output signal
+        s name of state signal
+        indep - name of indep noise signal
+        g - gain applied to state-mod indep noise for each unit
+        additive - boolean: if True noise is additive, False multiplicative
+        '''
+
+        indep_noise = rec[indep].as_continuous()
+        state = rec[s].as_continuous()
+
+        def fn_multiplicative(x):
+            x = x * np.exp((g @ state[:g.shape[1],:]) * indep_noise)
+            return x
+
+        def fn_additive(x):
+            x = x + (g @ state[:g.shape[1],:]) * indep_noise
+            return x
+
+        if additive:
+            return [rec[i].transform(fn_additive, o)]
+        else:
+            return [rec[i].transform(fn_multiplicative, o)]
+
 
     def tflayer(self):
         """

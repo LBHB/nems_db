@@ -189,6 +189,7 @@ def st(loadkey):
 
     state_signals = []
     permute_signals = []
+    generate_signals = []
 
     loadset = loader.split(".")
     for l in loadset:
@@ -264,10 +265,13 @@ def st(loadkey):
         state_signals.extend(this_sig)
         if l.endswith("0"):
             permute_signals.extend(this_sig)
+        if l.endswith("GP"):
+            generate_signals.extend(this_sig)
 
     xfspec = [['nems.xforms.make_state_signal',
                {'state_signals': state_signals,
                 'permute_signals': permute_signals,
+                'generate_signals': generate_signals,
                 'new_signalname': 'state'}]]
     return xfspec
 
