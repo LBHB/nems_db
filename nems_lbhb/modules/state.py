@@ -69,6 +69,15 @@ def _state_dexp_old(x, s, g, d, base, amplitude, kappa):
 
     return sg * x + sd
 
+def _stmod_dexp(x, chans, base, amplitude, kappa):
+    '''
+    Modulate state signal. Only model channels in "chans".
+    '''
+    xnew = x.copy()
+    for chan in chans:
+        xnew[chan, :] = base[[chan], :] + amplitude[[chan], :] * np.exp(-np.exp(np.array(-np.exp(kappa[[chan], :])) * x[[chan], :]))
+    return xnew
+
 
 def state_dexp(rec, i, o, s, g=None, d=None, base=None, amplitude=None, kappa=None,
                                     base_g=None, amplitude_g=None, kappa_g=None, offset_g=None,
@@ -986,11 +995,9 @@ class save_prediction(NemsModule):
         return []
 
 
-class state_rep(NemsModule):
+class state_mod(NemsModule):
     """
-    input / output: state -- add / modify state channels
-    Replicate a given state channel nTimes.
-    Specify shuffle/not for each channel.
+    input / output: state -- modify state channels
     Specify nonlinearity/not (sdexp) for each channel.
     """
     def __init__(self, **options):
@@ -1001,9 +1008,8 @@ class state_rep(NemsModule):
         options['tf_layer'] = options.get('tf_layer', None)
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'state', 
                                                          'o': 'state_mod', 
-                                                         'sdexp': False, 
-                                                         'chan': 'pupil',
-                                                         'nReps': 1}
+                                                         'chans': []
+                                                         }
                                                          )
         options['plot_fns'] = options.get('plot_fns', [])
         options['bounds'] = options.get('bounds', {})
@@ -1013,20 +1019,19 @@ class state_rep(NemsModule):
         """
         String description (include phi values?)
         """
-        return "Pass state variable(s) through sigmoid then apply dc/gain to pred"
+        return "Pass state variable(s) through sigmoid. Return new state_mod signal"
 
-    @xmodule('inoise')
+    @xmodule('stmod')
     def keyword(kw):
         '''
-        Generate and register modulespec for the lv_norm module
+        Generate and register modulespec for the stmod module
 
         Parameters
         ----------
         kw : str
-            Expected format: r'^inoise\.?(\d{1,})x(\d{1,})$'
-            e.g., "lvnorm.SxR" or "lvnorm.S":
-                S : number of state channels (required)
-                R : number of channels to modulate (default = 1)
+            Expected format: 
+                e.g. stmod.0:2 (modulate state channels 0 through 2 - inclusive)
+                e.g. stmod.0,1 (modulate only channels 0 and 1)
         Options
         -------
         None
@@ -1039,85 +1044,67 @@ class state_rep(NemsModule):
             pattern = re.compile(r'^(\d{1,})$')
             parsed = re.match(pattern, options[1])
         try:
-            n_states = int(parsed.group(1))
+            n_vars = int(parsed.group(1))
             if len(parsed.groups()) > 1:
                 n_chans = int(parsed.group(2))
             else:
                 n_chans = 1
-
         except TypeError:
-            raise ValueError("Got TypeError when parsing inoise keyword.\n"
+            raise ValueError("Got TypeError when parsing stategain keyword.\n"
                              "Make sure keyword is of the form: \n"
-                             "inoise.{n_state_variables}x{n_resp_chans} \n"
+                             "sdexp.{n_state_variables} \n"
                              "keyword given: %s" % kw)
 
-        state = 'state'
-        set_bounds = False
-        additive = True
-        for o in options[2:]:
-            if o == 'bound':
-                set_bounds = True
-            elif o == 'g':
-                additive = False
+        options = kw.split('.')
+        modchans = None 
+        for option in options[1:]:
+            if ("x" not in option):
+                if ":" in option:
+                    sidx, eidx = option.split(":")
+                    modchans = list(np.arange(int(sidx), int(eidx)+1))
+                elif "," in option:
+                    modchans = [int(k) for k in option.split(",")]
+                else:
+                    modchans = [int(option)]
 
-        # init gain/dc params
-        zeros = np.zeros([n_chans, n_states])
-        ones = np.ones([n_chans, n_states])
-        mean_g = zeros.copy()
-        sd_g = ones.copy()
-        if additive:
-            mean_g[:,0]=0.5
-        else:
-            mean_g[:,0]=0.1
+        if modchans == None:
+            raise ValueError("Must specify which")
+
+        n_chans = n_vars #len(modchans)
+        # init gain params
+        zeros = np.zeros([n_chans, 1])
+        ones = np.ones([n_chans, 1])
+        base_mean = zeros.copy()
+        base_sd = ones.copy()
+        amp_mean = zeros.copy() + 0
+        amp_sd = ones.copy() * 0.1
+        amp_mean[:, 0] = 1 
+        kappa_mean = zeros.copy()
+        kappa_sd = ones.copy() * 0.1
 
         template = {
-            'fn_kwargs': {'i': 'pred',
-                          'o': 'pred',
-                          's': state,
-                          'indep': 'indep',
-                          'additive': additive,
-                          'n_inputs': n_chans,
-                          'n_states': n_states},
-            'plot_fns': ['nems.plots.api.mod_output',
-                         'nems.plots.api.before_and_after',
-                         'nems.plots.api.pred_resp',
-                         'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all'],
-            'plot_fn_idx': 3,
-            'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g})}
+            'fn_kwargs': {'i': 'state',
+                          'o': 'state_mod',
+                          'chans': modchans},
+            'plot_fns': [],
+            'prior': {'base': ('Normal', {'mean': base_mean, 'sd': base_sd}),
+                      'amplitude': ('Normal', {'mean': amp_mean, 'sd': amp_sd}),
+                      'kappa': ('Normal', {'mean': kappa_mean, 'sd': kappa_sd})}
         }
-        if set_bounds:
-            template['bounds'] = {'g': (None, None)}
 
-        return indep_noise(**template)
+        return state_mod(**template)
 
-    def eval(self, rec, i, o, s, indep, g=None, additive=True, **kw_args):
+    def eval(self, rec, i, o, chans, base=None, amplitude=None, kappa=None, **kw_args):
         '''
         Parameters
         ----------
-        i name of input (baseline pred)
+        i name of input
         o name of output signal
-        s name of state signal
-        indep - name of indep noise signal
-        g - gain applied to state-mod indep noise for each unit
-        additive - boolean: if True noise is additive, False multiplicative
+        chans which channels to modulate
+        base, amplitude, kappa, offset - parameters for dexp applied to each state channel
         '''
-
-        indep_noise = rec[indep].as_continuous()
-        state = rec[s].as_continuous()
-
-        def fn_multiplicative(x):
-            x = x * np.exp((g @ state[:g.shape[1],:]) * indep_noise)
-            return x
-
-        def fn_additive(x):
-            x = x + (g @ state[:g.shape[1],:]) * indep_noise
-            return x
-
-        if additive:
-            return [rec[i].transform(fn_additive, o)]
-        else:
-            return [rec[i].transform(fn_multiplicative, o)]
+        fn = lambda x: _stmod_dexp(x, chans, base, amplitude, kappa)
+        return [rec[i].transform(fn, o)]
 
 
     def tflayer(self):

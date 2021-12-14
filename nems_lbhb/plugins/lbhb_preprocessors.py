@@ -183,7 +183,7 @@ def st(loadkey):
 
     broken out of evt/psth/etc loader keywords
     """
-    pattern = re.compile(r'^st\.([a-zA-Z0-9\.]*)$')
+    pattern = re.compile(r'^st\.([a-zA-Z0-9\W+\.]*)$')
     parsed = re.match(pattern, loadkey)
     loader = parsed.group(1)
 
@@ -263,10 +263,57 @@ def st(loadkey):
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
         state_signals.extend(this_sig)
-        if l.endswith("0"):
-            permute_signals.extend(this_sig)
-        if l.endswith("GP"):
-            generate_signals.extend(this_sig)
+
+        # NEW -- check if we've specified to repeat this signal inside the state signal
+        # crh, 14.12.2021
+        if len(l.split(";"))>1:
+            # repeat this signal r times
+            if l.split(";")[1].startswith("r"):
+                nReps = int(l.split(";")[1][1:])
+                for idx, r in enumerate(range(nReps)):
+                    state_signals.extend([ts+"_r"+str(idx+1) for ts in this_sig])
+            else:
+                raise ValueError("Unexpected format for specifying state signals")
+
+            # which signals to permute / generate randomly?
+            if len(l.split(";"))==3:
+                option = l.split(";")[2]
+                if option.startswith("s"):
+                    # permute the specified signals
+                    if ":" in option[1:]:
+                        sidx, eidx = option[1:].split(":")
+                        modchans = list(np.arange(int(sidx), int(eidx)+1))
+                    elif "," in option[1:]:
+                        modchans = [int(k) for k in option[1:].split(",")]
+                    else:
+                        modchans = [int(option[1:])]
+                    for mchan in modchans:
+                        if mchan == 0:
+                            mchan = ""
+                        permute_signals.extend([ts+"_r"+str(mchan) for ts in this_sig])
+
+                elif option.startswith("gp"):
+                    # gp generate the specified signals
+                    if ":" in option[2:]:
+                        sidx, eidx = option[2:].split(":")
+                        modchans = list(np.arange(int(sidx), int(eidx)+1))
+                    elif "," in option[2:]:
+                        modchans = [int(k) for k in option[2:].split(",")]
+                    else:
+                        modchans = [int(option[2:])]
+                    for mchan in modchans:
+                        if mchan == 0:
+                            mchan = ""
+                        generate_signals.extend([ts+"_r"+str(mchan) for ts in this_sig])
+                else:
+                    raise ValueError("Unexpected format for specifying state signal permutations")
+
+        # old way
+        else:
+            if l.endswith("0"):
+                permute_signals.extend(this_sig)
+            if l.endswith("GP"):
+                generate_signals.extend(this_sig)
 
     xfspec = [['nems.xforms.make_state_signal',
                {'state_signals': state_signals,
