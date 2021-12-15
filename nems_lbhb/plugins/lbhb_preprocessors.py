@@ -266,18 +266,18 @@ def st(loadkey):
 
         # NEW -- check if we've specified to repeat this signal inside the state signal
         # crh, 14.12.2021
-        if len(l.split("&"))>1:
+        if len(l.split("+"))>1:
             # repeat this signal r times
-            if l.split("&")[1].startswith("r"):
-                nReps = int(l.split("&")[1][1:])
+            if l.split("+")[1].startswith("r"):
+                nReps = int(l.split("+")[1][1:])
                 for idx, r in enumerate(range(nReps)):
                     state_signals.extend([ts+"_r"+str(idx+1) for ts in this_sig])
             else:
                 raise ValueError("Unexpected format for specifying state signals")
 
             # which signals to permute / generate randomly?
-            if len(l.split("&"))==3:
-                option = l.split("&")[2]
+            if len(l.split("+"))==3:
+                option = l.split("+")[2]
                 if option.startswith("s"):
                     # permute the specified signals
                     if "~" in option[1:]:
@@ -304,9 +304,9 @@ def st(loadkey):
                 else:
                     raise ValueError("Unexpected format for specifying state signal permutations")
             
-            elif l.split("&")[1].startswith("s"):
+            elif l.split("+")[1].startswith("s"):
                 permute_signals.extend(this_sig)
-            elif l.split("&")[1].startswith("gp"):
+            elif l.split("+")[1].startswith("gp"):
                 generate_signals.extend(this_sig)
             else:
                 raise ValueError("Unexpected format for specifying state signals")
