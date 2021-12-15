@@ -1063,9 +1063,9 @@ class state_mod(NemsModule):
         modchans = None 
         for option in options[1:]:
             if ("x" not in option):
-                if "~" in option:
-                    sidx, eidx = option.split("~")
-                    modchans = list(np.arange(int(sidx)+1, int(eidx)+1)) # +1 bc don't want to modify baseline state, +1 again to be inclusive on range end
+                if ":" in option:
+                    sidx, eidx = option.split(":")
+                    modchans = list(np.arange(int(sidx)+1, int(eidx)+1+1)) # +1 bc don't want to modify baseline state, +1 again to be inclusive on range end
                 elif "," in option:
                     modchans = [int(k)+1 for k in option.split(",")]
                 else:
