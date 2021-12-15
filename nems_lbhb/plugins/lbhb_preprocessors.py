@@ -284,10 +284,7 @@ def st(loadkey):
                 option = l.split("+")[2]
                 if option.startswith("s"):
                     # permute the specified signals
-                    if ":" in option[1:]:
-                        sidx, eidx = option[1:].split(":")
-                        modchans = list(np.arange(int(sidx), int(eidx)+1))
-                    elif "," in option[1:]:
+                    if "," in option[1:]:
                         modchans = [int(k) for k in option[1:].split(",")]
                     else:
                         modchans = [int(option[1:])]
@@ -296,10 +293,7 @@ def st(loadkey):
 
                 elif option.startswith("gp"):
                     # gp generate the specified signals
-                    if ":" in option[2:]:
-                        sidx, eidx = option[2:].split(":")
-                        modchans = list(np.arange(int(sidx), int(eidx)+1))
-                    elif "," in option[2:]:
+                    if "," in option[2:]:
                         modchans = [int(k) for k in option[2:].split(",")]
                     else:
                         modchans = [int(option[2:])]
