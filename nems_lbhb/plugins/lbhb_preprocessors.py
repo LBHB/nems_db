@@ -272,6 +272,10 @@ def st(loadkey):
                 nReps = int(l.split("+")[1][1:])
                 for idx, r in enumerate(range(nReps)):
                     state_signals.extend([ts+"_r"+str(idx+1) for ts in this_sig])
+            elif l.split("+")[1].startswith("s"):
+                permute_signals.extend(this_sig)
+            elif l.split("+")[1].startswith("gp"):
+                generate_signals.extend(this_sig)
             else:
                 raise ValueError("Unexpected format for specifying state signals")
 
@@ -303,13 +307,6 @@ def st(loadkey):
                         generate_signals.extend([ts+"_r"+str(mchan) if mchan!=0 else ts for ts in this_sig])
                 else:
                     raise ValueError("Unexpected format for specifying state signal permutations")
-            
-            elif l.split("+")[1].startswith("s"):
-                permute_signals.extend(this_sig)
-            elif l.split("+")[1].startswith("gp"):
-                generate_signals.extend(this_sig)
-            else:
-                raise ValueError("Unexpected format for specifying state signals")
 
         # old way
         else:
