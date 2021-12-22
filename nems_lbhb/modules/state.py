@@ -1008,7 +1008,7 @@ class state_mod(NemsModule):
         """
         set options to defaults if not supplied. pass to super() to add to data_dict
         """
-        options['fn'] = options.get('fn', str(self.__module__) + '.state_rep')
+        options['fn'] = options.get('fn', str(self.__module__) + '.state_mod')
         options['tf_layer'] = options.get('tf_layer', None)
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'state', 
                                                          'o': 'state_mod', 
