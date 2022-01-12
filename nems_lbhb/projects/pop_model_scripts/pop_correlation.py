@@ -173,6 +173,8 @@ if __name__ == '__main__':
     peg_corr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4.pkl'
     peg_corr_path_pop = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4_pop.pkl'
 
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 6))
+
     # Use this version when re-running all cells, in case there are connection issues.
     # for i in range(10):
     #     try:
@@ -199,9 +201,10 @@ if __name__ == '__main__':
 
     # To run plot when everything is done
     a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
-                                                skip_new_cells=True, do_scatter=False)
+                                                skip_new_cells=True, do_scatter=False, ax=ax1)
     peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
-                                                   skip_new_cells=True, do_scatter=False)
+                                                   skip_new_cells=True, do_scatter=False, ax=ax2)
+    fig.tight_layout()
 
     print("A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
     print("PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
