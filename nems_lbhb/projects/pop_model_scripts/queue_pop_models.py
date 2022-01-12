@@ -1,5 +1,3 @@
-
-
 import nems.db as nd
 from nems import get_setting
 
@@ -170,4 +168,21 @@ if 0:
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
+
+# PARTIAL EST MODELS STAGE 2
+if 0:
+    from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
+        modelname_half_pop, modelname_half_prefit, modelname_half_fullfit,
+        modelname_half_heldoutpop, modelname_half_heldoutfullfit)
+
+    modelnames = modelname_half_prefit + modelname_half_fullfit + modelname_half_heldoutfullfit
+    useGPU = False
+    for batch in batches:
+        c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        enqueue_exacloud_models(
+            cellist=c, batch=batch, modellist=modelnames,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
+
+
 
