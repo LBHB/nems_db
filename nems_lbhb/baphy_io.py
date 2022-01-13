@@ -2370,7 +2370,9 @@ def parse_cellid(options):
             # provided
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
-                scf.append(db.get_cell_files(t[0], rawid=rawid_))
+                scf_ = db.get_cell_files(t[0], rawid=rawid_)
+                assert len(scf_)==1
+                scf.append(scf_)
             assert len(scf) == len(rawid)
             channels.append(scf[0].iloc[0].channum)
             units.append(scf[0].iloc[0].unit)
