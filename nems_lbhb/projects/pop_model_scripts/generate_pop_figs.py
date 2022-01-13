@@ -112,6 +112,7 @@ a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, lo
                                             ax=axes2[0])
 peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path,
                                                force_rerun=False, ax=axes2[1])
+fig2.tight_layout()
 print("\n\ncorrelation histograms, A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
 print("correlation histograms, PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
 
