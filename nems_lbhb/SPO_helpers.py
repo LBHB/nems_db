@@ -18,6 +18,7 @@ import numpy as np
 import nems
 import nems.preprocessing as preproc
 import nems.metrics.api as nmet
+import nems.xforms as xforms
 import pickle as pl
 import pandas as pd
 import sys
@@ -30,6 +31,9 @@ import scipy
 import nems_db.params
 import warnings
 import itertools
+import copy
+import logging
+log = logging.getLogger(__name__)
 
 sb.color_palette
 sb.color_palette('colorblind')
@@ -93,22 +97,35 @@ def add_stimtype_CtoI_sub_epochs(sig, IncSwitchTime):
     return sig
 
 
-def scatterplot_print(x, y, names, ax=None, fn=None, fnargs={}, dv=None, **kwargs):
+def scatterplot_print(x, y, names, c=None, s=None, ax=None, fn=None, fnargs={}, dv=None, **kwargs):
+    assert len(x) == len(y) == len(names)
+    if c is not None:
+        assert len(x) == len(c)
     if ax is None:
         ax = plt.gca()
-    if 'marker' not in kwargs:
+    if c is None and 'marker' not in kwargs:
         kwargs['marker'] = '.'
-    if 'linestyle' not in kwargs:
+    if c is None and 'linestyle' not in kwargs:
         kwargs['linestyle'] = 'none'
+    if c is not None and 'alpha' not in kwargs:
+            kwargs['alpha'] = .6
+    if s is None:
+        s = np.full_like(x, plt.rcParams['lines.markersize'] ** 2) #plt.scatter default
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
+    s = s[good_inds]
+    if c is not None:
+        c = c[good_inds]
     names = [names[g] for g in good_inds]
     if type(fn) is list:
         for i in range(len(fnargs)):
             if 'pth' in fnargs[i].keys():
                 fnargs[i]['pth'] = [fnargs[i]['pth'][gi] for gi in good_inds]
-    art, = ax.plot(x, y, picker=5, **kwargs)
+    if c is None:
+        art, = ax.plot(x, y, picker=5, **kwargs)
+    else:
+        art = ax.scatter(x, y, c=c, s=s, picker=5, cmap='inferno', **kwargs)
 
     # art=ax.scatter(x,y,picker=5,**kwargs)
 
@@ -178,8 +195,10 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
                     if 'data_series_dict' in fna:
                         if fna['data_series_dict'] == 'dsx':
                             fna = dict(dfx.iloc[ind]) | fna
+                            print(fna)
                         elif fna['data_series_dict'] == 'dsy':
                             fna = dict(dfy.iloc[ind]) | fna
+                            print(fna)
                         else:
                             raise RuntimeError('data_series_dict must be either dsx or dsy')
                     fni(**fna)
@@ -315,7 +334,7 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
     batch = 306
 
     if get_stim:
-        loadkey = 'env.fs'
+        loadkey = 'env.fs100'
     else:
         loadkey = 'ns.fs100'
 
@@ -436,6 +455,9 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
     elif subset == 'C+I':
         plot_order = ['STIM_T+si464+si464', 'STIM_T+si516+si516',
                       'STIM_T+si464+si516', 'STIM_T+si516+si464']
+        if IncSwitchTime is not None:
+            plot_order[0] = 'STIM_T+si464+si464tosi516'
+            plot_order[1] = 'STIM_T+si516+si516tosi464'
     elif subset == 'CtoI+I':
         plot_order = ['STIM_T+si464+si464tosi516', 'STIM_T+si516+si516tosi464',
                       'STIM_T+si464+si516', 'STIM_T+si516+si464']
@@ -469,7 +491,7 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
     nplt = len(plot_order)
     gs_kw = dict(hspace=0, left=0.06, right=.99)
     fig, ax = plt.subplots(nrows=nplt, ncols=1, figsize=(10, 15), sharey=True, gridspec_kw=gs_kw)
-    if signames == ['resp', 'lin_model']:
+    if signames == ['resp', 'lin_model'] or signames == ['pred', 'pred_lin_model']:
         [axi.set_prop_cycle(cycler('color', ['k', 'g']) + cycler(linestyle=['-', 'dotted']) + cycler(linewidth=[1, 2]))
          for axi in ax]
     else:
@@ -500,24 +522,24 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
             snA = names_short[order[i]][:2] + '_'
             snB = '_' + names_short[order[i]][1:]
             snA_ = names[names_short.index(snA)]
-            epA = val['resp'].extract_epoch(snA_).squeeze()
+            epA = val[signames[0]].extract_epoch(snA_).squeeze()
             time_vector = np.arange(0, len(epA)) / val['resp'].fs
             ax[i].plot(time_vector - prestimtime, epA, '--', color=(1, .5, 0), linewidth=1.5)
             if 'to' in snB:
                 snB_ = snB.split('to')
                 snB_part1 = names[names_short.index(snB_[0])]
-                epB = val['resp'].extract_epoch(snB_part1).squeeze()
+                epB = val[signames[0]].extract_epoch(snB_part1).squeeze()
                 time = time_vector - prestimtime
                 pi = time < IncSwitchTime
                 ax[i].plot(time[pi], epB[pi], '--', color=(0, .5, 1), linewidth=1.5)
 
                 snB_part2 = names[names_short.index('_+' + snB_[1])]
-                epB = val['resp'].extract_epoch(snB_part2).squeeze()
+                epB = val[signames[0]].extract_epoch(snB_part2).squeeze()
                 pi = time >= IncSwitchTime
                 ax[i].plot(time[pi], epB[pi], '--', color=(.1, .7, 1), linewidth=1.5)
             else:
                 snB_ = names[names_short.index(snB)]
-                epB = val['resp'].extract_epoch(snB_).squeeze()
+                epB = val[signames[0]].extract_epoch(snB_).squeeze()
                 ax[i].plot(time_vector - prestimtime, epB, '--', color=(0, .5, 1), linewidth=1.5)
 
         ax[i].set_ylabel(names_short[order[i]], rotation=0, horizontalalignment='right', verticalalignment='bottom')
@@ -536,7 +558,7 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
             if 'to' in names_short[order[i]]:
                 ax[i].plot(np.repeat(IncSwitchTime, 2), (yl[0] - yl_margin, yl[1] + yl_margin), color=(.8, .8, .8))
     if plot_singles_on_dual:
-        ls = ['resp A', 'resp B']
+        ls = [signames[0]+' A', signames[0]+' B']
     else:
         ls = ['log(stim)']
     ax[nplt - 1].legend(signames + ls)
@@ -658,6 +680,7 @@ def export_all_vals(val, modelspec, signames=['resp', 'pred']):
 
 
 def calc_psth_metrics(batch, cellid, rec_file=None):
+    log.info(f'----- calc_psth_metrics for {cellid}')
     import nems.db as nd  # NEMS database functions -- NOT celldb
     import nems_lbhb.baphy as nb  # baphy-specific functions
     import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
@@ -697,9 +720,16 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
     rec['resp'].fs = 200
 
     epcs = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].copy()
-    ep2 = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PostStimSilence'].iloc[0].copy()
-    prestim = epcs.iloc[0]['end']
-    poststim = ep2['end'] - ep2['start']
+    PSS = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].iloc[0]
+    prestim = PSS['end'] - PSS['start']
+    REF = rec['resp'].epochs[rec['resp'].epochs['name'] == 'REFERENCE'].iloc[0]
+    total_duration = REF['end'] - REF['start']
+    POSS = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PostStimSilence'].iloc[0]
+    poststim = POSS['end'] - POSS['start']
+    duration = total_duration - prestim - poststim
+    prestimN = int(prestim * rec['resp'].fs)
+    poststimN = int(poststim * rec['resp'].fs)
+    durationN  = int(duration * rec['resp'].fs)
 
     spike_times = rec['resp']._data[cellid]
     count = 0
@@ -728,6 +758,7 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
 
     # smooth and subtract SR
     fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / resp.fs)
+    #fn = lambda x: x - SR / resp.fs
     val['resp'] = val['resp'].transform(fn)
     val['resp'] = add_stimtype_epochs(val['resp'])
 
@@ -794,7 +825,8 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
         inhibitory_percentage_onset[_type] = (ps[ff] < thresh[1]).sum() / ff.sum()
         Max_onset[_type] = ps[ff].max() / SinglesMax
 
-        # restore times
+    # Calculate correlation between single and dual-voice responses
+    # restore times
     val['resp'].epochs['end'] = nds
     val['resp'].epochs['start'] = sts
     val['resp'].epochs['start'] = val['resp'].epochs['start'] + prestim
@@ -833,7 +865,6 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
         for ind in inds:
             r = val['resp'].extract_epoch(epcs.iloc[ind]['name'])
             if np.any(np.isfinite(r)):
-                print(epcs.iloc[ind]['name'])
                 indA = np.where((EA[ind] == EA) & (EB == 'null'))[0]
                 if _type == 'CtoI':
                     EBparts = EB[ind].split('to')
@@ -925,7 +956,7 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
         # rac = _r_single(X, N)
         # r_ceiling = [nmet.r_ceiling(p, rec, 'pred', 'resp') for p in val_copy]
 
-    # Calculate correlation between linear 'model and dual-voice response, and mean amount of suppression, enhancement relative to linear 'model'
+    # Calculate correlation between linear 'model' and dual-voice response, and mean amount of suppression, enhancement relative to linear 'model'
     r_fit_linmodel = {}
     r_fit_linmodel_NM = {}
     r_ceil_linmodel = {}
@@ -936,10 +967,13 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
     DualAboveZeroP = {}
     resp_ = copy.deepcopy(rec['resp'].rasterize())
     resp_.epochs['start'] = sts_rec
+    resp_.epochs['start'] = resp_.epochs['start'] + prestim
     fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / val['resp'].fs)
     resp_ = resp_.transform(fn)
     for _type in types_2s:
         val_copy = copy.deepcopy(val)
+        val['resp'].epochs['start'] = sts
+        val['resp'].epochs['start'] = val['resp'].epochs['start'] + prestim
         val_copy['resp'] = val_copy['resp'].select_epochs([_type])
         # Correlation between linear 'model' (response to A plus response to B) and dual-voice response
         r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp')
@@ -965,19 +999,17 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
             stims = ['STIM_T+si464+si464tosi516', 'STIM_T+si516+si516tosi464']
         else:
             stims = ['STIM_T+si464+si516', 'STIM_T+si516+si464']
-        T = int(700 + prestim * val['resp'].fs)
-        Tps = int(prestim * val['resp'].fs)
-        jns = np.zeros((Njk, T, len(stims)))
+        jns = np.zeros((Njk, durationN+poststimN, len(stims)))
         for ns in range(len(stims)):
             for njk in range(Njk):
                 resp_jn = resp_.jackknife_by_epoch(Njk, njk, stims[ns])
                 jns[njk, :, ns] = np.nanmean(resp_jn.extract_epoch(stims[ns]), axis=0)
-        jns = np.reshape(jns[:, Tps:, :], (Njk, 700 * len(stims)), order='F')
+        jns = np.reshape(jns, (Njk, (durationN+poststimN) * len(stims)), order='F')
 
-        lim_models = np.zeros((700, len(stims)))
+        lim_models = np.zeros((durationN+poststimN, len(stims)))
         for ns in range(len(stims)):
             lim_models[:, ns] = val_copy['linmodel'].extract_epoch(stims[ns])
-        lim_models = lim_models.reshape(700 * len(stims), order='F')
+        lim_models = lim_models.reshape((durationN+poststimN) * len(stims), order='F')
 
         ff = np.isfinite(lim_models)
         mean_diff = (jns[:, ff] - lim_models[ff]).mean(axis=0)
@@ -1544,7 +1576,7 @@ def calc_psth_weights_of_model_responses(val, signame='pred', do_plot=False, fin
         IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
         namesC[2] = ['STIM_T+si464+si464tosi516', 'STIM_T+si516+si516tosi464']
         window = [0, IncSwitchTime]  # Use this window to calculate weight model
-    except:
+    except KeyError as ke:
         IncSwitchTime = None
         window = None
 
@@ -1568,13 +1600,46 @@ def calc_psth_weights_of_model_responses(val, signame='pred', do_plot=False, fin
     return D
     # return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
 
+def calc_psth_correlations(val, signame='pred', do_plot=False, find_mse_confidence=True,
+                                         get_nrmse_fn=True, exptparams=None):
+    # weights_C=np.ones((2,3))
+    # names=['STIM_T+si464+null','STIM_T+null+si464','STIM_T+si464+si464']
+    # weights_C[0,:]=calc_psth_weights_of_model_responses_single(val,names)
+    # names=['STIM_T+si516+null','STIM_T+null+si516','STIM_T+si516+si516']
+    # weights_C[1,:]=calc_psth_weights_of_model_responses_single(val,names)
+
+    namesC = [['STIM_T+si464+null', 'STIM_T+si516+null'],
+              ['STIM_T+null+si464', 'STIM_T+null+si516'],
+              ['STIM_T+si464+si464', 'STIM_T+si516+si516']]
+
+    if 'IncSwitchTime' in exptparams['TrialObject'][1]['ReferenceHandle'][1]:
+        IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
+        namesC[2] = ['STIM_T+si464+si464tosi516', 'STIM_T+si516+si516tosi464']
+        window = [0, IncSwitchTime]  # Use this window to calculate weight model
+    else:
+        IncSwitchTime = None
+        window = None
+
+    r_dual_A_C, r_dual_B_C, r_lin_A_C, r_lin_B_C = ts.calc_psth_correlations_list(
+        val, namesC, signame, window=window)
+
+    names = [['STIM_T+si464+null', 'STIM_T+si516+null'],
+             ['STIM_T+null+si516', 'STIM_T+null+si464'],
+             ['STIM_T+si464+si516', 'STIM_T+si516+si464']]
+    r_dual_A_I, r_dual_B_I, r_lin_A_I, r_lin_B_I = ts.calc_psth_correlations_list(
+        val, names, signame)
+
+    D = locals()
+    D = {k: D[k] for k in ('r_dual_A_I', 'r_dual_B_I', 'r_lin_A_I', 'r_lin_B_I',
+                           'r_dual_A_C', 'r_dual_B_C', 'r_lin_A_C', 'r_lin_B_C')}
+    return D
 
 def test(**kwds):
     print(kwds.keys())
 
 def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x15_lvl1_dexp1',
              loader='env.fs100-ld-sev-subset.A+B+C+I', fitter='fit_basic', pth=None,
-             ind=None, modelname=None, fignum=0, batch=306, modelpath=None, **extras):
+             ind=None, modelname=None, fignum=0, batch=306, modelpath=None, fs=100, **extras):
     ax_ = None
     if pth is None:
         print('pth is None')
@@ -1620,11 +1685,14 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
             else:
                 pth = pth.replace('.png', '_all_val.png')
         elif ft == 5:
-                pth = os.path.join(nd.get_results_file(batch, [modelname], [cellid])['modelpath'][0],
-                               'figure.{:04d}.png'.format(fignum))
-        elif ft == 6:
-            pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/{}.png'.format(cellid)
+                modelpath = nd.get_results_file(batch, [modelname], [cellid])['modelpath'][0]
+                pth = os.path.join(modelpath,'figure.{:04d}.png'.format(fignum))
+                print(f'ft 5 pth is {pth}')
 
+        elif ft == 6:
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/fs{fs}/{cellid}.png'
+        elif ft == 7:
+            pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/{}/{}.png'.format(modelname,cellid)
     else:
         pth = pth[ind]
         print('pth is {}, ind is {}'.format(pth, ind))
@@ -1652,6 +1720,11 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
         if 'cellids' in extras:
             ind = extras['cellids'].index(cellid)
             pth2 = pth.replace('0000.png',f'{ind+1:04d}.png')
+        elif modelname is not None and modelname.count('R')>0:
+                print(f'loading {modelpath} to find cellid index')
+                xfspec, ctx = xforms.load_analysis(modelpath, eval_model=False)
+                ind = ctx['modelspec'].meta['cellids'].index(cellid)
+                pth2 = pth.replace('0000.png', f'{ind + 1:04d}.png')
         else:
             if os.path.exists(pth.replace('.png', '_all_val.png')):
                 pth2 = pth.replace('.png', '_all_val.png')
@@ -1813,7 +1886,7 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
             return None, None, None
 
     if rec_file is None:
-        rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100', force_old_loader=False)
+        rec_file = nw.generate_recording_uri(cellid, batch, loadkey='env.fs100', force_old_loader=False)
     rec = recording.load_recording(rec_file)
     rec['resp'] = rec['resp'].extract_channels([cellid])
     rec['resp'].fs = fs
@@ -1838,7 +1911,10 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
 
     # smooth and subtract SR
-    fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
+    if fs==200:
+        fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
+    else:
+        fn = lambda x: x - SR / rec['resp'].fs
     val['resp'] = val['resp'].transform(fn)
     val['resp'] = add_stimtype_epochs(val['resp'])
 
@@ -1863,21 +1939,20 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
                        plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
     return fh, w_corrs, l_corrs
 
-def plot_linear_and_weighted_psths_loaded(val,SR,signame='resp',weights=None,subset=None,addsig=None):
+def plot_linear_and_weighted_psths_loaded(val,signame='resp',weights=None,subset=None,addsig=None, IncSwitchTime=None ):
     #WAS in nems_lbhb
     #smooth and subtract SR
-    import copy
-    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[signame].fs)
-    val[signame]=val[signame].transform(fn)
-    if addsig is not None:
-        fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[addsig].fs)
-        val[addsig]=val[addsig].transform(fn)
+    # fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[signame].fs)
+    # val[signame]=val[signame].transform(fn)
+    # if addsig is not None:
+    #     fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR/val[addsig].fs)
+    #     val[addsig]=val[addsig].transform(fn)
     lin_weights=[[1,1],[1,1]]
     epcs=val[signame].epochs[val[signame].epochs['name'] == 'PreStimSilence'].copy()
     epcs_offsets=[epcs['end'].iloc[0], 0]
 
     inp=copy.deepcopy(val[signame])
-    out, l_corrs=generate_weighted_model_signals(inp,lin_weights,epcs_offsets)
+    out, l_corrs=generate_weighted_model_signals(inp, lin_weights, epcs_offsets, IncSwitchTime=IncSwitchTime)
     val[signame+'_lin_model']=out
     if weights is None:
         sigz=[signame,signame+'_lin_model']
@@ -1889,7 +1964,8 @@ def plot_linear_and_weighted_psths_loaded(val,SR,signame='resp',weights=None,sub
         val[signame+'_weighted_model'], w_corrs=generate_weighted_model_signals(val[signame],weights,epcs_offsets)
         sigz=[signame,signame+'_lin_model',signame+'_weighted_model']
         plot_singles_on_dual=False
-    fh=plot_all_vals(val,None,signames=sigz,channels=[0,0,0],subset=subset,plot_singles_on_dual=plot_singles_on_dual)
+    fh=plot_all_vals(val, None, signames=sigz, channels=[0,0,0], subset=subset,
+                     plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
     return fh, w_corrs, l_corrs
 
 def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
@@ -1909,6 +1985,8 @@ def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
         IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
     except:
         IncSwitchTime = None
+        return None, None
+
 
     rec_file = nw.generate_recording_uri(row.name, int(row['batch']), loadkey='ns.fs' + str(fs), force_old_loader=False)
     rec = recording.load_recording(rec_file)
@@ -2073,14 +2151,8 @@ def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
         time_fit = np.arange(0, max(times), .01)
         fit_curve = fit_fn(time_fit, *params)
         ax[0].plot(time_fit + 1, fit_curve + ts_ss, '--', color='grey')
-        ax[0].text(time_fit.mean() + 1, yl[1], r'$g= {:.0f},  \tau=[{:.0f}, {:.0f}]ms, mse{:.2f}$'.format(params[0],
-                                                                                                          1000 / params[
-                                                                                                              1],
-                                                                                                          1000 / params[
-                                                                                                              2],
-                                                                                                          mse / row[
-                                                                                                              'SinglesMax']),
-                   va='top')
+        ax[0].text(time_fit.mean() + 1, yl[1], r'$g= {:.0f},  \tau=[{:.0f}, {:.0f}]ms, mse{:.2f}$'.format(
+            params[0], 1000 / params[1], 1000 / params[2], mse / row['SinglesMax']), va='top')
         ax[0].plot(time_fit[[0, -1]] + 1, [ts_ss, ts_ss], color='C2')
 
     # scipy.stats.bootstrap((epoch_data[names[3]][:, tcomp]-epoch_data[names[2]][:, tcomp].mean(),),np.mean,method='percentile')
@@ -2443,20 +2515,45 @@ def plot_weighted_psths_and_weightplot(row, weights, batch=306):
     return fh
 
 
-def calc_psth_weight_model(model, celldf=None, do_plot=False,
-                           modelspecs_dir='/auto/users/luke/Code/nems/modelspecs/normalization_branch'):
+def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None):
+
     cellid = model['cellid']
     cell = celldf.loc[cellid]
     print('load {}, {}'.format(cellid, model['modelspecname']))
-    modelspecs, est, val = load_SPO(cellid,
-                                    ['A', 'B', 'C', 'I'],
-                                    model['modelspecname'], fs=200,
-                                    modelspecs_dir=modelspecs_dir)
+    manager = BAPHYExperiment(batch=model['batch'], cellid=cellid)
+    exptparams = manager.get_baphy_exptparams()[0]
+    try:
+        IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
+    except KeyError as ke:
+        IncSwitchTime = None
+
+    filepath = model['modelpath']
+    xfspec, ctx = xforms.load_analysis(filepath, eval_model=False)
+    assert xfspec[1][1]['loadkey'] == f'env.fs{fs}'
+    predict_ind = [i for i,xfa in enumerate(xfspec) if 'nems.xforms.predict' == xfa[0] ][0]
+    ctx, log_xf = xforms.evaluate(xfspec, ctx, stop=predict_ind+1)
+    val = ctx['val']
+    val['pred'].chans = val['resp'].chans
+    est = ctx['est']
+    est['pred'].chans = est['resp'].chans
+
+    val['resp'] = val['resp'].extract_channels([cellid])
+    val['pred'] = val['pred'].extract_channels([cellid])
+    print(val['pred']._data.sum())
+    est['pred'] = est['pred'].extract_channels([cellid])
+
+    # modelspecs, est, val = load_SPO(cellid,
+    #                                 ['A', 'B', 'C', 'I'],
+    #                                 model['modelspecname'], fs=200,
+    #                                 modelspecs_dir=modelspecs_dir)
     # smooth and subtract SR
-    fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - cell['SR'] / val[0]['resp'].fs)
+    if fs == 200:
+        fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - cell['SR'] / val[0]['resp'].fs)
+    else:
+        fn = lambda x: x - SR / rec['resp'].fs
 
     # fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
-    val[0]['resp'] = val[0]['resp'].transform(fn)
+    val['resp'] = val['resp'].transform(fn)
 
     # calc SR of pred
     ps = est[0]['pred'].select_epochs(['PreStimSilence']).as_continuous()
@@ -2464,6 +2561,8 @@ def calc_psth_weight_model(model, celldf=None, do_plot=False,
     SR_model = ps[ff].mean() * val[0]['pred'].fs
 
     fn = lambda x: np.atleast_2d(x.squeeze() - SR_model / val[0]['pred'].fs)
+
+
     val[0]['pred'] = val[0]['pred'].transform(fn)
     print('calc weights')
     # weights_CR_,weights_IR_=calc_psth_weights_of_model_responses(val[0],signame='resp')
@@ -2473,15 +2572,65 @@ def calc_psth_weight_model(model, celldf=None, do_plot=False,
     # d={k+'R': v for k, v in d.items()}
     # for k, v in d.items():
     #    row[k]=v
-    dat = calc_psth_weights_of_model_responses(val[0], do_plot=do_plot, find_mse_confidence=False, get_nrmse_fn=False)
+    dat = calc_psth_weights_of_model_responses(val, do_plot=do_plot, find_mse_confidence=False, get_nrmse_fn=False, exptparams=exptparams)
+    for k, v in dat.items():
+        model[k] = v
+
+    dat = calc_psth_correlations(val, signame='resp', do_plot=do_plot, exptparams=exptparams)
+    dat = {k + 'R': v for k, v in dat.items()}
+    for k, v in dat.items():
+        model[k] = v
+
+    dat = calc_psth_correlations(val, signame='pred', do_plot=do_plot, exptparams=exptparams)
     for k, v in dat.items():
         model[k] = v
 
     if cell['get_nrmse_IR'] is None:
-        raise RuntimeError("Function cell['get_nrmse_IR'] is none.")
+        #raise RuntimeError("Function cell['get_nrmse_IR'] is none.")
+        model['LN_nrmse_ratio_I'] = None
+        model['LN_nrmse_ratio_C'] = None
     else:
         model['LN_nrmse_ratio_I'] = (1 - cell['get_nrmse_IR'](model['weights_I'])) / (1 - cell['nrmse_IR'])
         model['LN_nrmse_ratio_C'] = (1 - cell['get_nrmse_CR'](model['weights_C'])) / (1 - cell['nrmse_CR'])
+
+    if pth is not None:
+        fh, w_corrs, l_corrs = plot_linear_and_weighted_psths_loaded(val, signame='pred', subset='C+I', IncSwitchTime=IncSwitchTime)
+        fh.axes[0].set_title('{}: RType: {}, Pri: {}'.format(cellid, cell['Rtype'], ['A', 'B'][cell['inds'][0]]))
+        yl = np.array(fh.axes[0].get_ylim())
+        th = fh.axes[0].text(fh.axes[0].get_xlim()[1], yl[1] + .2 * np.diff(yl),
+                             '     DS  |  LS  |  dif  \nA: {: .2f}  {: .2f}  {: .2f}\nB: {: .2f}  {: .2f}  {: .2f}\nA-B: {: .2f}  {: .2f}  {: .2f}'.format(
+                                 model['r_dual_A_I'], model['r_lin_A_I'],
+                                 model['r_dual_A_I'] - model['r_lin_A_I'],
+                                 model['r_dual_B_I'], model['r_lin_B_I'],
+                                 model['r_dual_B_I'] - model['r_lin_B_I'],
+                                 model['r_dual_A_I'] - model['r_dual_B_I'],
+                                 model['r_lin_A_I'] - model['r_lin_B_I'],
+                                 model['r_dual_A_I'] - model['r_lin_A_I'] - (
+                                         model['r_dual_B_I'] - model['r_lin_B_I'])),
+                             verticalalignment='top', horizontalalignment='right')
+        th2 = fh.axes[2].text(fh.axes[0].get_xlim()[1], yl[1] + .01 * np.diff(yl),
+                              '     DS  |  LS  |  dif  \nA: {: .2f}  {: .2f}  {: .2f}\nB: {: .2f}  {: .2f}  {: .2f}\nA-B: {: .2f}  {: .2f}  {: .2f}'.format(
+                                  model['r_dual_A_C'], model['r_lin_A_C'],
+                                  model['r_dual_A_C'] - model['r_lin_A_C'],
+                                  model['r_dual_B_C'], model['r_lin_B_C'],
+                                  model['r_dual_B_C'] - model['r_lin_B_C'],
+                                  model['r_dual_A_C'] - model['r_dual_B_C'],
+                                  model['r_lin_A_C'] - model['r_lin_B_C'],
+                                  model['r_dual_A_C'] - model['r_lin_A_C'] - (
+                                          model['r_dual_B_C'] - model['r_lin_B_C'])),
+                              verticalalignment='top', horizontalalignment='right')
+        mngr = plt.get_current_fig_manager()
+        mngr.window.setGeometry(0, 29, 1916, 542)
+        plt.pause(.1)
+        mngr.window.setGeometry(0, 29, 1916, 542)
+        plt.draw_all()
+        plt.show()
+        fh.savefig(pth + cellid + '.png')
+        with open(pth + cellid + '.pickle', 'wb') as handle:
+            pl.dump(fh, handle)
+        plt.close(fh)
+
+
     return model
 
 
@@ -2501,7 +2650,10 @@ def calc_psth_weight_resp(row, do_plot=False, fs=200):
                                     get_est=False,
                                     get_stim=False)
     # smooth and subtract SR
-    fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR'] / val[0]['resp'].fs)
+    if fs == 200:
+        fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR'] / val[0]['resp'].fs)
+    else:
+        fn = lambda x: x - row['SR'] / val[0]['resp'].fs
 
     # fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val[0]['resp'] = val[0]['resp'].transform(fn)
