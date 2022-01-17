@@ -26,7 +26,7 @@ import nems_lbhb.xform_wrappers as xwrap
 log = logging.getLogger(__name__)
 
 # set to True to include expanded A1 set
-VERSION2_FLAG = True
+VERSION2_FLAG = False
 
 linux_user = getpass.getuser()
 

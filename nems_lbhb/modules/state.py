@@ -374,7 +374,7 @@ class population_mod(NemsModule):
                 n_inputs = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing pmod keyword.\n"
                              "Make sure keyword is of the form: \n"
                              "pmod.{n_state_variables} \n"
                              "keyword given: %s" % kw)
@@ -510,9 +510,9 @@ class sdexp_new(NemsModule):
                 n_chans = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing sdexp2 keyword.\n"
                              "Make sure keyword is of the form: \n"
-                             "sdexp.{n_state_variables} \n"
+                             "sdexp2.{n_state_variables} \n"
                              "keyword given: %s" % kw)
 
         state = 'state'
@@ -693,7 +693,7 @@ class lv_norm(NemsModule):
                 n_chans = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing lvnorm keyword.\n"
                              "Make sure keyword is of the form: \n"
                              "lvnorm.{n_state_variables}x{n_resp_chans} \n"
                              "keyword given: %s" % kw)
