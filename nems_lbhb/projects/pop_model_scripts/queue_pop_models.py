@@ -186,3 +186,24 @@ if 0:
 
 
 
+#  scratch space
+#
+if 0:
+    modelnames = ALL_FAMILY_POP[:-1]
+    modelnames = [m.replace("tfinit.n.lr1e3.et3.rb10.es20",
+                            "tfinit.n.lr1e3.et3.rb10.es20.l2,4") for m in modelnames]
+    useGPU = True
+
+    for batch in batches:
+        if useGPU and VERSION2_FLAG:
+            c = ['NAT4v2']
+        elif useGPU:
+            c = ['NAT4']
+        else:
+            c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        enqueue_exacloud_models(
+            cellist=c, batch=batch, modellist=modelnames,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
+
+
