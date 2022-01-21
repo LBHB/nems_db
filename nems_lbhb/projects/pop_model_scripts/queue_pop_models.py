@@ -190,8 +190,10 @@ if 0:
 #
 if 0:
     modelnames = ALL_FAMILY_POP[:-1]
-    modelnames = [m.replace("tfinit.n.lr1e3.et3.rb10.es20",
-                            "tfinit.n.lr1e3.et3.rb10.es20.l2,4") for m in modelnames]
+    #modelnames = [m.replace("tfinit.n.lr1e3.et3.rb10.es20",
+    #                        "tfinit.n.lr1e3.et3.rb10.es20.l2:4") for m in modelnames]
+    modelnames = [m.replace("newtf.n.lr1e4",
+                            "newtf.n.lr1e4.l2:4") for m in modelnames]
     useGPU = True
 
     for batch in batches:
@@ -206,4 +208,21 @@ if 0:
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
+    cellid='ARM029a-04-1'
+    batch=322
+    modelname = ALL_FAMILY_MODELS[2]
+    modelname = modelname.replace("newtf.n.lr1e4","newtf.n.lr1e4.l2:4")
+    print(modelname)
+    useGPU = False
+    for batch in batches:
+        cellids = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        #cellids = [c for c in cellids if c.startswith("TNC")]
+        enqueue_exacloud_models(
+            cellist=cellids, batch=batch, modellist=modelnames,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
+
+
+prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.ver2
+    modelname = 'ozgf.fs100.ch18.pop-loadpop-norm.l1-popev_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.l2:4.ver2'
 
