@@ -26,7 +26,8 @@ import nems_lbhb.xform_wrappers as xwrap
 log = logging.getLogger(__name__)
 
 # set to True to include expanded A1 set
-VERSION2_FLAG = True
+#VERSION2_FLAG = True
+VERSION = 3
 
 linux_user = getpass.getuser()
 
@@ -196,51 +197,53 @@ DOT_MARKERS = {#'conv1dx2': '^',
 #         f"{load_string}-mc.{c}_wc.18x30.g-fir.1x15x30-relu.30.f-wc.30x60-fir.1x10x60-relu.60.f-wc.60x80-relu.80-wc.80xR-lvl.R-dexp.R_{fit_string}", # c1dx2+d
 #     ])
 
-if VERSION2_FLAG:
-    NAT4_A1_SITES, _ = nd.get_batch_sites(322, POP_MODELS[2])
+####
+# A1 expanded dataset (v>=2)
+####
+
+if VERSION > 1:
+    if VERSION == 2:
+        vsuffix = '.ver2'
+        vsuffixp = '.ver2'
+    elif VERSION == 3:
+        vsuffix = '.l2:4-dstrf'
+        vsuffixp = '.l2:4'
+    NAT4_A1_SITES, rep_cellids = nd.get_batch_sites(322, POP_MODELS[2])
+
+    # dnn single models are the same so don't tack ".ver2" onto the last model in the list
+    POP_MODELS = [m+vsuffixp for m in POP_MODELS[:-1]] + [POP_MODELS[-1]]
+    SIG_TEST_MODELS = [m+vsuffix for m in SIG_TEST_MODELS[:-1]] + [SIG_TEST_MODELS[-1]]
+    ALL_FAMILY_POP = [m+vsuffixp for m in ALL_FAMILY_POP[:-1]] + [ALL_FAMILY_POP[-1]]
+    ALL_FAMILY_MODELS = [m+vsuffix for m in ALL_FAMILY_MODELS[:-1]] + [ALL_FAMILY_MODELS[-1]]
+
+    EQUIVALENCE_MODELS_POP = [m+vsuffixp for m in EQUIVALENCE_MODELS_POP]
+    EQUIVALENCE_MODELS_SINGLE = [m+vsuffix for m in EQUIVALENCE_MODELS_SINGLE]
+
+    # dnn single models are the same
+    HELDOUT = [m+vsuffix for m in HELDOUT[:-1]] + [HELDOUT[-1]]
+    MATCHED = [m+vsuffix for m in MATCHED[:-1]] + [MATCHED[-1]]
+    HELDOUT_pop = [m+vsuffixp for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
+    MATCHED_pop = [m+vsuffixp for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
+
+    fit_string_pop += vsuffixp
+    fit_string_single += vsuffix
 else:
+    vsuffix = ''
+    vsuffixp = ''
+
     NAT4_A1_SITES = [
-     'ARM029a', 'ARM030a', 'ARM031a',
-     'ARM032a', 'ARM033a',
-     'CRD016d', 'CRD017c',
-     'DRX006b.e1:64', 'DRX006b.e65:128',
-     'DRX007a.e1:64', 'DRX007a.e65:128',
-     'DRX008b.e1:64', 'DRX008b.e65:128',
+        'ARM029a', 'ARM030a', 'ARM031a',
+        'ARM032a', 'ARM033a',
+        'CRD016d', 'CRD017c',
+        'DRX006b.e1:64', 'DRX006b.e65:128',
+        'DRX007a.e1:64', 'DRX007a.e65:128',
+        'DRX008b.e1:64', 'DRX008b.e65:128',
     ]
 
 NAT4_PEG_SITES = [
     'ARM017a', 'ARM018a', 'ARM019a', 'ARM021b', 'ARM022b', 'ARM023a',
     'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b'
-    ]
-
-####
-# A1 expanded dataset (v2)
-####
-
-if VERSION2_FLAG:
-    NAT4_A1_SITES, rep_cellids = nd.get_batch_sites(322, POP_MODELS[2])
-
-    # dnn single models are the same so don't tack ".ver2" onto the last model in the list
-    POP_MODELS = [m+'.ver2' for m in POP_MODELS[:-1]] + [POP_MODELS[-1]]
-    SIG_TEST_MODELS = [m+'.ver2' for m in SIG_TEST_MODELS[:-1]] + [SIG_TEST_MODELS[-1]]
-    ALL_FAMILY_POP = [m+'.ver2' for m in ALL_FAMILY_POP[:-1]] + [ALL_FAMILY_POP[-1]]
-    ALL_FAMILY_MODELS = [m+'.ver2' for m in ALL_FAMILY_MODELS[:-1]] + [ALL_FAMILY_MODELS[-1]]
-
-    EQUIVALENCE_MODELS_POP = [m+'.ver2' for m in EQUIVALENCE_MODELS_POP]
-    EQUIVALENCE_MODELS_SINGLE = [m+'.ver2' for m in EQUIVALENCE_MODELS_SINGLE]
-
-    # dnn single models are the same
-    HELDOUT = [m+'.ver2' for m in HELDOUT[:-1]] + [HELDOUT[-1]]
-    MATCHED = [m+'.ver2' for m in MATCHED[:-1]] + [MATCHED[-1]]
-    HELDOUT_pop = [m+'.ver2' for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
-    MATCHED_pop = [m+'.ver2' for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
-
-    fit_string_pop += '.ver2'
-    fit_string_single += '.ver2'
-    #fit_string_nopre += '.ver2'
-    vsuffix = '.ver2'
-else:
-    vsuffix = ''
+]
 
 # Build modelnames
 MODELGROUPS = {}
