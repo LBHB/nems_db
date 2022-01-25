@@ -38,8 +38,8 @@ def subspace_overlap(u, v):
     return num / den
 
 
-def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10,
-                  norm_mean=True, method='jacobian', **kwargs):
+def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=None, memory=20,
+                  norm_mean=True, method='jacobian', use_rand_seed=0, **kwargs):
 
     # remove static nonlinearities from end of modelspec chain
     modelspec = modelspec.copy()
@@ -59,6 +59,8 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     bincount = rec['pred'].shape[1]
     stim_mean = np.mean(rec['stim'].as_continuous(), axis=1, keepdims=True)
     
+    if out_channel is None:
+        out_channel = [0]
     
     if index_range is None:
         stim_mag = rec['stim'].as_continuous().sum(axis=0)
@@ -67,7 +69,11 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
         index_range = index_range[(index_range > memory) & stim_big[index_range]]
         print(f"big frames in index_range: {len(index_range)}")
         if (sample_count is not None) and (len(index_range)>sample_count):
+            state = np.random.get_state()
+            np.random.seed(use_rand_seed)
             np.random.shuffle(index_range)
+            np.random.set_state(state)
+            
             index_range = index_range[:sample_count]
             print(f"trimmed to {sample_count} random subset")
 
@@ -541,24 +547,43 @@ def compute_dpcs(dstrf, pc_count=3):
     return pcs, pc_mag
 
 
-def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10, return_dstrf=False,
-              pca_index_range=None, **kwargs):
+def dstrf_pca(modelspec, rec, chunksize=20, out_channel=None, pc_count=3, 
+              return_dstrf=False, **dstrf_parms):
 
-    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
-                          memory=memory, **kwargs)
-
-    if pca_index_range is None:
-        pcs, pc_mag = compute_dpcs(dstrf, pc_count)
+    if out_channel is None:
+        cellcount = len(modelspec.meta['cellids'])
+        out_channel = list(np.arange(cellcount))
     else:
-        pcs, pc_mag = compute_dpcs(dstrf[pca_index_range, :, :], pc_count)
+        cellcount = len(out_channel)
+    chunkcount = int(np.ceil(cellcount/chunksize))
 
+    for chunk in range(chunkcount):
+        channels = list(range(chunk*chunksize,np.min([cellcount,(chunk+1)*chunksize])))
+        c1 = modelspec.meta['cellids'][channels[0]]
+        c2 = modelspec.meta['cellids'][channels[-1]]
+
+        print(f"Computing dSTRF(s) for chunk {chunk}: {channels[0]}-{channels[-1]} / cellid {c1} to {c2}")
+        dstrf_ = compute_dstrf(modelspec, rec, out_channel=channels, **dstrf_parms)
+        pcs_, pc_mag_ = compute_dpcs(dstrf_, pc_count=pc_count)
+        
+        if chunk==0:
+            dstrf = dstrf_.copy()
+            pcs = pcs_.copy()
+            pc_mag = pc_mag_.copy()
+        else:
+            if return_dstrf:
+                dstrf = np.concatenate((dstrf, dstrf_), axis=3)
+            pcs = np.concatenate((pcs, pcs_), axis=3)
+            pc_mag = np.concatenate((pc_mag, pc_mag_), axis=1)
+            
     if return_dstrf:
        return pcs, pc_mag, dstrf
     else:
        return pcs, pc_mag
 
 
-def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
+def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, 
+                      maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
 
     if IsReload and batching:
         return {}

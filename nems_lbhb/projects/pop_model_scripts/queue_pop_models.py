@@ -5,16 +5,12 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single,\
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, ALL_FAMILY_MODELS, ALL_FAMILY_POP, get_significant_cells, \
-    VERSION2_FLAG, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
+    VERSION, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
     DNN_SINGLE_MODELS, DNN_SINGLE_STAGE2, LN_SINGLE_MODELS, STP_SINGLE_MODELS,\
     NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS
 
 # parameters for adding to queue
-if VERSION2_FLAG:
-    batches = [322]
-else:
-    batches = [322, 323]
-    # ,334]  # 334 is merged A1+PEG megabatch
+batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
 
 force_rerun = False
 lbhb_user = "svd"
@@ -33,7 +29,7 @@ if 0:
     useGPU = True
 
     for batch in batches:
-        if useGPU and VERSION2_FLAG:
+        if useGPU and (VERSION > 1) and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -83,10 +79,9 @@ if 0:
 #
 # MATCHED/HELDOUT Round 1 - POP, excluding single sites
 #
-if VERSION2_FLAG:
-    batch_sites = {322: NAT4_A1_SITES}
-else:
-    batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
+
+batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
+
 if 0:
     modelnames = MATCHED_pop[:-1] + HELDOUT_pop[:-1]
     useGPU = True
@@ -124,7 +119,7 @@ if 0:
     modelnames = sum([POP_MODELGROUPS[k] for k in POP_MODELGROUPS if k not in ['LN','stp','dnn1_single']], [])
     useGPU = True
     for batch in batches:
-        if VERSION2_FLAG:
+        if (VERSION > 1) and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -197,7 +192,7 @@ if 0:
     useGPU = True
 
     for batch in batches:
-        if useGPU and VERSION2_FLAG:
+        if useGPU and (VERSION > 1) and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -213,6 +208,7 @@ if 0:
     modelname = ALL_FAMILY_MODELS[2]
     modelname = modelname.replace("newtf.n.lr1e4","newtf.n.lr1e4.l2:4")
     print(modelname)
+    modelnames=[modelname]
     useGPU = False
     for batch in batches:
         cellids = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
@@ -222,7 +218,4 @@ if 0:
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
-
-prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.ver2
-    modelname = 'ozgf.fs100.ch18.pop-loadpop-norm.l1-popev_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.l2:4.ver2'
 
