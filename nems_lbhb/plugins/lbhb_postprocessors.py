@@ -92,3 +92,15 @@ def rda(loadkey):
     """
     xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
     return xfspec
+
+@xform()
+def dstrf(loadkey):
+    """
+    Run Decoding Analysis
+    """
+    return [['nems.xforms.predict', {}],
+            ['nems.xforms.add_summary_statistics', {}],
+            ['nems.xforms.plot_summary', {}],
+            ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
+
+    return xfspec

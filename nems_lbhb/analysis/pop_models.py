@@ -407,14 +407,15 @@ def dstrf_pca_plot(pcs, pc_mag, cellids, clist=None, rows=1):
     return f2
 
 
-def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
+
+def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
     cellids = rec['resp'].chans
-    match=[c==cellid for c in cellids]
+    match = [c==cellid for c in cellids]
     c = np.where(match)[0][0]
         
     # analyze all output channels
     out_channel = [c]
-    channel_count=len(out_channel)
+    channel_count = len(out_channel)
 
     if dstrf is not None:
         stimmag = dstrf.shape[0]
@@ -428,7 +429,7 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
         dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
                               memory=memory, index_range=index_range)
 
-    if dpcs is None:
+    if pcs is None:
         # don't skip silent bins
 
         stim_big = stim_mag > np.max(stim_mag) / 1000
@@ -443,7 +444,7 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     
     c_=0
 
-    ii = np.arange(rr[0],rr[1])
+    ii = np.arange(rr[0],rr[-1])
     rr_orig = ii
     
     print(pcs.shape, dstrf.shape)
@@ -492,27 +493,30 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
         ax1.plot([d,d],yl1,'--', color='darkgray')
         ax2.plot([d,d],yl2,'--', color='darkgray')
         _dstrf = dstrf[d+rr[0],:,:,c_]
-        if True:
+        if False:
+            # stack a copy scaled by the current stim
             #_dstrf = np.concatenate((_dstrf,stim[:,(d-_dstrf.shape[1]):d]*mmd), axis=0)
             _dstrf = np.concatenate((_dstrf,_dstrf*stim[:,(d-_dstrf.shape[1]):d]), axis=0)
-
             #_dstrf *= stim[:,(d-_dstrf.shape[1]):d]
         ds = np.fliplr(_dstrf)
-        ds=zoom(ds, [2,2])
-        ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'))
+        #ds=zoom(ds, [2,2])
+        ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'), interpolation='none')
         #plot_heatmap(ds, aspect='auto', ax=ax[i], interpolation=2, clim=[-mmd, mmd], show_cbar=False, xlabel=None, ylabel=None)
 
         ax[i].set_title(f"Frame {d}", fontsize=8)
-        if i<n_pc:
-            ds=np.fliplr(pcs[i,:,:,c_])
-            ds=zoom(ds, [2,2])
-            mmp = np.max(np.abs(ds))
+        ds = np.fliplr(pcs[0,:,:,c_])*pc_mag[0]
+        #ds = zoom(ds, [2,2])
+        mmp = np.max(np.abs(ds))
+        if i < n_pc:
+            ds = np.fliplr(pcs[i,:,:,c_]*pc_mag[i])
+            #ds = zoom(ds, [2,2])
             #ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp])
             ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp], cmap=get_setting('WEIGHTS_CMAP'))
+            ax3[i].text(pcs.shape[2]-9, 1, f'PC{i}: {pc_mag[i,0]:0.3f}')
         else:
             ax3[i].set_axis_off()
 
-    ax[0].set_ylabel('example frames')
+    ax[0].set_ylabel('Example frames')
     ax3[0].set_ylabel('PCs')
 
     return f
@@ -580,6 +584,36 @@ def dstrf_pca(modelspec, rec, chunksize=20, out_channel=None, pc_count=3,
        return pcs, pc_mag, dstrf
     else:
        return pcs, pc_mag
+
+
+def dstrf_analysis(modelspec=None, est=None, figures=None, pc_count=5, memory=25,
+                   index_range=None, sample_count=1000,
+                   chunksize=25,
+                   IsReload=False, **kwargs):
+    """
+    Specialized postprocessor to analyze dstrf
+    """
+    if IsReload:
+        log.info("Reload, skipping dstrf_analysis")
+        return {}
+
+    pcs, pc_mag, dstrf = dstrf_pca(modelspec, est, pc_count=5, out_channel=None, memory=memory,
+                            index_range=None, sample_count=sample_count,
+                            return_dstrf=True, chunksize=chunksize)
+    modelspec.meta['dstrf_pcs'] = pcs
+    modelspec.meta['dstrf_pc_mag'] = pc_mag
+
+    rr = np.arange(150,600)
+    dindex = [50,100,200,250,350,400]
+    f = dstrf_details(modelspec, est, modelspec.meta['cellids'][0], rr, dindex, dstrf=None, pcs=None, memory=25, stepbins=3, maxbins=1500, n_pc=5)
+    f.show()
+    if figures is None:
+        figures = [nplt.fig2BytesIO(f)]
+    else:
+        figures = figures.copy()
+        figures.append(nplt.fig2BytesIO(f))
+
+    return {'modelspec': modelspec, 'figures': figures}
 
 
 def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, 

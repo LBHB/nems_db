@@ -84,18 +84,20 @@ batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
 
 if 0:
     modelnames = MATCHED_pop[:-1] + HELDOUT_pop[:-1]
+    modelnames = MATCHED_pop[:1] + HELDOUT_pop[:1]
     useGPU = True
-    for batch in batches:
+    for batch in batches[:1]:
         c = batch_sites[batch]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
-    modelnames = MATCHED_pop[-1:]
+    modelnames = MATCHED[:1]
     useGPU = False
     for batch in batches:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        c = [c_ for c_ in c if c_.startswith('ARM029a')]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
