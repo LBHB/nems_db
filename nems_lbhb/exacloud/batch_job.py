@@ -57,7 +57,10 @@ def write_batch_file(job_arguments,
         f.write(f'#SBATCH --account=lbhb\n')
         f.write(f'#SBATCH --time={time_hours:02d}:{time_mins:02d}:00\n')
         f.write(f'#SBATCH --cpus-per-task=1\n')
-        f.write(f'#SBATCH --mem=8G\n')
+        if use_gpu:
+            f.write(f'#SBATCH --mem=48G\n')
+        else:
+            f.write(f'#SBATCH --mem=8G\n')
         f.write(f'#SBATCH --job-name={job_name}\n')
         f.write(f'#SBATCH --comment="{job_comment}"\n')
         f.write(f'#SBATCH --output={str(job_log_loc)}%j_log.out\n')
