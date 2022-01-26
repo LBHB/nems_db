@@ -408,7 +408,7 @@ def dstrf_pca_plot(pcs, pc_mag, cellids, clist=None, rows=1):
 
 
 
-def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
+def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, pc_mag=None, memory=20, stepbins=3, maxbins=1000, n_pc=3):
     cellids = rec['resp'].chans
     match = [c==cellid for c in cellids]
     c = np.where(match)[0][0]
@@ -448,7 +448,7 @@ def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, memory=
     rr_orig = ii
     
     print(pcs.shape, dstrf.shape)
-    u = np.reshape(pcs[:,:,:,c_],[n_pc, -1])
+    u = np.reshape(pcs[:n_pc,:,:,c_],[n_pc, -1])
     d = np.reshape(dstrf[ii,:,:,c_],[len(ii),-1])
     pc_proj = d @ u.T
 
@@ -477,10 +477,10 @@ def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, memory=
     yl1=ax1.get_ylim()
 
     #ax2.plot(pc_proj);
-    ax2.plot(pred[:,rr_orig].T);
+    ax2.plot(pred[:n_pc, rr_orig].T);
     ax2.set_xlim(xl)
-    ax2.set_ylabel('pc projection')
-    ax2.legend(('PC1','PC2','PC3'), frameon=False)
+    ax2.set_ylabel('PC projection')
+    ax2.legend(('PC1', 'PC2', 'PC3'), frameon=False)
     yl2=ax2.get_ylim()
 
     dindex = np.array(dindex)
@@ -586,7 +586,7 @@ def dstrf_pca(modelspec, rec, chunksize=20, out_channel=None, pc_count=3,
        return pcs, pc_mag
 
 
-def dstrf_analysis(modelspec=None, est=None, figures=None, pc_count=5, memory=25,
+def dstrf_analysis(modelspec=None, est=None, val=None, figures=None, pc_count=5, memory=25,
                    index_range=None, sample_count=1000,
                    chunksize=25,
                    IsReload=False, **kwargs):
@@ -604,8 +604,8 @@ def dstrf_analysis(modelspec=None, est=None, figures=None, pc_count=5, memory=25
     modelspec.meta['dstrf_pc_mag'] = pc_mag
 
     rr = np.arange(150,600)
-    dindex = [50,100,200,250,350,400]
-    f = dstrf_details(modelspec, est, modelspec.meta['cellids'][0], rr, dindex, dstrf=None, pcs=None, memory=25, stepbins=3, maxbins=1500, n_pc=5)
+    dindex = np.array([25, 125, 175, 275, 325, 425])+7
+    f = dstrf_details(modelspec, val, modelspec.meta['cellids'][0], rr, dindex, dstrf=None, pcs=pcs, pc_mag=pc_mag, memory=25, stepbins=3, maxbins=600, n_pc=3)
     f.show()
     if figures is None:
         figures = [nplt.fig2BytesIO(f)]
