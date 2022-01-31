@@ -66,5 +66,3 @@ def run_decoding_analysis(IsReload=False, **kwargs):
     log.info('Queued decoding analysis')
     return {}
 
-            
-

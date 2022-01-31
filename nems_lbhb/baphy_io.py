@@ -2371,6 +2371,7 @@ def parse_cellid(options):
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
                 scf_ = db.get_cell_files(t[0], rawid=rawid_)
+                scf_ = scf_[['rawid','cellid','channum','unit']].drop_duplicates()
                 assert len(scf_)==1
                 scf.append(scf_)
             assert len(scf) == len(rawid)

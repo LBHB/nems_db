@@ -5,16 +5,12 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single,\
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, ALL_FAMILY_MODELS, ALL_FAMILY_POP, get_significant_cells, \
-    VERSION2_FLAG, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
+    VERSION, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
     DNN_SINGLE_MODELS, DNN_SINGLE_STAGE2, LN_SINGLE_MODELS, STP_SINGLE_MODELS,\
     NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS
 
 # parameters for adding to queue
-if VERSION2_FLAG:
-    batches = [322]
-else:
-    batches = [322, 323]
-    # ,334]  # 334 is merged A1+PEG megabatch
+batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
 
 force_rerun = False
 lbhb_user = "svd"
@@ -29,11 +25,11 @@ modelname_filter = POP_MODELS[2]
 
 # ROUND 1, all families pop
 if 0:
-    modelnames = ALL_FAMILY_POP[:-1]
+    modelnames = ALL_FAMILY_POP[1:-1]
     useGPU = True
 
     for batch in batches:
-        if useGPU and VERSION2_FLAG:
+        if useGPU and (VERSION > 1) and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -68,7 +64,7 @@ if 0:
 #
 if 0:
     # round 2 all family models
-    modelnames = ALL_FAMILY_MODELS
+    modelnames = ALL_FAMILY_MODELS[1:-1]
 
     useGPU = False
     for batch in batches:
@@ -83,24 +79,25 @@ if 0:
 #
 # MATCHED/HELDOUT Round 1 - POP, excluding single sites
 #
-if VERSION2_FLAG:
-    batch_sites = {322: NAT4_A1_SITES}
-else:
-    batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
+
+batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
+
 if 0:
     modelnames = MATCHED_pop[:-1] + HELDOUT_pop[:-1]
+    modelnames = MATCHED_pop[:1] + HELDOUT_pop[:1]
     useGPU = True
-    for batch in batches:
+    for batch in batches[:1]:
         c = batch_sites[batch]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
-    modelnames = MATCHED_pop[-1:]
+    modelnames = MATCHED[:1] + HELDOUT[:1]
     useGPU = False
-    for batch in batches:
+    for batch in batches[:1]:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        #c = [c_ for c_ in c if c_.startswith('ARM029a')]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
@@ -124,7 +121,7 @@ if 0:
     modelnames = sum([POP_MODELGROUPS[k] for k in POP_MODELGROUPS if k not in ['LN','stp','dnn1_single']], [])
     useGPU = True
     for batch in batches:
-        if VERSION2_FLAG:
+        if (VERSION > 1) and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -184,5 +181,43 @@ if 0:
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
+
+
+#  scratch space
+#
+if 0:
+    modelnames = ALL_FAMILY_POP[:-1]
+    #modelnames = [m.replace("tfinit.n.lr1e3.et3.rb10.es20",
+    #                        "tfinit.n.lr1e3.et3.rb10.es20.l2:4") for m in modelnames]
+    modelnames = [m.replace("newtf.n.lr1e4",
+                            "newtf.n.lr1e4.l2:4") for m in modelnames]
+    useGPU = True
+
+    for batch in batches:
+        if useGPU and (VERSION > 1) and (batch==322):
+            c = ['NAT4v2']
+        elif useGPU:
+            c = ['NAT4']
+        else:
+            c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        enqueue_exacloud_models(
+            cellist=c, batch=batch, modellist=modelnames,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
+
+    cellid='ARM029a-04-1'
+    batch=322
+    modelname = ALL_FAMILY_MODELS[2]
+    modelname = modelname.replace("newtf.n.lr1e4","newtf.n.lr1e4.l2:4")
+    print(modelname)
+    modelnames=[modelname]
+    useGPU = False
+    for batch in batches:
+        cellids = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        #cellids = [c for c in cellids if c.startswith("TNC")]
+        enqueue_exacloud_models(
+            cellist=cellids, batch=batch, modellist=modelnames,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
 

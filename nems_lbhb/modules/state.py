@@ -374,7 +374,7 @@ class population_mod(NemsModule):
                 n_inputs = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing pmod keyword.\n"
                              "Make sure keyword is of the form: \n"
                              "pmod.{n_state_variables} \n"
                              "keyword given: %s" % kw)
@@ -510,9 +510,9 @@ class sdexp_new(NemsModule):
                 n_chans = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing sdexp2 keyword.\n"
                              "Make sure keyword is of the form: \n"
-                             "sdexp.{n_state_variables} \n"
+                             "sdexp2.{n_state_variables} \n"
                              "keyword given: %s" % kw)
 
         state = 'state'
@@ -693,7 +693,7 @@ class lv_norm(NemsModule):
                 n_chans = 1
 
         except TypeError:
-            raise ValueError("Got TypeError when parsing stategain keyword.\n"
+            raise ValueError("Got TypeError when parsing lvnorm keyword.\n"
                              "Make sure keyword is of the form: \n"
                              "lvnorm.{n_state_variables}x{n_resp_chans} \n"
                              "keyword given: %s" % kw)
@@ -702,6 +702,7 @@ class lv_norm(NemsModule):
         set_bounds = False
         additive = False
         single_offset = False
+        exclude_chans = None
         for o in options[2:]:
             if o == 'bound':
                 set_bounds = True
@@ -711,6 +712,12 @@ class lv_norm(NemsModule):
                 single_offset=True
             elif o.startswith('sm'):
                 state = 'state_mod'
+            elif o.startswith('x'):
+                exclude_chans = [int(x) for x in o[1:].split(',')]
+
+        # update number of state channels, if we're asking to exlude any
+        if exclude_chans is not None:
+            n_states = n_states - len(exclude_chans)
 
         # init gain/dc params
         mean_g = np.zeros([n_chans, n_states])
@@ -729,7 +736,8 @@ class lv_norm(NemsModule):
                           'lv': 'lv',
                           'additive': additive,
                           'n_inputs': n_chans,
-                          'n_states': n_states},
+                          'n_states': n_states,
+                          'exclude_chans': exclude_chans},
             'plot_fns': ['nems.plots.api.mod_output',
                          'nems.plots.api.before_and_after',
                          'nems.plots.api.pred_resp',
@@ -745,7 +753,7 @@ class lv_norm(NemsModule):
 
         return lv_norm(**template)
 
-    def eval(self, rec, i, o, s, lv, g=None, d=None, additive=False, **kw_args):
+    def eval(self, rec, i, o, s, lv, g=None, d=None, additive=False, exclude_chans=None, **kw_args):
         '''
         Parameters
         ----------
@@ -759,6 +767,10 @@ class lv_norm(NemsModule):
 
         lv = rec[lv].as_continuous()
         state = rec[s].as_continuous()
+        # if excluding channels, update state now
+        if exclude_chans is not None:
+            keepidx = [idx for idx in range(0, state.shape[0]) if idx not in exclude_chans]
+            state = state[keepidx, :]
         #import pdb; pdb.set_trace()
         def fn(x):
             x = x.copy()
@@ -856,6 +868,7 @@ class indep_noise(NemsModule):
         state = 'state'
         set_bounds = False
         additive = True
+        exclude_chans = None
         for o in options[2:]:
             if o == 'bound':
                 set_bounds = True
@@ -863,6 +876,12 @@ class indep_noise(NemsModule):
                 additive = False
             elif o.startswith("sm"):
                 state = "state_mod"
+            elif o.startswith("x"):
+                exclude_chans = [int(x) for x in o[1:].split(',')]
+
+        # update number of state channels, if we're asking to exlude any
+        if exclude_chans is not None:
+            n_states = n_states - len(exclude_chans)
 
         # init gain/dc params
         zeros = np.zeros([n_chans, n_states])
@@ -881,7 +900,8 @@ class indep_noise(NemsModule):
                           'indep': 'indep',
                           'additive': additive,
                           'n_inputs': n_chans,
-                          'n_states': n_states},
+                          'n_states': n_states,
+                          'exclude_chans': exclude_chans},
             'plot_fns': ['nems.plots.api.mod_output',
                          'nems.plots.api.before_and_after',
                          'nems.plots.api.pred_resp',
@@ -895,7 +915,7 @@ class indep_noise(NemsModule):
 
         return indep_noise(**template)
 
-    def eval(self, rec, i, o, s, indep, g=None, additive=True, **kw_args):
+    def eval(self, rec, i, o, s, indep, g=None, additive=True, exclude_chans=None, **kw_args):
         '''
         Parameters
         ----------
@@ -909,7 +929,10 @@ class indep_noise(NemsModule):
 
         indep_noise = rec[indep].as_continuous()
         state = rec[s].as_continuous()
-
+        # if excluding channels, update state now
+        if exclude_chans is not None:
+            keepidx = [idx for idx in range(0, state.shape[0]) if idx not in exclude_chans]
+            state = state[keepidx, :]
         def fn_multiplicative(x):
             x = x * np.exp((g @ state[:g.shape[1],:]) * indep_noise)
             return x

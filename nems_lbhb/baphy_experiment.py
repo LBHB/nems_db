@@ -201,6 +201,8 @@ class BAPHYExperiment:
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+        if len(self.parmfile)==0:
+            raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
         self.folder = self.parmfile[0].parent
@@ -1394,6 +1396,8 @@ def _merge_refTar_epochs(exptevents, OverlapRefTar):
         ref_idx = target_prestims.index-3
         refs = exptevents.loc[ref_idx]
         refs = refs[refs.start.values == target_prestims.start.values]
+        if len(refs) == 0:
+            return exptevents
 
         # set the poststim duration to the ref post stim (to get rid of long poststim tails)
         exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
