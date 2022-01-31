@@ -87,6 +87,16 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     return dstrf
 
 
+def dstrf_pred(modelspec, rec, dstrf, index_range):
+    stim = rec['stim'].as_continuous()
+    shape_ = dstrf.shape
+    pred = np.full((stim.shape[0],stim.shape[1],dstrf.shape[3]), np.NaN)
+    memory = dstrf.shape[2]
+    for cellidx in range(dstrf.shape[3]):
+        for i in range(len(index_range)):
+            pred[:, index_range[i],cellidx] = (stim[:, (index_range[i] - memory + 1):(index_range[i] + 1)] * dstrf[i, :, :, cellidx]).sum(axis=1)
+    return pred
+
 def strf_mtx(modelspec, rows=3, smooth=[1,2]):
     
     fir_layers = [idx for idx,m in enumerate(modelspec) if ('fir' in m['fn'])]
@@ -745,8 +755,31 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
 
 
 def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, threshold=0, out_path="/tmp", 
-                out_base=None, fps=10, **kwargs):
-    #plt.close('all')
+                out_base=None, fps=10, zoom_factor = [2, 2], mode='images', dstrf_pred=None, **kwargs):
+    '''
+    Creates a dstrf movie. Either saves it to disk as .avi, previews the movie in a matplotlib window,
+    creates a figure and returns a function handle to load a specific frame, or makes a multipanel plot with requested frames.
+
+    To save to disk as .avi: use defaults (static=False, preview=False)
+    To preview the movie in a matplotlib window: preview=True
+    To create a figure and returns a function handle to load a specific frame: preview=2
+            Returns dstrf_frame, a fn that takes in integer input and loads that frame
+    To make a multipanel plot with requested frames: static=True
+
+    Arguments:
+    ----------
+    rec : recording object
+        recording object used to make the dstrf
+    preview : bool or int
+        if False and static=False, creates an avi
+        if True, plays movie in a matplotlib window
+        if 2, create a figure and returns a function handle to load a specific frame
+    mode : char in {'images','lines'}
+        images: makes strfs as images
+        lines: makes strfs as lines
+    zoom_factor : array-line, len 2
+        factor by which to upsample strf (frequency x time)
+    '''
 
     cellcount=len(out_channel)
     framecount=len(index_range)
@@ -771,6 +804,7 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     im_list = []
     l1_list = []
     l2_list = []
+    l3_list = []
 
     if static:
         max_frames = np.min([10, framecount])
@@ -779,34 +813,57 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     else:
         max_frames = framecount
         f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
+        if dstrf_pred is not None:
+            if mode == 'images':
+                raise RuntimeError('dstrf_pred for images not implemented (need to make more panels)')
+            elif mode == 'lines':
+                axs = np.hstack((axs,np.zeros((axs.shape[0],1))))
+                for cellidx in range(cellcount):
+                    axs[cellidx+1,2] = axs[cellidx+1,1].twinx()
+                dstrf_pred_sum = np.zeros((dstrf_pred.shape[1],dstrf_pred.shape[2]))
         stim0col=1
+        axs[0,0].remove()
     f.show()
 
-    im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', 
-                                           aspect='auto', cmap='Greys'))
+    if mode == 'images':
+        im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower',
+                                               aspect='auto', cmap='Greys'))
+        axs[0, stim0col].set_yticks([])
+        axs[0, stim0col].set_xticks([])
+    elif mode == 'lines':
+        im_list.append(axs[0, stim0col].plot(s.T))
+        axs[0, stim0col].set_ylim([0, stim_lim])
+        axs[0, stim0col].legend(im_list[-1],('Ch1','Ch2'))
     axs[0, stim0col].set_ylabel('stim')
-    axs[0, stim0col].set_yticks([])
-    axs[0, stim0col].set_xticks([])
+
     _title1 = axs[0, stim0col].set_title(f"dSTRF t={index / fs:.2f}")
 
     #axs[0, 0].set_axis_off()
     for cellidx in range(cellcount):
         d = dstrf[i, :, :, cellidx].copy()
 
-        pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
+        pred_max = np.max(rec['pred'].as_continuous()[out_channel[cellidx], :])
+        pred_min = np.min(rec['pred'].as_continuous()[out_channel[cellidx], :])
+        pred_ptp = np.ptp(rec['pred'].as_continuous()[out_channel[cellidx], :])
         strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) * 1.0
 
         if mult:
             strf_lim = strf_lim * stim_lim
             d = d * s
         d[np.abs(d)<threshold*strf_lim]=0
-        d = zoom(d, [2,2])
+        d = zoom(d, zoom_factor)
         #print(f"strf_lim[{cellidx}]: {strf_lim} shape: {dstrf[:, :, :, cellidx].shape} reshape max: {np.abs(d).max()}")
-        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
+        if mode == 'images':
+            im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
                                                interpolation='none', origin='lower',
                                                aspect='auto', cmap='bwr'))
-        axs[cellidx+1, 0].set_yticks([])
-        axs[cellidx+1, 0].set_xticks([])
+            axs[cellidx + 1, 0].set_yticks([])
+            axs[cellidx + 1, 0].set_xticks([])
+        elif mode == 'lines':
+            axs[cellidx + 1, 0].plot(np.zeros(d.shape[1]),color='grey')
+            im_list.append(axs[cellidx + 1, 0].plot(d.T))
+            axs[cellidx + 1, 0].set_ylim([-strf_lim, strf_lim])
+
         axs[cellidx+1, 0].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
 
         if cellidx<cellcount-1:
@@ -815,10 +872,16 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         if not static:
            l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index],
                                                  '-', color='purple')[0])
+           #print(f"{index}: {rec['pred'].as_continuous()[out_channel[cellidx], index]}")
            l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*2):index],
                                                  '-', color='gray')[0])
-           axs[cellidx+1, 1].set_ylim((0, pred_max))
-           axs[cellidx+1, 1].set_yticks([])
+           if dstrf_pred is not None:
+               if mode == 'lines':
+                   l3_list.append(axs[cellidx + 1, 2].plot(dstrf_pred[:,(index - memory * 2):index,cellidx].T,'--'))
+                   dstrf_pred_sum[:,cellidx] = dstrf_pred[:, :, cellidx].sum(axis=0)
+                   axs[cellidx+1, 2].set_ylim((np.nanmin(dstrf_pred_sum[:,cellidx]), np.nanmax(dstrf_pred_sum[:,cellidx])))
+           axs[cellidx+1, 1].set_ylim((pred_min, pred_max))
+           if mode == 'images': axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
         """
@@ -828,30 +891,43 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         """
         index = index_range[i]
         s = stim[:, (index - memory+1):(index+1)]
-        im_list[0].set_data(s)
-
+        if mode == 'images':
+            im_list[0].set_data(s)
+        elif mode == 'lines':
+            for j, line_handle in enumerate(im_list[0]):
+                line_handle.set_ydata(s[j,:])
         for cellidx in range(cellcount):
             if mult:
                 d = dstrf[i, :, :, cellidx] * s
             else:
                 d = dstrf[i, :, :, cellidx]
             d[np.abs(d)<threshold*strf_lim]=0
-            d=zoom(d,[2,2])
-            im_list[cellidx+1].set_data(d)
-
+            d=zoom(d, zoom_factor)
+            if mode == 'images':
+                im_list[cellidx+1].set_data(d)
+            elif mode == 'lines':
+                for j, line_handle in enumerate(im_list[cellidx+1]):
+                    line_handle.set_ydata(d[j,:])
             _t = np.arange(memory*2)
-            _r = rec['resp'].as_continuous()[cellidx, (index - memory*2-1):(index+1)]
+            _r = rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*zoom_factor[1]-1):(index+1)]
             smooth_window=0.75
             #import pdb; pdb.set_trace()
             _r = gaussian_filter1d(_r, smooth_window, axis=0)[1:-1]
 
-            #print(f"{index}: {_t.shape} {_r.shape}")
-            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[cellidx, (index - memory*2):index]))
+            #print(f"{index}: {_t.shape} {_r.shape} {rec['pred'].as_continuous()[out_channel[cellidx], index]}")
+            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index]))
             l2_list[cellidx].set_data((_t, _r))
+        if dstrf_pred is not None:
+            if mode == 'lines':
+                for j, line_handle in enumerate(l3_list[0]):
+                    line_handle.set_ydata(dstrf_pred[j, (index - memory * 2):index, cellidx].T)
 
         _title1.set_text(f"dSTRF t={index/fs:.2f}")
 
-        return tuple(im_list + l1_list + l2_list + [_title1])
+        if mode == 'images':
+            return tuple(im_list + l1_list + l2_list + [_title1])
+        elif mode == 'lines':
+            return tuple([j for i in im_list for j in i] + l1_list + l2_list + [_title1])
 
     if static:
         #stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
@@ -862,7 +938,10 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
            index = index_range[i]
 
            s = stim[:, (index - memory+2):(index+2)]
-           axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
+           if mode == 'images':
+               axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
+           elif mode == 'lines':
+               axs[0, i].plot(s.T)
            axs[0, i].set_title(f"dSTRF t={index/fs:.2f}")
            axs[0, i].set_yticks([])
            axs[0, i].set_xticks([])
@@ -870,15 +949,18 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
            for cellidx in range(cellcount):
                d = dstrf[i, :, :, cellidx].copy()
 
-               pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
+               pred_max = np.max(rec['pred'].as_continuous()[out_channel[cellidx], :])
                strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx]))  # /2
                if mult:
                    strf_lim = strf_lim * stim_lim
                    d = d * s
                d[np.abs(d)<threshold*strf_lim]=0
-               d = zoom(d, [2, 2])
-               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
+               d = zoom(d, zoom_factor)
+               if mode == 'images':
+                   axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower',
                                         aspect='auto', cmap='bwr')
+               elif mode == 'lines':
+                   axs[cellidx+1, i].plot(d.T)
                axs[cellidx+1, i].set_yticks([])
                axs[cellidx+1, i].set_xticks([])
                #axs[cellidx+1, i].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
@@ -894,6 +976,8 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         f.savefig(out_file)
 
     elif preview:
+        if preview==2:
+            return dstrf_frame
         for i in range(framecount):
             dstrf_frame(i)
             plt.pause(0.01)
@@ -1204,3 +1288,25 @@ def simulate_pop(n=10, modelstring=None):
         plt.text(0,resp._data[i,0],f"{i}", ha='right')
         
     return {'rec': rec, 'modelspec': modelspec}
+
+def align_yaxis(ax1, v1, ax2, v2):
+    """adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+    _, y1 = ax1.transData.transform((0, v1))
+    _, y2 = ax2.transData.transform((0, v2))
+    adjust_yaxis(ax2, (y1 - y2) / 2, v2)
+    adjust_yaxis(ax1, (y2 - y1) / 2, v1)
+
+
+def adjust_yaxis(ax, ydif, v):
+    """shift axis ax by ydiff, maintaining point v at the same location"""
+    inv = ax.transData.inverted()
+    _, dy = inv.transform((0, 0)) - inv.transform((0, ydif))
+    miny, maxy = ax.get_ylim()
+    miny, maxy = miny - v, maxy - v
+    if -miny > maxy or (-miny == maxy and dy > 0):
+        nminy = miny
+        nmaxy = miny * (maxy + dy) / (miny + dy)
+    else:
+        nmaxy = maxy
+        nminy = maxy * (miny + dy) / (maxy + dy)
+    ax.set_ylim(nminy + v, nmaxy + v)
