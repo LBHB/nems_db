@@ -20,9 +20,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 from nems.utils import ax_remove_box
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
-    MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP, SIG_TEST_MODELS,
+    MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
+    POP_MODELS, ALL_FAMILY_POP,
+    SIG_TEST_MODELS,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
-    linux_user, ALL_FAMILY_MODELS
+    linux_user, ALL_FAMILY_MODELS, VERSION, count_fits
 )
 
 from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pareto
@@ -59,17 +61,21 @@ fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
                              sharey='row')
 xlims = []
 ylims = []
+PLOT_STAT='r_test'
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
-    if batch==peg:
+    if (VERSION==2) and (batch==peg):
         mgroups = {k: [m.replace('.ver2','') for m in MODELGROUPS[k]] for k in MODELGROUPS}
         stest = [m.replace('.ver2','') for m in SIG_TEST_MODELS]
         allfam = [m.replace('.ver2','') for m in ALL_FAMILY_MODELS]
         nparms_modelgroups = {k: [m.replace('.ver2','') for m in POP_MODELGROUPS[k]] for k in POP_MODELGROUPS}
     else:
-        mgroups = MODELGROUPS
-        stest = SIG_TEST_MODELS
-        allfam = ALL_FAMILY_MODELS
+        mgroups = POP_MODELGROUPS
+        stest = POP_MODELS
+        allfam = ALL_FAMILY_POP
+        #mgroups = MODELGROUPS
+        #stest = SIG_TEST_MODELS
+        #allfam = ALL_FAMILY_MODELS
         nparms_modelgroups = POP_MODELGROUPS
 
     sig_cells = get_significant_cells(batch, stest, as_list=True)

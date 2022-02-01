@@ -40,18 +40,37 @@ base_path = figures_base_path / date
 if not base_path.is_dir():
     base_path.mkdir(parents=True, exist_ok=True)
 
-# old_fit_string = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
-# fit_string = "prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.et4"
-# #load_string = "ozgf.fs100.ch18.pop-ld-norm.l1-popev"
-# load_string = "ozgf.fs100.ch18-ld-norm.l1-sev"
-# dnn_load_string = "ozgf.fs100.ch18-ld-norm.l1-sev"
+####
+# set version-specific fit strings
+####
+if VERSION > 1:
+    if VERSION == 2:
+        vsuffix = '.ver2'
+        vsuffixp = '.ver2'
+    elif VERSION == 3:
+        vsuffix = '.l2:4-dstrf'
+        vsuffixp = '.l2:4'
 
+    # dnn single models are the same
+    #HELDOUT = [m+vsuffix for m in HELDOUT[:-1]] + [HELDOUT[-1]]
+    #MATCHED = [m+vsuffix for m in MATCHED[:-1]] + [MATCHED[-1]]
+    #HELDOUT_pop = [m+vsuffixp for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
+    #MATCHED_pop = [m+vsuffixp for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
+
+    #fit_string_pop += vsuffixp
+    #fit_string_single += vsuffix
+else:
+    vsuffix = ''
+    vsuffixp = ''
+
+# load/fit prefix/suffix
 load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
-fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 load_string_single = "ozgf.fs100.ch18-ld-norm.l1-sev"
-fit_string_single = 'prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4'
-fit_string_nopre = 'tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
-fit_string_dnn = 'prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4'
+
+fit_string_pop =   f"tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4{vsuffixp}"
+fit_string_nopre = f'tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4{vsuffixp}'
+fit_string_dnn =   f'prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}'
+fit_string_single = f'prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}'
 
 # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
 POP_MODELS = [
@@ -93,6 +112,28 @@ ALL_FAMILY_MODELS = [
 shortnames=['conv2d','conv1d','conv1dx2','ln-pop', 'dnn-sing']
 #shortnames=['conv1d','conv1dx2','dnn-sing']
 
+
+####
+# A1 expanded dataset (v>=2)
+####
+if VERSION > 1:
+    NAT4_A1_SITES, rep_cellids = nd.get_batch_sites(322, POP_MODELS[1])
+else:
+    NAT4_A1_SITES = [
+        'ARM029a', 'ARM030a', 'ARM031a',
+        'ARM032a', 'ARM033a',
+        'CRD016d', 'CRD017c',
+        'DRX006b.e1:64', 'DRX006b.e65:128',
+        'DRX007a.e1:64', 'DRX007a.e65:128',
+        'DRX008b.e1:64', 'DRX008b.e65:128',
+    ]
+
+NAT4_PEG_SITES = [
+    'ARM017a', 'ARM018a', 'ARM019a', 'ARM021b', 'ARM022b', 'ARM023a',
+    'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b'
+]
+
+
 # For correlation histograms
 EQUIVALENCE_MODELS_SINGLE = [
     f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single}",  #c2d
@@ -114,26 +155,26 @@ EQUIVALENCE_MODELS_POP = [
 #         f"{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
 # ]
 
-DNN_SINGLE_MODELS = ['ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x2.g-fir.1x25x2-relu.2.f-wc.2x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x3.g-fir.1x25x3-relu.3.f-wc.3x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x9.g-fir.1x25x9-relu.9.f-wc.9x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x15.g-fir.1x25x15-relu.15.f-wc.15x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4',
-    'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x18.g-fir.1x25x18-relu.18.f-wc.18x1-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
+DNN_SINGLE_MODELS = [f'{load_string_single}_wc.18x2.g-fir.1x25x2-relu.2.f-wc.2x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x3.g-fir.1x25x3-relu.3.f-wc.3x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x4.g-fir.1x25x4-relu.4.f-wc.4x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x9.g-fir.1x25x9-relu.9.f-wc.9x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x15.g-fir.1x25x15-relu.15.f-wc.15x1-lvl.1-dexp.1_{fit_string_nopre}',
+    f'{load_string_single}_wc.18x18.g-fir.1x25x18-relu.18.f-wc.18x1-lvl.1-dexp.1_{fit_string_nopre}'
                     ]
 DNN_SINGLE_STAGE2 = [m.replace("tfinit.n.lr1e3.et3.rb10.es20","prefit.m-tfinit.n.lr1e3.et3.es20") for m in DNN_SINGLE_MODELS]
 
-LN_SINGLE_MODELS = [f"{load_string_single}_wc.18x{rank}.g-fir.{rank}x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+LN_SINGLE_MODELS = [f"{load_string_single}_wc.18x{rank}.g-fir.{rank}x25-lvl.1-dexp.1_{fit_string_nopre}"
                     for rank in range(1,13)]
 
 STP_SINGLE_MODELS =[
-    f"{load_string_single}_wc.18x1.g-stp.1.q.s-fir.1x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
-    f"{load_string_single}_wc.18x2.g-stp.2.q.s-fir.2x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
-    f"{load_string_single}_wc.18x3.g-stp.3.q.s-fir.3x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
-    f"{load_string_single}_wc.18x4.g-stp.4.q.s-fir.4x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
-    f"{load_string_single}_wc.18x5.g-stp.5.q.s-fir.5x25-lvl.1-dexp.1_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4",
+    f"{load_string_single}_wc.18x1.g-stp.1.q.s-fir.1x25-lvl.1-dexp.1_{fit_string_nopre}",
+    f"{load_string_single}_wc.18x2.g-stp.2.q.s-fir.2x25-lvl.1-dexp.1_{fit_string_nopre}",
+    f"{load_string_single}_wc.18x3.g-stp.3.q.s-fir.3x25-lvl.1-dexp.1_{fit_string_nopre}",
+    f"{load_string_single}_wc.18x4.g-stp.4.q.s-fir.4x25-lvl.1-dexp.1_{fit_string_nopre}",
+    f"{load_string_single}_wc.18x5.g-stp.5.q.s-fir.5x25-lvl.1-dexp.1_{fit_string_nopre}",
 ]
 
 HELDOUT_pop = [m.replace("loadpop","loadpop.hs") for m in POP_MODELS]
@@ -197,53 +238,6 @@ DOT_MARKERS = {#'conv1dx2': '^',
 #         f"{load_string}-mc.{c}_wc.18x30.g-fir.1x15x30-relu.30.f-wc.30x60-fir.1x10x60-relu.60.f-wc.60x80-relu.80-wc.80xR-lvl.R-dexp.R_{fit_string}", # c1dx2+d
 #     ])
 
-####
-# A1 expanded dataset (v>=2)
-####
-
-if VERSION > 1:
-    if VERSION == 2:
-        vsuffix = '.ver2'
-        vsuffixp = '.ver2'
-    elif VERSION == 3:
-        vsuffix = '.l2:4-dstrf'
-        vsuffixp = '.l2:4'
-    NAT4_A1_SITES, rep_cellids = nd.get_batch_sites(322, POP_MODELS[2])
-
-    # dnn single models are the same so don't tack ".ver2" onto the last model in the list
-    POP_MODELS = [m+vsuffixp for m in POP_MODELS[:-1]] + [POP_MODELS[-1]]
-    SIG_TEST_MODELS = [m+vsuffix for m in SIG_TEST_MODELS[:-1]] + [SIG_TEST_MODELS[-1]]
-    ALL_FAMILY_POP = [m+vsuffixp for m in ALL_FAMILY_POP[:-1]] + [ALL_FAMILY_POP[-1]]
-    ALL_FAMILY_MODELS = [m+vsuffix for m in ALL_FAMILY_MODELS[:-1]] + [ALL_FAMILY_MODELS[-1]]
-
-    EQUIVALENCE_MODELS_POP = [m+vsuffixp for m in EQUIVALENCE_MODELS_POP]
-    EQUIVALENCE_MODELS_SINGLE = [m+vsuffix for m in EQUIVALENCE_MODELS_SINGLE]
-
-    # dnn single models are the same
-    HELDOUT = [m+vsuffix for m in HELDOUT[:-1]] + [HELDOUT[-1]]
-    MATCHED = [m+vsuffix for m in MATCHED[:-1]] + [MATCHED[-1]]
-    HELDOUT_pop = [m+vsuffixp for m in HELDOUT_pop[:-1]] + [HELDOUT_pop[-1]]
-    MATCHED_pop = [m+vsuffixp for m in MATCHED_pop[:-1]] + [MATCHED_pop[-1]]
-
-    fit_string_pop += vsuffixp
-    fit_string_single += vsuffix
-else:
-    vsuffix = ''
-    vsuffixp = ''
-
-    NAT4_A1_SITES = [
-        'ARM029a', 'ARM030a', 'ARM031a',
-        'ARM032a', 'ARM033a',
-        'CRD016d', 'CRD017c',
-        'DRX006b.e1:64', 'DRX006b.e65:128',
-        'DRX007a.e1:64', 'DRX007a.e65:128',
-        'DRX008b.e1:64', 'DRX008b.e65:128',
-    ]
-
-NAT4_PEG_SITES = [
-    'ARM017a', 'ARM018a', 'ARM019a', 'ARM021b', 'ARM022b', 'ARM023a',
-    'ARM024a', 'ARM025a', 'ARM026b', 'ARM027a', 'ARM028b'
-]
 
 # Build modelnames
 MODELGROUPS = {}
@@ -570,16 +564,16 @@ POP_MODELGROUPS['dnn1_single'] = [
 #
 # tentative: use best conv1dx2+d
 half_test_modelspec = "wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R"
-_tfitter = "tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4" + vsuffix
-_tfitter_rb = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4" + vsuffix
+_tfitter =    "tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4" + vsuffix
+_tfitter_rb = fit_string_nopre
 
 # test condition: take advantage of larger model population fit (hs: heldout), then fit single cell with half a dataset
 # fit last layer on half the data, using prefit with the current site held-out, run per cell
-modelname_half_prefit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hs-{_tfitter}",
-                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hs-{_tfitter}",
-                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hs-{_tfitter}",
-                       f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hs-{_tfitter}",
-                       f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hs-{_tfitter}"]
+modelname_half_prefit=[f"{load_string_single}.k10_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"{load_string_single}.k15_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"{load_string_single}.k25_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"{load_string_single}.k50_{half_test_modelspec}_prefit.hs-{_tfitter}",
+                       f"{load_string_single}_{half_test_modelspec}_prefit.hs-{_tfitter}"]
 
 # control condition: fit pop model then single cell with half the data. hm/hhm: exclude matched to preserve balance with heldout
 # fit held-out pop model with half the est data, run per site
@@ -590,11 +584,11 @@ modelname_half_pop=[f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev.k10_{half_tes
                     f"ozgf.fs100.ch18.pop-loadpop.hm-norm.l1-popev_{half_test_modelspec}_{_tfitter_rb}"]
 
 # then fit last layer on heldout cell with half the data (same est data as for modelname_half_prefit), run per cell
-modelname_half_fullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.htm-{_tfitter}",
-                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfm-{_tfitter}",
-                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqm-{_tfitter}",
-                        f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhm-{_tfitter}",
-                        f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hm-{_tfitter}"]
+modelname_half_fullfit=[f"{load_string_single}.k10_{half_test_modelspec}_prefit.htm-{_tfitter}",
+                        f"{load_string_single}.k15_{half_test_modelspec}_prefit.hfm-{_tfitter}",
+                        f"{load_string_single}.k25_{half_test_modelspec}_prefit.hqm-{_tfitter}",
+                        f"{load_string_single}.k50_{half_test_modelspec}_prefit.hhm-{_tfitter}",
+                        f"{load_string_single}_{half_test_modelspec}_prefit.hm-{_tfitter}"]
 
 # control condition: fit pop model then single cell with half the data. hm/hhm: exclude matched to preserve balance with heldout
 # fit held-out pop model with half the est data, run per site
@@ -605,26 +599,39 @@ modelname_half_heldoutpop=[f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev.k10_{h
                            f"ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev_{half_test_modelspec}_{_tfitter_rb}"]
 
 # then fit last layer on heldout cell with half the data (same est data as for modelname_half_prefit), run per cell
-modelname_half_heldoutfullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hts-{_tfitter}",
-                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfs-{_tfitter}",
-                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqs-{_tfitter}",
-                               f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhs-{_tfitter}",
-                               f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hs-{_tfitter}"]
+modelname_half_heldoutfullfit=[f"{load_string_single}.k10_{half_test_modelspec}_prefit.hts-{_tfitter}",
+                               f"{load_string_single}.k15_{half_test_modelspec}_prefit.hfs-{_tfitter}",
+                               f"{load_string_single}.k25_{half_test_modelspec}_prefit.hqs-{_tfitter}",
+                               f"{load_string_single}.k50_{half_test_modelspec}_prefit.hhs-{_tfitter}",
+                               f"{load_string_single}_{half_test_modelspec}_prefit.hs-{_tfitter}"]
 
 ln_half_models = [
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k15_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k25_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k50_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
-    f'ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k15_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k25_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k50_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}_wc.18x4.g-fir.4x25-lvl.1-dexp.1_{_tfitter_rb}',
 ]
 dnns_half_models = [
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k15_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k25_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
-    f'ozgf.fs100.ch18-ld-norm.l1-sev.k50_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k15_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k25_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
+    f'{load_string_single}.k50_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_{_tfitter_rb}',
     f"{load_string_single}_wc.18x12.g-fir.1x25x12-relu.12.f-wc.12x1-lvl.1-dexp.1_prefit.m-{_tfitter}"
 ]
 
+def count_fits(models, batch=None):
+    if batch is None:
+        batches=[322,323]
+    else:
+        batches=[batch]
 
+    for batch in batches:
+        df_r = nd.batch_comp(batch, models, stat='r_test')
+        #print(f"BATCH {batch}:")
+        for i,c in enumerate(df_r.columns):
+            parts=c.split("_")
+            if i==0:
+                print(f"BATCH {batch} -- {parts[0]}_XX_{parts[2]}")
+            print(f'{parts[1]}: {df_r[c].count()}')
 
 def get_significant_cells(batch, models, as_list=False):
 

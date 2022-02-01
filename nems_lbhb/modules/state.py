@@ -721,13 +721,13 @@ class lv_norm(NemsModule):
 
         # init gain/dc params
         mean_g = np.zeros([n_chans, n_states])
-        sd_g = np.ones([n_chans, n_states])
+        sd_g = np.ones([n_chans, n_states])/10
         if single_offset:
             mean_d = np.zeros([1, n_states])
-            sd_d = np.ones([1, n_states])
+            sd_d = np.ones([1, n_states])/10
         else:
             mean_d = np.zeros([n_chans, n_states])
-            sd_d = np.ones([n_chans, n_states])
+            sd_d = np.ones([n_chans, n_states])/10
 
         template = {
             'fn_kwargs': {'i': 'pred',
@@ -884,10 +884,8 @@ class indep_noise(NemsModule):
             n_states = n_states - len(exclude_chans)
 
         # init gain/dc params
-        zeros = np.zeros([n_chans, n_states])
-        ones = np.ones([n_chans, n_states])
-        mean_g = zeros.copy()
-        sd_g = ones.copy()
+        mean_g = np.zeros([n_chans, n_states])
+        sd_g = np.ones([n_chans, n_states])/10
         if additive:
             mean_g[:,0]=0.5
         else:

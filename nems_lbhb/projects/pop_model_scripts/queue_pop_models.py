@@ -7,7 +7,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, ALL_FAMILY_MODELS, ALL_FAMILY_POP, get_significant_cells, \
     VERSION, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
     DNN_SINGLE_MODELS, DNN_SINGLE_STAGE2, LN_SINGLE_MODELS, STP_SINGLE_MODELS,\
-    NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS
+    NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS, count_fits
 
 # parameters for adding to queue
 batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
@@ -21,11 +21,11 @@ script_path_exa = '/home/users/davids/nems/scripts/fit_single.py'
 ssh_key = '/home/svd/.ssh/id_rsa'
 user = "davids"
 
-modelname_filter = POP_MODELS[2]
+modelname_filter = POP_MODELS[1]
 
 # ROUND 1, all families pop
 if 0:
-    modelnames = ALL_FAMILY_POP[1:-1]
+    modelnames = ALL_FAMILY_POP[:-1]
     useGPU = True
 
     for batch in batches:
@@ -42,13 +42,13 @@ if 0:
 
 if 0:
     # dnn single, round 1
-    modelnames = DNN_SINGLE_MODELS
+    modelnames = DNN_SINGLE_MODELS[:5]
 
     # ln single, only 1 round
-    modelnames = LN_SINGLE_MODELS
+    modelnames = LN_SINGLE_MODELS[:5]
 
     # dnn single, round 2
-    modelnames = DNN_SINGLE_STAGE2
+    modelnames = DNN_SINGLE_STAGE2[:4]
 
     useGPU = False
     for batch in batches:
@@ -64,7 +64,7 @@ if 0:
 #
 if 0:
     # round 2 all family models
-    modelnames = ALL_FAMILY_MODELS[1:-1]
+    modelnames = ALL_FAMILY_MODELS
 
     useGPU = False
     for batch in batches:
@@ -84,20 +84,9 @@ batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
 
 if 0:
     modelnames = MATCHED_pop[:-1] + HELDOUT_pop[:-1]
-    modelnames = MATCHED_pop[:1] + HELDOUT_pop[:1]
     useGPU = True
     for batch in batches[:1]:
         c = batch_sites[batch]
-        enqueue_exacloud_models(
-            cellist=c, batch=batch, modellist=modelnames,
-            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
-            executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
-
-    modelnames = MATCHED[:1] + HELDOUT[:1]
-    useGPU = False
-    for batch in batches[:1]:
-        c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
-        #c = [c_ for c_ in c if c_.startswith('ARM029a')]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
@@ -147,7 +136,7 @@ if 0:
     for batch in batches:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
         enqueue_exacloud_models(
-            cellist=c, batch=batch, modellist=modelnames,
+            cellist=c[:2], batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 

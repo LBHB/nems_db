@@ -25,7 +25,6 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
     overall_max = -100
 
     for k, modelnames in modelgroups.items():
-        print(f"{k} len {len(modelnames)}")
         np_modelnames = nparms_modelgroups[k]
         b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
         b_n = nd.batch_comp(batch, np_modelnames, cellids=cellids, stat='n_parms')
@@ -34,7 +33,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         else:
             model_mean = b_ceiling.median()
         b_m = np.array(model_mean)
-
+        print(f"{k} modelcount {len(modelnames)} fits per model: {b_n.count().values}")
         n_parms = np.array([np.mean(b_n[m]) for m in np_modelnames])
 
         # don't divide by cells per site if only one cell was fit

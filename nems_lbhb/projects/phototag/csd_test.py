@@ -20,12 +20,12 @@ if USE_DB:
 else:
     #hard-code path to parmfile
     #parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a16_p_BNB.m"
-    #parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010c01_p_BNB.m"
     #parmfile = "/auto/data/daq/Teonancatl/TNC020/TNC020a11_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC017/TNC017a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC017/TNC017a10_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC016/TNC016a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a03_p_BNB.m"
+    parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
 
 
 ## load the recording

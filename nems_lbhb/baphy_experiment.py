@@ -27,6 +27,7 @@ from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.epoch as ep
+import nems.epoch as ep
 import nems.signal
 import nems.recording
 import nems.db as db
@@ -272,10 +273,20 @@ class BAPHYExperiment:
     def spikefile(self):
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix('.spk.mat').exists() for f in filenames]):
-            raise IOError("Spike file doesn't exist") 
+            raise IOError("Spike file doesn't exist")
         else:
             return [f.with_suffix('.spk.mat') for f in filenames]
-    
+
+    @property
+    @lru_cache(maxsize=128)
+    def dlcfile(self):
+        suffix = '.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
+            raise IOError("Spike file doesn't exist")
+        else:
+            return [f.with_suffix(suffix) for f in filenames]
+
     @property
     @lru_cache(maxsize=128)
     def behavior(self):
@@ -453,8 +464,7 @@ class BAPHYExperiment:
 
         # see if can load from cache, if not, call generate_recording
         data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
-        
-        # take care of the recache inside get_recording_uri 
+        # take care of the recache inside get_recording_uri
         # do we even need this if/else block here??? crh 01.22.2021
         if (not os.path.exists(data_file)): # | recache:
             kwargs.update({'mfiles': None})
@@ -476,6 +486,7 @@ class BAPHYExperiment:
         raw = kwargs.get('raw', False)
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
+        dlc = kwargs.get('dlc', False)
         stim = kwargs.get('stim', False)
         
         # default sampling rates depend on what signals are loaded
@@ -550,7 +561,19 @@ class BAPHYExperiment:
             if param['runclass']=='CPN':
                 #ToDo: format epochs for clarity and define if AllPermutations or Triplets
                 baphy_events[i], exptparams[i] = runclass.CPN(bev, param)
-                
+
+        def check_length(ps, rs):
+            for i, (p, r) in enumerate(zip(ps, rs)):
+                rlen = r.ntimes
+                plen = p.as_continuous().shape[1]
+                if plen > rlen:
+                    ps[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
+                elif rlen > plen:
+                    pcount = p.as_continuous().shape[0]
+                    ps[i] = p._modified_copy(np.append(p.as_continuous(),
+                                                       np.ones([pcount, rlen - plen]) * np.nan, axis=1))
+            return ps
+
         signals = {}
         
         if raw:
@@ -589,7 +612,6 @@ class BAPHYExperiment:
                     signals['resp'] = signals['resp'].append_time(r)
             
         if pupil:
-
             def check_length(ps, rs):
                 for i, (p, r) in enumerate(zip(ps, rs)):
                     rlen = r.ntimes
@@ -643,6 +665,23 @@ class BAPHYExperiment:
                     pupil_sigs = check_length(pupil_sigs, resp_sigs)
 
                 signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+
+        if dlc:
+            d_traces = self.get_dlc_trace(exptevents=exptevents, **kwargs)
+
+            # multiple dlc signals
+            sigs = list(d_traces[0][0].keys())
+            dlc_sigs = [nems.signal.RasterizedSignal(
+                fs=kwargs['rasterfs'], data=np.concatenate([d[0][sig] for sig in sigs], axis=0),
+                name='dlc', recording=rec_name, chans=sigs,
+                epochs=baphy_events[i])
+                for (i, d) in enumerate(d_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                dlc_sigs = check_length(dlc_sigs, resp_sigs)
+
+            signals['dlc'] = nems.signal.RasterizedSignal.concatenate_time(dlc_sigs)
 
         if stim:
             #import pdb; pdb.set_trace()
@@ -791,6 +830,12 @@ class BAPHYExperiment:
             return [io.load_pupil_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.pupilfile)]
         else:
             return [io.load_pupil_trace(str(p), **kwargs) for p in self.pupilfile]
+
+    def get_dlc_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [io.load_dlc_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.dlcfile)]
+        else:
+            return [io.load_dlc_trace(str(p), **kwargs) for p in self.dlcfile]
 
     # ===================================================================
 

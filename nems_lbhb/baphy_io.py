@@ -248,7 +248,9 @@ def baphy_mat2py(s):
     s3 = re.sub(r'globalparams\(1\)', r'globalparams', s3)
     s3 = re.sub(r'exptparams\(1\)', r'exptparams', s3)
 
-    s4 = re.sub(r'\(([0-9]*)\)', r'[\g<1>]', s3)
+    # special case for notes with () in them
+    s4 = re.sub(r'\(([0-9]*)\) ,', r'-\g<1> ,', s3)
+    s4 = re.sub(r'\(([0-9]*)\)', r'[\g<1>]', s4)
 
     s5 = re.sub(r'\.wav', r"", s4) # MLE eliminates .wav file sufix to not confuse with field ToDo: elimiate .wav from param files ?
     s5 = re.sub(r'\.([A-Za-z][A-Za-z0-9_]+)', r"['\g<1>']", s5)
@@ -278,7 +280,9 @@ def baphy_mat2py(s):
     s7 = re.sub(r'NaN', r'np.nan', s7)
     s7 = re.sub(r'zeros\(([0-9,]+)\)', r'np.zeros([\g<1>])', s7)
     if s7.count('{') == s7.count('}'):
-        s7 = re.sub(r'{(.*?)}', r'[\g<1>]', s7) # Replace {*} by [*]. (.*?) because that finds shortest matches possible.
+        s7 = s7.replace('{', '[')
+        s7 = s7.replace('}', ']')
+        #s7 = re.sub(r'{(.*?)}', r'[\g<1>]', s7) # Replace {*} by [*]. (.*?) because that finds shortest matches possible.
     else:
         raise RuntimeError('matlab->python string conversion failed because there were an unequal number of { and }')
 
@@ -297,10 +301,10 @@ def baphy_parm_read(filepath, evpread=True):
     globalparams = {}
     exptparams = {}
     exptevents = {}
-
     for ts in s:
+        #print(ts)
         sout = baphy_mat2py(ts)
-        # print(sout)
+        #print(sout)
         try:
             exec(sout)
         except KeyError:
@@ -331,8 +335,13 @@ def baphy_parm_read(filepath, evpread=True):
             exec(sout)
         except NameError:
             log.info("NameError on: {0}".format(sout))
+            import pdb; pdb.set_trace()
+        except SyntaxError:
+            import pdb; pdb.set_trace()
+            log.info("SyntaxError on: {0}".format(sout))
         except Exception as e:
             log.info("Other error on: {0} to {1}".format(ts,sout))
+            import pdb; pdb.set_trace()
 
     # special conversions
 
@@ -1565,6 +1574,179 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         return big_rs_dict, strialidx
     else:
         return big_rs, strialidx
+
+
+def load_dlc_trace(dlcfilepath, exptevents=None, **options):
+    """
+    returns big_rs which is pupil trace resampled to options['rasterfs']
+    and strialidx, which is the index into big_rs for the start of each
+    trial. need to make sure the big_rs vector aligns with the other signals
+
+    testing:
+    parmfile = '/auto/data/daq/Clathrus/training2022/Clathrus_2022_01_11_TBP_1.m'
+    dlcfilepath = '/auto/data/daq/Clathrus/training2022/sorted/Clathrus_2022_01_11_TBP_1.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
+    """
+
+    #options = set_default_pupil_options(options)
+
+    # todo : figure out filename from parm file path.
+    #pupilfilepath = get_pupil_file(pupilfilepath, **options)
+
+    rasterfs = options["rasterfs"]
+    dlc_threshold = options.get("dlc_threshold", -1)
+    verbose = options.get("verbose", False)
+    options['dlc'] = True
+
+    #if options["dlc_smooth"]:
+    #    raise ValueError('pupil_smooth not implemented. try pupil_median?')
+
+    # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
+    # these times are set based on openephys data, since baphy doesn't log exact trial start times
+    if exptevents is None:
+        from nems_lbhb.baphy_experiment import BAPHYExperiment
+
+        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
+        trial_starts = experiment.get_trial_starts()
+        exptevents = experiment.get_baphy_events()
+
+    dataframe = pd.read_hdf(dlcfilepath)
+    scorer = dataframe.columns.get_level_values(0)[0]
+    bodyparts = dataframe[scorer].columns.get_level_values(0)
+
+    num_frames = dataframe.shape[0]
+    names_bodyparts = list(bodyparts.unique(level=0))
+    num_bodyparts = len(names_bodyparts)
+
+    data_array = np.zeros((num_bodyparts*2, num_frames))
+    list_bodyparts = []
+
+    for i,bp in enumerate(names_bodyparts):
+        x = dataframe[scorer][bp]['x'].values
+        y = dataframe[scorer][bp]['y'].values
+        threshold_check = dataframe[scorer][bp]['likelihood'].values > dlc_threshold
+        x[~threshold_check] = np.nan
+        y[~threshold_check] = np.nan
+        data_array[2*i] = x
+        data_array[2*i+1] = y
+
+        list_bodyparts.append(bp+"_x")
+        list_bodyparts.append(bp+"_y")
+
+    if verbose:
+        print(data_array.shape) #should be number of bodyparts*2 x number of frames
+        print(list_bodyparts)  #should be each bodypart twice
+        print(data_array[8,0])  #should be NaN
+        print(data_array)  #check that values match
+
+
+    fs_approximate = 30  # approx video framerate
+    # resample and remove dropped frames
+
+    # find and parse lick trace events
+    pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+
+    trials = list(exptevents.loc[pp, 'Trial'])
+    ntrials = len(trials)
+    timestamp = np.zeros([ntrials+1])
+    firstframe = np.zeros([ntrials+1])
+    for i, x in exptevents.loc[pp].iterrows():
+        t = int(x['Trial'] - 1)
+        s = x['name'].split(",[")
+        p = eval("["+s[1])
+        # print("{0} p=[{1}".format(i,s[1]))
+        timestamp[t] = p[0]
+        firstframe[t] = int(p[1])
+    pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
+    lastidx = np.argwhere(pp)[-1]
+
+    s = exptevents.iloc[lastidx[0]]['name'].split(",[")
+    p = eval("[" + s[1])
+    timestamp[-1] = p[0]
+    firstframe[-1] = int(p[1])
+
+    # align DLC signals with other events, probably by
+    # removing extra bins from between trials
+    ff = exptevents['name'].str.startswith('TRIALSTART')
+    start_events = exptevents.loc[ff, ['start']].reset_index()
+    start_events['StartBin'] = (
+        np.round(start_events['start'] * rasterfs)
+    ).astype(int)
+    start_e = list(start_events['StartBin'])
+    ff = (exptevents['name'] == 'TRIALSTOP')
+    stop_events = exptevents.loc[ff, ['start']].reset_index()
+    stop_events['StopBin'] = (
+        np.round(stop_events['start'] * rasterfs)
+    ).astype(int)
+    stop_e = list(stop_events['StopBin'])
+
+    # calculate frame count and duration of each trial
+    duration = np.diff(np.append(start_e, stop_e[-1]) / rasterfs)
+
+    frame_count = np.diff(firstframe)
+    l = list_bodyparts
+
+    big_rs_dict = {}
+    for sigidx,signal in enumerate(l):
+        extras = False
+        # warp/resample each trial to compensate for dropped frames
+        strialidx = np.zeros([ntrials + 1])
+        #big_rs = np.array([[]])
+        all_fs = np.empty([ntrials])
+
+        for ii in range(0, ntrials):
+            d = data_array[sigidx,int(firstframe[ii]):int(firstframe[ii]+frame_count[ii])]
+
+            fs = frame_count[ii] / duration[ii]
+            all_fs[ii] = fs
+            t = np.arange(0, d.shape[0]) / fs
+            ti = np.arange(
+                (1/rasterfs)/2, duration[ii]+(1/rasterfs)/2, 1/rasterfs
+            )
+            # print("{0} len(d)={1} len(ti)={2} fs={3}"
+            #       .format(ii,len(d),len(ti),fs))
+            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            di = _f(ti)
+            if ii==0:
+                big_rs = di
+            else:
+                big_rs = np.concatenate((big_rs, di), axis=0)
+            if (ii < ntrials-1) and (len(big_rs) > start_e[ii+1]):
+                big_rs = big_rs[:start_e[ii+1]]
+            elif ii == ntrials-1:
+                big_rs = big_rs[:stop_e[ii]]
+
+            strialidx[ii+1] = big_rs.shape[0]
+
+        #if (pupil_median) & (signal == 'pupil'):
+        #    kernel_size = int(round(pupil_median*rasterfs/2)*2+1)
+        #    big_rs = scipy.signal.medfilt(big_rs, kernel_size=(kernel_size,1))
+
+        # shape to 1 x T to match NEMS signal specs. or transpose if 2nd dim already exists
+        if big_rs.ndim==1:
+            big_rs = big_rs[np.newaxis, :]
+        else:
+            big_rs=big_rs.T
+
+        if verbose and (sigidx==0):
+            #plot framerate for each trial (for checking camera performance)
+            plt.figure()
+            plt.plot(all_fs.T)
+            plt.xlabel('Trial')
+            plt.ylabel('Sampling rate (Hz)')
+
+        if verbose:
+            plt.show()
+
+        if len(l)>=2:
+            big_rs_dict[signal] = big_rs
+
+    print('done creating big_rs')
+
+    if len(l)>=2:
+        return big_rs_dict, strialidx
+    else:
+        return big_rs, strialidx
+
 
 
 def get_rem(pupilfilepath, exptevents=None, **options):
