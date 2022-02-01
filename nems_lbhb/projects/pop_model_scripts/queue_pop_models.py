@@ -136,7 +136,7 @@ if 0:
     for batch in batches:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
         enqueue_exacloud_models(
-            cellist=c[:2], batch=batch, modellist=modelnames,
+            cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 

@@ -61,7 +61,7 @@ fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
                              sharey='row')
 xlims = []
 ylims = []
-PLOT_STAT='r_test'
+PLOT_STAT='r_ceiling'
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
     if (VERSION==2) and (batch==peg):
@@ -70,12 +70,12 @@ for i, batch in enumerate([a1, peg]):
         allfam = [m.replace('.ver2','') for m in ALL_FAMILY_MODELS]
         nparms_modelgroups = {k: [m.replace('.ver2','') for m in POP_MODELGROUPS[k]] for k in POP_MODELGROUPS}
     else:
-        mgroups = POP_MODELGROUPS
-        stest = POP_MODELS
+        #mgroups = POP_MODELGROUPS
+        #stest = POP_MODELS
         allfam = ALL_FAMILY_POP
-        #mgroups = MODELGROUPS
-        #stest = SIG_TEST_MODELS
-        #allfam = ALL_FAMILY_MODELS
+        mgroups = MODELGROUPS
+        stest = SIG_TEST_MODELS
+        allfam = ALL_FAMILY_MODELS
         nparms_modelgroups = POP_MODELGROUPS
 
     sig_cells = get_significant_cells(batch, stest, as_list=True)
