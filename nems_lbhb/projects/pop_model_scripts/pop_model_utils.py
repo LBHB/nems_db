@@ -192,6 +192,7 @@ fit_string2 = "tfinit.n.lr1e3.et3.rb10.es20.v-newtf.n.lr1e4.es20.v"
 fit_string3 = "tfinit.n.lr1e3.et3.rb10.es20.L2-newtf.n.lr1e4.es20.L2"
 
 PLOT_STAT = 'r_ceiling'
+#PLOT_STAT = 'r_test'
 
 DOT_COLORS = {'conv2d': 'darkgreen', 'LN': 'black', 'conv1d': 'lightblue', #'conv1dx2': 'purple',
               'conv1dx2+d': 'purple', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',

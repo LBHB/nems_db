@@ -9,14 +9,16 @@ parmfile = '/auto/data/daq/Clathrus/training2022/Clathrus_2022_01_11_TBP_1.m'
 #dlcfilepath = '/auto/data/daq/Clathrus/training2022/sorted/Clathrus_2022_01_11_TBP_1.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
 
 experiment = BAPHYExperiment(parmfile=parmfile)
-rec = experiment.get_recording(rasterfs=30, dlc=True,
+rec = experiment.get_recording(rasterfs=30, recache=True, dlc=True,
                                resp=False, stim=False, dlc_threshold=0.25)
 
 # find lick events
+dlc = rec['dlc']
+show_sec = 500
+
 lick_events = dlc.epochs.loc[(dlc.epochs.name=='LICK') & (dlc.epochs.start<show_sec)].copy()
 lick_frames = (lick_events['start'].values * dlc.fs).astype(int)
 
-dlc = rec['dlc']
 chans = dlc.chans
 plt.figure()
 for i in range(0,len(chans),2):
@@ -39,7 +41,6 @@ dlc.epochs.loc[dlc.epochs['name'].str.endswith("_TRIAL")]
 
 
 # plot lick times on top of raw dlc trace
-show_sec = 500
 show_frames=int(show_sec*dlc.fs)
 
 # find lick events

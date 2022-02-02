@@ -12,7 +12,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop
 # parameters for adding to queue
 batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
 
-force_rerun = False
+force_rerun = True
 lbhb_user = "svd"
 
 # exacloud settings:
@@ -176,10 +176,7 @@ if 0:
 #
 if 0:
     modelnames = ALL_FAMILY_POP[:-1]
-    #modelnames = [m.replace("tfinit.n.lr1e3.et3.rb10.es20",
-    #                        "tfinit.n.lr1e3.et3.rb10.es20.l2:4") for m in modelnames]
-    modelnames = [m.replace("newtf.n.lr1e4",
-                            "newtf.n.lr1e4.l2:4") for m in modelnames]
+    modelnames = [m.replace("l2:4","l2:5") for m in modelnames]
     useGPU = True
 
     for batch in batches:
@@ -196,10 +193,10 @@ if 0:
 
     cellid='ARM029a-04-1'
     batch=322
-    modelname = ALL_FAMILY_MODELS[2]
-    modelname = modelname.replace("newtf.n.lr1e4","newtf.n.lr1e4.l2:4")
-    print(modelname)
-    modelnames=[modelname]
+
+    modelnames = ALL_FAMILY_MODELS[:-1]
+    modelnames = [m.replace("l2:4","l2:5") for m in modelnames]
+
     useGPU = False
     for batch in batches:
         cellids = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()

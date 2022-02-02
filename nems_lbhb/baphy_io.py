@@ -243,6 +243,7 @@ def baphy_mat2py(s):
     s3 = re.sub(r'%', r'#', s3)
     s3 = re.sub(r'\\', r'/', s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
+    s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)\+", r"XX\g<1>+", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+) ,", r"XX\g<1> ,", s3)
     s3 = re.sub(r'globalparams\(1\)', r'globalparams', s3)
@@ -273,6 +274,7 @@ def baphy_mat2py(s):
         s6 = "=".join(x)
 
     s7 = re.sub(r"XX([a-zA-Z0-9]+)'", r".\g<1>'", s6)
+    s7 = re.sub(r"XX([a-zA-Z0-9]+)'", r".\g<1>'", s7)
     s7 = re.sub(r"XX([a-zA-Z0-9]+)\+", r".\g<1>+", s7)
     s7 = re.sub(r"XX([a-zA-Z0-9]+) ,", r".\g<1> ,", s7)
     s7 = re.sub(r',,', r',', s7)
