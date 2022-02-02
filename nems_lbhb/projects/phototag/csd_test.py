@@ -1,7 +1,7 @@
 from os.path import basename, join
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import convolve2d
+from scipy.signal import convolve2d, butter, sosfilt
 
 from nems import db
 from nems.utils import smooth
@@ -29,31 +29,50 @@ else:
 
 
 ## load the recording
+parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
 ex = BAPHYExperiment(parmfile=parmfile)
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-rec = ex.get_recording(raw=True, resp=False, stim=False, recache=False, rawchans=None, rasterfs=400)
+rec = ex.get_recording(raw=True, resp=False, stim=False, recache=False, rawchans=None, rasterfs=1500)
 
-print('smoothing...')
-raw_data=rec['raw']._data.copy()
-for i in range(raw_data.shape[0]):
-    raw_data[i, :] = smooth(raw_data[i,:], 5)
+data = rec['raw']._data.copy()
 
-rec['smoothed'] = rec['raw']._modified_copy(data=raw_data)
+print('HP-filtering MUA >100 Hz...')
+sos = butter(4, 100, 'hp', fs=rec['raw'].fs, output='sos')
+mua_ = sosfilt(sos, data, axis=1)
+mua_ = np.abs(mua_)
+for i in range(mua_.shape[0]):
+    mua_[i, :] = smooth(mua_[i,:], 10)
+
+rec['mua'] = rec['raw']._modified_copy(data=mua_)
+
+print('BP-filtering LFP 1-150 Hz...')
+data = rec['raw']._data.copy()
+sos = butter(4, [1, 150], 'bandpass', fs=rec['raw'].fs, output='sos')
+lfp_ = sosfilt(sos, data, axis=1)
+rec['lfp'] = rec['raw']._modified_copy(data=lfp_)
+
+
+plt.figure()
+plt.plot(data[0,:1000])
+plt.plot(lfp_[0,:1000])
+plt.plot(mua_[0,:1000])
+plt.legend(('raw','lfp','mua'))
+
 
 ## extract traces for each stimulus event
-ep = rec['raw'].epochs
+ep = rec['lfp'].epochs
 eps = ep.loc[ep['name'].str.startswith("STIM"),'name']
 epoch = ep.loc[ep['name'].str.startswith("STIM"),'name'].values[0]
 
-r = rec['smoothed'].extract_epoch(epoch)
+r = rec['lfp'].extract_epoch(epoch)
 pre_ep = ep.loc[ep.name.str.startswith("PreStim")]
 pre_stim_silence = pre_ep.iloc[0]['end']-pre_ep.iloc[0]['start']
 epoch, pre_stim_silence, rec['raw'].fs
 
 
-## plot raw traces
-s = rec['raw'].epochs.loc[rec['raw'].epochs['name']==epoch, ['start','end']]
+## plot mean LFP traces
+s = rec['lfp'].epochs.loc[rec['lfp'].epochs['name']==epoch, ['start','end']]
 diff = (s['end']-s['start']).values
 
 tt = np.arange(r.shape[2]) / rec['raw'].fs-pre_stim_silence
@@ -72,7 +91,7 @@ right_ch_nums = np.arange(4,65,3)-1
 center_ch_nums = np.insert(np.arange(5, 63, 3),obj=slice(0,1),values =[1,2],axis=0)-1
 
 #spatial_filter = np.array([[0.05], [0.15], [0.7], [0.15], [0.05]])
-spatial_filter = np.hanning(3)[:, np.newaxis]
+spatial_filter = np.hanning(5)[:, np.newaxis]
 spatial_filter = spatial_filter / spatial_filter.sum()
 
 csd = np.zeros_like(r_mean)

@@ -57,11 +57,9 @@ else:
 ########################################################################################################################
 means = []
 fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short)
-fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
-                             sharey='row')
 xlims = []
 ylims = []
-PLOT_STAT='r_ceiling'
+
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
     if (VERSION==2) and (batch==peg):
@@ -72,7 +70,7 @@ for i, batch in enumerate([a1, peg]):
     else:
         #mgroups = POP_MODELGROUPS
         #stest = POP_MODELS
-        allfam = ALL_FAMILY_POP
+        #allfam = ALL_FAMILY_POP
         mgroups = MODELGROUPS
         stest = SIG_TEST_MODELS
         allfam = ALL_FAMILY_MODELS
@@ -101,6 +99,11 @@ for a in axes1:
     a.set_xlim(min_x, max_x)
     a.set_ylim(min_y, max_y)
 
+fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
+                             sharey='row')
+#scatter_bar([a1], ALL_FAMILY_POP, axes=axes1b[:,0])
+#scatter_bar([a1], m, axes=axes1b[:,1])
+#scatter_bar([peg], ALL_FAMILY_POP, stest=stest, axes=axes1b[:,1])
 scatter_bar([a1], ALL_FAMILY_MODELS, axes=axes1b[:,0])
 scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
 
