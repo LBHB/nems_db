@@ -340,7 +340,7 @@ def baphy_parm_read(filepath, evpread=True):
             import pdb; pdb.set_trace()
         except SyntaxError:
             import pdb; pdb.set_trace()
-            log.info("SyntaxError on: {0}".format(sout))
+            log.info("SyntaxError parsing this baphy config line: {0}".format(sout))
         except Exception as e:
             log.info("Other error on: {0} to {1}".format(ts,sout))
             import pdb; pdb.set_trace()

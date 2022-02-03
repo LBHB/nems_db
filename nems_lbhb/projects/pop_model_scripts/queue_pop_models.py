@@ -12,7 +12,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop
 # parameters for adding to queue
 batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
 
-force_rerun = True
+force_rerun = False
 lbhb_user = "svd"
 
 # exacloud settings:

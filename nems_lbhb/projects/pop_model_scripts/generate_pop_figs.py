@@ -111,10 +111,18 @@ scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
 ########################################################################################################################
 #################################   EQUIVALENCE  #######################################################################
 ########################################################################################################################
-a1_corr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'corr_nat4.pkl'
-a1_corr_path_pop = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'corr_nat4_pop.pkl'
-peg_corr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4.pkl'
-peg_corr_path_pop = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4_pop.pkl'
+#int_path = Path('/auto/users/jacob/notes/new_equivalence_results/')
+int_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/')
+
+a1_corr_path = int_path  / str(a1) / 'corr_nat4.pkl'
+a1_corr_path_pop = int_path / str(a1) / 'corr_nat4_pop.pkl'
+peg_corr_path = int_path / str(peg) / 'corr_nat4.pkl'
+peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
+
+from pop_correlation import generate_psth_correlations_pop
+batch=322
+generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+
 
 fig2, axes2 = plt.subplots(2, 1, figsize=single_column_tall)
 a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
@@ -149,8 +157,10 @@ print(mds2)
 ########################################################################################################################
 #################################   SNR  ###############################################################################
 ########################################################################################################################
-a1_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/') / str(a1) / 'snr_nat4.pkl'
-peg_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/') / str(peg) / 'snr_nat4.pkl'
+#a1_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/') / str(a1) / 'snr_nat4.pkl'
+#peg_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/') / str(peg) / 'snr_nat4.pkl'
+a1_snr_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/') / str(a1) / 'snr_nat4.pkl'
+peg_snr_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/') / str(peg) / 'snr_nat4.pkl'
 
 fig4a, ax4a = plt.subplots(figsize=single_column_short)
 fig4b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.

@@ -13,7 +13,8 @@ import nems_lbhb.xform_wrappers as xwrap
 import nems.epoch as ep
 
 from pop_model_utils import (get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
-                             NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS)
+                             NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS,
+                            figures_base_path)
 
 import matplotlib as mpl
 params = {'pdf.fonttype': 42,
