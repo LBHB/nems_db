@@ -61,7 +61,7 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
 
     if not sequence_only:
         # strip the seq. epochs and sub pre/post stim
-        new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
+        new_epochs = new_epochs.loc[~new_epochs.name.str.contains('_sequence')]
 
         # remove "sub" labels -- sub masks finds SubPreStimSilence and SubPostStimSilence
         sub = new_epochs.name.str.startswith('Sub')

@@ -48,8 +48,8 @@ if VERSION > 1:
         vsuffix = '.ver2'
         vsuffixp = '.ver2'
     elif VERSION == 3:
-        vsuffix = '.l2:4-dstrf'
-        vsuffixp = '.l2:4'
+        vsuffix = '.l2:5-dstrf'
+        vsuffixp = '.l2:5'
 
     # dnn single models are the same
     #HELDOUT = [m+vsuffix for m in HELDOUT[:-1]] + [HELDOUT[-1]]

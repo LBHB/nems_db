@@ -55,6 +55,20 @@ else:
 ########################################################################################################################
 #################################   PARETO  ############################################################################
 ########################################################################################################################
+ALL_FAMILY_POP[-1]=ALL_FAMILY_POP[-1].replace("l2:5","l2:4")
+ALL_FAMILY_MODELS[-1]=ALL_FAMILY_MODELS[-1].replace("l2:5","l2:4")
+POP_MODELS[-1]=POP_MODELS[-1].replace("l2:5","l2:4")
+SIG_TEST_MODELS[-1]=SIG_TEST_MODELS[-1].replace("l2:5","l2:4")
+
+fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
+                             sharey='row')
+#scatter_bar([a1], ALL_FAMILY_POP, axes=axes1b[:,0])
+#scatter_bar([a1], m, axes=axes1b[:,1])
+#scatter_bar([peg], ALL_FAMILY_POP, stest=stest, axes=axes1b[:,1])
+scatter_bar([a1], ALL_FAMILY_MODELS, axes=axes1b[:,0])
+scatter_bar([peg], ALL_FAMILY_MODELS, axes=axes1b[:,1])
+#scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
+
 means = []
 fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short)
 xlims = []
@@ -98,14 +112,6 @@ max_y = ylims.max()
 for a in axes1:
     a.set_xlim(min_x, max_x)
     a.set_ylim(min_y, max_y)
-
-fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
-                             sharey='row')
-#scatter_bar([a1], ALL_FAMILY_POP, axes=axes1b[:,0])
-#scatter_bar([a1], m, axes=axes1b[:,1])
-#scatter_bar([peg], ALL_FAMILY_POP, stest=stest, axes=axes1b[:,1])
-scatter_bar([a1], ALL_FAMILY_MODELS, axes=axes1b[:,0])
-scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
 
 
 ########################################################################################################################
