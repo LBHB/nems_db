@@ -24,7 +24,7 @@ def db_session():
 
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path,
-                            script_path, time_limit=14, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
+                            script_path, time_limit=14, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
     """Enqueues models similarly to nems.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param celllist: List of cells to include in analysis.
@@ -34,7 +34,8 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     :param linux_user: OHSU username.
     :param executable_path: Executable used to run script.
     :param script_path: Script to run.
-    :param time_limit: How long the job will run for. Jobs will terminated if not complete by the end of the time limit.
+    :param time_limit: Max hours the job will run for. Jobs will terminated if not complete by the end of the time limit.
+    :param reserve_gb: Max GB required for the job. Job will fail if memory use goes above this level.
     :param useGPU: Whether or not to be GPU job.
     :param high_mem: Whether or not GPU should be a higher memory one.
     :param exclude: List of nodes to exclude. Comma separated values, no spaces.
@@ -45,9 +46,10 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     # extra parameters for future
     time_limit = f'--time_limit={time_limit}'
     use_gpu = '--use_gpu' if useGPU else ''
+    reserve_gb = f'--reserve_gb={reserve_gb}' if reserve_gb else ''
     high_mem = '--high_mem' if high_mem else ''
     exclude = f'--exclude={exclude}' if exclude is not None else ''
-    extra_options = ' '.join([time_limit, use_gpu, high_mem, exclude])
+    extra_options = ' '.join([time_limit, reserve_gb, use_gpu, high_mem, exclude])
 
     # Convert to list of tuples b/c product object only useable once.
     combined = list(itertools.product(cellist, [str(batch)], modellist))
