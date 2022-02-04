@@ -60,7 +60,7 @@ def write_batch_file(job_arguments,
         if use_gpu:
             f.write(f'#SBATCH --mem=48G\n')
         else:
-            f.write(f'#SBATCH --mem=8G\n')
+            f.write(f'#SBATCH --mem=10G\n')
         f.write(f'#SBATCH --job-name={job_name}\n')
         f.write(f'#SBATCH --comment="{job_comment}"\n')
         f.write(f'#SBATCH --output={str(job_log_loc)}%j_log.out\n')
