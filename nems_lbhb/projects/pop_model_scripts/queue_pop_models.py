@@ -85,7 +85,7 @@ batch_sites = {322: NAT4_A1_SITES, 323: NAT4_PEG_SITES}
 if 0:
     modelnames = MATCHED_pop[:-1] + HELDOUT_pop[:-1]
     useGPU = True
-    for batch in batches[:1]:
+    for batch in batches:
         c = batch_sites[batch]
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,

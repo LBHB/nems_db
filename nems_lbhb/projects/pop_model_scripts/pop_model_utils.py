@@ -181,10 +181,10 @@ HELDOUT_pop = [m.replace("loadpop","loadpop.hs") for m in POP_MODELS]
 MATCHED_pop = [m.replace("loadpop","loadpop.hm") for m in POP_MODELS]
 
 HELDOUT = [m.replace("prefit.f","prefit.hs") for m in SIG_TEST_MODELS]
-HELDOUT[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.h-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+HELDOUT[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.h-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}"
 
 MATCHED = [m.replace("prefit.f","prefit.hm") for m in SIG_TEST_MODELS]
-MATCHED[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+MATCHED[-1] = f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}"
 
 
 
