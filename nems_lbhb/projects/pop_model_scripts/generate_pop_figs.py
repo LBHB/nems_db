@@ -55,10 +55,6 @@ else:
 ########################################################################################################################
 #################################   PARETO  ############################################################################
 ########################################################################################################################
-#ALL_FAMILY_POP[-1]=ALL_FAMILY_POP[-1].replace("l2:5","l2:4")
-#ALL_FAMILY_MODELS[-1]=ALL_FAMILY_MODELS[-1].replace("l2:5","l2:4")
-#POP_MODELS[-1]=POP_MODELS[-1].replace("l2:5","l2:4")
-#SIG_TEST_MODELS[-1]=SIG_TEST_MODELS[-1].replace("l2:5","l2:4")
 
 fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
                              sharey='row')
@@ -127,7 +123,7 @@ peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
 
 from pop_correlation import generate_psth_correlations_pop
 batch=322
-generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+#generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
 
 
 fig2, axes2 = plt.subplots(2, 1, figsize=single_column_tall)

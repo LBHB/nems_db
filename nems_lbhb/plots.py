@@ -17,7 +17,7 @@ import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import find_module, get_setting
+from nems.utils import find_module, get_setting, find_common
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -370,6 +370,26 @@ def quick_pred_comp(cellid, batch, modelname1, modelname2,
     nplt.ax_remove_box(ax)
 
     return ax, ctx1, ctx2
+
+def scatter_model_set(modelnames, batch, cellids=None, stat='r_test'):
+
+    shortened, prefix, suffix = find_common(modelnames)
+
+    d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
+    modelcount = d.shape[1]
+
+    cols=modelcount-1
+    rows=modelcount-1
+    f,ax=plt.subplots(rows,cols, figsize=(cols,rows),sharex=True, sharey=True)
+    for i in range(modelcount):
+        for j in range(i+1,modelcount):
+            a=d.iloc[:,i]
+            b=d.iloc[:,j]
+            ax[i,j-1].scatter(a,b,s=3,color='k')
+            ax[i,j-1].set_xlabel(shortened[i])
+            ax[i,j-1].set_ylabel(shortened[j])
+    #ax[rows-1,0].bar(np.linspace(0.15,0.85,len(modelnames)),d.mean(),width=0.1)
+
 
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
