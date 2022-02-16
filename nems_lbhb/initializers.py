@@ -157,7 +157,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             #post_part = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.es20"
             post_part = fit_string_pop
 
-        if modelname_parts[2].endswith(".l2:5") or modelname_parts[2].endswith(".l2:5-dstrf"):
+        if modelname_parts[2].endswith(".l2:5") or modelname_parts[2].endswith(".l2:5-dstrf") or modelname_parts[2].endswith("-dstrf"):
             post_part += ".l2:5"
         elif modelname_parts[2].endswith(".l2:4") or modelname_parts[2].endswith(".l2:4-dstrf"):
             post_part += ".l2:4"

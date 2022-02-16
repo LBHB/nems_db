@@ -123,7 +123,7 @@ peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
 
 from pop_correlation import generate_psth_correlations_pop
 batch=322
-generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+#generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
 
 
 fig2, axes2 = plt.subplots(2, 1, figsize=single_column_tall)

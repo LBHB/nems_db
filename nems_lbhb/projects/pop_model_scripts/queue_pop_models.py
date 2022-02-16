@@ -21,6 +21,10 @@ script_path_exa = '/home/users/davids/nems/scripts/fit_single.py'
 ssh_key = '/home/svd/.ssh/id_rsa'
 user = "davids"
 
+time_limit_gpu=14
+time_limit_cpu=2
+reserve_gb=0
+
 modelname_filter = POP_MODELS[1]
 
 # ROUND 1, all families pop
@@ -117,6 +121,7 @@ if 0:
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            time_limit=time_limit_gpu,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
     # single-cell fits
@@ -127,6 +132,7 @@ if 0:
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            time_limit=time_limit_cpu,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
 # STAGE 2 MODELS FOR PARETO PLOT
@@ -138,6 +144,7 @@ if 0:
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
             user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            time_limit=time_limit_cpu,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
 
