@@ -47,9 +47,15 @@ if VERSION > 1:
     if VERSION == 2:
         vsuffix = '.ver2'
         vsuffixp = '.ver2'
+        vsuffixc2d = vsuffix
+        vsuffixpc2d = vsuffixp
     elif VERSION == 3:
         vsuffix = '.l2:5-dstrf'
         vsuffixp = '.l2:5'
+        vsuffixc2d = '.l2:4-dstrf'
+        vsuffixpc2d = '.l2:4'
+        #vsuffixc2d = vsuffix
+        #vsuffixpc2d = vsuffixp
 
     # dnn single models are the same
     #HELDOUT = [m+vsuffix for m in HELDOUT[:-1]] + [HELDOUT[-1]]
@@ -72,9 +78,12 @@ fit_string_nopre = f'tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4{vsuffixp}'
 fit_string_dnn =   f'prefit.m-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}'
 fit_string_single = f'prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffix}'
 
+fit_string_pop_c2d =   f"tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4{vsuffixpc2d}"
+fit_string_single_c2d = f'prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffixc2d}'
+
 # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
 POP_MODELS = [
-    #f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop}",  #c2d
+    #f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
     f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
     f"{load_string_pop}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # LN_pop
     #f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120.f-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
@@ -83,7 +92,7 @@ POP_MODELS = [
 ]
 # SIG_TEST_MODELS: round 2, fit using real single cellid in LBHB or exacloud. LBHB probably faster
 SIG_TEST_MODELS = [
-    #f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single}",  #c2d
+    #f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single_c2d}",  #c2d
     f"{load_string_single}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_single}", # c1dx2+d
     f"{load_string_single}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # LN_pop
     #f"{load_string_single}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120.f-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # c1d
@@ -95,14 +104,14 @@ shortnamesp=[s+"_p" for s in shortnames]
 
 # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
 ALL_FAMILY_POP = [
-    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop}",  #c2d
+    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
     f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120.f-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
     f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
     f"{load_string_pop}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # LN_pop
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_pop}"  # dnn1_single
 ]
 ALL_FAMILY_MODELS = [
-    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single}",  #c2d
+    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single_c2d}",  #c2d
     f"{load_string_single}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120.f-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # c1d
     f"{load_string_single}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_single}", # c1dx2+d
     f"{load_string_single}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # LN_pop
@@ -136,12 +145,12 @@ NAT4_PEG_SITES = [
 
 # For correlation histograms
 EQUIVALENCE_MODELS_SINGLE = [
-    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single}",  #c2d
+    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_single_c2d}",  #c2d
     f"{load_string_single}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_single}", # c1dx2+d
     f"{load_string_single}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_single}",  # LN_pop
 ]
 EQUIVALENCE_MODELS_POP = [
-    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop}",  #c2d
+    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
     f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
     f"{load_string_pop}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}",  # LN_pop
 ]
@@ -369,12 +378,12 @@ POP_MODELGROUPS['conv1dx2+d'] = [
 dense_counts = [4, 8, 12, 20, 40, 50, 70, 90, 110, 130, 150, 175, 200, 250, 300]#, 400]
 MODELGROUPS['conv2d'] = [
     f"{load_string_single}_conv2d.10.8x3.rep3-wcn.{dense}-"
-    + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_single}"
+    + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_single_c2d}"
     for dense in dense_counts
 ]
 POP_MODELGROUPS['conv2d'] = [
     f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.{dense}-"
-    + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_pop}"
+    + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_pop_c2d}"
     for dense in dense_counts
 ]
 
