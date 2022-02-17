@@ -374,7 +374,7 @@ def quick_pred_comp(cellid, batch, modelname1, modelname2,
 def scatter_model_set(modelnames, batch, cellids=None, stat='r_test'):
 
     shortened, prefix, suffix = find_common(modelnames)
-
+    shortened = [s if len(s)>0 else "_" for s in shortened]
     d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
     modelcount = d.shape[1]
 
@@ -385,11 +385,19 @@ def scatter_model_set(modelnames, batch, cellids=None, stat='r_test'):
         for j in range(i+1,modelcount):
             a=d.iloc[:,i]
             b=d.iloc[:,j]
-            ax[i,j-1].scatter(a,b,s=3,color='k')
-            ax[i,j-1].set_xlabel(shortened[i])
-            ax[i,j-1].set_ylabel(shortened[j])
+            ax[j-1,i].plot([0,1],[0,1],'--',color='gray')
+            ax[j-1,i].scatter(a,b,s=3,color='k')
+            if j==modelcount-1:
+                ax[j-1,i].set_xlabel(shortened[i])
+            if i==0:
+                ax[j-1,i].set_ylabel(shortened[j])
     #ax[rows-1,0].bar(np.linspace(0.15,0.85,len(modelnames)),d.mean(),width=0.1)
 
+    goodcells = np.isnan(d).sum(axis=1)==0
+    print(d.loc[goodcells,:].median())
+    print(f"Good cells: {goodcells.sum()}/{len(goodcells)}")
+
+    return d
 
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,

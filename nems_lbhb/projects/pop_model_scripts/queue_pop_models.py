@@ -138,6 +138,7 @@ if 0:
 # STAGE 2 MODELS FOR PARETO PLOT
 if 0:
     modelnames = sum([MODELGROUPS[k] for k in MODELGROUPS if k not in ['LN','stp']], [])
+    modelnames=MODELGROUPS['conv2d']
     useGPU = False
     for batch in batches:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()

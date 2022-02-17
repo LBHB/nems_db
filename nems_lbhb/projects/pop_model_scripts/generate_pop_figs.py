@@ -66,7 +66,7 @@ scatter_bar([peg], ALL_FAMILY_MODELS, axes=axes1b[:,1])
 #scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
 
 means = []
-fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short)
+fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short, sharex=True, sharey=True)
 xlims = []
 ylims = []
 
@@ -91,7 +91,7 @@ for i, batch in enumerate([a1, peg]):
                                                  nparms_modelgroups=nparms_modelgroups,
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
-                                                 labeled_models=stest,
+                                                 labeled_models=allfam,
                                                  show_legend=show_legend)
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'
@@ -99,15 +99,9 @@ for i, batch in enumerate([a1, peg]):
     xlims.extend(axes1[i].get_xlim())
     ylims.extend(axes1[i].get_ylim())
 
-xlims = np.array(xlims)
-ylims = np.array(ylims)
-min_x = xlims.min()
-max_x = xlims.max()
-min_y = ylims.min()
-max_y = ylims.max()
 for a in axes1:
-    a.set_xlim(min_x, max_x)
-    a.set_ylim(min_y, max_y)
+    a.set_xlim(np.min(xlims), np.max(xlims))
+    a.set_ylim(np.min(ylims), np.max(ylims))
 
 
 ########################################################################################################################
@@ -121,16 +115,20 @@ a1_corr_path_pop = int_path / str(a1) / 'corr_nat4_pop.pkl'
 peg_corr_path = int_path / str(peg) / 'corr_nat4.pkl'
 peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
 
-from pop_correlation import generate_psth_correlations_pop
-batch=322
-#generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+if 0:
+    from pop_correlation import generate_psth_correlations_pop
+    batch=322
+    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+    batch=323
+    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
 
 
 fig2, axes2 = plt.subplots(2, 1, figsize=single_column_tall)
-a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
-                                            ax=axes2[0])
-peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path,
-                                               force_rerun=False, ax=axes2[1])
+a1_corr, a1_p, a1_t = correlation_histogram(
+    a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
+peg_corr, peg_p, peg_t = correlation_histogram(
+    peg, 'PEG', load_path=peg_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[1])
+
 fig2.tight_layout()
 print("\n\ncorrelation histograms, A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
 print("correlation histograms, PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
@@ -204,4 +202,5 @@ for fig, name in figures_to_save:
     pdf.savefig(fig, dpi='figure')
     plt.close(fig)
 pdf.close()
-plt.close('all')  # just to make double sure that everything is closed
+
+#plt.close('all')  # just to make double sure that everything is closed
