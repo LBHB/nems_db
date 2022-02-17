@@ -9,6 +9,7 @@ from pathlib import Path
 def write_batch_file(job_arguments,
                      queueid=None,
                      time_limit=10,
+                     reserve_gb=0,
                      use_gpu=False,
                      high_mem=False,
                      exclude=None):
@@ -52,15 +53,20 @@ def write_batch_file(job_arguments,
     time_hours = time_mins // 60
     time_mins -= time_hours * 60
 
+    reserve_gb=int(reserve_gb)
+
     with open(job_file_loc, 'w') as f:
         f.write('#!/bin/bash\n')
         f.write(f'#SBATCH --account=lbhb\n')
         f.write(f'#SBATCH --time={time_hours:02d}:{time_mins:02d}:00\n')
         f.write(f'#SBATCH --cpus-per-task=1\n')
         if use_gpu:
-            f.write(f'#SBATCH --mem=48G\n')
+            if reserve_gb==0:
+                reserve_gb=48
         else:
-            f.write(f'#SBATCH --mem=10G\n')
+            if reserve_gb==0:
+                reserve_gb=8
+        f.write(f'#SBATCH --mem={reserve_gb}G\n')
         f.write(f'#SBATCH --job-name={job_name}\n')
         f.write(f'#SBATCH --comment="{job_comment}"\n')
         f.write(f'#SBATCH --output={str(job_log_loc)}%j_log.out\n')
@@ -119,6 +125,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run jobs on exacloud!')
     parser.add_argument('--queueid', default=None, help='The tQueue QID.')
     parser.add_argument('--time_limit', type=float, default=10, help='The time limit for the job in hours.')
+    parser.add_argument('--reserve_gb', type=float, default=0, help='Maximum GB to require (0 means use defaults).')
     parser.add_argument('--use_gpu', action='store_true', help='Whether to start a CPU or GPU job.')
     parser.add_argument('--high_mem', action='store_true', help='Whether to use GPU with more memory.')
     parser.add_argument('--exclude', default=None, help='List of nodes to exclude. Comma separated values, no spaces.')
@@ -126,7 +133,8 @@ if __name__ == '__main__':
     parser.add_argument('arguments', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
-    job_file_loc = write_batch_file(args.arguments, args.queueid, args.time_limit, args.use_gpu)
+    job_file_loc = write_batch_file(args.arguments, args.queueid, args.time_limit, args.reserve_gb, 
+                                    args.use_gpu)
     jobid, stdout = queue_batch_file(job_file_loc)
 
     if jobid is not None:
