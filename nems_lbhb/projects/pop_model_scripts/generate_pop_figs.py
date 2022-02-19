@@ -37,6 +37,8 @@ from nems_lbhb.projects.pop_model_scripts.partial_est_plot import partial_est_pl
 
 a1 = 322
 peg = 323
+
+
 # TODO: adjust figure sizes
 if linux_user=='svd':
     sf=1.5
@@ -72,26 +74,13 @@ ylims = []
 
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
-    if (VERSION==2) and (batch==peg):
-        mgroups = {k: [m.replace('.ver2','') for m in MODELGROUPS[k]] for k in MODELGROUPS}
-        stest = [m.replace('.ver2','') for m in SIG_TEST_MODELS]
-        allfam = [m.replace('.ver2','') for m in ALL_FAMILY_MODELS]
-        nparms_modelgroups = {k: [m.replace('.ver2','') for m in POP_MODELGROUPS[k]] for k in POP_MODELGROUPS}
-    else:
-        #mgroups = POP_MODELGROUPS
-        #stest = POP_MODELS
-        #allfam = ALL_FAMILY_POP
-        mgroups = MODELGROUPS
-        stest = SIG_TEST_MODELS
-        allfam = ALL_FAMILY_MODELS
-        nparms_modelgroups = POP_MODELGROUPS
 
-    sig_cells = get_significant_cells(batch, stest, as_list=True)
-    _, b_ceiling, model_mean = model_comp_pareto(batch, mgroups, axes1[i], sig_cells,
-                                                 nparms_modelgroups=nparms_modelgroups,
+    sig_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+    _, b_ceiling, model_mean = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
+                                                 nparms_modelgroups=POP_MODELGROUPS,
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
-                                                 labeled_models=allfam,
+                                                 labeled_models=ALL_FAMILY_MODELS,
                                                  show_legend=show_legend)
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'

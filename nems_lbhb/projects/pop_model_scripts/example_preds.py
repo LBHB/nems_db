@@ -44,7 +44,7 @@ tctx = {'rec': b.get_recording(loadkey="ozgf.fs100.ch64")}
 tctx = xforms.evaluate_step(['nems.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM', 'keepfrac': 1.0}], tctx)
 tctx = xforms.evaluate_step(['nems.xforms.average_away_stim_occurrences', {'epoch_regex': '^STIM'}], tctx)
 
-example_models=[ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]]
+example_models=[ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]+'.l2:4-dstrf']
 example_shortnames=['ln_pop','conv1dx2+d','conv2dx3']
 
 cellids = ["DRX006b-128-2", "ARM030a-40-2"]   # , "ARM030a-23-2"

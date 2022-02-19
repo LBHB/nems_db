@@ -26,6 +26,8 @@ time_limit_cpu=2
 reserve_gb=0
 
 modelname_filter = POP_MODELS[1]
+mfb = {322: modelname_filter,
+       323: modelname_filter.replace('.ver2','')}
 
 # ROUND 1, all families pop
 if 0:
@@ -33,7 +35,7 @@ if 0:
     useGPU = True
 
     for batch in batches:
-        if useGPU and (VERSION > 1) and (batch==322):
+        if useGPU and (batch==322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']
@@ -41,7 +43,7 @@ if 0:
             c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
         enqueue_exacloud_models(
             cellist=c, batch=batch, modellist=modelnames,
-            user=lbhb_user, linux_user=user, force_rerun=force_rerun,
+            user=lbhb_user, linux_user=user, force_rerun=force_rerun, priority=1,
             executable_path=executable_path_exa, script_path=script_path_exa, useGPU=useGPU)
 
 if 0:
@@ -49,14 +51,14 @@ if 0:
     modelnames = DNN_SINGLE_MODELS[:5]
 
     # ln single, only 1 round
-    modelnames = LN_SINGLE_MODELS[:5]
+    modelnames = LN_SINGLE_MODELS[:10]
 
     # dnn single, round 2
-    modelnames = DNN_SINGLE_STAGE2[:4]
+    modelnames = DNN_SINGLE_STAGE2[:5]
 
     useGPU = False
     for batch in batches:
-        cellids = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()
+        cellids = nd.batch_comp(modelnames=[mfb[batch]], batch=batch).index.to_list()
         #cellids = [c for c in cellids if c.startswith("TNC")]
         enqueue_exacloud_models(
                 cellist=cellids, batch=batch, modellist=modelnames,
@@ -69,6 +71,7 @@ if 0:
 if 0:
     # round 2 all family models
     modelnames = ALL_FAMILY_MODELS
+    modelnames = [ALL_FAMILY_MODELS[0] + '.ver1']
 
     useGPU = False
     for batch in batches:
@@ -138,7 +141,8 @@ if 0:
 # STAGE 2 MODELS FOR PARETO PLOT
 if 0:
     modelnames = sum([MODELGROUPS[k] for k in MODELGROUPS if k not in ['LN','stp']], [])
-    modelnames=MODELGROUPS['conv2d']
+    #modelnames=MODELGROUPS['conv2d']
+
     useGPU = False
     for batch in batches:
         c = nd.batch_comp(modelnames=[modelname_filter], batch=batch).index.to_list()

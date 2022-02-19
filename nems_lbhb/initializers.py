@@ -165,6 +165,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             post_part += ".l2:4.ver2"
         elif modelname_parts[2].endswith("ver2"):
             post_part += ".ver2"
+        elif modelname_parts[2].endswith("ver1"):
+            post_part += ".ver1"
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         if pre_batch is None:
