@@ -1407,6 +1407,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
         #modelgroups={'ALL': modelnames}
+        modelgroups={}
         pass
     else:
         modelnames = []

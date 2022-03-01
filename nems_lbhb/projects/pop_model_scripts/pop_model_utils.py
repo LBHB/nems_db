@@ -33,6 +33,8 @@ linux_user = getpass.getuser()
 
 if linux_user=='svd':
     figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
+elif linux_user == 'luke':
+        figures_base_path = Path('/auto/users/luke/Projects/SPS/plots/NEMS/pop_plots/')
 else:
     figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
 date = str(datetime.datetime.now()).split(' ')[0]
