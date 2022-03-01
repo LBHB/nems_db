@@ -24,6 +24,7 @@ mpl.rcParams.update(params)
 def generate_psth_correlations_pop(batch, modelnames, save_path=None, load_path=None):
     if load_path is not None:
         corrs = pd.read_pickle(load_path)
+        return corrs
         cellids = corrs.index.values.tolist()
         c2d_c1d = corrs['c2d_c1d'].values.tolist()
         c2d_LN = corrs['c2d_LN'].values.tolist()

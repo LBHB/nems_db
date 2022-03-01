@@ -35,9 +35,9 @@ def get_heldout_results(batch, significant_cells, short_names):
     return r_ceilings
 
 
-def generate_heldout_plots(batch, batch_name, ax=None, hide_xaxis=False):
+def generate_heldout_plots(batch, batch_name, sig_test_models=SIG_TEST_MODELS, ax=None, hide_xaxis=False):
 
-    significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+    significant_cells = get_significant_cells(batch, sig_test_models, as_list=True)
     #short_names = ['conv2d', 'conv1d', 'conv1dx2+d', 'LN_pop', 'dnn1']
     short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
     if len(short_names) != len(HELDOUT):
@@ -45,8 +45,8 @@ def generate_heldout_plots(batch, batch_name, ax=None, hide_xaxis=False):
     r_ceilings = get_heldout_results(batch, significant_cells, short_names)
 
     r_ceilings['cellid'] = significant_cells
-    reference_results = nd.batch_comp(batch, SIG_TEST_MODELS, cellids=significant_cells, stat=PLOT_STAT)
-    reference_medians = [reference_results[m].median() for m in SIG_TEST_MODELS]
+    reference_results = nd.batch_comp(batch, sig_test_models, cellids=significant_cells, stat=PLOT_STAT)
+    reference_medians = [reference_results[m].median() for m in sig_test_models]
 
     heldout_names = [n + '_heldout' for n in short_names]
     matched_names = [n + '_matched' for n in short_names]

@@ -37,6 +37,8 @@ from nems_lbhb.projects.pop_model_scripts.partial_est_plot import partial_est_pl
 
 a1 = 322
 peg = 323
+
+
 # TODO: adjust figure sizes
 if linux_user=='svd':
     sf=1.5
@@ -55,10 +57,6 @@ else:
 ########################################################################################################################
 #################################   PARETO  ############################################################################
 ########################################################################################################################
-#ALL_FAMILY_POP[-1]=ALL_FAMILY_POP[-1].replace("l2:5","l2:4")
-#ALL_FAMILY_MODELS[-1]=ALL_FAMILY_MODELS[-1].replace("l2:5","l2:4")
-#POP_MODELS[-1]=POP_MODELS[-1].replace("l2:5","l2:4")
-#SIG_TEST_MODELS[-1]=SIG_TEST_MODELS[-1].replace("l2:5","l2:4")
 
 fig1b, axes1b = plt.subplots(2, 2, figsize=column_and_half_tall,
                              sharey='row')
@@ -70,32 +68,19 @@ scatter_bar([peg], ALL_FAMILY_MODELS, axes=axes1b[:,1])
 #scatter_bar([peg], allfam, stest=stest, axes=axes1b[:,1])
 
 means = []
-fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short)
+fig1, axes1 = plt.subplots(1, 2, figsize=column_and_half_short, sharex=True, sharey=True)
 xlims = []
 ylims = []
 
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
-    if (VERSION==2) and (batch==peg):
-        mgroups = {k: [m.replace('.ver2','') for m in MODELGROUPS[k]] for k in MODELGROUPS}
-        stest = [m.replace('.ver2','') for m in SIG_TEST_MODELS]
-        allfam = [m.replace('.ver2','') for m in ALL_FAMILY_MODELS]
-        nparms_modelgroups = {k: [m.replace('.ver2','') for m in POP_MODELGROUPS[k]] for k in POP_MODELGROUPS}
-    else:
-        #mgroups = POP_MODELGROUPS
-        #stest = POP_MODELS
-        #allfam = ALL_FAMILY_POP
-        mgroups = MODELGROUPS
-        stest = SIG_TEST_MODELS
-        allfam = ALL_FAMILY_MODELS
-        nparms_modelgroups = POP_MODELGROUPS
 
-    sig_cells = get_significant_cells(batch, stest, as_list=True)
-    _, b_ceiling, model_mean = model_comp_pareto(batch, mgroups, axes1[i], sig_cells,
-                                                 nparms_modelgroups=nparms_modelgroups,
+    sig_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+    _, b_ceiling, model_mean = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
+                                                 nparms_modelgroups=POP_MODELGROUPS,
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
-                                                 labeled_models=stest,
+                                                 labeled_models=ALL_FAMILY_MODELS,
                                                  show_legend=show_legend)
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'
@@ -103,15 +88,9 @@ for i, batch in enumerate([a1, peg]):
     xlims.extend(axes1[i].get_xlim())
     ylims.extend(axes1[i].get_ylim())
 
-xlims = np.array(xlims)
-ylims = np.array(ylims)
-min_x = xlims.min()
-max_x = xlims.max()
-min_y = ylims.min()
-max_y = ylims.max()
 for a in axes1:
-    a.set_xlim(min_x, max_x)
-    a.set_ylim(min_y, max_y)
+    a.set_xlim(np.min(xlims), np.max(xlims))
+    a.set_ylim(np.min(ylims), np.max(ylims))
 
 
 ########################################################################################################################
@@ -125,16 +104,20 @@ a1_corr_path_pop = int_path / str(a1) / 'corr_nat4_pop.pkl'
 peg_corr_path = int_path / str(peg) / 'corr_nat4.pkl'
 peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
 
-from pop_correlation import generate_psth_correlations_pop
-batch=322
-generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+if 0:
+    from pop_correlation import generate_psth_correlations_pop
+    batch=322
+    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
+    batch=323
+    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
 
 
 fig2, axes2 = plt.subplots(2, 1, figsize=single_column_tall)
-a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
-                                            ax=axes2[0])
-peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path,
-                                               force_rerun=False, ax=axes2[1])
+a1_corr, a1_p, a1_t = correlation_histogram(
+    a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
+peg_corr, peg_p, peg_t = correlation_histogram(
+    peg, 'PEG', load_path=peg_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[1])
+
 fig2.tight_layout()
 print("\n\ncorrelation histograms, A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
 print("correlation histograms, PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
@@ -208,4 +191,5 @@ for fig, name in figures_to_save:
     pdf.savefig(fig, dpi='figure')
     plt.close(fig)
 pdf.close()
-plt.close('all')  # just to make double sure that everything is closed
+
+#plt.close('all')  # just to make double sure that everything is closed
