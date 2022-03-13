@@ -904,7 +904,8 @@ class BAPHYExperiment:
                 ev['end'] += epochs[-1]['end'].max()
                 ev['start'] += epochs[-1]['end'].max()
                 ev['Trial'] += epochs[-1]['Trial'].max()
-                ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
+                if "soundTrialidx" in ev.columns:
+                    ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
                 epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
         '''
