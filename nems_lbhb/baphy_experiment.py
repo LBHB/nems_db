@@ -1063,8 +1063,8 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
     epochs = epochs[~start_events]
 
     # get rid of weird floating point precision 
-    epochs.at[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
-    epochs.at[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
+    epochs.loc[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
+    epochs.loc[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
 
     # Remove any duplicate epochs (that are getting created somewhere???)
     epochs = epochs.drop_duplicates()
@@ -1092,8 +1092,8 @@ def _make_trial_epochs(exptevents, exptparams, fidx=None, **options):
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
     end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
-    trial_events.at[:, 'end'] = end_events['start'].values
-    trial_events.at[:, 'name'] = 'TRIAL'
+    trial_events.loc[:, 'end'] = end_events['start'].values
+    trial_events.loc[:, 'name'] = 'TRIAL'
 
     #if remove_post_lick:
     #   trial_events =  _remove_post_lick(trial_events, exptevents, **options)
@@ -1145,11 +1145,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     #import pdb; pdb.set_trace()
 
-    ref_events.at[:, 'name'] = new_tags
-    ref_events.at[:, 'start'] = ref_starts.start.values
-    ref_events.at[:, 'end'] = ref_ends.end.values
+    ref_events.loc[:, 'name'] = new_tags
+    ref_events.loc[:, 'start'] = ref_starts.start.values
+    ref_events.loc[:, 'end'] = ref_ends.end.values
     ref_events2 = ref_events.copy()
-    ref_events2.at[:, 'name'] = 'REFERENCE'
+    ref_events2.loc[:, 'name'] = 'REFERENCE'
 
     ref_events = pd.concat([ref_events, ref_events2], ignore_index=True)
 
@@ -1165,11 +1165,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     
     tar_events = exptevents[exptevents.name.isin(tar_tags)].copy()
     new_tags = ['TAR_' + t.split(',')[1].replace(' ', '') for t in tar_events.name]
-    tar_events.at[:, 'name'] = new_tags
-    tar_events.at[:, 'start'] = tar_starts.start.values
-    tar_events.at[:, 'end'] = tar_ends.end.values
+    tar_events.loc[:, 'name'] = new_tags
+    tar_events.loc[:, 'start'] = tar_starts.start.values
+    tar_events.loc[:, 'end'] = tar_ends.end.values
     tar_events2 = tar_events.copy()
-    tar_events2.at[:, 'name'] = 'TARGET'
+    tar_events2.loc[:, 'name'] = 'TARGET'
     tar_events = pd.concat([tar_events, tar_events2], ignore_index=True)
 
     # Catch events (including spont)
@@ -1184,18 +1184,18 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     
     cat_events = exptevents[exptevents.name.isin(cat_tags)].copy()
     new_tags = ['CAT_' + t.split(',')[1].replace(' ', '') for t in cat_events.name]
-    cat_events.at[:, 'name'] = new_tags
-    cat_events.at[:, 'start'] = cat_starts.start.values
-    cat_events.at[:, 'end'] = cat_ends.end.values
+    cat_events.loc[:, 'name'] = new_tags
+    cat_events.loc[:, 'start'] = cat_starts.start.values
+    cat_events.loc[:, 'end'] = cat_ends.end.values
     cat_events2 = cat_events.copy()
-    cat_events2.at[:, 'name'] = 'CATCH'
+    cat_events2.loc[:, 'name'] = 'CATCH'
     cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
 
     # pre/post stim events
     sil_tags = exptevents[exptevents.name.str.contains('Silence')].name.unique()
     sil_events = exptevents[exptevents.name.isin(sil_tags)].copy()
     new_tags = [t.split(',')[0].replace(' ', '') for t in sil_events.name]
-    sil_events.at[:, 'name'] = new_tags
+    sil_events.loc[:, 'name'] = new_tags
 
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
@@ -1229,7 +1229,7 @@ def _make_light_epochs(exptevents, exptparams, **options):
     light_events = exptevents[exptevents['name'].str.contains('LightStim')].copy()
     
     if light_events.shape[0] >= 1:
-        light_events.at[:, 'name'] = 'LIGHTON'
+        light_events.loc[:, 'name'] = 'LIGHTON'
         light_events = light_events.sort_values(
                 by=['start', 'end'], ascending=[1, 0]
                 ).reset_index()
