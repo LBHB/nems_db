@@ -17,7 +17,7 @@ import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import find_module, get_setting
+from nems.utils import find_module, get_setting, find_common
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -370,6 +370,34 @@ def quick_pred_comp(cellid, batch, modelname1, modelname2,
     nplt.ax_remove_box(ax)
 
     return ax, ctx1, ctx2
+
+def scatter_model_set(modelnames, batch, cellids=None, stat='r_test'):
+
+    shortened, prefix, suffix = find_common(modelnames)
+    shortened = [s if len(s)>0 else "_" for s in shortened]
+    d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
+    modelcount = d.shape[1]
+
+    cols=modelcount-1
+    rows=modelcount-1
+    f,ax=plt.subplots(rows,cols, figsize=(cols,rows),sharex=True, sharey=True)
+    for i in range(modelcount):
+        for j in range(i+1,modelcount):
+            a=d.iloc[:,i]
+            b=d.iloc[:,j]
+            ax[j-1,i].plot([0,1],[0,1],'--',color='gray')
+            ax[j-1,i].scatter(a,b,s=3,color='k')
+            if j==modelcount-1:
+                ax[j-1,i].set_xlabel(shortened[i])
+            if i==0:
+                ax[j-1,i].set_ylabel(shortened[j])
+    #ax[rows-1,0].bar(np.linspace(0.15,0.85,len(modelnames)),d.mean(),width=0.1)
+
+    goodcells = np.isnan(d).sum(axis=1)==0
+    print(d.loc[goodcells,:].median())
+    print(f"Good cells: {goodcells.sum()}/{len(goodcells)}")
+
+    return d
 
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
@@ -1407,6 +1435,7 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
         #modelgroups={'ALL': modelnames}
+        modelgroups={}
         pass
     else:
         modelnames = []

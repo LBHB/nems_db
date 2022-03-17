@@ -5,6 +5,7 @@ import logging
 import matplotlib.pyplot as plt
 import json as jsonlib
 from scipy.ndimage import zoom
+from scipy.stats import wilcoxon
 import sys, importlib
 import copy
 import pandas as pd
@@ -39,12 +40,12 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 log = logging.getLogger(__name__)
 
-savefigs=False
-
-
+savefigs = False
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single, \
-    POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, get_significant_cells
+    POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, get_significant_cells, PLOT_STAT, \
+    modelname_half_prefit, modelname_half_pop, modelname_half_fullfit, \
+    modelname_half_heldoutpop, modelname_half_heldoutfullfit
 
 #out_path = "/auto/users/svd/projects/pop_models/"
 #outpath="/auto/users/svd/docs/current/conf/apan2020/dstrf"
@@ -55,42 +56,29 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
         figsize = (8,4)
 
     sig_cells=get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
-
+    print(f"len(sig_cells)={len(sig_cells)}")
     # tentative: use best conv1dx2+d
     half_test_modelspec = "wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R"
 
-    # test condition: take advantage of larger model population fit (hs: heldout), then fit single cell with half a dataset
+    # modelname_half_prefit: test condition: take advantage of larger model population fit (hs: heldout),
+    # then fit single cell with half a dataset
     # fit last layer on half the data, using prefit with the current site held-out, run per cell
-    modelname_half_prefit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                           f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                           f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                           f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                           f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"]
 
-    # then fit last layer on heldout cell with half the data (same est data as for modelname_half_prefit), run per cell
-    modelname_half_fullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.htm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                            f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                            f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                            f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                            f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hm-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"]
+    # modelname_half_fullfit: then fit last layer on heldout cell with half the data (same est data as for
+    # modelname_half_prefit), run per cell
 
-
-    modelname_half_heldoutfullfit=[f"ozgf.fs100.ch18-ld-norm.l1-sev.k10_{half_test_modelspec}_prefit.hts-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                                   f"ozgf.fs100.ch18-ld-norm.l1-sev.k15_{half_test_modelspec}_prefit.hfs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                                   f"ozgf.fs100.ch18-ld-norm.l1-sev.k25_{half_test_modelspec}_prefit.hqs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                                   f"ozgf.fs100.ch18-ld-norm.l1-sev.k50_{half_test_modelspec}_prefit.hhs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4",
-                                   f"ozgf.fs100.ch18-ld-norm.l1-sev_{half_test_modelspec}_prefit.hs-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"]
+    # modelname_half_heldoutfullfit
 
     pre = nd.batch_comp(batch, modelname_half_prefit, cellids=sig_cells, stat=PLOT_STAT)
     full = nd.batch_comp(batch, modelname_half_fullfit, cellids=sig_cells, stat=PLOT_STAT)
     heldout = nd.batch_comp(batch, modelname_half_heldoutfullfit, cellids=sig_cells, stat=PLOT_STAT)
-
 
     d = []
     pcts=['10','15','25','50','100']
     mdls=['LN','dnns','std','prefit']
     for n,h,m,s in zip(pcts,modelname_half_prefit,modelname_half_fullfit,modelname_half_heldoutfullfit):
         d_ = full.loc[:,[m]]
+        #d_ = heldout.loc[:,[s]]
         d_.columns=[PLOT_STAT]
         d_['midx']=n
         d_['fit']="std"
@@ -113,25 +101,54 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
     f,ax=plt.subplots(1,2,figsize=figsize)
 
-    ax[0].plot([0,1],[0,1],'k--')
-    x1,x2='10','std'
-    y1,y2='10','prefit'
-    x=dpred.loc[(dpred.midx==x1) & (dpred.fit==x2),'r_ceiling']
-    y=dpred.loc[(dpred.midx==y1) & (dpred.fit==y2),'r_ceiling']
-    sns.scatterplot(x=x, y=y, ax=ax[0])
+    ax[0].plot([0, 1], [0, 1], 'k--')
+    x1,x2,xlabel='10', 'std', 'Standard'
+    y1,y2,ylabel='10', 'prefit','Pretrained'
+    x=dpred.loc[(dpred.midx==x1) & (dpred.fit==x2), [PLOT_STAT]]
+    y=dpred.loc[(dpred.midx==y1) & (dpred.fit==y2), [PLOT_STAT]]
+    _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
+    ax[0].scatter(x=_d[PLOT_STAT+'_x'], y=_d[PLOT_STAT+'_y'], s=4, c='k')
 
-    ax[0].set_xlabel(f"{x2} {x1}% {x.median():.3f}")
-    ax[0].set_ylabel(f"{y2} {y1}% {y.median():.3f}")
-    ax[0].set_title(f'batch {batch} {x2} vs {y2}')
+    ax[0].set_xlabel(f"{xlabel} {_d[PLOT_STAT+'_x'].median():.3f}")
+    ax[0].set_ylabel(f"{ylabel} {_d[PLOT_STAT+'_y'].median():.3f}")
+    ax[0].set_title(f'Batch {batch} {x1}%')
     ax[0].set_xlim([-0.05,1.05])
     ax[0].set_ylim([-0.05,1.05])
 
     dpm = dpred.groupby(['midx','fit']).median().reset_index()
     dpm.midx = dpm.midx.astype(int)
-    dpm = dpm.pivot(index='midx',columns='fit', values='r_ceiling')
-    dpm.plot(ax=ax[1], legend=False)
+    dpm = dpm.pivot(index='midx', columns='fit', values='r_ceiling')
+
+    for midx in pcts:
+        x=dpred.loc[(dpred.midx==midx) & (dpred.fit=='std'), [PLOT_STAT]]
+        y=dpred.loc[(dpred.midx==midx) & (dpred.fit=='prefit'), [PLOT_STAT]]
+        _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
+
+        if midx=='100':
+            p=0.5
+        else:
+            w, p = wilcoxon(_d[PLOT_STAT+'_x'], _d[PLOT_STAT+'_y'])
+
+        dpm.loc[int(midx), 'p'] = p
+
+    ax[1].plot(dpm.index, dpm['std'], '-s', color='gray', label=xlabel)
+    ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel)
     ax[1].legend(frameon=False)
+    ax[1].set_xlabel('Fraction estimation data')
 
     print(dpm)
 
     return f
+
+
+if __name__ == '__main__':
+
+    a1 = 322
+    peg = 323
+
+    sf=1.5
+    single_column_short = (3.5*sf, 2.5*sf)
+    single_column_tall = (3.5*sf, 6*sf)
+    column_and_half_short = (5*sf, 2.5*sf)
+    column_and_half_tall = (5*sf, 5*sf)
+    fig5 = partial_est_plot(batch=a1, PLOT_STAT=PLOT_STAT, figsize=column_and_half_short)

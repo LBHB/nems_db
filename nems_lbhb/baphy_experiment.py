@@ -904,6 +904,8 @@ class BAPHYExperiment:
                 ev['end'] += epochs[-1]['end'].max()
                 ev['start'] += epochs[-1]['end'].max()
                 ev['Trial'] += epochs[-1]['Trial'].max()
+                if "soundTrialidx" not in epochs[-1].columns:
+                    raise ValueError("Can only be run on active exptevents / parmfiles, I think? crh 13.03.2022")
                 ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
                 epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)

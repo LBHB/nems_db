@@ -26,6 +26,8 @@ else:
     parmfile = "/auto/data/daq/Teonancatl/TNC016/TNC016a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC018/TNC018a03_p_BNB.m"
     parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
+    parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a03_p_BNB.m"
+    parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a19_p_BNB.m"
 
 
 ## load the recording
