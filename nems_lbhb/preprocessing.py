@@ -110,7 +110,7 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
     for signal in newrec.signals.keys():
         newrec[signal].epochs = new_epochs
 
-    return {'rec':newrec}
+    return newrec
 
 #
 # BUNCH OF MASKING FUNCTIONS
