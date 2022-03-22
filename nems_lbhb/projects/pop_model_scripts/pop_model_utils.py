@@ -34,10 +34,12 @@ peg=323
 linux_user = getpass.getuser()
 
 if linux_user=='svd':
-    figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
+    #figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
     figures_base_path = Path('/auto/users/svd/docs/current/pop_coding/figures/')
     int_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/')
     base_path = figures_base_path
+elif linux_user == 'luke':
+        figures_base_path = Path('/auto/users/luke/Projects/SPS/plots/NEMS/pop_plots/')
 else:
     figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
     int_path = Path('/auto/users/jacob/notes/new_equivalence_results/')

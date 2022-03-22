@@ -52,12 +52,9 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
     newrec = copy.deepcopy(rec)
     new_epochs = copy.deepcopy(newrec.epochs)
 
-    # now that it's masked, fixed the epochs
-    new_epochs = copy.deepcopy(newrec.epochs)
-
     # Name the "trial" pre/post differently to distinguish from each STIM
     prepost = new_epochs.name.str.startswith('PreStimSilence') | new_epochs.name.str.startswith('PostStimSilence')
-    new_epochs.at[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
+    new_epochs.loc[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
 
     if not sequence_only:
         # strip the seq. epochs and sub pre/post stim
@@ -65,22 +62,22 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
 
         # remove "sub" labels -- sub masks finds SubPreStimSilence and SubPostStimSilence
         sub = new_epochs.name.str.startswith('Sub')
-        new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
+        new_epochs.loc[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
 
-        # Clean up the actual sound epochs 
+        # Clean up the actual sound epochs
         stim_mask = new_epochs.name.str.startswith('STIM_')
-        new_epochs.at[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
+        new_epochs.loc[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
 
-        # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence) 
+        # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence)
         one_bin = np.float(1 / rec['resp'].fs)
-        new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
-        new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+        new_epochs.loc[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
+        new_epochs.loc[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
         # looks like was never actually dealing with prestim silence correctly, which resulted
         # in prestim silence epochs with negative length. Oops. Fixing that now -- crh 06.28.2021
         # reason this happened is that sub pre/post stim are length zero for this data, so I forgot
         # to update the end timestamp too.
         if not use_old:
-            new_epochs.at[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
+            new_epochs.loc[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
 
     else:
         new_epochs = new_epochs[~new_epochs.name.str.contains('_probe')]
@@ -89,26 +86,31 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
 
         # remove "Trial" silence prefixes
         sub = new_epochs.name.str.startswith('TRIALP')
-        new_epochs.at[sub, 'name'] = [s.strip('TRIAL') for s in new_epochs[sub].name]
+        new_epochs.loc[sub, 'name'] = [s.strip('TRIAL') for s in new_epochs[sub].name]
 
     # strip old references and make new ones
     ref = new_epochs.name.str.startswith('REFERENCE')
     new_epochs = new_epochs.loc[~ref]
     stim_mask = new_epochs.name.str.startswith('STIM_')
-    stim_epochs = new_epochs.loc[stim_mask]
+    stim_epochs = new_epochs.loc[stim_mask].copy()
     stim_epochs.name = 'REFERENCE'
     new_epochs = pd.concat([new_epochs, stim_epochs])
-    
+
+    # get rid of float point error duplicates, Thiw was an anoying bug
+    new_epochs.loc[:, ['start', 'end']] = new_epochs.loc[:, ['start', 'end']].values.round(decimals=12)
+    new_epochs.drop_duplicates(inplace=True)
+
     # clean up index
     new_epochs = new_epochs.sort_values(
             by=['start', 'end'], ascending=[1, 0]
-            ).reset_index()
+            ).reset_index(drop=True)
 
     # assign to new recording
+    # newrec.epochs = new_epochs
     for signal in newrec.signals.keys():
         newrec[signal].epochs = new_epochs
 
-    return newrec
+    return {'rec':newrec}
 
 #
 # BUNCH OF MASKING FUNCTIONS
