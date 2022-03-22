@@ -3,14 +3,24 @@ import numpy as np
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 
-batch = 307
-siteid = 'TAR010c'
-rawid = (123675, 123676, 123677, 123681)
+LOAD_BY_PARMFILE=True
 
-manager = BAPHYExperiment(batch=batch, siteid=siteid, rawid=rawid) 
-options = {'rasterfs': 20, 'resp': True, 'pupil': True, 'stim': False,
-            'batch': batch, 'siteid': siteid, 'rawid': rawid}
-r = manager.get_recording(**options)
+if LOAD_BY_PARMFILE:
+    parmfile=['/auto/data/daq/Clathrus/CLT011/CLT011a07_p_TBP.m']
+    manager = BAPHYExperiment(parmfile=parmfile)
+    options = {'rasterfs': 100, 'resp': True, 'pupil': True, 'stim': False,
+                }
+    r = manager.get_recording(**options)
+else:
+
+    batch = 307
+    siteid = 'TAR010c'
+    rawid = (123675, 123676, 123677, 123681)
+
+    manager = BAPHYExperiment(batch=batch, siteid=siteid, rawid=rawid)
+    options = {'rasterfs': 20, 'resp': True, 'pupil': True, 'stim': False,
+                'batch': batch, 'siteid': siteid, 'rawid': rawid}
+    r = manager.get_recording(**options)
 
 import nems_lbhb.baphy as nb
 from nems.recording import Recording

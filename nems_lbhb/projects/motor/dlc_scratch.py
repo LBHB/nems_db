@@ -7,10 +7,11 @@ import nems_lbhb.baphy_io as baphy_io
 
 parmfile = '/auto/data/daq/Clathrus/training2022/Clathrus_2022_01_11_TBP_1.m'
 #dlcfilepath = '/auto/data/daq/Clathrus/training2022/sorted/Clathrus_2022_01_11_TBP_1.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
+parmfile = '/auto/data/daq/Clathrus/CLT011/CLT011a05_a_TBP.m'
 
 experiment = BAPHYExperiment(parmfile=parmfile)
 rec = experiment.get_recording(rasterfs=30, recache=True, dlc=True,
-                               resp=False, stim=False, dlc_threshold=0.25)
+                               resp=True, stim=False, dlc_threshold=0.25)
 
 # find lick events
 dlc = rec['dlc']

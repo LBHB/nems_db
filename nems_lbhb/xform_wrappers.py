@@ -516,6 +516,9 @@ def generate_recording_uri(cellid=None, batch=None, loadkey="",
             #options.update({'pupil': True, 'pupil_deblink': True,
             #                'pupil_deblink_dur': 1,
             #                'pupil_median': 0, 'rem': 1})
+        elif op=='dlc':
+            options.update({'dlc': True})
+
         elif op=='rem':
             options['rem'] = True
 

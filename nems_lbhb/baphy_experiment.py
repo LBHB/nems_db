@@ -281,9 +281,12 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def dlcfile(self):
         suffix = '.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
+        # standardize output--alias to most recent run?
+        suffix = '.lick.dlc.h5'
+        log.info(f"DLC file suffix: {suffix}")
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
-            raise IOError("Spike file doesn't exist")
+            raise IOError("DLC file doesn't exist")
         else:
             return [f.with_suffix(suffix) for f in filenames]
 

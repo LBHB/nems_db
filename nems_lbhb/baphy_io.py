@@ -2532,6 +2532,7 @@ def parse_cellid(options):
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
                                                      rawid=rawid)
         # now, use rawid to get all stable cellids across these files
+        #import pdb; pdb.set_trace()
         siteid = cell_list[0].split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                                      rawid=rawid)

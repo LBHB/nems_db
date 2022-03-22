@@ -462,6 +462,20 @@ class PupilBrowser:
 
         self.load_file()
 
+    def open_file(self, videofile):
+        # get the pupil video file
+        self.raw_video = videofile
+
+        params_file = os.path.split(self.raw_video)[-1].split('.')[0]
+        animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
+
+        self.video_name.delete(0, 'end')
+        self.animal_name.delete(0, 'end')
+        self.video_name.insert(0, params_file)
+        self.animal_name.insert(0, animal)
+
+        self.load_file()
+
     def load_file(self):
         """
         Load the overall predictions and plot the trace on the trace canvas.
@@ -699,4 +713,8 @@ class PupilBrowser:
 
 root = tk.Tk()
 my_gui = PupilBrowser(root)
+
+if len(sys.argv)>1:
+    my_gui.open_file(sys.argv[1])
+
 root.mainloop()

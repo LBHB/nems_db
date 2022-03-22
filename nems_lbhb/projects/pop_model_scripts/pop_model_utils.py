@@ -9,11 +9,11 @@ import os
 import matplotlib as mpl
 params = {'axes.spines.right': False,
           'axes.spines.top': False,
-          'legend.fontsize': 12,
-          'axes.labelsize': 12,
-          'axes.titlesize': 12,
-          'xtick.labelsize': 12,
-          'ytick.labelsize': 12,
+          'legend.fontsize': 10,
+          'axes.labelsize': 10,
+          'axes.titlesize': 10,
+          'xtick.labelsize': 10,
+          'ytick.labelsize': 10,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
 mpl.rcParams.update(params)
@@ -28,18 +28,44 @@ log = logging.getLogger(__name__)
 # set to >1 to use l2-reg models
 VERSION = 1
 
+a1=322
+peg=323
+
 linux_user = getpass.getuser()
 
 if linux_user=='svd':
-    figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
+    #figures_base_path = Path('/auto/users/svd/projects/pop_models/eps/')
+    figures_base_path = Path('/auto/users/svd/docs/current/pop_coding/figures/')
+    int_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/')
+    base_path = figures_base_path
 elif linux_user == 'luke':
         figures_base_path = Path('/auto/users/luke/Projects/SPS/plots/NEMS/pop_plots/')
 else:
     figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
-date = str(datetime.datetime.now()).split(' ')[0]
-base_path = figures_base_path / date
+    int_path = Path('/auto/users/jacob/notes/new_equivalence_results/')
+    date = str(datetime.datetime.now()).split(' ')[0]
+    base_path = figures_base_path / date
+
 if not base_path.is_dir():
     base_path.mkdir(parents=True, exist_ok=True)
+
+# TODO: adjust figure sizes
+if linux_user=='svd':
+    sf=1
+    single_column_short = (3.5*sf, 2.5*sf)
+    single_column_tall = (3.5*sf, 6*sf)
+    column_and_half_vshort = (5*sf, 1.5*sf)
+    column_and_half_short = (5*sf, 2.5*sf)
+    column_and_half_tall = (5*sf, 5*sf)
+
+else:
+    single_column_short = (3.5, 3)
+    single_column_tall = (3.5, 6)
+    column_and_half_vshort = (5, 1.5)
+    column_and_half_short = (5, 3)
+    column_and_half_tall = (5, 6)
+#inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
+
 
 ####
 # set version-specific fit strings
@@ -253,7 +279,7 @@ MODELGROUPS = {}
 POP_MODELGROUPS = {}
 
 # LN ###################################################################################################################
-params = [1, 2, 3, 4, 6, 8, 9, 10]#, 12, 14]
+params = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]#, 12, 14]
 MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 POP_MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 
@@ -431,7 +457,7 @@ POP_MODELGROUPS['conv2d'] = [
 
 
 # dnn1_single ##########################################################################################################
-params = [4, 6, 9, 12, 15, 18]
+params = [2,3,4, 6, 9, 12, 15, 18]
 MODELGROUPS['dnn1_single'] = [
     f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_dnn}"
     for p in params
@@ -685,20 +711,23 @@ def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True
                 rec_path = xwrap.generate_recording_uri(site, batch, loadkey=loadkey)
                 rec = nems.recording.load_recording(rec_path)
                 est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
+                val = val.apply_mask()
                 for cellid in rec['resp'].chans:
-                    resp = val.apply_mask()['resp'].extract_channels([cellid])
+                    resp = val['resp'].extract_channels([cellid])
                     snr = compute_snr(resp, frac_total=frac_total)
                     snrs.append(snr)
                     cells.append(cellid)
-
+                    print(f"{cellid}: {snr:.3f}")
+                    
         else:
             if isinstance(rec, str):
                 rec = nems.recording.load_recording(rec)
             cellids = rec['resp'].chans
             est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
+            val = val.apply_mask()
             for cellid in cellids:
                 log.info("computing SNR for cell: %s" % cellid)
-                resp = val.apply_mask()['resp'].extract_channels([cellid])
+                resp = val['resp'].extract_channels([cellid])
                 snr = compute_snr(resp, frac_total=frac_total)
                 snrs.append(snr)
             cells = cellids
@@ -708,10 +737,10 @@ def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True
         df.dropna(inplace=True)
         df.set_index('cellid', inplace=True)
         if save_path is not None:
-            df.to_pickle(save_path)
+            df.to_csv(save_path)
 
     else:
-        df = pd.read_pickle(load_path)
+        df = pd.read_csv(load_path, index_col=0)
 
     return df
 
@@ -733,14 +762,19 @@ def compute_snr(resp, frac_total=True):
         for i, _ in enumerate(resp):
             total_power = products[i,i]
             signal_powers = np.delete(products[i], i)
-            if frac_total:
-                rep_snr = np.nanmean(signal_powers)/total_power
-            else:
-                rep_snr = np.nanmean(signal_powers/(total_power-signal_powers))
+            if total_power>0:
+                if frac_total:
+                    rep_snr = np.nanmean(signal_powers)/total_power
+                else:
+                    rep_snr = np.nanmean(signal_powers/(total_power-signal_powers))
 
-            per_rep_snrs.append(rep_snr)
-        per_stim_snrs.append(np.nanmean(per_rep_snrs))
-
+                per_rep_snrs.append(rep_snr)
+        if len(per_rep_snrs)>0:
+            per_stim_snrs.append(np.nanmean(per_rep_snrs))
+    
+    snr = np.nanmean(per_stim_snrs)
+    if snr==0:
+        import pdb; pdb.set_trace()
     # if np.sum(np.isnan(per_stim_snrs)) == len(per_stim_snrs):
     #     import pdb; pdb.set_trace()
 

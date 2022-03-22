@@ -1263,6 +1263,34 @@ def zscore_resp(rec, use_mask=False):
     return r
 
 
+def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0,
+                       shuffle_interactions=False, **ctx):
+
+    cellid = meta['cellid']
+    matchcellid=np.where([True if c==cellid else False for c in rec[s].chans])[0][0]
+
+    new_rec = rec.copy()
+    new_rec[r] = new_rec[r].rasterize()
+    stim = rec[s]._data.copy()
+    
+    if smooth_window>0:
+        stim = gaussian_filter1d(stim,smooth_window,axis=1)
+  
+    if shuffle_interactions:
+        log.info(f"Shuffling population signal in time")
+        tsig2 = rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
+        stim = tsig2._data.copy()
+        
+    log.info(f"Swapping psth into pop stim for ch {matchcellid}")
+    psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
+    stim[matchcellid,:] = psth._data    
+
+    new_rec['stim']=rec[s]._modified_copy(data=stim)
+    
+    return {'rec': new_rec}
+
+
+
 def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
                      shuffle_interactions=False, **ctx):
 
