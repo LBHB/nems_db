@@ -209,6 +209,8 @@ def st(loadkey):
             this_sig = ["pupil2"]
         elif l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("dlp"):
+            this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
@@ -343,6 +345,18 @@ def rstate(kw):
 
     return [['nems_lbhb.preprocessing.state_resp_outer', dopt]]
 
+@xform()
+def popstim(kw):
+    ops = kw.split(".")[1:]
+    dopt = {}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.population_to_stim', dopt]]
+    
 
 @xform()
 def inp(loadkey):
@@ -398,38 +412,39 @@ def pca(loadkey):
     """
 
     ops = loadkey.split(".")[1:]
+
     pc_source = "psth"
     overwrite_resp = True
     pc_count=None
     pc_idx=None
     compute_power = 'no'
     whiten = True
+
+    options = {}
     for op in ops:
         if op == "psth":
-            pc_source = "psth"
+            options['pc_source'] = "psth"
         elif op == "all":
-            pc_source = "all"
+            options['pc_source'] = "all"
         elif op == "noise":
-            pc_source = "noise"
+            options['pc_source'] = "noise"
         elif op == "no":
-            overwrite_resp = False
+            options['overwrite_resp'] = False
+        elif op == "dlc":
+            options['resp_sig'] = 'dlc'
+            options['overwrite_resp'] = False
+            options['pc_sig'] = 'dlc_pca'
         elif op.startswith("cc"):
-            pc_count=int(op[2:])
-            pc_idx=list(range(pc_count))
+            options['pc_count'] = int(op[2:])
+            options['pc_idx']=list(range(options['pc_count']))
         elif op.startswith("n"):
-            pc_count=int(op[1:])+1
-            pc_idx=[int(op[1:])]
+            n = int(op[1:])
+            options['pc_count'] = n+1
+            options['pc_idx'] = [n]
         elif op.startswith("p"):
-            compute_power = "single_trial"
+            options['compute_power'] = "single_trial"
 
-    if pc_idx is not None:
-        xfspec = [['nems.preprocessing.resp_to_pc',
-                   {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power, 'whiten': whiten}]]
-    else:
-        xfspec = [['nems.preprocessing.resp_to_pc',
-                   {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'compute_power': compute_power, 'whiten': whiten}]]
+    xfspec = [['nems.preprocessing.resp_to_pc', options]]
 
     return xfspec
 

@@ -213,3 +213,4 @@ nems_web/configs/*
 
 */notebooks/pupil-behavior-notebooks-DS/*pdf
 .idea/
+*/intermediate_results
