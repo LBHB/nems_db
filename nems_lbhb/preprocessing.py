@@ -1271,8 +1271,10 @@ def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0
 
     new_rec = rec.copy()
     new_rec[r] = new_rec[r].rasterize()
-    stim = rec[s]._data.copy()
-    
+    stim = rec[s].rasterize()._data.copy()
+    stim0 = generate_average_sig(rec[s],'stim0','^(STIM|TAR|CAT)', mask=rec['mask'])._data
+    stim = stim - stim0
+
     if smooth_window>0:
         stim = gaussian_filter1d(stim,smooth_window,axis=1)
   
