@@ -31,5 +31,5 @@ else:
 if hasattr(psl, 'TMP_TRAIN'):
     TMP_TRAIN = psl.TMP_TRAIN
 else:
-    TMP_TRAIN = os.path.join(ROOT_DIRECTORY, 'tmp_train/')
+    TMP_TRAIN = os.path.join(ROOT_DIRECTORY, 'tmp_train_mateo/')
 
