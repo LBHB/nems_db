@@ -1324,3 +1324,38 @@ def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
 
     return {'rec': new_rec}
 
+def stack_signal_as_delayed_lines(rec, signal, delay, duration, **kwargs):
+
+    array = rec[signal]._data
+    chn, tme = array.shape
+    stk = chn * duration
+
+    stacked_array = np.empty((stk, tme))
+    channels = list()
+    for dur in range(duration):
+        chn_start = chn*dur
+        chn_stop = chn_start + chn
+        npad = delay + dur # number of positions to shift forwards
+
+        if npad == 0:
+            stacked_array[chn_start:chn_stop,:] = array
+        else:
+            stacked_array[chn_start:chn_stop,:] = np.pad(array,((0,0),(npad,0)), mode='constant')[:,:-npad]
+
+        channels.extend([f'{ch}_{npad}' for ch in rec[signal].chans])
+
+    rec[signal] = rec[signal]._modified_copy(data=stacked_array, chans=channels)
+    return rec
+
+
+if __name__ == '__main__':
+
+    from nems import recording, signal
+
+    sig = signal.RasterizedSignal(data=np.arange(10).reshape((2,5)), fs=10, name='state', recording='hola', chans=['1','2'])
+    rec = recording.Recording(signals={'state':sig})
+
+    stacked_rec = stack_signal_as_delayed_lines(rec,'state', delay=1, duration=3)
+
+
+

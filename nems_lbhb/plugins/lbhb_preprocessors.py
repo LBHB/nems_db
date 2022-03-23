@@ -943,3 +943,10 @@ def esth2(kw):
         seed_idx = 0
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2,
                                                            'seed_idx': seed_idx}]]
+
+@xform('dline')
+def dline(kw):
+    _, delay, duration = kw.split('.')
+    return [['nems_lbhb.preprocessing.stack_signal_as_delayed_lines',
+             {'signal': 'state', 'delay': int(delay), 'duration': int(duration)}, ['rec'], ['rec']
+             ]]
