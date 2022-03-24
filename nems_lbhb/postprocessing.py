@@ -4,6 +4,7 @@ import logging
 
 import nems.db as nd
 import nems.xforms
+
 log = logging.getLogger(__name__)
 
 
@@ -65,4 +66,19 @@ def run_decoding_analysis(IsReload=False, **kwargs):
                     reserve_gb=2)
     log.info('Queued decoding analysis')
     return {}
+
+def save_pred_signal(**ctx):
+    """
+    Saves the model prediction for the validation set
+    """
+    rec = ctx['val'].copy()
+    rec.signals = {key:sig for key, sig in rec.signals.items() if key == 'pred'}
+    rec.signal_views = [rec.signals]
+
+    savefile = ctx['modelspec'].meta['modelpath'] + '/' + 'prediction.tar.gz'
+    rec.save(str(savefile))
+
+    return ctx
+
+
 
