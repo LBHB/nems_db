@@ -39,7 +39,7 @@ def append_difficulty(rec, **kwargs):
     newrec['hard_trials'] = resp.epoch_to_signal('HARD_BEHAVIOR')
     newrec['hard_trials'].chans = ['hard_trials']
 
-def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
+def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
     """
     Specialized preprocessor for CPN data to make the epoch names match more 
     "traditional" baphy format.
@@ -52,29 +52,32 @@ def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
     newrec = copy.deepcopy(rec)
     new_epochs = copy.deepcopy(newrec.epochs)
 
-    # now that it's masked, fixed the epochs
-    new_epochs = copy.deepcopy(newrec.epochs)
-
     # Name the "trial" pre/post differently to distinguish from each STIM
     prepost = new_epochs.name.str.startswith('PreStimSilence') | new_epochs.name.str.startswith('PostStimSilence')
-    new_epochs.at[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
+    new_epochs.loc[prepost, 'name'] = ['TRIAL'+s for s in new_epochs[prepost].name]
 
     if not sequence_only:
         # strip the seq. epochs and sub pre/post stim
-        new_epochs = new_epochs[~new_epochs.name.str.contains('_sequence')]
+        new_epochs = new_epochs.loc[~new_epochs.name.str.contains('_sequence')]
 
-        # remove "sub" labels
+        # remove "sub" labels -- sub masks finds SubPreStimSilence and SubPostStimSilence
         sub = new_epochs.name.str.startswith('Sub')
-        new_epochs.at[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
+        new_epochs.loc[sub, 'name'] = [s.strip('Sub') for s in new_epochs[sub].name]
 
-        # Clean up the actual sound epochs 
+        # Clean up the actual sound epochs
         stim_mask = new_epochs.name.str.startswith('STIM_')
-        new_epochs.at[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
+        new_epochs.loc[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
 
-        # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence) 
+        # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence)
         one_bin = np.float(1 / rec['resp'].fs)
-        new_epochs.at[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
-        new_epochs.at[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+        new_epochs.loc[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
+        new_epochs.loc[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
+        # looks like was never actually dealing with prestim silence correctly, which resulted
+        # in prestim silence epochs with negative length. Oops. Fixing that now -- crh 06.28.2021
+        # reason this happened is that sub pre/post stim are length zero for this data, so I forgot
+        # to update the end timestamp too.
+        if not use_old:
+            new_epochs.loc[sub, 'end'] = new_epochs.loc[sub, 'end'].values + one_bin
 
     else:
         new_epochs = new_epochs[~new_epochs.name.str.contains('_probe')]
@@ -83,22 +86,27 @@ def fix_cpn_epochs(rec, sequence_only=True, **kwargs):
 
         # remove "Trial" silence prefixes
         sub = new_epochs.name.str.startswith('TRIALP')
-        new_epochs.at[sub, 'name'] = [s.strip('TRIAL') for s in new_epochs[sub].name]
+        new_epochs.loc[sub, 'name'] = [s.strip('TRIAL') for s in new_epochs[sub].name]
 
     # strip old references and make new ones
     ref = new_epochs.name.str.startswith('REFERENCE')
     new_epochs = new_epochs.loc[~ref]
     stim_mask = new_epochs.name.str.startswith('STIM_')
-    stim_epochs = new_epochs.loc[stim_mask]
+    stim_epochs = new_epochs.loc[stim_mask].copy()
     stim_epochs.name = 'REFERENCE'
     new_epochs = pd.concat([new_epochs, stim_epochs])
-    
+
+    # get rid of float point error duplicates, Thiw was an anoying bug
+    new_epochs.loc[:, ['start', 'end']] = new_epochs.loc[:, ['start', 'end']].values.round(decimals=12)
+    new_epochs.drop_duplicates(inplace=True)
+
     # clean up index
     new_epochs = new_epochs.sort_values(
             by=['start', 'end'], ascending=[1, 0]
-            ).reset_index()
+            ).reset_index(drop=True)
 
     # assign to new recording
+    # newrec.epochs = new_epochs
     for signal in newrec.signals.keys():
         newrec[signal].epochs = new_epochs
 
@@ -641,7 +649,6 @@ def create_pupil_mask(rec, evoked_only=False, **options):
 
     elif (collapse is True) & (epoch is not None):
         log.info('collapsing over all {0} epochs and tiling mean pupil per epoch'.format(epoch))
-
         # In this case, fold pupil first based on the epoch(s)
         folded_pupil = r['pupil'].extract_epochs(epoch)
 
@@ -837,7 +844,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, pupsort=False, reduce_mask=False, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -851,7 +858,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = rec.copy()
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
-    
+
     if custom_epochs:
         # special case, masking pupil per epoch/bin using a custom set of epochs.
         site = kwargs['meta']['cellid']
@@ -863,7 +870,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         reliable_epochs = pickle.load(open(fn, "rb"))
 
         # Use the best <ev_bins> epochs, or default of 5
-        if ev_bins == 0: 
+        if ev_bins == 0:
             ev_bins = 5
 
         mask_bins = []
@@ -888,9 +895,109 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #r.meta['reliable_bin'] = reliable
 
         return {'rec': r}
-        
 
-    if ev_bins>1:
+    if (ev_bins>=1) & (respsort):
+        log.info(f"Sorting epochs by response magnitude and keeping the top {ev_bins} for lrg/sm splits")
+        # sort epoch / bin combinations by size of mean population response
+        # take the first ev_bins of these sorted epoch / bin combinations
+        # 21.10.2021 -- using 'reset_epochs' here is kinda slow. Is there a better way?
+        epoch_names = epoch_names_matching(r.apply_mask(reset_epochs=True)['resp'].epochs, '^STIM_')
+
+        # for each epoch / bin, get the size of the response
+        resp = r['resp'].extract_epochs(epoch_names, mask=r['mask'])
+        rmag = np.array([resp[e].mean(axis=(0,1)) for e in epoch_names])
+        
+        # sort responses from greatest to smallest
+        idx = np.unravel_index(np.argsort(rmag.ravel())[::-1], rmag.shape)
+
+        # remove any spont bins
+        pre,post = getPrePostSilence(r['resp'])
+        prebins = int(pre*r['resp'].fs)
+        postbins = int(post*r['resp'].fs)
+        durbins = rmag.shape[-1]-prebins-postbins
+        rridx = (idx[1] < prebins) | (idx[1] >= (prebins+durbins))
+        epoch_idx = idx[0][~rridx]
+        bin_idx = idx[1][~rridx]
+
+        # extract corresponding epoch / bin number
+        keep_epochs = np.array(epoch_names)[epoch_idx][:ev_bins]
+        keep_bins = np.array(bin_idx)[:ev_bins]
+
+        # for each epoch / bin, make a pupil mask
+        mask_bins=[]
+        for i, (e, b) in enumerate(zip(keep_epochs, keep_bins)):
+            e = str(e)
+            mask_bins.append((e, b))
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            eindices = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            p = np.squeeze(p.mean(axis=2))
+
+            _m_lg = np.zeros(r['pupil'].shape)
+            _m_sm = np.zeros(r['pupil'].shape)
+            for j, ei in enumerate(eindices):
+                if p[j] < np.median(p):
+                    _m_sm[0, ei[0] + b] = 1
+                else:
+                    _m_lg[0, ei[0] + b] = 1
+
+            r['mask_'+e+':'+str(b)+'_sm'] = r['mask']._modified_copy((r['mask']._data * _m_sm).astype(bool))
+            r['mask_'+e+':'+str(b)+'_lg'] = r['mask']._modified_copy((r['mask']._data * _m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
+        r.meta['mask_bins'] = mask_bins
+
+    elif (ev_bins>=1) & (pupsort):
+        log.info(f"Sorting epochs by normalized pupil size")
+        # sort epoch / bin combinations by the range of normalized pupil range that they span
+        # crh 14.11.2021
+        epoch_names = epoch_names_matching(r.apply_mask(reset_epochs=True)['resp'].epochs, '^STIM_')
+
+        # for each epoch / bin, get the size of the response
+        pup = r['pupil_raw'].extract_epochs(epoch_names, mask=r['mask'])
+        pmax = r['pupil_raw']._data.max()
+        pup = {k: p / pmax for k, p in pup.items()}
+
+        # sort by how close the mean is to 0.5
+        pmdiff = np.array([np.abs(pup[e].mean(axis=(0,1)) - 0.5) for e in epoch_names])
+        
+        # sort diffs from smallest to greatest
+        idx = np.unravel_index(np.argsort(pmdiff.ravel()), pmdiff.shape)
+
+        # remove any spont bins
+        pre,post = getPrePostSilence(r['resp'])
+        prebins = int(pre*r['resp'].fs)
+        postbins = int(post*r['resp'].fs)
+        durbins = pmdiff.shape[-1]-prebins-postbins
+        rridx = (idx[1] < prebins) | (idx[1] >= (prebins+durbins))
+        epoch_idx = idx[0][~rridx]
+        bin_idx = idx[1][~rridx]
+
+        # extract corresponding epoch / bin number
+        keep_epochs = np.array(epoch_names)[epoch_idx][:ev_bins]
+        keep_bins = np.array(bin_idx)[:ev_bins]
+
+        # for each epoch / bin, make a pupil mask
+        mask_bins=[]
+        for i, (e, b) in enumerate(zip(keep_epochs, keep_bins)):
+            e = str(e)
+            mask_bins.append((e, b))
+            p = r['pupil'].extract_epoch(e, mask=r['mask'])
+            eindices = r['resp'].get_epoch_indices(e, mask=r['mask'])
+            p = np.squeeze(p.mean(axis=2))
+
+            _m_lg = np.zeros(r['pupil'].shape)
+            _m_sm = np.zeros(r['pupil'].shape)
+            for j, ei in enumerate(eindices):
+                if p[j] < np.median(p):
+                    _m_sm[0, ei[0] + b] = 1
+                else:
+                    _m_lg[0, ei[0] + b] = 1
+
+            r['mask_'+e+':'+str(b)+'_sm'] = r['mask']._modified_copy((r['mask']._data * _m_sm).astype(bool))
+            r['mask_'+e+':'+str(b)+'_lg'] = r['mask']._modified_copy((r['mask']._data * _m_lg).astype(bool))
+            log.info(f"{e} {b} sm={r['mask_'+e+':'+str(b)+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(b)+'_lg'].as_continuous().sum()}")
+        r.meta['mask_bins'] = mask_bins
+
+    elif ev_bins>=1:
         # special case, find stim with high pupil variance, mask in individual bins from them
         # generate list of tuples in rec.meta with [(epoch, bin), ... ]
         epoch_names = epoch_names_matching(r['resp'].epochs, '^STIM_')
@@ -941,9 +1048,9 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
             log.info(f"{e} {choose_bin[i]} sm={r['mask_'+e+':'+str(choose_bin[i])+'_sm'].as_continuous().sum()} lg={r['mask_'+e+':'+str(choose_bin[i])+'_lg'].as_continuous().sum()}")
         r.meta['mask_bins'] = mask_bins
     
-        return {'rec': r}
+        #return {'rec': r}
     
-    if 0 & (ev_bins>0):
+    elif 0 & (ev_bins>0):
         _m = r['mask_large'].as_continuous()[0,:]
         _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
         r['mask_large'] = r['mask_large']._modified_copy(_dm)
@@ -951,7 +1058,7 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         _dm = np.concatenate(([0],np.diff(_m)>0)).astype(bool)
         r['mask_small'] = r['mask_small']._modified_copy(_dm)
     
-    if add_per_stim or split_per_stim:
+    elif add_per_stim or split_per_stim:
         e = epoch_names_matching(r['resp'].epochs, '^STIM_')
         #e[:3]
 
@@ -978,7 +1085,95 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #    plt.plot(rec['mask_'+e].as_continuous()[0,:]+i*1.1)
         #import pdb;
         #pdb.set_trace()
-        
+
+    # at the end, AND the large and small masks with the selected epochs
+    masks = [k for k in r.signals.keys()
+             if (k.startswith("mask_") and k!="mask_small" and k!="mask_large")]
+    m = np.zeros_like(r["mask"]._data)
+    for i in masks:
+        m += r[i]._data
+    r['mask_small'] = r['mask_small']._modified_copy(data=r['mask_small']._data * m)
+    r['mask_large'] = r['mask_large']._modified_copy(data=r['mask_large']._data * m)
+    log.info(f"Masks trimmed: sm: {r['mask_small']._data.sum()}  lg: {r['mask_large']._data.sum()}")
+    if reduce_mask:
+        r['mask'] = r['mask']._modified_copy(data=r['mask_small']._data +r['mask_large']._data)
+        log.info('Including main mask')
+    return {'rec': r}
+
+
+def mask_time_segments(rec, segment_count=8, evoked_only=True, **kwargs):
+    """
+    Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
+      reproduce desired pattern of noise correlations in different conditions.
+    By default, creates signals that mask trials according to whether pupil is smaller or larger than the mean.
+    Added to whatever mask already exists in rec.
+    Inputs: rec: Recording from NEMS
+    Returns rec: Recording with new signals 'mask_large' and 'mask_small'
+    Option: add_per_stim: if True, also returns signals 'mask_<epoch>' matching each epoch that 
+       starts with "STIM_". Currently these masks span both large and small pupil
+    """
+    r = rec.copy()
+    
+    if 'mask' in r.signals.keys():
+        m = r['mask']._data.copy()
+    else:
+        m = np.ones((1,r['resp'].shape[1]))
+    r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
+    r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+    
+    nbins = m.sum()
+    validbins = np.where(m[0,:]>0)[0]
+    chunksize = nbins / segment_count
+    log.info(f"nbins/segmentcount: {nbins}/{segment_count} = {chunksize}")
+    #log.info(f"{validbins[:100]}")
+    for s in range(segment_count):
+        _m = np.zeros_like(m)
+        #log.info(f'{s}: {validbins[int(s*chunksize):int((s+1)*chunksize)]}')
+        _m[0, validbins[int(s*chunksize):int((s+1)*chunksize)]]=1
+        log.info(f'{s}: {_m.sum()}')
+        r[f'mask_{s}'] = r['mask']._modified_copy(_m.astype(bool))
+               
+    return {'rec': r}
+
+
+def movement_mask(rec, binsize=1, threshold=0.25, **kwargs):
+    '''
+    Use pupil_extras signals to mask the recording during periods of movement (eg blinks)
+    binsize - window size in seconds over which to compute variance of eye position traces
+    threshold - number of std of the variance trace over which data is excluded
+
+    crh 06.18.2021
+    '''
+    if 'pupil_extras' not in rec.signals.keys():
+        raise ValueError("Pupil extras do not exist for this recording. Old recording? Old pupil analysis?")
+    r = rec.copy()
+    # before masking, take raw signals and compute variance of an eyelid over a sliding window
+    binsize = int(binsize * r['resp'].fs)
+    signal = r['pupil_extras'].extract_channels(['eyelid_top_y'])._data 
+    signal2 = r['pupil_extras'].extract_channels(['eyelid_bottom_y'])._data
+    varsig = np.zeros(signal.shape)
+    for i in range(varsig.shape[-1]):
+        varsig[0, i] = np.var(signal[0, i:(i+binsize)])+np.var(signal2[0, i:(i+binsize)])
+    varsig = np.roll(varsig, int(binsize/2))
+    r['varsig'] = r['pupil']._modified_copy(varsig)
+    threshold = np.std(varsig) * threshold
+    mask = varsig >= threshold
+    log.info(f"Found {mask.sum()} / {mask.shape[-1]} bins that violated movement threshold")
+
+    # tile mask over generic epochs (REFERENCE, TARGET, CATCH)
+    epochs = [e for e in ['REFERENCE', 'TARGET', 'CATCH'] if e in r['resp'].epochs.name.unique()]
+    
+    rec['var_mask'] = r['pupil']._modified_copy(mask)
+    fm = rec['var_mask'].extract_epochs(epochs)
+    # tile bool across full reference so not to split up epochs in weird ways
+    fm = {k: np.concatenate([np.zeros(v[[i]].shape).astype(bool) if np.any(v[[i]]==True) else np.ones(v[[i]].shape).astype(bool) 
+                        for i in range(v.shape[0])], axis=0) 
+                        for k, v in fm.items()}
+    rec['var_mask'] = rec['var_mask'].replace_epochs(fm)
+    if 'mask' not in r.signals:
+        r = r.create_mask(True)
+    r['mask'] = r['mask']._modified_copy(r['mask']._data & rec['var_mask']._data)
+
     return {'rec': r}
 
 def create_residual(rec, cutoff=None, shuffle=False, signal='psth_sp'):
@@ -1050,17 +1245,70 @@ def add_meta(rec):
     return rec
 
 
-def zscore_resp(rec):
+def zscore_resp(rec, use_mask=False):
     r = rec.copy()
     r['resp'] = r['resp'].rasterize()
     zscore = r['resp']._data
-    zscore = (zscore.T - zscore.mean()).T
-    zscore = (zscore.T / zscore.std(axis=-1)).T
+    if use_mask:
+        log.info("using recording mask to zscore")
+        _zscore = r.apply_mask()['resp']._data
+    else:
+        _zscore = zscore.copy()
+    zscore = (zscore.T - _zscore.mean()).T
+    zscore = (zscore.T / _zscore.std(axis=-1)).T
 
     r['resp_raw'] = rec['resp']
     r['resp'] = r['resp']._modified_copy(zscore)
 
     return r
+
+
+def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0,
+                       shuffle_interactions=False, **ctx):
+
+    cellid = meta['cellid']
+    matchcellid=np.where([True if c==cellid else False for c in rec[s].chans])[0][0]
+
+    new_rec = rec.copy()
+    new_rec[r] = new_rec[r].rasterize()
+    stim = rec[s].rasterize()._data.copy()
+    stim0 = generate_average_sig(rec[s],'stim0','^(STIM|TAR|CAT)', mask=rec['mask'])._data
+    stim = stim - stim0
+
+    if smooth_window>0:
+        stim = gaussian_filter1d(stim,smooth_window,axis=1)
+  
+    if shuffle_interactions:
+        log.info(f"Shuffling population signal in time")
+        tsig2 = rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
+        stim = tsig2._data.copy()
+        
+    log.info(f"Swapping psth into pop stim for ch {matchcellid}")
+    psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
+
+    # figure out spont rate for subtraction from PSTH
+    prestimsilence = new_rec[r].extract_epoch('PreStimSilence', mask=rec['mask'])
+    if prestimsilence.shape[-1] > 0:
+        if len(prestimsilence.shape) == 3:
+            spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+        else:
+            spont_rate = np.nanmean(prestimsilence)
+    else:
+        try:
+            prestimsilence = resp.extract_epoch('TRIALPreStimSilence')
+            if len(prestimsilence.shape) == 3:
+                spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+            else:
+                spont_rate = np.nanmean(prestimsilence)
+        except:
+            raise ValueError("Can't find prestim silence to use for PSTH calculation")
+
+    stim[matchcellid, :] = psth._data - spont_rate
+
+    new_rec['stim']=rec[s]._modified_copy(data=stim)
+    
+    return {'rec': new_rec}
+
 
 
 def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
@@ -1095,4 +1343,39 @@ def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
     new_rec[s]=rec[s]._modified_copy(data=new_state/ts)
 
     return {'rec': new_rec}
+
+def stack_signal_as_delayed_lines(rec, signal, delay, duration, **kwargs):
+
+    array = rec[signal]._data
+    chn, tme = array.shape
+    stk = chn * duration
+
+    stacked_array = np.empty((stk, tme))
+    channels = list()
+    for dur in range(duration):
+        chn_start = chn*dur
+        chn_stop = chn_start + chn
+        npad = delay + dur # number of positions to shift forwards
+
+        if npad == 0:
+            stacked_array[chn_start:chn_stop,:] = array
+        else:
+            stacked_array[chn_start:chn_stop,:] = np.pad(array,((0,0),(npad,0)), mode='constant')[:,:-npad]
+
+        channels.extend([f'{ch}_{npad}' for ch in rec[signal].chans])
+
+    rec[signal] = rec[signal]._modified_copy(data=stacked_array, chans=channels)
+    return rec
+
+
+if __name__ == '__main__':
+
+    from nems import recording, signal
+
+    sig = signal.RasterizedSignal(data=np.arange(10).reshape((2,5)), fs=10, name='state', recording='hola', chans=['1','2'])
+    rec = recording.Recording(signals={'state':sig})
+
+    stacked_rec = stack_signal_as_delayed_lines(rec,'state', delay=1, duration=3)
+
+
 

@@ -10,15 +10,16 @@ import sys
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 
-# define global variables for data
-path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
-data_frames = os.listdir(path)
+from batch_norm import get_batch_norm_params
 
+# define global variables for data
+#path = ps.TRAIN_DATA_PATH  #'/auto/data/nems_db/pup_py/training_data/'
+#data_frames = os.listdir(path)
 
 class DataGenerator(keras.utils.Sequence):
 
-    def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=5, n_channels=3, shuffle=True,
-                 augment_minibatches=False):
+    def __init__(self, list_IDs, batch_size=32, image_dim=(224, 224), n_parms=13, n_channels=3, shuffle=True,
+                 augment_minibatches=False, species='ferret'):
         self.batch_size = batch_size
         self.list_IDs = list_IDs
         self.n_parms = n_parms
@@ -27,6 +28,10 @@ class DataGenerator(keras.utils.Sequence):
         self.shuffle = shuffle
         self.augment = augment_minibatches
         self.on_epoch_end()
+        global NORM_FACTORS, data_frames, path
+        NORM_FACTORS = get_batch_norm_params(species)
+        path = os.path.join(ps.ROOT_DIRECTORY, species, 'training_data/')  #'/auto/data/nems_db/pup_py/training_data/'
+        data_frames = os.listdir(path)
 
     def on_epoch_end(self):
         'Update index after each epoch'
@@ -51,7 +56,17 @@ class DataGenerator(keras.utils.Sequence):
             long_axis = current_frame['ellipse_zack']['b'] * 2
             short_axis = current_frame['ellipse_zack']['a'] * 2
             phi = current_frame['ellipse_zack']['phi']
-            y[i, :] = np.asarray([Y0_in, X0_in, long_axis, short_axis, phi])
+            # eyelid keypoints
+            lx = current_frame['ellipse_zack']['eyelid_left_x']
+            ly = current_frame['ellipse_zack']['eyelid_left_y']
+            tx = current_frame['ellipse_zack']['eyelid_top_x']
+            ty = current_frame['ellipse_zack']['eyelid_top_y']
+            rx = current_frame['ellipse_zack']['eyelid_right_x']
+            ry = current_frame['ellipse_zack']['eyelid_right_y']
+            bx = current_frame['ellipse_zack']['eyelid_bottom_x']
+            by = current_frame['ellipse_zack']['eyelid_bottom_y']
+            y[i, :] = np.asarray([Y0_in, X0_in, long_axis, short_axis, phi,
+                            lx, ly, tx, ty, rx, ry, bx, by])
 
             if self.augment:
                 # randomly augment mini-batches by performing transformations on each image
@@ -63,18 +78,33 @@ class DataGenerator(keras.utils.Sequence):
                 scale_fact, im = ut.resize(current_frame['frame'], size=self.image_dim)
 
             y[i, ] = np.asarray([y[i, 0] * scale_fact[1], y[i, 1] * scale_fact[0], y[i, 2] * scale_fact[1],
-                                y[i, 3] * scale_fact[0], y[i, 4]])
+                                y[i, 3] * scale_fact[0], y[i, 4],
+                                y[i, 5] * scale_fact[0],
+                                y[i, 6] * scale_fact[1],
+                                y[i, 7] * scale_fact[0],
+                                y[i, 8] * scale_fact[1],
+                                y[i, 9] * scale_fact[0],
+                                y[i, 10] * scale_fact[1],
+                                y[i, 11] * scale_fact[0],
+                                y[i, 12] * scale_fact[1],
+                                ])
 
             im = keras.applications.densenet.preprocess_input(im)
 
             # this stuff is still a WIP. Trying to normalize parameters for the fit so one isn't weighted more heavily than others            
             # normalize the params to live between 0 and 1
+            for j, (_, v) in enumerate(NORM_FACTORS.items()):
+                # these should be sorted in the same order as y, so no need to use the
+                # dict keys in NORM_FACTORS
+                y[i, j] = (y[i, j] / v[2]) #/ v[1]
+            '''
             y[i, 0] = y[i, 0] / self.image_dim[1]
             y[i, 1] = y[i, 1] / self.image_dim[1]
             y[i, 2] = y[i, 2] / (self.image_dim[1] / 2)
             y[i, 3] = y[i, 3] / (self.image_dim[1] / 2)
             y[i, 4] = (y[i, 4] / (np.pi)) 
-
+            y[i, 5:] = y[i, 5:] / self.image_dim[1]
+            '''
             y[i, :] = y[i, :] * 100
             
             X[i, ] = np.tile(np.expand_dims(im, -1), [1, 1, 3])

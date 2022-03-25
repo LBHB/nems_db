@@ -183,12 +183,13 @@ def st(loadkey):
 
     broken out of evt/psth/etc loader keywords
     """
-    pattern = re.compile(r'^st\.([a-zA-Z0-9\.]*)$')
+    pattern = re.compile(r'^st\.([a-zA-Z0-9\W+\.]*)$')
     parsed = re.match(pattern, loadkey)
     loader = parsed.group(1)
 
     state_signals = []
     permute_signals = []
+    generate_signals = []
 
     loadset = loader.split(".")
     for l in loadset:
@@ -208,6 +209,8 @@ def st(loadkey):
             this_sig = ["pupil2"]
         elif l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("dlp"):
+            this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
@@ -262,12 +265,56 @@ def st(loadkey):
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
         state_signals.extend(this_sig)
-        if l.endswith("0"):
-            permute_signals.extend(this_sig)
+
+        # NEW -- check if we've specified to repeat this signal inside the state signal
+        # crh, 14.12.2021
+        if len(l.split("+"))>1:
+            # repeat this signal r times
+            if l.split("+")[1].startswith("r"):
+                nReps = int(l.split("+")[1][1:])
+                for idx, r in enumerate(range(nReps)):
+                    state_signals.extend([ts+"_r"+str(idx+1) for ts in this_sig])
+            elif l.split("+")[1].startswith("s"):
+                permute_signals.extend(this_sig)
+            elif l.split("+")[1].startswith("gp"):
+                generate_signals.extend(this_sig)
+            else:
+                raise ValueError("Unexpected format for specifying state signals")
+
+            # which signals to permute / generate randomly?
+            if len(l.split("+"))==3:
+                option = l.split("+")[2]
+                if option.startswith("s"):
+                    # permute the specified signals
+                    if "," in option[1:]:
+                        modchans = [int(k) for k in option[1:].split(",")]
+                    else:
+                        modchans = [int(option[1:])]
+                    for mchan in modchans:
+                        permute_signals.extend([ts+"_r"+str(mchan) if mchan!=0 else ts for ts in this_sig])
+
+                elif option.startswith("gp"):
+                    # gp generate the specified signals
+                    if "," in option[2:]:
+                        modchans = [int(k) for k in option[2:].split(",")]
+                    else:
+                        modchans = [int(option[2:])]
+                    for mchan in modchans:
+                        generate_signals.extend([ts+"_r"+str(mchan) if mchan!=0 else ts for ts in this_sig])
+                else:
+                    raise ValueError("Unexpected format for specifying state signal permutations")
+
+        # old way
+        else:
+            if l.endswith("0"):
+                permute_signals.extend(this_sig)
+            if l.endswith("GP"):
+                generate_signals.extend(this_sig)
 
     xfspec = [['nems.xforms.make_state_signal',
                {'state_signals': state_signals,
                 'permute_signals': permute_signals,
+                'generate_signals': generate_signals,
                 'new_signalname': 'state'}]]
     return xfspec
 
@@ -298,6 +345,18 @@ def rstate(kw):
 
     return [['nems_lbhb.preprocessing.state_resp_outer', dopt]]
 
+@xform()
+def popstim(kw):
+    ops = kw.split(".")[1:]
+    dopt = {}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.population_to_stim', dopt]]
+    
 
 @xform()
 def inp(loadkey):
@@ -353,45 +412,52 @@ def pca(loadkey):
     """
 
     ops = loadkey.split(".")[1:]
+
     pc_source = "psth"
     overwrite_resp = True
     pc_count=None
     pc_idx=None
     compute_power = 'no'
     whiten = True
+
+    options = {}
     for op in ops:
         if op == "psth":
-            pc_source = "psth"
+            options['pc_source'] = "psth"
         elif op == "all":
-            pc_source = "all"
+            options['pc_source'] = "all"
         elif op == "noise":
-            pc_source = "noise"
+            options['pc_source'] = "noise"
         elif op == "no":
-            overwrite_resp = False
+            options['overwrite_resp'] = False
+        elif op == "dlc":
+            options['resp_sig'] = 'dlc'
+            options['overwrite_resp'] = False
+            options['pc_sig'] = 'dlc_pca'
         elif op.startswith("cc"):
-            pc_count=int(op[2:])
-            pc_idx=list(range(pc_count))
+            options['pc_count'] = int(op[2:])
+            options['pc_idx']=list(range(options['pc_count']))
         elif op.startswith("n"):
-            pc_count=int(op[1:])+1
-            pc_idx=[int(op[1:])]
+            n = int(op[1:])
+            options['pc_count'] = n+1
+            options['pc_idx'] = [n]
         elif op.startswith("p"):
-            compute_power = "single_trial"
+            options['compute_power'] = "single_trial"
 
-    if pc_idx is not None:
-        xfspec = [['nems.preprocessing.resp_to_pc',
-                   {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'pc_idx': pc_idx, 'compute_power': compute_power, 'whiten': whiten}]]
-    else:
-        xfspec = [['nems.preprocessing.resp_to_pc',
-                   {'pc_source': pc_source, 'overwrite_resp': overwrite_resp,
-                    'pc_count': pc_count, 'compute_power': compute_power, 'whiten': whiten}]]
+    xfspec = [['nems.preprocessing.resp_to_pc', options]]
 
     return xfspec
 
 
 @xform()
 def popev(loadkey):
-    return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {}]]
+    ops = loadkey.split('.')[1:]
+    keepfrac = 1.0
+    for op in ops:
+        if op.startswith("k"):
+            keepfrac=int(op[1:]) / 100
+    
+    return [['nems_lbhb.xform_wrappers.split_pop_rec_by_mask', {'keepfrac': keepfrac}]]
 
 
 @xform()
@@ -459,8 +525,10 @@ def epcpn(load_key):
     """
     ops = load_key.split('.')[1:]
     sequence_only = ('seq' in ops)
+    use_old = ('old' in ops) # use old (buggy) code
     xfspec = [['nems_lbhb.preprocessing.fix_cpn_epochs',
-               {'sequence_only': sequence_only},
+               {'sequence_only': sequence_only, 
+               'use_old': use_old},
               ['rec'], ['rec']]]
 
     return xfspec
@@ -480,23 +548,81 @@ def pbal(load_key):
 @xform()
 def plgsm(load_key):
     """
-    Create masks for large and small pupl
+    Create masks for large and small pupil
     """
     ops = load_key.split('.')[1:]
     evoked_only = False
     custom_epochs = False
+    respsort = False
+    pupsort = False
     ev_bins = 0
     add_per_stim = ('s' in ops)
     split_per_stim = ('sp' in ops)
+    reduce_mask = ('rm' in ops)
     for op in ops:
         if op[:1] == 'e':
             evoked_only=True
             if len(op) > 1:
-                ev_bins = int(op[1:].strip('g'))
+                ev_bins = int(op[1:].strip('g').strip('r').strip('p'))
                 if 'g' in op:
                     custom_epochs = True
+                if 'r' in op:
+                    respsort = True
+                if 'p' in op:
+                    pupsort = True
     xfspec = [['nems_lbhb.preprocessing.pupil_large_small_masks', 
-               {'evoked_only': evoked_only, 'ev_bins': ev_bins, 'add_per_stim': add_per_stim, 'split_per_stim': split_per_stim, 'custom_epochs': custom_epochs}]]
+               {'evoked_only': evoked_only, 'ev_bins': ev_bins,
+                'add_per_stim': add_per_stim,
+                'split_per_stim': split_per_stim,
+                'custom_epochs': custom_epochs,
+                'reduce_mask': reduce_mask,
+                'respsort': respsort,
+                'pupsort': pupsort}]]
+
+    return xfspec
+
+@xform()
+def tseg(load_key):
+    """
+    Create masks for large and small pupl
+    """
+    ops = load_key.split('.')[1:]
+    segment_count = 8
+    for op in ops:
+        if op[:1] == 's':
+            segment_count = int(op[1:])
+
+    xfspec = [['nems_lbhb.preprocessing.mask_time_segments', 
+               {'segment_count': segment_count}]]
+
+    return xfspec
+
+@xform()
+def mvm(load_key):
+    """
+    Create masks for movement artifacts
+    """
+    ops = load_key.split('.')[1:]
+    binsize = 1
+    threshold = 0.25
+    for op in ops:
+        if op.startswith('t'):
+            # threshold
+            tkey = float(op[1:])
+            if tkey == 1:
+                threshold = tkey
+            else:
+                threshold = tkey / 100
+        if op.startswith('w'):
+            # window size in sec
+            wkey = float(op[1:])
+            if wkey > 10:
+                binsize = wkey / 100
+            else:
+                binsize = wkey 
+    
+    xfspec = [['nems_lbhb.preprocessing.movement_mask', 
+               {'threshold': threshold, 'binsize': binsize}]]
 
     return xfspec
 
@@ -624,6 +750,7 @@ def psthfr(load_key):
     """
     options = load_key.split('.')[1:]
     smooth = ('s' in options)
+    mean_zero = ('z' in options)
     hilo = ('hilo' in options)
     jackknife = ('j' in options)
     use_as_input = ('ni' not in options)
@@ -647,11 +774,11 @@ def psthfr(load_key):
     else:
         if jackknife:
             xfspec=[['nems.xforms.generate_psth_from_est_for_both_est_and_val_nfold',
-                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
+                     {'smooth_resp': smooth, 'epoch_regex': epoch_regex, 'mean_zero': mean_zero}]]
         else:
             xfspec=[['nems.xforms.generate_psth_from_resp',
                      {'smooth_resp': smooth, 'use_as_input': use_as_input,
-                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim}]]
+                      'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim, 'mean_zero': mean_zero}]]
     return xfspec
 
 
@@ -785,9 +912,15 @@ def rz(load_key):
     Transform resp into zscore. Add signal 'raw_resp' for original resp
     signal.
     """
-
+    options = load_key.split('.')
+    use_mask = False
+    for o in options:
+        if o=='m':
+            use_mask = True
+    
     xfspec = [['nems_lbhb.preprocessing.zscore_resp',
-                {}, ['rec'], ['rec']]]
+                {'use_mask': use_mask}, 
+                ['rec'], ['rec']]]
 
     return xfspec
 
@@ -810,3 +943,13 @@ def esth2(kw):
         seed_idx = 0
     return [['nems_lbhb.gcmodel.initializers.est_halved', {'half': 2,
                                                            'seed_idx': seed_idx}]]
+
+@xform('dline')
+def dline(kw):
+    """
+    Stacks the state signal to be expressed as delayed lines
+    """
+    _, delay, duration = kw.split('.')
+    return [['nems_lbhb.preprocessing.stack_signal_as_delayed_lines',
+             {'signal': 'state', 'delay': int(delay), 'duration': int(duration)}, ['rec'], ['rec']
+             ]]
