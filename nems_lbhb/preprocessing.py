@@ -1280,7 +1280,7 @@ def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0
   
     if shuffle_interactions:
         log.info(f"Shuffling population signal in time")
-        tsig2 = rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
+        tsig2 = new_rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
         stim = tsig2._data.copy()
         
     log.info(f"Swapping psth into pop stim for ch {matchcellid}")
