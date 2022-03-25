@@ -171,14 +171,14 @@ print("matched snr Sig. tests:\n"
 DO_SAVE=True
 if DO_SAVE:
     figures_to_save = [
-        (fig2, 'fig2_pareto'),
-        (fig3, 'fig3_scatter_bar'),
-        (fig5, 'fig5_heldout'),
-        (fig6, 'fig6_data_subsets'),
-        (fig7, 'fig7_equivalence'),
-        (fig8, 'fig8_sparseness'),
-        (fig9a, 'fig9_snr'),
-        (fig9b, 'fig9_snr_inset'),
+        (fig2, 'fig3_pareto'),
+        (fig3, 'fig4_scatter_bar'),
+        (fig5, 'fig6_heldout'),
+        (fig6, 'fig7_data_subsets'),
+        (fig7, 'fig8_equivalence'),
+        (fig8, 'fig9_sparseness'),
+        (fig9a, 'fig10_snr'),
+        (fig9b, 'fig10_snr_inset'),
     ]
 
     pdf = PdfPages(base_path / 'all_figs.pdf')

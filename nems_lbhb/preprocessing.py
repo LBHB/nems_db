@@ -1285,7 +1285,25 @@ def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0
         
     log.info(f"Swapping psth into pop stim for ch {matchcellid}")
     psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
-    stim[matchcellid,:] = psth._data    
+
+    # figure out spont rate for subtraction from PSTH
+    prestimsilence = new_rec[r].extract_epoch('PreStimSilence', mask=rec['mask'])
+    if prestimsilence.shape[-1] > 0:
+        if len(prestimsilence.shape) == 3:
+            spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+        else:
+            spont_rate = np.nanmean(prestimsilence)
+    else:
+        try:
+            prestimsilence = resp.extract_epoch('TRIALPreStimSilence')
+            if len(prestimsilence.shape) == 3:
+                spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+            else:
+                spont_rate = np.nanmean(prestimsilence)
+        except:
+            raise ValueError("Can't find prestim silence to use for PSTH calculation")
+
+    stim[matchcellid, :] = psth._data - spont_rate
 
     new_rec['stim']=rec[s]._modified_copy(data=stim)
     
