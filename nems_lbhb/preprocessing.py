@@ -1308,7 +1308,9 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
 
         new_rec['stim']=rec[s]._modified_copy(data=stim)
     elif cross_state:
-        stim[matchcellid,:] = 1
+        stim = np.concatenate((np.ones((1,stim.shape[0])),
+                                       stim[:matchcellid,:],
+                                       stim[(matchcellid+1):,:]), axis=0)
         slist=[]
         st=new_rec['state']._data
         stchans=[]
