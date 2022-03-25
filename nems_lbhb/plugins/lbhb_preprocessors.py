@@ -946,6 +946,9 @@ def esth2(kw):
 
 @xform('dline')
 def dline(kw):
+    """
+    Stacks the state signal to be expressed as delayed lines
+    """
     _, delay, duration = kw.split('.')
     return [['nems_lbhb.preprocessing.stack_signal_as_delayed_lines',
              {'signal': 'state', 'delay': int(delay), 'duration': int(duration)}, ['rec'], ['rec']
