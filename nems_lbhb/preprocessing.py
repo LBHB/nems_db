@@ -1264,7 +1264,7 @@ def zscore_resp(rec, use_mask=False):
     return r
 
 def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim', smooth_window=0,
-                         shuffle_interactions=False, **ctx):
+                         shuffle_interactions=False, cross_state=False, **ctx):
 
     cellid = meta['cellid']
     matchcellid=np.where([True if c==cellid else False for c in rec[s].chans])[0][0]
@@ -1307,6 +1307,16 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
         stim[matchcellid, :] = psth._data - spont_rate
 
         new_rec['stim']=rec[s]._modified_copy(data=stim)
+    elif cross_state:
+        stim[matchcellid,:] = 1
+        slist=[]
+        st=new_rec['state']._data
+        stchans=[]
+        for i in range(st.shape[0]):
+            slist.append(stim * st[[i],:])
+            stchans.extend(rec[s].chans)
+        newst=np.concatenate(slist,axis=0)
+        new_rec['state'] = new_rec['state']._modified_copy(data=newst, chans=stchans)
     else:
         stim = np.concatenate((stim[:matchcellid,:],stim[(matchcellid+1):,:]), axis=0)
         newst=rec[s]._modified_copy(data=stim)

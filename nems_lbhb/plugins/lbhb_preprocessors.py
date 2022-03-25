@@ -364,6 +364,8 @@ def popstate(kw):
     for op in ops:
         if op=='sh':
            dopt['shuffle_interactions'] = True
+        elif op=='x':
+           dopt['cross_state'] = True
         elif op.startswith('s'):
            dopt['smooth_window'] = int(op[1:])
 
