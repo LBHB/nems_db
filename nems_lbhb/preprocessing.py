@@ -1315,7 +1315,12 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
         st=new_rec['state']._data
         stchans=[]
         for i in range(st.shape[0]):
-            slist.append(stim * st[[i],:])
+            stmin = st[i,:].min()
+            if stmin<0:
+                slist.append(stim * (st[[i],:] - stmin))
+            else:
+                slist.append(stim * st[[i],:])
+
             stchans.extend(rec[s].chans)
         newst=np.concatenate(slist,axis=0)
         new_rec['state'] = new_rec['state']._modified_copy(data=newst, chans=stchans)
