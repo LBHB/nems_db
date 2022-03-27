@@ -209,6 +209,8 @@ def st(loadkey):
             this_sig = ["pupil2"]
         elif l.startswith("pup"):
             this_sig = ["pupil"]
+        elif l.startswith("ppp"):
+            this_sig = ["pupiln"]
         elif l.startswith("dlp"):
             this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
