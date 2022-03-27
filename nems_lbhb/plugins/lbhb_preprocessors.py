@@ -348,15 +348,28 @@ def rstate(kw):
 @xform()
 def popstim(kw):
     ops = kw.split(".")[1:]
-    dopt = {}
+    dopt = {'outsig': 'stim'}
     for op in ops:
         if op=='sh':
            dopt['shuffle_interactions'] = True
         elif op.startswith('s'):
            dopt['smooth_window'] = int(op[1:])
 
-    return [['nems_lbhb.preprocessing.population_to_stim', dopt]]
+    return [['nems_lbhb.preprocessing.population_to_signal', dopt]]
     
+@xform()
+def popstate(kw):
+    ops = kw.split(".")[1:]
+    dopt = {'sigout': 'state'}
+    for op in ops:
+        if op=='sh':
+           dopt['shuffle_interactions'] = True
+        elif op=='x':
+           dopt['cross_state'] = True
+        elif op.startswith('s'):
+           dopt['smooth_window'] = int(op[1:])
+
+    return [['nems_lbhb.preprocessing.population_to_signal', dopt]]
 
 @xform()
 def inp(loadkey):

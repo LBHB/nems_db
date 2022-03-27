@@ -20,7 +20,8 @@ from scipy.ndimage import gaussian_filter1d
 import pickle
 import pandas as pd
 
-from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths
+from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
+    concatenate_state_channel
 from nems.epoch import epoch_names_matching
 import nems.db as nd
 
@@ -1262,9 +1263,8 @@ def zscore_resp(rec, use_mask=False):
 
     return r
 
-
-def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0,
-                       shuffle_interactions=False, **ctx):
+def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim', smooth_window=0,
+                         shuffle_interactions=False, cross_state=False, **ctx):
 
     cellid = meta['cellid']
     matchcellid=np.where([True if c==cellid else False for c in rec[s].chans])[0][0]
@@ -1280,34 +1280,59 @@ def population_to_stim(rec, meta=None, s='population', r='resp', smooth_window=0
   
     if shuffle_interactions:
         log.info(f"Shuffling population signal in time")
-        tsig2 = rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
+        tsig2 = new_rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
         stim = tsig2._data.copy()
         
-    log.info(f"Swapping psth into pop stim for ch {matchcellid}")
-    psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
+    if sigout=='stim':
+        log.info(f"Swapping psth into pop stim for ch {matchcellid}")
+        psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
 
-    # figure out spont rate for subtraction from PSTH
-    prestimsilence = new_rec[r].extract_epoch('PreStimSilence', mask=rec['mask'])
-    if prestimsilence.shape[-1] > 0:
-        if len(prestimsilence.shape) == 3:
-            spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
-        else:
-            spont_rate = np.nanmean(prestimsilence)
-    else:
-        try:
-            prestimsilence = resp.extract_epoch('TRIALPreStimSilence')
+        # figure out spont rate for subtraction from PSTH
+        prestimsilence = new_rec[r].extract_epoch('PreStimSilence', mask=rec['mask'])
+        if prestimsilence.shape[-1] > 0:
             if len(prestimsilence.shape) == 3:
                 spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
             else:
                 spont_rate = np.nanmean(prestimsilence)
-        except:
-            raise ValueError("Can't find prestim silence to use for PSTH calculation")
+        else:
+            try:
+                prestimsilence = resp.extract_epoch('TRIALPreStimSilence')
+                if len(prestimsilence.shape) == 3:
+                    spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+                else:
+                    spont_rate = np.nanmean(prestimsilence)
+            except:
+                raise ValueError("Can't find prestim silence to use for PSTH calculation")
 
-    stim[matchcellid, :] = psth._data - spont_rate
+        stim[matchcellid, :] = psth._data - spont_rate
 
-    new_rec['stim']=rec[s]._modified_copy(data=stim)
-    
+        new_rec['stim']=rec[s]._modified_copy(data=stim)
+    elif cross_state:
+        stim = np.concatenate((np.ones((1,stim.shape[1])),
+                                       stim[:matchcellid,:],
+                                       stim[(matchcellid+1):,:]), axis=0)
+        slist=[]
+        st=new_rec['state']._data
+        stchans=[]
+        for i in range(st.shape[0]):
+            stmin = st[i,:].min()
+            if stmin<0:
+                slist.append(stim * (st[[i],:] - stmin))
+            else:
+                slist.append(stim * st[[i],:])
+
+            stchans.extend(rec[s].chans)
+        newst=np.concatenate(slist,axis=0)
+        new_rec['state'] = new_rec['state']._modified_copy(data=newst, chans=stchans)
+    else:
+        stim = np.concatenate((stim[:matchcellid,:],stim[(matchcellid+1):,:]), axis=0)
+        newst=rec[s]._modified_copy(data=stim)
+        new_rec = concatenate_state_channel(new_rec, newst)
+        
     return {'rec': new_rec}
+
+def population_to_stim(rec, **kwargs):
+    return population_to_signal(rec, sigout='stim', **kwargs)
 
 
 
