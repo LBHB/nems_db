@@ -17,7 +17,7 @@ from nems.registry import xmodule
 log = logging.getLogger(__name__)
 
 
-def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
+def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d, per_channel=False):
     '''
      Apparently, numpy is VERY slow at taking the exponent of a negative number
      https://github.com/numpy/numpy/issues/8233
@@ -34,19 +34,34 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
     n_inputs=base_g.shape[0]
     n_states=base_g.shape[1]
     _n = np.newaxis
-    for i in range(n_inputs):
-        _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
-                     axis=0, keepdims=True)
-        _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
-                     axis=0, keepdims=True)
-        if i == 0:
-           sg = _sg
-           sd = _sd
-        else:
-           sg = np.concatenate((sg, _sg), axis=0)
-           sd = np.concatenate((sd, _sd), axis=0)
+    if per_channel:
+        for i in range(n_states):
+            _sg = base_g[[0],i,_n] + amplitude_g[[0],i,_n] * \
+                         np.exp(-np.exp(-np.exp(kappa_g[[0],i,_n]) * (s[i] - offset_g[[0],i,_n])))
+            _sd = base_d[[0],i,_n] + amplitude_d[[0],i,_n] * \
+                         np.exp(-np.exp(-np.exp(kappa_d[[0],i,_n]) * (s[i] - offset_d[[0],i,_n])))
+            if i == 0:
+               sg = _sg
+               sd = _sd
+            else:
+               sg = np.concatenate((sg, _sg), axis=0)
+               sd = np.concatenate((sd, _sd), axis=0)
+                
+        #import pdb; pdb.set_trace()
+    else:
+        for i in range(n_inputs):
+            _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
+                         np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
+                         axis=0, keepdims=True)
+            _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
+                         np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
+                         axis=0, keepdims=True)
+            if i == 0:
+               sg = _sg
+               sd = _sd
+            else:
+               sg = np.concatenate((sg, _sg), axis=0)
+               sd = np.concatenate((sd, _sd), axis=0)
 
     return sg * x + sd, sg, sd
 
@@ -519,6 +534,7 @@ class sdexp_new(NemsModule):
         set_bounds = False
         # nl_state_chans = 1
         nl_state_chans = n_vars
+        per_channel=('per' in options[2:])
         for o in options[2:]:
             if o == 'lv':
                 state = 'lv'
@@ -558,6 +574,7 @@ class sdexp_new(NemsModule):
                           's': state,
                           'n_inputs': n_chans,
                           'chans': n_vars,
+                          'per_channel': per_channel,
                           'state_type': 'both'},
             'plot_fns': ['nems.plots.api.mod_output',
                          'nems.plots.api.before_and_after',
@@ -599,12 +616,14 @@ class sdexp_new(NemsModule):
         d - dc to offset by
         base, amplitude, kappa - parameters for dexp applied to each state channel
         '''
-
+        
+        fn_kwargs = self.get('fn_kwargs')
+        
         if (base_d is None) & (amplitude_d is None) & (kappa_d is None):
             fn = lambda x: _state_dexp_old(x, rec[s]._data, g, d, base, amplitude, kappa)
         else:
             fn = lambda x: _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
-                                       base_d, amplitude_d, kappa_d, offset_d)
+                                       base_d, amplitude_d, kappa_d, offset_d, per_channel=fn_kwargs['per_channel'])
 
         # kludgy backwards compatibility
         try:

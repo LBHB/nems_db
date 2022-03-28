@@ -1283,7 +1283,7 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
         tsig2 = new_rec[r]._modified_copy(data=stim).shuffle_time(rand_seed=100, mask=rec['mask'])
         stim = tsig2._data.copy()
         
-    if sigout=='stim':
+    if sigout=='stim':  # kw popstim
         log.info(f"Swapping psth into pop stim for ch {matchcellid}")
         psth = generate_average_sig(new_rec[r], 'psth', '^(STIM|TAR|CAT)', mask=rec['mask'])
 
@@ -1307,7 +1307,7 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
         stim[matchcellid, :] = psth._data - spont_rate
 
         new_rec['stim']=rec[s]._modified_copy(data=stim)
-    elif cross_state:
+    elif cross_state:  # kw popstate.x
         stim = np.concatenate((np.ones((1,stim.shape[1])),
                                        stim[:matchcellid,:],
                                        stim[(matchcellid+1):,:]), axis=0)
@@ -1324,7 +1324,7 @@ def population_to_signal(rec, meta=None, s='population', r='resp', sigout='stim'
             stchans.extend(rec[s].chans)
         newst=np.concatenate(slist,axis=0)
         new_rec['state'] = new_rec['state']._modified_copy(data=newst, chans=stchans)
-    else:
+    else:   # kw popstate
         stim = np.concatenate((stim[:matchcellid,:],stim[(matchcellid+1):,:]), axis=0)
         newst=rec[s]._modified_copy(data=stim)
         new_rec = concatenate_state_channel(new_rec, newst)
