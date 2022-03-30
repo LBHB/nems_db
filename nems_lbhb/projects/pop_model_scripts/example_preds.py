@@ -83,8 +83,11 @@ def single_cell_examples():
 
         ctx0['val']['stim'] = tctx['val']['stim']
         pop_models.model_pred_sum(
-            [ctx0, ctx1, ctx2], cellid=cellid, rr=np.arange(150,600),
+            [ctx0, ctx1, ctx2], cellid=cellid, rr=np.arange(150, 600),
             predcolor=['orange', 'blue', 'darkgreen'], labels=example_shortnames, ax=[ax[0],ax[i+1]])
+        if i<len(cellids)-1:
+            ax[i+1].set_xlabel('')
+
     return fig
 
 def pop_model_example(figsize=None):
@@ -122,9 +125,9 @@ def pop_model_example(figsize=None):
 if __name__ == '__main__':
     
     fig = single_cell_examples()
-    filename=base_path / 'fig4_pred_example.pdf'
+    filename=base_path / 'fig5_pred_example.pdf'
     fig.savefig(filename, format='pdf', dpi='figure')
 
-    f=pop_model_example(figsize=column_and_half_tall)
-    filename=base_path / 'figS_example.pdf'
-    f.savefig(filename, format='pdf', dpi='figure')
+    #f=pop_model_example(figsize=column_and_half_tall)
+    #filename=base_path / 'fig2_example.pdf'
+    #f.savefig(filename, format='pdf', dpi='figure')

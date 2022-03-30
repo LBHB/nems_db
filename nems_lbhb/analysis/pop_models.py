@@ -370,23 +370,23 @@ def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purpl
     rr_orig=rr
     tt=np.arange(len(rr))/rec['resp'].fs
     
-    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower', cmap="gray_r", 
+    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig+1]**0.6, aspect='auto', origin='lower', cmap="gray_r",
                  extent=[tt[0],tt[-1],0,rec['stim'].shape[0]])
     ax[0].set_title(cellid + "/" + modelspec.meta['modelname'].split("_")[1])
-    ax[0].set_ylabel('Frequency')
+    ax[0].set_ylabel('Frequency', fontsize=8)
 
-    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], color=respcolor, label='resp');
+    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], linewidth=0.75, color=respcolor, label='resp');
     if mult_ctx:
         for e in range(len(ctx)):
             print(f"{labels[e]} {predcolor[e]}")
             r=ctx[e]['modelspec'].meta['r_test'][c][0]
-            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
+            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
     else: 
-        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
+        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
 
     ax[1].legend(frameon=False, fontsize=8)
-    ax[1].set_xlabel('Time (s)')
-    ax[1].set_ylabel('Spikes/sec')
+    ax[1].set_xlabel('Time (s)', fontsize=8)
+    ax[1].set_ylabel('Spikes/sec', fontsize=8)
     return ax[0].figure
     
 from nems.utils import get_setting

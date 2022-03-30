@@ -17,7 +17,7 @@ from nems.registry import xmodule
 log = logging.getLogger(__name__)
 
 
-def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d):
+def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_d, kappa_d, offset_d, per_channel=False):
     '''
      Apparently, numpy is VERY slow at taking the exponent of a negative number
      https://github.com/numpy/numpy/issues/8233
@@ -34,19 +34,34 @@ def _state_dexp(x, s, base_g, amplitude_g, kappa_g, offset_g, base_d, amplitude_
     n_inputs=base_g.shape[0]
     n_states=base_g.shape[1]
     _n = np.newaxis
-    for i in range(n_inputs):
-        _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
-                     axis=0, keepdims=True)
-        _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
-                     np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
-                     axis=0, keepdims=True)
-        if i == 0:
-           sg = _sg
-           sd = _sd
-        else:
-           sg = np.concatenate((sg, _sg), axis=0)
-           sd = np.concatenate((sd, _sd), axis=0)
+    if per_channel:
+        for i in range(n_states):
+            _sg = base_g[[0],i,_n] + amplitude_g[[0],i,_n] * \
+                         np.exp(-np.exp(-np.exp(kappa_g[[0],i,_n]) * (s[i] - offset_g[[0],i,_n])))
+            _sd = base_d[[0],i,_n] + amplitude_d[[0],i,_n] * \
+                         np.exp(-np.exp(-np.exp(kappa_d[[0],i,_n]) * (s[i] - offset_d[[0],i,_n])))
+            if i == 0:
+               sg = _sg
+               sd = _sd
+            else:
+               sg = np.concatenate((sg, _sg), axis=0)
+               sd = np.concatenate((sd, _sd), axis=0)
+                
+        #import pdb; pdb.set_trace()
+    else:
+        for i in range(n_inputs):
+            _sg = np.sum(base_g[i,:,_n] + amplitude_g[i,:,_n] * 
+                         np.exp(-np.exp(-np.exp(kappa_g[i,:,_n]) * (s[:n_states] - offset_g[i,:,_n]))),
+                         axis=0, keepdims=True)
+            _sd = np.sum(base_d[i,:,_n] + amplitude_d[i,:,_n] * 
+                         np.exp(-np.exp(-np.exp(kappa_d[i,:,_n]) * (s[:n_states] - offset_d[i,:,_n]))),
+                         axis=0, keepdims=True)
+            if i == 0:
+               sg = _sg
+               sd = _sd
+            else:
+               sg = np.concatenate((sg, _sg), axis=0)
+               sd = np.concatenate((sd, _sd), axis=0)
 
     return sg * x + sd, sg, sd
 
@@ -519,6 +534,7 @@ class sdexp_new(NemsModule):
         set_bounds = False
         # nl_state_chans = 1
         nl_state_chans = n_vars
+        per_channel=('per' in options[2:])
         for o in options[2:]:
             if o == 'lv':
                 state = 'lv'
@@ -558,6 +574,7 @@ class sdexp_new(NemsModule):
                           's': state,
                           'n_inputs': n_chans,
                           'chans': n_vars,
+                          'per_channel': per_channel,
                           'state_type': 'both'},
             'plot_fns': ['nems.plots.api.mod_output',
                          'nems.plots.api.before_and_after',
@@ -599,12 +616,14 @@ class sdexp_new(NemsModule):
         d - dc to offset by
         base, amplitude, kappa - parameters for dexp applied to each state channel
         '''
-
+        
+        fn_kwargs = self.get('fn_kwargs')
+        
         if (base_d is None) & (amplitude_d is None) & (kappa_d is None):
             fn = lambda x: _state_dexp_old(x, rec[s]._data, g, d, base, amplitude, kappa)
         else:
             fn = lambda x: _state_dexp(x, rec[s]._data, base_g, amplitude_g, kappa_g, offset_g,
-                                       base_d, amplitude_d, kappa_d, offset_d)
+                                       base_d, amplitude_d, kappa_d, offset_d, per_channel=fn_kwargs['per_channel'])
 
         # kludgy backwards compatibility
         try:
@@ -634,6 +653,198 @@ class sdexp_new(NemsModule):
         return []
 
 
+class state_hinge(NemsModule):
+    """
+    Hinge function to capture non-monotonic state effects
+    """
+    def __init__(self, **options):
+        """
+        set options to defaults if not supplied. pass to super() to add to data_dict
+        """
+        options['fn'] = options.get('fn', str(self.__module__) + '.state_hinge')
+        options['tf_layer'] = options.get('tf_layer', '')
+        options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
+                                                         'n_inputs': 1, 'chans': 1,
+                                                         'state_type': 'both'})
+        options['plot_fns'] = ['nems.plots.api.mod_output',
+                    'nems.plots.api.spectrogram_output',
+                    'nems.plots.api.before_and_after',
+                    'nems.plots.api.pred_resp',
+                    'nems.plots.api.state_vars_timeseries',
+                    'nems.plots.api.state_vars_psth_all']
+
+        options['plot_fn_idx'] = options.get('plot_fn_idx', 5)
+        options['bounds'] = options.get('bounds', {})
+        super().__init__(**options)
+
+    def description(self):
+        """
+        String description (include phi values?)
+        """
+        return "Pass state variable(s) through hinge then apply dc/gain to pred"
+
+    @xmodule('sthinge')
+    def keyword(kw):
+        '''
+        Generate and register modulespec for the sthinge
+
+        Parameters
+        ----------
+        kw : str
+            Expected format: r'^sthinge\.?(\d{1,})x(\d{1,})$'
+            e.g., "sthinge.SxR" or "sthinge.S":
+                S : number of state channels (required)
+                R : number of channels to modulate (default = 1)
+        Options
+        -------
+        None
+        '''
+        options = kw.split('.')
+        in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')
+
+        try:
+            parsed = re.match(in_out_pattern, options[1])
+            if parsed is None:
+                # backward compatible parsing if R not specified
+                n_vars = int(options[1])
+                n_chans = 1
+
+            else:
+                n_vars = int(parsed.group(1))
+                if len(parsed.groups())>1:
+                    n_chans = int(parsed.group(2))
+                else:
+                    n_chans = 1
+
+        except TypeError:
+            raise ValueError("Got TypeError when parsing sthinge keyword.\n"
+                             "Make sure keyword is of the form: \n"
+                             "sthinge.{n_variables} or sthinge.{n_variables}x{n_chans} \n"
+                             "keyword given: %s" % kw)
+            
+        zeros = np.zeros([n_chans, n_vars])
+        ones = np.ones([n_chans, n_vars])
+        g1_mean = zeros.copy()
+        g1_mean[:, 0] = 1
+        g1_sd = ones.copy() / 20
+        d1_mean = zeros
+        d1_sd = ones
+        g2_mean = zeros.copy()
+        g2_mean[:, 0] = 1
+        g2_sd = ones.copy() / 20
+        d2_mean = zeros
+        d2_sd = ones
+        x0_mean= zeros
+        x0_sd = ones / 20
+        
+        fn_kwargs = {'i': 'pred', 'o': 'pred', 's': 'state', 'chans': n_vars, 'n_inputs': n_chans}
+        
+        if ('g' in options[2:]):
+            fn_kwargs['state_type'] = 'gain_only'
+            fn_kwargs['d1'] = d1_mean
+            fn_kwargs['d2'] = d2_mean
+            prior = {'g1': ('Normal', {'mean': g1_mean, 'sd': g1_sd}),
+                     'g2': ('Normal', {'mean': g2_mean, 'sd': g2_sd}),
+                     'x0': ('Normal', {'mean': x0_mean, 'sd': x0_sd})}
+        elif ('d' in options[2:]):
+            fn_kwargs['state_type'] = 'dc_only'
+            fn_kwargs['g1'] = g1_mean
+            fn_kwargs['g2'] = g2_mean
+            prior = {'d1': ('Normal', {'mean': d1_mean, 'sd': d1_sd}),
+                     'd2': ('Normal', {'mean': d2_mean, 'sd': d2_sd}),
+                     'x0': ('Normal', {'mean': x0_mean, 'sd': x0_sd})}
+        else:
+            prior = {'d1': ('Normal', {'mean': d1_mean, 'sd': d1_sd}),
+                     'd2': ('Normal', {'mean': d2_mean, 'sd': d2_sd}),
+                     'g1': ('Normal', {'mean': g1_mean, 'sd': g1_sd}),
+                     'g2': ('Normal', {'mean': g2_mean, 'sd': g2_sd}),
+                     'x0': ('Normal', {'mean': x0_mean, 'sd': x0_sd})}
+
+            
+        if ('s' in options[2:]): # separate offset for spont than during evoked
+            raise ValueError('include_spont not yet supported.')
+        fn_kwargs['per_channel']=('per' in options[2:])
+        
+        fn_kwargs['fix_across_channels'] = 0
+        if 'c1' in options[2:]:
+            fn_kwargs['fix_across_channels'] = 1
+        elif 'c2' in options[2:]:
+            fn_kwargs['fix_across_channels'] = 2
+        if 'lv' in options[2:]:
+            fn_kwargs['s'] = 'lv'
+        
+        #If .o# is passed, fix gainoffset to #, initialize gain to 0.
+        # y = (np.matmul(g, rec[s]._data) + offset) * x so .g1 will by initialize with no state-dependence
+        gainoffset = 0
+        bounds=None
+        exclude_chans = None
+
+        for op in options[2:]:
+            if op.startswith('o'):
+                num = op[1:].replace('\\', '')
+                gainoffset = float(num)
+                g_mean[:, 0] = 0
+            elif op.startswith('b'):
+                bounds_in = op[1:].replace('\\', '').replace('d', '.')
+                bounds_in = bounds_in.split(':')
+                bounds = tuple(np.full_like(g_mean,float(bound) - gainoffset) for bound in bounds_in)
+            elif op.startswith("x"):
+                fn_kwargs['exclude_chans'] = [int(x) for x in op[1:].split(',')]
+
+        template = {
+            'fn_kwargs': fn_kwargs,
+            'plot_fn_idx': 5,
+            'prior': prior
+        }
+        template['tf_layer'] = ''
+        
+        return state_hinge(**template)
+
+
+    def eval(self, rec, i='pred', o='pred', s='state', g1=1, g2=1, x0=0, d1=0, d2=0, exclude_chans=None,
+             per_channel=False, **kw_args):
+        '''
+        Parameters
+        ----------
+        i name of input
+        o name of output signal
+        s name of state signal
+        g1,g2 - gain to scale s by
+        d1,d2 - dc to offset by
+        x0 -crossover between 1 and 2
+        '''
+        
+        state = rec[s]._data
+        if exclude_chans is not None:
+            keepidx = [idx for idx in range(0, state.shape[0]) if idx not in exclude_chans]
+            state = state[keepidx, :]
+
+        if per_channel:
+            def fn(x):
+                s_ = state-x0.T
+                sp = s_ * (s_>0)
+                sn = -s_ * (s_<0)
+                # gain applied point-wise to each state channel, split above and below x0
+                return (-g1.T * sn + g2.T * sp) * x + (-d1.T * sn + d2.T * sp)
+
+        else:
+            def fn(x):
+                s_ = state-x0.T
+                sp = s_ * (s_>0)
+                sn = -s_ * (s_<0)
+                # gain to all state channels, split above and below x0
+                return (np.matmul(-g1, sn) + np.matmul(g2, sp)) * x + np.matmul(-d1, sn) + np.matmul(d2, sp)
+                
+        return [rec[i].transform(fn, o)]
+
+    def tflayer(self):
+        """
+        layer definition for TF spec
+        """
+        #import tf-relevant code only here, to avoid dependency
+        return []
+
+    
 class lv_norm(NemsModule):
     """
     Add latent variable for normative models (matched cc)
