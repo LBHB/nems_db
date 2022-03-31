@@ -8,18 +8,19 @@ import nems_lbhb.plots
 import nems.db as nd
 from nems.utils import ax_remove_box
 
-from pop_model_utils import (SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS, PLOT_STAT, DOT_COLORS, DOT_MARKERS,
+from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS, PLOT_STAT, DOT_COLORS, DOT_MARKERS,
                              get_significant_cells)
 
 
 def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, dot_colors=None, dot_markers=None,
-                      plot_stat='r_test', plot_medians=False, labeled_models=None, show_legend=True):
+                      fill_styles=None, plot_stat='r_test', plot_medians=False, labeled_models=None, show_legend=True):
 
     if labeled_models is None:
         labeled_models = []
     if nparms_modelgroups is None:
         nparms_modelgroups = copy.copy(modelgroups)
-
+    if fill_styles is None:
+        fill_styles={k:'full' for (k,v) in dot_colors.items()}
     mean_cells_per_site = len(cellids)  # NAT4 dataset, so all cellids are used
     overall_min = 100
     overall_max = -100
@@ -45,7 +46,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         overall_max = max(overall_max, y_max)
         overall_min = min(overall_min, y_min)
 
-        ax.plot(n_parms, b_m, color=dot_colors[k], marker=dot_markers[k], label=k.split('_single')[0], markersize=6)
+        ax.plot(n_parms, b_m, color=dot_colors[k], marker=dot_markers[k], label=k.split('_single')[0], markersize=6, fillstyle=fill_styles[k])
         for m in labeled_models:
             if m in modelnames:
                 i = modelnames.index(m)
