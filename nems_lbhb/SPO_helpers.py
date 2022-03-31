@@ -44,8 +44,8 @@ pd.options.display.float_format = '{:,.3f}'.format
 pd.set_option('precision', 3)
 pd.set_option('display.expand_frame_repr', False)
 
-sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
-import fitEllipse as fE
+#sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
+import nems_lbhb.fitEllipse as fE
 
 from joblib import Memory
 memory = Memory('/auto/users/luke/Projects/SPS/NEMS/joblib_cache/')

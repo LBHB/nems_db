@@ -21,8 +21,8 @@ import sys
 import os
 import re
 import itertools
-sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
-import fitEllipse as fE
+#sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
+import nems_lbhb.fitEllipse as fE
 
 def get_sep_stim_names(stim_name):
     seps = [m.start() for m in re.finditer('_(\d|n)',stim_name)]
