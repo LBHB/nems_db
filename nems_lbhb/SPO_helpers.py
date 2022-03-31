@@ -48,7 +48,15 @@ pd.set_option('display.expand_frame_repr', False)
 import nems_lbhb.fitEllipse as fE
 
 from joblib import Memory
-memory = Memory('/auto/users/luke/Projects/SPS/NEMS/joblib_cache/')
+jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
+if os.path.exists(jl_cache_dir):
+    memory = Memory(jl_cache_dir)
+else:
+    jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+    if os.path.exists(jl_cache_dir):
+        memory = Memory(jl_cache_dir)
+    else:
+        raise RuntimeError('joblib cache not acessible')
 
 batches = {
     306:'3-component HCTs', #3H, has est stimuli
