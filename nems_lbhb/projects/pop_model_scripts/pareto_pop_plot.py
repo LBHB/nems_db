@@ -1,9 +1,20 @@
 import copy
 
+import matplotlib as mpl
+params = {'axes.spines.right': False,
+          'axes.spines.top': False,
+          'legend.fontsize': 10,
+          'axes.labelsize': 10,
+          'axes.titlesize': 10,
+          'xtick.labelsize': 10,
+          'ytick.labelsize': 10,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+mpl.rcParams.update(params)
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-#import importlib; importlib.reload(nems_lbhb.plots)  # if need to incorporate updated code w/o restarting entire kernel
 import nems_lbhb.plots
 import nems.db as nd
 from nems.utils import ax_remove_box
@@ -55,7 +66,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
     handles, labels = ax.get_legend_handles_labels()
     # reverse the order
     if show_legend:
-        ax.legend(handles, labels, loc='lower right', fontsize=8, frameon=False)
+        ax.legend(handles, labels, loc='lower right', fontsize=7, frameon=False)
     ax.set_xlabel('Free parameters')
     ax.set_ylabel('Mean pred corr')
     ax.set_ylim((overall_min, overall_max))

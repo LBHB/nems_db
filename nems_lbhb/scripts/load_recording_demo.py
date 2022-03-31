@@ -22,6 +22,7 @@ cellid = 'TAR009d-42-1'
 options = {'rasterfs': 100, 'stimfmt': 'ozgf',
            'chancount': 18, 'pupil': True, 'stim': True}
 
+
 # get the name of the cached recording
 uri = nb.baphy_load_recording_uri(cellid=cellid, batch=batch, **options)
 rec = load_recording(uri)

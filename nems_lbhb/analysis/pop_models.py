@@ -3,6 +3,17 @@ import logging
 
 import json as jsonlib
 import matplotlib as mpl
+params = {'axes.spines.right': False,
+          'axes.spines.top': False,
+          'legend.fontsize': 10,
+          'axes.labelsize': 10,
+          'axes.titlesize': 10,
+          'xtick.labelsize': 10,
+          'ytick.labelsize': 10,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+mpl.rcParams.update(params)
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
@@ -144,7 +155,7 @@ def strf_mtx(modelspec, rows=3, smooth=[1,2]):
 
 def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, 
                        smooth=[2,2], figsize=None, example_idx=0, cmap='bwr',
-                       performance_metric='r_ceiling', modelspec_ref=None, **kwargs):
+                       performance_metric='r_ceiling', modelspec_ref=None, altstim=None, **kwargs):
 
     fs = rec['resp'].fs
     nl_layers = [idx for idx,m in enumerate(modelspec) if (('nonlinearity' in m['fn']) and ('dlog' not in m['fn']))]
@@ -217,7 +228,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     ax_perf.set_yticks([0,0.5,1])
     ax_perf.set_title(performance_metric)
 
-    spec = rec['stim'].as_continuous()[:,index_range]
+    if altstim is not None:
+        spec = altstim.as_continuous()[:,index_range]
+    else:
+        spec = rec['stim'].as_continuous()[:,index_range]
     extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
 
     if np.mean(spec==0)>0.5:
@@ -321,8 +335,18 @@ def force_signal_silence(rec, signal='stim'):
     return rec
 
 
-def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purple', labels='model'):
-
+def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purple', labels='model', ax=None, figsize=None):
+    """
+    :param ctx:
+    :param cellid:
+    :param rr:
+    :param respcolor:
+    :param predcolor:
+    :param labels:
+    :param ax: list of two axis handles
+    :param figsize:
+    :return:
+    """
     if type(ctx) is list:
         mult_ctx=True
         rec=ctx[0]['val']
@@ -338,28 +362,32 @@ def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purpl
     
     if rr is None:
         rr=np.arange(np.min((1000,rec['resp'].shape[1])))
-        
-    f,ax = plt.subplots(2,1, figsize=(12,4), sharex=True)
+    if figsize is None:
+        figsize=(12,4)
+
+    if ax is None:
+        f,ax = plt.subplots(2, 1, sharex=True, figsize=figsize)
     rr_orig=rr
     tt=np.arange(len(rr))/rec['resp'].fs
     
-    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig], aspect='auto', origin='lower', cmap="gray_r", 
+    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig+1]**0.6, aspect='auto', origin='lower', cmap="gray_r",
                  extent=[tt[0],tt[-1],0,rec['stim'].shape[0]])
     ax[0].set_title(cellid + "/" + modelspec.meta['modelname'].split("_")[1])
-    
-    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], color=respcolor, label='resp');
+    ax[0].set_ylabel('Frequency', fontsize=8)
+
+    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], linewidth=0.75, color=respcolor, label='resp');
     if mult_ctx:
         for e in range(len(ctx)):
             print(f"{labels[e]} {predcolor[e]}")
             r=ctx[e]['modelspec'].meta['r_test'][c][0]
-            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
+            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
     else: 
-        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
+        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
 
     ax[1].legend(frameon=False, fontsize=8)
-    ax[1].set_xlabel('Time (s)')
-    
-    return f
+    ax[1].set_xlabel('Time (s)', fontsize=8)
+    ax[1].set_ylabel('Spikes/sec', fontsize=8)
+    return ax[0].figure
     
 from nems.utils import get_setting
 from scipy.ndimage import zoom

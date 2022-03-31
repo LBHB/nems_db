@@ -104,3 +104,12 @@ def dstrf(loadkey):
             ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
 
     return xfspec
+
+
+
+@xform('svpred')
+def svpred(kw):
+    """
+    saves a recording containing only the prediction signal alongside the xfomrs model
+    """
+    return [['nems_lbhb.postprocessing.save_pred_signal', {}, ]]

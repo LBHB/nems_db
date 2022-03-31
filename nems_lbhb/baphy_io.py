@@ -1395,7 +1395,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
     if pupil_deblink & ~loading_pcs:
         dp = np.abs(np.diff(pupil_diameter, axis=0))
         blink = np.zeros(dp.shape)
-        blink[dp > np.nanmean(dp) + 6*np.nanstd(dp)] = 1
+        blink[dp > np.nanmean(dp) + 4*np.nanstd(dp)] = 1
         # CRH add following line 7-19-2019
         # (blink should be = 1 if pupil_dia goes to 0)
         blink[[isclose(p, 0, abs_tol=0.5) for p in pupil_diameter[:-1]]] = 1
@@ -1435,6 +1435,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 plt.ylabel('Pupil')
                 plt.legend()
                 plt.title("Artifacts detected: {}".format(len(onidx)))
+            log.info("Deblink: artifacts detected: {}".format(len(onidx)))
             pupil_diameter = deblinked
 
     # resample and remove dropped frames
@@ -2532,6 +2533,7 @@ def parse_cellid(options):
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
                                                      rawid=rawid)
         # now, use rawid to get all stable cellids across these files
+        #import pdb; pdb.set_trace()
         siteid = cell_list[0].split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                                      rawid=rawid)

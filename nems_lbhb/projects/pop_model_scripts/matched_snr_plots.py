@@ -2,9 +2,21 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as st
+
+import matplotlib as mpl
+params = {'axes.spines.right': False,
+          'axes.spines.top': False,
+          'legend.fontsize': 10,
+          'axes.labelsize': 10,
+          'axes.titlesize': 10,
+          'xtick.labelsize': 10,
+          'ytick.labelsize': 10,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+mpl.rcParams.update(params)
+import matplotlib.pyplot as plt
 
 import nems
 import nems.db as nd
@@ -14,7 +26,8 @@ import nems.epoch as ep
 
 from pop_model_utils import (get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
                              NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS,
-                            figures_base_path)
+                             figures_base_path, a1, peg, int_path,
+                             single_column_short, single_column_tall, column_and_half_short, column_and_half_tall)
 
 import matplotlib as mpl
 params = {'pdf.fonttype': 42,
@@ -131,13 +144,15 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
         plt.sca(ax)
     jitter = 0.2
     palette = {0: DOT_COLORS['conv1dx2+d'], 1: DOT_COLORS['LN_pop'], 2: DOT_COLORS['dnn1_single']}
-    sns.stripplot(x='model', y=PLOT_STAT, data=results_removed, zorder=0, order=alternating_columns,
+    tres=results_removed.loc[(results_removed[PLOT_STAT]<1) & results_removed[PLOT_STAT]>-0.05]
+    sns.stripplot(x='model', y=PLOT_STAT, data=tres, zorder=0, order=alternating_columns,
                        color='gray', alpha=0.5, size=2, jitter=jitter, hue='hue_tag', palette=palette, ax=ax)
     ax.legend_.remove()
-    sns.stripplot(x='model', y=PLOT_STAT, data=results_matched, zorder=0, order=alternating_columns,
-                       jitter=jitter, hue='hue_tag', palette=palette, ax=ax, size=3)
+    tres=results_matched.loc[(results_matched[PLOT_STAT]<1) & results_matched[PLOT_STAT]>-0.05]
+    sns.stripplot(x='model', y=PLOT_STAT, data=tres, zorder=0, order=alternating_columns,
+                       jitter=jitter, hue='hue_tag', palette=palette, ax=ax, size=2)
     ax.legend_.remove()
-    sns.boxplot(x='model', y=PLOT_STAT, data=results_matched, boxprops={'facecolor': 'None', 'linewidth': 2},
+    sns.boxplot(x='model', y=PLOT_STAT, data=results_matched, boxprops={'facecolor': 'None', 'linewidth': 1},
                      showcaps=False, showfliers=False, whiskerprops={'linewidth': 0}, order=alternating_columns, ax=ax)
 
     labels = [e.get_text() for e in ax.get_xticklabels()]
@@ -147,24 +162,29 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
         idx = labels.index(model)
         j = int(idx*0.5)
         if idx % 2 == 0:
-            plt.hlines(a1_medians[j], ticks[idx]-w, ticks[idx]+w)
+            plt.hlines(a1_medians[j], ticks[idx]-w, ticks[idx]+w, color='black', linewidth=2)
         else:
-            plt.hlines(peg_medians[j], ticks[idx]-w, ticks[idx]+w)
+            plt.hlines(peg_medians[j], ticks[idx]-w, ticks[idx]+w, color='black', linewidth=2)
 
     ax.set(ylim=(None,1))
-    plt.xticks(rotation=45)
+    plt.xticks(rotation=45, fontsize=6, ha='right')
     plt.tight_layout()
 
     return u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn
 
 
 if __name__ == '__main__':
-    a1 = 322
-    peg = 323
-    a1_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'snr_nat4.pkl'
-    peg_snr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'snr_nat4.pkl'
+    a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
+    peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-    u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
+    fig9a, ax4a = plt.subplots(figsize=single_column_short)
+    fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
+    u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
+                                                        ax=ax4a, inset_ax=ax4b)
+    #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
+    #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
+    #
+    #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
 
     print("Sig. tests:\n"
           "conv1Dx2: T: %.4e, p: %.4e\n"
