@@ -236,7 +236,9 @@ class BAPHYExperiment:
                 baphy_data_root = '/auto/data/daq'
                 newparmfile.append(str(p).replace(baphy_data_root, prefix))
             log.info(f"Using remote parmfiles: {newparmfile}")
-            self.parmfile=newparmfile
+            self.parmfile_WEB_API=newparmfile
+        else:
+            self.parmfile_WEB_API = None
 
 
     @property
@@ -997,8 +999,15 @@ class BAPHYExperiment:
             BAPHY parms data and convert them to dictionaries. See
             :func:`baphy_convert_user_definable_fields` for example.
         '''
+        # If running remote, use remote uri, otherwise use direct path
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+        if use_API:
+            parmfile = self.parmfile_WEB_API
+        else:
+            parmfile = self.parmfile
+
         # Returns tuple of global, expt and events
-        result = [io.baphy_parm_read(p) for p in self.parmfile]
+        result = [io.baphy_parm_read(p) for p in parmfile]
         if userdef_convert:
             [io.baphy_convert_user_definable_fields(r) for r in result]
         return result
