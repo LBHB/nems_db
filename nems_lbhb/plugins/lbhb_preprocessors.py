@@ -962,9 +962,38 @@ def esth2(kw):
 @xform('dline')
 def dline(kw):
     """
-    Stacks the state signal to be expressed as delayed lines
+    Stacks the state signal to be expressed as delayed lines, with a fixed delay, and duration,
+    taking or not the mean for the duration windo.
+
+    format: dline.{delay:int}.{duration:int}.{use_window_mean:bool}(optional:.i.{iput_signal:str}.o.{ouput_signal:str}).
+
+    not: input and output signal are optional. The default being state->state
+
+    e.g. dline.10.15.1:
+    shifts the state signal 10 samples forward (effectively looking 10 samples into the past)
+    considers a window of 15 samples looking back (after the shift)
+    takes the mean of said window (instead of stacking the 15 samples as delayed lines)
+
+    e.g. dline.10.15.1.i.resp.o.state:
+    same as the previous example, exept takes in response data and outputs a recordign with a modified state signal.
     """
-    _, delay, duration = kw.split('.')
+
+    # ppp: positional parameter parsing
+    arguments = kw.split('.')
+    delay, duration, use_window_mean = [parg for idx, parg in enumerate(arguments) if idx in [1,2,3]]
+
+    # keyword arguments, state is default input and output if not specified
+    input_matches = re.findall('\.i\.[A-Za-z]+', kw)
+    input_signal = input_matches[0][3:] if input_matches else 'state'
+
+    output_matches = re.findall('\.o\.[A-Za-z]+', kw)
+    output_signal = output_matches[0][3:] if output_matches else 'state'
+
     return [['nems_lbhb.preprocessing.stack_signal_as_delayed_lines',
-             {'signal': 'state', 'delay': int(delay), 'duration': int(duration)}, ['rec'], ['rec']
+             {'signal': input_signal,
+              'delay': int(delay),
+              'duration': int(duration),
+              'use_window_mean':int(use_window_mean),
+              'output_signal': output_signal},
+             ['rec'], ['rec']
              ]]

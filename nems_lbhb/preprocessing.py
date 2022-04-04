@@ -16,7 +16,8 @@ import nems.epoch as ep
 import nems.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
-from scipy.ndimage import gaussian_filter1d
+
+from scipy.ndimage import gaussian_filter1d, convolve1d
 import pickle
 import pandas as pd
 
@@ -1369,27 +1370,62 @@ def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
 
     return {'rec': new_rec}
 
-def stack_signal_as_delayed_lines(rec, signal, delay, duration, **kwargs):
+def stack_signal_as_delayed_lines(rec, signal, delay, duration, use_window_mean, output_signal, **kwargs):
+    """
+    takes a (n)euron by (t)time data array from the selected signal and returns an output signal with the data shifted
+    rightward for the t dimension (into the future) by the value in delay, in this case the output shape is the same
+    n by t.
+    If the duration>1 delayed lines shifted by delay+d where d goes from 0 to duration are stacked into an array of
+    shape (n*duration) by t.
+    Alternatively takes a mean across the values defined by the duration window, again returning a new signal with the
+    same data shape.
+    All new arrays are zero padded to the left, and the right side is truncated to keep the size of the second dimension
+    :rec: Nems recording object
+    :signal: str. the name of the source signal
+    :delay: int. number of bins to look into the past (shift to the future)
+    :duration: int. number of bins to consider past delay
+    :use_window_mean: bool. False (default) use delayed lines; True use the mean of the window instead
+    :output_signal: str. None (default) the input signal is replaces by the output. Otherwise the signa with the
+    specified name is used.
+    :returns: Nems recording object
+    """
 
-    array = rec[signal]._data
-    chn, tme = array.shape
-    stk = chn * duration
+    in_arr = rec[signal]._data
+    chn, tme = in_arr.shape
 
-    stacked_array = np.empty((stk, tme))
-    channels = list()
-    for dur in range(duration):
-        chn_start = chn*dur
-        chn_stop = chn_start + chn
-        npad = delay + dur # number of positions to shift forwards
 
-        if npad == 0:
-            stacked_array[chn_start:chn_stop,:] = array
-        else:
-            stacked_array[chn_start:chn_stop,:] = np.pad(array,((0,0),(npad,0)), mode='constant')[:,:-npad]
+    if use_window_mean:
+        conv_window = np.zeros(duration*2)
+        conv_window[duration:] = 1/duration # window looking into the past. gets "flipped" during convolution
 
-        channels.extend([f'{ch}_{npad}' for ch in rec[signal].chans])
+        convolved  = convolve1d(in_arr, conv_window, axis=1, mode='constant')
+        convolved = np.pad(convolved,((0,0),(delay,0)), mode='constant')[:,:-delay]
 
-    rec[signal] = rec[signal]._modified_copy(data=stacked_array, chans=channels)
+        out_arr = convolved
+        channels = rec[signal].chans
+
+    else:
+        # stacks all data as delayed lines
+        stk = chn * duration
+        stacked_array = np.empty((stk, tme))
+        channels = list()
+        for dur in range(duration):
+            chn_start = chn*dur
+            chn_stop = chn_start + chn
+            npad = delay + dur # number of positions to shift forwards
+
+            if npad == 0:
+                stacked_array[chn_start:chn_stop,:] = in_arr
+            else:
+                stacked_array[chn_start:chn_stop,:] = np.pad(in_arr,((0,0),(npad,0)), mode='constant')[:,:-npad]
+
+            channels.extend([f'{ch}_{npad}' for ch in rec[signal].chans])
+        out_arr = stacked_array
+
+    if output_signal is None:
+        output_signal = signal
+
+    rec[output_signal] = rec[signal]._modified_copy(data=out_arr, chans=channels)
     return rec
 
 
@@ -1397,10 +1433,23 @@ if __name__ == '__main__':
 
     from nems import recording, signal
 
-    sig = signal.RasterizedSignal(data=np.arange(10).reshape((2,5)), fs=10, name='state', recording='hola', chans=['1','2'])
-    rec = recording.Recording(signals={'state':sig})
+    # # pop state delayed lines
+    # data = np.zeros((2,30))
+    # data[:,15:] = 1
+    # sig = signal.RasterizedSignal(data=data , fs=10, name='state', recording='hola', chans=['1','2'])
+    # rec = recording.Recording(signals={'state':sig})
+    # stacked_rec = stack_signal_as_delayed_lines(rec,'state', delay=1, duration=2, use_window_mean=True)
 
-    stacked_rec = stack_signal_as_delayed_lines(rec,'state', delay=1, duration=3)
+    # # self instrospection
+    # data = np.zeros((1,30))
+    # data[:,15:] = 1
+    # sig = signal.RasterizedSignal(data=data , fs=10, name='state', recording='hola', chans=['1','2'])
+    # rec = recording.Recording(signals={'resp':sig})
+    # stacked_rec = stack_signal_as_delayed_lines(rec,'resp', delay=5, duration=3, use_window_mean=True, output_signal='state')
+    # ccc = np.concatenate((stacked_rec['resp']._data, stacked_rec['state']._data), axis=0).T
+    # print(ccc)
+
+    pass
 
 
 
