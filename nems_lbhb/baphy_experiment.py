@@ -145,6 +145,9 @@ class BAPHYExperiment:
             if type(parmfile) is str:
                 parmfile=[parmfile]
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
+
+
+
             self.batch = None
             if rawid is None:
                 stems = [pl.Path(p).stem + '.m' for p in parmfile]
@@ -223,7 +226,19 @@ class BAPHYExperiment:
             self.batch = os.path.sep.join([self.animal, self.siteid])
         else:
             pass
-    
+
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+
+        if use_API:
+            newparmfile=[]
+            for p in self.parmfile:
+                prefix = 'http://' + get_setting('NEMS_BAPHY_API_HOST') + ":" + str(get_setting('NEMS_BAPHY_API_PORT')) + '/daq'
+                baphy_data_root = '/auto/data/daq'
+                newparmfile.append(str(p).replace(baphy_data_root, prefix))
+            log.info(f"Using remote parmfiles: {newparmfile}")
+            self.parmfile=newparmfile
+
+
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
@@ -484,6 +499,8 @@ class BAPHYExperiment:
 
     def generate_recording(self, rawchans=None, **kwargs):
         rec_name = self.experiment[0][:7]     
+        
+        kwargs=baphy_io.fill_default_options(kwargs)
         
         # figure out signals to load, then load them (as lists)
         raw = kwargs.get('raw', False)

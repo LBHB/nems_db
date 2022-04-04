@@ -42,6 +42,7 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
+from nems.uri import load_resource
 
 log = logging.getLogger(__name__)
 
@@ -263,8 +264,12 @@ def baphy_mat2py(s):
             x[1] = re.sub(r'\[', r"np.array([[", x[1])
             x[1] = re.sub(r'\]', r"]])", x[1])
             x[1] = re.sub(r';','],[', x[1])
-        x[1] = re.sub('true','True', x[1])
-        x[1] = re.sub('false','False', x[1])
+        x[1] = re.sub('true ','True,', x[1])
+        x[1] = re.sub('false ','False,', x[1])
+        x[1] = re.sub('true]','True]', x[1])
+        x[1] = re.sub('false]','False]', x[1])
+        x[1] = re.sub('true$','True', x[1])
+        x[1] = re.sub('false$','False', x[1])
         x[1] = re.sub(r'NaN ', r"np.nan,", x[1])
         x[1] = re.sub(r'Inf ', r"np.inf,", x[1])
         x[1] = re.sub(r'NaN,', r"np.nan,", x[1])
@@ -296,9 +301,12 @@ def baphy_mat2py(s):
 
 def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
-
-    f = io.open(filepath, "r")
-    s = f.readlines(-1)
+    print(str(filepath))
+    s = load_resource(str(filepath))
+    if type(s) is str:
+        s=s.split("\n")
+    #f = io.open(filepath, "r")
+    #s = f.readlines(-1)
 
     globalparams = {}
     exptparams = {}
@@ -339,8 +347,8 @@ def baphy_parm_read(filepath, evpread=True):
             log.info("NameError on: {0}".format(sout))
             import pdb; pdb.set_trace()
         except SyntaxError:
-            #import pdb; pdb.set_trace()
             log.info("SyntaxError parsing this baphy config line: {0}".format(sout))
+            #import pdb; pdb.set_trace()
         except Exception as e:
             log.info("Other error on: {0} to {1}".format(ts,sout))
             import pdb; pdb.set_trace()

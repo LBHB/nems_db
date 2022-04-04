@@ -8,6 +8,11 @@ cluttering the main loader.
 import numpy as np
 import pandas as pd
 import copy
+from pathlib import Path
+
+from scipy.io import wavfile
+import matplotlib.pyplot as plt
+from nems.analysis.gammatone.gtgram import gtgram
 
 # ================================== TBP LOADING ================================
 def TBP(exptevents, exptparams):
@@ -227,3 +232,98 @@ def CPN (exptevents, exptparams):
     new_params = copy.deepcopy(exptparams)
 
     return new_events, new_params
+
+
+def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000):
+    
+    sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
+
+    #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
+    #print(exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()[:10])
+    #wav1=[e.split(' , ')[1].split("+")[0].split(":")[0].replace("STIM_","") for e in stim_epochs]
+    #wav2=[e.split(' , ')[1].split("+")[0].split(":")[0].replace("STIM_","") for e in stim_epochs]
+
+    stim_epochs = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']
+    #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
+    wav1=[e.split("+")[0].split(":")[0] for e in stim_epochs]
+    wav2=[e.split("+")[1].split(":")[0] for e in stim_epochs]
+    chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
+    chan2=[int(e.split("+")[1].split(":")[1])-1 for e in stim_epochs]
+    print(wav1[0],chan1[0],wav2[0],chan2[0])
+    max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
+    
+    file_unique=wav1.copy()
+    file_unique.extend(wav2)
+    file_unique=list(set(file_unique))
+    if 'NULL' in file_unique:
+        file_unique.remove('NULL')
+    
+    PreStimSilence = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
+    Duration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+    PostStimSilence = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
+    print(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
+    
+    #file_unique=file_unique[:10]
+    wav_unique = {}
+    fs_unique = {}
+    for filename in file_unique:
+        fs,w = wavfile.read(sound_root / (filename+'.wav'))
+        #print(f"{filename} fs={fs} len={w.shape}")
+        duration_samples = int(np.floor(Duration * fs))
+        wav_unique[filename] = w[:duration_samples,np.newaxis]
+        fs_unique[filename] = fs
+    print(f"assuming fixed fs at {fs}")
+    
+    if separate_files_only:
+        # combine into pairs that were actually presented
+        wav_all = wav_unique
+        fs_all = fs_unique
+    else:
+        wav_all = {}
+        fs_all = {}
+        for (f1,c1,f2,c2,n) in zip(wav1,chan1,wav2,chan2,stim_epochs):
+            #print(f1,f2)
+            if f1!="NULL":
+                w1=wav_unique[f1]
+                if f2!="NULL":
+                    w2=wav_unique[f2]
+                else:
+                    w2=np.zeros(w1.shape)
+            else:
+                w2=wav_unique[f2]
+                w1=np.zeros(w2.shape)
+            w=np.zeros((w1.shape[0],max_chans))
+            w[:,[c1]]=w1
+            w[:,[c2]]+=w2
+            wav_all[n]=w
+            fs_all[n]=fs
+        
+    if stimfmt=='wav':
+        for f,w in wav_all.items():
+            wav_all[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
+                                         w,
+                                         np.zeros((int(np.floor(fs*PostStimSilence)),max_chans))],axis=0)
+        return wav_all
+
+    if stimfmt=='gtgram':
+        window_time=1/rasterfs * 1
+        hop_time=1/rasterfs
+        
+        sg_pre = np.zeros((channels,int(np.floor(rasterfs*PreStimSilence))))
+        sg_null = np.zeros((channels,int(np.floor(rasterfs*Duration))))
+        sg_post = np.zeros((channels,int(np.floor(rasterfs*PostStimSilence))))
+        
+        sg_unique={}
+        for (f,w) in wav_all.items():
+            if len(sg_unique)%100 == 99:
+                print(f,w.std(axis=0))
+            sg = [gtgram(w[:,i], fs, window_time, hop_time, channels, f_min, f_max) 
+                  if w[:,i].var()>0 else sg_null 
+                  for i in range(w.shape[1])]
+            sg = [np.concatenate([sg_pre, s, sg_post],axis=1) for s in sg]
+            sg_unique[f] = np.stack(sg,axis=2)
+
+        return sg_unique
+
+    
+        
