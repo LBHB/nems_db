@@ -117,7 +117,35 @@ class GetRecording(Resource):
             f = io.open(filepath, 'rb')
             return Response(f, status=200, mimetype='application/gzip')
         except:
-            abort(400, 'file not found')
+            #print(f"looking for file: filepath")
+            abort(400, f'file {filepath} not found')
+
+    def put(self, batch, file):
+        abort(400, 'Not yet implemented')
+
+    def delete(self, batch, file):
+        abort(400, 'Not yet Implemented')
+
+
+class GetDaq(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    def __init__(self, **kwargs):
+        pass
+
+    def get(self, animal, site, file):
+        '''
+        Queries the MySQL database, finds the file, and returns
+        the corresponding data in a NEMS-friendly Recording object.
+        '''
+        filepath = os.path.join(nems_recordings_dir, 'daq', animal, site, file)
+
+        try:
+            f = io.open(filepath, 'rb')
+            return Response(f, status=200, mimetype='application/text')
+        except:
+            abort(400, f'file {filepath} not found')
 
     def put(self, batch, file):
         abort(400, 'Not yet implemented')
