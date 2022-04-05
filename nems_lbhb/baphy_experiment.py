@@ -151,7 +151,7 @@ class BAPHYExperiment:
             self.batch = None
             if rawid is None:
                 stems = [pl.Path(p).stem + '.m' for p in parmfile]
-                print(stems)
+                log.info(stems)
                 stemstring = "'" + "','".join(stems) + "'"
                 rawdata = db.pd_query(f"SELECT * from gDataRaw where parmfile in ({stemstring})")
                 rawid = []

@@ -86,6 +86,15 @@ def psth(loadkey, cellid=None, batch=None, siteid=None, **options):
 
 
 @xform()
+def gtgram(loadkey, cellid=None, batch=None, siteid=None, **options):
+    """
+    gammatone filter, nems built-in, reads from wav
+       extra parameters handled by loadkey parser in baphy_load_wrapper
+    """
+    return _parse_baphy_loadkey(loadkey, cellid=cellid, batch=batch, siteid=siteid, **options)
+
+
+@xform()
 def ozgf(loadkey, cellid=None, batch=None, siteid=None, **options):
     """
     gammatone filter
