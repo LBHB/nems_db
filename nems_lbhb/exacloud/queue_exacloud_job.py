@@ -61,8 +61,11 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
     conn = engine.connect()
 
     for cell, b, model in combined:
-
+        add_msg_str=''
         progname = ' '.join([extra_options, executable_path, script_path, cell, b, model])
+        if "*" in cell:
+            progname = ' '.join([extra_options, executable_path, script_path, f"'{cell}'", b, model])
+            add_msg_str = f", subbed '{cell}' for {cell} in tQueue progname."
         note = '/'.join([cell, b, model])
 
         sql = f"SELECT * FROM Results WHERE batch={b} and cellid='{cell}' and modelname='{model}'"
@@ -115,7 +118,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
                 )
 
                 queue_items.append(queue_item)
-                message = f"Added exacloud job: {note}"
+                message = f"Added exacloud job: {note}{add_msg_str}"
         else:
             message = "Model fit for: %s exists, skipping."  % note
 
