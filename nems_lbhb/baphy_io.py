@@ -501,7 +501,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
         options.update({'stim': False, 'stimfmt': 'parm'})
     else:
         options['stimfmt'] = ops[0]
-
+    if options['stimfmt'] == 'env':
+        options['stimfmt'] = 'envelope'
     # computed, but not saved anywhere?
     load_pop_file = ("pop" in ops)
 
