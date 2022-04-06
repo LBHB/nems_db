@@ -31,7 +31,7 @@ imi = 13
 
 metric = 'r_test'
 
-comparisons=((0,1))
+comparisons=((0,1),)
 batch=306
 mns=['env.fs200-SPOld-SPOsev_fir.2x20x40.z-relu.40-wc.40xR-lvl.R_tfinit.n.lr1e3.et3.L2:3:FIRWC-newtf.n.lr1e4.L2:3:FIRWC-SPOpf.GPU',
     'env.fs200-SPOld-SPOsev_fir.2x20x40.z-relu.40-wc.40xR-lvl.R_tfinit.n.lr1e3.et3.L2:4:FIRWC-newtf.n.lr1e4.L2:4:FIRWC-SPOpf.GPU']
@@ -42,18 +42,20 @@ mns=['env.fs200-SPOld-SPOsev_fir.2x20x40.z-relu.40-wc.40xR-lvl.R_tfinit.n.lr1e3.
 mns=['ozgf.fs100.ch18-ld-norm.l1-sev_wc.18x10.g-fir.1x25x10-wc.10xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4-dstrf',
      'ozgf.fs100.ch18-ld-norm.l1-sev_conv2d.10.8x3.rep3-wcn.110-relu.110-wc.110xR-lvl.R-dexp.R_prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4-dstrf']
 
-mns=['env.fs200-SPOld-stSPO.nb-SPOsev-shuf.st_dlog-stategain.2x2.g.o1.b0d001:5-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
-     'env.fs200-SPOld-stSPO.nb-SPOsev_dlog-stategain.2x2.g.o1.b0d001:5-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
-     'env.fs200-SPOld-stSPO.nb-SPOsev-shuf.st_dlog-stategain.2x2.g.o1.b0d001:5-wc.2x2.c-stp.2-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
-     'env.fs200-SPOld-stSPO.nb-SPOsev_dlog-stategain.2x2.g.o1.b0d001:5-wc.2x2.c-stp.2-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa'
-     ]
-comparisons=((0,1),(2,3),(0,2))
+mns= ['env.fs200-SPOld-SPOsev_dlog-fir.2x30x40-relu.40.f-wc.40xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rbp30-newtf.n.lr1e4-SPOpf.GPU',
+      'env.fs200-SPOld-SPOsev_dlog-fir.2x30x40-relu.40.f-wc.40xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rbp10-newtf.n.lr1e4-SPOpf.Exa']
+# mns=['env.fs200-SPOld-stSPO.nb-SPOsev-shuf.st_dlog-stategain.2x2.g.o1.b0d001:5-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
+#      'env.fs200-SPOld-stSPO.nb-SPOsev_dlog-stategain.2x2.g.o1.b0d001:5-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
+#      'env.fs200-SPOld-stSPO.nb-SPOsev-shuf.st_dlog-stategain.2x2.g.o1.b0d001:5-wc.2x2.c-stp.2-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa',
+#      'env.fs200-SPOld-stSPO.nb-SPOsev_dlog-stategain.2x2.g.o1.b0d001:5-wc.2x2.c-stp.2-fir.2x30.z-lvl.1-dexp.1_SDB-init.t5.rb5-basic.t6-SPOpf.Exa'
+#      ]
+# comparisons=((0,1),(2,3),(0,2))
 
 ## Get df of modefits
 #cells = sp.get_significant_cells(batch,mns,as_list=True) #Sig cells across all models
 #cells = sp.get_significant_cells(batch,mns[:1],as_list=True) #Sig cells in the first model
 dfc = nd.get_results_file(batch,mns[:1]); cells = list(dfc['cellid'].values) # All cells fit in the first model
-cells = [cell for cell in cells if 'fre' not in cell]; print('Keeping only fred cells')
+#cells = [cell for cell in cells if 'fre' not in cell]; print('Keeping only fred cells')
 print(f'{len(cells)} cells')
 df = nd.get_results_file(batch,mns,cells)
 
@@ -70,7 +72,10 @@ fnargs = [{'ax': imageax, 'ft': 5, 'data_series_dict': 'dsx'},
 ##Create figure
 subs = get_subs(len(comparisons))
 fig, ax = plt.subplots(nrows=subs[1], ncols=subs[0])
-axf = ax.flatten()
+if len(comparisons)==1:
+    axf = [ax]
+else:
+    axf = ax.flatten()
 abbr, pre, suf = prx.find_common(mns)
 val_range=np.array((0.0,1.0))
 for i,ax_ in enumerate(axf[:len(comparisons)]):

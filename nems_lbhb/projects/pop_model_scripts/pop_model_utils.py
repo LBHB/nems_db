@@ -39,7 +39,8 @@ if linux_user=='svd':
     int_path = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/pop_model_scripts/intermediate_results/')
     base_path = figures_base_path
 elif linux_user == 'luke':
-        figures_base_path = Path('/auto/users/luke/Projects/SPS/plots/NEMS/pop_plots/')
+    figures_base_path = Path('/auto/users/luke/Projects/SPS/plots/NEMS/pop_plots/')
+    base_path = figures_base_path
 else:
     figures_base_path = Path('/auto/users/jacob/notes/pop_model_figs/')
     int_path = Path('/auto/users/jacob/notes/new_equivalence_results/')
