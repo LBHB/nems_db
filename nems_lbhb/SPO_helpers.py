@@ -87,10 +87,15 @@ def parse_stim_type(stim_name):
     elif stim_sep[1] == stim_sep[2]:
         stim_type = 'C'
     else:
+        stim_sep1 = stim_sep[1].split('to')
         stim_sep2 = stim_sep[2].split('to')
-        if len(stim_sep2) == 1:
+        if (len(stim_sep1) == 1) and (len(stim_sep2) == 1):
             stim_type = 'I'
-        elif stim_sep[1] == stim_sep2[0]:
+        elif (len(stim_sep1) == 2) and (len(stim_sep2) == 1) and (stim_sep1[0] == stim_sep[2]):
+            #Ch 1 changed to make it become incoherent
+            stim_type = 'CtoI'
+        elif (len(stim_sep1) == 1) and (len(stim_sep2) == 2) and (stim_sep[1] == stim_sep2[0]):
+            #Ch 2 changed to make it become incoherent
             stim_type = 'CtoI'
         else:
             raise RuntimeError(f"{stim_name} is not parseable")
@@ -257,7 +262,7 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
 
 
 def load(rec, batch, cellid, meta, **context):
-    eval_conds=[['A'],['B'],['C'],['I'],['A','B'],['C','I']]
+    eval_conds=[['A'],['B'],['C'],['I'],['A','B'],['C','I'],['CtoI'],['IafterC'],['A','B','C','I']]
     rec['resp'] = add_stimtype_epochs(rec['resp'])
     if len(ep.epoch_occurrences(rec.epochs, 'CtoI')) > 0:
         manager = BAPHYExperiment(batch=batch, cellid=cellid[0])
@@ -302,9 +307,12 @@ def mask_out_Squares(val, **context):
     return {'val': val.and_mask(epoch=square_epochs,invert=True)}
 
 
-def add_coherence_as_state(rec, permute=False, baseline=True, **context):
+def add_coherence_as_state(rec, meta, permute=False, baseline=True, **context):
     coh = rec['resp'].epoch_to_signal('C')
     inc = rec['resp'].epoch_to_signal('I')
+    if meta['IncSwitchTime'] is not None:
+        inc_after_coh = rec['resp'].epoch_to_signal('IafterC')
+        inc._data = inc._data + inc_after_coh._data
     if permute:
         coh = coh.shuffle_time(rand_seed=0, mask=rec['mask'])
         inc = inc.shuffle_time(rand_seed=1, mask=rec['mask'])
@@ -1744,10 +1752,13 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
             pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/'
             pth = pth + cellid + '_env100_subset_' + subset + '.' + modelspecname + '_all_val+FIR.png'
         elif ft == 1:
-            pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/fs{fs}/'
             pth = pth + cellid + '.png'
         elif ft == 11:
             pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/fs{fs}/'
+            pth = pth + cellid + '.png'
+        elif ft == 12:
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Squares/fs{fs}/'
             pth = pth + cellid + '.png'
         elif ft == 2:
             pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
@@ -3115,7 +3126,7 @@ def get_cell_metrics(batch,cellid, fs=200, do_plot=True):
         sort_by_dominant_voice(metrics, vars_to_sort = ('weights_CR', 'weights_IR'))
         sort_Efitpars_by_dominant_voice(metrics, vars_to_sort = ('Efit_CR', 'Efit_IR'))
 
-        pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH2/'
+        pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
         fs_squareTC = 50
         pth_squareTC = f'{pth}SquaresOverlap/2exp/fs{fs_squareTC}/'
         pth_full = f'{pth}/fs{fs}/'
