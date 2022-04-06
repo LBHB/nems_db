@@ -30,6 +30,7 @@ import nems_lbhb.old_xforms.xform_helper as oxfh
 import nems_lbhb.baphy_io as io
 from nems import get_setting
 from nems_lbhb.baphy_experiment import BAPHYExperiment
+from nems_lbhb import baphy_io
 
 
 import logging
@@ -484,6 +485,9 @@ def generate_recording_uri(cellid=None, batch=None, loadkey="",
     if loader != '':
         log.info('loader=%s',loader)
 
+    options = baphy_io.parse_loadkey(loadkey=loader, batch=batch, siteid=siteid,
+                                     cellid=cellid, **options)
+    """ moved functionality to baphy_io
     ops = loader.split(".")
 
     # updates some some defaults
@@ -528,7 +532,6 @@ def generate_recording_uri(cellid=None, batch=None, loadkey="",
             load_pop_file = True
         elif op == 'voc':
             options.update({'runclass': 'VOC'})
-
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, psth, parm, env, evt) not specified in loader='+loader)
     if (options['stimfmt']=='ozgf') and (options['chancount'] <= 0):
@@ -542,6 +545,9 @@ def generate_recording_uri(cellid=None, batch=None, loadkey="",
 
     options["batch"] = batch
     options["cellid"] = cellid
+    """
+    ops = loader.split(".")
+    load_pop_file = ("pop" in ops)
 
     if load_pop_file:
         recording_uri = pop_file(siteid=cellid, **options)

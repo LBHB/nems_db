@@ -5,6 +5,7 @@ Idea is that different runclasses in baphy may have special loading requirements
 Seems easiest to stick these "speciality" loading protocols all in one place, to avoid
 cluttering the main loader.
 """
+import logging
 import numpy as np
 import pandas as pd
 import copy
@@ -13,6 +14,8 @@ from pathlib import Path
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from nems.analysis.gammatone.gtgram import gtgram
+
+log = logging.getLogger(__name__)
 
 # ================================== TBP LOADING ================================
 def TBP(exptevents, exptparams):
@@ -234,7 +237,7 @@ def CPN (exptevents, exptparams):
     return new_events, new_params
 
 
-def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000):
+def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000, **options):
     
     sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
 
@@ -249,7 +252,7 @@ def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     wav2=[e.split("+")[1].split(":")[0] for e in stim_epochs]
     chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
     chan2=[int(e.split("+")[1].split(":")[1])-1 for e in stim_epochs]
-    print(wav1[0],chan1[0],wav2[0],chan2[0])
+    log.info(wav1[0],chan1[0],wav2[0],chan2[0])
     max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
     
     file_unique=wav1.copy()
@@ -261,19 +264,22 @@ def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     PreStimSilence = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PreStimSilence']
     Duration = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Duration']
     PostStimSilence = exptparams['TrialObject'][1]['ReferenceHandle'][1]['PostStimSilence']
-    print(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
+    log.info(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
     
-    #file_unique=file_unique[:10]
     wav_unique = {}
     fs_unique = {}
+    fs0=None
     for filename in file_unique:
         fs,w = wavfile.read(sound_root / (filename+'.wav'))
+        if fs0 is None:
+            fs0=fs
+        elif fs!=fs0:
+            raise ValueError("fs mismatch. need to implement resampling!")
         #print(f"{filename} fs={fs} len={w.shape}")
         duration_samples = int(np.floor(Duration * fs))
         wav_unique[filename] = w[:duration_samples,np.newaxis]
         fs_unique[filename] = fs
-    print(f"assuming fixed fs at {fs}")
-    
+
     if separate_files_only:
         # combine into pairs that were actually presented
         wav_all = wav_unique
@@ -306,24 +312,27 @@ def BNT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         return wav_all
 
     if stimfmt=='gtgram':
-        window_time=1/rasterfs * 1
+        window_time=1/rasterfs * 2
         hop_time=1/rasterfs
-        
+
+        duration_bins = int(np.floor(rasterfs*Duration))
         sg_pre = np.zeros((channels,int(np.floor(rasterfs*PreStimSilence))))
-        sg_null = np.zeros((channels,int(np.floor(rasterfs*Duration))))
+        sg_null = np.zeros((channels,duration_bins))
         sg_post = np.zeros((channels,int(np.floor(rasterfs*PostStimSilence))))
         
         sg_unique={}
+        stimparam={'f_min': f_min, 'f_max': f_max, 'rasterfs': rasterfs}
         for (f,w) in wav_all.items():
             if len(sg_unique)%100 == 99:
-                print(f,w.std(axis=0))
+                log.info(f"i={len(sg_unique)} {f} {w.std(axis=0)}")
             sg = [gtgram(w[:,i], fs, window_time, hop_time, channels, f_min, f_max) 
                   if w[:,i].var()>0 else sg_null 
                   for i in range(w.shape[1])]
-            sg = [np.concatenate([sg_pre, s, sg_post],axis=1) for s in sg]
-            sg_unique[f] = np.stack(sg,axis=2)
+            sg = [np.concatenate([sg_pre, s[:,:duration_bins], sg_post],axis=1) for s in sg]
+            #sg_unique[f] = np.stack(sg,axis=2)
+            sg_unique[f] = np.concatenate(sg,axis=0)
 
-        return sg_unique
+        return sg_unique, list(sg_unique.keys()), stimparam
 
     
         
