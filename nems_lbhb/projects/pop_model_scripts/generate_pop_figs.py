@@ -39,8 +39,7 @@ from nems_lbhb.projects.pop_model_scripts.snr_batch import sparseness, sparsenes
 
 a1 = 322
 peg = 323
-
-
+stats_tests = []
 
 ########################################################################################################################
 #################################   SCATTER/BAR PRED   #################################################################
@@ -94,16 +93,20 @@ tests1, sig1, r1, m1, mds1 = generate_heldout_plots(a1, 'A1', ax=axes3[0])
 tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
 axes3[1].set_ylabel('')
 
-print("\n\nheldout vs matched, Sig. tests for batch %d:" % a1)
-print(tests1)
-print("median diffs:")
-print(mds1)
-print("\n")
-print("heldout vs matched, Sig. tests for batch %d:" % peg)
-print(tests2)
-print("median diffs:")
-print(mds2)
+short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
+print('Make sure short_names matches actual modelnames used!')
+print('short_names: %s' % short_names)
+print('HELDOUT: %s' % HELDOUT)
 
+stats_tests.append("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
+stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests1)]))
+stats_tests.append("median diffs:")
+stats_tests.append(str(mds1))
+stats_tests.append("\n")
+stats_tests.append("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % peg)
+stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests2)]))
+stats_tests.append("median diffs:")
+stats_tests.append(str(mds2))
 
 
 ########################################################################################################################
@@ -131,22 +134,23 @@ if 0:
     generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
 
 fig7, axes2 = plt.subplots(1, 2, figsize=column_and_half_short)
-a1_corr, a1_p, a1_t = correlation_histogram(
+a1_corr, a1_stats7 = correlation_histogram(
     a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
-peg_corr, peg_p, peg_t = correlation_histogram(
+peg_corr, peg_stats7 = correlation_histogram(
     peg, 'PEG', load_path=peg_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[1])
 
 fig7.tight_layout()
-print("\n\ncorrelation histograms, A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
-print("correlation histograms, PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
+stats_tests.append("\n\ncorrelation histograms, A1 sig tests: %s" % a1_stats7)
+stats_tests.append("correlation histograms, PEG sig tests: %s" % peg_stats7)
 
 
 ########################################################################################################################
 ##################################   SPARSENESS   ######################################################################
 ########################################################################################################################
 
-fig8 = sparseness_figs()
-
+fig8, tests8 = sparseness_figs()
+stats_tests.append("\n\nsparseness figs stats results:")
+stats_tests.append(''.join([f'{t}\n' for t in tests8]))
 
 ########################################################################################################################
 #################################   SNR  ###############################################################################
@@ -157,18 +161,19 @@ peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
 fig9a, ax4a = plt.subplots(figsize=single_column_short)
 fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
+test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
                                                         ax=ax4a, inset_ax=ax4b)
-print("matched snr Sig. tests:\n"
-      "conv1Dx2: T: %.4e, p: %.4e\n"
-      "LN: T: %.4e, p: %.4e\n"
-      "dnn1_single: T: %.4e, p: %.4e\n" % (u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn))
+
+tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
+stats_tests.append('matched snr sig. tests:')
+stats_tests.append(''.join([f'{s}:   {t}\n' for s, t in tests9]))
+
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
 ########################################################################################################################
 
-DO_SAVE=True
+DO_SAVE=False
 if DO_SAVE:
     figures_to_save = [
         (fig2, 'fig3_pareto'),
@@ -189,4 +194,6 @@ if DO_SAVE:
         plt.close(fig)
     pdf.close()
 
+    with open(base_path / 'stats_file.txt', 'w') as stats_file:
+        stats_file.write('\n'.join(stats_tests))
     #plt.close('all')  # just to make double sure that everything is closed

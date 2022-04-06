@@ -106,7 +106,7 @@ def generate_heldout_plots(batch, batch_name, sig_test_models=SIG_TEST_MODELS, a
         ax.xaxis.set_visible(False)
     plt.tight_layout()
 
-    return [p[1] for p in tests], significant_cells, r_ceilings, reference_medians, median_diffs
+    return [p for p in tests], significant_cells, r_ceilings, reference_medians, median_diffs
 
 
 if __name__ == '__main__':
@@ -116,12 +116,17 @@ if __name__ == '__main__':
     tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
     axes3[1].set_ylabel('')
 
-    print("\n\nheldout vs matched, Sig. tests for batch %d:" % a1)
-    print(tests1)
+    short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
+    print('Make sure short_names matches actual modelnames used!')
+    print('short_names: %s' % short_names)
+    print('HELDOUT: %s' % HELDOUT)
+
+    print("\n\nheldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
+    print(''.join([f'{t}|\n' for t in tests1]))
     print("median diffs:")
     print(mds1)
     print("\n")
-    print("heldout vs matched, Sig. tests for batch %d:" % peg)
-    print(tests2)
+    print("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % peg)
+    print(''.join([f'{t}|\n' for t in tests2]))
     print("median diffs:")
     print(mds2)

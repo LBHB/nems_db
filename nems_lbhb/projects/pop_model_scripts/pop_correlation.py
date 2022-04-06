@@ -111,10 +111,10 @@ def generate_psth_correlations_single(batch, modelnames, save_path=None, load_pa
 def get_significance_scores(correlations):
     # Run wilcoxon test on each pair of correlations, return p-values and t-scores
     #t1, p1 = st.wilcoxon(correlations['c2d_c1d'], correlations['c2d_LN'], alternative='two-sided')
-    t2, p2 = st.wilcoxon(correlations['c2d_c1d'], correlations['c1d_LN'], alternative='two-sided')
+    test2 = st.wilcoxon(correlations['c2d_c1d'], correlations['c1d_LN'], alternative='two-sided')
     #t3, p3 = st.wilcoxon(correlations['c2d_LN'], correlations['c1d_LN'], alternative='two-sided')
 
-    return [p2], [t2]
+    return [test2]
 
 
 def correlation_histogram(batch, batch_name, save_path=None, load_path=None, test_limit=None, force_rerun=False,
@@ -134,7 +134,7 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     #       triangular heatmap to represent them.
     correlations = correlations.drop('c2d_LN', axis=1)
 
-    p_values, t_scores = get_significance_scores(correlations)
+    stats_tests = get_significance_scores(correlations)
 
     # Plot all distributions of correlations on common bins
     if ax is None:
@@ -163,7 +163,7 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     plt.legend()
     plt.tight_layout()
 
-    return correlations, p_values, t_scores
+    return correlations, stats_tests
 
 
 if __name__ == '__main__':
@@ -201,11 +201,12 @@ if __name__ == '__main__':
     # peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=None, test_limit=None, load_path=peg_corr_path, force_rerun=True)
 
     # To run plot when everything is done
-    a1_corr, a1_p, a1_t = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
+    a1_corr, a1_stats = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
                                                 skip_new_cells=True, do_scatter=False, ax=ax1)
-    peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
+    peg_corr, peg_stats = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
                                                    skip_new_cells=True, do_scatter=False, ax=ax2)
     fig.tight_layout()
 
-    print("A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
-    print("PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
+    # T-statistic, p-value
+    print("A1 sig tests: %s" % a1_stats)
+    print("PEG sig tests: %s" % peg_stats)

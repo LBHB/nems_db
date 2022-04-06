@@ -118,9 +118,9 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     peg_removed_results = peg_results[~peg_results.index.isin(peg_matched_cellids)].reset_index(level=0)
 
     # Test significance after matching distributions
-    u_c1, p_c1 = st.mannwhitneyu(a1_matched_results[a1_short[0]], peg_matched_results[peg_short[0]], alternative='two-sided')
-    u_LN, p_LN = st.mannwhitneyu(a1_matched_results[a1_short[1]], peg_matched_results[peg_short[1]], alternative='two-sided')
-    u_dnn, p_dnn = st.mannwhitneyu(a1_matched_results[a1_short[2]], peg_matched_results[peg_short[2]], alternative='two-sided')
+    test_c1 = st.mannwhitneyu(a1_matched_results[a1_short[0]], peg_matched_results[peg_short[0]], alternative='two-sided')
+    test_LN = st.mannwhitneyu(a1_matched_results[a1_short[1]], peg_matched_results[peg_short[1]], alternative='two-sided')
+    test_dnn = st.mannwhitneyu(a1_matched_results[a1_short[2]], peg_matched_results[peg_short[2]], alternative='two-sided')
 
     results_matched = pd.concat([a1_matched_results, peg_matched_results], axis=0)
     results_removed = pd.concat([a1_removed_results, peg_removed_results], axis=0)
@@ -170,7 +170,7 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     plt.xticks(rotation=45, fontsize=6, ha='right')
     plt.tight_layout()
 
-    return u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn
+    return test_c1, test_LN, test_dnn
 
 
 if __name__ == '__main__':
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
     fig9a, ax4a = plt.subplots(figsize=single_column_short)
     fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-    u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
+    test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
                                                         ax=ax4a, inset_ax=ax4b)
     #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
     #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
@@ -187,6 +187,6 @@ if __name__ == '__main__':
     #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
 
     print("Sig. tests:\n"
-          "conv1Dx2: T: %.4e, p: %.4e\n"
-          "LN: T: %.4e, p: %.4e\n"
-          "dnn1_single: T: %.4e, p: %.4e\n"% (u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn))
+          "conv1Dx2: %s\n"
+          "LN: %s\n"
+          "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
