@@ -252,7 +252,7 @@ def sparseness_figs():
 
     f1.tight_layout()
 
-    return f1
+    return f1, tests
 
 if __name__ == '__main__':
     
