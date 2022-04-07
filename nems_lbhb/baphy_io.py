@@ -527,6 +527,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options['pupil_eyespeed'] = True
         elif op == 'voc':
             options.update({'runclass': 'VOC'})
+        elif op == 'bin':
+            options.update({'binaural': 'crude'})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader='+loader)

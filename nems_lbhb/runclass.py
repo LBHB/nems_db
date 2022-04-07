@@ -237,7 +237,8 @@ def CPN (exptevents, exptparams):
     return new_events, new_params
 
 
-def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000, **options):
+def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000, binaural=False,
+             **options):
 
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
@@ -286,14 +287,14 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     log.info(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
     
     wav_unique = {}
-    fs_unique = {}
-    fs0=None
+    fs0 = None
     for filename in file_unique:
-        fs,w = wavfile.read(sound_root / (filename+'.wav'))
+        fs, w = wavfile.read(sound_root / (filename+'.wav'))
         if fs0 is None:
-            fs0=fs
-        elif fs!=fs0:
-            raise ValueError("fs mismatch. need to implement resampling!")
+            fs0 = fs
+        elif fs != fs0:
+            raise ValueError("fs mismatch between wav files. Need to implement resampling!")
+
         #print(f"{filename} fs={fs} len={w.shape}")
         duration_samples = int(np.floor(Duration * fs))
 
@@ -310,12 +311,10 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         w /= sf
         
         wav_unique[filename] = w[:,np.newaxis]
-        fs_unique[filename] = fs
 
     if separate_files_only:
         # combine into pairs that were actually presented
         wav_all = wav_unique
-        fs_all = fs_unique
     else:
         wav_all = {}
         fs_all = {}
@@ -331,11 +330,20 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 w2=wav_unique[f2]
                 w1=np.zeros(w2.shape)
             w=np.zeros((w1.shape[0],max_chans))
-            w[:,[c1]]=w1
-            w[:,[c2]]+=w2
-            wav_all[n]=w
-            fs_all[n]=fs
-        
+            if (binaural is None) | (binaural==False):
+                #log.info(f'binaural model: None')
+                w[:,[c1]] = w1
+                w[:,[c2]] += w2
+            else:
+                #log.info(f'binaural model: {binaural}')
+                #import pdb; pdb.set_trace()
+                db_atten=10
+                factor = 10**(-db_atten/20)
+                w[:,[c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
+                w[:,[c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+
+            wav_all[n] = w
+
     if stimfmt=='wav':
         for f,w in wav_all.items():
             wav_all[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
@@ -366,6 +374,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             #sg = [np.concatenate([sg_pre, s[:,:duration_bins], sg_post],axis=1) for s in sg]
             sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post],axis=1) for s in sg]
             #sg_unique[f] = np.stack(sg,axis=2)
+
             sg_unique[f] = np.concatenate(sg,axis=0)
 
         return sg_unique, list(sg_unique.keys()), stimparam

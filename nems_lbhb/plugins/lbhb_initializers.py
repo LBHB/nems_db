@@ -35,6 +35,7 @@ def pclast(kw):
 def prefit(kw):
     ops = kw.split('.')[1:]
     kwargs = {}
+    kwargs['prefit_type']='site'
 
     # use_full_model means population model (vs. single-cell fit used for dnn-single)
     for op in ops:
