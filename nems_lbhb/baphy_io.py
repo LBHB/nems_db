@@ -527,6 +527,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options['pupil_eyespeed'] = True
         elif op == 'voc':
             options.update({'runclass': 'VOC'})
+        elif op == 'bin':
+            options.update({'binaural': 'crude'})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader='+loader)
@@ -781,10 +783,10 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if (options['stimfmt'] == 'gtgram') & \
-            (exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
+    if (options['stimfmt'] == 'gtgram'):
+        # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
-        stim, tags, stimparam = runclass.BNT_stim(None, exptparams, **options)
+        stim, tags, stimparam = runclass.NAT_stim(None, exptparams, **options)
 
     elif (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
         import nems_lbhb.strf.torc_subfunctions as tsf
