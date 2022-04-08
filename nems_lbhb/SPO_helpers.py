@@ -186,7 +186,7 @@ def scatterplot_print(x, y, names, c=None, s=None, ax=None, fn=None, fnargs={}, 
     ax.figure.canvas.mpl_connect('pick_event', onpick)
     return art
 
-def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, c=None,
+def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, c=None, s=None,
                          cmap='inferno', **kwargs):
     if ax is None:
         ax = plt.gca()
@@ -203,9 +203,12 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
 
     x = dfx[varnames[0]].values
     y = dfy[varnames[1]].values
+    if s is None:
+        s = np.full_like(x, plt.rcParams['lines.markersize'] ** 2)  # plt.scatter default
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
+    s = s[good_inds]
     if c is not None:
         c = c[good_inds]
     if dispname is None:
