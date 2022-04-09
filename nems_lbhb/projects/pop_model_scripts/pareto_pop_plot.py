@@ -36,6 +36,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
     overall_min = 100
     overall_max = -100
 
+    all_model_means = []
     for k, modelnames in modelgroups.items():
         np_modelnames = nparms_modelgroups[k]
         b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
@@ -63,6 +64,8 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
                 i = modelnames.index(m)
                 ax.plot(n_parms[i], b_m[i], color='black', marker='o', fillstyle='none', markersize=10)
 
+        all_model_means.append(model_mean)
+
     handles, labels = ax.get_legend_handles_labels()
     # reverse the order
     if show_legend:
@@ -72,7 +75,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
     ax.set_ylim((overall_min, overall_max))
     ax_remove_box(ax)
 
-    return ax, b_ceiling, model_mean
+    return ax, b_ceiling, all_model_means, labels
 
 
 if __name__ == '__main__':
