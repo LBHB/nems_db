@@ -670,7 +670,6 @@ def count_fits(models, batch=None):
             print(f'{parts[1]}: {df_r[c].count()}')
 
 def get_significant_cells(batch, models, as_list=False):
-
     df_r = nd.batch_comp(batch, models, stat='r_test')
     df_r.dropna(axis=0, how='any', inplace=True)
     df_r.sort_index(inplace=True)
@@ -701,6 +700,7 @@ def get_significant_cells(batch, models, as_list=False):
 def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True, rec=None, siteids=None):
     snrs = []
     cells = []
+
     if load_path is None:
 
         if rec is None:

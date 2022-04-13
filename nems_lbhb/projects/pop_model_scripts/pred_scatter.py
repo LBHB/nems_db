@@ -156,7 +156,22 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
     ax.set_ylabel('Median Prediction Accuracy')
     ax.set_xticklabels(ax.get_xticklabels(), rotation='45', ha='right')
 
-    return ax, medians
+    # Test significance for all comparisons
+    stats_results = {}
+    reduced_modelnames = modelnames.copy()
+    reduced_shortnames = short_names.copy()
+    for m1, s1 in zip(modelnames, short_names):
+        i = 0
+        reduced_modelnames.pop(i)
+        reduced_shortnames.pop(i)
+        i += 1
+        # compare each model to every other model
+        for m2, s2 in zip(reduced_modelnames, reduced_shortnames):
+            stats_test = st.wilcoxon(r_values[m1], r_values[m2], alternative='two-sided')
+            key = f'{s1} vs {s2}'
+            stats_results[key] = stats_test
+
+    return ax, medians, stats_results
 
 
 if __name__ == '__main__':

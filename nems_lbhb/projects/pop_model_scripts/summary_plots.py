@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy.stats as st
 
 from nems.utils import ax_remove_box
 import nems.db as nd

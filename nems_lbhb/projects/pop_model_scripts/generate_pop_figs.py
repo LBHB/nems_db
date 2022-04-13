@@ -48,8 +48,8 @@ stats_tests = []
 fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
 plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1D CNN','pop LN'], ax=ax[0,0])
 plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'], ax=ax[0,1])
-ax3a, a1_medians = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
-ax3b, peg_medians = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
+ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
+ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
 fig3.tight_layout()
 
 stats_tests.append('scatter / bar summary figure')
@@ -57,6 +57,12 @@ stats_tests.append('A1 median r_ceiling:')
 stats_tests.append(f'{a1_medians}')
 stats_tests.append('\nPEG median r_ceiling:')
 stats_tests.append(f'{peg_medians}')
+
+stats_tests.append('\nsig. testing between all models:')
+stats_tests.append('A1:')
+stats_tests.extend([f'{k}:  {v}' for k, v in a1_bar_stats.items()])
+stats_tests.append('\nPEG')
+stats_tests.extend([f'{k}:  {v}' for k, v in peg_bar_stats.items()])
 
 relative_change_by_batch = '\n'.join([f'{n}:  {m1/m2}' for n, m1, m2 in zip(shortnames, a1_medians, peg_medians)])
 stats_tests.append('\nRelative change  a1/peg:')
