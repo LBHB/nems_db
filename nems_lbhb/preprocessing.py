@@ -1370,7 +1370,7 @@ def state_resp_outer(rec, s='state', r='resp', smooth_window=5,
 
     return {'rec': new_rec}
 
-def stack_signal_as_delayed_lines(rec, signal, delay, duration, use_window_mean, output_signal, **kwargs):
+def stack_signal_as_delayed_lines(rec, signal, delay, duration, use_window_mean, output_signal='state', **kwargs):
     """
     takes a (n)euron by (t)time data array from the selected signal and returns an output signal with the data shifted
     rightward for the t dimension (into the future) by the value in delay, in this case the output shape is the same

@@ -1102,7 +1102,8 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
             unitcount = s.shape[0]
             for u in range(0, unitcount):
                 st = s[u, 0]
-                if st.size:
+                # if st.size:
+                if st.shape[0] == 3:
                     log.debug("{} {}".format(u,str(st.shape)))
                     uniquetrials = np.unique(st[0, :])
                     # print('chan {0} unit {1}: {2} spikes {3} trials'
