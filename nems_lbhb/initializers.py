@@ -190,7 +190,14 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             raise ValueError(f"batch {batch} prefit not implemented yet.")
             
         log.info(f"prefit cellid={pre_cellid}")
-        
+    elif prefit_type == 'site':
+        # exact same model, just fit for site, now being fit for single cell
+        pre_parts = modelname_parts[0].split("-")
+        post_parts = modelname_parts[2].split("-")
+        model_search = modelname_parts[0] + "%%" + modelname_parts[1] + "%%" + "-".join(post_parts[1:])
+
+        pre_cellid = cellid[0]
+        pre_batch = batch
     elif prefit_type is not None:
         # this is a single-cell fit
         if type(cellid) is list:
@@ -220,7 +227,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             post_part += ".ver2"
         modelname_parts[2] = post_part
         model_search="_".join(modelname_parts)
-        
+
     elif modelname_parts[1].endswith(".1"):
         raise ValueError("deprecated prefit initialization?")
         # this is a single-cell fit
@@ -236,7 +243,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             pre_cellid = [c_alt for c,c_alt in zip(cellids,alt_cellid) if c==cellid][0]
             log.info(f"matched cell for {cellid} is {pre_cellid}")
         else:
-            pre_cellid = cellid
+            pre_cellid = cellid[0]
             log.info(f"cellid prefit for {cellid}")
         if pre_batch is None:
             pre_batch = batch

@@ -150,12 +150,13 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
     # NOTE: ordering of names is assuming ALL_FAMILY_MODELS is being used and has not changed.
     short_names = ['conv2d', 'conv1d', 'conv1dx2+d', 'LN_pop', 'dnn1_single']
     bar_colors = [DOT_COLORS[k] for k in short_names]
-    ax.bar(np.arange(0, len(modelnames)), r_values.median(axis=0).values, color=bar_colors,
+    medians = r_values.median(axis=0).values
+    ax.bar(np.arange(0, len(modelnames)), medians, color=bar_colors,
            tick_label=short_names)
     ax.set_ylabel('Median Prediction Accuracy')
     ax.set_xticklabels(ax.get_xticklabels(), rotation='45', ha='right')
 
-    return ax
+    return ax, medians
 
 
 if __name__ == '__main__':

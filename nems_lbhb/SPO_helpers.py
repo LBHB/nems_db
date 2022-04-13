@@ -5,8 +5,9 @@ Created on Fri Apr 20 14:00:51 2018
 
 @author: luke
 """
+import logging
+log = logging.getLogger(__name__)
 import random
-
 import numpy as np
 import matplotlib.pyplot as plt
 import nems.db as nd  # NEMS database functions -- NOT celldb
@@ -32,8 +33,6 @@ import nems_db.params
 import warnings
 import itertools
 import copy
-import logging
-log = logging.getLogger(__name__)
 
 sb.color_palette
 sb.color_palette('colorblind')
@@ -45,9 +44,37 @@ pd.options.display.float_format = '{:,.3f}'.format
 pd.set_option('precision', 3)
 pd.set_option('display.expand_frame_repr', False)
 
-sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
-import fitEllipse as fE
+#sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
+import nems_lbhb.fitEllipse as fE
 
+from joblib import Memory
+jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
+if os.path.exists(jl_cache_dir):
+    memory = Memory(jl_cache_dir)
+else:
+    jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+    if os.path.exists(jl_cache_dir):
+        memory = Memory(jl_cache_dir)
+    else:
+        raise RuntimeError('joblib cache not acessible')
+
+batches = {
+    306:'3-component HCTs', #3H, has est stimuli
+    335:'10-component HCTs', #10H, has est stimuli
+    336:'3-component HCTs', #3H, some don't have est stimuli (use for PSTH analysis)
+    337:'10-component HCTs', #10H, some don't have est stimuli (use for PSTH analysis)
+}
+"""
+mysql> SELECT id,name,runclassid,parmstring from sBatch WHERE runclassid=117 ORDER BY id;
++-----+--------------+------------+----------------------------------------------------------------------------------------------+
+| id  | name         | runclassid | parmstring                                                                                   |
++-----+--------------+------------+----------------------------------------------------------------------------------------------+
+| 306 | spo/3H       |        117 | params.miniso=90;params.specialbatch='spo';params.N_harmonics=3;params.must_have_est_set=1;  |
+| 335 | spo/10H      |        117 | params.miniso=90;params.specialbatch='spo';params.N_harmonics=10;params.must_have_est_set=1; |
+| 336 | spo/3H/PSTH  |        117 | params.miniso=90;params.specialbatch='spo';params.N_harmonics=3;params.must_have_est_set=0;  |
+| 337 | spo/10H/PSTH |        117 | params.miniso=90;params.specialbatch='spo';params.N_harmonics=10;params.must_have_est_set=0; |
++-----+--------------+------------+----------------------------------------------------------------------------------------------+
+"""
 
 def parse_stim_type(stim_name):
     stim_sep = stim_name.split('+')
@@ -60,10 +87,15 @@ def parse_stim_type(stim_name):
     elif stim_sep[1] == stim_sep[2]:
         stim_type = 'C'
     else:
+        stim_sep1 = stim_sep[1].split('to')
         stim_sep2 = stim_sep[2].split('to')
-        if len(stim_sep2) == 1:
+        if (len(stim_sep1) == 1) and (len(stim_sep2) == 1):
             stim_type = 'I'
-        elif stim_sep[1] == stim_sep2[0]:
+        elif (len(stim_sep1) == 2) and (len(stim_sep2) == 1) and (stim_sep1[0] == stim_sep[2]):
+            #Ch 1 changed to make it become incoherent
+            stim_type = 'CtoI'
+        elif (len(stim_sep1) == 1) and (len(stim_sep2) == 2) and (stim_sep[1] == stim_sep2[0]):
+            #Ch 2 changed to make it become incoherent
             stim_type = 'CtoI'
         else:
             raise RuntimeError(f"{stim_name} is not parseable")
@@ -154,18 +186,31 @@ def scatterplot_print(x, y, names, c=None, s=None, ax=None, fn=None, fnargs={}, 
     ax.figure.canvas.mpl_connect('pick_event', onpick)
     return art
 
-def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, **kwargs):
+def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, c=None, s=None,
+                         cmap='inferno', **kwargs):
     if ax is None:
         ax = plt.gca()
-    if 'marker' not in kwargs:
+    if c is not None:
+        assert len(dfx) == len(c)
+    if ax is None:
+        ax = plt.gca()
+    if c is None and 'marker' not in kwargs:
         kwargs['marker'] = '.'
-    if 'linestyle' not in kwargs:
+    if c is None and 'linestyle' not in kwargs:
         kwargs['linestyle'] = 'none'
+    if c is not None and 'alpha' not in kwargs:
+        kwargs['alpha'] = .6
+
     x = dfx[varnames[0]].values
     y = dfy[varnames[1]].values
+    if s is None:
+        s = np.full_like(x, plt.rcParams['lines.markersize'] ** 2)  # plt.scatter default
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
+    s = s[good_inds]
+    if c is not None:
+        c = c[good_inds]
     if dispname is None:
         names = list(dfx.index.values[good_inds])
     else:
@@ -174,7 +219,10 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
         for i in range(len(fnargs)):
             if 'pth' in fnargs[i].keys():
                 fnargs[i]['pth'] = [fnargs[i]['pth'][gi] for gi in good_inds]
-    art, = ax.plot(x, y, picker=5, **kwargs)
+    if c is None:
+        art, = ax.plot(x, y, picker=5, **kwargs)
+    else:
+        art = ax.scatter(x, y, c=c, s=s, picker=5, cmap=cmap, **kwargs)
 
     ax.set_xlabel(f'dfx, {varnames[0]}')
     ax.set_ylabel(f'dfx, {varnames[1]}')
@@ -217,7 +265,7 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
 
 
 def load(rec, batch, cellid, meta, **context):
-    eval_conds=[['A'],['B'],['C'],['I'],['A','B'],['C','I']]
+    eval_conds=[['A'],['B'],['C'],['I'],['A','B'],['C','I'],['CtoI'],['IafterC'],['A','B','C','I']]
     rec['resp'] = add_stimtype_epochs(rec['resp'])
     if len(ep.epoch_occurrences(rec.epochs, 'CtoI')) > 0:
         manager = BAPHYExperiment(batch=batch, cellid=cellid[0])
@@ -229,7 +277,7 @@ def load(rec, batch, cellid, meta, **context):
 
     return {'rec':  rec, 'meta':meta, 'evaluation_conditions':eval_conds}
 
-def split_by_occurrence_counts_SPO(rec, epoch_regex='^STIM',**context):
+def split_by_occurrence_counts_SPO(rec, epoch_regex='^STIM', include_squares=False, meta={}, **context):
     if False:
         #Just going by rep numbers sometimes is wrong when a few extra reps were recorded
         N_per_epoch = ep.epoch_occurrences(rec.epochs, epoch_regex)
@@ -248,17 +296,26 @@ def split_by_occurrence_counts_SPO(rec, epoch_regex='^STIM',**context):
         square_epochs = ep.epoch_names_matching(rec.epochs, '.*Square')
         # epochs_for_val = epochs_for_val + square_epochs 10/7/21: Don't include square epochs in val, make a new recording for them later as needed
         epochs_for_est = set(all_epochs) - set(epochs_for_val) - set(square_epochs)
+        if include_squares:
+            epochs_for_val += square_epochs
     est, val = rec.split_by_epochs(epochs_for_est, epochs_for_val)
-    return {'est': est, 'val': val}
+    N_per_epoch = ep.epoch_occurrences(rec.epochs, epoch_regex)
+    meta['val_Ns'] = N_per_epoch.filter(items=epochs_for_val).values
+    meta['min_val_N'] = int(meta['val_Ns'].min())
+    meta['est_Ns'] = N_per_epoch.filter(items=epochs_for_est).values
+    return {'est': est, 'val': val, 'meta':meta}
 
 def mask_out_Squares(val, **context):
     square_epochs = ep.epoch_names_matching(val.epochs, '.*Square')
     return {'val': val.and_mask(epoch=square_epochs,invert=True)}
 
 
-def add_coherence_as_state(rec, permute=False, baseline=True, **context):
+def add_coherence_as_state(rec, meta, permute=False, baseline=True, **context):
     coh = rec['resp'].epoch_to_signal('C')
     inc = rec['resp'].epoch_to_signal('I')
+    if meta['IncSwitchTime'] is not None:
+        inc_after_coh = rec['resp'].epoch_to_signal('IafterC')
+        inc._data = inc._data + inc_after_coh._data
     if permute:
         coh = coh.shuffle_time(rand_seed=0, mask=rec['mask'])
         inc = inc.shuffle_time(rand_seed=1, mask=rec['mask'])
@@ -321,7 +378,7 @@ def plot_linear_and_weighted_psths_model(modelspec, val, rec, figures=None, IsRe
     return {'figures': figures}
 
 def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
-             modelspecs_dir='/auto/users/luke/Code/nems/modelspecs', fs=100, get_est=True, get_stim=True):
+             modelspecs_dir='/auto/users/luke/Code/nems/modelspecs', fs=100, get_est=True, get_stim=True, batch=306):
     import glob
     import nems.analysis.api
     import nems.modelspec as ms
@@ -330,8 +387,6 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
     import nems.preprocessing as preproc
     import pandas as pd
     import copy
-
-    batch = 306
 
     if get_stim:
         loadkey = 'env.fs100'
@@ -353,8 +408,10 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
     # Method #1: Find which stimuli have the most reps, use those for val
     # if not get_stim:
     #    del rec.signals['stim']
-    est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
-
+    #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
+    ctx = split_by_occurrence_counts_SPO(rec)
+    est = ctx['est']; val = ctx['val']; est_Ns = ctx['meta']['est_Ns']; val_Ns = ctx['meta']['val_Ns'];
+    min_val_Ns = val_Ns.min()
     # Optional: Take nanmean of ALL occurrences of all signals
     if get_est:
         est = preproc.average_away_epoch_occurrences(est, epoch_regex='^STIM_')
@@ -411,7 +468,7 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
 
 
 def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0], subset=None,
-                  plot_singles_on_dual=False, IncSwitchTime=None):
+                  plot_singles_on_dual=False, IncSwitchTime=None, separate_factor = 0):
     # NOTE TO SELF: Not sure why channels=[0,0,1]. Setting it as default, but when called by plot_linear_and_weighted_psths it should be [0,0,0]
     from nems.plots.timeseries import timeseries_from_epoch
     import matplotlib.pyplot as plt
@@ -472,7 +529,9 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
         plot_order = [['STIM_T+Square_0_2+null', 'STIM_T+null+Square_0_2'], ['STIM_T+Square_0_2+Square_0_2',
                                                                              'STIM_T+Square_0_2+Square_1_3'],
                       'STIM_T+Square_1_3+Square_0_2']
-
+    elif subset == 'I2':
+        print(subset)
+        plot_order=['STIM_T+si516+si464']
     # OVERWRITE PLOT ORDER TO BE WHAT YOU WANT:
     # plot_order=['STIM_T+si464+null', 'STIM_T+null+si464','STIM_T+si464+si464']
 
@@ -490,9 +549,23 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
     title = ''
     nplt = len(plot_order)
     gs_kw = dict(hspace=0, left=0.06, right=.99)
-    fig, ax = plt.subplots(nrows=nplt, ncols=1, figsize=(10, 15), sharey=True, gridspec_kw=gs_kw)
+    if nplt == 1:
+        figsize=(10,3)
+        gs_kw['bottom']=.2
+        gs_kw['top']=1
+        gs_kw['left']=0.01
+    else:
+        figsize=(10, 15)
+    fig, ax = plt.subplots(nrows=nplt, ncols=1, figsize=figsize, sharey=True, gridspec_kw=gs_kw)
+    show_summation=True
+    if nplt==1:
+        ax=[ax]
     if signames == ['resp', 'lin_model'] or signames == ['pred', 'pred_lin_model']:
-        [axi.set_prop_cycle(cycler('color', ['k', 'g']) + cycler(linestyle=['-', 'dotted']) + cycler(linewidth=[1, 2]))
+        if separate_factor == 0:
+            ls = ['-','--']
+        else:
+            ls = ['-', '-']
+        [axi.set_prop_cycle(cycler('color', ['k', 'g']) + cycler(linestyle=ls) + cycler(linewidth=[1, 1]))
          for axi in ax]
     else:
         [axi.set_prop_cycle(cycler('color', ['k', '#1f77b4', 'r']) + cycler('linestyle', ['-', '-', '--'])) for axi in
@@ -504,11 +577,16 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
     stimname = 'stim'  # LAS was this
     #stimname = 'resp'
     prestimtime = val[stimname].epochs.loc[0].end
+    if not show_summation: sigs.pop()
 
     for i in range(nplt):
         timeseries_from_epoch(sigs, epochname, title=title,
                               occurrences=occurrences[order[i]], ax=ax[i], channels=channels, linestyle=None,
                               linewidth=None)
+        if separate_factor>0:
+            ax[i].text(-.09,yl[0]+0.05*np.diff(yl),'Both', color='k')
+        if show_summation and (separate_factor>0):
+            ax[i].text(-.07, yl[0] - 0.00 * np.diff(yl), 'Summation', color='g',verticalalignment='top')
         if names_short[order[i]] in ['1+_', '2+_']:
             # timeseries_from_epoch([val['stim']], epochname, title=title,
             #             occurrences=occurrences[order[i]],ax=ax[i])
@@ -524,7 +602,9 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
             snA_ = names[names_short.index(snA)]
             epA = val[signames[0]].extract_epoch(snA_).squeeze()
             time_vector = np.arange(0, len(epA)) / val['resp'].fs
-            ax[i].plot(time_vector - prestimtime, epA, '--', color=(1, .5, 0), linewidth=1.5)
+            ax[i].plot(time_vector - prestimtime, epA+np.diff(yl)*separate_factor, '-', color=(1, .5, 0), linewidth=1)
+            if separate_factor>0:
+                ax[i].text(-.09, yl[0] + 0.05 * np.diff(yl)+np.diff(yl)*separate_factor, 'A alone', color=(1, .5, 0))
             if 'to' in snB:
                 snB_ = snB.split('to')
                 snB_part1 = names[names_short.index(snB_[0])]
@@ -540,7 +620,9 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
             else:
                 snB_ = names[names_short.index(snB)]
                 epB = val[signames[0]].extract_epoch(snB_).squeeze()
-                ax[i].plot(time_vector - prestimtime, epB, '--', color=(0, .5, 1), linewidth=1.5)
+                ax[i].plot(time_vector - prestimtime, epB-np.diff(yl)*separate_factor, '-', color=(0, .5, 1), linewidth=1)
+                if separate_factor>0:
+                    ax[i].text(-.09, yl[0] + 0.05 * np.diff(yl) - np.diff(yl) * separate_factor, 'B alone', color=(0, .5, 1))
 
         ax[i].set_ylabel(names_short[order[i]], rotation=0, horizontalalignment='right', verticalalignment='bottom')
 
@@ -550,7 +632,10 @@ def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0],
     [axi.get_yaxis().set_ticks([]) for axi in ax]
     [axi.get_legend().set_visible(False) for axi in ax[:-1]]
     [axi.set_xlim([.8 - 1, 4.5 - 1]) for axi in ax]
-    yl_margin = .01 * (yl[1] - yl[0])
+    if separate_factor==0:
+        yl_margin = .01 * (yl[1] - yl[0])
+    else:
+        yl_margin = separate_factor*1.2 * (yl[1] - yl[0])
     [axi.set_ylim((yl[0] - yl_margin, yl[1] + yl_margin)) for axi in ax]
     [axi.set_ylim((yl[0] - yl_margin, yl[1] + yl_margin)) for axi in ax]
     if IncSwitchTime is not None:
@@ -678,8 +763,8 @@ def export_all_vals(val, modelspec, signames=['resp', 'pred']):
     from pdb import set_trace;
     set_trace()
 
-
-def calc_psth_metrics(batch, cellid, rec_file=None):
+@memory.cache
+def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
     log.info(f'----- calc_psth_metrics for {cellid}')
     import nems.db as nd  # NEMS database functions -- NOT celldb
     import nems_lbhb.baphy as nb  # baphy-specific functions
@@ -710,6 +795,12 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
         IncSwitchTime = None
         types = ['A', 'B', 'C', 'I']
         types_2s = ['C', 'I']
+    has_squares = False
+    try:
+        if exptparams['TrialObject'][1]['ReferenceHandle'][1]['AddSquares'] != 0:
+            has_squares = True
+    except:
+        has_squares = False
 
     if rec_file is None:
         rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100',
@@ -717,7 +808,7 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
     # uri = nb.baphy_load_recording_uri(cellid=cellid, batch=batch, **options)
     rec = recording.load_recording(rec_file)
     rec['resp'] = rec['resp'].extract_channels([cellid])
-    rec['resp'].fs = 200
+    rec['resp'].fs = fs
 
     epcs = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].copy()
     PSS = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].iloc[0]
@@ -745,7 +836,12 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
     SR_std = ps[ff].std() * resp.fs
 
     # COMPUTE ALL FOLLOWING metrics using smoothed driven rate
-    est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
+    #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
+    ctx = split_by_occurrence_counts_SPO(rec)
+    est = ctx['est']; val = ctx['val']; est_Ns = ctx['meta']['est_Ns']; val_Ns = ctx['meta']['val_Ns'];
+    min_val_Ns = val_Ns.min()
+    if min_val_Ns < 10:
+        print('At least one val stimulus has less than 10 reps. Will use less jacknifes')
     epochs_to_extract = ep.epoch_names_matching(val.epochs, '^STIM_')
     folded_matrices = val['resp'].extract_epochs(epochs_to_extract)
     stds = np.array(0)
@@ -970,6 +1066,12 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
     resp_.epochs['start'] = resp_.epochs['start'] + prestim
     fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / val['resp'].fs)
     resp_ = resp_.transform(fn)
+    Njk = 10
+    if (min_val_Ns < 10) and (min_val_Ns > 4):
+        Njk = min_val_Ns
+        print(f'min_val_Ns={min_val_Ns}, reducing N jacknifes from 10 to {Njk} (for estimating percent of time enhanced or suppressed).')
+    elif min_val_Ns <= 4:
+        raise RuntimeError('Not enough repetitions to estimate percent of time enhanced or suppressed')
     for _type in types_2s:
         val_copy = copy.deepcopy(val)
         val['resp'].epochs['start'] = sts
@@ -992,7 +1094,6 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
         mean_enh[_type] = prdiff[prdiff > 0].mean() * val['resp'].fs
         mean_supp[_type] = prdiff[prdiff < 0].mean() * val['resp'].fs
 
-        Njk = 10
         if _type == 'C':
             stims = ['STIM_T+si464+si464', 'STIM_T+si516+si516']
         elif _type == 'CtoI':
@@ -1120,7 +1221,9 @@ def calc_psth_metrics(batch, cellid, rec_file=None):
             'rAA': rAA, 'rBB': rBB, 'rCC': rCC, 'rII': rII,
             'rAA_nc': rAA_nc, 'rBB_nc': rBB_nc,
             'mean_nsA': mean_nsA, 'mean_nsB': mean_nsB, 'min_nsA': min_nsA, 'min_nsB': min_nsB,
-            'SR': SR, 'SR_std': SR_std, 'SR_av_std': SR_av_std}
+            'SR': SR, 'SR_std': SR_std, 'SR_av_std': SR_av_std,
+            'has_squares': has_squares,
+            'est_Ns': est_Ns, 'val_Ns': val_Ns, 'min_val_Ns': min_val_Ns}
 
 
 def r_noise_corrected(X, Y, N_ac=200):
@@ -1388,6 +1491,11 @@ def type_by_psth(row, prefix=''):
     elif t[0] == 'O' and t[1] == 'E':  # OE
         inds = np.array((1, 0))
         t = ['E', 'O']
+    elif t[0] == 'I' and t[1] == 'O':  # IO
+        inds = np.array((0, 1))
+    elif t[0] == 'O' and t[1] == 'I':  # OI
+        inds = np.array((1, 0))
+        t = ['I', 'O']
     elif t.count('O') == 2:  # OO
         if row[prefix + 'Max_A'] > row[prefix + 'Max_B']:
             inds = np.array((0, 1))
@@ -1647,10 +1755,13 @@ def show_img(cellid, ax=None, ft=1, subset='A+B+C+I', modelspecname='dlog_fir2x1
             pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/'
             pth = pth + cellid + '_env100_subset_' + subset + '.' + modelspecname + '_all_val+FIR.png'
         elif ft == 1:
-            pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/fs{fs}/'
             pth = pth + cellid + '.png'
         elif ft == 11:
-            pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/'
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Overlay/fs{fs}/'
+            pth = pth + cellid + '.png'
+        elif ft == 12:
+            pth = f'/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/Squares/fs{fs}/'
             pth = pth + cellid + '.png'
         elif ft == 2:
             pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
@@ -1860,7 +1971,7 @@ def generate_weighted_model_signals(sig_in, weights, epcs_offsets, IncSwitchTime
     return sig_out, corrs
 
 
-def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec_file=None, fs=200):
+def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec_file=None, fs=200, separate_factor=0, do_smooth=True):
     # options = {}
     # options['cellid']=cellid
     # options['batch']=batch
@@ -1899,19 +2010,21 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
     SR = count / (epcs['end'] - epcs['start']).sum()
 
     # COMPUTE ALL FOLLOWING metrics using smoothed driven rate
-    groups = ep.group_epochs_by_occurrence_counts(rec.epochs, '^STIM_')
-    square_epochs = ep.epoch_occurrences(rec.epochs, 'Square')
-    N_per_epoch = ep.epoch_occurrences(rec.epochs, '^STIM')
-    est_mask = N_per_epoch < N_per_epoch.max() / 9
-    epochs_for_est = N_per_epoch.index.values[est_mask]
-    epochs_for_val = N_per_epoch.index.values[~est_mask]
-
-    est, val = rec.split_by_epochs(epochs_for_est, epochs_for_val)
+    # groups = ep.group_epochs_by_occurrence_counts(rec.epochs, '^STIM_')
+    # square_epochs = ep.epoch_occurrences(rec.epochs, 'Square')
+    # N_per_epoch = ep.epoch_occurrences(rec.epochs, '^STIM')
+    # est_mask = N_per_epoch < N_per_epoch.max() / 9
+    # epochs_for_est = N_per_epoch.index.values[est_mask]
+    # epochs_for_val = N_per_epoch.index.values[~est_mask]
+    #
+    # est, val = rec.split_by_epochs(epochs_for_est, epochs_for_val)
+    ctx = split_by_occurrence_counts_SPO(rec, include_squares=True)
+    est = ctx['est']; val = ctx['val']; est_Ns = ctx['meta']['est_Ns']; val_Ns = ctx['meta']['val_Ns'];
     # est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
 
     # smooth and subtract SR
-    if fs==200:
+    if do_smooth:
         fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
     else:
         fn = lambda x: x - SR / rec['resp'].fs
@@ -1936,7 +2049,7 @@ def plot_linear_and_weighted_psths(batch, cellid, weights=None, subset=None, rec
         sigz = ['resp', 'lin_model', 'weighted_model']
         plot_singles_on_dual = False
     fh = plot_all_vals(val, None, signames=sigz, channels=[0, 0, 0], subset=subset,
-                       plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
+                       plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime, separate_factor=separate_factor)
     return fh, w_corrs, l_corrs
 
 def plot_linear_and_weighted_psths_loaded(val,signame='resp',weights=None,subset=None,addsig=None, IncSwitchTime=None ):
@@ -1968,6 +2081,7 @@ def plot_linear_and_weighted_psths_loaded(val,signame='resp',weights=None,subset
                      plot_singles_on_dual=plot_singles_on_dual, IncSwitchTime=IncSwitchTime)
     return fh, w_corrs, l_corrs
 
+@memory.cache(ignore=['do_plot'])
 def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
     # options = {}
     # options['cellid']=cellid
@@ -1976,21 +2090,28 @@ def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
     # options["chancount"] = 0
     # options["rasterfs"] = 100
     # rec_file=nb.baphy_data_path(options)
-
-    print('load {}'.format(row.name))
+    if isinstance(row, pd.Series):
+        print('This is a series')
+        cellid = row.name
+    elif isinstance(row, dict):
+        print('this is a dict')
+        cellid = row['cellid']
+    print('load {}' .format(cellid))
     metrics = {}
-    manager = BAPHYExperiment(batch=int(row['batch']), cellid=row.name)
+    manager = BAPHYExperiment(batch=int(row['batch']), cellid=cellid)
     exptparams = manager.get_baphy_exptparams()[0]
     try:
-        IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
+        if exptparams['TrialObject'][1]['ReferenceHandle'][1]['AddSquares'] != 0:
+            pass
+        else:
+            return None, None
     except:
-        IncSwitchTime = None
         return None, None
 
 
-    rec_file = nw.generate_recording_uri(row.name, int(row['batch']), loadkey='ns.fs' + str(fs), force_old_loader=False)
+    rec_file = nw.generate_recording_uri(cellid, int(row['batch']), loadkey='ns.fs' + str(fs), force_old_loader=False)
     rec = recording.load_recording(rec_file)
-    rec['resp'] = rec['resp'].extract_channels([row.name])
+    rec['resp'] = rec['resp'].extract_channels([cellid])
     # rec['resp'].fs = fs
 
     # est, val = rec.split_using_epoch_occurrence_counts(epoch_regex='^STIM_')
@@ -2082,7 +2203,8 @@ def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
                            epoch_means[names[4]] + epoch_sterrs[names[4]] / 2, alpha=.5, color='C4')
         ax[0].legend(ph[4:], [names[x] for x in [2, 4]])
         yl = ax[0].get_ylim()
-
+    else:
+        fh = None
     tcomp = np.nonzero(np.logical_and(time > 1, time <= 2))[0]
     pv = np.full(tcomp.shape, np.nan)
     df = np.full(tcomp.shape, np.nan)
@@ -2158,15 +2280,17 @@ def calc_square_time_constants(row, fs=50, save_pth=None, do_plot=True):
     # scipy.stats.bootstrap((epoch_data[names[3]][:, tcomp]-epoch_data[names[2]][:, tcomp].mean(),),np.mean,method='percentile')
     if do_plot:
         ax[0].set_ylim(yl)
-        fh.axes[0].set_title('{}: SqRType: {}, Pri: {}, RType: {}, Pri: {}'.format(row.name, metrics['SqRtype'],
+        fh.axes[0].set_title('{}: SqRType: {}, Pri: {}, RType: {}, Pri: {}'.format(cellid, metrics['SqRtype'],
                                                                                    ['A', 'B'][metrics['Sqinds'][0]],
                                                                                    row['Rtype'],
                                                                                    ['A', 'B'][row['inds'][0]]))
         if save_pth is not None:
-            fh.savefig(save_pth + row.name + '.png')
-            with open(save_pth + row.name + '.pickle', 'wb') as handle:
+            os.makedirs(save_pth, exist_ok=True)
+            fh.savefig(save_pth + cellid + '.png')
+            with open(save_pth + cellid + '.pickle', 'wb') as handle:
                 pl.dump(fh, handle)
             plt.close(fh)
+            return metrics
     return fh, metrics
 
 
@@ -2515,7 +2639,7 @@ def plot_weighted_psths_and_weightplot(row, weights, batch=306):
     return fh
 
 
-def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None):
+def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None, subset='C+I'):
 
     cellid = model['cellid']
     cell = celldf.loc[cellid]
@@ -2593,8 +2717,10 @@ def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None):
         model['LN_nrmse_ratio_I'] = (1 - cell['get_nrmse_IR'](model['weights_I'])) / (1 - cell['nrmse_IR'])
         model['LN_nrmse_ratio_C'] = (1 - cell['get_nrmse_CR'](model['weights_C'])) / (1 - cell['nrmse_CR'])
 
-    if pth is not None:
-        fh, w_corrs, l_corrs = plot_linear_and_weighted_psths_loaded(val, signame='pred', subset='C+I', IncSwitchTime=IncSwitchTime)
+    if pth is None:
+        fh=None
+    else:
+        fh, w_corrs, l_corrs = plot_linear_and_weighted_psths_loaded(val, signame='pred', subset=subset, IncSwitchTime=IncSwitchTime)
         fh.axes[0].set_title('{}: RType: {}, Pri: {}'.format(cellid, cell['Rtype'], ['A', 'B'][cell['inds'][0]]))
         yl = np.array(fh.axes[0].get_ylim())
         th = fh.axes[0].text(fh.axes[0].get_xlim()[1], yl[1] + .2 * np.diff(yl),
@@ -2633,10 +2759,16 @@ def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None):
 
     return model
 
-
-def calc_psth_weight_resp(row, do_plot=False, fs=200):
-    print('load {}'.format(row.name))
-    manager = BAPHYExperiment(batch=306, cellid=row.name)
+@memory.cache
+def calc_psth_weight_resp(row, do_plot=False, fs=200, remove_functions = False):
+    if isinstance(row, pd.Series):
+        print('This is a series')
+        cellid = row.name
+    elif isinstance(row, dict):
+        print('this is a dict')
+        cellid = row['cellid']
+    print('load {}'.format(cellid))
+    manager = BAPHYExperiment(batch=row['batch'], cellid=cellid)
     exptparams = manager.get_baphy_exptparams()[0]
     try:
         IncSwitchTime = exptparams['TrialObject'][1]['ReferenceHandle'][1]['IncSwitchTime']
@@ -2644,11 +2776,12 @@ def calc_psth_weight_resp(row, do_plot=False, fs=200):
     except:
         types = ['A', 'B', 'C', 'I']
 
-    modelspecs, est, val = load_SPO(row.name,
+    modelspecs, est, val = load_SPO(cellid,
                                     types,
                                     None, fs=fs,
                                     get_est=False,
-                                    get_stim=False)
+                                    get_stim=False,
+                                    batch=row['batch'])
     # smooth and subtract SR
     if fs == 200:
         fn = lambda x: np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR'] / val[0]['resp'].fs)
@@ -2665,6 +2798,11 @@ def calc_psth_weight_resp(row, do_plot=False, fs=200):
     # weights_CR_,weights_IR_,Efit_CR_,Efit_IR_=sp.calc_psth_weights_of_model_responses(val[0],signame='resp',do_plot=do_plot)
     # weights_CR_, Efit_C_, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
     d = calc_psth_weights_of_model_responses(val[0], signame='resp', do_plot=do_plot, exptparams=exptparams)
+    if remove_functions:
+        d.pop('get_nrmse_C')
+        d.pop('get_nrmse_I')
+        d.pop('get_error_C')
+        d.pop('get_error_I')
     d = {k + 'R': v for k, v in d.items()}
     for k, v in d.items():
         row[k] = v
@@ -2909,3 +3047,189 @@ def add_queueinfo_to_results_df(df):
 
 # for module_target,module_source in zip(ctx_re['modelspec'],ctxO['modelspec']):
 #     module_target['phi'] = module_source['phi']
+def get_subs(N):
+
+    if N == 1:
+        subs = (1, 1)
+    elif N <= 2:
+        subs = (1, 2)
+    elif N <= 3:
+        subs = (3, 1)
+    elif N <= 4:
+        subs = (2, 2)
+    elif N <= 6:
+        subs = (3, 2)
+    elif N <= 8:
+        subs = (4, 2)
+    elif N <= 12:
+        subs = (4, 3)
+    elif N <= 15:
+        subs = (5, 3)
+    elif N <= 16:
+        subs = (4, 4)
+    elif N <= 20:
+        subs = (5, 4)
+    elif N <= 24:
+        subs = (6, 4)
+    elif N <= 30:
+        subs = (6, 5)
+    elif N <= 35:
+        subs = (7, 5)
+    else:
+        subs = (int(np.floor(np.sqrt(N))), int(np.ceil(np.sqrt(N))))
+        if (subs[0] * subs[1]) < N :
+            subs = (subs[0], subs[1] + 1)
+    return subs
+
+
+def sort_by_dominant_voice(row, vars_to_sort, sort_name='inds'):
+    for var in vars_to_sort:
+        row[var] = row[var][row[sort_name]]
+    return row
+
+
+def sort_Efitpars_by_dominant_voice(row, vars_to_sort, sort_name='inds'):
+    inds = row[sort_name]
+    all_inds = np.hstack([inds[[0, 1]], inds[[0, 1]] + 2, 4])
+    # all_inds=np.hstack([inds[[0,1]],2 ,3 , 4])
+    for var in vars_to_sort:
+        row[var] = row[var][all_inds]
+        if inds[0] == 1:
+            row[var][4] = -1 * row[var][4]
+    return row
+
+
+def get_cell_metrics_df(batch, cell_list, do_plot=True):
+
+    metrics=[]
+    for i,cellid in enumerate(cell_list):
+        metrics_ = get_cell_metrics(batch, cellid, do_plot=do_plot)
+        metrics.append(metrics_)
+
+    df = pd.DataFrame(data=metrics)
+    df['cellid']=cell_list
+    df = df.set_index('cellid')
+
+    return df
+
+def get_cell_metrics(batch,cellid, fs=200, do_plot=True):
+    try:
+        #log.info(f'----- get_cell_metrics for {cellid}')
+        metrics = {} #In case of error
+        metrics = calc_psth_metrics(batch, cellid)
+        metrics['cellid'] = cellid
+        metrics['batch'] = batch
+        metrics = type_by_psth(metrics)
+        metrics = calc_psth_weight_resp(metrics, fs=fs, remove_functions=True)
+
+        metrics['weights_CR_unsorted']=metrics['weights_CR']
+        metrics['weights_IR_unsorted']=metrics['weights_IR']
+        metrics['Efit_CR_unsorted']=metrics['Efit_CR']
+        metrics['Efit_IR_unsorted']=metrics['Efit_IR']
+        sort_by_dominant_voice(metrics, vars_to_sort = ('weights_CR', 'weights_IR'))
+        sort_Efitpars_by_dominant_voice(metrics, vars_to_sort = ('Efit_CR', 'Efit_IR'))
+
+        pth = '/auto/users/luke/Projects/SPS/plots/NEMS/types/PSTH/'
+        fs_squareTC = 50
+        pth_squareTC = f'{pth}SquaresOverlap/2exp/fs{fs_squareTC}/'
+        pth_full = f'{pth}/fs{fs}/'
+        pth_overlay = f'{pth}Overlay/fs{fs}/'
+        fs_squares = 70
+        pth_squares = f'{pth}Squares/fs{fs_squares}/'
+
+        if metrics['has_squares'] and do_plot:
+            metrics_for_sq = {k: metrics[k] for k in ('cellid','SR','SR_av_std','batch','SinglesMax','Rtype','inds')}
+            in_cache = calc_square_time_constants.check_call_in_cache(metrics_for_sq, fs=fs_squareTC, save_pth=pth_squareTC, do_plot=do_plot)
+            fn = pth_squareTC + cellid + '.png'
+
+            if in_cache and (do_plot==1 or (do_plot==2 and not os.path.exists(fn))):
+                result = calc_square_time_constants.call_and_shelve(metrics_for_sq, fs=fs_squareTC, save_pth=pth_squareTC, do_plot=do_plot)
+                #regenerate
+                result.clear()
+            os.makedirs(pth_squareTC, exist_ok=True)
+            metrics_squareTC = calc_square_time_constants(metrics_for_sq, fs=fs_squareTC, save_pth=pth_squareTC, do_plot=do_plot)
+            metrics = {**metrics, **metrics_squareTC}
+
+        fn = pth_full + cellid + '.png'
+        if (do_plot==1) or ((do_plot==2) and not os.path.exists(fn)):
+            os.makedirs(pth_full, exist_ok=True)
+            weights = [metrics['weights_CR'], metrics['weights_IR']]
+            fh, _, _ = plot_linear_and_weighted_psths(batch, cellid, weights, fs=fs)
+            fh.axes[0].set_title('{}: RType: {}, Pri: {}'.format(cellid, metrics['Rtype'], ['A', 'B'][metrics['inds'][0]]))
+            fh.savefig(fn)
+            with open(pth_full + cellid + '.pickle', 'wb') as handle:
+                pl.dump(fh, handle)
+            plt.close(fh)
+
+        fn = pth_overlay + cellid + '.png'
+        if (do_plot==1) or ((do_plot==2) and not os.path.exists(fn)):
+            os.makedirs(pth_overlay, exist_ok=True)
+            fh, _, lcs = plot_linear_and_weighted_psths(batch, cellid, None, subset='C+I', fs=fs)
+            fh.axes[0].set_title('{}: RType: {}, Pri: {}'.format(cellid, metrics['Rtype'], ['A', 'B'][metrics['inds'][0]]))
+            yl = np.array(fh.axes[0].get_ylim())
+            th = fh.axes[0].text(fh.axes[0].get_xlim()[1], yl[1] + .2 * np.diff(yl),
+                                 '     DS  |  LS  |  dif  \nA: {: .2f}  {: .2f}  {: .2f}\nB: {: .2f}  {: .2f}  {: .2f}\nA-B: {: .2f}  {: .2f}  {: .2f}'.format(
+                                     metrics['r_dual_A_I_bal'], metrics['r_lin_A_I_bal'],
+                                     metrics['r_dual_A_I_bal'] - metrics['r_lin_A_I_bal'],
+                                     metrics['r_dual_B_I_bal'], metrics['r_lin_B_I_bal'],
+                                     metrics['r_dual_B_I_bal'] - metrics['r_lin_B_I_bal'],
+                                     metrics['r_dual_A_I_bal'] - metrics['r_dual_B_I_bal'],
+                                     metrics['r_lin_A_I_bal'] - metrics['r_lin_B_I_bal'],
+                                     metrics['r_dual_A_I_bal'] - metrics['r_lin_A_I_bal'] - (
+                                                 metrics['r_dual_B_I_bal'] - metrics['r_lin_B_I_bal'])),
+                                 verticalalignment='top', horizontalalignment='right')
+            th2 = fh.axes[2].text(fh.axes[0].get_xlim()[1], yl[1] + .01 * np.diff(yl),
+                                  '     DS  |  LS  |  dif  \nA: {: .2f}  {: .2f}  {: .2f}\nB: {: .2f}  {: .2f}  {: .2f}\nA-B: {: .2f}  {: .2f}  {: .2f}'.format(
+                                      metrics['r_dual_A_C_bal'], metrics['r_lin_A_C_bal'],
+                                      metrics['r_dual_A_C_bal'] - metrics['r_lin_A_C_bal'],
+                                      metrics['r_dual_B_C_bal'], metrics['r_lin_B_C_bal'],
+                                      metrics['r_dual_B_C_bal'] - metrics['r_lin_B_C_bal'],
+                                      metrics['r_dual_A_C_bal'] - metrics['r_dual_B_C_bal'],
+                                      metrics['r_lin_A_C_bal'] - metrics['r_lin_B_C_bal'],
+                                      metrics['r_dual_A_C_bal'] - metrics['r_lin_A_C_bal'] - (
+                                                  metrics['r_dual_B_C_bal'] - metrics['r_lin_B_C_bal'])),
+                                  verticalalignment='top', horizontalalignment='right')
+            mngr = plt.get_current_fig_manager()
+            mngr.window.setGeometry(0, 29, 1916, 542)
+            plt.pause(.1)
+            mngr.window.setGeometry(0, 29, 1916, 542)
+            plt.draw_all()
+            plt.show()
+            fh.savefig(fn)
+            with open(pth_overlay + cellid + '.pickle', 'wb') as handle:
+                pl.dump(fh, handle)
+            plt.close(fh)
+
+        fn = pth_squares+cellid+'.png'
+        if metrics['has_squares'] and ( (do_plot == 1) or ((do_plot == 2) and not os.path.exists(fn)) ):
+            print(do_plot)
+            print(os.path.exists(fn))
+            os.makedirs(pth_squares, exist_ok=True)
+            weights=[metrics['weights_CR'], metrics['weights_IR']]
+            fh,_,_ = plot_linear_and_weighted_psths(batch,cellid,weights,subset='squares',fs=fs_squares)
+            if fh is not None:
+                fh.axes[0].set_title('{}: RType: {}, Pri: {}, Weights ({:.2f},{:.2f}), ({:.2f},{:.2f})'.format(cellid,
+                   metrics['Rtype'],['A','B'][metrics['inds'][0]],metrics['weights_CR'][0],metrics['weights_CR'][1],
+                                                           metrics['weights_IR'][0],metrics['weights_IR'][1]))
+                mngr = plt.get_current_fig_manager()
+                mngr.window.setGeometry(0, 29, 1916, 1000)
+                plt.pause(.1)
+                mngr.window.setGeometry(0, 29, 1916, 1000)
+                plt.draw_all()
+                plt.show()
+                fh.savefig(fn)
+                with open(pth_squares+cellid+'.pickle', 'wb') as handle:
+                    pl.dump(fh,handle)
+                plt.close(fh)
+        metrics['error'] = False
+    except Exception as e:
+        print(e.args)
+        err_str = f'Error running get_cell_metrics({batch},\'{cellid}\')'
+        logging.info(err_str, exc_info=True)
+        metrics['error'] = True
+        with open('/auto/users/luke/Code/PycharmProjects/SPO/get_cell_metrics_errors.log', 'a') as the_file:
+            the_file.write(err_str + '\n')
+
+    return metrics
+
+manual_unit_categories={'unstable':['TBR024a-044-2_200-360','TBR024a-014-1_1610-3059','TBR024a-053-1_951-2759']}

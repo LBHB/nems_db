@@ -145,10 +145,13 @@ class BAPHYExperiment:
             if type(parmfile) is str:
                 parmfile=[parmfile]
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
+
+
+
             self.batch = None
             if rawid is None:
                 stems = [pl.Path(p).stem + '.m' for p in parmfile]
-                print(stems)
+                log.info(stems)
                 stemstring = "'" + "','".join(stems) + "'"
                 rawdata = db.pd_query(f"SELECT * from gDataRaw where parmfile in ({stemstring})")
                 rawid = []
@@ -223,7 +226,21 @@ class BAPHYExperiment:
             self.batch = os.path.sep.join([self.animal, self.siteid])
         else:
             pass
-    
+
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+
+        if use_API:
+            newparmfile=[]
+            for p in self.parmfile:
+                prefix = 'http://' + get_setting('NEMS_BAPHY_API_HOST') + ":" + str(get_setting('NEMS_BAPHY_API_PORT')) + '/daq'
+                baphy_data_root = '/auto/data/daq'
+                newparmfile.append(str(p).replace(baphy_data_root, prefix))
+            log.info(f"Using remote parmfiles: {newparmfile}")
+            self.parmfile_WEB_API=newparmfile
+        else:
+            self.parmfile_WEB_API = None
+
+
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
@@ -484,6 +501,8 @@ class BAPHYExperiment:
 
     def generate_recording(self, rawchans=None, **kwargs):
         rec_name = self.experiment[0][:7]     
+        
+        kwargs=baphy_io.fill_default_options(kwargs)
         
         # figure out signals to load, then load them (as lists)
         raw = kwargs.get('raw', False)
@@ -980,8 +999,15 @@ class BAPHYExperiment:
             BAPHY parms data and convert them to dictionaries. See
             :func:`baphy_convert_user_definable_fields` for example.
         '''
+        # If running remote, use remote uri, otherwise use direct path
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+        if use_API:
+            parmfile = self.parmfile_WEB_API
+        else:
+            parmfile = self.parmfile
+
         # Returns tuple of global, expt and events
-        result = [io.baphy_parm_read(p) for p in self.parmfile]
+        result = [io.baphy_parm_read(p) for p in parmfile]
         if userdef_convert:
             [io.baphy_convert_user_definable_fields(r) for r in result]
         return result

@@ -42,6 +42,8 @@ import nems.db as db
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
+from nems_lbhb import runclass
+from nems.uri import load_resource
 
 log = logging.getLogger(__name__)
 
@@ -263,8 +265,12 @@ def baphy_mat2py(s):
             x[1] = re.sub(r'\[', r"np.array([[", x[1])
             x[1] = re.sub(r'\]', r"]])", x[1])
             x[1] = re.sub(r';','],[', x[1])
-        x[1] = re.sub('true','True', x[1])
-        x[1] = re.sub('false','False', x[1])
+        x[1] = re.sub('true ','True,', x[1])
+        x[1] = re.sub('false ','False,', x[1])
+        x[1] = re.sub('true]','True]', x[1])
+        x[1] = re.sub('false]','False]', x[1])
+        x[1] = re.sub('true$','True', x[1])
+        x[1] = re.sub('false$','False', x[1])
         x[1] = re.sub(r'NaN ', r"np.nan,", x[1])
         x[1] = re.sub(r'Inf ', r"np.inf,", x[1])
         x[1] = re.sub(r'NaN,', r"np.nan,", x[1])
@@ -296,9 +302,11 @@ def baphy_mat2py(s):
 
 def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
-
-    f = io.open(filepath, "r")
-    s = f.readlines(-1)
+    s = load_resource(str(filepath))
+    if type(s) is str:
+        s=s.split("\n")
+    #f = io.open(filepath, "r")
+    #s = f.readlines(-1)
 
     globalparams = {}
     exptparams = {}
@@ -339,8 +347,8 @@ def baphy_parm_read(filepath, evpread=True):
             log.info("NameError on: {0}".format(sout))
             import pdb; pdb.set_trace()
         except SyntaxError:
-            #import pdb; pdb.set_trace()
             log.info("SyntaxError parsing this baphy config line: {0}".format(sout))
+            #import pdb; pdb.set_trace()
         except Exception as e:
             log.info("Other error on: {0} to {1}".format(ts,sout))
             import pdb; pdb.set_trace()
@@ -487,22 +495,19 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
     ops = loader.split(".")
 
     # updates some some defaults
+
     options.update({'rasterfs': 100, 'chancount': 0})
-    load_pop_file = False
+    if ops[0] in ['nostim','psth','ns', 'evt']:
+        options.update({'stim': False, 'stimfmt': 'parm'})
+    else:
+        options['stimfmt'] = ops[0]
+    if options['stimfmt'] == 'env':
+        options['stimfmt'] = 'envelope'
+    # computed, but not saved anywhere?
+    load_pop_file = ("pop" in ops)
 
-    for op in ops:
-        if op=='ozgf':
-            options['stimfmt'] = 'ozgf'
-        elif op=='parm':
-            options['stimfmt'] = 'parm'
-        elif op=='ll':
-            options['stimfmt'] = 'll'
-        elif op=='env':
-            options['stimfmt'] = 'envelope'
-        elif op in ['nostim','psth','ns', 'evt']:
-            options.update({'stim': False, 'stimfmt': 'parm'})
-
-        elif op.startswith('fs'):
+    for op in ops[1:]:
+        if op.startswith('fs'):
             options['rasterfs'] = int(op[2:])
         elif op.startswith('ch'):
             options['chancount'] = int(op[2:])
@@ -520,13 +525,13 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
 
         elif 'eysp' in ops:
             options['pupil_eyespeed'] = True
-        elif op.startswith('pop'):
-            load_pop_file = True
         elif op == 'voc':
             options.update({'runclass': 'VOC'})
+        elif op == 'bin':
+            options.update({'binaural': 'crude'})
 
     if 'stimfmt' not in options.keys():
-        raise ValueError('Valid stim format (ozgf, psth, parm, env, evt) not specified in loader='+loader)
+        raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader='+loader)
     if (options['stimfmt']=='ozgf') and (options['chancount'] <= 0):
         raise ValueError('Stim format ozgf requires chancount>0 (.chNN) in loader='+loader)
 
@@ -778,7 +783,12 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
+    if (options['stimfmt'] == 'gtgram'):
+        # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
+
+        stim, tags, stimparam = runclass.NAT_stim(None, exptparams, **options)
+
+    elif (options['stimfmt']=='parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
         import nems_lbhb.strf.torc_subfunctions as tsf
         TorcObject = exptparams['TrialObject'][1]['ReferenceHandle'][1]
         stim, tags, stimparam = tsf.generate_torc_spectrograms(
@@ -827,7 +837,7 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
         stimparam = stimparam1
     else:
         stimfilepath = baphy_stim_cachefile(exptparams, parmfilepath, **options)
-        print("Cached stim: {0}".format(stimfilepath))
+        log.info("Cached stim: {0}".format(stimfilepath))
         # load stimulus spectrogram
         stim, tags, stimparam = baphy_load_specgram(stimfilepath)
 
@@ -836,7 +846,7 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
         # SSA special case
         stimo=stim.copy()
         maxval=np.max(np.reshape(stimo,[2,-1]),axis=1)
-        print('special case for SSA stim!')
+        log.info('special case for SSA stim!')
         ref=exptparams['TrialObject'][1]['ReferenceHandle'][1]
         stimlen=ref['PipDuration']+ref['PipInterval']
         stimbins=int(stimlen*options['rasterfs'])
@@ -1559,7 +1569,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
                 eye_width_mm = matdata['pupil_data']['params'][0][0]['eye_width_mm'][0][0][0]
                 big_rs = big_rs*(eye_width_mm/eye_width_px)
             except:
-                print("couldn't convert pupil to mm")
+                log.info("couldn't convert pupil to mm")
 
         if verbose:
             #plot framerate for each trial (for checking camera performance)
@@ -1637,10 +1647,10 @@ def load_dlc_trace(dlcfilepath, exptevents=None, **options):
         list_bodyparts.append(bp+"_y")
 
     if verbose:
-        print(data_array.shape) #should be number of bodyparts*2 x number of frames
-        print(list_bodyparts)  #should be each bodypart twice
-        print(data_array[8,0])  #should be NaN
-        print(data_array)  #check that values match
+        log.info(data_array.shape) #should be number of bodyparts*2 x number of frames
+        log.info(list_bodyparts)  #should be each bodypart twice
+        log.info(data_array[8,0])  #should be NaN
+        log.info(data_array)  #check that values match
 
 
     fs_approximate = 30  # approx video framerate
@@ -1744,7 +1754,7 @@ def load_dlc_trace(dlcfilepath, exptevents=None, **options):
         if len(l)>=2:
             big_rs_dict[signal] = big_rs
 
-    print('done creating big_rs')
+    log.info('done creating big_rs')
 
     if len(l)>=2:
         return big_rs_dict, strialidx
@@ -2194,7 +2204,7 @@ def load_raw_photometry(photofilepath, fs=None, framen=0):
     F_mag2 = []
     for i, packet in enumerate(video_container.demux(video_stream)):
         if i%1000 == 0:
-            print("frame: {}".format(i))
+            log.info("frame: {}".format(i))
 
         if i < framen:
             frame = packet.decode()[0]
@@ -2534,7 +2544,9 @@ def parse_cellid(options):
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=cellid,
                                                      rawid=rawid)
         # now, use rawid to get all stable cellids across these files
-        #import pdb; pdb.set_trace()
+        if len(cell_list)==0:
+            print(f'empty cell_list for cellid={cellid}, batch={batch}, rawid={rawid}?')
+            import pdb; pdb.set_trace()
         siteid = cell_list[0].split('-')[0]
         cell_list, rawid = db.get_stable_batch_cells(batch=batch, cellid=siteid,
                                                      rawid=rawid)

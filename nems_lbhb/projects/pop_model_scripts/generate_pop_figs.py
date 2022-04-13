@@ -6,7 +6,7 @@ import numpy as np
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
-    POP_MODELS, ALL_FAMILY_POP,
+    POP_MODELS, ALL_FAMILY_POP, shortnames,
     SIG_TEST_MODELS,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, int_path, a1, peg, single_column_short, single_column_tall,
@@ -39,8 +39,7 @@ from nems_lbhb.projects.pop_model_scripts.snr_batch import sparseness, sparsenes
 
 a1 = 322
 peg = 323
-
-
+stats_tests = []
 
 ########################################################################################################################
 #################################   SCATTER/BAR PRED   #################################################################
@@ -49,9 +48,30 @@ peg = 323
 fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
 plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1D CNN','pop LN'], ax=ax[0,0])
 plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'], ax=ax[0,1])
-bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
-bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
+ax3a, a1_medians = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
+ax3b, peg_medians = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
 fig3.tight_layout()
+
+stats_tests.append('scatter / bar summary figure')
+stats_tests.append('A1 median r_ceiling:')
+stats_tests.append(f'{a1_medians}')
+stats_tests.append('\nPEG median r_ceiling:')
+stats_tests.append(f'{peg_medians}')
+
+relative_change_by_batch = '\n'.join([f'{n}:  {m1/m2}' for n, m1, m2 in zip(shortnames, a1_medians, peg_medians)])
+stats_tests.append('\nRelative change  a1/peg:')
+stats_tests.append(relative_change_by_batch)
+
+cnn1d_vs_LN_A1 = a1_medians[2] / a1_medians[3]
+cnn1d_vs_LN_PEG = peg_medians[2] / peg_medians[3]
+cnn2d_vs_LN_A1 = a1_medians[0] / a1_medians[3]
+cnn2d_vs_LN_PEG = peg_medians[0] / peg_medians[3]
+stats_tests.append('\nRelative change CNN / LN:')
+stats_tests.append(f'A1 CNN 1Dx2 / pop LN:  {cnn1d_vs_LN_A1}')
+stats_tests.append(f'PEG CNN 1Dx2 / pop LN:  {cnn1d_vs_LN_PEG}')
+stats_tests.append(f'A1 CNN 2D / pop LN:  {cnn2d_vs_LN_A1}')
+stats_tests.append(f'PEG CNN 2D / pop LN:  {cnn2d_vs_LN_PEG}')
+
 
 ########################################################################################################################
 #################################   PARETO  ############################################################################
@@ -67,7 +87,7 @@ for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
 
     sig_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
-    _, b_ceiling, model_mean = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
+    _, b_ceiling, model_mean, labels = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
                                                  nparms_modelgroups=POP_MODELGROUPS,
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
@@ -83,7 +103,10 @@ for a in axes1:
     a.set_xlim(np.min(xlims), np.max(xlims))
     a.set_ylim(np.min(ylims), np.max(ylims))
 
-
+relative_changes_per_model = [means[0][i] / means[1][i] for i, _ in enumerate(labels)]
+relative_change_pareto = '\n'.join([f'{n}: {changes.mean()}' for n, changes in zip(labels, relative_changes_per_model)])
+stats_tests.append('\n\nPareto plot, relative change a1/peg:')
+stats_tests.append(relative_change_pareto)
 
 
 ########################################################################################################################
@@ -94,16 +117,20 @@ tests1, sig1, r1, m1, mds1 = generate_heldout_plots(a1, 'A1', ax=axes3[0])
 tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
 axes3[1].set_ylabel('')
 
-print("\n\nheldout vs matched, Sig. tests for batch %d:" % a1)
-print(tests1)
-print("median diffs:")
-print(mds1)
-print("\n")
-print("heldout vs matched, Sig. tests for batch %d:" % peg)
-print(tests2)
-print("median diffs:")
-print(mds2)
+short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
+print('Make sure short_names matches actual modelnames used!')
+print('short_names: %s' % short_names)
+print('HELDOUT: %s' % HELDOUT)
 
+stats_tests.append("\n\nheldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
+stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests1)]))
+stats_tests.append("median diffs:")
+stats_tests.append(str(mds1))
+stats_tests.append("\n")
+stats_tests.append("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % peg)
+stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests2)]))
+stats_tests.append("median diffs:")
+stats_tests.append(str(mds2))
 
 
 ########################################################################################################################
@@ -131,22 +158,23 @@ if 0:
     generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
 
 fig7, axes2 = plt.subplots(1, 2, figsize=column_and_half_short)
-a1_corr, a1_p, a1_t = correlation_histogram(
+a1_corr, a1_stats7 = correlation_histogram(
     a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
-peg_corr, peg_p, peg_t = correlation_histogram(
+peg_corr, peg_stats7 = correlation_histogram(
     peg, 'PEG', load_path=peg_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[1])
 
 fig7.tight_layout()
-print("\n\ncorrelation histograms, A1 sig tests: p=%s,  t=%s" % (a1_p, a1_t))
-print("correlation histograms, PEG sig tests: p=%s,  t=%s" % (peg_p, peg_t))
+stats_tests.append("\n\ncorrelation histograms, A1 sig tests: %s" % a1_stats7)
+stats_tests.append("correlation histograms, PEG sig tests: %s" % peg_stats7)
 
 
 ########################################################################################################################
 ##################################   SPARSENESS   ######################################################################
 ########################################################################################################################
 
-fig8 = sparseness_figs()
-
+fig8, tests8 = sparseness_figs()
+stats_tests.append("\n\nsparseness figs stats results:")
+stats_tests.append(''.join([f'{t}\n' for t in tests8]))
 
 ########################################################################################################################
 #################################   SNR  ###############################################################################
@@ -157,12 +185,13 @@ peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
 fig9a, ax4a = plt.subplots(figsize=single_column_short)
 fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
+test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
                                                         ax=ax4a, inset_ax=ax4b)
-print("matched snr Sig. tests:\n"
-      "conv1Dx2: T: %.4e, p: %.4e\n"
-      "LN: T: %.4e, p: %.4e\n"
-      "dnn1_single: T: %.4e, p: %.4e\n" % (u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn))
+
+tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
+stats_tests.append('matched snr sig. tests:')
+stats_tests.append(''.join([f'{s}:   {t}\n' for s, t in tests9]))
+
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
@@ -189,4 +218,6 @@ if DO_SAVE:
         plt.close(fig)
     pdf.close()
 
+    with open(base_path / 'stats_file.txt', 'w') as stats_file:
+        stats_file.write('\n'.join(stats_tests))
     #plt.close('all')  # just to make double sure that everything is closed
