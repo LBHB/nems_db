@@ -69,13 +69,15 @@ def plot_pred_scatter(batch, modelnames, labels=None, colors=None, ax=None):
           (sig_scores[modelnames[0]] - se_scores[modelnames[0]] > sig_scores[modelnames[1]] + se_scores[modelnames[1]])
     group1 = (ceiling_scores.loc[~sig,modelnames[0]].values, ceiling_scores.loc[~sig,modelnames[1]].values)
     group2 = (ceiling_scores.loc[sig,modelnames[0]].values, ceiling_scores.loc[sig,modelnames[1]].values)
+    n_nonsig = group1[0].size
+    n_sig = group2[0].size
 
     scatter_groups([group1, group2], ['lightgray', 'black'], ax=ax)
     ax.set_title(f'{batch_str[batch]} {PLOT_STAT}')
     ax.set_xlabel(f'{labels[0]} (mean r={ceiling_scores[modelnames[0]].mean():.3f})', color=colors[0])
     ax.set_ylabel(f'{labels[1]} (mean r={ceiling_scores[modelnames[1]].mean():.3f})', color=colors[1])
 
-    return fig
+    return fig, n_sig, n_nonsig
 
 
 def plot_conv_scatters(batch):

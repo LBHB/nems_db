@@ -12,6 +12,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, int_path, a1, peg, single_column_short, single_column_tall,
     column_and_half_short, column_and_half_tall
 )
+import nems.db as nd
 
 import matplotlib as mpl
 params = {'axes.spines.right': False,
@@ -46,13 +47,32 @@ stats_tests = []
 ########################################################################################################################
 
 fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
-plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1D CNN','pop LN'], ax=ax[0,0])
-plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'], ax=ax[0,1])
+fig3, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]],
+                                                      labels=['1D CNN','pop LN'], ax=ax[0,0])
+fig3, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]],
+                                                      labels=['1D CNN','2D CNN'], ax=ax[0,1])
 ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
 ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
 fig3.tight_layout()
 
+# Get general cell and site count info
+a1_r = nd.batch_comp(a1, ALL_FAMILY_MODELS, stat='r_test')
+peg_r = nd.batch_comp(peg, ALL_FAMILY_MODELS, stat='r_test')
+a1_cell_count = len(a1_r)
+a1_site_count = len(set([s.split('-')[0] for s in a1_r.index.values]))
+peg_cell_count = len(peg_r)
+peg_site_count = len(set([s.split('-')[0] for s in peg_r.index.values]))
+
 stats_tests.append('scatter / bar summary figure')
+stats_tests.append('site and cell counts:')
+stats_tests.append(f'A1: {a1_site_count} sites, {a1_cell_count} cells')
+stats_tests.append(f'PEG: {peg_site_count} sites, {peg_cell_count} cells')
+
+stats_tests.append('scatter plots')
+stats_tests.append(f'1D vs LN, {n_sig_1d_LN} sig. cells, {n_nonsig_1d_LN} non-sig. cells')
+stats_tests.append(f'1D vs 2D, {n_sig_1d_2d} sig. cells, {n_nonsig_1d_2d} non-sig. cells')
+
+stats_tests.append('\nBar plots')
 stats_tests.append('A1 median r_ceiling:')
 stats_tests.append(f'{a1_medians}')
 stats_tests.append('\nPEG median r_ceiling:')
