@@ -211,13 +211,34 @@ peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
 fig9a, ax4a = plt.subplots(figsize=single_column_short)
 fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
-                                                        ax=ax4a, inset_ax=ax4b)
+test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, \
+    a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
+        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+    )
 
 tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
-stats_tests.append('matched snr sig. tests:')
+stats_tests.append('matched snr')
+stats_tests.append('sig. tests:')
 stats_tests.append(''.join([f'{s}:   {t}\n' for s, t in tests9]))
 
+stats_tests.append('\nmedian prediction corr info:')
+stats_tests.append('a1 full medians:')
+stats_tests.append(str(a1_md))
+stats_tests.append('a1 mathced medians:')
+stats_tests.append(str(a1_md_match))
+stats_tests.append('peg full medians:')
+stats_tests.append(str(peg_md))
+stats_tests.append('peg mathced medians:')
+stats_tests.append(str(peg_md_match))
+stats_tests.append('a1 - peg medians full:')
+stats_tests.append(str(a1_md.values - peg_md.values))
+stats_tests.append('a1 - peg matched:')
+stats_tests.append(str(a1_md_match.values - peg_md_match.values))
+
+stats_tests.append('\n median snr info:')
+stats_tests.append(f'a1 median snr, full: {a1_md_snr}, matched: {a1_md_snr_match}')
+stats_tests.append(f'peg median snr, full: {peg_md_snr}, matched: {peg_md_snr_match}')
+stats_tests.append(f'test significance for full data: {test_snr}')
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################

@@ -54,11 +54,14 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
 
     # put peg snr in increasing order
     a1_snr = a1_snr_df.values.flatten()
+    a1_median_snr = np.median(a1_snr)
     a1_cellids = a1_snr_df.index.values
     peg_snr = peg_snr_df.values.flatten()
+    peg_median_snr = np.median(peg_snr)
     peg_idx = np.argsort(peg_snr_df.values, axis=None)
     peg_cellids = peg_snr_df.index[peg_idx].values
     peg_snr_sample = peg_snr[peg_idx]
+    test_snr = st.mannwhitneyu(a1_snr, peg_snr, alternative='two-sided')
 
     # force "exact" distribution match for given histogram bins
     bins = np.histogram(np.hstack((peg_snr_sample, a1_snr)), bins=40)[1]
@@ -80,6 +83,8 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
             continue
     a1_matched_snr = a1_snr_df.loc[a1_matched_cellids].values
     peg_matched_snr = peg_snr_df.loc[peg_matched_cellids].values
+    a1_median_snr_matched = np.median(a1_matched_snr)
+    peg_median_snr_matched = np.median(peg_matched_snr)
 
     if plot_sanity_check:
         # Sanity check: these should definitely be the same
@@ -170,7 +175,9 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     plt.xticks(rotation=45, fontsize=6, ha='right')
     plt.tight_layout()
 
-    return test_c1, test_LN, test_dnn
+    return (test_c1, test_LN, test_dnn, test_snr,
+            a1_results.median(), a1_matched_results.median(), peg_results.median(), peg_matched_results.median(),
+            a1_median_snr, a1_median_snr_matched, peg_median_snr, peg_median_snr_matched)
 
 
 if __name__ == '__main__':
