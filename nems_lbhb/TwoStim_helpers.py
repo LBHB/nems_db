@@ -21,9 +21,15 @@ import pandas as pd
 import sys
 import os
 import re
+import seaborn as sns
 import itertools
 sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
 import fitEllipse as fE
+import nems.epoch as ep
+import logging
+import binaural_OLP_helpers as bnh
+log = logging.getLogger(__name__)
+
 
 def get_sep_stim_names(stim_name):
     seps = [m.start() for m in re.finditer('_(\d|n)',stim_name)]
@@ -55,7 +61,8 @@ def add_stimtype_epochs(sig):
         sig.epochs=pd.concat([sig.epochs, df0])
         return sig
     
-def scatterplot_print(x,y,names,ax=None,fn=None,fnargs={},dv=None,**kwargs):
+def scatterplot_print(x,y,names,ids,ax=None,fn=None,fnargs={},dv=None,
+                      thresh=None, color='animal', **kwargs):
 
     if ax is None:
         ax=plt.gca()
@@ -63,6 +70,8 @@ def scatterplot_print(x,y,names,ax=None,fn=None,fnargs={},dv=None,**kwargs):
         kwargs['marker']='.'
     if 'linestyle' not in kwargs:
         kwargs['linestyle']='none'
+    if 'sound_type' in ids:
+        kwargs['sound_type'] = ids['sound_type']
     good_inds = np.where(np.isfinite(x+y))[0]
     x=x[good_inds]
     y=y[good_inds]
@@ -71,8 +80,26 @@ def scatterplot_print(x,y,names,ax=None,fn=None,fnargs={},dv=None,**kwargs):
         for i in range(len(fnargs)):
             if 'pth' in fnargs[i].keys():
                 fnargs[i]['pth']=[fnargs[i]['pth'][gi] for gi in good_inds]
-    art, = ax.plot(x, y, picker=5,**kwargs)
-    #art=ax.scatter(x,y,picker=5,**kwargs)
+    plot_df = pd.DataFrame(data=list(zip(x, y, [n[:3] for n in names])), index=names,
+                           columns=[ids['xcol'], ids['ycol'], 'animal'])
+    if color == 'namesB':
+        color = [aa.split(':')[2].split('-')[0][2:].replace('_', '') for aa in plot_df.index]
+    # plot_df = pd.DataFrame(data=list(zip(x, y, [n[:3] for n in names])), index=names,
+    #                        columns=['weightBG', 'weightFG', 'animal'])
+    fig, ax = plt.subplots()
+    ax = sns.scatterplot(x=ids['xcol'], y=ids['ycol'], data=plot_df, hue=color, picker=5, ax =ax)
+    # ax = sns.scatterplot(x='weightBG', y='weightFG', data=plot_df, hue='animal', picker=5, ax =ax)
+    if thresh:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        ax.vlines([thresh, -thresh], ymin, ymax, color='black', lw=0.5)
+        ax.hlines([thresh, -thresh], xmin, xmax, color='black', lw=0.5)
+
+    art = ax.collections[0]
+    if 'keyword' in ids:
+        ax.set_title(f"{ids['keyword']}: {ids['sound_type']}")
+    # art, = ax.plot(x, y, picker=5, **kwargs)
+    # art=ax.scatter(x,y,picker=5)
     
     def onpick(event):
         if event.artist == art:
@@ -99,7 +126,8 @@ def scatterplot_print(x,y,names,ax=None,fn=None,fnargs={},dv=None,**kwargs):
 
 
 def load_TwoStim(batch,cellid,fit_epochs,modelspec_name,loader='env100',
-             modelspecs_dir='/auto/users/luke/Code/nems/modelspecs',fs=100,get_est=True,get_stim=True):
+             modelspecs_dir='/auto/users/luke/Code/nems/modelspecs',fs=100,get_est=True,get_stim=True,
+                 paths=None):
     import glob
     import nems.analysis.api
     import nems.modelspec as ms
@@ -130,6 +158,43 @@ def load_TwoStim(batch,cellid,fit_epochs,modelspec_name,loader='env100',
     # Method #1: Find which stimuli have the most reps, use those for val
 #    if not get_stim:
 #        del rec.signals['stim']
+
+    ##Added Greg 9/22/21 for
+
+    stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
+    if paths:
+        bg_dir = f"/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{paths[0]}/"
+        bg_nm = os.listdir(bg_dir)
+        bg_names = [os.path.splitext(name)[0][2:].replace('_', '') for name in bg_nm]
+        fg_dir = f"/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{paths[1]}/"
+        fg_nm = os.listdir(fg_dir)
+        fg_names = [os.path.splitext(name)[0][2:].replace('_', '') for name in fg_nm]
+        bg_names.append('null'), fg_names.append('null')
+
+        bg_epochs = [b.split('_')[1].split('-')[0] for b in stim_epochs]
+        fg_epochs = [f.split('_')[2].split('-')[0] for f in stim_epochs]
+        bg_epochs = [b[2:] if b != 'null' else b for b in bg_epochs]
+        fg_epochs = [f[2:] if f != 'null' else f for f in fg_epochs]
+
+        bool_bg, bool_fg = [], []
+        for (b, f) in zip(bg_epochs, fg_epochs):
+            bool_bg.append(b in bg_names)
+            bool_fg.append(f in fg_names)
+
+        mask = np.logical_and(np.asarray(bool_bg), np.asarray(bool_fg))
+        stim_epochs = [b for a, b in zip(mask, stim_epochs) if a]
+
+        good_epochs = rec['resp'].epochs.loc[(rec['resp'].epochs['name'].isin(stim_epochs)), :]
+        starts = good_epochs.start
+        ends = good_epochs.end
+
+        ff_start = rec['resp'].epochs.start.isin(starts)
+        ff_ends = rec['resp'].epochs.end.isin(ends)
+        ff_silence = rec['resp'].epochs.name.isin(stim_epochs + ['PreStimSilence', 'PostStimSilence', 'REFERENCE'])
+
+        rec['resp'].epochs = rec['resp'].epochs.loc[ff_silence & (ff_start | ff_ends), :]
+
+
     val=rec.copy()
     val['resp']=val['resp'].rasterize()
     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
@@ -404,7 +469,7 @@ def export_all_vals(val,modelspec,signames=['resp','pred']):
     pyqtRemoveInputHook()
     set_trace() 
     
-def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
+def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None, paths=None):
     import nems.db as nd  # NEMS database functions -- NOT celldb
     import nems_lbhb.baphy as nb   # baphy-specific functions
     import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
@@ -418,6 +483,9 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     import nems.epoch as ep
     import scipy.stats as sst
     from nems_lbhb.gcmodel.figures.snr import compute_snr
+    from nems.preprocessing import generate_psth_from_resp
+    import logging
+    log = logging.getLogger(__name__)
 
     start_win_offset=0  #Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
     #start_win_offset=0.5 (HCT-stimuli)
@@ -431,11 +499,17 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     #rec_file=nb.baphy_data_path(options)
 
     #Greg added loader that doesn't need parmfile
-    manager = BAPHYExperiment(cellid=cellid, batch=batch)
+    if parmfile:
+        manager = BAPHYExperiment(parmfile)
+    else:
+        manager = BAPHYExperiment(cellid=cellid, batch=batch)
     options = {'rasterfs': 100,
-               'stim': False,
-               'resp': True}
+               'stim': True,
+               'resp': True,
+               'stimfmt': 'gtgram'}
     rec = manager.get_recording(**options)
+    #rec = generate_psth_from_resp_bgfg(rec, manager)
+
     # if rec_file is None and parmfile is None:
     #     rec_file = nw.generate_recording_uri(cellid, batch, loadkey='ns.fs100')  #'was 'env.fs100'
     #     rec=recording.load_recording(rec_file)
@@ -452,10 +526,16 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
     rec['resp'] = rec['resp'].extract_channels([cellid])
 
-    if passive.shape[0] == 2:
+    if passive.shape[0] >= 2:
         #if OLP test was sorted in here as well, slice it out of the epochs and data
-        print(f"Multiple OLPs found in {cellid}, dropping the first 'test' run.")
-        good_start = passive.iloc[1,1]
+        print(f"Multiple ({passive.shape[0]}) OLPs found in {cellid}")
+        runs = passive.shape[0] - 1
+        max_run = (passive['end'] - passive['start']).reset_index(drop=True).idxmax()
+        if runs != max_run:
+            print(f"There are {runs+1} OLPs, the longest is run {max_run+1}. Using last run but make sure that is what you want.")
+        else:
+            print(f"The {runs+1} run is also the longest run: {max_run+1}, using last run.")
+        good_start = passive.iloc[-1,1]
         rec['resp']._data = {key: val[val >= good_start] - good_start for key,val in rec['resp']._data.items()}
         rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start,:].reset_index(drop=True)
         rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
@@ -489,6 +569,44 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     lenstim=ep2['end']
 
     stim_epochs = ep.epoch_names_matching(resp.epochs, 'STIM_')
+    if paths and cellid[:3] == 'TBR':
+        bg_dir = f"/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{paths[0]}/"
+        bg_nm = os.listdir(bg_dir)
+        bg_names = [os.path.splitext(name)[0][2:].replace('_', '') for name in bg_nm]
+        fg_dir = f"/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{paths[1]}/"
+        fg_nm = os.listdir(fg_dir)
+        fg_names = [os.path.splitext(name)[0][2:].replace('_', '') for name in fg_nm]
+        bg_names.append('null'), fg_names.append('null')
+
+        bg_epochs = [b.split('_')[1].split('-')[0] for b in stim_epochs]
+        fg_epochs = [f.split('_')[2].split('-')[0] for f in stim_epochs]
+        bg_epochs = [b[2:] if b != 'null' else b for b in bg_epochs]
+        fg_epochs = [f[2:] if f != 'null' else f for f in fg_epochs]
+
+        bool_bg, bool_fg = [], []
+        for (b, f) in zip(bg_epochs, fg_epochs):
+            bool_bg.append(b in bg_names)
+            bool_fg.append(f in fg_names)
+
+        mask = np.logical_and(np.asarray(bool_bg), np.asarray(bool_fg))
+        stim_epochs = [b for a, b in zip(mask, stim_epochs) if a]
+
+        good_epochs = resp.epochs.loc[(resp.epochs['name'].isin(stim_epochs)), :]
+        starts = good_epochs.start
+        ends = good_epochs.end
+
+        ff_start = resp.epochs.start.isin(starts)
+        ff_ends = resp.epochs.end.isin(ends)
+        ff_silence = resp.epochs.name.isin(stim_epochs + ['PreStimSilence', 'PostStimSilence', 'REFERENCE'])
+
+        resp.epochs = resp.epochs.loc[ff_silence & (ff_start | ff_ends), :]
+        rec['resp'].epochs = resp.epochs.loc[ff_silence & (ff_start | ff_ends), :]
+        # resp.epochs = resp.epochs.loc[ff_silence & (ff_start | ff_ends), :]
+        # full = pd.concat([good_epochs, selected_silences]).sort_values(by=['start', 'end'], ascending=[True, False], ignore_index=True)
+
+
+
+
     epoch_repetitions = [resp.count_epoch(cc) for cc in stim_epochs]
     full_resp = np.empty((max(epoch_repetitions), len(stim_epochs),
                           (int(lenstim) * rec['resp'].fs)))
@@ -521,19 +639,36 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
 
     #Calculate suppression for each sound pair.
     # epochs with two sounds in them
-    epcs_twostim = resp.epochs[resp.epochs['name'].str.count('-0-1') == 2].copy()
+    if paths and cellid[:3] == 'TBR':
+        epcs_twostim = resp.epochs.loc[(resp.epochs['name'].str.count('-0-1') == 2) &
+                                   (resp.epochs['name'].isin(stim_epochs)), :].copy()
+    if params['Binaural'] = 'Yes':
+        epcs_twostim = bnh.label_pair_types(resp.epochs, params)
+    else:
+        epcs_twostim = resp.epochs[resp.epochs['name'].str.count('-0-1') == 2].copy()
+
+
     twostims = np.unique(epcs_twostim.name.values.tolist())
     supp_array = np.empty((len(twostims)))
     supp_array[:] = np.nan
+    FR_array = np.empty((len(twostims), 3))
+    FR_array[:] = np.nan
+
+    prestimsil, poststimsil = int(prestim*rec['resp'].fs), int(poststim*rec['resp'].fs)
 
     for cnt, stimmy in enumerate(twostims.tolist()):
-        ABepo = resp.extract_epoch(stimmy)
+        ABepo = resp.extract_epoch(stimmy)[:,:,prestimsil:-poststimsil]
         sep = get_sep_stim_names(stimmy)
-        Aepo = resp.extract_epoch('STIM_'+sep[0]+'_null')
-        Bepo = resp.extract_epoch('STIM_null_'+sep[1])
+        Aepo = resp.extract_epoch('STIM_'+sep[0]+'_null')[:,:,prestimsil:-poststimsil]
+        Bepo = resp.extract_epoch('STIM_null_'+sep[1])[:,:,prestimsil:-poststimsil]
         lenA, lenB = Aepo.shape[0], Bepo.shape[0]
         min_rep = np.min((Aepo.shape[0], Bepo.shape[0]))
         lin_resp = (Aepo[:min_rep, :, :] + Bepo[:min_rep, :, :])
+
+        A_FR = np.nanmean(np.nanmean(Aepo, axis=0), axis=1)
+        B_FR = np.nanmean(np.nanmean(Bepo, axis=0), axis=1)
+        AB_FR = np.nanmean(np.nanmean(ABepo, axis=0), axis=1)
+        FR_array[cnt,:] = [A_FR, B_FR, AB_FR]
 
         mean_lin = np.nanmean(np.squeeze(lin_resp), axis=(0,1))
         mean_combo = np.nanmean(np.squeeze(ABepo), axis=(0,1))
@@ -546,7 +681,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
     for index, row in epcs.iterrows():
         count+=np.sum((spike_times > row['start']) & (spike_times < row['end']))
     SR=count/(epcs['end']-epcs['start']).sum()
-    
+
     resp=rec['resp'].rasterize()
     resp=add_stimtype_epochs(resp)
     ps=resp.select_epochs(['PreStimSilence']).as_continuous()
@@ -918,9 +1053,11 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None):
             'rAA_nc':rAA_nc,'rBB_nc':rBB_nc,
             'mean_nsA':mean_nsA,'mean_nsB':mean_nsB,'min_nsA':min_nsA,'min_nsB':min_nsB,
             'SR':SR, 'SR_std':SR_std, 'SR_av_std':SR_av_std,
-            'norm_spont': norm_spont, 'params': params,
+            'norm_spont': norm_spont, 'spont_rate': spont_rate, 'params': params,
             'corcoef': corcoef, 'avg_resp': avg_resp, 'snr': snr,
-            'pair_names': twostims, 'suppression': supp_array}
+            'pair_names': twostims, 'suppression': supp_array, 'FR': FR_array,
+            'rec' : rec,
+            'animal' : cellid[:3]}
     
 def r_noise_corrected(X,Y,N_ac=200):
     import nems.metrics.corrcoef
@@ -943,9 +1080,18 @@ def r_noise_corrected(X,Y,N_ac=200):
     #plt.figure(); plt.imshow(rs)
     return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
     
-def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False,fs=200):
+def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False,fs=200, paths=None):
     print('load {}'.format(row.name))
-    modelspecs,est,val = load_TwoStim(int(row.batch),
+    if paths and row.name[:3] == 'TBR':
+        modelspecs, est, val = load_TwoStim(int(row.batch),
+                                            row.name,
+                                            ['A', 'B', 'C', 'I'],
+                                            None, fs=fs,
+                                            get_est=False,
+                                            get_stim=False,
+                                            paths=paths)
+    else:
+        modelspecs,est,val = load_TwoStim(int(row.batch),
                                       row.name,
                                       ['A','B','C','I'],
                                       None,fs=fs,
@@ -1050,8 +1196,14 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     fsigs=np.vstack((sig1,sig2)).T
     ff = np.all(np.isfinite(fsigs),axis=1) & np.isfinite(sigO)
     close_to_zero = np.array([np.allclose(fsigs[ff,i], 0, atol=1e-17) for i in (0,1)])
-    if any(close_to_zero):
-        weights_,residual_sum,rank,singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff,~close_to_zero],1),sigO[ff],rcond=None)
+
+    if all(close_to_zero):
+        weights = np.zeros(2)
+        rank = 0
+
+    elif any(close_to_zero) and not all(close_to_zero):
+        bool2dim = np.logical_and(ff[:,None], ~close_to_zero[None,:])
+        weights_,residual_sum,rank,singular_values = np.linalg.lstsq(np.expand_dims(fsigs[bool2dim],1),sigO[ff],rcond=None)
         weights = np.zeros(2)
         weights[~close_to_zero] = weights_
     else:
@@ -1680,8 +1832,8 @@ def get_expt_params(resp, manager, cellid):
     expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
     if len(expt_params) == 1:
         ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
-    if len(expt_params) == 2:
-        ref_handle = expt_params[1]['TrialObject'][1]['ReferenceHandle'][1]
+    if len(expt_params) > 1:
+        ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
 
     params['experiment'], params['fs'] = cellid.split('-')[0], resp.fs
     params['PreStimSilence'], params['PostStimSilence'] = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']
@@ -1699,5 +1851,307 @@ def get_expt_params(resp, manager, cellid):
                                     for s in range(len(soundies))]
     params['units'], params['response'] = resp.chans, resp
     params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
+    if ref_handle['Binaural']:
+        params['Binaural'] = ref_handle['Binaural']
+    else:
+        params['Binaural'] = 'No'
 
     return params
+
+def generate_psth_from_resp_bgfg(rec, manager, resp_sig='resp', epoch_regex='^(STIM_|TAR_|CAT_|REF_)',
+                            smooth_resp=False, channel_per_stim=False):
+    '''
+    Estimates a PSTH from all responses to each regex match in a recording
+
+    subtract spont rate based on pre-stim silence for ALL estimation data.
+
+    if rec['mask'] exists, uses rec['mask'] == True to determine valid epochs
+
+    Problem: not all the Pre/Dur/Post lengths are the same across reps of a stimulus.
+    Shorten everything to minimum of each. If Dur is variable, throw away post-stim silence.
+
+    '''
+    #Greg adding stuff poorly
+    expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
+    if len(expt_params) == 1:
+        ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+    if len(expt_params) == 2:
+        ref_handle = expt_params[1]['TrialObject'][1]['ReferenceHandle'][1]
+
+    soundies = list(ref_handle['SoundPairs'].values())
+    bgs = sorted(list(set([soundies[s]['bg_sound_name'].split('.')[0]+'-0-1' for s in range(len(soundies))])))
+    fgs = sorted(list(set([soundies[s]['fg_sound_name'].split('.')[0]+'-0-1' for s in range(len(soundies))])))
+    bg_ep, fg_ep = ['STIM_'+g+'_null' for g in bgs], ['STIM_null_'+f for f in fgs]
+    bgs_half = sorted(list(set([soundies[s]['bg_sound_name'].split('.')[0]+'-0.5-1' for s in range(len(soundies))])))
+    fgs_half = sorted(list(set([soundies[s]['fg_sound_name'].split('.')[0]+'-0.5-1' for s in range(len(soundies))])))
+    bg_ep_half, fg_ep_half = ['STIM_'+g+'_null' for g in bgs_half], ['STIM_null_'+f for f in fgs_half]
+
+    nulls_bg, nulls_fg = fg_ep + fg_ep_half, bg_ep + bg_ep_half
+
+    newrec = rec.copy()
+    resp = newrec[resp_sig].rasterize()
+
+    # compute spont rate during valid (non-masked) trials
+    if 'mask' in newrec.signals.keys():
+        mask = newrec['mask']
+    else:
+        mask = None
+
+    # Figure out list of matching epoch names: epochs_to_extract
+    if type(epoch_regex) == list:
+        epochs_to_extract = []
+        for rx in epoch_regex:
+            eps = ep.epoch_names_matching(resp.epochs, rx)
+            epochs_to_extract += eps
+
+    elif type(epoch_regex) == str:
+        epochs_to_extract = ep.epoch_names_matching(resp.epochs, epoch_regex)
+
+    epochs_to_extract_bg = [[e for e in epochs_to_extract if bg in e and f'{bg}-0.5-1' not in e] for bg in bgs]
+    epochs_to_extract_fg = [[e for e in epochs_to_extract if fg in e and f'{fg}-0.5-1' not in e] for fg in fgs]
+    epochs_to_extract_bg_half = [[e for e in epochs_to_extract if bg in e and f'{bg}-0-1' not in e] for bg in bgs_half]
+    epochs_to_extract_fg_half = [[e for e in epochs_to_extract if fg in e and f'{fg}-0-1' not in e] for fg in fgs_half]
+    nulls_bg, nulls_fg = fg_ep + fg_ep_half, bg_ep + bg_ep_half
+
+    # figure out spont rate for subtraction from PSTH
+    prestimsilence = resp.extract_epoch('PreStimSilence', mask=mask)
+    if len(prestimsilence.shape) == 3:
+        spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
+    else:
+        spont_rate = np.nanmean(prestimsilence)
+
+    NEW_WAY = True
+    if NEW_WAY:
+        # already taken care of?
+        #newrec = normalize_epoch_lengths(newrec, resp_sig=resp_sig, epoch_regex='^STIM_')
+        #resp = newrec[resp_sig].rasterize()
+        # find all pre/post-stimsilence epochs
+        preidx = resp.get_epoch_indices('PreStimSilence', mask=mask)
+        posidx = resp.get_epoch_indices('PostStimSilence', mask=mask)
+        prebins = preidx[0][1] - preidx[0][0]
+        if posidx.shape[0]>0:
+            postbins = posidx[0][1] - posidx[0][0]
+        else:
+            postbins = 0
+    else:
+        # find all pre/post-stimsilence epochs
+        preidx = resp.get_epoch_indices('PreStimSilence', mask=mask)
+        posidx = resp.get_epoch_indices('PostStimSilence', mask=mask)
+        dpre=preidx[:,1]-preidx[:,0]
+        minpre=np.min(dpre)
+        prebins = preidx[0][1] - preidx[0][0]
+        dpos=posidx[:,1]-posidx[:,0]
+        minpos=np.min(dpre)
+        postbins = posidx[0][1] - posidx[0][0]
+        #refidx = resp.get_epoch_indices('REFERENCE')
+
+        #import pdb
+        #pdb.set_trace()
+        for ename in epochs_to_extract:
+            ematch = np.argwhere(resp.epochs['name']==ename)
+            import pdb; pdb.set_trace()
+            ff = resp.get_epoch_indices(ename, mask=mask)
+            for i,fe in enumerate(ff):
+                re = ((resp.epochs['name']=='REFERENCE') &
+                      (resp.epochs['start']==fe[0]/resp.fs))
+                pe = ep.epoch_contained(preidx, [fe])
+                thispdur = np.diff(preidx[pe])
+
+                if np.sum(pe)==1 and thispdur>minpre:
+                    print('adjust {} to {}'.format(thispdur, minpre))
+                    print(resp.epochs.loc[ematch[i]])
+                    resp.epochs.loc[ematch[i],'start'] += (thispdur[0,0]-minpre)/resp.fs
+                    resp.epochs.loc[re,'start'] += (thispdur[0,0]-minpre)/resp.fs
+                    print(resp.epochs.loc[ematch[i]])
+
+                pe = ep.epoch_contained(posidx, [fe])
+                thispdur = np.diff(posidx[pe])
+                if thispdur.shape and thispdur>minpos:
+                    print('adjust {} to {}'.format(thispdur, minpos))
+                    print(resp.epochs.loc[ematch[i]])
+                    resp.epochs.loc[ematch[i],'end'] -= (thispdur[0,0]-minpos)/resp.fs
+                    resp.epochs.loc[re,'end'] -= (thispdur[0,0]-minpos)/resp.fs
+                    print(resp.epochs.loc[ematch[i]])
+
+        newrec['resp'].epochs = resp.epochs.copy()
+
+    # mask=None means no mask
+    folded_matrices = resp.extract_epochs(epochs_to_extract, mask=newrec['mask'])
+    folded_matrices_bg = resp.extract_epochs(bg_ep, mask=newrec['bgmask'])
+    folded_matrices_fg = resp.extract_epochs(fg_ep, mask=newrec['fgmask'])
+    folded_matrices_bg_half = resp.extract_epochs(bg_ep_half, mask=newrec['bghalfmask'])
+    folded_matrices_fg_half = resp.extract_epochs(fg_ep_half, mask=newrec['fghalfmask'])
+    folded_matrices_bg_null = resp.extract_epochs(nulls_bg, mask=newrec['bgnull'])
+    folded_matrices_fg_null = resp.extract_epochs(nulls_fg, mask=newrec['fgnull'])
+    for key in folded_matrices_bg_null.keys():
+        folded_matrices_bg_null[key][:] = 0
+    for key in folded_matrices_fg_null.keys():
+        folded_matrices_fg_null[key][:] = 0
+
+
+    log.info('generating PSTHs for %d epochs', len(folded_matrices.keys()))
+    log.info('generating PSTHs for %d BG epochs', len(folded_matrices_bg.keys()))
+    log.info('generating PSTHs for %d FG epochs', len(folded_matrices_fg.keys()))
+    log.info('generating PSTHs for %d BG half epochs', len(folded_matrices_bg_half.keys()))
+    log.info('generating PSTHs for %d FG half epochs', len(folded_matrices_fg_half.keys()))
+    log.info('generating PSTHs for %d BG null epochs', len(folded_matrices_bg_null.keys()))
+    log.info('generating PSTHs for %d FG null epochs', len(folded_matrices_fg_null.keys()))
+
+
+    # 2. Average over all reps of each stim and save into dict called psth.
+    per_stim_psth = dict()
+    per_stim_psth_spont = dict()
+    for k, v in folded_matrices.items():
+        if smooth_resp:
+            # replace each epoch (pre, during, post) with average
+            v[:, :, :prebins] = np.nanmean(v[:, :, :prebins],
+                                           axis=2, keepdims=True)
+            v[:, :, prebins:(prebins+2)] = np.nanmean(v[:, :, prebins:(prebins+2)],
+                                                      axis=2, keepdims=True)
+            v[:, :, (prebins+2):-postbins] = np.nanmean(v[:, :, (prebins+2):-postbins],
+                                                        axis=2, keepdims=True)
+            v[:, :, -postbins:(-postbins+2)] = np.nanmean(v[:, :, -postbins:(-postbins+2)],
+                                                          axis=2, keepdims=True)
+            v[:, :, (-postbins+2):] = np.nanmean(v[:, :, (-postbins+2):],
+                                                 axis=2, keepdims=True)
+
+        per_stim_psth[k] = np.nanmean(v, axis=0) - spont_rate[:, np.newaxis]
+        per_stim_psth_spont[k] = np.nanmean(v, axis=0)
+        folded_matrices[k] = v
+
+    per_stim_psth_bg, per_stim_psth_spont_bg = dict(), dict()
+    for n, (k, v) in enumerate(folded_matrices_bg.items()):
+        if k in epochs_to_extract_bg[n]:
+            per_stim_psth_bg = {**per_stim_psth_bg, **{key:np.nanmean(v, axis=0) - spont_rate[:, np.newaxis] for
+                                 key in epochs_to_extract_bg[n]}}
+            per_stim_psth_spont_bg = {**per_stim_psth_spont_bg, **{key:np.nanmean(v, axis=0) for
+                                 key in epochs_to_extract_bg[n]}}
+        else:
+            raise ValueError("Values for BGs are misaligned to keys. Bad.")
+
+    per_stim_psth_fg, per_stim_psth_spont_fg = dict(), dict()
+    for n, (k, v) in enumerate(folded_matrices_fg.items()):
+        if k in epochs_to_extract_fg[n]:
+            per_stim_psth_fg = {**per_stim_psth_fg, **{key:np.nanmean(v, axis=0) - spont_rate[:, np.newaxis] for
+                                 key in epochs_to_extract_fg[n]}}
+            per_stim_psth_spont_fg = {**per_stim_psth_spont_fg, **{key:np.nanmean(v, axis=0) for
+                                 key in epochs_to_extract_fg[n]}}
+        else:
+            raise ValueError("Values for FGs are misaligned to keys. Bad.")
+
+    per_stim_psth_bg_half, per_stim_psth_spont_bg_half = dict(), dict()
+    for n, (k, v) in enumerate(folded_matrices_bg_half.items()):
+        if k in epochs_to_extract_bg_half[n]:
+            per_stim_psth_bg_half = {**per_stim_psth_bg_half, **{key:np.nanmean(v, axis=0) - spont_rate[:, np.newaxis] for
+                                 key in epochs_to_extract_bg_half[n]}}
+            per_stim_psth_spont_bg_half = {**per_stim_psth_spont_bg_half, **{key:np.nanmean(v, axis=0) for
+                                 key in epochs_to_extract_bg_half[n]}}
+        else:
+            raise ValueError("Values for BGs are misaligned to keys. Bad.")
+
+    per_stim_psth_fg_half, per_stim_psth_spont_fg_half = dict(), dict()
+    for n, (k, v) in enumerate(folded_matrices_fg_half.items()):
+        if k in epochs_to_extract_fg_half[n]:
+            per_stim_psth_fg_half = {**per_stim_psth_fg_half, **{key:np.nanmean(v, axis=0) - spont_rate[:, np.newaxis] for
+                                 key in epochs_to_extract_fg_half[n]}}
+            per_stim_psth_spont_fg_half = {**per_stim_psth_spont_fg_half, **{key:np.nanmean(v, axis=0) for
+                                 key in epochs_to_extract_fg_half[n]}}
+        else:
+            raise ValueError("Values for FGs are misaligned to keys. Bad.")
+
+    # per_stim_null_bg = dict()
+    # for n, (k, v) in enumerate(folded_matrices_bg_null.items()):
+    #     if k in nulls_bg[n]:
+    #         per_stim_null_bg = {**per_stim_psth_fg_half, **{key:np.nanmean(v, axis=0) - spont_rate[:, np.newaxis] for
+    #                              key in epochs_to_extract_fg_half[n]}}
+    #         per_stim_psth_spont_fg_half = {**per_stim_psth_spont_fg_half, **{key:np.nanmean(v, axis=0) for
+    #                              key in epochs_to_extract_fg_half[n]}}
+    #import pdb; pdb.set_trace()
+
+    # 3. Invert the folding to unwrap the psth into a predicted spike_dict by
+    #   replacing all epochs in the signal with their average (psth)
+    if channel_per_stim:
+        raise ValueError('channel_per_stim not yet supported')
+
+    respavg = resp.replace_epochs(per_stim_psth)
+    respavg_with_spont = resp.replace_epochs(per_stim_psth_spont)
+    respavg.name = 'psth'
+    respavg_with_spont.name = 'psth_sp'
+
+    respavg_bg = resp.replace_epochs(per_stim_psth_bg)
+    respavg_with_spont_bg = resp.replace_epochs(per_stim_psth_spont_bg)
+    respavg_bg = respavg_bg.replace_epochs(per_stim_psth_bg_half)
+    respavg_with_spont_bg = respavg_with_spont_bg.replace_epochs(per_stim_psth_spont_bg_half)
+    respavg_bg = respavg_bg.replace_epochs(folded_matrices_bg_null)
+    respavg_with_spont_bg = respavg_with_spont_bg.replace_epochs(folded_matrices_bg_null)
+    respavg_bg.name = 'psth_bg'
+    respavg_with_spont_bg.name = 'psth_sp_bg'
+
+    respavg_fg = resp.replace_epochs(per_stim_psth_fg)
+    respavg_with_spont_fg = resp.replace_epochs(per_stim_psth_spont_fg)
+    respavg_fg = respavg_fg.replace_epochs(per_stim_psth_fg_half)
+    respavg_with_spont_fg = respavg_with_spont_fg.replace_epochs(per_stim_psth_spont_fg_half)
+    respavg_fg = respavg_fg.replace_epochs(folded_matrices_fg_null)
+    respavg_with_spont_fg = respavg_with_spont_fg.replace_epochs(folded_matrices_fg_null)
+    respavg_fg.name = 'psth_fg'
+    respavg_with_spont_fg.name = 'psth_sp_fg'
+
+    # Fill in a all non-masked periods with 0 (presumably, these are spont
+    # periods not contained within stimulus epochs), or spont rate (for the signal
+    # containing spont rate)
+    respavg_data = respavg.as_continuous().copy()
+    respavg_spont_data = respavg_with_spont.as_continuous().copy()
+    if 'mask' in newrec.signals.keys():
+        mask_data = newrec['mask']._data
+    else:
+        mask_data = np.ones(respavg_data.shape).astype(np.bool)
+    spont_periods = ((np.isnan(respavg_data)) & (mask_data==True))
+    respavg_data[:, spont_periods[0,:]] = 0
+    # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
+    respavg = respavg._modified_copy(respavg_data)
+    respavg_with_spont = respavg_with_spont._modified_copy(respavg_spont_data)
+
+    respavg_data_bg = respavg_bg.as_continuous().copy()
+    respavg_spont_data_bg = respavg_with_spont_bg.as_continuous().copy()
+    mask_data_bg = np.ones(respavg_data_bg.shape).astype(np.bool)
+    spont_periods_bg = ((np.isnan(respavg_data_bg)) & (mask_data_bg==True))
+    respavg_data_bg[:, spont_periods_bg[0,:]] = 0
+    # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
+    respavg_bg = respavg_bg._modified_copy(respavg_data_bg)
+    respavg_with_spont_bg = respavg_with_spont_bg._modified_copy(respavg_spont_data_bg)
+
+    respavg_data_fg = respavg_fg.as_continuous().copy()
+    respavg_spont_data_fg = respavg_with_spont_fg.as_continuous().copy()
+    mask_data_fg = np.ones(respavg_data_fg.shape).astype(np.bool)
+    spont_periods_fg = ((np.isnan(respavg_data_fg)) & (mask_data_fg==True))
+    respavg_data_fg[:, spont_periods_fg[0,:]] = 0
+    # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
+    respavg_fg = respavg_fg._modified_copy(respavg_data_fg)
+    respavg_with_spont_fg = respavg_with_spont_fg._modified_copy(respavg_spont_data_fg)
+
+    # add the new signals to the recording
+    newrec.add_signal(respavg), newrec.add_signal(respavg_with_spont)
+    newrec.add_signal(respavg_bg), newrec.add_signal(respavg_with_spont_bg)
+    newrec.add_signal(respavg_fg), newrec.add_signal(respavg_with_spont_fg)
+
+    if 'stim' in newrec.signals.keys():
+        # add as channel to stim signal if it exists
+        newrec['stim'] = newrec['stim'].rasterize()
+        newrec = concatenate_state_channel(newrec, respavg, 'stim')
+        newrec['stim'].chans[-1] = 'psth'
+
+    if smooth_resp:
+        log.info('Replacing resp with smoothed resp')
+        resp = resp.replace_epochs(folded_matrices, mask=newrec['mask'])
+        newrec.add_signal(resp)
+
+    return newrec
+
+# from nems.gui.recording_browser import browse_recording
+# aw= browse_recording(newrec, ['psth','psth_bg','psth_fg'])
+
+
+
+
+
+
