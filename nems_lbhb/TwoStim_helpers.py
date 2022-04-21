@@ -13,7 +13,6 @@ import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with dat
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems.recording as recording
 import numpy as np
-import TwoStim_helpers as ts
 import nems.preprocessing as preproc
 import nems.metrics.api as nmet
 import pickle as pl
@@ -23,13 +22,11 @@ import os
 import re
 import seaborn as sns
 import itertools
-sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
-import fitEllipse as fE
 import nems.epoch as ep
 import logging
 import binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
-
+import nems_lbhb.fitEllipse as fE
 
 def get_sep_stim_names(stim_name):
     seps = [m.start() for m in re.finditer('_(\d|n)',stim_name)]
@@ -845,7 +842,7 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None, paths=None):
         
         
 
-        if _type is 'C':
+        if _type == 'C':
             rCC = nems.metrics.corrcoef._r_single(r_st,200,0)
 
         else:
@@ -1098,7 +1095,7 @@ def calc_psth_weight_resp(row,do_plot=False,find_mse_confidence=False,fs=200, pa
                                       get_est=False,
                                       get_stim=False)
     #smooth and subtract SR
-    fn = lambda x : np.atleast_2d(ts.smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
     
     #fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val[0]['resp']=val[0]['resp'].transform(fn)
@@ -1172,8 +1169,43 @@ def type_by_psth(row):
     #row['inds']=inds
     #return pd.Series({'Rtype': ''.join(t), 'inds': inds})
     return row
-        
-def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=False,find_mse_confidence=True,get_nrmse_fn=True):
+
+
+def calc_psth_correlations_list(val, names, signame='pred', do_plot=False, find_mse_confidence=True,
+                                              get_nrmse_fn=True, window=None):
+    # prestimtime=0.5;#1;
+    PSS = val[signame].epochs[val[signame].epochs['name'] == 'PreStimSilence'].iloc[0]
+    prestimtime = PSS['end'] - PSS['start']
+    REF = val[signame].epochs[val[signame].epochs['name'] == 'REFERENCE'].iloc[0]
+    total_duration = REF['end'] - REF['start']
+    POSS = val[signame].epochs[val[signame].epochs['name'] == 'PostStimSilence'].iloc[0]
+    poststimtime = POSS['end'] - POSS['start']
+    duration = total_duration - prestimtime - poststimtime
+
+    post_duration_pad = .5  # Include stim much post-stim time in weight calcs
+    time = np.arange(0, val[signame].extract_epoch(names[0][0]).shape[-1]) / val[signame].fs - prestimtime
+    if window is None:
+        xc_win = (time >= 0) & (time < (duration + post_duration_pad))
+    else:
+        xc_win = (time >= window[0]) & (time < window[1])
+    # names = [ [n[0]] for n in names]
+    sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[0]])
+    sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[1]])
+    # sig_SR=np.ones(sig1.shape)
+    sigO = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[2]])
+
+    ff = np.isfinite(sigO) & np.isfinite(sig1) & np.isfinite(sig2)
+    r_dual_A = np.corrcoef(sig1[ff], sigO[ff])[0, 1]
+    r_dual_B = np.corrcoef(sig2[ff], sigO[ff])[0, 1]
+    r_lin_A = np.corrcoef(sig1[ff], sig1[ff] + sig2[ff])[0, 1]
+    r_lin_B = np.corrcoef(sig2[ff], sig1[ff] + sig2[ff])[0, 1]
+
+    return r_dual_A, r_dual_B, r_lin_A, r_lin_B
+
+
+
+def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plot=False, find_mse_confidence=True,
+                                              get_nrmse_fn=True, window=None):
     #prestimtime=0.5;#1;
     PSS=val[signame].epochs[val[signame].epochs['name']=='PreStimSilence'].iloc[0]
     prestimtime = PSS['end'] - PSS['start']
@@ -1185,7 +1217,10 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     
     post_duration_pad=.5 #Include stim much post-stim time in weight calcs
     time = np.arange(0, val[signame].extract_epoch(names[0][0]).shape[-1]) / val[signame].fs - prestimtime    
-    xc_win=(time>0) & (time < (duration + post_duration_pad))
+    if window is None:
+        xc_win=(time>=0) & (time < (duration + post_duration_pad))
+    else:
+        xc_win = (time >= window[0]) & (time < window[1])
     #names = [ [n[0]] for n in names]
     sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[0]])
     sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[xc_win] for n in names[1]])
@@ -1196,14 +1231,12 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     fsigs=np.vstack((sig1,sig2)).T
     ff = np.all(np.isfinite(fsigs),axis=1) & np.isfinite(sigO)
     close_to_zero = np.array([np.allclose(fsigs[ff,i], 0, atol=1e-17) for i in (0,1)])
-
     if all(close_to_zero):
+        #Both input signals have all their values close to 0. Set weights to 0.
         weights = np.zeros(2)
-        rank = 0
-
-    elif any(close_to_zero) and not all(close_to_zero):
-        bool2dim = np.logical_and(ff[:,None], ~close_to_zero[None,:])
-        weights_,residual_sum,rank,singular_values = np.linalg.lstsq(np.expand_dims(fsigs[bool2dim],1),sigO[ff],rcond=None)
+        rank=1
+    elif any(close_to_zero):
+        weights_,residual_sum,rank,singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff,~close_to_zero],1),sigO[ff],rcond=None)
         weights = np.zeros(2)
         weights[~close_to_zero] = weights_
     else:
@@ -1238,15 +1271,15 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
     
     def get_error(weights=weights,get_what='error'):
             
-            if get_what is 'sigA':
+            if get_what == 'sigA':
                 return fsigs[ff,0]
-            elif get_what is 'sigB':
+            elif get_what == 'sigB':
                 return fsigs[ff,1]
-            elif get_what is 'sigAB':
+            elif get_what == 'sigAB':
                 return sigO[ff]
-            elif get_what is 'pred':
+            elif get_what == 'pred':
                 return np.dot(weights,fsigs[ff,:].T)
-            elif get_what is 'error':
+            elif get_what == 'error':
                 pred = np.dot(weights,fsigs[ff,:].T)
                 return pred-sigO[ff]
             else:
@@ -1284,12 +1317,12 @@ def calc_psth_weights_of_model_responses_list(val,names,signame='pred',do_plot=F
         w=np.stack((wA,wB),axis=2)
         nrmse = get_nrmse(w)
         #range_=mse.max()-mse.min()
-        if threshtype is 'Absolute':
+        if threshtype == 'Absolute':
             thresh=nrmse.min()*np.array((1.4,1.6))
             thresh=nrmse.min()*np.array((1.02,1.04))
             As=wA[(nrmse<thresh[1]) & (nrmse>thresh[0])]
             Bs=wB[(nrmse<thresh[1]) & (nrmse>thresh[0])]
-        elif threshtype is 'ReChance':
+        elif threshtype == 'ReChance':
             thresh=1-(1-nrmse.min())*np.array((.952,.948))
             As=wA[(nrmse<thresh[1]) & (nrmse>thresh[0])]
             Bs=wB[(nrmse<thresh[1]) & (nrmse>thresh[0])]
@@ -1622,7 +1655,7 @@ def plot_linear_and_weighted_psths(row,weights=None,subset=None,rec_file=None):
                                       get_est=False,
                                       get_stim=False)
     #smooth and subtract SR
-    fn = lambda x : np.atleast_2d(ts.smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
+    fn = lambda x : np.atleast_2d(smooth(x.squeeze(), 3, 2) - row['SR']/val[0]['resp'].fs)
     val=val[0]
     #fn = lambda x : np.atleast_2d(sp.smooth(x.squeeze(), 3, 2)*val[0]['resp'].fs - row['SR'])
     val['resp']=val['resp'].transform(fn)

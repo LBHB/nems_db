@@ -1,17 +1,18 @@
 # LBHB-specific post-processors
+# WARNING: Changes to ctx made by functions in this file won't get saved whenthe model is run by fit_model_xform
 import logging
 
-import nems.analysis as na
 import nems.db as nd
+import nems.xforms
 
 log = logging.getLogger(__name__)
 
 
 
-def add_summary_statistics_by_condition(est,val,modelspec,evaluation_conditions,rec=None,**context):
-    modelspec = na.api.standard_correlation_by_epochs(est,val,modelspec=modelspec,
-            epochs_list=evaluation_conditions,rec=rec)
-    return {'modelspec': modelspec}
+def add_summary_statistics_by_condition(**context):
+    return nems.xforms.add_summary_statistics_by_condition(**context)
+    #LAS: This is here for backwards compatibility for old models.
+    # For new models the keyword 'ebc' (evaluate by condition) adds nems.xforms.add_summary_statistics_by_condition
 
 
 def run_decoding_analysis(IsReload=False, **kwargs):
@@ -66,5 +67,18 @@ def run_decoding_analysis(IsReload=False, **kwargs):
     log.info('Queued decoding analysis')
     return {}
 
-            
+def save_pred_signal(**ctx):
+    """
+    Saves the model prediction for the validation set
+    """
+    rec = ctx['val'].copy()
+    rec.signals = {key:sig for key, sig in rec.signals.items() if key == 'pred'}
+    rec.signal_views = [rec.signals]
+
+    savefile = ctx['modelspec'].meta['modelpath'] + '/' + 'prediction.tar.gz'
+    rec.save(str(savefile))
+
+    return ctx
+
+
 

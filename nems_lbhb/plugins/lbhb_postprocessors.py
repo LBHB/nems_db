@@ -18,24 +18,25 @@ def ebc(loadkey):
     ebc = evaluate_by_condition
        finds prediction correlations by condition
     """
-    ops = loadkey.split('.')[1:]
-    if ops[0] == 'rmM':
-        use_mask=False
-    else:
-        use_mask=True
+    options = loadkey.split('.')[1:]
+    use_mask=True
+    for op in options[1:]:
+        if op == 'rmM':
+            use_mask=False
     xfspec = [
         ['nems.xforms.add_summary_statistics', {'use_mask': use_mask}],
-        ['nems_lbhb.postprocessing.add_summary_statistics_by_condition',{}]
+        ['nems.xforms.add_summary_statistics_by_condition',{'use_mask': use_mask}]
     ]
     return xfspec
 
 @xform()
 def SPOpf(loadkey):
-    xfspec = [['nems.xforms.predict', {}]]
+    xfspec = [['nems.xforms.predict', {'use_mask': False}]]
+    #xfspec.append(['nems_lbhb.SPO_helpers.mask_out_Squares', {}]) Not included in val anymore
     xfspec = xfspec + ebc('ebc.rmM')
-    xfspec.append(['nems.xforms.plot_summary', {}])
+    xfspec.append(['nems.xforms.plot_summary', {'time_range':(5, 23.0)}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_all_vals_',{}])
-    xfspec.append(['nems_lbhb.SPO_helpers.plot_linear_and_weighted_psths_model', {}])
+    # xfspec.append(['nems_lbhb.SPO_helpers.plot_linear_and_weighted_psths_model', {}])
 
     return xfspec
 
@@ -91,3 +92,24 @@ def rda(loadkey):
     """
     xfspec = [['nems_lbhb.postprocessing.run_decoding_analysis', {}]]
     return xfspec
+
+@xform()
+def dstrf(loadkey):
+    """
+    Run Decoding Analysis
+    """
+    return [['nems.xforms.predict', {}],
+            ['nems.xforms.add_summary_statistics', {}],
+            ['nems.xforms.plot_summary', {}],
+            ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
+
+    return xfspec
+
+
+
+@xform('svpred')
+def svpred(kw):
+    """
+    saves a recording containing only the prediction signal alongside the xfomrs model
+    """
+    return [['nems_lbhb.postprocessing.save_pred_signal', {}, ]]

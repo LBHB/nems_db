@@ -167,11 +167,7 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
     else:
         strfdata = strf0
 
-<<<<<<< HEAD
-    axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower', )
-=======
     axs.imshow(strfdata, cmap=None, norm=None, aspect='auto', extent=[0, tleng, 0, noct], origin='lower')
->>>>>>> 84f0ee15ff44ef5ce02ebbadbbd841b990728629
 
     if lfreq:
         freqappend = lfreq
@@ -180,7 +176,7 @@ def strfplot(strf0, lfreq, tleng, smooth=0, noct=5, axs=None):
             if fff != 0:
                 freqappend = freqappend * 2
             freqticks.append(freqappend)
-        axs.set_yticks(np.arange(noct))
+        axs.set_yticks(np.arange(noct+1))
         axs.set_yticklabels(freqticks)
 
     return freqticks,strfdata

@@ -16,6 +16,12 @@ mfilename = "/auto/data/daq/Amanita/AMT005/AMT005c05_p_TOR.m"
 cellid = 'AMT005c-12-1'
 ###################################
 
+
+# define named tuple outside of function to allow picking
+STRF_Data = collections.namedtuple('STRF_Data', ['STRF', 'STRF_error', 'Best_Frequency_Hz', 'Signal_to_Noise',
+                                                         'Onset_Latency_ms', 'Offset_Latency_ms', 'StimParams'])
+
+
 def tor_tuning(cellid, mfilename=None, rec=None,fs=1000,plot=False):
     '''
     Creates STRF from stimulus and response
@@ -248,6 +254,4 @@ def tor_tuning(cellid, mfilename=None, rec=None,fs=1000,plot=False):
 
         fig.tight_layout()
 
-    tor_tuning_output = collections.namedtuple('STRF_Data',['STRF','STRF_error','Best_Frequency_Hz','Signal_to_Noise','Onset_Latency_ms','Offset_Latency_ms','StimParams'])
-
-    return tor_tuning_output(strf0, strfemp, bf, snr, lat, offlat, StimParams)
+    return STRF_Data(strf0, strfemp, bf, snr, lat, offlat, StimParams)

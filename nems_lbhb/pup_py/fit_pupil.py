@@ -112,7 +112,7 @@ class queue_pupil_job:
     def get_fn(self):
         self.video_file = filedialog.askopenfilename(initialdir = "/auto/data/daq/",
                             title = "Select raw video file", 
-                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+                            filetypes = (("avi files","*.avi"), ("mj2 files","*.mj2*"), ))
         self.filename_value.delete(0, 'end')
         self.filename_value.insert(0, self.video_file)
 
