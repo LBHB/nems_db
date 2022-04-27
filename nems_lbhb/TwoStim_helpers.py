@@ -24,7 +24,7 @@ import seaborn as sns
 import itertools
 import nems.epoch as ep
 import logging
-import binaural_OLP_helpers as bnh
+import nems_lbhb.projects.olp.binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
 import nems_lbhb.fitEllipse as fE
 
@@ -501,9 +501,8 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None, paths=None):
     else:
         manager = BAPHYExperiment(cellid=cellid, batch=batch)
     options = {'rasterfs': 100,
-               'stim': True,
-               'resp': True,
-               'stimfmt': 'gtgram'}
+               'stim': False,
+               'resp': True}
     rec = manager.get_recording(**options)
     #rec = generate_psth_from_resp_bgfg(rec, manager)
 
@@ -639,8 +638,8 @@ def calc_psth_metrics(batch,cellid,rec_file=None,parmfile=None, paths=None):
     if paths and cellid[:3] == 'TBR':
         epcs_twostim = resp.epochs.loc[(resp.epochs['name'].str.count('-0-1') == 2) &
                                    (resp.epochs['name'].isin(stim_epochs)), :].copy()
-    if params['Binaural'] = 'Yes':
-        epcs_twostim = bnh.label_pair_types(resp.epochs, params)
+    # if params['Binaural'] == 'Yes':
+    #     epcs_twostim = bnh.label_pair_types(resp.epochs, params)
     else:
         epcs_twostim = resp.epochs[resp.epochs['name'].str.count('-0-1') == 2].copy()
 
@@ -1884,10 +1883,10 @@ def get_expt_params(resp, manager, cellid):
                                     for s in range(len(soundies))]
     params['units'], params['response'] = resp.chans, resp
     params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
-    if ref_handle['Binaural']:
-        params['Binaural'] = ref_handle['Binaural']
-    else:
-        params['Binaural'] = 'No'
+    # if ref_handle['Binaural']:
+    #     params['Binaural'] = ref_handle['Binaural']
+    # else:
+    #     params['Binaural'] = 'No'
 
     return params
 

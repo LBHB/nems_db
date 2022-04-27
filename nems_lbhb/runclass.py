@@ -279,6 +279,27 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         wav2=["NULL"] * len(wav1)
         chan2 = [0] * len(wav1)
 
+    elif ReferenceClass == 'OverlappingPairs':
+        bg_folder = ReferenceHandle['BG_Folder']
+        fg_folder = ReferenceHandle['FG_Folder']
+
+        bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+        fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+
+        stim_epochs = ReferenceHandle['Names']
+        #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
+        wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
+        wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
+        chan1=[int(e.split("_")[0].split("-")[3])-1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
+        chan2=[int(e.split("_")[1].split("-")[3])-1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+        #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
+        wav1 = [wav for wav in wav1 if wav != 'null']
+        wav2 = [wav for wav in wav2 if wav != 'null']
+
+        file_unique=wav1.copy()
+        file_unique.extend(wav2)
+        file_unique=list(set(file_unique))
+
     max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
 
     PreStimSilence = ReferenceHandle['PreStimSilence']
@@ -289,7 +310,13 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     wav_unique = {}
     fs0 = None
     for filename in file_unique:
-        fs, w = wavfile.read(sound_root / (filename+'.wav'))
+        if ReferenceClass == "OverlappingPairs":
+            try:
+                fs, w = wavfile.read(Path(bg_root) / (filename + '.wav'))
+            except:
+                fs, w = wavfile.read(Path(fg_root) / (filename + '.wav'))
+        else:
+            fs, w = wavfile.read(sound_root / (filename+'.wav'))
         if fs0 is None:
             fs0 = fs
         elif fs != fs0:

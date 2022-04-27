@@ -1,5 +1,5 @@
 import nems_lbhb.TwoStim_helpers as ts
-import nems_lbhb.OLP_plot_helpers as opl
+import nems_lbhb.projects.olp.OLP_plot_helpers as opl
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems.db as nd
 import pandas as pd
