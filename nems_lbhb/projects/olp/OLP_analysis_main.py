@@ -10,6 +10,8 @@ import seaborn as sb
 import copy
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.projects.olp.OLP_fit as ofit
+import nems_lbhb.projects.olp.OLP_Binaural_plot as obip
+
 
 
 sb.color_palette
@@ -45,7 +47,19 @@ if fit == True:
     df = pd.concat(metrics)
     df.reset_index()
 
-bg, fg = 'Waterfall', 'Keys'
-df_filtered = df[(df.BG == bg) & (df.FG == fg)]
 
-df[(df[Gender]=='Male') & (df[Year]==2014)]
+
+
+
+
+cell = 'CLT007a-009-2'
+bg, fg = 'Waterfall', 'Keys'
+
+
+cells = obip.get_cell_names(df)
+
+cell = 'CLT007a-009-2'
+
+pairs = obip.get_pair_names(cell, df)
+
+obip.plot_binaural_psths(df, cells, bg, fg, batch, save=True)
