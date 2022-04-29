@@ -1,26 +1,16 @@
 import copy
-
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
-
-import matplotlib.pyplot as plt
 import numpy as np
 
 import nems_lbhb.plots
 import nems.db as nd
 from nems.utils import ax_remove_box
 
-from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS, PLOT_STAT, DOT_COLORS, DOT_MARKERS,
-                             get_significant_cells)
+from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (mplparams, SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS,
+                                                                  PLOT_STAT, DOT_COLORS, DOT_MARKERS,
+                                                                  get_significant_cells)
+import matplotlib as mpl
+mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
 
 
 def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, dot_colors=None, dot_markers=None,
@@ -31,12 +21,13 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
     if nparms_modelgroups is None:
         nparms_modelgroups = copy.copy(modelgroups)
     if fill_styles is None:
-        fill_styles={k:'full' for (k,v) in dot_colors.items()}
+        fill_styles = {k:'full' for (k,v) in dot_colors.items()}
     mean_cells_per_site = len(cellids)  # NAT4 dataset, so all cellids are used
     overall_min = 100
     overall_max = -100
 
     all_model_means = []
+    labeled_data = []
     for k, modelnames in modelgroups.items():
         np_modelnames = nparms_modelgroups[k]
         b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
@@ -50,7 +41,7 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         n_parms = np.array([np.mean(b_n[m]) for m in np_modelnames])
 
         # don't divide by cells per site if only one cell was fit
-        if ('_single' not in k) and (k != 'LN') and (k != 'stp'):
+        if ('single' not in k) and (k != 'LN') and (k != 'stp'):
             n_parms = n_parms / mean_cells_per_site
 
         y_max = b_m.max() * 1.05
@@ -58,22 +49,26 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         overall_max = max(overall_max, y_max)
         overall_min = min(overall_min, y_min)
 
-        ax.plot(n_parms, b_m, color=dot_colors[k], marker=dot_markers[k], label=k.split('_single')[0], markersize=6, fillstyle=fill_styles[k])
+        ax.plot(n_parms, b_m, color=dot_colors[k], marker=dot_markers[k], label=k, markersize=4.5,
+                fillstyle=fill_styles[k])
         for m in labeled_models:
             if m in modelnames:
                 i = modelnames.index(m)
-                ax.plot(n_parms[i], b_m[i], color='black', marker='o', fillstyle='none', markersize=10)
+                labeled_data.append([n_parms[i], b_m[i]])
 
         all_model_means.append(model_mean)
+
+    ax.plot(*list(zip(*labeled_data)), 's', color='black', marker='o', fillstyle='none', markersize=10)
 
     handles, labels = ax.get_legend_handles_labels()
     # reverse the order
     if show_legend:
         ax.legend(handles, labels, loc='lower right', fontsize=7, frameon=False)
-    ax.set_xlabel('Free parameters')
-    ax.set_ylabel('Mean pred corr')
+    ax.set_xlabel('Free parameters per neuron')
+    ax.set_ylabel('Median prediction correlation')
     ax.set_ylim((overall_min, overall_max))
     ax_remove_box(ax)
+    plt.tight_layout()
 
     return ax, b_ceiling, all_model_means, labels
 

@@ -47,8 +47,8 @@ a1_sparseness_path = int_path  / str(a1) / 'sparseness_data.csv'
 peg_sparseness_path = int_path  / str(peg) / 'sparseness_data.csv'
 
 def sparseness(r, p, cellid="cell", verbose=False, ax=None, colors=None):
-    n_r,xr = np.histogram(r,bins=np.arange(np.ceil(r.max()))-0.0)
-    n_p,xp = np.histogram(p,bins=np.arange(np.ceil(r.max()))-0.0)
+    n_r,xr = np.histogram(r, bins=np.arange(np.ceil(r.max()))-0.0)
+    n_p,xp = np.histogram(p, bins=np.arange(np.ceil(r.max()))-0.0)
     c = np.corrcoef(r, p)[0,1]
 
     S_r = 1 - (r.mean())**2 / (r**2).mean()
@@ -61,8 +61,10 @@ def sparseness(r, p, cellid="cell", verbose=False, ax=None, colors=None):
         print(maxbins)
         if colors is None:
             colors=[None, None]
-        ax.bar(xr[:maxbins]-0.2, n_r[:maxbins], width=0.4, color=colors[0], label=f"Actual {S_r:.2f}")
-        ax.bar(xp[:maxbins]+0.2, n_p[:maxbins], width=0.4, color=colors[1], label=f"Predicted {S_p:.2f}")
+        ax.bar(xr[:maxbins]-0.2, n_r[:maxbins], width=0.4, color=colors[0], #edgecolor='black', linewidth=0.5,
+               label=f"Actual {S_r:.2f}")
+        ax.bar(xp[:maxbins]+0.2, n_p[:maxbins], width=0.4, color=colors[1], #edgecolor='black', linewidth=0.5,
+               label=f"Predicted {S_p:.2f}")
         ax.set_xlabel("Spikes/sec")
         ax.set_ylabel("N occurrences")
         
@@ -91,7 +93,7 @@ def sparseness_example(batch, cellid, modelname, rec=None, ax=None, tag="", colo
     if ax is None:
         f,ax=plt.subplots()
     S_r, S_p, c = sparseness(this_resp, this_pred, cellid=cellid, verbose=True, ax=ax, colors=colors)
-    ax.set_title(f"{cellid} {tag}")
+    #ax.set_title(f"{cellid} {tag}")
     print(f"{cellid} r_test={c:.3f} orig r_test={ctx['modelspec'].meta['r_test'][0,0]:.3f} S_r={S_r:.3f} S_p={S_p:.3f}")
 
     return S_r, S_p
@@ -181,8 +183,8 @@ def sparseness_figs():
     val = val.apply_mask()
 
     f1,ax=plt.subplots(2,2, figsize=column_and_half_tall) #, sharex=True, sharey=True)
-    sparseness_example(batch, cellid, modelname, rec=val, ax=ax[0, 0], tag="CNN", colors=['gray', 'purple'])
-    sparseness_example(batch, cellid, modelname_ln, rec=val, ax=ax[0, 1], tag="LN", colors=['gray', 'orange'])
+    sparseness_example(batch, cellid, modelname, rec=val, ax=ax[0, 0], tag="CNN", colors=['gray', DOT_COLORS['1D CNNx2']])
+    sparseness_example(batch, cellid, modelname_ln, rec=val, ax=ax[0, 1], tag="LN", colors=['gray', DOT_COLORS['pop LN']])
     ax[0,1].set_yticks([])
 
     a1_sparseness_path = int_path  / str(a1) / 'sparseness_data.csv'
@@ -230,9 +232,9 @@ def sparseness_figs():
 
     #f,ax=plt.subplots()
     sns.stripplot(x='label', y='S', hue='label', data=sd, zorder=0,
-                  palette=['gray',DOT_COLORS['conv1dx2+d'],DOT_COLORS['LN_pop']]*2,
-                  hue_order=['A1 act','A1 1D CNN','A1 pop LN','PEG act','PEG 1D CNN','PEG pop LN'],
-                  order=['A1 act','A1 1D CNN','A1 pop LN','PEG act','PEG 1D CNN','PEG pop LN'],
+                  palette=['gray', DOT_COLORS['1D CNNx2'], DOT_COLORS['pop LN']]*2,
+                  hue_order=['A1 act', 'A1 1D CNN', 'A1 pop LN', 'PEG act', 'PEG 1D CNN', 'PEG pop LN'],
+                  order=['A1 act', 'A1 1D CNN', 'A1 pop LN', 'PEG act', 'PEG 1D CNN', 'PEG pop LN'],
                   jitter=0.2, size=2, ax=ax[1,1]) #[1,1]
     sns.boxplot(x='label', y='S', data=sd, boxprops={'facecolor': 'None', 'linewidth': 1},
                 showcaps=False, showfliers=False, whiskerprops={'linewidth': 0},

@@ -12,12 +12,11 @@ import nems
 import nems.db as nd
 import nems.xform_helper as xhelp
 
-from pop_model_utils import get_significant_cells, SIG_TEST_MODELS, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP
+from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, EQUIVALENCE_MODELS_SINGLE,
+                             EQUIVALENCE_MODELS_POP, DOT_COLORS)
 
 import matplotlib as mpl
-params = {'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
+mpl.rcParams.update(mplparams)
 
 
 # Use this for first stage of fit (with all cellids in one recording)
@@ -151,16 +150,24 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
         ax.set_ylim(0,1)
         ax.set_xlim(0,1)
     else:
-        for l, c in correlations.items():
-                # One histogram for each column in correlations, each column is correlation between one pair of models
-                # l, c  is column name, column values
-                ax.hist(c, bins=bins, label=l, alpha=0.5)
-                ax.axvline(np.median(c), color='black', linestyle='dashed')
-        plt.xlabel('Pearson Correlation between PSTHs')
+        colors = [DOT_COLORS['2D CNN'], DOT_COLORS['pop LN']]  # 1D CNNx2 in common, so color by other model
+
+        c1 = correlations['c2d_c1d']
+        c2 = correlations['c1d_LN']
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=1.5,
+                histtype='stepfilled')
+        #ax.text(np.median(c1), 0, '*', va='bottom', ha='center')
+        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop LN'], edgecolor='black', linewidth=1.5,
+                histtype='stepfilled')
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=1.5,
+                histtype='stepfilled', fc='None', hatch='\\\\\\\\')
+        #ax.text(np.median(c2), 0, '*', va='bottom', ha='center')
+
+        plt.xlabel('PSTH Correlation')
         plt.ylabel('Count')
 
     plt.title('%s' % batch_name)
-    plt.legend()
+    #plt.legend()
     plt.tight_layout()
 
     return correlations, stats_tests
