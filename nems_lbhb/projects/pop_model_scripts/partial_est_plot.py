@@ -109,9 +109,9 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
     ax[0].scatter(x=_d[PLOT_STAT+'_x'], y=_d[PLOT_STAT+'_y'], s=4, c='k')
 
-    ax[0].set_xlabel(f"{xlabel} {_d[PLOT_STAT+'_x'].median():.3f}")
-    ax[0].set_ylabel(f"{ylabel} {_d[PLOT_STAT+'_y'].median():.3f}")
-    ax[0].set_title(f'Batch {batch} {x1}%')
+    ax[0].set_xlabel(f"{xlabel} (median r={_d[PLOT_STAT+'_x'].median():.3f})")
+    ax[0].set_ylabel(f"{ylabel} (median r={_d[PLOT_STAT+'_y'].median():.3f})")
+    #ax[0].set_title(f'Batch {batch} {x1}%')
     ax[0].set_xlim([-0.05,1.05])
     ax[0].set_ylim([-0.05,1.05])
 

@@ -33,6 +33,7 @@ import nems_db.params
 import warnings
 import itertools
 import copy
+import getpass
 
 sb.color_palette
 sb.color_palette('colorblind')
@@ -47,16 +48,22 @@ pd.set_option('display.expand_frame_repr', False)
 #sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
 import nems_lbhb.fitEllipse as fE
 
+linux_user = getpass.getuser()
 from joblib import Memory
-jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
-if os.path.exists(jl_cache_dir):
-    memory = Memory(jl_cache_dir)
-else:
-    jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+
+if linux_user=='luke':
+    jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
     if os.path.exists(jl_cache_dir):
         memory = Memory(jl_cache_dir)
     else:
-        raise RuntimeError('joblib cache not acessible')
+        jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+        if os.path.exists(jl_cache_dir):
+            memory = Memory(jl_cache_dir)
+        else:
+            raise RuntimeError('joblib cache not acessible')
+else:
+    jl_cache_dir='/auto/data/tmp/TwoStim/'
+    memory = Memory(jl_cache_dir)
 
 batches = {
     306:'3-component HCTs', #3H, has est stimuli
@@ -186,7 +193,7 @@ def scatterplot_print(x, y, names, c=None, s=None, ax=None, fn=None, fnargs={}, 
     ax.figure.canvas.mpl_connect('pick_event', onpick)
     return art
 
-def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, c=None,
+def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=None, fnargs={}, dv=None, c=None, s=None,
                          cmap='inferno', **kwargs):
     if ax is None:
         ax = plt.gca()
@@ -203,9 +210,12 @@ def scatterplot_print_df(dfx, dfy, varnames, dispname = 'cellid', ax=None, fn=No
 
     x = dfx[varnames[0]].values
     y = dfy[varnames[1]].values
+    if s is None:
+        s = np.full_like(x, plt.rcParams['lines.markersize'] ** 2)  # plt.scatter default
     good_inds = np.where(np.isfinite(x + y))[0]
     x = x[good_inds]
     y = y[good_inds]
+    s = s[good_inds]
     if c is not None:
         c = c[good_inds]
     if dispname is None:

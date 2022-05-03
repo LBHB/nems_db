@@ -7,7 +7,7 @@ from pathlib import Path
 import datetime
 import os
 import matplotlib as mpl
-params = {'axes.spines.right': False,
+mplparams = {'axes.spines.right': False,
           'axes.spines.top': False,
           'legend.fontsize': 10,
           'axes.labelsize': 10,
@@ -16,7 +16,7 @@ params = {'axes.spines.right': False,
           'ytick.labelsize': 10,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
-mpl.rcParams.update(params)
+mpl.rcParams.update(mplparams)
 
 import nems
 import nems.epoch as ep
@@ -125,8 +125,9 @@ SIG_TEST_MODELS = [
     #f"{load_string_single}_wc.18x4.g-fir.1x25x4-wc.4xR-lvl.R-dexp.R_{fit_string_single}", # Low_dim
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
-shortnames=['conv1d','conv1dx2','dnn-sing']
-shortnamesp=[s+"_p" for s in shortnames]
+shortnamesp = ['1D CNN', '1D CNNx2', 'CNN single']
+#shortnames = ['conv1d','conv1dx2','dnn-sing']
+shortnamesp = [s+"_p" for s in shortnamesp]
 
 # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
 ALL_FAMILY_POP = [
@@ -144,7 +145,8 @@ ALL_FAMILY_MODELS = [
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
 
-shortnames=['conv2d','conv1d','conv1dx2','ln-pop', 'dnn-sing']
+shortnames = ['2D CNN', '1D CNN', '1D CNNx2', 'pop LN', 'CNN single']
+#shortnames=['conv2d', 'conv1d', 'conv1dx2', 'ln-pop', 'dnn-sing']
 #shortnames=['conv1d','conv1dx2','dnn-sing']
 
 
@@ -204,13 +206,14 @@ DNN_SINGLE_STAGE2 = [m.replace("tfinit.n.lr1e3.et3.rb10.es20","prefit.m-tfinit.n
 LN_SINGLE_MODELS = [f"{load_string_single}_wc.18x{rank}.g-fir.{rank}x25-lvl.1-dexp.1_{fit_string_nopre}"
                     for rank in range(1,13)]
 
-STP_SINGLE_MODELS =[
-    f"{load_string_single}_wc.18x1.g-stp.1.q.s-fir.1x25-lvl.1-dexp.1_{fit_string_nopre}",
-    f"{load_string_single}_wc.18x2.g-stp.2.q.s-fir.2x25-lvl.1-dexp.1_{fit_string_nopre}",
-    f"{load_string_single}_wc.18x3.g-stp.3.q.s-fir.3x25-lvl.1-dexp.1_{fit_string_nopre}",
-    f"{load_string_single}_wc.18x4.g-stp.4.q.s-fir.4x25-lvl.1-dexp.1_{fit_string_nopre}",
-    f"{load_string_single}_wc.18x5.g-stp.5.q.s-fir.5x25-lvl.1-dexp.1_{fit_string_nopre}",
-]
+# Remove from pareto plot for now
+# STP_SINGLE_MODELS =[
+#     f"{load_string_single}_wc.18x1.g-stp.1.q.s-fir.1x25-lvl.1-dexp.1_{fit_string_nopre}",
+#     f"{load_string_single}_wc.18x2.g-stp.2.q.s-fir.2x25-lvl.1-dexp.1_{fit_string_nopre}",
+#     f"{load_string_single}_wc.18x3.g-stp.3.q.s-fir.3x25-lvl.1-dexp.1_{fit_string_nopre}",
+#     f"{load_string_single}_wc.18x4.g-stp.4.q.s-fir.4x25-lvl.1-dexp.1_{fit_string_nopre}",
+#     f"{load_string_single}_wc.18x5.g-stp.5.q.s-fir.5x25-lvl.1-dexp.1_{fit_string_nopre}",
+# ]
 
 HELDOUT_pop = [m.replace("loadpop","loadpop.hs") for m in POP_MODELS]
 MATCHED_pop = [m.replace("loadpop","loadpop.hm") for m in POP_MODELS]
@@ -229,9 +232,9 @@ fit_string3 = "tfinit.n.lr1e3.et3.rb10.es20.L2-newtf.n.lr1e4.es20.L2"
 PLOT_STAT = 'r_ceiling'
 #PLOT_STAT = 'r_test'
 
-DOT_COLORS = {'conv2d': 'darkgreen', 'LN': 'black', 'conv1d': 'lightblue', #'conv1dx2': 'purple',
-              'conv1dx2+d': 'purple', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
-              'LN_pop': 'orange', 'dnn1': 'lightgreen', 'dnn1_single': 'lightgreen', 'c1dx2-stp': 'red', #'STP': 'lightblue',
+DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#2B8AE0', #'conv1dx2': 'purple',
+              '1D CNNx2': '#27717A', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
+              'pop LN': '#7978B0', 'CNN single': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
               'LN_2d': 'purple',
               'c1d2_input': 'blue',
               'c1d2_tiny': 'blue',
@@ -248,9 +251,9 @@ DOT_COLORS = {'conv2d': 'darkgreen', 'LN': 'black', 'conv1d': 'lightblue', #'con
               }
 
 DOT_MARKERS = {#'conv1dx2': '^',
-               'conv2d': 's', 'LN_pop': 'o', 'conv1d': 'o',
-               'LN':'.', 'dnn1': 'v', 'dnn1_single': 'v', 'c1dx2-stp': '*', #'STP': 'x',
-               'conv1dx2+d': '+', 'LN_2d': 'x',
+               '2D CNN': 's', 'pop LN': 'o', '1D CNN': 'o',
+               'LN': '.', 'CNN single': 'v', 'c1dx2-stp': '*', #'STP': 'x', #'dnn1_single': 'v'
+               '1D CNNx2': '+', 'LN_2d': 'x',
                'c1d2_input': '^',
                'c1d2_tiny': '>',
                'c1d2_output': 'v',
@@ -284,16 +287,16 @@ params = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]#, 12, 14]
 MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 POP_MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 
-params = [2,3,4,5]
-MODELGROUPS['stp'] = [f'{load_string_single}_wc.18xR.g-stp.R.q.s-fir.1x12xR-lvl.R-dexp.R_{fit_string_nopre}'] + \
-    [f'{load_string_single}_wc.18x{p}R.g-stp.{p}R.q.s-fir.{p}x12xR-lvl.R-dexp.R_{fit_string_nopre}' for p in params]
-
-POP_MODELGROUPS['stp'] = MODELGROUPS['stp'].copy()
+# params = [2,3,4,5]
+# MODELGROUPS['stp'] = [f'{load_string_single}_wc.18xR.g-stp.R.q.s-fir.1x12xR-lvl.R-dexp.R_{fit_string_nopre}'] + \
+#     [f'{load_string_single}_wc.18x{p}R.g-stp.{p}R.q.s-fir.{p}x12xR-lvl.R-dexp.R_{fit_string_nopre}' for p in params]
+#
+# POP_MODELGROUPS['stp'] = MODELGROUPS['stp'].copy()
 
 # LN_pop ###############################################################################################################
 params = [4, 6, 10, 14, 30, 42, 60, 80, 100, 120, 150, 175, 200, 250, 300]
-MODELGROUPS['LN_pop'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
-POP_MODELGROUPS['LN_pop'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
+MODELGROUPS['pop LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
+POP_MODELGROUPS['pop LN'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
 
 
 # conv1d ###############################################################################################################
@@ -303,12 +306,12 @@ L1_L2 = [
     (60, 80), (80, 100), (100, 120), (120, 140),
     (140, 160), (170, 200), (200, 250), (230, 300)
 ]
-MODELGROUPS['conv1d'] = [
+MODELGROUPS['1D CNN'] = [
     f"{load_string_single}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
     + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_single}"
     for layer1, layer2 in L1_L2
 ]
-POP_MODELGROUPS['conv1d'] = [
+POP_MODELGROUPS['1D CNN'] = [
     f"{load_string_pop}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
     + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_pop}"
     for layer1, layer2 in L1_L2
@@ -322,12 +325,12 @@ L1_L2_L3 = [
     (70, 90, 120), (80, 100, 140), (90, 120, 160), (100, 140, 180),
     (120, 160, 220), (150, 200, 250), #(180, 250, 300)
 ]
-MODELGROUPS['conv1dx2+d'] = [
+MODELGROUPS['1D CNNx2'] = [
     f"{load_string_single}_wc.18x{layer1}.g-fir.1x15x{layer1}-relu.{layer1}.f-wc.{layer1}x{layer2}-fir.1x10x{layer2}-"
     + f"relu.{layer2}.f-wc.{layer2}x{layer3}-relu.{layer3}-wc.{layer3}xR-lvl.R-dexp.R_{fit_string_single}"
     for layer1, layer2, layer3 in L1_L2_L3
 ]
-POP_MODELGROUPS['conv1dx2+d'] = [
+POP_MODELGROUPS['1D CNNx2'] = [
     f"{load_string_pop}_wc.18x{layer1}.g-fir.1x15x{layer1}-relu.{layer1}.f-wc.{layer1}x{layer2}-fir.1x10x{layer2}-"
     + f"relu.{layer2}.f-wc.{layer2}x{layer3}-relu.{layer3}-wc.{layer3}xR-lvl.R-dexp.R_{fit_string_pop}"
     for layer1, layer2, layer3 in L1_L2_L3
@@ -402,12 +405,12 @@ POP_MODELGROUPS['conv1dx2+d'] = [
 
 # try fixing with 10 filters
 dense_counts = [4, 8, 12, 20, 40, 50, 70, 90, 110, 130, 150, 175, 200, 250, 300]#, 400]
-MODELGROUPS['conv2d'] = [
+MODELGROUPS['2D CNN'] = [
     f"{load_string_single}_conv2d.10.8x3.rep3-wcn.{dense}-"
     + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_single_c2d}"
     for dense in dense_counts
 ]
-POP_MODELGROUPS['conv2d'] = [
+POP_MODELGROUPS['2D CNN'] = [
     f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.{dense}-"
     + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_pop_c2d}"
     for dense in dense_counts
@@ -459,11 +462,11 @@ POP_MODELGROUPS['conv2d'] = [
 
 # dnn1_single ##########################################################################################################
 params = [2,3,4, 6, 9, 12, 15, 18]
-MODELGROUPS['dnn1_single'] = [
+MODELGROUPS['CNN single'] = [
     f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_dnn}"
     for p in params
 ]
-POP_MODELGROUPS['dnn1_single'] = [
+POP_MODELGROUPS['CNN single'] = [
     f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_nopre}"
     for p in params
 ]
@@ -670,7 +673,6 @@ def count_fits(models, batch=None):
             print(f'{parts[1]}: {df_r[c].count()}')
 
 def get_significant_cells(batch, models, as_list=False):
-
     df_r = nd.batch_comp(batch, models, stat='r_test')
     df_r.dropna(axis=0, how='any', inplace=True)
     df_r.sort_index(inplace=True)
@@ -701,6 +703,7 @@ def get_significant_cells(batch, models, as_list=False):
 def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True, rec=None, siteids=None):
     snrs = []
     cells = []
+
     if load_path is None:
 
         if rec is None:

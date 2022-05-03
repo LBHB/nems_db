@@ -5,28 +5,19 @@ import datetime
 import numpy as np
 import pandas as pd
 
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
-import matplotlib.pyplot as plt
-import seaborn as sns
 import scipy.stats as st
 
 import nems
 import nems.db as nd
 import nems.xform_helper as xhelp
 
-from pop_model_utils import get_significant_cells, SIG_TEST_MODELS, \
+from pop_model_utils import mplparams, get_significant_cells, SIG_TEST_MODELS, \
     ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, DOT_COLORS, shortnames, base_path, a1, peg, \
     single_column_short, single_column_tall, column_and_half_short, column_and_half_tall
+import matplotlib as mpl
+mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 batch_str = {a1: 'A1', peg: 'PEG'}
 
@@ -40,7 +31,7 @@ def scatter_groups(groups, colors, add_diagonal=True, ax=None, scatter_kwargs=No
     if add_diagonal:
         ax.plot([0,1], [0,1], c='black', linestyle='dashed')
     for g, color in zip(groups, colors):
-        vg=(g[0]>0) & (g[0]<1) & (g[1]>0) & (g[1]<1)
+        vg = (g[0]>0) & (g[0]<1) & (g[1]>0) & (g[1]<1)
         ax.scatter(g[0][vg], g[1][vg], c=color, s=5, **scatter_kwargs)
     ax.set_aspect('equal')
 
@@ -69,13 +60,15 @@ def plot_pred_scatter(batch, modelnames, labels=None, colors=None, ax=None):
           (sig_scores[modelnames[0]] - se_scores[modelnames[0]] > sig_scores[modelnames[1]] + se_scores[modelnames[1]])
     group1 = (ceiling_scores.loc[~sig,modelnames[0]].values, ceiling_scores.loc[~sig,modelnames[1]].values)
     group2 = (ceiling_scores.loc[sig,modelnames[0]].values, ceiling_scores.loc[sig,modelnames[1]].values)
+    n_nonsig = group1[0].size
+    n_sig = group2[0].size
 
     scatter_groups([group1, group2], ['lightgray', 'black'], ax=ax)
-    ax.set_title(f'{batch_str[batch]} {PLOT_STAT}')
-    ax.set_xlabel(f'{labels[0]} (mean r={ceiling_scores[modelnames[0]].mean():.3f})', color=colors[0])
-    ax.set_ylabel(f'{labels[1]} (mean r={ceiling_scores[modelnames[1]].mean():.3f})', color=colors[1])
+    #ax.set_title(f'{batch_str[batch]} {PLOT_STAT}')
+    ax.set_xlabel(f'{labels[0]} (median r={ceiling_scores[modelnames[0]].median():.3f})', color=colors[0])
+    ax.set_ylabel(f'{labels[1]} (median r={ceiling_scores[modelnames[1]].median():.3f})', color=colors[1])
 
-    return fig
+    return fig, n_sig, n_nonsig
 
 
 def plot_conv_scatters(batch):
@@ -148,14 +141,29 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
 
     # Bar Plot -- Median for each model
     # NOTE: ordering of names is assuming ALL_FAMILY_MODELS is being used and has not changed.
-    short_names = ['conv2d', 'conv1d', 'conv1dx2+d', 'LN_pop', 'dnn1_single']
-    bar_colors = [DOT_COLORS[k] for k in short_names]
-    ax.bar(np.arange(0, len(modelnames)), r_values.median(axis=0).values, color=bar_colors,
-           tick_label=short_names)
-    ax.set_ylabel('Median Prediction Accuracy')
+    bar_colors = [DOT_COLORS[k] for k in shortnames]
+    medians = r_values.median(axis=0).values
+    ax.bar(np.arange(0, len(modelnames)), medians, color=bar_colors, edgecolor='black', linewidth=1.5,
+           tick_label=shortnames)
+    ax.set_ylabel('Median prediction correlation')
     ax.set_xticklabels(ax.get_xticklabels(), rotation='45', ha='right')
 
-    return ax
+    # Test significance for all comparisons
+    stats_results = {}
+    reduced_modelnames = modelnames.copy()
+    reduced_shortnames = shortnames.copy()
+    for m1, s1 in zip(modelnames, shortnames):
+        i = 0
+        reduced_modelnames.pop(i)
+        reduced_shortnames.pop(i)
+        i += 1
+        # compare each model to every other model
+        for m2, s2 in zip(reduced_modelnames, reduced_shortnames):
+            stats_test = st.wilcoxon(r_values[m1], r_values[m2], alternative='two-sided')
+            key = f'{s1} vs {s2}'
+            stats_results[key] = stats_test
+
+    return ax, medians, stats_results
 
 
 if __name__ == '__main__':

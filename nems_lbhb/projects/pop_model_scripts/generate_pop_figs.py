@@ -5,25 +5,17 @@ import os
 import numpy as np
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
-    MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
-    POP_MODELS, ALL_FAMILY_POP,
+    mplparams, MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
+    POP_MODELS, ALL_FAMILY_POP, shortnames,
     SIG_TEST_MODELS,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, int_path, a1, peg, single_column_short, single_column_tall,
     column_and_half_short, column_and_half_tall
 )
+import nems.db as nd
 
 import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
+mpl.rcParams.update(mplparams)  # import from pop_model_utils
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -46,11 +38,57 @@ stats_tests = []
 ########################################################################################################################
 
 fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
-plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1D CNN','pop LN'], ax=ax[0,0])
-plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'], ax=ax[0,1])
-bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
-bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
+fig3, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[3]],
+                                                      labels=['1D CNNx2', 'pop LN'], ax=ax[0,0])
+fig3, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]],
+                                                      labels=['1D CNNx2', '2D CNN'], ax=ax[0,1])
+ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
+ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
 fig3.tight_layout()
+
+# Get general cell and site count info
+a1_r = nd.batch_comp(a1, ALL_FAMILY_MODELS, stat='r_test')
+peg_r = nd.batch_comp(peg, ALL_FAMILY_MODELS, stat='r_test')
+a1_cell_count = len(a1_r)
+a1_site_count = len(set([s.split('-')[0] for s in a1_r.index.values]))
+peg_cell_count = len(peg_r)
+peg_site_count = len(set([s.split('-')[0] for s in peg_r.index.values]))
+
+stats_tests.append('scatter / bar summary figure')
+stats_tests.append('site and cell counts:')
+stats_tests.append(f'A1: {a1_site_count} sites, {a1_cell_count} cells')
+stats_tests.append(f'PEG: {peg_site_count} sites, {peg_cell_count} cells')
+
+stats_tests.append('scatter plots')
+stats_tests.append(f'1D vs LN, {n_sig_1d_LN} sig. cells, {n_nonsig_1d_LN} non-sig. cells')
+stats_tests.append(f'1D vs 2D, {n_sig_1d_2d} sig. cells, {n_nonsig_1d_2d} non-sig. cells')
+
+stats_tests.append('\nBar plots')
+stats_tests.append('A1 median r_ceiling:')
+stats_tests.append(f'{a1_medians}')
+stats_tests.append('\nPEG median r_ceiling:')
+stats_tests.append(f'{peg_medians}')
+
+stats_tests.append('\nsig. testing between all models:')
+stats_tests.append('A1:')
+stats_tests.extend([f'{k}:  {v}' for k, v in a1_bar_stats.items()])
+stats_tests.append('\nPEG')
+stats_tests.extend([f'{k}:  {v}' for k, v in peg_bar_stats.items()])
+
+relative_change_by_batch = '\n'.join([f'{n}:  {m1/m2}' for n, m1, m2 in zip(shortnames, a1_medians, peg_medians)])
+stats_tests.append('\nRelative change  a1/peg:')
+stats_tests.append(relative_change_by_batch)
+
+cnn1d_vs_LN_A1 = a1_medians[2] / a1_medians[3]
+cnn1d_vs_LN_PEG = peg_medians[2] / peg_medians[3]
+cnn2d_vs_LN_A1 = a1_medians[0] / a1_medians[3]
+cnn2d_vs_LN_PEG = peg_medians[0] / peg_medians[3]
+stats_tests.append('\nRelative change CNN / LN:')
+stats_tests.append(f'A1 CNN 1Dx2 / pop LN:  {cnn1d_vs_LN_A1}')
+stats_tests.append(f'PEG CNN 1Dx2 / pop LN:  {cnn1d_vs_LN_PEG}')
+stats_tests.append(f'A1 CNN 2D / pop LN:  {cnn2d_vs_LN_A1}')
+stats_tests.append(f'PEG CNN 2D / pop LN:  {cnn2d_vs_LN_PEG}')
+
 
 ########################################################################################################################
 #################################   PARETO  ############################################################################
@@ -66,7 +104,7 @@ for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
 
     sig_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
-    _, b_ceiling, model_mean = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
+    _, b_ceiling, model_mean, labels = model_comp_pareto(batch, MODELGROUPS, axes1[i], sig_cells,
                                                  nparms_modelgroups=POP_MODELGROUPS,
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
@@ -74,7 +112,7 @@ for i, batch in enumerate([a1, peg]):
                                                  show_legend=show_legend)
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'
-    axes1[i].set_title(f'{batch_name}')
+    # axes1[i].set_title(f'{batch_name}')
     xlims.extend(axes1[i].get_xlim())
     ylims.extend(axes1[i].get_ylim())
 
@@ -82,7 +120,10 @@ for a in axes1:
     a.set_xlim(np.min(xlims), np.max(xlims))
     a.set_ylim(np.min(ylims), np.max(ylims))
 
-
+relative_changes_per_model = [means[0][i] / means[1][i] for i, _ in enumerate(labels)]
+relative_change_pareto = '\n'.join([f'{n}: {changes.mean()}' for n, changes in zip(labels, relative_changes_per_model)])
+stats_tests.append('\n\nPareto plot, relative change a1/peg:')
+stats_tests.append(relative_change_pareto)
 
 
 ########################################################################################################################
@@ -91,14 +132,15 @@ for a in axes1:
 fig5, axes3 = plt.subplots(1, 2, figsize=column_and_half_short, sharex=True, sharey=True)
 tests1, sig1, r1, m1, mds1 = generate_heldout_plots(a1, 'A1', ax=axes3[0])
 tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
+axes3[0].set_ylabel('Prediction correlation')
 axes3[1].set_ylabel('')
 
-short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
+short_names = ['1D CNNx2', 'pop LN', 'CNN single']
 print('Make sure short_names matches actual modelnames used!')
 print('short_names: %s' % short_names)
 print('HELDOUT: %s' % HELDOUT)
 
-stats_tests.append("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
+stats_tests.append("\n\nheldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
 stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests1)]))
 stats_tests.append("median diffs:")
 stats_tests.append(str(mds1))
@@ -115,6 +157,7 @@ stats_tests.append(str(mds2))
 
 
 fig6 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=column_and_half_short)
+fig6.tight_layout()
 
 
 ########################################################################################################################
@@ -151,6 +194,7 @@ stats_tests.append("correlation histograms, PEG sig tests: %s" % peg_stats7)
 fig8, tests8 = sparseness_figs()
 stats_tests.append("\n\nsparseness figs stats results:")
 stats_tests.append(''.join([f'{t}\n' for t in tests8]))
+fig8.tight_layout()
 
 ########################################################################################################################
 #################################   SNR  ###############################################################################
@@ -161,19 +205,42 @@ peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
 fig9a, ax4a = plt.subplots(figsize=single_column_short)
 fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
-                                                        ax=ax4a, inset_ax=ax4b)
+test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, \
+    a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
+        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+    )
+ax4a.set_ylabel('Prediction correlation')
+ax4a.set_xlabel('')
 
 tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
-stats_tests.append('matched snr sig. tests:')
+stats_tests.append('matched snr')
+stats_tests.append('sig. tests:')
 stats_tests.append(''.join([f'{s}:   {t}\n' for s, t in tests9]))
 
+stats_tests.append('\nmedian prediction corr info:')
+stats_tests.append('a1 full medians:')
+stats_tests.append(str(a1_md))
+stats_tests.append('a1 mathced medians:')
+stats_tests.append(str(a1_md_match))
+stats_tests.append('peg full medians:')
+stats_tests.append(str(peg_md))
+stats_tests.append('peg mathced medians:')
+stats_tests.append(str(peg_md_match))
+stats_tests.append('a1 - peg medians full:')
+stats_tests.append(str(a1_md.values - peg_md.values))
+stats_tests.append('a1 - peg matched:')
+stats_tests.append(str(a1_md_match.values - peg_md_match.values))
+
+stats_tests.append('\n median snr info:')
+stats_tests.append(f'a1 median snr, full: {a1_md_snr}, matched: {a1_md_snr_match}')
+stats_tests.append(f'peg median snr, full: {peg_md_snr}, matched: {peg_md_snr_match}')
+stats_tests.append(f'test significance for full data: {test_snr}')
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
 ########################################################################################################################
 
-DO_SAVE=False
+DO_SAVE=True
 if DO_SAVE:
     figures_to_save = [
         (fig2, 'fig3_pareto'),
