@@ -11,7 +11,7 @@ https://guillermohidalgogadea.com/openlabnotebook/refining-your-dlc-model/
 #change if using a different DLC model
 path_config='/auto/data/dlc/multivid-CLL-2022-01-14/config.yaml'
 
-penname='CLT011'
+penname='CLT020'
 if penname=='CLT011':
     #leave blank to analyze ALL compressed vids in vid_dir; otherwise enter list of vid names
     #vids=['CLT011a07_p_TBP.lick.avi']
@@ -25,6 +25,12 @@ elif penname == 'CLT009':
     vids=['CLT009a09_a_TBP.lick.avi']
 elif penname == 'CLT007':
     vids=['CLT007a04_a_TBP.lick.avi']
+elif penname == 'CLT020':
+    vids=['CLT020a04_p_TBP.lick.avi',
+          'CLT020a05_a_TBP.lick.avi',
+          'CLT020a06_p_TBP.lick.avi',
+          'CLT020a07_a_TBP.lick.avi',
+          'CLT020a08_p_NON.lick.avi']
 
 vid_dir=f'/auto/data/daq/Clathrus/{penname}/'
 path_sorted = os.path.join(vid_dir, 'sorted')

@@ -168,7 +168,8 @@ def mask_all_but_targets(rec, include_incorrect=True):
     return newrec
 
 
-def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
+def mask_all_but_reference_target(rec, include_incorrect=True,
+                                  ITI_sec_to_include=0, **ctx):
     """
     Specialized function for removing incorrect trials from data
     collected using baphy during behavior.
@@ -182,9 +183,26 @@ def mask_all_but_reference_target(rec, include_incorrect=True, **ctx):
     if 'stim' in newrec.signals.keys():
         newrec['stim'] = newrec['stim'].rasterize()
 
-    #newrec = newrec.and_mask(['PASSIVE_EXPERIMENT', 'TARGET'])
-    newrec = newrec.and_mask(['REFERENCE','TARGET','CATCH'])
-    #newrec = newrec.and_mask(['TARGET'])
+    if ITI_sec_to_include > 0:
+        e = newrec['resp'].epochs
+        etrial = e.loc[(e.name == "TRIAL")]
+        total_len = e['end'].max()
+        d_list = []
+        for i, r in etrial.iterrows():
+            et = e.loc[((e.name == "TARGET") | (e.name == "REFERENCE")) &
+                       ((e.start>=r.start) & (e.end<=r.end))]
+            end_max = et.end.max()
+            if (end_max+ITI_sec_to_include <= total_len):
+                # data exists after current trail
+                d_list.append(pd.DataFrame.from_dict({
+                    'name': ['ITI'],
+                    'start': [end_max],
+                    'end': [end_max+ITI_sec_to_include]}))
+        e = pd.concat([e]+d_list)
+        for s in list(newrec.signals.keys()):
+            newrec[s].epochs = e
+
+    newrec = newrec.and_mask(['REFERENCE', 'TARGET', 'CATCH', 'ITI'])
 
     if not include_incorrect:
         newrec = mask_incorrect(newrec)

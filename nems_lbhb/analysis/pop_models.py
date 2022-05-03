@@ -176,7 +176,7 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
         
     rows = len(nl_layers)+2
     if figsize is None:
-        figsize=(12, rows*1.5)
+        figsize=(10, rows*1)
 
     f = plt.figure(constrained_layout=True, figsize=figsize)
     gs = f.add_gridspec(rows, 4)
@@ -291,10 +291,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                         if np.abs(col)>0.3:
                             if col>0:
                                 #col = [(1-col), 1-0.5*col, 1-0.5*col]
-                                col = [1-0.1*col, 1-col, 1-col]
+                                col = [1-col, 1-col, 1-0.1*col]
                             else:
                                 #col = [1+0.5*col, 1+0.5*col, 1+col]
-                                col = [1+col, 1+col, 1+0.1*col]
+                                col = [1+0.1*col, 1+col, 1+col]
 
                             ax1.plot([x0[i0], x1[i1]],[rows - (i), rows - (i+1)], 
                                      color=col, linewidth=0.5)
