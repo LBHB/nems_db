@@ -299,6 +299,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         file_unique=wav1.copy()
         file_unique.extend(wav2)
         file_unique=list(set(file_unique))
+    else:
+        raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
 
     max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
 
