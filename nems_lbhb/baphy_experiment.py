@@ -12,6 +12,7 @@ import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
+import pandas as pd
 import json
 import sys
 import tarfile
@@ -1031,17 +1032,16 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
 
     log.info('Creating trial epochs')
     trial_epochs = _make_trial_epochs(exptevents, exptparams, fidx, **options)
-    epochs.append(trial_epochs)
+    epochs = pd.concat([epochs, trial_epochs], ignore_index=True)
 
     log.info('Creating stim epochs')
     stim_epochs = _make_stim_epochs(exptevents, exptparams, **options)
-    epochs.append(stim_epochs)
+    epochs = pd.concat([epochs, stim_epochs], ignore_index=True)
 
     log.info('Creating Light epochs')
     light_epochs = _make_light_epochs(exptevents, exptparams, **options)
-    #if light_epochs != []:
     if light_epochs is not None:
-        epochs.append(light_epochs)
+        epochs = pd.concat([epochs, light_epochs], ignore_index=True)
 
     # this step includes removing post lick events for 
     # active files
@@ -1068,7 +1068,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
 
-    epochs = epochs.append(te, ignore_index=True)
+    epochs = pd.concat([epochs, te], ignore_index=True)
     # append file name epoch
     mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
 
@@ -1076,8 +1076,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
     te.loc[0, 'end'] = file_end_time
     te.loc[0, 'name'] = 'FILE_'+mfilename
 
-    epochs = epochs.append(te, ignore_index=True)
-    
+    epochs = pd.concat([epochs, te], ignore_index=True)
     epochs = epochs.sort_values(by=['start', 'end'], 
                     ascending=[1, 0]).reset_index()
     epochs = epochs.drop(columns=['index'])
@@ -1375,7 +1374,7 @@ def _truncate_trials(exptevents, **options):
 
         # for remaining events, just brute force truncate
         # truncate partial events
-        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        events.loc[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
         if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
             #print(t)
             #import pdb; pdb.set_trace()

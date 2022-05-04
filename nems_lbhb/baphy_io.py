@@ -39,6 +39,7 @@ import matplotlib.pyplot as plt
 import nems.signal
 import nems.recording
 import nems.db as db
+import nems.epoch as ep
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
@@ -381,14 +382,14 @@ def baphy_parm_read(filepath, evpread=True):
             
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
-            exptevents = exptevents.append(lick_events, ignore_index=True)
+            exptevents = pd.concat([exptevents, lick_events], ignore_index=True)
         except:
             log.info("Failed loading evp file. Still zipped?")
 
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
            exptparams['TrialObject'][1]['ReferenceHandle'][1]['descriptor']
-    # CPP special case, deletes added commas ToDo this might be unecesary, the task is done in MLE code.
+    # CPP special case, deletes added commas ToDo this might be unneccesary, the task is done in MLE code.
     if exptparams['TrialObject'][1]['ReferenceClass'] == 'ContextProbe':
         tags = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']  # gets the list of tags
         tag_map = {oldtag: re.sub(r' , ', r'  ', oldtag)
@@ -520,6 +521,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             #options.update({'pupil': True, 'pupil_deblink': True,
             #                'pupil_deblink_dur': 1,
             #                'pupil_median': 0, 'rem': 1})
+        elif op=='dlc':
+            options.update({'dlc': True})
         elif op=='rem':
             options['rem'] = True
 
@@ -1590,7 +1593,9 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         return big_rs, strialidx
 
 
-def load_dlc_trace(dlcfilepath, exptevents=None, **options):
+def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
+                   verbose=False, rasterfs=30, dlc_threshold=-1, fill_invalid='mean',
+                   **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
     and strialidx, which is the index into big_rs for the start of each
@@ -1601,27 +1606,14 @@ def load_dlc_trace(dlcfilepath, exptevents=None, **options):
     dlcfilepath = '/auto/data/daq/Clathrus/training2022/sorted/Clathrus_2022_01_11_TBP_1.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
     """
 
-    #options = set_default_pupil_options(options)
-
     # todo : figure out filename from parm file path.
+    #options = set_default_pupil_options(options)
     #pupilfilepath = get_pupil_file(pupilfilepath, **options)
 
-    rasterfs = options["rasterfs"]
-    dlc_threshold = options.get("dlc_threshold", -1)
-    verbose = options.get("verbose", False)
     options['dlc'] = True
 
     #if options["dlc_smooth"]:
     #    raise ValueError('pupil_smooth not implemented. try pupil_median?')
-
-    # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
-    # these times are set based on openephys data, since baphy doesn't log exact trial start times
-    if exptevents is None:
-        from nems_lbhb.baphy_experiment import BAPHYExperiment
-
-        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
-        trial_starts = experiment.get_trial_starts()
-        exptevents = experiment.get_baphy_events()
 
     dataframe = pd.read_hdf(dlcfilepath)
     scorer = dataframe.columns.get_level_values(0)[0]
@@ -1638,8 +1630,18 @@ def load_dlc_trace(dlcfilepath, exptevents=None, **options):
         x = dataframe[scorer][bp]['x'].values
         y = dataframe[scorer][bp]['y'].values
         threshold_check = dataframe[scorer][bp]['likelihood'].values > dlc_threshold
-        x[~threshold_check] = np.nan
-        y[~threshold_check] = np.nan
+        bad_frame_count=(~threshold_check).sum()
+        if fill_invalid=='mean':
+            x[~threshold_check] = np.nanmean(x[threshold_check])
+            y[~threshold_check] = np.nanmean(y[threshold_check])
+
+            if bad_frame_count>0:
+                log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+        else:
+            x[~threshold_check] = np.nan
+            y[~threshold_check] = np.nan
+            if bad_frame_count>0:
+                log.info(f"{bp}: {bad_frame_count} bad samples, replacing with nan")
         data_array[2*i] = x
         data_array[2*i+1] = y
 
@@ -1649,9 +1651,19 @@ def load_dlc_trace(dlcfilepath, exptevents=None, **options):
     if verbose:
         log.info(data_array.shape) #should be number of bodyparts*2 x number of frames
         log.info(list_bodyparts)  #should be each bodypart twice
-        log.info(data_array[8,0])  #should be NaN
         log.info(data_array)  #check that values match
 
+    if return_raw:
+        return data_array, list_bodyparts
+
+    # we want to use exptevents TRIALSTART events as the ground truth for the time when each trial starts.
+    # these times are set based on openephys data, since baphy doesn't log exact trial start times
+    if exptevents is None:
+        from nems_lbhb.baphy_experiment import BAPHYExperiment
+
+        experiment = BAPHYExperiment.from_pupilfile(pupilfilepath)
+        trial_starts = experiment.get_trial_starts()
+        exptevents = experiment.get_baphy_events()
 
     fs_approximate = 30  # approx video framerate
     # resample and remove dropped frames

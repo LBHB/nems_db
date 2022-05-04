@@ -5,34 +5,20 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
-import matplotlib.pyplot as plt
-
 import nems
 import nems.db as nd
 import nems.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
 import nems.epoch as ep
 
-from pop_model_utils import (get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
+from pop_model_utils import (mplparams, get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
                              NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS,
                              figures_base_path, a1, peg, int_path,
                              single_column_short, single_column_tall, column_and_half_short, column_and_half_tall)
 
 import matplotlib as mpl
-params = {'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
+mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
 
 
 def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True, ax=None, inset_ax=None):
@@ -99,24 +85,25 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
         _, inset_ax = plt.subplots()
     else:
         plt.sca(inset_ax)
-    plt.hist(a1_snr, bins=bins, label='a1')
-    plt.hist(peg_snr, bins=bins, label='peg')
-    plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black')
+    plt.hist(a1_snr, bins=bins, color=DOT_COLORS['pop LN'], label='a1', histtype='stepfilled', edgecolor='black')
+    plt.hist(peg_snr, bins=bins, color=DOT_COLORS['2D CNN'], label='peg', histtype='stepfilled', edgecolor='black')
+    plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black', fill=False,
+             hatch='...')
     plt.legend()
     inset_ax.xaxis.set_visible(False)
     inset_ax.yaxis.set_visible(False)
 
     # Filter by matched cellids,
     # then combine into single dataframe with columns for cellid, a1/peg, modelname, PLOT_STAT
-    short_names = ['conv1dx2', 'LN_pop', 'dnn1']
-    a1_short = [s + '_a1' for s in short_names]
+    short_names = ['CNN 1Dx2', 'pop LN', 'CNN single']
+    a1_short = [s + ' A1' for s in short_names]
     a1_rename = {k: v for k, v in zip(modelnames, a1_short)}
     a1_results = a1_results.rename(columns=a1_rename)
     a1_matched_results = a1_results.loc[a1_matched_cellids].reset_index(level=0)
     a1_removed_results = a1_results.loc[~a1_results.index.isin(a1_matched_cellids)].reset_index(level=0)
     #a1_full_results = a1_results.reset_index(level=0)
 
-    peg_short = [s + '_peg' for s in short_names]
+    peg_short = [s + ' PEG' for s in short_names]
     peg_rename = {k: v for k, v in zip(modelnames, peg_short)}
     peg_results = peg_results.rename(columns=peg_rename)
     peg_matched_results = peg_results.loc[peg_matched_cellids].reset_index(level=0)
@@ -148,11 +135,14 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     else:
         plt.sca(ax)
     jitter = 0.2
-    palette = {0: DOT_COLORS['conv1dx2+d'], 1: DOT_COLORS['LN_pop'], 2: DOT_COLORS['dnn1_single']}
-    tres=results_removed.loc[(results_removed[PLOT_STAT]<1) & results_removed[PLOT_STAT]>-0.05]
-    sns.stripplot(x='model', y=PLOT_STAT, data=tres, zorder=0, order=alternating_columns,
-                       color='gray', alpha=0.5, size=2, jitter=jitter, hue='hue_tag', palette=palette, ax=ax)
-    ax.legend_.remove()
+    palette = {0: DOT_COLORS['1D CNNx2'], 1: DOT_COLORS['pop LN'], 2: DOT_COLORS['CNN single']}
+
+    # plot removed cells "under" the remaining ones
+    #tres = results_removed.loc[(results_removed[PLOT_STAT]<1) & results_removed[PLOT_STAT]>-0.05]
+    # sns.stripplot(x='model', y=PLOT_STAT, data=tres, zorder=0, order=alternating_columns,
+    #                    color='gray', alpha=0.5, size=2, jitter=jitter, hue='hue_tag', palette=palette, ax=ax)
+    #ax.legend_.remove()
+
     tres=results_matched.loc[(results_matched[PLOT_STAT]<1) & results_matched[PLOT_STAT]>-0.05]
     sns.stripplot(x='model', y=PLOT_STAT, data=tres, zorder=0, order=alternating_columns,
                        jitter=jitter, hue='hue_tag', palette=palette, ax=ax, size=2)

@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
-    MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
+    mplparams, MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
     POP_MODELS, ALL_FAMILY_POP, shortnames,
     SIG_TEST_MODELS,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
@@ -15,16 +15,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
 import nems.db as nd
 
 import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
+mpl.rcParams.update(mplparams)  # import from pop_model_utils
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -47,10 +38,10 @@ stats_tests = []
 ########################################################################################################################
 
 fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
-fig3, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]],
-                                                      labels=['1D CNN','pop LN'], ax=ax[0,0])
-fig3, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[0]],
-                                                      labels=['1D CNN','2D CNN'], ax=ax[0,1])
+fig3, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[3]],
+                                                      labels=['1D CNNx2', 'pop LN'], ax=ax[0,0])
+fig3, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]],
+                                                      labels=['1D CNNx2', '2D CNN'], ax=ax[0,1])
 ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
 ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
 fig3.tight_layout()
@@ -121,7 +112,7 @@ for i, batch in enumerate([a1, peg]):
                                                  show_legend=show_legend)
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'
-    axes1[i].set_title(f'{batch_name}')
+    # axes1[i].set_title(f'{batch_name}')
     xlims.extend(axes1[i].get_xlim())
     ylims.extend(axes1[i].get_ylim())
 
@@ -141,9 +132,10 @@ stats_tests.append(relative_change_pareto)
 fig5, axes3 = plt.subplots(1, 2, figsize=column_and_half_short, sharex=True, sharey=True)
 tests1, sig1, r1, m1, mds1 = generate_heldout_plots(a1, 'A1', ax=axes3[0])
 tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
+axes3[0].set_ylabel('Prediction correlation')
 axes3[1].set_ylabel('')
 
-short_names = ['conv1dx2+d', 'LN_pop', 'dnn1']
+short_names = ['1D CNNx2', 'pop LN', 'CNN single']
 print('Make sure short_names matches actual modelnames used!')
 print('short_names: %s' % short_names)
 print('HELDOUT: %s' % HELDOUT)
@@ -165,6 +157,7 @@ stats_tests.append(str(mds2))
 
 
 fig6 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=column_and_half_short)
+fig6.tight_layout()
 
 
 ########################################################################################################################
@@ -201,6 +194,7 @@ stats_tests.append("correlation histograms, PEG sig tests: %s" % peg_stats7)
 fig8, tests8 = sparseness_figs()
 stats_tests.append("\n\nsparseness figs stats results:")
 stats_tests.append(''.join([f'{t}\n' for t in tests8]))
+fig8.tight_layout()
 
 ########################################################################################################################
 #################################   SNR  ###############################################################################
@@ -215,6 +209,8 @@ test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, 
     a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
         a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
     )
+ax4a.set_ylabel('Prediction correlation')
+ax4a.set_xlabel('')
 
 tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
 stats_tests.append('matched snr')
