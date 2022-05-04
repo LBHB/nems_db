@@ -237,9 +237,33 @@ def CPN (exptevents, exptparams):
     return new_events, new_params
 
 
-def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000, binaural=False,
+def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
+             mono=False, binaural=False,
              **options):
-
+    """
+    :param exptevents: from baphy
+    :param exptparams: from baphy
+    :param stimfmt: string, currently must be 'wav' or 'gtgram'
+    :param separate_files_only: boolean [=False]
+        if True, just return each individual sound file rather than combinations
+        (eg, as specified for binaural stim)
+    :param channels: int
+        number of gtgram channels
+    :param rasterfs: int
+        gtgram sampling rate
+    :param f_min: float
+        gtgram min frequency
+    :param f_max: float
+        gtgram max frequency
+    :param mono: boolean [False]
+        if True, collapse wavs to single channel (dumb control for binaural)
+    :param binaural:
+        if True, apply model to simulate sound at each ear. Currently, a very dumb HRTF
+    :param options: dict
+        extra stuff to pass through
+    :return: 
+        stim, tags, stimparam
+    """
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
@@ -305,6 +329,11 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         stim_epochs = [s.replace(" ", "") for s in stim_epochs]
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
+
+    if mono:
+        log.info("Forcing mono stimulus, averaging across space")
+        chan1 = [0] * len(wav1)
+        chan2 = [0] * len(wav2)
 
     max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
 
