@@ -20,10 +20,12 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'
 fs, paths = 100, None
 
 # fit = False
-fit = True
+fit = False
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Marmosets_OLP.h5'
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Marmosets_OLP_add_spont.h5'
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Marmosets_OLP_resp.h5'
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_resp.h5'  #Old ferret
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_corr.h5'  #New for testig corr
 
 batch = 328 #Ferret A1
 batch = 329 #Ferret PEG
@@ -35,10 +37,11 @@ if fit == True:
     cell_df = nd.get_batch_cells(batch)
     cell_list = cell_df['cellid'].tolist()
     cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
-    # cellid, parmfile = cell_list[4], None
+    cell_list = [cc for cc in cell_list if cc[:6] == "CLT007"]
+    cellid, parmfile = 'CLT007a-009-2', None
 
     metrics=[]
-    for cellid in cell_list[55:65]:
+    for cellid in cell_list:
         cell_metric = ofit.calc_psth_metrics(batch, cellid)
         cell_metric.insert(loc=0, column='cellid', value=cellid)
         print(f"Adding cellid {cellid}.")
@@ -47,8 +50,16 @@ if fit == True:
     df = pd.concat(metrics)
     df.reset_index()
 
+    os.makedirs(os.path.dirname(OLP_cell_metrics_db_path),exist_ok=True)
+    store = pd.HDFStore(OLP_cell_metrics_db_path)
+    df_store=copy.deepcopy(df)
+    store['df'] = df_store.copy()
+    store.close()
 
-
+else:
+    store = pd.HDFStore(OLP_cell_metrics_db_path)
+    df=store['df']
+    store.close()
 
 
 
@@ -57,9 +68,33 @@ bg, fg = 'Waterfall', 'Keys'
 
 
 cells = obip.get_cell_names(df)
+cells['site'] = cells.cellid.str[:6]
+
+
+a1 = cells.loc[cells.area == 'A1']
+peg = cells.loc[cells.area == 'PEG']
+
+site = 'CLT019'
+sites = cells.loc[cells.site == site]
+for ss in sites.cellid:
+    print(ss)
+
 
 cell = 'CLT007a-009-2'
+cell = 'CLT007a-019-1'
+cell = 'CLT019a-031-2'
 
 pairs = obip.get_pair_names(cell, df)
 
-obip.plot_binaural_psths(df, cells, bg, fg, batch, save=True)
+bg = 'Rain'
+fg = 'Geese'
+
+
+obip.plot_binaural_psths(df, cell, bg, fg, batch, save=True, close=False)
+
+
+check = df.loc[(df.cellid == cell) & (df.BG == bg) & (df.FG == fg)]
+
+
+for ci in sites.cellid:
+    obip.plot_binaural_psths(df, ci, bg, fg, batch, save=True, close=True)
