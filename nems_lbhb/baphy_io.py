@@ -39,6 +39,7 @@ import matplotlib.pyplot as plt
 import nems.signal
 import nems.recording
 import nems.db as db
+import nems.epoch as ep
 from nems.recording import Recording
 from nems.recording import load_recording
 import nems_lbhb.behavior as behavior
@@ -381,14 +382,14 @@ def baphy_parm_read(filepath, evpread=True):
             
             # add evp lick events, delete baphy lick events
             exptevents = exptevents[~(exptevents.name=='LICK')]
-            exptevents = exptevents.append(lick_events, ignore_index=True)
+            exptevents = pd.concat([exptevents, lick_events], ignore_index=True)
         except:
             log.info("Failed loading evp file. Still zipped?")
 
     if 'ReferenceClass' not in exptparams['TrialObject'][1].keys():
         exptparams['TrialObject'][1]['ReferenceClass'] = \
            exptparams['TrialObject'][1]['ReferenceHandle'][1]['descriptor']
-    # CPP special case, deletes added commas ToDo this might be unecesary, the task is done in MLE code.
+    # CPP special case, deletes added commas ToDo this might be unneccesary, the task is done in MLE code.
     if exptparams['TrialObject'][1]['ReferenceClass'] == 'ContextProbe':
         tags = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']  # gets the list of tags
         tag_map = {oldtag: re.sub(r' , ', r'  ', oldtag)

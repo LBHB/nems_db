@@ -293,12 +293,16 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         chan1=[int(e.split("_")[0].split("-")[3])-1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
         chan2=[int(e.split("_")[1].split("-")[3])-1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
-        wav1 = [wav for wav in wav1 if wav != 'null']
-        wav2 = [wav for wav in wav2 if wav != 'null']
+        #wav1 = [wav for wav in wav1 if wav != 'null']
+        #wav2 = [wav for wav in wav2 if wav != 'null']
 
         file_unique=wav1.copy()
         file_unique.extend(wav2)
         file_unique=list(set(file_unique))
+        file_unique = [f for f in file_unique if f != 'null']
+
+        log.info('NOTE: Stripping spaces from epoch names in OverlappingPairs files')
+        stim_epochs = [s.replace(" ", "") for s in stim_epochs]
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
 
@@ -349,27 +353,27 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         fs_all = {}
         for (f1,c1,f2,c2,n) in zip(wav1,chan1,wav2,chan2,stim_epochs):
             #print(f1,f2)
-            if f1!="NULL":
-                w1=wav_unique[f1]
-                if f2!="NULL":
-                    w2=wav_unique[f2]
+            if f1.upper() != "NULL":
+                w1 = wav_unique[f1]
+                if f2.upper() != "NULL":
+                    w2 = wav_unique[f2]
                 else:
-                    w2=np.zeros(w1.shape)
+                    w2 = np.zeros(w1.shape)
             else:
-                w2=wav_unique[f2]
-                w1=np.zeros(w2.shape)
-            w=np.zeros((w1.shape[0],max_chans))
-            if (binaural is None) | (binaural==False):
+                w2 = wav_unique[f2]
+                w1 = np.zeros(w2.shape)
+            w = np.zeros((w1.shape[0],max_chans))
+            if (binaural is None) | (binaural == False):
                 #log.info(f'binaural model: None')
-                w[:,[c1]] = w1
-                w[:,[c2]] += w2
+                w[:, [c1]] = w1
+                w[:, [c2]] += w2
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
                 db_atten=10
                 factor = 10**(-db_atten/20)
-                w[:,[c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
-                w[:,[c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
 
             wav_all[n] = w
 
