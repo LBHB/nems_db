@@ -1032,16 +1032,17 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
 
     log.info('Creating trial epochs')
     trial_epochs = _make_trial_epochs(exptevents, exptparams, fidx, **options)
-    epochs = pd.concat([epochs, trial_epochs], ignore_index=True)
+    epochs.append(trial_epochs)
 
     log.info('Creating stim epochs')
     stim_epochs = _make_stim_epochs(exptevents, exptparams, **options)
-    epochs = pd.concat([epochs, stim_epochs], ignore_index=True)
+    epochs.append(stim_epochs)
 
     log.info('Creating Light epochs')
     light_epochs = _make_light_epochs(exptevents, exptparams, **options)
+    #if light_epochs != []:
     if light_epochs is not None:
-        epochs = pd.concat([epochs, light_epochs], ignore_index=True)
+        epochs.append(light_epochs)
 
     # this step includes removing post lick events for 
     # active files

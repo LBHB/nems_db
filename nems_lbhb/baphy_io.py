@@ -523,6 +523,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             #                'pupil_median': 0, 'rem': 1})
         elif op=='dlc':
             options.update({'dlc': True})
+        elif op=='mono':
+            options.update({'mono': True})
         elif op=='rem':
             options['rem'] = True
 
