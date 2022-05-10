@@ -124,10 +124,10 @@ def pop_model_example(figsize=None):
     
 if __name__ == '__main__':
     
-    fig = single_cell_examples()
-    filename=base_path / 'fig5_pred_example.pdf'
-    fig.savefig(filename, format='pdf', dpi='figure')
+    #fig = single_cell_examples()
+    #filename=base_path / 'fig5_pred_example.pdf'
+    #fig.savefig(filename, format='pdf', dpi='figure')
 
-    #f=pop_model_example(figsize=column_and_half_tall)
-    #filename=base_path / 'fig2_example.pdf'
+    f=pop_model_example(figsize=column_and_half_tall)
+    filename=base_path / 'fig2_example.pdf'
     #f.savefig(filename, format='pdf', dpi='figure')

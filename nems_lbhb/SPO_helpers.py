@@ -33,6 +33,7 @@ import nems_db.params
 import warnings
 import itertools
 import copy
+import getpass
 
 sb.color_palette
 sb.color_palette('colorblind')
@@ -47,16 +48,22 @@ pd.set_option('display.expand_frame_repr', False)
 #sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')
 import nems_lbhb.fitEllipse as fE
 
+linux_user = getpass.getuser()
 from joblib import Memory
-jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
-if os.path.exists(jl_cache_dir):
-    memory = Memory(jl_cache_dir)
-else:
-    jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+
+if linux_user=='luke':
+    jl_cache_dir='/auto/users/luke/Projects/SPS/NEMS/joblib_cache/'
     if os.path.exists(jl_cache_dir):
         memory = Memory(jl_cache_dir)
     else:
-        raise RuntimeError('joblib cache not acessible')
+        jl_cache_dir = '/home/exacloud/gscratch/LBHB/cache'
+        if os.path.exists(jl_cache_dir):
+            memory = Memory(jl_cache_dir)
+        else:
+            raise RuntimeError('joblib cache not acessible')
+else:
+    jl_cache_dir='/auto/data/tmp/TwoStim/'
+    memory = Memory(jl_cache_dir)
 
 batches = {
     306:'3-component HCTs', #3H, has est stimuli

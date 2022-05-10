@@ -12,6 +12,7 @@ import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
+import pandas as pd
 import json
 import sys
 import tarfile
@@ -1068,7 +1069,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
 
-    epochs = epochs.append(te, ignore_index=True)
+    epochs = pd.concat([epochs, te], ignore_index=True)
     # append file name epoch
     mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
 
@@ -1076,8 +1077,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
     te.loc[0, 'end'] = file_end_time
     te.loc[0, 'name'] = 'FILE_'+mfilename
 
-    epochs = epochs.append(te, ignore_index=True)
-    
+    epochs = pd.concat([epochs, te], ignore_index=True)
     epochs = epochs.sort_values(by=['start', 'end'], 
                     ascending=[1, 0]).reset_index()
     epochs = epochs.drop(columns=['index'])
@@ -1375,7 +1375,7 @@ def _truncate_trials(exptevents, **options):
 
         # for remaining events, just brute force truncate
         # truncate partial events
-        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        events.loc[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
         if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
             #print(t)
             #import pdb; pdb.set_trace()

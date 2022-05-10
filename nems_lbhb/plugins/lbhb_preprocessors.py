@@ -47,8 +47,13 @@ def cor(kw):
     :return:
     """
     ops = kw.split('.')[1:]
+    parms = {}
+    for op in ops:
+        if op.startswith('i'):
+            s = op[1:].replace('d', '.')
+            parms['ITI_sec_to_include'] = float(s)
 
-    return [['nems.xforms.mask_incorrect', {}]]
+    return [['nems.xforms.mask_incorrect', parms]]
 
 
 @xform()
@@ -92,21 +97,24 @@ def tar(kw):
 
 @xform()
 def reftar(kw):
-    ops = kw.split('.')[1:]
 
-    balance_rep_count = False
-    include_incorrect = False
-    generate_evoked_mask = False
+    parms = {'include_incorrect': False}
+
+    ops = kw.split('.')[1:]
     for op in ops:
         if op.startswith('b'):
-            balance_rep_count = True
+            parms['balance_rep_count'] = True
         if op.startswith('a'):
-            include_incorrect = True
+            parms['include_incorrect'] = True
         if op.startswith('e'):
-            generate_evoked_mask = True
+            parms['generate_evoked_mask'] = True
+        if op.startswith('i'):
+            parms['include_ITI'] = True
+            if len(op) > 1:
+                s = op[1:].replace('d', '.')
+                parms['ITI_sec_to_include'] = float(s)
 
-    return [['nems_lbhb.preprocessing.mask_all_but_reference_target',
-             {'include_incorrect': include_incorrect}]]
+    return [['nems_lbhb.preprocessing.mask_all_but_reference_target', parms]]
 
 
 @xform()

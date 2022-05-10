@@ -312,7 +312,7 @@ def create_trial_labels(exptparams, exptevents):
     # Number the (non NULL) sound trials
     new_events['soundTrialidx'] = 0
     trialidx = np.arange(1, (new_events.soundTrial!='NULL').sum()+1)
-    new_events.at[new_events.soundTrial!='NULL', 'soundTrialidx'] = trialidx
+    new_events.loc[new_events.soundTrial!='NULL', 'soundTrialidx'] = trialidx
 
     return new_events
 

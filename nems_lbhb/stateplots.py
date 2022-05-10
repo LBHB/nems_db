@@ -22,21 +22,6 @@ from nems.utils import find_module
 import nems_lbhb.plots as lplt
 from nems.plots.file import save_figure, load_figure_img, load_figure_bytes, fig2BytesIO
 
-font_size=8
-params = {'legend.fontsize': font_size-2,
-          'figure.figsize': (8, 6),
-          'axes.labelsize': font_size,
-          'axes.titlesize': font_size,
-          'axes.spines.right': False,
-          'axes.spines.top': False,
-          'xtick.labelsize': font_size,
-          'ytick.labelsize': font_size,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-
-
-plt.rcParams.update(params)
-
 line_colors = {'actual_psth': (0,0,0),
                'predicted_psth': 'red',
                #'passive': (255/255, 133/255, 133/255),
