@@ -4,8 +4,6 @@ import requests
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import scipy.stats as st
 
 import nems
@@ -13,10 +11,41 @@ import nems.db as nd
 import nems.xform_helper as xhelp
 
 from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, EQUIVALENCE_MODELS_SINGLE,
-                             EQUIVALENCE_MODELS_POP, DOT_COLORS)
+                             EQUIVALENCE_MODELS_POP, DOT_COLORS, MODELGROUPS)
 
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+def sanity_check_LN(batch, modelnames, save_path=None, load_path=None):
+    if load_path is not None:
+        corrs = pd.read_pickle(load_path)
+        return corrs
+    else:
+        cellids = []
+        pop_vs_LN = []
+    significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+
+    for cellid in significant_cells:
+        # Load and evaluate each model, pull out validation pred signal for each one.
+        contexts = [xhelp.load_model_xform(cellid, batch, m, eval_model=True)[1] for m in modelnames]
+        preds = [c['val'].apply_mask()['pred'].as_continuous() for c in contexts]
+
+        # Compute correlation between eaceh pair of models, append to running list.
+        # 0: conv2d, 1: conv1dx2+d, 2: LN_pop,  # TODO: if EQUIVALENCE_MODELS changes, this needs to change as well
+        pop_vs_LN.append(np.corrcoef(preds[0], preds[1])[0, 1])   # correlate conv1dx2+d with LN_pop
+        cellids.append(cellid)
+
+        # Convert to dataframe and save after each cell, in case there's a crash.
+        corrs = {'cellid': cellids, 'pop_vs_LN': pop_vs_LN}
+        corrs = pd.DataFrame.from_dict(corrs)
+        corrs.set_index('cellid', inplace=True)
+        if save_path is not None:
+            corrs.to_pickle(save_path)
+
+    return corrs
 
 
 # Use this for first stage of fit (with all cellids in one recording)
@@ -24,10 +53,6 @@ def generate_psth_correlations_pop(batch, modelnames, save_path=None, load_path=
     if load_path is not None:
         corrs = pd.read_pickle(load_path)
         return corrs
-        cellids = corrs.index.values.tolist()
-        c2d_c1d = corrs['c2d_c1d'].values.tolist()
-        c2d_LN = corrs['c2d_LN'].values.tolist()
-        c1d_LN = corrs['c1d_LN'].values.tolist()
     else:
         cellids = []
         c2d_c1d = []
@@ -166,7 +191,7 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
         plt.xlabel('PSTH Correlation')
         plt.ylabel('Count')
 
-    plt.title('%s' % batch_name)
+    #plt.title('%s' % batch_name)
     #plt.legend()
     plt.tight_layout()
 
@@ -178,8 +203,10 @@ if __name__ == '__main__':
     peg = 323
     a1_corr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'corr_nat4.pkl'
     a1_corr_path_pop = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'corr_nat4_pop.pkl'
+    a1_corr_path_LN = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(a1) / 'corr_nat4_LN_test.pkl'
     peg_corr_path = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4.pkl'
     peg_corr_path_pop = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4_pop.pkl'
+    peg_corr_path_LN = Path('/auto/users/jacob/notes/new_equivalence_results/')  / str(peg) / 'corr_nat4_LN_test.pkl'
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 6))
 
@@ -217,3 +244,9 @@ if __name__ == '__main__':
     # T-statistic, p-value
     print("A1 sig tests: %s" % a1_stats)
     print("PEG sig tests: %s" % peg_stats)
+
+    # test LN vs pop_LN
+    # a1_corr_LN = sanity_check_LN(a1, [MODELGROUPS['LN'][4], EQUIVALENCE_MODELS_SINGLE[2]],
+    #                              save_path=a1_corr_path_LN, load_path=a1_corr_path_LN)
+    # peg_corr_LN = sanity_check_LN(peg, [MODELGROUPS['LN'][4], EQUIVALENCE_MODELS_SINGLE[2]],
+    #                               save_path=peg_corr_path_LN, load_path=peg_corr_path_LN)

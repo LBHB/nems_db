@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import scipy.stats as st
 
 import nems
@@ -19,6 +18,58 @@ from pop_model_utils import (mplparams, get_significant_cells, get_rceiling_corr
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+def get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids):
+    # force "exact" distribution match for given histogram bins
+    bins = np.histogram(np.hstack((peg_snr, a1_snr)), bins=40)[1]
+    bin_assignments = np.digitize(peg_snr, bins, right=True)
+    a1_matched_cellids = []
+    peg_matched_cellids = []
+    for i, (bin_idx, snr) in enumerate(zip(bin_assignments, peg_snr)):
+        # look for a1 cell with minimum snr difference *that is also in the same bin*
+        # and then add both peg cell and matching a1 cell to cellid lists
+        a1_subset = ((a1_snr > bins[bin_idx-1]) & (a1_snr <= bins[bin_idx]))
+        if a1_subset.sum() > 0:
+            diffs = snr - a1_snr[a1_subset]
+            min_idx = np.argmin(np.abs(diffs))  # index within subset
+            min_cell_idx = np.argwhere(a1_subset)[min_idx][0]  # index within full list of cellids
+            a1_matched_cellids.append(a1_cellids[min_cell_idx])
+            peg_matched_cellids.append(peg_cellids[i])
+        else:
+            # if no such match, exclude cell
+            continue
+
+    return a1_matched_cellids, peg_matched_cellids
+
+
+def get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path):
+    modelnames = SIG_TEST_MODELS
+
+    a1_significant_cells = get_significant_cells(a1, modelnames, as_list=True)
+    a1_results = nd.batch_comp(batch=a1, modelnames=modelnames, stat=PLOT_STAT, cellids=a1_significant_cells)
+    a1_index = a1_results.index.values
+    peg_significant_cells = get_significant_cells(peg, modelnames, as_list=True)
+    peg_results = nd.batch_comp(batch=peg, modelnames=modelnames, stat=PLOT_STAT, cellids=peg_significant_cells)
+    peg_index = peg_results.index.values
+
+    a1_snr_df = snr_by_batch(a1, 'ozgf.fs100.ch18', load_path=a1_snr_path).loc[a1_index]
+    peg_snr_df = snr_by_batch(peg, 'ozgf.fs100.ch18', load_path=peg_snr_path).loc[peg_index]
+    a1_snr = a1_snr_df.values.flatten()
+    a1_cellids = a1_snr_df.index.values
+    peg_snr = peg_snr_df.values.flatten()
+    peg_idx = np.argsort(peg_snr_df.values, axis=None)
+    peg_snr_sample = peg_snr[peg_idx]
+    peg_cellids = peg_snr_df.index[peg_idx].values
+
+    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr_sample, a1_cellids, peg_cellids)
+    cell_map_df = pd.DataFrame(data={'A1_cellid': a1_matched_cellids,
+                                     'A1_snr': a1_snr_df.snr.loc[a1_matched_cellids].values,
+                                     'PEG_cellid': peg_matched_cellids,
+                                     'PEG_snr': peg_snr_df.snr.loc[peg_matched_cellids].values})
+
+    return cell_map_df
 
 
 def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True, ax=None, inset_ax=None):
@@ -50,25 +101,22 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     test_snr = st.mannwhitneyu(a1_snr, peg_snr, alternative='two-sided')
 
     # force "exact" distribution match for given histogram bins
-    bins = np.histogram(np.hstack((peg_snr_sample, a1_snr)), bins=40)[1]
-    bin_assignments = np.digitize(peg_snr_sample, bins, right=True)
-    a1_matched_cellids = []
-    peg_matched_cellids = []
-    for i, (bin_idx, snr) in enumerate(zip(bin_assignments, peg_snr_sample)):
-        # look for a1 cell with minimum snr difference *that is also in the same bin*
-        # and then add both peg cell and matching a1 cell to cellid lists
-        a1_subset = ((a1_snr > bins[bin_idx-1]) & (a1_snr <= bins[bin_idx]))
-        if a1_subset.sum() > 0:
-            diffs = snr - a1_snr[a1_subset]
-            min_idx = np.argmin(np.abs(diffs))  # index within subset
-            min_cell_idx = np.argwhere(a1_subset)[min_idx][0]  # index within full list of cellids
-            a1_matched_cellids.append(a1_cellids[min_cell_idx])
-            peg_matched_cellids.append(peg_cellids[i])
-        else:
-            # if no such match, exclude cell
-            continue
-    a1_matched_snr = a1_snr_df.loc[a1_matched_cellids].values
-    peg_matched_snr = peg_snr_df.loc[peg_matched_cellids].values
+    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr_sample, a1_cellids, peg_cellids)
+    a1_matched_snr_df = a1_snr_df.loc[a1_matched_cellids]
+    peg_matched_snr_df = peg_snr_df.loc[peg_matched_cellids]
+
+    a1_snr_df2 = a1_snr_df.rename(columns={'snr': 'A1'})
+    peg_snr_df2 = peg_snr_df.rename(columns={'snr': 'PEG'})
+    combined_df = a1_snr_df2.join(peg_snr_df2, how='outer')
+
+    combined_df = combined_df.reset_index(0)
+    combined_df = pd.melt(combined_df, value_vars=['A1', 'PEG'], value_name='SNR', id_vars='cellid')
+    combined_df['matched'] = 0
+    combined_df['matched'].loc[combined_df.cellid.isin(a1_matched_cellids + peg_matched_cellids)] = 1
+    combined_df = combined_df.sort_values(by='matched')
+
+    a1_matched_snr = a1_matched_snr_df.values
+    peg_matched_snr = peg_matched_snr_df.values
     a1_median_snr_matched = np.median(a1_matched_snr)
     peg_median_snr_matched = np.median(peg_matched_snr)
 
@@ -80,18 +128,7 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
         plt.title('sanity check: these should completely overlap')
         plt.legend()
 
-    # Plot the original distributions and the matched distribution, to visualize what was removed.
-    if inset_ax is None:
-        _, inset_ax = plt.subplots()
-    else:
-        plt.sca(inset_ax)
-    plt.hist(a1_snr, bins=bins, color=DOT_COLORS['pop LN'], label='a1', histtype='stepfilled', edgecolor='black')
-    plt.hist(peg_snr, bins=bins, color=DOT_COLORS['2D CNN'], label='peg', histtype='stepfilled', edgecolor='black')
-    plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black', fill=False,
-             hatch='...')
-    plt.legend()
-    inset_ax.xaxis.set_visible(False)
-    inset_ax.yaxis.set_visible(False)
+
 
     # Filter by matched cellids,
     # then combine into single dataframe with columns for cellid, a1/peg, modelname, PLOT_STAT
@@ -165,6 +202,25 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     plt.xticks(rotation=45, fontsize=6, ha='right')
     plt.tight_layout()
 
+    # Plot the original distributions and the matched distribution, to visualize what was removed.
+    if inset_ax is None:
+        _, inset_ax = plt.subplots()
+    else:
+        plt.sca(inset_ax)
+    # plt.hist(a1_snr, bins=bins, color=DOT_COLORS['pop LN'], label='a1', histtype='stepfilled', edgecolor='black')
+    # plt.hist(peg_snr, bins=bins, color=DOT_COLORS['2D CNN'], label='peg', histtype='stepfilled', edgecolor='black')
+    # plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black', fill=False,
+    #          hatch='...')
+    # plt.legend()
+    # inset_ax.xaxis.set_visible(False)
+    # inset_ax.yaxis.set_visible(False)
+    sns.stripplot(x='variable', y='SNR', data=combined_df, hue='matched', palette={0: 'lightgray', 1: 'black'},
+                  size=2, ax=inset_ax, jitter=jitter)
+    inset_ax.legend_.remove()
+    #sns.stripplot(data=combined_df_matched, palette={'A1': 'black', 'PEG': 'black'}, size=2, ax=inset_ax, jitter=jitter)
+
+    plt.tight_layout()
+
     return (test_c1, test_LN, test_dnn, test_snr,
             a1_results.median(), a1_matched_results.median(), peg_results.median(), peg_matched_results.median(),
             a1_median_snr, a1_median_snr_matched, peg_median_snr, peg_median_snr_matched)
@@ -176,8 +232,12 @@ if __name__ == '__main__':
 
     fig9a, ax4a = plt.subplots(figsize=single_column_short)
     fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-    test_c1, test_LN, test_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False,
-                                                        ax=ax4a, inset_ax=ax4b)
+    test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_matched, peg_md, \
+        peg_md_matched, a1_md_snr, a1_md_snr_matched, peg_md_snr, peg_md_snr_matched = plot_matched_snr(
+            a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+    )
+    plt.show(block=True)
+
     #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
     #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
     #
@@ -187,3 +247,7 @@ if __name__ == '__main__':
           "conv1Dx2: %s\n"
           "LN: %s\n"
           "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
+
+    # Generate mapping csv for use elsewhere
+    cell_map_df = get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path)
+    cell_map_df.to_csv(int_path / 'snr_subset_map.csv')

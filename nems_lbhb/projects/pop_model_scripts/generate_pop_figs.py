@@ -10,7 +10,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     SIG_TEST_MODELS,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, int_path, a1, peg, single_column_short, single_column_tall,
-    column_and_half_short, column_and_half_tall
+    column_and_half_short, column_and_half_tall, single_column_shorter, double_column_short, double_column_shorter
 )
 import nems.db as nd
 
@@ -37,14 +37,19 @@ stats_tests = []
 #################################   SCATTER/BAR PRED   #################################################################
 ########################################################################################################################
 
-fig3, ax = plt.subplots(2, 2, figsize=column_and_half_tall)
-fig3, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[3]],
-                                                      labels=['1D CNNx2', 'pop LN'], ax=ax[0,0])
-fig3, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]],
-                                                      labels=['1D CNNx2', '2D CNN'], ax=ax[0,1])
-ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
-ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
-fig3.tight_layout()
+fig3a, axa = plt.subplots(1, 2, figsize=single_column_shorter, sharey=True)
+fig3b, axb = plt.subplots(1, 2, figsize=single_column_shorter, sharey=True)
+fig3a, n_sig_1d_LN, n_nonsig_1d_LN = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]],
+                                                      labels=['pop LN', '1D CNNx2'], ax=axa[0])
+axa[0].legend()
+fig3a, n_sig_1d_2d, n_nonsig_1d_2d = plot_pred_scatter(a1, [ALL_FAMILY_MODELS[0], ALL_FAMILY_MODELS[2]],
+                                                      labels=['2D CNN', '1D CNNx2'], ax=axa[1])
+ax3a, a1_medians, a1_bar_stats = bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=axb[0])
+ax3a.set_box_aspect(1)
+ax3b, peg_medians, peg_bar_stats = bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=axb[1])
+ax3b.set_box_aspect(1)
+fig3a.tight_layout()
+fig3b.tight_layout()
 
 # Get general cell and site count info
 a1_r = nd.batch_comp(a1, ALL_FAMILY_MODELS, stat='r_test')
@@ -156,7 +161,7 @@ stats_tests.append(str(mds2))
 ########################################################################################################################
 
 
-fig6 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=column_and_half_short)
+fig6 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=single_column_shorter)
 fig6.tight_layout()
 
 
@@ -176,7 +181,9 @@ if 0:
     batch=323
     generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
 
-fig7, axes2 = plt.subplots(1, 2, figsize=column_and_half_short)
+fig7, axes2 = plt.subplots(1, 2, figsize=single_column_shorter)
+axes2[0].set_box_aspect(1)
+axes2[1].set_box_aspect(1)
 a1_corr, a1_stats7 = correlation_histogram(
     a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
 peg_corr, peg_stats7 = correlation_histogram(
@@ -203,14 +210,15 @@ fig8.tight_layout()
 a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
 peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-fig9a, ax4a = plt.subplots(figsize=single_column_short)
-fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
+fig9, ax4 = plt.subplots(1, 2, figsize=single_column_short)
 test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, \
     a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
-        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4[0], inset_ax=ax4[1]
     )
-ax4a.set_ylabel('Prediction correlation')
-ax4a.set_xlabel('')
+ax4[0].set_ylabel('Prediction correlation')
+ax4[1].set_xlabel('')
+ax4[0].set_box_aspect(1)
+ax4[1].set_box_aspect(1)
 
 tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
 stats_tests.append('matched snr')
@@ -244,20 +252,20 @@ DO_SAVE=True
 if DO_SAVE:
     figures_to_save = [
         (fig2, 'fig3_pareto'),
-        (fig3, 'fig4_scatter_bar'),
+        (fig3a, 'fig4_scatters'),
+        (fig3b, 'fig4_bars'),
         (fig5, 'fig6_heldout'),
         (fig6, 'fig7_data_subsets'),
         (fig7, 'fig8_equivalence'),
         (fig8, 'fig9_sparseness'),
-        (fig9a, 'fig10_snr'),
-        (fig9b, 'fig10_snr_inset'),
+        (fig9, 'fig10_snr'),
     ]
 
     pdf = PdfPages(base_path / 'all_figs.pdf')
     for fig, name in figures_to_save:
         full_path = (base_path / name).with_suffix('.pdf')
-        fig.savefig(full_path, format='pdf', dpi='figure')
-        pdf.savefig(fig, dpi='figure')
+        fig.savefig(full_path, format='pdf', dpi=300)
+        pdf.savefig(fig, dpi=300)
         plt.close(fig)
     pdf.close()
 

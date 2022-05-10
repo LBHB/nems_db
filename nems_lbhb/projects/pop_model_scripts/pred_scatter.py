@@ -21,7 +21,7 @@ import seaborn as sns
 
 batch_str = {a1: 'A1', peg: 'PEG'}
 
-def scatter_groups(groups, colors, add_diagonal=True, ax=None, scatter_kwargs=None):
+def scatter_groups(groups, colors, add_diagonal=True, ax=None, scatter_kwargs=None, labels=None):
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -30,9 +30,11 @@ def scatter_groups(groups, colors, add_diagonal=True, ax=None, scatter_kwargs=No
 
     if add_diagonal:
         ax.plot([0,1], [0,1], c='black', linestyle='dashed')
-    for g, color in zip(groups, colors):
+    if labels is None:
+        labels = ['_nolabel' for c in colors]
+    for g, color, label in zip(groups, colors, labels):
         vg = (g[0]>0) & (g[0]<1) & (g[1]>0) & (g[1]<1)
-        ax.scatter(g[0][vg], g[1][vg], c=color, s=5, **scatter_kwargs)
+        ax.scatter(g[0][vg], g[1][vg], c=color, s=1, label=label, **scatter_kwargs)
     ax.set_aspect('equal')
 
     return ax
@@ -63,10 +65,10 @@ def plot_pred_scatter(batch, modelnames, labels=None, colors=None, ax=None):
     n_nonsig = group1[0].size
     n_sig = group2[0].size
 
-    scatter_groups([group1, group2], ['lightgray', 'black'], ax=ax)
+    scatter_groups([group1, group2], ['lightgray', 'black'], ax=ax, labels=['N.S.', 'p < 0.5'])
     #ax.set_title(f'{batch_str[batch]} {PLOT_STAT}')
-    ax.set_xlabel(f'{labels[0]} (median r={ceiling_scores[modelnames[0]].median():.3f})', color=colors[0])
-    ax.set_ylabel(f'{labels[1]} (median r={ceiling_scores[modelnames[1]].median():.3f})', color=colors[1])
+    ax.set_xlabel(f'{labels[0]}\n(median r={ceiling_scores[modelnames[0]].median():.3f})', color=colors[0])
+    ax.set_ylabel(f'{labels[1]}\n(median r={ceiling_scores[modelnames[1]].median():.3f})', color=colors[1])
 
     return fig, n_sig, n_nonsig
 
@@ -143,10 +145,11 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
     # NOTE: ordering of names is assuming ALL_FAMILY_MODELS is being used and has not changed.
     bar_colors = [DOT_COLORS[k] for k in shortnames]
     medians = r_values.median(axis=0).values
-    ax.bar(np.arange(0, len(modelnames)), medians, color=bar_colors, edgecolor='black', linewidth=1.5,
+    ax.bar(np.arange(0, len(modelnames)), medians, color=bar_colors, edgecolor='black', linewidth=1,
            tick_label=shortnames)
-    ax.set_ylabel('Median prediction correlation')
+    ax.set_ylabel('Median prediction\ncorrelation')
     ax.set_xticklabels(ax.get_xticklabels(), rotation='45', ha='right')
+
 
     # Test significance for all comparisons
     stats_results = {}
