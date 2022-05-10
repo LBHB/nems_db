@@ -237,9 +237,33 @@ def CPN (exptevents, exptparams):
     return new_events, new_params
 
 
-def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000, binaural=False,
+def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
+             mono=False, binaural=False,
              **options):
-
+    """
+    :param exptevents: from baphy
+    :param exptparams: from baphy
+    :param stimfmt: string, currently must be 'wav' or 'gtgram'
+    :param separate_files_only: boolean [=False]
+        if True, just return each individual sound file rather than combinations
+        (eg, as specified for binaural stim)
+    :param channels: int
+        number of gtgram channels
+    :param rasterfs: int
+        gtgram sampling rate
+    :param f_min: float
+        gtgram min frequency
+    :param f_max: float
+        gtgram max frequency
+    :param mono: boolean [False]
+        if True, collapse wavs to single channel (dumb control for binaural)
+    :param binaural:
+        if True, apply model to simulate sound at each ear. Currently, a very dumb HRTF
+    :param options: dict
+        extra stuff to pass through
+    :return: 
+        stim, tags, stimparam
+    """
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
@@ -293,12 +317,23 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         chan1=[int(e.split("_")[0].split("-")[3])-1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
         chan2=[int(e.split("_")[1].split("-")[3])-1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
-        wav1 = [wav for wav in wav1 if wav != 'null']
-        wav2 = [wav for wav in wav2 if wav != 'null']
+        #wav1 = [wav for wav in wav1 if wav != 'null']
+        #wav2 = [wav for wav in wav2 if wav != 'null']
 
         file_unique=wav1.copy()
         file_unique.extend(wav2)
         file_unique=list(set(file_unique))
+        file_unique = [f for f in file_unique if f != 'null']
+
+        log.info('NOTE: Stripping spaces from epoch names in OverlappingPairs files')
+        stim_epochs = [s.replace(" ", "") for s in stim_epochs]
+    else:
+        raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
+
+    if mono:
+        log.info("Forcing mono stimulus, averaging across space")
+        chan1 = [0] * len(wav1)
+        chan2 = [0] * len(wav2)
 
     max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
 
@@ -347,27 +382,27 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         fs_all = {}
         for (f1,c1,f2,c2,n) in zip(wav1,chan1,wav2,chan2,stim_epochs):
             #print(f1,f2)
-            if f1!="NULL":
-                w1=wav_unique[f1]
-                if f2!="NULL":
-                    w2=wav_unique[f2]
+            if f1.upper() != "NULL":
+                w1 = wav_unique[f1]
+                if f2.upper() != "NULL":
+                    w2 = wav_unique[f2]
                 else:
-                    w2=np.zeros(w1.shape)
+                    w2 = np.zeros(w1.shape)
             else:
-                w2=wav_unique[f2]
-                w1=np.zeros(w2.shape)
-            w=np.zeros((w1.shape[0],max_chans))
-            if (binaural is None) | (binaural==False):
+                w2 = wav_unique[f2]
+                w1 = np.zeros(w2.shape)
+            w = np.zeros((w1.shape[0],max_chans))
+            if (binaural is None) | (binaural == False):
                 #log.info(f'binaural model: None')
-                w[:,[c1]] = w1
-                w[:,[c2]] += w2
+                w[:, [c1]] = w1
+                w[:, [c2]] += w2
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
                 db_atten=10
                 factor = 10**(-db_atten/20)
-                w[:,[c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
-                w[:,[c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
 
             wav_all[n] = w
 

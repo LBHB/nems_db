@@ -202,22 +202,92 @@ def label_pair_type(stim):
 def label_ep_type(ep_name):
     '''Labels epochs that have one or two stimuli in it. First position refers to BG, second
     to FG. 0 means null, 1 means primary speaker, 2 means secondary speaker'''
-    seps = (ep_name.split('_')[1], ep_name.split('_')[2])
-
-    if len(seps[0].split('-')) >= 4 or len(seps[1].split('-')) >= 4:
-        if seps[0] != 'null' and seps[1] != 'null':
-            stim_type = seps[0].split('-')[3] + seps[1].split('-')[3]
+    if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
+        stim_type = None
+    elif len(ep_name.split('_')) == 3:
+        seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        if len(seps[0].split('-')) >= 4 or len(seps[1].split('-')) >= 4:
+            if seps[0] != 'null' and seps[1] != 'null':
+                stim_type = seps[0].split('-')[3] + seps[1].split('-')[3]
+            else:
+                if seps[0] == 'null':
+                    stim_type = '0' + seps[1].split('-')[3]
+                elif seps[1] == 'null':
+                    stim_type = seps[0].split('-')[3] + '0'
         else:
             if seps[0] == 'null':
-                stim_type = '0' + seps[1].split('-')[3]
+                stim_type = '01'
             elif seps[1] == 'null':
-                stim_type = seps[0].split('-')[3] + '0'
+                stim_type = '10'
+            else:
+                stim_type = '11'
     else:
-        if seps[0] == 'null':
-            stim_type = '01'
-        elif seps[1] == 'null':
-            stim_type = '10'
-        else:
-            stim_type = '11'
+        stim_type = None
 
     return stim_type
+
+
+def add_stimtype_epochs(sig):
+    '''Mostly unneeded, just replaces epochs with their type instead of just
+    labeling them as in label_ep_type'''
+    import pandas as pd
+    df0 = sig.epochs.copy()
+    df0['name'] = df0['name'].apply(label_ep_type)
+    df0 = df0.loc[df0['name'].notnull()]
+    sig.epochs = pd.concat([sig.epochs, df0])
+    return sig
+
+
+def r_noise_corrected(X,Y,N_ac=200):
+    '''This one is directly from Luke's'''
+    import nems.metrics.corrcoef
+    Xac = nems.metrics.corrcoef._r_single(X, N_ac,0)
+    Yac = nems.metrics.corrcoef._r_single(Y, N_ac,0)
+    repcount = X.shape[0]
+    rs = np.zeros((repcount,repcount))
+    for nn in range(repcount):
+        for mm in range(repcount):
+            X_ = X[mm, :]
+            Y_ = Y[nn, :]
+            # remove all nans from pred and resp
+            ff = np.isfinite(X_) & np.isfinite(Y_)
+
+            if (np.sum(X_[ff]) != 0) and (np.sum(Y_[ff]) != 0):
+                rs[nn,mm] = np.corrcoef(X_[ff],Y_[ff])[0, 1]
+            else:
+                rs[nn,mm] = 0
+    #rs=rs[np.triu_indices(rs.shape[0],1)]
+    #plt.figure(); plt.imshow(rs)
+    return np.mean(rs)/(np.sqrt(Xac) * np.sqrt(Yac))
+
+
+def get_binaural_adjacent_epochs(stim):
+    '''Takes a simulus name and finds the two epochs if you were to reverse
+    the BG and FG ipsi to contra or vice versa'''
+    s, a, b = stim.split('_')
+    if len(a.split('-')) >= 4 or len(b.split('-')) >= 4:
+        #Swap BG first
+        q, w, e, r = a.split('-')[:4]
+        if r == '1':
+            newr = '2'
+        elif r == '2':
+            newr = '1'
+        newa = '-'.join([q, w, e, newr])
+        dA = '_'.join([s, newa, b])
+
+        #Swap FG next
+        q, w, e, r = b.split('-')[:4]
+        if r == '1':
+            newr = '2'
+        elif r == '2':
+            newr = '1'
+        newb = '-'.join([q, w, e, newr])
+        dB = '_'.join([s, a, newb])
+
+        return dA, dB
+
+
+
+
+    else:
+        raise ValueError(f"Your stimulus is labeled as binaural but isn't.")
