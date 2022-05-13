@@ -96,12 +96,12 @@ def plot_binaural_psths(df, cellid, bg, fg, batch, save=False, close=False):
     r_mean['lin11'], r_mean['lin12'] = r_mean[bg1]+r_mean[fg1], r_mean[bg1]+r_mean[fg2]
     r_mean['lin21'], r_mean['lin22'] = r_mean[bg2]+r_mean[fg1], r_mean[bg2]+r_mean[fg2]
 
-    colors = ['deepskyblue'] *3 + ['yellowgreen'] *3 + ['violet'] *3 + ['darksalmon'] *3 \
+    colors = ['deepskyblue'] *3 + ['violet'] *3 + ['yellowgreen'] *3 + ['darksalmon'] *3 \
              + ['dimgray'] *4 + ['black'] *4
     styles = ['-'] *16 + [':'] *4
-    ax_num = [0, 1, 8, 0, 2, 9, 2, 3, 8, 1, 3, 9, 0, 1, 2, 3, 0, 1, 2, 3]
-    ep_num = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    labels = ['BG1'] *3 + ['FG1'] *3 + ['BG2'] *3 + ['FG2'] *3 \
+    ax_num = [0, 1, 8, 2, 3, 8, 0, 2, 9, 1, 3, 9, 0, 1, 2, 3, 0, 1, 2, 3]
+    ep_num = [0, 0, 0, 2, 2, 2, 1, 1, 1, 3, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    labels = ['BG1'] *3 + ['BG2'] *3 + ['FG1'] *3 + ['FG2'] *3 \
              + ['BG1+FG1'] + ['BG1+FG2'] + ['BG2+FG1'] + ['BG2+FG2'] + ['LS'] *4
 
     for e, a, c, s, l in zip(ep_num, ax_num, colors, styles, labels):
@@ -110,10 +110,17 @@ def plot_binaural_psths(df, cellid, bg, fg, batch, save=False, close=False):
 
     ymin, ymax = ax[0].get_ylim()
     AXS = [0, 1, 2, 3, 8, 9]
+    for AX, tt, aab, bab, ali, bli, prf in zip(range(4), df_filtered.kind, df_filtered.AcorAB,
+                                          df_filtered.BcorAB, df_filtered.AcorLin,
+                                               df_filtered.BcorLin, df_filtered.pref):
+        ax[AX].legend((f'BG{tt[0]}, corr={np.around(aab, 3)}',
+                       f'FG{tt[1]}, corr={np.around(bab, 3)}',
+                       f'BG{tt[0]}+FG{tt[1]}',
+                       f'LS, Acorr={np.around(ali, 3)}\nBcorr={np.around(bli, 3)}\npref={np.around(prf, 3)}'))
     for AX in AXS:
-        ax[AX].legend()
         ax[AX].vlines([0, 1.0], ymin, ymax, color='black', lw=0.75, ls='--')
         ax[AX].vlines(0.5, ymax * 0.9, ymax, color='black', lw=0.75, ls=':')
+        ax[AX].spines['right'].set_visible(True), ax[AX].spines['top'].set_visible(True)
         if AX !=8 and AX !=9:
             ax[AX].set_xlim((-prestim * 0.5), (1 + (prestim * 0.75)))
         else:

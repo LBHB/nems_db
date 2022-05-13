@@ -17,6 +17,13 @@ import seaborn as sns
 import itertools
 import nems.epoch as ep
 import logging
+
+import glob
+import nems.analysis.api
+import nems.modelspec as ms
+import warnings
+import pandas as pd
+
 import nems_lbhb.projects.olp.binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
 import nems_lbhb.fitEllipse as fE
@@ -25,7 +32,6 @@ import nems.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb  # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
 import nems.recording as recording
-import numpy as np
 import SPO_helpers as sp
 import nems.preprocessing as preproc
 import nems.metrics.api as nmet
@@ -37,6 +43,8 @@ from nems_lbhb.gcmodel.figures.snr import compute_snr
 from nems.preprocessing import generate_psth_from_resp
 import logging
 import nems_lbhb.projects.olp.OLP_helpers as ohel
+import nems_lbhb.TwoStim_helpers as ts
+
 
 log = logging.getLogger(__name__)
 from nems import db
@@ -118,17 +126,17 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
         rA_st, rB_st = rAsm[:, presil:-postsil], rBsm[:, presil:-postsil]
         rAB_st = rABsm[:, presil:-postsil]
 
-        rAm, rBm = np.nanmean(rA_st, axis=0), np.nanmean(rB_st, axis=0)
-        rABm = np.nanmean(rAB_st, axis=0)
+        rAm, rBm = np.nanmean(rAsm, axis=0), np.nanmean(rBsm, axis=0)
+        rABm = np.nanmean(rABsm, axis=0)
 
         AcorAB = np.corrcoef(rAm, rABm)[0, 1]  # Corr between resp to A and resp to dual
         BcorAB = np.corrcoef(rBm, rABm)[0, 1]  # Corr between resp to B and resp to dual
 
-        A_FR, B_FR, AB_FR = np.nanmean(rAm), np.nanmean(rBm), np.nanmean(rABm)
+        A_FR, B_FR, AB_FR = np.nanmean(rA_st), np.nanmean(rB_st), np.nanmean(rAB_st)
 
         min_rep = np.min((rA.shape[0], rB.shape[0])) #only will do something if SoundRepeats==Yes
-        lin_resp = (rA_st[:min_rep, :] + rB_st[:min_rep, :])
-        supp = np.nanmean(lin_resp) - AB_FR
+        lin_resp = np.nanmean(rAsm[:min_rep, :] + rBsm[:min_rep, :], axis=0)
+        supp = np.nanmean(lin_resp - AB_FR)
 
         AcorLin = np.corrcoef(rAm, lin_resp)[0, 1]  # Corr between resp to A and resp to lin
         BcorLin = np.corrcoef(rBm, lin_resp)[0, 1]  # Corr between resp to B and resp to lin
@@ -163,7 +171,7 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
                         'supp': supp})
 
     cell_df = pd.DataFrame(cell_df)
-    # cell_df['SR'], cell_df['STD'] = SR, STD
+    cell_df['SR'], cell_df['STD'] = SR, STD
     # cell_df['corcoef'], cell_df['avg_resp'], cell_df['snr'] = corcoef, avg_resp, snr
     cell_df.insert(loc=0, column='area', value=area)
 
@@ -542,3 +550,113 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
             'pair_names': twostims, 'suppression': supp_array, 'FR': FR_array,
             'rec': rec,
             'animal': cellid[:3]}
+
+
+def calc_psth_weight_resp(row, do_plot=False, find_mse_confidence=False, fs=200, paths=None):
+    print('load {}'.format(row.cellid))
+    modelspecs, est, val = load_TwoStim(int(row.batch),
+                                        row.cellid,
+                                        ['10', '01', '20', '02', '11', '12', '21', '22'],
+                                        None, fs=fs,
+                                        get_est=False,
+                                        get_stim=False)
+    # smooth and subtract SR
+    fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - row['SR'] / val[0]['resp'].fs)
+    val[0]['resp'] = val[0]['resp'].transform(fn)
+
+    print('calc weights')
+    d = ts.calc_psth_weights_of_model_responses(val[0], signame='resp', do_plot=do_plot,
+                                             find_mse_confidence=find_mse_confidence)
+    d = {k + 'R': v for k, v in d.items()}
+    for k, v in d.items():
+        row[k] = v
+    return row
+
+
+def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
+                 modelspecs_dir='/auto/users/luke/Code/nems/modelspecs', fs=100, get_est=True, get_stim=True,
+                 paths=None):
+    # load into a recording object
+    if not get_stim:
+        loadkey = 'ns.fs100'
+    else:
+        raise RuntimeError('Put stimuli in batch')
+    manager = BAPHYExperiment(cellid=cellid, batch=batch)
+
+    options = {'rasterfs': 100,
+               'stim': False,
+               'resp': True}
+    rec = manager.get_recording(**options)
+
+    rec['resp'].fs = fs
+    rec['resp'] = rec['resp'].extract_channels([cellid])
+    # ----------------------------------------------------------------------------
+    # DATA PREPROCESSING
+    #
+    # GOAL: Split your data into estimation and validation sets so that you can
+    #       know when your model exhibits overfitting.
+
+    # Method #1: Find which stimuli have the most reps, use those for val
+    #    if not get_stim:
+    #        del rec.signals['stim']
+
+    ##Added Greg 9/22/21 for
+
+    stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
+
+    val = rec.copy()
+    val['resp'] = val['resp'].rasterize()
+    val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
+
+    if get_est:
+        raise RuntimeError('Fix me')
+        df0 = est['resp'].epochs.copy()
+        df2 = est['resp'].epochs.copy()
+        df0['name'] = df0['name'].apply(parse_stim_type)
+        df0 = df0.loc[df0['name'].notnull()]
+        df3 = pd.concat([df0, df2])
+
+        est['resp'].epochs = df3
+        est_sub = copy.deepcopy(est)
+        est_sub['resp'] = est_sub['resp'].select_epochs(fit_epochs)
+    else:
+        est_sub = None
+
+    df0 = val['resp'].epochs.copy()
+    df2 = val['resp'].epochs.copy()
+    # df0['name'] = df0['name'].apply(ts.parse_stim_type)
+    df0['name'] = df0['name'].apply(ohel.label_ep_type)
+    df0 = df0.loc[df0['name'].notnull()]
+    df3 = pd.concat([df0, df2])
+
+    val['resp'].epochs = df3
+    val_sub = copy.deepcopy(val)
+    val_sub['resp'] = val_sub['resp'].select_epochs(fit_epochs)
+
+    # ----------------------------------------------------------------------------
+    # GENERATE SUMMARY STATISTICS
+
+    if modelspec_name is None:
+        return None, [est_sub], [val_sub]
+    else:
+        fit_epochs_str = "+".join([str(x) for x in fit_epochs])
+        mn = loader + '_subset_' + fit_epochs_str + '.' + modelspec_name
+        an_ = modelspecs_dir + '/' + cellid + '/' + mn
+        an = glob.glob(an_ + '*')
+        if len(an) > 1:
+            warnings.warn('{} models found, loading an[0]:{}'.format(len(an), an[0]))
+            an = [an[0]]
+        if len(an) == 1:
+            filepath = an[0]
+            modelspecs = [ms.load_modelspec(filepath)]
+            modelspecs[0][0]['meta']['modelname'] = mn
+            modelspecs[0][0]['meta']['cellid'] = cellid
+        else:
+            raise RuntimeError('not fit')
+        # generate predictions
+        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+
+        return modelspecs, est_sub, val_sub
+
+

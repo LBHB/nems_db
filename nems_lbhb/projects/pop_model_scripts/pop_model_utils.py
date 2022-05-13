@@ -9,11 +9,12 @@ import os
 import matplotlib as mpl
 mplparams = {'axes.spines.right': False,
           'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
+          'legend.frameon': False,
+          'legend.fontsize': 8,
+          'axes.labelsize': 8,
+          'axes.titlesize': 8,
+          'xtick.labelsize': 8,
+          'ytick.labelsize': 8,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
 mpl.rcParams.update(mplparams)
@@ -60,11 +61,14 @@ if linux_user=='svd':
     column_and_half_tall = (5*sf, 5*sf)
 
 else:
+    single_column_shorter = (3.5, 2)
     single_column_short = (3.5, 3)
     single_column_tall = (3.5, 6)
     column_and_half_vshort = (5, 1.5)
     column_and_half_short = (5, 3)
     column_and_half_tall = (5, 6)
+    double_column_short = (7, 3)
+    double_column_shorter = (7, 2)
 #inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
 
 
@@ -232,8 +236,8 @@ fit_string3 = "tfinit.n.lr1e3.et3.rb10.es20.L2-newtf.n.lr1e4.es20.L2"
 PLOT_STAT = 'r_ceiling'
 #PLOT_STAT = 'r_test'
 
-DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#2B8AE0', #'conv1dx2': 'purple',
-              '1D CNNx2': '#27717A', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
+DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#27717A', #'conv1dx2': 'purple',
+              '1D CNNx2': '#2B8AE0', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
               'pop LN': '#7978B0', 'CNN single': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
               'LN_2d': 'purple',
               'c1d2_input': 'blue',

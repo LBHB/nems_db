@@ -1,20 +1,6 @@
 import numpy as np
 import scipy.stats as st
-import seaborn as sns
 import pandas as pd
-
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 10,
-          'axes.labelsize': 10,
-          'axes.titlesize': 10,
-          'xtick.labelsize': 10,
-          'ytick.labelsize': 10,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
-import matplotlib.pyplot as plt
 
 import nems
 import nems.db as nd
@@ -24,8 +10,13 @@ import nems.epoch as ep
 from nems.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 
-from pop_model_utils import (get_significant_cells, SIG_TEST_MODELS, MODELGROUPS, HELDOUT, MATCHED, PLOT_STAT, DOT_COLORS,
-                             a1, peg, single_column_short, single_column_tall, column_and_half_short, column_and_half_tall)
+from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, MODELGROUPS, HELDOUT, MATCHED, PLOT_STAT,
+                             DOT_COLORS, a1, peg, single_column_short, single_column_tall, column_and_half_short,
+                             column_and_half_tall)
+import matplotlib as mpl
+mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def get_heldout_results(batch, significant_cells, short_names):

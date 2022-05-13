@@ -2,26 +2,13 @@ import numpy as np
 import os
 import io
 import logging
-import matplotlib.pyplot as plt
 import json as jsonlib
+
 from scipy.ndimage import zoom
 from scipy.stats import wilcoxon
 import sys, importlib
 import copy
 import pandas as pd
-import seaborn as sns
-
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 12,
-          'axes.labelsize': 12,
-          'axes.titlesize': 12,
-          'xtick.labelsize': 12,
-          'ytick.labelsize': 12,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
 
 import nems.modelspec as ms
 import nems.xforms as xforms
@@ -45,7 +32,12 @@ savefigs = False
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single, \
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, get_significant_cells, PLOT_STAT, \
     modelname_half_prefit, modelname_half_pop, modelname_half_fullfit, \
-    modelname_half_heldoutpop, modelname_half_heldoutfullfit
+    modelname_half_heldoutpop, modelname_half_heldoutfullfit, mplparams
+
+import matplotlib as mpl
+mpl.rcParams.update(mplparams)
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 #out_path = "/auto/users/svd/projects/pop_models/"
 #outpath="/auto/users/svd/docs/current/conf/apan2020/dstrf"
@@ -107,13 +99,14 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     x=dpred.loc[(dpred.midx==x1) & (dpred.fit==x2), [PLOT_STAT]]
     y=dpred.loc[(dpred.midx==y1) & (dpred.fit==y2), [PLOT_STAT]]
     _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
-    ax[0].scatter(x=_d[PLOT_STAT+'_x'], y=_d[PLOT_STAT+'_y'], s=4, c='k')
+    ax[0].scatter(x=_d[PLOT_STAT+'_x'], y=_d[PLOT_STAT+'_y'], s=1, c='k')
 
     ax[0].set_xlabel(f"{xlabel} (median r={_d[PLOT_STAT+'_x'].median():.3f})")
     ax[0].set_ylabel(f"{ylabel} (median r={_d[PLOT_STAT+'_y'].median():.3f})")
     #ax[0].set_title(f'Batch {batch} {x1}%')
     ax[0].set_xlim([-0.05,1.05])
     ax[0].set_ylim([-0.05,1.05])
+    ax[0].set_aspect('equal')
 
     dpm = dpred.groupby(['midx','fit']).median().reset_index()
     dpm.midx = dpm.midx.astype(int)
@@ -131,10 +124,11 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
         dpm.loc[int(midx), 'p'] = p
 
-    ax[1].plot(dpm.index, dpm['std'], '-s', color='gray', label=xlabel)
-    ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel)
+    ax[1].plot(dpm.index, dpm['std'], '-s', color='gray', label=xlabel, markersize=4.5)
+    ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel, markersize=4.5)
     ax[1].legend(frameon=False)
     ax[1].set_xlabel('Fraction estimation data')
+    ax[1].set_box_aspect(1)
 
     print(dpm)
 
