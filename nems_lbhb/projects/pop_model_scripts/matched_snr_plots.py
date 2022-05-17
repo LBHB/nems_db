@@ -12,13 +12,33 @@ import nems.epoch as ep
 
 from pop_model_utils import (mplparams, get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
                              NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS,
-                             figures_base_path, a1, peg, int_path,
+                             figures_base_path, a1, peg, int_path, HELDOUT_CROSSBATCH, HELDOUT,
                              single_column_short, single_column_tall, column_and_half_short, column_and_half_tall)
 
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+
+def load_snr_and_cellids(a1, peg, a1_snr_path, peg_snr_path):
+    a1_significant_cells = get_significant_cells(a1, SIG_TEST_MODELS, as_list=True)
+    a1_results = nd.batch_comp(batch=a1, modelnames=SIG_TEST_MODELS, stat=PLOT_STAT, cellids=a1_significant_cells)
+    a1_index = a1_results.index.values
+    peg_significant_cells = get_significant_cells(peg, SIG_TEST_MODELS, as_list=True)
+    peg_results = nd.batch_comp(batch=peg, modelnames=SIG_TEST_MODELS, stat=PLOT_STAT, cellids=peg_significant_cells)
+    peg_index = peg_results.index.values
+
+    a1_snr_df = snr_by_batch(a1, 'ozgf.fs100.ch18', load_path=a1_snr_path).loc[a1_index]
+    peg_snr_df = snr_by_batch(peg, 'ozgf.fs100.ch18', load_path=peg_snr_path).loc[peg_index]
+    a1_snr = a1_snr_df.values.flatten()
+    a1_cellids = a1_snr_df.index
+    peg_snr = peg_snr_df.values.flatten()
+    peg_idx = np.argsort(peg_snr_df.values, axis=None)
+    peg_snr_sample = peg_snr[peg_idx]
+    peg_cellids = peg_snr_df.index[peg_idx].values
+
+    return a1_snr, peg_snr_sample, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids
 
 
 def get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids):
@@ -44,26 +64,10 @@ def get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids):
     return a1_matched_cellids, peg_matched_cellids
 
 
-def get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path):
+def get_matched_snr_mapping(a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids):
     modelnames = SIG_TEST_MODELS
 
-    a1_significant_cells = get_significant_cells(a1, modelnames, as_list=True)
-    a1_results = nd.batch_comp(batch=a1, modelnames=modelnames, stat=PLOT_STAT, cellids=a1_significant_cells)
-    a1_index = a1_results.index.values
-    peg_significant_cells = get_significant_cells(peg, modelnames, as_list=True)
-    peg_results = nd.batch_comp(batch=peg, modelnames=modelnames, stat=PLOT_STAT, cellids=peg_significant_cells)
-    peg_index = peg_results.index.values
-
-    a1_snr_df = snr_by_batch(a1, 'ozgf.fs100.ch18', load_path=a1_snr_path).loc[a1_index]
-    peg_snr_df = snr_by_batch(peg, 'ozgf.fs100.ch18', load_path=peg_snr_path).loc[peg_index]
-    a1_snr = a1_snr_df.values.flatten()
-    a1_cellids = a1_snr_df.index.values
-    peg_snr = peg_snr_df.values.flatten()
-    peg_idx = np.argsort(peg_snr_df.values, axis=None)
-    peg_snr_sample = peg_snr[peg_idx]
-    peg_cellids = peg_snr_df.index[peg_idx].values
-
-    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr_sample, a1_cellids, peg_cellids)
+    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids)
     cell_map_df = pd.DataFrame(data={'A1_cellid': a1_matched_cellids,
                                      'A1_snr': a1_snr_df.snr.loc[a1_matched_cellids].values,
                                      'PEG_cellid': peg_matched_cellids,
@@ -226,28 +230,70 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
             a1_median_snr, a1_median_snr_matched, peg_median_snr, peg_median_snr_matched)
 
 
+def plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path, ax=None):
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=(single_column_short))
+
+    a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids = load_snr_and_cellids(322, 323, a1_snr_path, peg_snr_path)
+    cell_map_df = get_matched_snr_mapping(a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids)
+    a1_matched_cellids = cell_map_df.A1_cellid
+    peg_matched_cellids = cell_map_df.PEG_cellid
+    a1_r = nd.batch_comp(322, HELDOUT[:1], stat=PLOT_STAT).loc[a1_matched_cellids]
+    peg_r = nd.batch_comp(323, [HELDOUT_CROSSBATCH], stat=PLOT_STAT).loc[peg_matched_cellids]
+    test = st.wilcoxon(a1_r.values.flatten(), peg_r.values.flatten(), alternative='two-sided')
+
+    a1_r = a1_r.rename(columns={HELDOUT[0]: 'A1'})
+    peg_r = peg_r.rename(columns={HELDOUT_CROSSBATCH: 'PEG'})
+    combined_r = a1_r.join(peg_r, how='outer')
+    combined_df = combined_r.join(a1_snr_df, how='left')
+    combined_df = combined_df.fillna(peg_snr_df.loc[peg_matched_cellids])
+    combined_df[PLOT_STAT] = np.nan
+    combined_df.r_ceiling.loc[a1_matched_cellids] = combined_df.A1.loc[a1_matched_cellids]
+    combined_df.r_ceiling.loc[peg_matched_cellids] = combined_df.PEG.loc[peg_matched_cellids]
+    combined_df['variable'] = 'A1'
+    combined_df['variable'].loc[peg_matched_cellids] = 'PEG'
+    combined_df = combined_df.drop(columns='A1')
+    combined_df = combined_df.drop(columns='PEG')
+    combined_df = combined_df.sort_values(by='snr')
+    combined_df = combined_df.reset_index(0)
+
+    sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
+                  #hue='snr', palette=f'dark:{DOT_COLORS["1D CNNx2"]}',
+                  size=2, ax=ax, zorder=0)
+    sns.boxplot(x='variable', y=PLOT_STAT, data=combined_df, boxprops={'facecolor': 'None', 'linewidth': 1},
+                     showcaps=False, showfliers=False, whiskerprops={'linewidth': 0}, ax=ax)
+    #ax.legend_.remove()  # tried to color by snr but it's just really hard to see, and no pattern anyway
+    plt.tight_layout()
+
+    return a1_r, peg_r, test
+
 if __name__ == '__main__':
     a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
     peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-    fig9a, ax4a = plt.subplots(figsize=single_column_short)
-    fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-    test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_matched, peg_md, \
-        peg_md_matched, a1_md_snr, a1_md_snr_matched, peg_md_snr, peg_md_snr_matched = plot_matched_snr(
-            a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
-    )
+    a1_r, peg_r = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path)
     plt.show(block=True)
 
-    #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
-    #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
+
     #
-    #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
-
-    print("Sig. tests:\n"
-          "conv1Dx2: %s\n"
-          "LN: %s\n"
-          "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
-
-    # Generate mapping csv for use elsewhere
-    cell_map_df = get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path)
-    cell_map_df.to_csv(int_path / 'snr_subset_map.csv')
+    # fig9a, ax4a = plt.subplots(figsize=single_column_short)
+    # fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
+    # test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_matched, peg_md, \
+    #     peg_md_matched, a1_md_snr, a1_md_snr_matched, peg_md_snr, peg_md_snr_matched = plot_matched_snr(
+    #         a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+    # )
+    # plt.show(block=True)
+    #
+    # #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
+    # #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
+    # #
+    # #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
+    #
+    # print("Sig. tests:\n"
+    #       "conv1Dx2: %s\n"
+    #       "LN: %s\n"
+    #       "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
+    #
+    # # Generate mapping csv for use elsewhere
+    # cell_map_df = get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path)
+    # cell_map_df.to_csv(int_path / 'snr_subset_map.csv')

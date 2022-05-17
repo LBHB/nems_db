@@ -55,7 +55,7 @@ def load_high_res_stim():
     return high_res_ctx
 
 
-def single_cell_examples():
+def aciknos_examples():
     
     global column_and_half_short
     

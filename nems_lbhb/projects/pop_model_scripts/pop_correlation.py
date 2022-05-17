@@ -179,12 +179,12 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
 
         c1 = correlations['c2d_c1d']
         c2 = correlations['c1d_LN']
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=1.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
         #ax.text(np.median(c1), 0, '*', va='bottom', ha='center')
-        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop LN'], edgecolor='black', linewidth=1.5,
+        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop LN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=1.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled', fc='None', hatch='\\\\\\\\')
         #ax.text(np.median(c2), 0, '*', va='bottom', ha='center')
 

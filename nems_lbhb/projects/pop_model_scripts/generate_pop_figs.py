@@ -23,7 +23,7 @@ from nems_lbhb.projects.pop_model_scripts.pareto_pop_plot import model_comp_pare
 from nems_lbhb.projects.pop_model_scripts.summary_plots import scatter_bar
 from nems_lbhb.projects.pop_model_scripts.pop_correlation import correlation_histogram
 from nems_lbhb.projects.pop_model_scripts.heldout_plots import generate_heldout_plots
-from nems_lbhb.projects.pop_model_scripts.matched_snr_plots import plot_matched_snr
+from nems_lbhb.projects.pop_model_scripts.matched_snr_plots import plot_matched_snr, plot_heldout_a1_vs_peg
 from nems_lbhb.projects.pop_model_scripts.partial_est_plot import partial_est_plot
 from nems_lbhb.projects.pop_model_scripts.pred_scatter import plot_pred_scatter, bar_mean
 from nems_lbhb.projects.pop_model_scripts.snr_batch import sparseness, sparseness_by_batch, sparseness_plot, sparseness_example, sparseness_figs
@@ -210,7 +210,7 @@ fig8.tight_layout()
 a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
 peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-fig9, ax4 = plt.subplots(1, 2, figsize=single_column_short)
+fig9, ax4 = plt.subplots(1, 3, figsize=column_and_half_short)
 test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, \
     a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
         a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4[0], inset_ax=ax4[1]
@@ -219,6 +219,11 @@ ax4[0].set_ylabel('Prediction correlation')
 ax4[1].set_xlabel('')
 ax4[0].set_box_aspect(1)
 ax4[1].set_box_aspect(1)
+
+a1_heldout_r, peg_heldout_r, wilcoxon = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path, ax=ax4[2])
+ax4[2].set_box_aspect(1)
+ax4[2].set_xlabel('')
+ax4[2].set_ylabel('Prediction correlation')
 
 tests9 = [('conv1D', test_c1), ('LN_pop', test_LN), ('dnn1_single', test_dnn)]
 stats_tests.append('matched snr')
@@ -243,6 +248,11 @@ stats_tests.append('\n median snr info:')
 stats_tests.append(f'a1 median snr, full: {a1_md_snr}, matched: {a1_md_snr_match}')
 stats_tests.append(f'peg median snr, full: {peg_md_snr}, matched: {peg_md_snr_match}')
 stats_tests.append(f'test significance for full data: {test_snr}')
+
+stats_tests.append('\ncross-batch heldout:')
+stats_tests.append(f'A1-second median r: {np.median(a1_heldout_r)}')
+stats_tests.append(f'PEG-second median r: {np.median(peg_heldout_r)}')
+stats_tests.append(f'{wilcoxon}')
 
 ########################################################################################################################
 #################################   SAVE PDFS  #########################################################################
