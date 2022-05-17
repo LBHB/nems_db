@@ -9,15 +9,18 @@ Created on Fri Aug 31 12:50:49 2018
 @author: svd
 """
 import logging
+import os
 import re
-import numpy as np
+import hashlib
 import copy
-import nems.epoch as ep
-import nems.signal as signal
+
+import numpy as np
 import scipy.fftpack as fp
 import scipy.signal as ss
-import hashlib
+import pandas as pd
 
+import nems.epoch as ep
+import nems.signal as signal
 from nems.utils import find_module, adjust_uri_prefix
 from nems.preprocessing import resp_to_pc
 from nems.initializers import load_phi
@@ -178,8 +181,17 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         siteid = cellid.split("-")[0]
         allsiteids, allcellids = nd.get_batch_sites(batch, modelname_filter=model_search)
         allsiteids = [s.split(".")[0] for s in allsiteids]
-        #import pdb; pdb.set_trace()
-        if siteid in allsiteids:
+
+        if (batch==323) and (pre_batch==322):
+            matchfile=os.path.dirname(__file__) + "/projects/pop_model_scripts/snr_subset_map.csv"
+            df = pd.read_csv(matchfile, index_col=0)
+            pre_cellid = df.loc[df.PEG_cellid==cellid, 'A1_cellid'].values[0]
+        elif (batch==322) and (pre_batch==323):
+            matchfile=os.path.dirname(__file__) + "/projects/pop_model_scripts/snr_subset_map.csv"
+            df = pd.read_csv(matchfile, index_col=0)
+            pre_cellid = df.loc[df.A1_cellid==cellid, 'PEG_cellid'].values[0]
+
+        elif siteid in allsiteids:
             # don't need to generalize, load from actual fit
             pre_cellid = cellid
         elif batch in [322, 334]:
@@ -189,7 +201,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         else:
             raise ValueError(f"batch {batch} prefit not implemented yet.")
             
-        log.info(f"prefit cellid={pre_cellid}")
+        log.info(f"prefit cellid={pre_cellid} prefit batch={pre_batch}")
+
     elif prefit_type == 'site':
         # exact same model, just fit for site, now being fit for single cell
         pre_parts = modelname_parts[0].split("-")
