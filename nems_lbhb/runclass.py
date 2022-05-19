@@ -261,7 +261,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         if True, apply model to simulate sound at each ear. Currently, a very dumb HRTF
     :param options: dict
         extra stuff to pass through
-    :return: 
+    :return:
         stim, tags, stimparam
     """
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
@@ -330,12 +330,13 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
 
+    max_chans = np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
+    max_chans_was = max_chans
     if mono:
         log.info("Forcing mono stimulus, averaging across space")
         chan1 = [0] * len(wav1)
         chan2 = [0] * len(wav2)
-
-    max_chans=np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
+        max_chans = 1
 
     PreStimSilence = ReferenceHandle['PreStimSilence']
     Duration = ReferenceHandle['Duration']
@@ -432,12 +433,14 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             sg = [gtgram(np.pad(w[:,i],[padbins, padbins]), fs, window_time, hop_time, channels, f_min, f_max)
                   if w[:,i].var()>0 else sg_null 
                   for i in range(w.shape[1])]
-            #import pdb; pdb.set_trace()
-            #sg = [np.concatenate([sg_pre, s[:,:duration_bins], sg_post],axis=1) for s in sg]
-            sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post],axis=1) for s in sg]
-            #sg_unique[f] = np.stack(sg,axis=2)
 
-            sg_unique[f] = np.concatenate(sg,axis=0)
+            sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post], axis=1) for s in sg]
+
+            if mono & (max_chans_was>1):
+                sgshuff = np.random.permutation(sg[0].flatten())
+                sgshuff = np.reshape(sgshuff, sg[0].shape)
+                sg.append(sgshuff)
+            sg_unique[f] = np.concatenate(sg, axis=0)
 
         return sg_unique, list(sg_unique.keys()), stimparam
 

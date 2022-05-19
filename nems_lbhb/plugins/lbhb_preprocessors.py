@@ -986,22 +986,61 @@ def dline(kw):
     same as the previous example, exept takes in response data and outputs a recordign with a modified state signal.
     """
 
-    # ppp: positional parameter parsing
+    # positional parameter parsing
     arguments = kw.split('.')
     delay, duration, use_window_mean = [parg for idx, parg in enumerate(arguments) if idx in [1,2,3]]
 
     # keyword arguments, state is default input and output if not specified
-    input_matches = re.findall('\.i\.[A-Za-z]+', kw)
-    input_signal = input_matches[0][3:] if input_matches else 'state'
+    input_matches = re.findall('\.i\.([A-Za-z]+)', kw)
+    input_signal = input_matches[0]if input_matches else 'state'
 
-    output_matches = re.findall('\.o\.[A-Za-z]+', kw)
-    output_signal = output_matches[0][3:] if output_matches else 'state'
+    output_matches = re.findall('\.o\.([A-Za-z]+)', kw)
+    output_signal = output_matches[0]if output_matches else 'state'
 
     return [['nems_lbhb.preprocessing.stack_signal_as_delayed_lines',
              {'signal': input_signal,
               'delay': int(delay),
               'duration': int(duration),
               'use_window_mean':int(use_window_mean),
+              'output_signal': output_signal},
+             ['rec'], ['rec']
+             ]]
+
+
+@xform('shfcat')
+def shfcat(kw):
+    """
+    shuffle and concatenate signal into a single signal. The shufling is independent (even absetn) for differente signals
+
+    format:
+
+    e.g. shfcat.i.resp0.state.o.state
+    meaning it takes stim and shuffles it (0), the state as is (no zero, no shuffle) and concatenate into a signal called
+    state (overwriting the original on)
+    """
+    # keyword arguments, state is default input and output if not specified
+    raw_signals = re.findall('\.i\.(.*)\.o\.', kw)[0].split('.')
+
+    output_signal = re.findall('\.o\.(\w+)\Z', kw)[0]
+
+    # parses the input signals. defining the action to do with each according to the code
+    code_map = {'0': 'shuffle',
+                '1': 'roll'}
+
+    input_signals = list()
+    to_shuffle = list()
+    for isig in raw_signals:
+        code_n = isig[-1]
+        if code_n in code_map:
+            to_shuffle.append(code_map[code_n])
+            input_signals.append(isig[:-1])
+        else:
+            to_shuffle.append('pass')
+            input_signals.append(isig)
+
+    return [['nems_lbhb.preprocessing.shuffle_and_concat_signals',
+             {'signals': input_signals,
+              'to_shuffle': to_shuffle,
               'output_signal': output_signal},
              ['rec'], ['rec']
              ]]
