@@ -154,6 +154,12 @@ shortnames = ['2D CNN', '1D CNN', '1D CNNx2', 'pop LN', 'CNN single']
 #shortnames=['conv1d','conv1dx2','dnn-sing']
 
 
+HELDOUT_CROSSBATCH = cross_batch_modelname=("ozgf.fs100.ch18-ld-norm.l1-sev_"
+                                            "wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-"
+                                            "wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_"
+                                            "prefit.hs.b322-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4")
+
+
 ####
 # A1 expanded dataset (v>=2)
 ####

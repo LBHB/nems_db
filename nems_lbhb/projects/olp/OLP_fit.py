@@ -660,3 +660,30 @@ def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
         return modelspecs, est_sub, val_sub
 
 
+def fit_weights(df, batch, fs=100):
+    df['batch'] = batch
+
+    df_fit = df[['cellid', 'SR', 'batch']].copy()
+    df_fit = df_fit.drop_duplicates(subset=['cellid'])
+
+    df0 = df_fit.apply(calc_psth_weight_resp, axis=1, fs=fs)
+
+    def drop_get_error(row):
+        row['weight_dfR'] = row['weight_dfR'].copy().drop(columns=['get_error', 'Efit'])
+        return row
+
+    df0 = df0.copy().drop(columns='get_nrmseR')
+    df0 = df0.apply(drop_get_error, axis=1)
+
+    weight_df = pd.concat(df0['weight_dfR'].values, keys=df0.cellid).reset_index(). \
+        drop(columns='level_1')
+    ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df.namesA, weight_df.namesB)]
+    weight_df = weight_df.drop(columns=['namesA', 'namesB'])
+    weight_df['epoch'] = ep_names
+
+    weights_df = pd.merge(right=weight_df, left=df, on=['cellid', 'epoch'])
+    if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
+        raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
+
+    return weights_df
+
