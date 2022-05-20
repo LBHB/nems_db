@@ -271,6 +271,8 @@ def st(loadkey):
             this_sig = ["pupil_x_population"]
         elif l.startswith("bxp"):
             this_sig = ["active_x_population"]
+        elif l.startswith("pca"):
+            this_sig = ["pca"]
         else:
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
@@ -436,7 +438,6 @@ def pca(loadkey):
 
     ops = loadkey.split(".")[1:]
 
-    pc_source = "psth"
     overwrite_resp = True
     pc_count=None
     pc_idx=None
@@ -444,9 +445,13 @@ def pca(loadkey):
     whiten = True
 
     options = {}
+    options['pc_source'] = "psth"
     for op in ops:
         if op == "psth":
             options['pc_source'] = "psth"
+        elif op == "p":
+            options['pc_source'] = "psth"
+            options['resp_sig'] = "psth"
         elif op == "all":
             options['pc_source'] = "all"
         elif op == "noise":
@@ -582,9 +587,16 @@ def plgsm(load_key):
     add_per_stim = ('s' in ops)
     split_per_stim = ('sp' in ops)
     reduce_mask = ('rm' in ops)
+    pca_split = 0
     for op in ops:
+        if op[:1] == 'p':
+            if len(op) > 1:
+                pca_split = int(op[1:])
+            else:
+                pca_split = 1
+
         if op[:1] == 'e':
-            evoked_only=True
+            evoked_only = True
             if len(op) > 1:
                 ev_bins = int(op[1:].strip('g').strip('r').strip('p'))
                 if 'g' in op:
@@ -600,7 +612,8 @@ def plgsm(load_key):
                 'custom_epochs': custom_epochs,
                 'reduce_mask': reduce_mask,
                 'respsort': respsort,
-                'pupsort': pupsort}]]
+                'pupsort': pupsort,
+               'pca_split': pca_split}]]
 
     return xfspec
 

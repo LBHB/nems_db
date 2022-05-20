@@ -11,6 +11,7 @@ import copy
 import pandas as pd
 import scipy.ndimage.filters as sf
 import seaborn as sns
+import scipy.stats as st
 
 import nems.plots.api as nplt
 import nems.xforms as xforms
@@ -374,29 +375,46 @@ def quick_pred_comp(cellid, batch, modelname1, modelname2,
 
     return ax, ctx1, ctx2
 
-def scatter_model_set(modelnames, batch, cellids=None, stat='r_test'):
+def scatter_model_set(modelnames=[], batch=322, cellids=None, stat='r_test', sf=1):
+    """
+    :param modelnames:
+    :param batch:
+    :param cellids:
+    :param stat:
+    :param sf: size of each plot (inches)
+    :return:
+    """
 
     shortened, prefix, suffix = find_common(modelnames)
     shortened = [s if len(s)>0 else "_" for s in shortened]
     d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
-    modelcount = d.shape[1]
+    dse = nd.batch_comp(batch, modelnames, cellids=cellids, stat='se_test')
 
+    modelcount = d.shape[1]
+    goodcells = (d/dse*2)>1
+    goodcells = goodcells.sum(axis=1)==modelcount
+    print(goodcells.sum(),goodcells.shape)
+    #import pdb; pdb.set_trace()
     cols=modelcount-1
     rows=modelcount-1
-    f,ax=plt.subplots(rows,cols, figsize=(cols,rows),sharex=True, sharey=True)
+    f,ax=plt.subplots(rows,cols, figsize=(cols*sf,rows*sf),sharex=True, sharey=True)
+    #goodcells = np.isnan(d).sum(axis=1)==0
     for i in range(modelcount):
         for j in range(i+1,modelcount):
-            a=d.iloc[:,i]
-            b=d.iloc[:,j]
+            a=d.loc[goodcells].values[:,i]
+            b=d.loc[goodcells].values[:,j]
+            mw=st.mannwhitneyu(a, b, alternative='two-sided')
+            medians = [np.median(a), np.median(b)]
             ax[j-1,i].plot([0,1],[0,1],'--',color='gray')
             ax[j-1,i].scatter(a,b,s=3,color='k')
             if j==modelcount-1:
-                ax[j-1,i].set_xlabel(shortened[i])
+                ax[j-1,i].set_xlabel(f"{shortened[i]} ({medians[0]:.3f})")
             if i==0:
-                ax[j-1,i].set_ylabel(shortened[j])
+                ax[j-1,i].set_ylabel(f"{shortened[j]} ({medians[1]:.3f})")
+            if sf>1:
+                ax[j-1,i].set_title(f"p={mw.pvalue:.3e}")
     #ax[rows-1,0].bar(np.linspace(0.15,0.85,len(modelnames)),d.mean(),width=0.1)
 
-    goodcells = np.isnan(d).sum(axis=1)==0
     print(d.loc[goodcells,:].median())
     print(f"Good cells: {goodcells.sum()}/{len(goodcells)}")
 
@@ -792,7 +810,7 @@ def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, t
     # left column + right column are identical
     el_shift = int(abs(max_shift)/3)
     tf=0
-    while tf is 0:
+    while tf == 0:
         if el_shift%3 != 0:
             el_shift += 1
         elif max_shift>0 and max_shift<3:
