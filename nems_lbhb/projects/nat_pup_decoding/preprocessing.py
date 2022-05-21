@@ -251,7 +251,9 @@ def get_pupil_range(X_pup, pmask):
                     'sp_var': np.nan,
                     'stim': stim}
         
-        df = df.append([results])
+        #df = df.append([results])
+        df = pd.concat([df,pd.DataFrame(results,index=[0])], ignore_index=True)
+
     # add overall results to df to compare across sites
     results = {'range': full_range,
                'max': max_pup,
@@ -259,5 +261,6 @@ def get_pupil_range(X_pup, pmask):
                'bp_var': np.nan,
                'sp_var': np.nan,
                'stim': 'all'}
-    df = df.append([results])
+    #df = df.append([results])
+    df = pd.concat([df,pd.DataFrame(results,index=[0])], ignore_index=True)
     return df
