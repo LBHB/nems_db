@@ -85,6 +85,16 @@ def tfheld(loadkey):
                                                                    'use_same_recording': use_same_recording}]]
     return xfspec
 
+@xform('rd')
+def rd(loadkey):
+    """
+    Run Decoding Analysis using context.
+    In the future, add options to specify options for the decoding analysis.
+    For now, just using defaults set in nems_lbhb.projects.nat_pup_decoding.do_decoding
+    """
+    xfspec = [['nems_lbhb.postprocessing.run_decoding', {}]]
+    return xfspec
+
 @xform()
 def rda(loadkey):
     """
