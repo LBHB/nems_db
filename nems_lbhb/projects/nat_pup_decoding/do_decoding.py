@@ -19,6 +19,10 @@ from itertools import combinations
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
 import os
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+print("suppressing FutureWarnings")
+
 import pandas as pd 
 import pickle
 import sys
@@ -448,17 +452,17 @@ def do_decoding_analysis(ctx):
                         else:
                             _tdr_results[sp_col] = np.nan # add place holder in case the first didn't have data for this
 
-                #temp_tdr_results = temp_tdr_results.append([_tdr_results])
-                t = {k: [v] for k,v in _tdr_results.items()}
-                temp_tdr_results = pd.concat([temp_tdr_results, pd.DataFrame(t)], ignore_index=True)
+                temp_tdr_results = temp_tdr_results.append([_tdr_results])
+                #t = {k: [v] for k,v in _tdr_results.items()}
+                #temp_tdr_results = pd.concat([temp_tdr_results, pd.DataFrame(t)], ignore_index=True)
                 tdr_results = pd.DataFrame(index=tdr_index, columns=temp_tdr_results.columns)
                 tdr_results.loc[tdr_idx] = temp_tdr_results.iloc[0].values
                 temp_tdr_results = pd.DataFrame()
 
             else:
-                #temp_tdr_results = temp_tdr_results.append([_tdr_results])
-                t = {k: [v] for k,v in _tdr_results.items()}
-                temp_tdr_results = pd.concat([temp_tdr_results, pd.DataFrame(t)], ignore_index=True)
+                temp_tdr_results = temp_tdr_results.append([_tdr_results])
+                #t = {k: [v] for k,v in _tdr_results.items()}
+                #temp_tdr_results = pd.concat([temp_tdr_results, pd.DataFrame(t)], ignore_index=True)
                 tdr_results.loc[tdr_idx, temp_tdr_results.keys()] = temp_tdr_results.iloc[0].values
                 temp_tdr_results = pd.DataFrame()
             tdr_idx += 1
@@ -540,6 +544,7 @@ def do_decoding_analysis(ctx):
     log.info('Computing mean pupil range for each pair of stimuli')
     combo_to_tup = lambda x: (int(x.split('_')[0]), int(x.split('_')[1])) 
     combos = pd.Series(tdr_results['combo'].values).apply(combo_to_tup)
+    #import pdb; pdb.set_trace()
     pr = pupil_range
     get_mean = lambda x: (pr[pr.stim==x[0]]['range'] + pr[pr.stim==x[1]]['range']) / 2
     pr_range = combos.apply(get_mean)
