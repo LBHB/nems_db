@@ -11,6 +11,10 @@ import numpy as np
 from sklearn.decomposition import PCA
 import scipy.signal as ss 
 
+import logging
+
+log = logging.getLogger(__name__)
+
 def get_one_hot_matrix(ncategories, nreps):
     # build Y matrix of one hot vectors
     Y = np.zeros((ncategories, ncategories * nreps))
@@ -68,7 +72,18 @@ class TDR():
         # figure out the axis that spans the plane with dU
         noise_on_dec = (np.dot(noise_axis, dU.T)) * dU
         orth_ax = noise_axis - noise_on_dec
-        orth_ax /= np.linalg.norm(orth_ax)
+
+        # account for (very rare case) that noise is perfectly aligned with 
+        # decoding axis. In that case, just add tiny bit of noise to
+        # jitter the noise axis and recompute orth_axis
+        if (np.linalg.norm(orth_ax)>0):
+            orth_ax /= np.linalg.norm(orth_ax)
+        else:
+            log.info("WARNING: dU was perfectly aligned with noise axis - probably because of a weak response artifact. Adding random jitter to get second ddr axis")
+            naxis_with_jitter = np.random.normal(0, 1, orth_ax.shape)/1000 + noise_axis
+            naxis_with_jitter = naxis_with_jitter / np.linalg.norm(naxis_with_jitter)
+            orth_ax = naxis_with_jitter - noise_on_dec
+            orth_ax /= np.linalg.norm(orth_ax)
 
         weights = np.concatenate((dU, orth_ax), axis=0)
 
