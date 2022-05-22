@@ -8,10 +8,6 @@ from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
 import itertools
 import pickle
-import json
-import jsonpickle
-import jsonpickle.ext.pandas as jsonpickle_pd
-jsonpickle_pd.register_handlers()
 import os
 import copy
 
@@ -371,14 +367,14 @@ class DecodingResults():
             if os.path.isfile(cache_file) & (recache==False):
                 log.info("loading pickle from {}".format(cache_file))
                 with open(fn, 'rb') as handle:
-                    data = pickle.load(handle)
+                    data = pickle.load(handle, protocol=pickle.HIGHEST_PROTOCOL)
                 return data
 
             if (not os.path.isfile(cache_file)) | recache:
                 # load fn, then cache it
                 log.info("loading pickle from {}".format(fn))
                 with open(fn, 'rb') as handle:
-                    data = pickle.load(handle)
+                    data = pickle.load(handle, protocol=pickle.HIGHEST_PROTOCOL)
                 log.info("caching pickle to {0}".format(cache_file))
                 try:
                     with open(cache_file, 'wb') as handle:
@@ -396,6 +392,7 @@ class DecodingResults():
             return data
 
     def save_json(self, fn):
+        raise DeprecationWarning("Don't use this anymore")
         log.info("json serializing DecodingResults object to {}".format(fn))
         js_string = jsonpickle.encode(self)
         try:
@@ -409,6 +406,7 @@ class DecodingResults():
                 json.dump(js_string, handle)
     
     def load_json(self, fn):
+        raise DeprecationWarning("Don't use this anymore")
         if not os.path.isfile(fn):
             raise FileNotFoundError
         log.info("loading json string from {}".format(fn))

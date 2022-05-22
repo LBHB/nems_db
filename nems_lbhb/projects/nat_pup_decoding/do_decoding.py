@@ -572,20 +572,30 @@ def do_decoding_analysis(ctx):
     # save results
     modelname = modelname.replace('*', '_')
 
-    log.info("Saving results to {}".format(os.path.join(path, str(batch))))
-    if not os.path.isdir(os.path.join(path, str(batch))):
-        os.mkdir(os.path.join(path, str(batch)))
-    if not os.path.isdir(os.path.join(path, str(batch), site)):
-        os.mkdir(os.path.join(path, str(batch), site))
+    results_path = ctx['modelspec'][0]['meta']['modelpath']
+    log.info(f"Saving results to {results_path}")
 
-    tdr_results.save_json(os.path.join(path, str(batch), site, modelname+'_TDR.json'))
-    tdr_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_TDR.pickle'))
+    tdr_results.save_pickle(os.path.join(results_path, modelname+'_TDR.pickle'))
 
     if do_PCA:
-        pca_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PCA.pickle'))
+        pca_results.save_pickle(os.path.join(results_path, modelname+'_PCA.pickle'))
 
     if do_pls:
-        pls_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PLS.pickle'))
-
+        pls_results.save_pickle(os.path.join(results_path, modelname+'_PLS.pickle'))
 
     return 0
+
+    # log.info("Saving results to {}".format(os.path.join(path, str(batch))))
+    # if not os.path.isdir(os.path.join(path, str(batch))):
+    #     os.mkdir(os.path.join(path, str(batch)))
+    # if not os.path.isdir(os.path.join(path, str(batch), site)):
+    #     os.mkdir(os.path.join(path, str(batch), site))
+
+    # tdr_results.save_json(os.path.join(path, str(batch), site, modelname+'_TDR.json'))
+    # tdr_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_TDR.pickle'))
+
+    # if do_PCA:
+    #     pca_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PCA.pickle'))
+
+    # if do_pls:
+    #     pls_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PLS.pickle'))
