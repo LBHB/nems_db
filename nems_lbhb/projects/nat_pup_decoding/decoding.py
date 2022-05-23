@@ -1827,6 +1827,8 @@ def load_site(site, batch, ctx=None, use_pred=False, pca_ops=None, pup_ops=None,
     Just get it out of ctx["val"]
     if use_pred = True, then load the prediction, not the raw response
     """
+    if type(batch) is str:
+        batch=int(batch)
     if ctx is None:
         if 0: #batch in [289, 294, 322]:
             options = {'cellid': site, 'rasterfs': 4, 'batch': batch, 'pupil': True, 'stim': False}

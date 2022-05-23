@@ -48,6 +48,8 @@ def do_decoding_analysis(ctx):
     # pull site / batch out of context
     site = ctx["meta"]["cellid"]
     batch = ctx["meta"]["batch"]
+    if type(batch) is str:
+        batch = int(batch)
     modelname = "decoding"
 
     # ================================ SET RNG STATE ===================================
