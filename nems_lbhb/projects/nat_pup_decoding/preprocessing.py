@@ -41,7 +41,6 @@ def dict_to_X(d):
                 X = np.append(X, r_epoch, axis=2)
     else:
         log.info(f"WARNING: Need to choose subset of reps for certain stim, since reps aren't even \n Max rep n: {max(reps)}, choosing {min_even_reps} from each stim to balance")
-        import pdb; pdb.set_trace()
         for i, epoch in enumerate(epochs):
             # don't choose randomly bc then wouldn't line up with other data that gets tranformed
             choose = np.arange(min_even_reps)
