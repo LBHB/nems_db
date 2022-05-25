@@ -92,7 +92,13 @@ def rd(loadkey):
     In the future, add options to specify options for the decoding analysis.
     For now, just using defaults set in nems_lbhb.projects.nat_pup_decoding.do_decoding
     """
-    xfspec = [['nems_lbhb.postprocessing.run_decoding', {}]]
+    use_pred = True
+    options = loadkey.split(".")
+    for op in options:
+        if op == "resp":
+            use_pred = False
+            
+    xfspec = [['nems_lbhb.postprocessing.run_decoding', {'use_pred': use_pred}]]
     return xfspec
 
 @xform()

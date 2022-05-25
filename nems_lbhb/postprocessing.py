@@ -17,7 +17,7 @@ def add_summary_statistics_by_condition(**context):
     # For new models the keyword 'ebc' (evaluate by condition) adds nems.xforms.add_summary_statistics_by_condition
 
 
-def run_decoding(**ctx):
+def run_decoding(use_pred, **ctx):
     """
     Run decoding analysis on LV model results.
     For now, just use hardcoded dprime analysis options. These could be modified with the 
@@ -25,7 +25,11 @@ def run_decoding(**ctx):
 
     CRH 2022.05.21
     """
-    success = decoding.do_decoding_analysis(ctx)
+    if use_pred:
+        log.info("Running decoding analysis on pred data")
+    else:
+        log.info("Running decoding analysis on raw data")
+    success = decoding.do_decoding_analysis(lv_model=use_pred, **ctx)
     # decoding results get saved in their own file, so don't really need to return anything
     if success == 0:
         return ctx

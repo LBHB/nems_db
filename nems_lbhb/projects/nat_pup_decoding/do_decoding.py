@@ -38,7 +38,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-def do_decoding_analysis(ctx):
+def do_decoding_analysis(lv_model=True, **ctx):
     """
     Meant to replace CRH's personal code for doing decoding analysis.
     Basically the only this that needed to change is to allow the decoding.load_site 
@@ -73,11 +73,7 @@ def do_decoding_analysis(ctx):
     sim2 = False
     sim12 = False
     sim_tdr_space = False  # perform the simulation in the TDR space. piggy-back on jackknifes for this. e.g. for each jackknife, do a new simulation
-                        # this is kludgy. may want to do more iterations. If so, gonna need to rethink the modelname / est val creation etc.
-
-    # default for this function (that's why we're running it afer model fit)
-    lv_model = True       # perform decoding on the simulated, lv model predictions
-    lv_str = ctx["meta"]["modelname"]
+                        # this is kludgy. may want to do more iterations. If so, gonna need to rethink the modelname / est val creation etc
 
     pca_ops = None
     do_pls = False
