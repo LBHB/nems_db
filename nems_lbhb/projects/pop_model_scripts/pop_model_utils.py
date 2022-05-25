@@ -7,16 +7,19 @@ from pathlib import Path
 import datetime
 import os
 import matplotlib as mpl
-mplparams = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.frameon': False,
-          'legend.fontsize': 8,
-          'axes.labelsize': 8,
-          'axes.titlesize': 8,
-          'xtick.labelsize': 8,
-          'ytick.labelsize': 8,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
+mplparams = {
+    'axes.spines.right': False,
+    'axes.spines.top': False,
+    'legend.frameon': False,
+    'legend.fontsize': 8,
+    'axes.labelsize': 8,
+    'axes.titlesize': 8,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
+    'pdf.fonttype': 42,
+    'ps.fonttype': 42,
+    'hatch.linewidth': 0.5
+}
 mpl.rcParams.update(mplparams)
 
 import nems
