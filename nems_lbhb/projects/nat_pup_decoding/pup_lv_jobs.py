@@ -20,28 +20,24 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 log = logging.getLogger(__name__)
 
 # A1/PEG LV models
-
-#batch = 331
-batch = 322
+batch = 331
+#batch = 322
 
 states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1',
           'st.pca.pup+r1+s1', 'st.pca.pup+r1']
 
 if batch == 331:
-    ## batch 331- CPN  (need epcpn keyword)
+    ## batch 331- CPN (need epcpn keyword)
     # batch 331 - pred
     modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd"+\
                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
-                "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
+                "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t5.f0.ss3"
     # batch 331 - actual data decoding
     resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{states[-1]}-plgsm.p2-aev-rd.resp"+\
                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
                 "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
 elif batch==322:
     ## batch 322- NAT
-    modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd"+\
-                "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
-                "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r4-aev-ccnorm.md.t5.f0.ss3"
     modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd"+\
                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
                 "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
@@ -57,7 +53,6 @@ else:
 modelnames=[resp_modelname]+[modelname_base.format(s) for s in states]
 
 siteids, cellids = db.get_batch_sites(batch)
-
 
 #siteids=[siteids[0]]
 
