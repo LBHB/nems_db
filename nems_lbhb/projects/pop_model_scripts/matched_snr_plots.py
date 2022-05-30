@@ -243,44 +243,47 @@ def plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path, ax=None):
 
     a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids = load_snr_and_cellids(322, 323, a1_snr_path, peg_snr_path)
     cell_map_df = get_matched_snr_mapping(a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids)
-    a1_matched_cellids = cell_map_df.A1_cellid
+    #a1_matched_cellids = cell_map_df.A1_cellid
     peg_matched_cellids = cell_map_df.PEG_cellid
-    a1_r = nd.batch_comp(322, HELDOUT[:1], stat=PLOT_STAT).loc[a1_matched_cellids]
+    #a1_r = nd.batch_comp(322, HELDOUT[:1], stat=PLOT_STAT).loc[a1_matched_cellids]
     peg_r = nd.batch_comp(323, [HELDOUT_CROSSBATCH], stat=PLOT_STAT).loc[peg_matched_cellids]
     peg_r2 = nd.batch_comp(323, HELDOUT[:1], stat=PLOT_STAT).loc[peg_matched_cellids]
-    test_crossbatch = st.wilcoxon(a1_r.values.flatten(), peg_r.values.flatten(), alternative='two-sided')
+    #test_crossbatch = st.wilcoxon(a1_r.values.flatten(), peg_r.values.flatten(), alternative='two-sided')
     test_within_peg = st.wilcoxon(peg_r.values.flatten(), peg_r2.values.flatten(), alternative='two-sided')
 
-    a1_r = a1_r.rename(columns={HELDOUT[0]: 'A1'})
-    peg_r = peg_r.rename(columns={HELDOUT_CROSSBATCH: 'PEG'})
-    combined_r = a1_r.join(peg_r, how='outer')
-    combined_df = combined_r.join(a1_snr_df, how='left')
-    combined_df = combined_df.fillna(peg_snr_df.loc[peg_matched_cellids])
-    combined_df[PLOT_STAT] = np.nan
-    combined_df.r_ceiling.loc[a1_matched_cellids] = combined_df.A1.loc[a1_matched_cellids]
-    combined_df.r_ceiling.loc[peg_matched_cellids] = combined_df.PEG.loc[peg_matched_cellids]
-    combined_df['variable'] = 'A1'
-    combined_df['variable'].loc[peg_matched_cellids] = 'PEG'
-    combined_df = combined_df.drop(columns='A1')
-    combined_df = combined_df.drop(columns='PEG')
-    combined_df = combined_df.sort_values(by='snr')
-    combined_df = combined_df.reset_index(0)
+    #a1_r = a1_r.rename(columns={HELDOUT[0]: 'A1'})
+    peg_r = peg_r.rename(columns={HELDOUT_CROSSBATCH: 'cross-batch held'})
+    peg_r2 = peg_r2.rename(columns={HELDOUT[0]: 'PEG held'})
+    combined_r = peg_r.join(peg_r2, how='outer')
+    #combined_df = combined_r.join(peg_snr_df, how='left')
+    #combined_df = combined_df.fillna(peg_snr_df.loc[peg_matched_cellids])
+    #combined_df[PLOT_STAT] = np.nan
+    #combined_df.r_ceiling.loc[a1_matched_cellids] = combined_df.A1.loc[a1_matched_cellids]
+    #combined_df.r_ceiling.loc[peg_matched_cellids] = combined_df.PEG.loc[peg_matched_cellids]
+    #combined_df['variable'] = 'A1'
+    #combined_df['variable'].loc[peg_matched_cellids] = 'PEG'
+    #combined_df = combined_df.drop(columns='A1')
+    #combined_df = combined_df.drop(columns='PEG')
+    #combined_df = combined_df.sort_values(by='snr')
+    #combined_df = combined_df.reset_index(0)
 
-    sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
+    #sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
                   #hue='snr', palette=f'dark:{DOT_COLORS["1D CNNx2"]}',
-                  size=2, ax=ax, zorder=0)
-    sns.boxplot(x='variable', y=PLOT_STAT, data=combined_df, boxprops={'facecolor': 'None', 'linewidth': 1},
+                  #size=2, ax=ax, zorder=0)
+    sns.stripplot(data=combined_r, color=DOT_COLORS['1D CNNx2'], size=2, ax=ax, zorder=0)
+    plt.xticks(rotation=45, fontsize=6, ha='right')
+    sns.boxplot(data=combined_r, boxprops={'facecolor': 'None', 'linewidth': 1},
                      showcaps=False, showfliers=False, whiskerprops={'linewidth': 0}, ax=ax)
     #ax.legend_.remove()  # tried to color by snr but it's just really hard to see, and no pattern anyway
     plt.tight_layout()
 
-    return a1_r, peg_r, peg_r2, test_crossbatch, test_within_peg
+    return peg_r, peg_r2, test_within_peg
 
 if __name__ == '__main__':
     a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
     peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-    a1_r, peg_r, peg_r2, test_between, test_within = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path)
+    peg_r, peg_r2, test_within = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path)
     plt.show(block=True)
 
     fig9a, ax4a = plt.subplots(figsize=single_column_short)

@@ -213,14 +213,14 @@ peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 fig9, ax4 = plt.subplots(1, 3, figsize=column_and_half_short)
 test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_match, peg_md, peg_md_match, \
     a1_md_snr, a1_md_snr_match, peg_md_snr, peg_md_snr_match = plot_matched_snr(
-        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4[0], inset_ax=ax4[1]
+        a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4[1], inset_ax=ax4[0]
     )
 ax4[0].set_ylabel('Prediction correlation')
 ax4[0].set_xlabel('')
 ax4[0].set_box_aspect(1)
 ax4[1].set_box_aspect(1)
 
-a1_heldout_r, peg_crossbatch_r, peg_heldout_r,  wilcoxon_between, wilcoxon_peg = plot_heldout_a1_vs_peg(
+peg_crossbatch_r, peg_heldout_r, wilcoxon_peg = plot_heldout_a1_vs_peg(
     a1_snr_path, peg_snr_path, ax=ax4[2]
 )
 ax4[2].set_box_aspect(1)
@@ -252,9 +252,7 @@ stats_tests.append(f'peg median snr, full: {peg_md_snr}, matched: {peg_md_snr_ma
 stats_tests.append(f'test significance for full data: {test_snr}')
 
 stats_tests.append('\ncross-batch heldout:')
-stats_tests.append(f'A1-second (standard heldout) median r: {np.median(a1_heldout_r)}')
 stats_tests.append(f'PEG-second (crossbatch) median r: {np.median(peg_crossbatch_r)}')
-stats_tests.append(f'{wilcoxon_between}')
 stats_tests.append(f'PEG-first-and-second (standard heldout) median r: {np.median(peg_heldout_r)}')
 stats_tests.append(f'{wilcoxon_peg}')
 
