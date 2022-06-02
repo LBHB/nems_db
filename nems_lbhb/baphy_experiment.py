@@ -3,6 +3,7 @@ from pathlib import Path
 import logging
 import re
 import os
+import stat
 import os.path
 import pickle
 import pathlib as pl
@@ -137,7 +138,6 @@ class BAPHYExperiment:
             files.sort()
             self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
-
         # db-free options for loading specific cellids / parmfiles
         # here, must assume cellid = cells_to_load = cells_to_extract 
         # (so, might end up caching an extra, redundant, recording,
@@ -212,6 +212,9 @@ class BAPHYExperiment:
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
         self.folder = self.parmfile[0].parent
         self.experiment = [p.name.split('_', 1)[0] for p in self.parmfile]
+
+        # hard coded -- copy raw tgz files locally to load OE data
+        self.local_copy_raw = True
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
@@ -775,6 +778,34 @@ class BAPHYExperiment:
             selected_data = np.take(data_files, idx)
             continuous_data = []
             timestamp0 = []
+
+            if self.local_copy_raw:
+                filename = selected_data[-1]
+                full_filename = openephys_folder / filename
+                if ~os.path.isfile(full_filename):
+                    # file doesn't exist (still zipped?) unzip to a local folder
+                    tmppath = Path('/tmp/evpread/')
+                    newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+
+                    test_filename = newpath / filename
+                    if os.path.isfile(test_filename):
+                        log.info(f"Local un-tar-ed copy exists in: {newpath}")
+                    else:
+
+                        log.info(f"Temp untaring raw data to {newpath}")
+                        os.makedirs(tmppath, exist_ok=True)
+
+                        # open file
+                        file = tarfile.open(tarfile_fullpath)
+                        # extracting file
+                        file.extractall(tmppath, numeric_owner=True)
+                        file.close()
+                        os.chmod(tmppath / tarfile_fullpath.stem, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                        os.chmod(newpath, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+
+                    # point to the local folder
+                    openephys_folder = newpath
+
             for filename in selected_data:
                 full_filename = openephys_folder / filename
                 if os.path.isfile(full_filename):

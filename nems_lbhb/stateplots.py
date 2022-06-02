@@ -1239,12 +1239,17 @@ def state_resp_coefs(rec, modelspec, ax=None,
     """
 
 
-def cc_comp(val, modelspec, ax=None, extra_epoch=None, **options):
+def cc_comp(val, modelspec, ax=None, extra_epoch=None, masknames=None, **options):
     ## display noise corr. matrices
-    f,ax = plt.subplots(4,3, figsize=(9,12))
+    f, ax = plt.subplots(4, 3, figsize=(9, 12))
     #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
-    if extra_epoch is not None:
+    if masknames is not None:
+        rec = val.copy()
+        small_idx = rec[masknames[0]].as_continuous()[0,:].astype(bool)
+        large_idx = rec[masknames[1]].as_continuous()[0,:].astype(bool)
+
+    elif extra_epoch is not None:
         rec=val.copy()
         rec=rec.and_mask(extra_epoch)
         rec = rec.apply_mask()

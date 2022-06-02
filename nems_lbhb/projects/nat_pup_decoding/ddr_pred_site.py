@@ -37,6 +37,37 @@ ALL_SITES = ['BOL005c', 'BOL006b', 'bbl086b', 'bbl099g', 'bbl104h', 'BRT026c', '
             'CRD016d', 'CRD017c',
             'TNC008a', 'TNC009a', 'TNC010a', 'TNC012a', 'TNC013a', 'TNC014a', 'TNC015a', 'TNC016a', 'TNC017a', 'TNC018a', 'TNC020a']
 
+def parse_modelname_base(modelname_base, batch=None):
+
+    if batch is None:
+        if 'epcpn' in modelname_base:
+            batch = 331
+        else:
+            batch = 322
+
+    if batch == 331:
+        resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp" + \
+                     "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
+    else:
+        resp_modelname = f"psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp" + \
+                         "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
+                         "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
+
+    if 'lvnorm.6' in str(modelname_base):
+        states = ['st.pca0.pup+r3+s0,1,2,3', 'st.pca.pup+r3+s0,1,2,3',
+                  'st.pca.pup+r3+s1,2,3', 'st.pca.pup+r3+s2,3', 'st.pca.pup+r3+s3', 'st.pca0.pup+r3+s3']
+    elif 'lvnorm.5' in str(modelname_base):
+        states = ['st.pca0.pup+r2+s0,1,2', 'st.pca.pup+r2+s0,1,2',
+                  'st.pca.pup+r2+s1,2', 'st.pca.pup+r2+s2', 'st.pca.pup+r2', 'st.pca0.pup+r2']
+    else:
+        states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1', 'st.pca.pup+r1+s1', 'st.pca.pup+r1']
+
+    modelnames = [resp_modelname] + [modelname_base.format(s) for s in states]
+
+    return modelnames, states
+
+
 def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, skip_plot=False):
     if batch is None:
         batch=331
@@ -49,37 +80,24 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, ski
     if len(cellid)==0:
         raise ValueError(f"No match for site {site} batch {batch}")
 
-    states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1', 'st.pca.pup+r1+s1', 'st.pca.pup+r1']
-
     if batch == 331:
         if modelname_base is None:
             modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                              "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                             "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
-            #modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
-            #                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-            #                 "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss4"
-        resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{states[-1]}-plgsm.p2-aev-rd.resp" + \
-                         "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                         "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
+                             "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
     else:
-        #modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
-        #                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-        #                 "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r4-aev-ccnorm.md.t5.f0.ss3"
         modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                          "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
                          "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
-        resp_modelname = f"psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{states[-1]}-plgsm.p2-aev-rd.resp" + \
-                         "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                         "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
     log.info(f"site {site} modelname_base: {modelname_base}")
-    modelnames = [resp_modelname] + [modelname_base.format(s) for s in states]
+
+    modelnames, states = parse_modelname_base(modelname_base)
     labels = ['actual'] + states
 
-    mse = np.zeros((4, 3))
-    cc = np.zeros((4, 3))
+    mse = np.zeros((len(modelnames)-1, 3))
+    cc = np.zeros((len(modelnames)-1, 3))
 
-    f, ax = plt.subplots(4, 5, figsize=(6, 5), sharex='row', sharey='row');
+    f, ax = plt.subplots(4, len(modelnames), figsize=(6, 5), sharex='row', sharey='row');
     for i, m in enumerate(modelnames):
         modelpath = db.get_results_file(batch=batch, modelnames=[m], cellids=[cellid]).iloc[0]["modelpath"]
 
@@ -116,8 +134,11 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, ski
             raw_df.loc[:, 'delta_pred'] = (raw_df["bp_dp"] - raw_df["sp_dp"]) / (raw_df["bp_dp"] + raw_df["sp_dp"])
             raw_df = raw_df.merge(resp_df, how='inner', left_index=True, right_index=True)
 
-            cc[i-1, 0] = np.corrcoef(raw_df['bp_dp'], raw_df['bp_dp_act'])[0, 1]
-            mse[i-1, 0] = np.std(raw_df['bp_dp']-raw_df['bp_dp_act'])
+            x = np.concatenate((raw_df['bp_dp'], raw_df['sp_dp']))
+            y = np.concatenate((raw_df['bp_dp_act'], raw_df['sp_dp_act']))
+            cc[i-1, 0] = np.corrcoef(x, y)[0, 1]
+            mse[i-1, 0] = np.std(x-y)
+
             ax[1, i].scatter(raw_df['bp_dp'], raw_df['bp_dp_act'], s=3, alpha=0.4)
             ax[1, i].set_title(f"{cc[i-1, 0]:.3f}")
 
@@ -166,44 +187,62 @@ def ddr_sum_all(batch=331, modelname_base=None):
             labels, cc, mse, pupil_range = ddr_pred_site_sim(
                 site, batch=batch, modelname_base=modelname_base,
                 skip_plot=True)
-            labels2=[l+'_raw' for l in labels]
+            labelsabs = [l + '_abs_cc' for l in labels]
+            labelscc = [l + '_cc' for l in labels]
+            labelsraw = [l + '_raw_cc' for l in labels]
+            labelsmabs = [l + '_abs_mse' for l in labels]
+            labelsmse = [l + '_mse' for l in labels]
+            labelsmraw = [l + '_raw_mse' for l in labels]
 
             d = {'site': site, 'batch': batch,
                  'pupil_range': pupil_range, 'cc_base': cc[0,0]}
-            for l,c,m in zip(labels+labels2, cc[:,1:].T.flatten(), mse[:,1:].T.flatten()):
-                d[l+'_cc'] = c
-                #d[l+'_mse'] = m
+            for i in range(len(labelscc)):
+                d[labelsabs[i]]=cc[i,0]
+                d[labelscc[i]]=cc[i,1]
+                d[labelsraw[i]]=cc[i,2]
+                d[labelsmabs[i]]=mse[i,0]
+                d[labelsmse[i]]=mse[i,1]
+                d[labelsmraw[i]]=mse[i,2]
 
             res.append(pd.DataFrame(d, index=[0]))
         except:
             print(f"Skipping site {site}")
+            plt.close()
+
     df = pd.concat(res, ignore_index=True)
 
-    labels2 = [l+'_raw' for l in labels]
-    f, ax = plt.subplots(2, 2, figsize=(5,5))
-    #s = (df['pupil_range'] - df['pupil_range'].min()) * 50 + 1
-    s = (df['cc_base']-df['cc_base'].min())*50+1
-    mmin = np.nanmin(df[[labels[1]+'_cc',labels[2]+'_cc',labels[3]+'_cc']].values)
-    mmax = np.nanmax(df[[labels[1]+'_cc',labels[2]+'_cc',labels[3]+'_cc']].values)
-    ax[0,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-    ax[0,0].scatter(df[labels[1]+'_cc'],df[labels[2]+'_cc'],s=s)
-    ax[0,0].set_ylabel('first-order')
-    ax[0,0].set_xlabel('shuff')
-    ax[0,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-    ax[0,1].scatter(df[labels2[1]+'_cc'],df[labels2[2]+'_cc'],s=s)
-    ax[0,1].set_title('raw cc')
+    labels = [labelsabs,labelscc, labelsraw , labelsmabs,labelsmse, labelsmraw]
 
-    ax[1,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-    ax[1,0].scatter(df[labels[2]+'_cc'],df[labels[3]+'_cc'],s=s)
-    ax[1,0].set_ylabel('pup LV')
-    ax[1,0].set_xlabel('first-order')
-    ax[1,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-    ax[1,1].scatter(df[labels2[2]+'_cc'],df[labels2[3]+'_cc'],s=s)
-    f.suptitle(f'batch {batch}')
-    plt.tight_layout()
-    #f.savefig(f'/auto/users/svd/projects/pop_state/ddr_pred_{batch}_all.jpg')
+    if 0:
+        f, ax = plt.subplots(2, 2, figsize=(5,5))
+        #s = (df['pupil_range'] - df['pupil_range'].min()) * 50 + 1
+        s = (df['cc_base']-df['cc_base'].min())*50+1
+        mmin = np.nanmin(df[[labelscc[2],labelscc[3],labelscc[4]]].values)
+        mmax = np.nanmax(df[[labelscc[2],labelscc[3],labelscc[4]]].values)
+        ax[0,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[0,0].scatter(df[labelscc[2]],df[labelscc[3]],s=s)
+        ax[0,0].set_ylabel('1st-order/indep pup')
+        ax[0,0].set_xlabel('shuff')
+        ax[0,1].set_title('norm cc')
+        ax[0,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[0,1].scatter(df[labelsraw[2]],df[labelsraw[3]],s=s)
+        ax[0,1].set_title('raw cc')
 
-    return df, f
+        ax[1,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[1,0].scatter(df[labelscc[3]],df[labelscc[4]],s=s)
+        ax[1,0].set_ylabel('pup LV')
+        ax[1,0].set_xlabel('1st-order/indep pup')
+        ax[1,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[1,1].scatter(df[labelsraw[3]],df[labelsraw[4]],s=s)
+        f.suptitle(f"{batch} - {modelname_base.split('_')[-1]}")
+        plt.tight_layout()
+        #f.savefig(f'/auto/users/svd/projects/pop_state/ddr_pred_{batch}_all.jpg')
+
+    else:
+        pass
+
+    return df, labels
+
 
 if __name__ == '__main__':
     site, batch = "CRD016d", 322
@@ -226,10 +265,10 @@ if __name__ == '__main__':
     site, batch = "ARM005e", 331
     site, batch = "ARM029a", 331
 
-    modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
-                     "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                     "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t5.f0.ss3"
-    modelname_base=None
+    modelname_base = None
 
+    modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd"+\
+                "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
+                "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t5.f0.ss3"
     labels, cc, mse, pupil_range = ddr_pred_site_sim(site, batch=batch, modelname_base=modelname_base)
 
