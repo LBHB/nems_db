@@ -379,8 +379,8 @@ def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purpl
     if mult_ctx:
         for e in range(len(ctx)):
             print(f"{labels[e]} {predcolor[e]}")
-            r=ctx[e]['modelspec'].meta['r_test'][c][0]
-            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor[e], label=f"{labels[e]} r={r:.2f}");
+            r=ctx[e]['modelspec'].meta['r_ceiling'][c][0]
+            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor[e], label=f"{labels[e]} r={r:.3f}");
     else: 
         ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
 
