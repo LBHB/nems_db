@@ -1,3 +1,27 @@
+"""
+demo code:
+
+from nems_lbhb.projects.nat_pup_decoding import ddr_pred_site
+
+site='AMT020a'
+batch=331
+modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                 "_stategain.2xR.x1,3,4-spred-lvnorm.5xR.so.x2,3-inoise.5xR.x2,4" + \
+                 "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
+modelnames, states = ddr_pred_site.parse_modelname_base(modelname_base)
+
+# plot single site
+labels, cc, mse, pupil_range = ddr_pred_site.ddr_pred_site_sim(site, batch=batch, modelname_base=modelname_base, save_fig=False);
+
+# compute and plot summary
+df, labels = ddr_pred_site.ddr_sum_all(batch=331, modelname_base=modelname_base)
+ddr_pred_site.ddr_plot_pred_sum(df, labels, modelnames)
+
+
+"""
+
+
+
 import numpy as np
 import os
 import io
@@ -8,6 +32,7 @@ import sys, importlib
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 
 import nems.modelspec as ms
 import nems.xforms as xforms
@@ -242,6 +267,52 @@ def ddr_sum_all(batch=331, modelname_base=None):
         pass
 
     return df, labels
+
+
+def ddr_plot_pred_sum(df, labels, modelnames):
+    labelsabs, labelscc, labelsraw, labelmraw, labelsmse, labelsmraw = labels
+
+    if len(modelnames)==5:
+        c1,c2,c3=[1,2,3]
+    elif len(modelnames)==7:
+        c1,c2,c3=[1,3,4]
+
+    plt.close('all')
+    f1, ax = plt.subplots(len(labels), 1, figsize=(3,8), sharex=True)
+    cats = ['ccabs','ccnorm','ccraw','mseabs','msenorm','mseraw']
+    shortlabels=[l.replace('_cc','').replace('st.','') for l in labelscc]
+    for i in range(len(labels)):
+        d = df[labels[i]]
+        d.columns=shortlabels
+        sns.stripplot(data=d, s=2, ax=ax[i])
+        ax[i].errorbar(np.arange(len(labels[i])), d.median(),
+                        d.std()/np.sqrt(len(d)))
+        ax[i].set_ylabel(cats[i])
+        #sns.pointplot(data=df[labels[i]], ci=95, color='black', lw=1, markers='', join=False, s=0, ax=ax[i])
+    ax[-1].set_xticklabels(shortlabels, rotation = 45)
+    plt.tight_layout()
+
+    f2, ax = plt.subplots(len(labels),2, figsize=(3,8))
+    for i in range(len(labels)):
+        l=labels[i]
+        shortlabels=[l.replace('_cc','').replace('st.','') for l in labels[i]]
+
+        d = df[labels[i]]
+        mmin = np.nanmin(df[[l[c1],l[c2],l[c3]]].values)
+        mmax = np.nanmax(df[[l[c1],l[c2],l[c3]]].values)
+        ax[i,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[i,0].scatter(df[l[c1]],df[l[c2]],s=3)
+        ax[i,0].set_xlabel(shortlabels[c1], fontsize=6)
+        ax[i,0].set_ylabel(shortlabels[c2], fontsize=6)
+        ax[i,0].set_title(cats[i], fontsize=6)
+        ax[i,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
+        ax[i,1].scatter(df[l[c2]],df[l[c3]],s=3)
+        ax[i,1].set_xlabel(shortlabels[c2], fontsize=6)
+        ax[i,1].set_ylabel(shortlabels[c3], fontsize=6)
+    plt.tight_layout()
+
+    return f1, f2
+
 
 
 if __name__ == '__main__':
