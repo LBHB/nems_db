@@ -57,6 +57,11 @@ if batch == 331:
     modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                      "_stategain.2xR.x1,3,4-spred-lvnorm.5xR.so.x2,4-inoise.5xR.x2,3" + \
                      "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t5.f0.ss3"
+
+    modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                     "_stategain.2xR.x1,3,4-spred-lvnorm.5xR.so.x2,3-inoise.5xR.x2,4" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t5.f0.ss3"
+
     # batch 331 - actual data decoding
     resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp"+\
                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
@@ -78,7 +83,7 @@ else:
     raise ValueError('batch not implemented')
 
 modelnames, states = parse_modelname_base(modelname_base, batch)
-
+#modelnames=[modelnames[1]]
 siteids, cellids = db.get_batch_sites(batch)
 
 #siteids=[siteids[0]]
