@@ -3,6 +3,7 @@ import datetime
 import os
 
 import numpy as np
+import scipy.stats as st
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     mplparams, MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
@@ -58,11 +59,13 @@ a1_cell_count = len(a1_r)
 a1_site_count = len(set([s.split('-')[0] for s in a1_r.index.values]))
 peg_cell_count = len(peg_r)
 peg_site_count = len(set([s.split('-')[0] for s in peg_r.index.values]))
+sig_cells_A1 = get_significant_cells(322, SIG_TEST_MODELS, as_list=True)
+sig_cells_PEG = get_significant_cells(323, SIG_TEST_MODELS, as_list=True)
 
 stats_tests.append('scatter / bar summary figure')
 stats_tests.append('site and cell counts:')
-stats_tests.append(f'A1: {a1_site_count} sites, {a1_cell_count} cells')
-stats_tests.append(f'PEG: {peg_site_count} sites, {peg_cell_count} cells')
+stats_tests.append(f'A1: {a1_site_count} sites, {a1_cell_count} cells, {len(sig_cells_A1)} significant')
+stats_tests.append(f'PEG: {peg_site_count} sites, {peg_cell_count} cells, {len(sig_cells_PEG)} significant')
 
 stats_tests.append('scatter plots')
 stats_tests.append(f'1D vs LN, {n_sig_1d_LN} sig. cells, {n_nonsig_1d_LN} non-sig. cells')
@@ -129,6 +132,36 @@ relative_changes_per_model = [means[0][i] / means[1][i] for i, _ in enumerate(la
 relative_change_pareto = '\n'.join([f'{n}: {changes.mean()}' for n, changes in zip(labels, relative_changes_per_model)])
 stats_tests.append('\n\nPareto plot, relative change a1/peg:')
 stats_tests.append(relative_change_pareto)
+
+
+LN_single = MODELGROUPS['LN'][4]
+pop_LN = ALL_FAMILY_MODELS[3]
+sig_cells_A1 = get_significant_cells(322, SIG_TEST_MODELS, as_list=True)
+r1 = nd.batch_comp(322, [LN_single, pop_LN], cellids=sig_cells_A1, stat=PLOT_STAT)
+LN_test1 = st.wilcoxon(getattr(r1, LN_single), getattr(r1, pop_LN), alternative='two-sided')
+
+sig_cells_PEG = get_significant_cells(323, SIG_TEST_MODELS, as_list=True)
+r2 = nd.batch_comp(323, [LN_single, pop_LN], cellids=sig_cells_PEG, stat=PLOT_STAT)
+LN_test2 = st.wilcoxon(getattr(r2, LN_single), getattr(r2, pop_LN), alternative='two-sided')
+
+stats_tests.append('\nLN single vs pop LN:')
+stats_tests.append(f'A1: {LN_test1}')
+stats_tests.append(f'PEG: {LN_test2}')
+# fig1 = plt.figure()
+# plt.scatter(getattr(r2, LN_single), getattr(r2, pop_LN), c='black')
+# plt.plot([[0,0], [1,1]], c='black', linestyle='dashed')
+# plt.xlim(0,1)
+# plt.ylim(0,1)
+# ax = plt.gca()
+# ax.set_box_aspect(1)
+#
+# fig2 = plt.figure()
+# plt.hist(getattr(r2, LN_single) - getattr(r2, pop_LN), bins=40)
+# plt.title('LN single - pop LN')
+#
+# print(f'A1: {LN_test1}, {len(sig_cells1)} cells')
+# print(f'PEG: {LN_test2}, {len(sig_cells2)} cells')
+# plt.show(block=True)
 
 
 ########################################################################################################################
