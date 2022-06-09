@@ -243,9 +243,9 @@ def sparseness_figs():
     ref_models = ['A1 act','A1 1D CNN','PEG act','PEG 1D CNN']
     test_models = ['A1 1D CNN','A1 pop LN','PEG 1D CNN','PEG pop LN']
 
-    tests = [[m1,m2,st.mannwhitneyu(sd.loc[sd['label']==m1,'S'], sd.loc[sd['label']==m2,'S'], alternative='two-sided')]
+    tests = [[m1,m2,st.wilcoxon(sd.loc[sd['label']==m1,'S'], sd.loc[sd['label']==m2,'S'], alternative='two-sided')]
              for m1, m2 in zip(ref_models, test_models)]
-    print(pd.DataFrame(tests, columns=['ref','test','MannWhitney u,p']))
+    print(pd.DataFrame(tests, columns=['ref','test','Wilcoxon u,p']))
     print(sd.groupby('label').median())
 
     f1.tight_layout()
