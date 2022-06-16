@@ -518,6 +518,8 @@ class BAPHYExperiment:
         # default sampling rates depend on what signals are loaded
         if raw:
             kwargs['rasterfs'] = kwargs.get('rasterfs', 400)
+            kwargs['lp'] = kwargs.get('lp', None)
+            kwargs['hp'] = kwargs.get('hp', None)
         else:
             kwargs['rasterfs'] = kwargs.get('rasterfs', 100)
             
@@ -606,7 +608,9 @@ class BAPHYExperiment:
             if rawchans is None:
                 rawchans = np.arange(globalparams[0]['NumberOfElectrodes'])
             fs = kwargs['rasterfs']
-            d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs)
+            hp = kwargs['hp']
+            lp = kwargs['lp']
+            d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs, hp=hp, lp=lp)
             #import pdb;pdb.set_trace()
             for i in range(len(baphy_events)):
                 #s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
@@ -711,8 +715,9 @@ class BAPHYExperiment:
 
         if stim:
             #import pdb; pdb.set_trace()
+            stim_kwargs = {key:val for key, val in kwargs.items() if key not in ['hp','lp']}
             stim_sigs = [nems.signal.TiledSignal(
-                            data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **kwargs)[0],
+                            data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **stim_kwargs)[0],
                             fs=kwargs['rasterfs'], name='stim',
                             epochs=baphy_events[i], recording=rec_name)
                         for i, p in enumerate(self.parmfile)]
@@ -738,7 +743,7 @@ class BAPHYExperiment:
 
     # ==================== DATA EXTRACTION METHODS =====================
 
-    def get_continuous_data(self, chans, rasterfs=None):
+    def get_continuous_data(self, chans, rasterfs=None, lp=None, hp=None):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
@@ -774,6 +779,10 @@ class BAPHYExperiment:
                                 for i in recChans[connector].keys()]
             data_files = [connector + '_' + c + '.continuous' for c in recChans]
             all_chans = np.arange(len(data_files))
+
+            if type(chans) is tuple:
+                chans = list(chans)
+
             idx = all_chans[chans].tolist()
             selected_data = np.take(data_files, idx)
             continuous_data = []
@@ -811,10 +820,70 @@ class BAPHYExperiment:
                 if os.path.isfile(full_filename):
                     log.info('%s already extracted, load faster...', filename)
                     data = io.load_continuous_openephys(str(full_filename))
-                    if rasterfs is None:
+                    if rasterfs is None and lp is None and hp is None:
+                        print("no parameters specified")
                         continuous_data.append(data['data'][np.newaxis, :])
                         timestamp0.append(data['timestamps'][0])
+                    elif lp is not None and hp is not None and rasterfs is not None:
+                        print("bandpass filter and sample rate specified")
+                        # filter data within bandwidth
+                        sos = scipy.signal.butter(4, [hp, lp], 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+                        data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
+                        resample_new_size = int(
+                            np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+                    elif lp is not None and hp is not None:
+                        print("bandpass filter selected sample rate set to Nyquist")
+                        # filter data within bandwidth
+                        sos = scipy.signal.butter(4, [hp, lp], 'bandpass', fs=int(data['header']['sampleRate']),
+                                                  output='sos')
+                        data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
+                        resample_new_size = int(
+                            np.round(len(data['bpfiltered']) * lp*2 / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * lp*2 / int(data['header']['sampleRate']))
+                    elif lp is not None and rasterfs is not None:
+                        # filter data within bandwidth
+                        print("lowpass filter selected and sample rate specified")
+                        sos = scipy.signal.butter(4, lp, 'lowpass', fs=int(data['header']['sampleRate']),
+                                                  output='sos')
+                        data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
+                        resample_new_size = int(
+                            np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * rasterfs/ int(data['header']['sampleRate']))
+                    elif hp is not None and rasterfs is not None:
+                        # filter data within bandwidth
+                        print("high pass filter selected and sample rate specified")
+                        sos = scipy.signal.butter(4, hp, 'highpass', fs=int(data['header']['sampleRate']),
+                                                  output='sos')
+                        data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
+                        resample_new_size = int(
+                            np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+                    elif lp is not None:
+                        print("lowpass filter selected sample rate set to Nyquist")
+                        sos = scipy.signal.butter(4, lp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+                        data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'], axis=1)
+                        resample_new_size = int(
+                            np.round(len(data['lpfiltered']) * lp*2 / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * lp*2  / int(data['header']['sampleRate']))
+                    elif hp is not None:
+                        print("highpass filter selected sample rate not adjusted")
+                        sos = scipy.signal.butter(4, hp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+                        data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'], axis=1)
+                        continuous_data.append(data['hpfiltered'][np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0])
                     else:
+                        print("sample rate specified...downsampling data")
                         resample_new_size = int(np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
                         d = scipy.signal.resample(data['data'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
