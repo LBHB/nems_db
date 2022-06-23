@@ -33,6 +33,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from scipy import stats
 
 import nems.modelspec as ms
 import nems.xforms as xforms
@@ -69,8 +70,17 @@ def parse_modelname_base(modelname_base, batch=None):
             batch = 331
         else:
             batch = 322
+    if 'plgsm.er5' in modelname_base:
+        short_set=True
+    else:
+        short_set=False
 
-    if batch == 331:
+    if short_set:
+        resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.er5-aev-rd.resp" + \
+                     "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
+
+    elif batch == 331:
         resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp" + \
                      "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
                      "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
@@ -85,6 +95,8 @@ def parse_modelname_base(modelname_base, batch=None):
     elif 'lvnorm.5' in str(modelname_base):
         states = ['st.pca0.pup+r2+s0,1,2', 'st.pca.pup+r2+s0,1,2',
                   'st.pca.pup+r2+s1,2', 'st.pca.pup+r2+s2', 'st.pca.pup+r2', 'st.pca0.pup+r2']
+        #states = ['st.pca0.pup+r2+s0,1,2', 'st.pca0.pup+r2+s0,1,2',
+        #          'st.pca0.pup+r2+s1,2', 'st.pca0.pup+r2+s2', 'st.pca0.pup+r2', 'st.pca0.pup+r2']
     else:
         states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1', 'st.pca.pup+r1+s1', 'st.pca.pup+r1']
 
@@ -93,7 +105,7 @@ def parse_modelname_base(modelname_base, batch=None):
     return modelnames, states
 
 
-def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, skip_plot=False):
+def ddr_pred_site_sim(site, batch=None, modelname_base=None, just_return_mean_dp=False, save_fig=False, skip_plot=False):
     if batch is None:
         batch=331
         cellid = [c for c in db.get_batch_cells(batch).cellid if site in c][0]
@@ -122,7 +134,29 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, ski
     mse = np.zeros((len(modelnames)-1, 3))
     cc = np.zeros((len(modelnames)-1, 3))
 
-    f, ax = plt.subplots(4, len(modelnames), figsize=(6, 5), sharex='row', sharey='row');
+    if just_return_mean_dp:
+        dp = np.zeros((len(modelnames),2))
+        for i, m in enumerate(modelnames):
+            modelpath = db.get_results_file(batch=batch, modelnames=[m], cellids=[cellid]).iloc[0]["modelpath"]
+
+            loader = decoding.DecodingResults()
+            raw_res = loader.load_results(os.path.join(modelpath, "decoding_TDR.pickle"))
+
+            raw_df = raw_res.numeric_results
+            raw_df = raw_df.loc[pd.IndexSlice[raw_res.evoked_stimulus_pairs, 2], :].copy()
+
+            if 'mask_bins' in raw_res.meta.keys():
+                mask_bins = raw_res.meta['mask_bins']
+                fit_combos = [k for k, v in raw_res.mapping.items() if (('_'.join(v[0].split('_')[:-1]), int(v[0].split('_')[-1])) in mask_bins) & \
+                                                                    (('_'.join(v[1].split('_')[:-1]), int(v[1].split('_')[-1])) in mask_bins)]
+                all_combos = raw_res.evoked_stimulus_pairs
+                val_combos = [c for c in all_combos if c not in fit_combos]
+            s=raw_df["sp_dp"]/(raw_df["sp_dp"]+raw_df["bp_dp"])
+            l=raw_df["bp_dp"]/(raw_df["sp_dp"]+raw_df["bp_dp"])
+            dp[i,:] = [s.mean(), l.mean]
+        return labels,dp
+            
+    f, ax = plt.subplots(4, len(modelnames), figsize=(8, 6), sharex='row', sharey='row');
     for i, m in enumerate(modelnames):
         modelpath = db.get_results_file(batch=batch, modelnames=[m], cellids=[cellid]).iloc[0]["modelpath"]
 
@@ -132,6 +166,14 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, ski
         raw_df = raw_res.numeric_results
         raw_df = raw_df.loc[pd.IndexSlice[raw_res.evoked_stimulus_pairs, 2], :].copy()
 
+        if 'mask_bins' in raw_res.meta.keys():
+            mask_bins = raw_res.meta['mask_bins']
+            fit_combos = [k for k, v in raw_res.mapping.items() if (('_'.join(v[0].split('_')[:-1]), int(v[0].split('_')[-1])) in mask_bins) & \
+                                                                (('_'.join(v[1].split('_')[:-1]), int(v[1].split('_')[-1])) in mask_bins)]
+            all_combos = raw_res.evoked_stimulus_pairs
+            val_combos = [c for c in all_combos if c not in fit_combos]
+            import pbd; pdb.set_trace()
+            
         if i == 0:
             mmraw0 = raw_df[["sp_dp", "bp_dp"]].values.max()
         ax[0, i].plot([0, mmraw0], [0, mmraw0], 'k--', lw=0.5)
@@ -167,15 +209,17 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, save_fig=False, ski
             ax[1, i].scatter(raw_df['bp_dp'], raw_df['bp_dp_act'], s=3, alpha=0.4)
             ax[1, i].set_title(f"{cc[i-1, 0]:.3f}")
 
-            a, b='delta_pred_raw', 'delta_act_raw'
-            ax[2, i].plot([-mmraw, mmraw], [-mmraw, mmraw], 'k--', lw=0.5)
+            # normed dp
+            a, b='delta_pred', 'delta_act'
+            ax[2, i].plot([-mmnorm, mmnorm], [-mmnorm, mmnorm], 'k--', lw=0.5)
             ax[2, i].scatter(raw_df[a], raw_df[b], s=3, alpha=0.4)
             cc[i-1, 1] = np.corrcoef(raw_df[a], raw_df[b])[0, 1]
             mse[i-1, 1] = np.std(raw_df[a]-raw_df[b])
             ax[2, i].set_title(f"e={mse[i-1,1]:.1f} cc={cc[i-1,1]:.3f}")
 
-            a, b = 'delta_pred', 'delta_act'
-            ax[3, i].plot([-mmnorm, mmnorm], [-mmnorm, mmnorm], 'k--', lw=0.5)
+            # raw dp
+            a, b = 'delta_pred_raw', 'delta_act_raw'
+            ax[3, i].plot([-mmraw, mmraw], [-mmraw, mmraw], 'k--', lw=0.5)
             ax[3, i].scatter(raw_df[a], raw_df[b], s=3, alpha=0.4)
             cc[i-1,2] = np.corrcoef(raw_df[a], raw_df[b])[0, 1]
             mse[i-1,2] = np.std(raw_df[a]-raw_df[b])
@@ -238,47 +282,19 @@ def ddr_sum_all(batch=331, modelname_base=None):
 
     labels = [labelsabs,labelscc, labelsraw , labelsmabs,labelsmse, labelsmraw]
 
-    if 0:
-        f, ax = plt.subplots(2, 2, figsize=(5,5))
-        #s = (df['pupil_range'] - df['pupil_range'].min()) * 50 + 1
-        s = (df['cc_base']-df['cc_base'].min())*50+1
-        mmin = np.nanmin(df[[labelscc[2],labelscc[3],labelscc[4]]].values)
-        mmax = np.nanmax(df[[labelscc[2],labelscc[3],labelscc[4]]].values)
-        ax[0,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[0,0].scatter(df[labelscc[2]],df[labelscc[3]],s=s)
-        ax[0,0].set_ylabel('1st-order/indep pup')
-        ax[0,0].set_xlabel('shuff')
-        ax[0,1].set_title('norm cc')
-        ax[0,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[0,1].scatter(df[labelsraw[2]],df[labelsraw[3]],s=s)
-        ax[0,1].set_title('raw cc')
-
-        ax[1,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[1,0].scatter(df[labelscc[3]],df[labelscc[4]],s=s)
-        ax[1,0].set_ylabel('pup LV')
-        ax[1,0].set_xlabel('1st-order/indep pup')
-        ax[1,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[1,1].scatter(df[labelsraw[3]],df[labelsraw[4]],s=s)
-        f.suptitle(f"{batch} - {modelname_base.split('_')[-1]}")
-        plt.tight_layout()
-        #f.savefig(f'/auto/users/svd/projects/pop_state/ddr_pred_{batch}_all.jpg')
-
-    else:
-        pass
-
     return df, labels
 
 
-def ddr_plot_pred_sum(df, labels, modelnames):
+def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
     labelsabs, labelscc, labelsraw, labelmraw, labelsmse, labelsmraw = labels
-
+    fontsize=8
     if len(modelnames)==5:
         c1,c2,c3=[1,2,3]
     elif len(modelnames)==7:
-        c1,c2,c3=[1,3,4]
+        c1,c2,c3=[2,3,4]
 
     plt.close('all')
-    f1, ax = plt.subplots(len(labels), 1, figsize=(3,8), sharex=True)
+    f1, ax = plt.subplots(len(labels), 1, figsize=(4,10), sharex=True)
     cats = ['ccabs','ccnorm','ccraw','mseabs','msenorm','mseraw']
     shortlabels=[l.replace('_cc','').replace('st.','') for l in labelscc]
     for i in range(len(labels)):
@@ -292,7 +308,14 @@ def ddr_plot_pred_sum(df, labels, modelnames):
     ax[-1].set_xticklabels(shortlabels, rotation = 45)
     plt.tight_layout()
 
-    f2, ax = plt.subplots(len(labels),2, figsize=(3,8))
+    f2, ax = plt.subplots(len(labels),2, figsize=(4,10))
+    if thr_name==None:
+        thr_name='pupil_range'
+    print(f'threshold col: {thr_name} val: {thr}')
+    s=df[thr_name].copy()
+    pidx=s>thr
+    s = 30*(s-s.min())+1
+    print(f"thr={thr}, valid={pidx.sum()}/{len(pidx)}")
     for i in range(len(labels)):
         l=labels[i]
         shortlabels=[l.replace('_cc','').replace('st.','') for l in labels[i]]
@@ -301,14 +324,23 @@ def ddr_plot_pred_sum(df, labels, modelnames):
         mmin = np.nanmin(df[[l[c1],l[c2],l[c3]]].values)
         mmax = np.nanmax(df[[l[c1],l[c2],l[c3]]].values)
         ax[i,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[i,0].scatter(df[l[c1]],df[l[c2]],s=3)
-        ax[i,0].set_xlabel(shortlabels[c1], fontsize=6)
-        ax[i,0].set_ylabel(shortlabels[c2], fontsize=6)
-        ax[i,0].set_title(cats[i], fontsize=6)
+        a=df[l[c2]]
+        b=df[l[c3]]
+
+        W,p = stats.wilcoxon(a[pidx],b[pidx])
+        ax[i,0].scatter(df[l[c2]],df[l[c3]],s=s)
+        ax[i,0].set_xlabel(shortlabels[c2], fontsize=fontsize)
+        ax[i,0].set_ylabel(shortlabels[c3], fontsize=fontsize)
+        ax[i,0].set_title(f"{cats[i]} {p:.3f}", fontsize=fontsize)
+
+        a=df[l[c1]][s>thr]
+        b=df[l[c3]][s>thr]
+        W,p = stats.wilcoxon(a[pidx],b[pidx])
         ax[i,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[i,1].scatter(df[l[c2]],df[l[c3]],s=3)
-        ax[i,1].set_xlabel(shortlabels[c2], fontsize=6)
-        ax[i,1].set_ylabel(shortlabels[c3], fontsize=6)
+        ax[i,1].scatter(df[l[c1]],df[l[c3]],s=s)
+        ax[i,1].set_xlabel(shortlabels[c1], fontsize=fontsize)
+        ax[i,1].set_ylabel(shortlabels[c3], fontsize=fontsize)
+        ax[i,1].set_title(f"{cats[i]} {p:.3f}", fontsize=fontsize)
     plt.tight_layout()
 
     return f1, f2

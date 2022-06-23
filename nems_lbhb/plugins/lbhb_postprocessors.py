@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 def ebc(loadkey):
     """
     ebc = evaluate_by_condition
+    ebc = evaluate_by_condition
        finds prediction correlations by condition
     """
     options = loadkey.split('.')[1:]
