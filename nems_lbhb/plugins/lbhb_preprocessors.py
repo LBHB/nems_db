@@ -273,6 +273,8 @@ def st(loadkey):
             this_sig = ["active_x_population"]
         elif l.startswith("pca"):
             this_sig = ["pca"]
+        elif l.startswith("fpc"):
+            this_sig = ["facepca"]
         else:
             raise ValueError("unknown signal code %s for state variable initializer", l)
 
