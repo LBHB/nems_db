@@ -32,7 +32,7 @@ if fit == True:
     cell_df = nd.get_batch_cells(batch)
     cell_list = cell_df['cellid'].tolist()
     cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
-    cell_list = [cc for cc in cell_list if cc[:6] == "CLT007"]
+    cell_list = [cc for cc in cell_list if (cc[:6] == "CLT022") or (cc[:6] == 'CLT023')]
     cell_list = cell_list[:5]
     # cellid, parmfile = 'CLT007a-009-2', None
 
@@ -106,6 +106,25 @@ import re
 import itertools
 
 
+##zippy greg stuff before vacation to get rid of quiet FGs
+# weight_dff = weight_df.loc[weight_df.kind=='11']
+# print(len(weight_dff))
+weight_dff = weight_df.loc[weight_df.FG != 'Heels']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'KitWhine']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'Typing']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'Dice']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'CashRegister']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'KitGroan']
+print(len(weight_dff))
+weight_dff = weight_dff.loc[weight_dff.FG != 'Keys']
+print(len(weight_dff))
+quad, threshold = ohel.quadrants_by_FR(weight_dff, threshold=0.03, quad_return=3)
+obip.binaural_weight_hist(weight_dff)
 
 def get_sep_stim_names(stim_name):
     seps = [m.start() for m in re.finditer('_(\d|n)', stim_name)]
@@ -118,7 +137,7 @@ weight_list = []
 batch = 339
 fs = 100
 lfreq, hfreq, bins = 100, 24000, 48
-threshold = 0.1
+threshold = 0.75
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
 cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
@@ -129,9 +148,7 @@ modelspecs_dir = '/auto/users/luke/Code/nems/modelspecs'
 
 for cellid in cell_list:
     loadkey = 'ns.fs100'
-
     manager = BAPHYExperiment(cellid=cellid, batch=batch)
-
     options = {'rasterfs': 100,
                'stim': False,
                'resp': True}
@@ -142,13 +159,17 @@ for cellid in cell_list:
     ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
     FG_folder, fgidx = ref_handle['FG_Folder'], list(set(ref_handle['Foreground']))
     fgidx.sort(key=int)
-
     idxstr = [str(ff).zfill(2) for ff in fgidx]
 
     fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
                            f'{FG_folder}/{ff}*.wav'))[0] for ff in idxstr]
     fgname = [ff.split('/')[-1].split('.')[0].replace(' ', '') for ff in fg_paths]
     ep_fg = [f"STIM_null_{ff}" for ff in fgname]
+
+    prebins = int(ref_handle['PreStimSilence'] * options['rasterfs'])
+    postbins = int(ref_handle['PostStimSilence'] * options['rasterfs'])
+    durbins = int(ref_handle['Duration'] * options['rasterfs'])
+    trialbins = durbins + postbins
 
     env_cuts = {}
     for nm, pth in zip(fgname, fg_paths):
@@ -158,18 +179,27 @@ for cellid in cell_list:
         env = np.nanmean(spec, axis=0)
         cutoff = np.max(env) * threshold
 
-        aboves = np.squeeze(np.argwhere(env >= cutoff))
-        belows = np.squeeze(np.argwhere(env < cutoff))
+        # aboves = np.squeeze(np.argwhere(env >= cutoff))
+        # belows = np.squeeze(np.argwhere(env < cutoff))
 
-        env_cuts[nm] = (aboves, belows)
+        highs, lows, whole_thing = env >= cutoff, env < cutoff, env > 0
+        prestimFalse = np.full((prebins,), False)
+        poststimTrue = np.full((trialbins - len(env),), True)
+        poststimFalse = np.full((trialbins - len(env),), False)
 
-        # f, ax = plt.subplots(3, 1, sharex=True, sharey=True)
-        # ax[0].plot(env)
-        # ax[0].hlines(cutoff, 0, 100, ls=':'
-        # ax[0].set_title(f"{nm}")
-        # ax[1].plot(env[aboves])
-        # ax[2].plot(env[belows])
+        full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
+        aboves = np.concatenate((prestimFalse, highs, poststimFalse))
+        belows = np.concatenate((prestimFalse, lows, poststimFalse))
+        belows_post = np.concatenate((prestimFalse, lows, poststimTrue))
 
+        env_cuts[nm] = [full, aboves, belows, belows_post]
+
+        f, ax = plt.subplots(3, 1, sharex=True, sharey=True)
+        ax[0].plot(env)
+        ax[0].hlines(cutoff, 0, 100, ls=':')
+        ax[0].set_title(f"{nm}")
+        ax[1].plot(env[aboves])
+        ax[2].plot(env[belows])
 
     rec['resp'].fs = fs
     rec['resp'] = rec['resp'].extract_channels([cellid])
@@ -199,12 +229,7 @@ for cellid in cell_list:
     fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
     val['resp'] = val['resp'].transform(fn)
 
-    print('calc weights')
-
-    signame = 'resp'
-    do_plot = False
-    find_mse_confidence = True
-    get_nrmse_fn = True
+    print(f'calc weights {cellid}')
 
     #where twostims fit actually begins
     epcs = val.epochs[val.epochs['name'].str.count('-0-1') >= 1].copy()
@@ -225,333 +250,251 @@ for cellid in cell_list:
             sepnames.append(sepname.iloc[i])
 
     #Calculate weights
-    weights = np.zeros((2, len(AB)))
-    weights_h = np.zeros((2, len(AB)))
-    weights_l = np.zeros((2, len(AB)))
-    weights_lp = np.zeros((2, len(AB)))
-    Efit = np.zeros((5,len(AB)))
-    nMSE = np.zeros(len(AB))
-    nf = np.zeros(len(AB))
-    r = np.zeros(len(AB))
+    subsets = len(list(env_cuts.values())[0])
+    weights = np.zeros((2, len(AB), subsets))
+    Efit = np.zeros((5,len(AB), subsets))
+    nMSE = np.zeros((len(AB), subsets))
+    nf = np.zeros((len(AB), subsets))
+    r = np.zeros((len(AB), subsets))
+    cut_len = np.zeros((len(AB), subsets-1))
     get_error=[]
 
     for i in range(len(AB)):
         names=[[A[i]],[B[i]],[AB[i]]]
-        weights[:,i], weights_h[:,i], weights_l[:,i], weights_lp[:,i], \
-        Efit[:,i], nMSE[i], nf[i], get_nrmse, r[i], ge = \
-            calc_psth_weights_of_model_responses_list(
-                val,names,signame,do_plot=None,find_mse_confidence=None,
-                get_nrmse_fn=None, window=None, cuts=env_cuts)
-        get_error.append(ge)
-        if do_plot and find_mse_confidence:
-            plt.title('{}, signame={}'.format(AB[i],signame))
-
-    window=None
-
-    weight_df = pd.DataFrame(
-        [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values,
-         weights[0, :], weights[1, :],
-         weights_h[0, :], weights_h[1, :],
-         weights_l[0, :], weights_l[1, :],
-         weights_lp[0, :], weights_lp[1, :],
-         Efit, nMSE, nf, r,
-         get_error])
-    weight_df = weight_df.T
-    weight_df.columns = ['namesA', 'namesB', 'weightsA', 'weightsB', 'weightsAh', 'weightsBh',
-                         'weightsAl', 'weightsBl', 'weightsAlp', 'weightsBlp',
-                         'Efit', 'nMSE', 'nf', 'r', 'get_error']
-    cols = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE']
-    print(weight_df[cols])
-
-    weight_df = weight_df.astype({'weightsA': float, 'weightsB': float,
-                                  'weightsAh': float, 'weightsBh': float,
-                                  'weightsAl': float, 'weightsBl': float,
-                                  'weightsAlp': float, 'weightsBlp': float,
-                                  'nMSE': float, 'nf': float, 'r': float})
-    val_range = lambda x: max(x) - min(x)
-    val_range.__name__ = 'range'
-    MI = lambda x: np.mean([np.abs(np.diff(pair)) / np.abs(np.sum(pair)) for pair in itertools.combinations(x, 2)])
-    MI.__name__ = 'meanMI'
-    MIall = lambda x: (max(x) - min(x)) / np.abs(max(x) + min(x))
-    MIall.__name__ = 'meanMIall'
-
-    fns = ['count', val_range, 'std', MI, MIall, 'sum']
-    WeightAgroups = weight_df.groupby('namesA')[['weightsA', 'weightsB']].agg(fns)
-    WeightAgroups = WeightAgroups[WeightAgroups['weightsA']['count'] > 1]
-    WeightBgroups = weight_df.groupby('namesB')[['weightsA', 'weightsB']].agg(fns)
-    WeightBgroups = WeightBgroups[WeightBgroups['weightsA']['count'] > 1]
-
-    cols = ['count', 'range', 'meanMIall']
-    print('Grouped by A, A weight metrics:')
-    print(WeightAgroups['weightsA'][cols])
-    print('Grouped by A, B weight metrics:')
-    print(WeightAgroups['weightsB'][cols])
-    print('Grouped by B, A weight metrics:')
-    print(WeightBgroups['weightsA'][cols])
-    print('Grouped by B, B weight metrics:')
-    print(WeightBgroups['weightsB'][cols])
-
-    names = AB
-    namesA = A
-    namesB = B
-    D = locals()
-    D = {k: D[k] for k in (
-    'weights', 'Efit', 'nMSE', 'nf', 'get_nrmse', 'r', 'names', 'namesA', 'namesB', 'weight_df', 'WeightAgroups',
-    'WeightBgroups')}
-
-    d = {k + 'R': v for k, v in D.items()}
-
-    weightDF = d['weight_dfR']
-    weightDF.insert(loc=0, column='cellid', value=cellid)
-
-    weight_list.append(weightDF)
-    
-
-   def drop_get_error(row):
-        row['weight_dfR'] = row['weight_dfR'].copy().drop(columns=['get_error', 'Efit'])
-        return row
-
-    df0 = df0.copy().drop(columns='get_nrmseR')
-    df0 = df0.apply(drop_get_error, axis=1)
-
-    weight_df = pd.concat(df0['weight_dfR'].values, keys=df0.cellid).reset_index(). \
-        drop(columns='level_1')
-    ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df.namesA, weight_df.namesB)]
-    weight_df = weight_df.drop(columns=['namesA', 'namesB'])
-    weight_df['epoch'] = ep_names
-
-    weights_df = pd.merge(right=weight_df, left=df, on=['cellid', 'epoch'])
-    if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
-        raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
-
-
-# return weights_C, Efit_C, nmse_C, nf_C, get_mse_C, weights_I, Efit_I, nmse_I, nf_I, get_mse_I
-
-
-def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plot=False, find_mse_confidence=True,
-                                              get_nrmse_fn=True, window=None, cuts=None):
-    # prestimtime=0.5;#1;
-    PSS = val[signame].epochs[val[signame].epochs['name'] == 'PreStimSilence'].iloc[0]
-    prestimtime = PSS['end'] - PSS['start']
-    REF = val[signame].epochs[val[signame].epochs['name'] == 'REFERENCE'].iloc[0]
-    total_duration = REF['end'] - REF['start']
-    POSS = val[signame].epochs[val[signame].epochs['name'] == 'PostStimSilence'].iloc[0]
-    poststimtime = POSS['end'] - POSS['start']
-    duration = total_duration - prestimtime - poststimtime
-
-    post_duration_pad = .5  # Include stim much post-stim time in weight calcs
-    time = np.arange(0, val[signame].extract_epoch(names[0][0]).shape[-1]) / val[signame].fs - prestimtime
-
-    if cuts is None:
-        subsets = 1
-        weights_h, weights_l, weights_lp = None, None, None
-    else:
-        subsets = 4 #if I pass my fg envelope filter it'll fit normal, high power, low power
-                    # plus poststim and low power without post stim
-        #get which cut set to use
-        fs = val['resp'].fs
         Fg = names[1][0].split('_')[2].split('-')[0]
-        high_power, low_power = cuts[Fg]
-        binstim = int((duration+poststimtime) * fs)
-        maxbin = np.max([np.max(high_power), np.max(low_power)])
-        post_bins = np.asarray(range(maxbin+1,binstim))
-        low_wpost = np.concatenate((low_power, post_bins))
-        postbin = int(poststimtime * fs)
+        cut_list = env_cuts[Fg]
 
-        high_power_pad, low_power_pad = high_power + postbin, low_power + postbin
-        lwpost_pad, full = low_wpost + postbin, np.asarray(range(0,binstim)) + postbin
-        filters = [full, high_power_pad, low_power_pad, lwpost_pad]
+        for ss, cut in enumerate(cut_list):
+            weights[:,i,ss], Efit[:,i,ss], nMSE[i,ss], nf[i,ss], _, r[i,ss], _ = \
+                    calc_psth_weights_of_model_responses_list(val, names,
+                                                              signame='resp', cuts=cut)
+            if ss != 0:
+                cut_len[i, ss-1] = np.sum(cut)
+            # get_error.append(ge)
 
-    for subset in range(subsets):
-        sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[filters[subset]] for n in names[0]])
-        sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[filters[subset]] for n in names[1]])
-        # sig_SR=np.ones(sig1.shape)
-        sigO = np.concatenate([val[signame].extract_epoch(n).squeeze()[filters[subset]] for n in names[2]])
+    if subsets == 4:
+        weight_df = pd.DataFrame(
+            [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values,
+             weights[0, :, 0], weights[1, :, 0], nMSE[:, 0], nf[:, 0], r[:, 0],
+             weights[0, :, 1], weights[1, :, 1], nMSE[:, 1], nf[:, 1], r[:, 1], cut_len[:,0],
+             weights[0, :, 2], weights[1, :, 2], nMSE[:, 2], nf[:, 2], r[:, 2], cut_len[:,1],
+             weights[0, :, 3], weights[1, :, 3], nMSE[:, 3], nf[:, 3], r[:, 3], cut_len[:,2],])
+        weight_df = weight_df.T
+        weight_df.columns = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE', 'nf', 'r',
+                             'weightsA_h', 'weightsB_h', 'nMSE_h', 'nf_h', 'r_h', 'h_idxs',
+                             'weightsA_l', 'weightsB_l', 'nMSE_l', 'nf_l', 'r_l', 'l_idxs',
+                             'weightsA_lp', 'weightsB_lp', 'nMSE_lp', 'nf_lp', 'r_lp', 'lp_idxs']
+        cols = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE']
+        print(weight_df[cols])
 
-        # fsigs=np.vstack((sig1,sig2,sig_SR)).T
-        fsigs = np.vstack((sig1, sig2)).T
-        ff = np.all(np.isfinite(fsigs), axis=1) & np.isfinite(sigO)
-        close_to_zero = np.array([np.allclose(fsigs[ff, i], 0, atol=1e-17) for i in (0, 1)])
-        if all(close_to_zero):
-            # Both input signals have all their values close to 0. Set weights to 0.
-            weights = np.zeros(2)
-            rank = 1
-        elif any(close_to_zero):
-            weights_, residual_sum, rank, singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff, ~close_to_zero], 1),
-                                                                            sigO[ff], rcond=None)
-            weights = np.zeros(2)
-            weights[~close_to_zero] = weights_
-        else:
-            weights, residual_sum, rank, singular_values = np.linalg.lstsq(fsigs[ff, :], sigO[ff], rcond=None)
-            # residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
+        weight_df = weight_df.astype({'weightsA': float, 'weightsB': float,
+                                      'weightsA_h': float, 'weightsB_h': float,
+                                      'weightsA_l': float, 'weightsB_l': float,
+                                      'weightsA_lp': float, 'weightsB_lp': float,
+                                      'nMSE': float, 'nf': float, 'r': float,
+                                      'nMSE_h': float, 'nf_h': float, 'r_h': float,
+                                      'nMSE_l': float, 'nf_l': float, 'r_l': float,
+                                      'nMSE_lp': float, 'nf_lp': float, 'r_lp': float,
+                                      'h_idxs': float, 'l_idxs': float, 'lp_idxs': float})
 
-        if subset == 0:
-            # calc CC between weight model and actual response
+    else:
+        raise ValueError(f"Only {subsets} subsets. You got lazy and didn't make this part"
+                         f"flexible yet.")
+
+    # val_range = lambda x: max(x) - min(x)
+    # val_range.__name__ = 'range'
+    # MI = lambda x: np.mean([np.abs(np.diff(pair)) / np.abs(np.sum(pair)) for pair in itertools.combinations(x, 2)])
+    # MI.__name__ = 'meanMI'
+    # MIall = lambda x: (max(x) - min(x)) / np.abs(max(x) + min(x))
+    # MIall.__name__ = 'meanMIall'
+    #
+    # fns = ['count', val_range, 'std', MI, MIall, 'sum']
+    # WeightAgroups = weight_df.groupby('namesA')[['weightsA', 'weightsB']].agg(fns)
+    # WeightAgroups = WeightAgroups[WeightAgroups['weightsA']['count'] > 1]
+    # WeightBgroups = weight_df.groupby('namesB')[['weightsA', 'weightsB']].agg(fns)
+    # WeightBgroups = WeightBgroups[WeightBgroups['weightsA']['count'] > 1]
+    #
+    # cols = ['count', 'range', 'meanMIall']
+    # print('Grouped by A, A weight metrics:')
+    # print(WeightAgroups['weightsA'][cols])
+    # print('Grouped by A, B weight metrics:')
+    # print(WeightAgroups['weightsB'][cols])
+    # print('Grouped by B, A weight metrics:')
+    # print(WeightBgroups['weightsA'][cols])
+    # print('Grouped by B, B weight metrics:')
+    # print(WeightBgroups['weightsB'][cols])
+    #
+    # names = AB
+    # namesA = A
+    # namesB = B
+    # D = locals()
+    # D = {k: D[k] for k in (
+    # 'weights', 'Efit', 'nMSE', 'nf', 'get_nrmse', 'r', 'names', 'namesA',
+    # 'namesB', 'weight_df', 'WeightAgroups', 'WeightBgroups')}
+    #
+    # d = {k + 'R': v for k, v in D.items()}
+    #
+    # weightDF = d['weight_dfR']
+    weight_df.insert(loc=0, column='cellid', value=cellid)
+
+    weight_list.append(weight_df)
+
+weight_df0 = pd.concat(weight_list)
+
+
+ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df0.namesA, weight_df0.namesB)]
+weight_df0 = weight_df0.drop(columns=['namesA', 'namesB'])
+weight_df0['epoch'] = ep_names
+
+weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
+weight_df0['threshold'] = str(int(threshold * 100))
+if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
+    raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
+
+##load here.
+OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights20.h5'  # weight + corr
+OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights.h5'  # weight + corr
+
+part_weights = False
+if part_weights == True:
+    os.makedirs(os.path.dirname(OLP_partialweights_db_path),exist_ok=True)
+    store = pd.HDFStore(OLP_partialweights_db_path)
+    df_store=copy.deepcopy(weight_df0)
+    store['df'] = df_store.copy()
+    store.close()
+
+else:
+    store = pd.HDFStore(OLP_partialweights_db_path)
+    weight_df0=store['df']
+    store.close()
+
+
+
+
+def calc_psth_weights_of_model_responses_list(val, names, signame='resp',
+                                              get_nrmse_fn=False, cuts=None):
+
+    sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[0]])
+    sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[1]])
+    # sig_SR=np.ones(sig1.shape)
+    sigO = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[2]])
+
+    # fsigs=np.vstack((sig1,sig2,sig_SR)).T
+    fsigs = np.vstack((sig1, sig2)).T
+    ff = np.all(np.isfinite(fsigs), axis=1) & np.isfinite(sigO)
+    close_to_zero = np.array([np.allclose(fsigs[ff, i], 0, atol=1e-17) for i in (0, 1)])
+    if all(close_to_zero):
+        # Both input signals have all their values close to 0. Set weights to 0.
+        weights = np.zeros(2)
+        rank = 1
+    elif any(close_to_zero):
+        weights_, residual_sum, rank, singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff, ~close_to_zero], 1),
+                                                                        sigO[ff], rcond=None)
+        weights = np.zeros(2)
+        weights[~close_to_zero] = weights_
+    else:
+        weights, residual_sum, rank, singular_values = np.linalg.lstsq(fsigs[ff, :], sigO[ff], rcond=None)
+        # residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
+
+    # calc CC between weight model and actual response
+    pred = np.dot(weights, fsigs[ff, :].T)
+    cc = np.corrcoef(pred, sigO[ff])
+    r_weight_model = cc[0, 1]
+
+    # norm_factor = np.std(sigO[ff])
+    norm_factor = np.mean(sigO[ff] ** 2)
+
+    if rank == 1:
+        min_nMSE = 1
+        min_nRMSE = 1
+    else:
+        # min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor
+        pred = np.dot(weights, fsigs[ff, :].T)
+        min_nRMSE = np.sqrt(((sigO[ff] - pred) ** 2).mean()) / np.sqrt(
+            norm_factor)  # minimim normalized root mean squared error
+        min_nMSE = ((sigO[ff] - pred) ** 2).mean() / norm_factor  # minimim normalized mean squared error
+
+    # create NMSE caclulator for later
+    if get_nrmse_fn:
+        def get_nrmse(weights=weights):
             pred = np.dot(weights, fsigs[ff, :].T)
-            cc = np.corrcoef(pred, sigO[ff])
-            r_weight_model = cc[0, 1]
+            nrmse = np.sqrt(((pred - sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
+            return nrmse
+    else:
+        get_nrmse = np.nan
 
-            # norm_factor = np.std(sigO[ff])
-            norm_factor = np.mean(sigO[ff] ** 2)
+    weights[close_to_zero] = np.nan
+    return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
 
-        if subset == 0:
-            weights_f = weights
-        elif subset == 1:
-            weights_h = weights
-        elif subset == 2:
-            weights_l = weights
-        elif subset == 3:
-            weights_lp = weights
-    #
-    # if rank == 1:
-    #     min_nMSE = 1
-    #     min_nRMSE = 1
-    # else:
-    #     # min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor
-    #     pred = np.dot(weights, fsigs[ff, :].T)
-    #     min_nRMSE = np.sqrt(((sigO[ff] - pred) ** 2).mean()) / np.sqrt(
-    #         norm_factor)  # minimim normalized root mean squared error
-    #     min_nMSE = ((sigO[ff] - pred) ** 2).mean() / norm_factor  # minimim normalized mean squared error
-    #
-    # # create NMSE caclulator for later
-    # if get_nrmse_fn:
-    #     def get_nrmse(weights=weights):
-    #         pred = np.dot(weights, fsigs[ff, :].T)
-    #         nrmse = np.sqrt(((pred - sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
-    #         return nrmse
-    # else:
-    #     get_nrmse = np.nan
-    #
-    # def get_error(weights=weights, get_what='error'):
-    #
-    #     if get_what == 'sigA':
-    #         return fsigs[ff, 0]
-    #     elif get_what == 'sigB':
-    #         return fsigs[ff, 1]
-    #     elif get_what == 'sigAB':
-    #         return sigO[ff]
-    #     elif get_what == 'pred':
-    #         return np.dot(weights, fsigs[ff, :].T)
-    #     elif get_what == 'error':
-    #         pred = np.dot(weights, fsigs[ff, :].T)
-    #         return pred - sigO[ff]
-    #     else:
-    #         raise RuntimeError('Invalid get_what parameter')
 
-    # if not find_mse_confidence:
-    #     weights[close_to_zero] = np.nan
-    #     return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
+##################FINISHED FRIDAY, WANT TO PLOT THE FOUR CONDITIONS NOW
+env_threshold = '75'
+quad_threshold= 0.05
+# area = 'A1'
 
-    # #    sigF=weights[0]*sig1 + weights[1]*sig2 + weights[2]
-    # #    plt.figure();
-    # #    plt.plot(np.vstack((sig1,sig2,sigO,sigF)).T)
-    # #    wA_ = np.linspace(-2, 4, 100)
-    # #    wB_ = np.linspace(-2, 4, 100)
-    # #    wA, wB = np.meshgrid(wA_,wB_)
-    # #    w=np.vstack((wA.flatten(),wB.flatten())).T
-    # #    sigF2=np.dot(w,fsigs[ff,:].T)
-    # #    mse = ((sigF2-sigO[ff].T) ** 2).mean(axis=1)
-    # #    mse = np.reshape(mse,(len(wA_),len(wB_)))
-    # #    plt.figure();plt.imshow(mse,interpolation='none',extent=[wA_[0],wA_[-1],wB_[0],wB_[-1]],origin='lower',vmax=.02,cmap='viridis_r');plt.colorbar()
-    #
-    # def calc_nrmse_matrix(margin, N=60, threshtype='ReChance'):
-    #     # wsearcha=(-2, 4, 100)
-    #     # wsearchb=wsearcha
-    #     # margin=6
-    #     if not hasattr(margin, "__len__"):
-    #         margin = np.float(margin) * np.ones(2)
-    #     wA_ = np.hstack((np.linspace(weights[0] - margin[0], weights[0], N),
-    #                      (np.linspace(weights[0], weights[0] + margin[0], N)[1:])))
-    #     wB_ = np.hstack((np.linspace(weights[1] - margin[1], weights[1], N),
-    #                      (np.linspace(weights[1], weights[1] + margin[1], N)[1:])))
-    #     wA, wB = np.meshgrid(wA_, wB_)
-    #     w = np.stack((wA, wB), axis=2)
-    #     nrmse = get_nrmse(w)
-    #     # range_=mse.max()-mse.min()
-    #     if threshtype == 'Absolute':
-    #         thresh = nrmse.min() * np.array((1.4, 1.6))
-    #         thresh = nrmse.min() * np.array((1.02, 1.04))
-    #         As = wA[(nrmse < thresh[1]) & (nrmse > thresh[0])]
-    #         Bs = wB[(nrmse < thresh[1]) & (nrmse > thresh[0])]
-    #     elif threshtype == 'ReChance':
-    #         thresh = 1 - (1 - nrmse.min()) * np.array((.952, .948))
-    #         As = wA[(nrmse < thresh[1]) & (nrmse > thresh[0])]
-    #         Bs = wB[(nrmse < thresh[1]) & (nrmse > thresh[0])]
-    #     return nrmse, As, Bs, wA_, wB_
-    #
-    # if min_nRMSE < 1:
-    #     this_threshtype = 'ReChance'
-    # else:
-    #     this_threshtype = 'Absolute'
-    # margin = 6
-    # As = np.zeros(0)
-    # Bs = np.zeros(0)
-    # attempt = 0
-    # did_estimate = False
-    # while len(As) < 20:
-    #     attempt += 1
-    #     if (attempt > 1) and (len(As) > 0) and (len(As) > 2) and (not did_estimate):
-    #         margin = np.float(margin) * np.ones(2)
-    #         m = np.abs(weights[0] - As).max() * 3
-    #         if m == 0:
-    #             margin[0] = margin[0] / 2
-    #         else:
-    #             margin[0] = m
-    #
-    #         m = np.abs(weights[1] - Bs).max() * 3
-    #         if m == 0:
-    #             margin[1] = margin[1] / 2
-    #         else:
-    #             margin[1] = m
-    #         did_estimate = True
-    #     elif attempt > 1:
-    #         margin = margin / 2
-    #     if attempt > 1:
-    #         print('Attempt {}, margin = {}'.format(attempt, margin))
-    #     nrmse, As, Bs, wA_, wB_ = calc_nrmse_matrix(margin, threshtype=this_threshtype)
-    #
-    #     if attempt == 8:
-    #         print('Too many attempts, break')
-    #         break
-    #
-    # try:
-    #     efit = fE.fitEllipse(As, Bs)
-    #     center = fE.ellipse_center(efit)
-    #     phi = fE.ellipse_angle_of_rotation(efit)
-    #     axes = fE.ellipse_axis_length(efit)
-    #
-    #     epars = np.hstack((center, axes, phi))
-    # except:
-    #     print('Error fitting ellipse: {}'.format(sys.exc_info()[0]))
-    #     print(sys.exc_info()[0])
-    #     epars = np.full([5], np.nan)
-    # #    idxA = (np.abs(wA_ - weights[0])).argmin()
-    # #    idxB = (np.abs(wB_ - weights[1])).argmin()
-    # if do_plot:
-    #     plt.figure();
-    #     plt.imshow(nrmse, interpolation='none', extent=[wA_[0], wA_[-1], wB_[0], wB_[-1]], origin='lower',
-    #                cmap='viridis_r');
-    #     plt.colorbar()
-    #     ph = plt.plot(weights[0], weights[1], Color='k', Marker='.')
-    #     plt.plot(As, Bs, 'r.')
-    #
-    #     if not np.isnan(epars).any():
-    #         a, b = axes
-    #         R = np.arange(0, 2 * np.pi, 0.01)
-    #         xx = center[0] + a * np.cos(R) * np.cos(phi) - b * np.sin(R) * np.sin(phi)
-    #         yy = center[1] + a * np.cos(R) * np.sin(phi) + b * np.sin(R) * np.cos(phi)
-    #         plt.plot(xx, yy, color='k')
-    #
-    # #    plt.figure();plt.plot(get_nrmse(weights=(xx,yy)))
-    # #    plt.figure();plt.plot(get_nrmse(weights=(As,Bs)))
-    # weights[close_to_zero] = np.nan
+edges = np.arange(-1,2,.05)
+
+df = weight_df0.loc[weight_df0['threshold'] == env_threshold]
+
+quad0, _ = ohel.quadrants_by_FR(df, threshold=quad_threshold, quad_return=3)
+quad0 = quad0.loc[quad0.kind == '11']
+quad0.loc[quad0['l_idxs'] <= 5, 'weightsA_l'] = np.NaN
+quad0.loc[quad0['l_idxs'] <= 5, 'weightsB_l'] = np.NaN
+quad0.loc[quad0['h_idxs'] <= 5, 'weightsA_h'] = np.NaN
+quad0.loc[quad0['h_idxs'] <= 5, 'weightsB_h'] = np.NaN
+
+
+f = plt.figure(figsize=(15, 12))
+hist11 = plt.subplot2grid((13, 16), (0, 0), rowspan=5, colspan=3)
+mean11 = plt.subplot2grid((13, 16), (0, 4), rowspan=5, colspan=2)
+hist12 = plt.subplot2grid((13, 16), (0, 8), rowspan=5, colspan=3, sharey=hist11)
+mean12 = plt.subplot2grid((13, 16), (0, 12), rowspan=5, colspan=2, sharey=mean11)
+hist21 = plt.subplot2grid((13, 16), (7, 0), rowspan=5, colspan=3, sharey=hist11)
+mean21 = plt.subplot2grid((13, 16), (7, 4), rowspan=5, colspan=2, sharey=mean11)
+hist22 = plt.subplot2grid((13, 16), (7, 8), rowspan=5, colspan=3, sharey=hist11)
+mean22 = plt.subplot2grid((13, 16), (7, 12), rowspan=5, colspan=2, sharey=mean11)
+ax = [hist11, hist12, hist21, hist22, mean11, mean12, mean21, mean22]
+
+
+titles = ['Full weights', f'Above {env_threshold}% env',
+          f'Below {env_threshold}% env no post', f'Below {env_threshold}% env with post']
+Aw = ['weightsA', 'weightsA_h', 'weightsA_l', 'weightsA_lp']
+Bw = ['weightsB', 'weightsB_h', 'weightsB_l', 'weightsB_lp']
+
+
+ttests = {}
+DF = quad0
+for aa, (tt, aw, bw) in enumerate(zip(titles, Aw, Bw)):
+    na, xa = np.histogram(DF[aw], bins=edges)
+    na = na / na.sum() * 100
+    nb, xb = np.histogram(DF[bw], bins=edges)
+    nb = nb / nb.sum() * 100
+
+    ax[aa].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
+    ax[aa].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+    ax[aa].legend(('Background', 'Foreground'), fontsize=6)
+    ax[aa].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=10)
+    ax[aa].set_title(f"{tt}", fontweight='bold', fontsize=12)
+    ax[aa].set_xlabel("Weight", fontweight='bold', fontsize=10)
+    ymin, ymax = ax[aa].get_ylim()
+
+    BG1, FG1 = np.mean(DF[aw]), np.mean(DF[bw])
+    BG1sem, FG1sem = stats.sem(DF[aw]), stats.sem(DF[bw])
+    ttest = stats.ttest_ind(DF[aw], DF[bw])
+    ax[aa+4].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
+    ax[aa+4].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
+    ax[aa+4].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+    if ttest.pvalue < 0.001:
+        title = 'p<0.001'
+    else:
+        title = f"{ttest.pvalue:.3f}"
+    ax[aa + 4].set_title(title, fontsize=8)
+
+
+f.suptitle(f"{area}", fontweight='bold', fontsize=12)
 
 
 
-    # return weights_f, weights_h, weights_l, weights_lp,\
-    #        epars, nrmse.min(), norm_factor, get_nrmse, r_weight_model, get_error
-    return weights_f, weights_h, weights_l, weights_lp,\
-               np.nan, np.nan, norm_factor, np.nan, r_weight_model, np.nan
 
 
 
