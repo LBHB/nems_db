@@ -313,6 +313,17 @@ class BAPHYExperiment:
 
     @property
     @lru_cache(maxsize=128)
+    def facepcafile(self):
+        suffix = '.facePCs.h5'
+        log.info(f"Face PCA file suffix: {suffix}")
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
+            raise IOError("Face PCA file doesn't exist")
+        else:
+            return [f.with_suffix(suffix) for f in filenames]
+
+    @property
+    @lru_cache(maxsize=128)
     def behavior(self):
         exptparams = self.get_baphy_exptparams()
         behavior = np.any([e['BehaveObjectClass'] != 'Passive' for e in exptparams])
@@ -513,6 +524,7 @@ class BAPHYExperiment:
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
         dlc = kwargs.get('dlc', False)
+        facepca = kwargs.get('facepca', False)
         stim = kwargs.get('stim', False)
         
         # default sampling rates depend on what signals are loaded
@@ -709,6 +721,23 @@ class BAPHYExperiment:
 
             signals['dlc'] = nems.signal.RasterizedSignal.concatenate_time(dlc_sigs)
 
+        if facepca:
+            f_traces = self.get_facepca_trace(exptevents=exptevents, **kwargs)
+
+            # multiple facepca signals
+            sigs = [f"PC{i}" for i in range(f_traces[0][0].shape[0])]
+            facepca_sigs = [nems.signal.RasterizedSignal(
+                fs=kwargs['rasterfs'], data=d[0],
+                name='facepca', recording=rec_name, chans=sigs,
+                epochs=baphy_events[i])
+                for (i, d) in enumerate(f_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                facepca_sigs = check_length(facepca_sigs, resp_sigs)
+
+            signals['facepca'] = nems.signal.RasterizedSignal.concatenate_time(facepca_sigs)
+
         if stim:
             #import pdb; pdb.set_trace()
             stim_sigs = [nems.signal.TiledSignal(
@@ -891,7 +920,13 @@ class BAPHYExperiment:
         else:
             return [io.load_dlc_trace(str(p), **kwargs) for p in self.dlcfile]
 
-    # ===================================================================
+    def get_facepca_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [io.load_facepca_trace(str(p), exptevents=e, pc_count=kwargs['facepca'], **kwargs) for e, p in zip(exptevents, self.facepcafile)]
+        else:
+            return [io.load_facepca_trace(str(p), pc_count=kwargs['facepca'], **kwargs) for p in self.facepcafile]
+
+     # ===================================================================
 
     # ==================== BEHAVIOR METRIC METHODS ======================
     def get_behavior_performance(self, trials=None, tokens=None, **kwargs):
