@@ -22,8 +22,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     SIG_TEST_MODELS, mplparams,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, compute_snr, int_path, 
-    a1, peg, base_path, single_column_short, single_column_tall, column_and_half_short, column_and_half_tall,
-    column_and_half_vshort, double_column_shorter
+    a1, peg, base_path
 )
 
 import matplotlib as mpl

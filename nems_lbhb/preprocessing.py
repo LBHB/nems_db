@@ -881,7 +881,10 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
 
     if pca_split>0:
         rmedian=np.nanmedian(r.apply_mask()['pca'].as_continuous())
-        resp = r['pca'].as_continuous()[0, :]
+        #if 'PC0' in rec['state'].chans:
+        #    resp = rec['state'].extract_channels(['PC0']).as_continuous()[0, :]
+        #else:
+        resp = rec['pca'].as_continuous()[0, :]
         rlarge = (resp > rmedian)
         rsmall = (resp <= rmedian)
         log.info(f"Splitting by pc0 large {rlarge.sum()} small {rsmall.sum()}")

@@ -176,7 +176,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
     # should make results easier to interpret. CRH 06.04.2020
     X_raw = X.copy()
     pup_mask_raw = pup_mask.copy()
-    meta = None
+    meta = ctx['rec'].meta
     if (sim1 | sim2 | sim12) & (not sim_tdr_space):
         X, pup_mask = decoding.simulate_response(X, pup_mask, sim_first_order=sim1,
                                                             sim_second_order=sim2,
