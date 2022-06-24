@@ -514,12 +514,16 @@ class BAPHYExperiment:
         pupil = kwargs.get('pupil', False)
         dlc = kwargs.get('dlc', False)
         stim = kwargs.get('stim', False)
+        mua = kwargs.get('mua', False)
         
         # default sampling rates depend on what signals are loaded
         if raw:
             kwargs['rasterfs'] = kwargs.get('rasterfs', 400)
-            kwargs['lp'] = kwargs.get('lp', None)
-            kwargs['hp'] = kwargs.get('hp', None)
+            kwargs['rawlp'] = kwargs.get('rawlp', None)
+            kwargs['rawhp'] = kwargs.get('rawhp', None)
+        if mua:
+            kwargs['rasterfs'] = kwargs.get('rasterfs', 100)
+            kwargs['muabp'] = kwargs.get('muabp', (500, 5000))
         else:
             kwargs['rasterfs'] = kwargs.get('rasterfs', 100)
             
@@ -533,6 +537,8 @@ class BAPHYExperiment:
 
         # load aligned baphy events
         if raw:
+            exptevents = self.get_baphy_events(correction_method='openephys', **kwargs)
+        if mua:
             exptevents = self.get_baphy_events(correction_method='openephys', **kwargs)
         elif self.behavior:
             exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
@@ -608,25 +614,54 @@ class BAPHYExperiment:
             if rawchans is None:
                 rawchans = np.arange(globalparams[0]['NumberOfElectrodes'])
             fs = kwargs['rasterfs']
-            hp = kwargs['hp']
-            lp = kwargs['lp']
-            d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs, hp=hp, lp=lp)
+            rawhp = kwargs['rawhp']
+            rawlp = kwargs['rawlp']
+            d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
             #import pdb;pdb.set_trace()
+            raw_baphy_events = [idf.copy() for idf in baphy_events]
             for i in range(len(baphy_events)):
                 #s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
                 #e = np.round(baphy_events[i].loc[:,'end'] * float(fs)) - np.round(t0[i]/fs)
                 #diff = np.round((baphy_events[i].loc[:,'end'] - baphy_events[i].loc[:,'start']) * float(fs))
                 
-                baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
-                baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
-                
+                raw_baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
+                raw_baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
+
+                if d[i].shape[1]<raw_baphy_events[i].end.max()*fs:
+                    raise ValueError("Length of raw trace is shorter than max event in file {i}.")
             raw_sigs = [nems.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='raw', recording=rec_name, chans=[str(c+1) for c in rawchans],
                         epochs=e)
-                        for e, r in zip(baphy_events, d)]
+                        for e, r in zip(raw_baphy_events, d)]
             signals['raw'] = nems.signal.RasterizedSignal.concatenate_time(raw_sigs)
-            
+
+        if mua:
+            if rawchans is None:
+                rawchans = np.arange(globalparams[0]['NumberOfElectrodes'])
+            fs = kwargs['rasterfs']
+            muabp = kwargs['muabp']
+            # get mua data
+            d, t0 = self.get_continuous_data(mua = True, chans=rawchans, rasterfs=fs, muabp=muabp)
+            # create rasterized signal object
+            mua_baphy_events = [idf.copy() for idf in baphy_events]
+            for i in range(len(baphy_events)):
+                # s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
+                # e = np.round(baphy_events[i].loc[:,'end'] * float(fs)) - np.round(t0[i]/fs)
+                # diff = np.round((baphy_events[i].loc[:,'end'] - baphy_events[i].loc[:,'start']) * float(fs))
+
+                mua_baphy_events[i].loc[:, 'start'] -= np.round(t0[i]) / fs
+                mua_baphy_events[i].loc[:, 'end'] -= np.round(t0[i]) / fs
+
+                if d[i].shape[1] < mua_baphy_events[i].end.max() * fs:
+                    raise ValueError("Length of mua trace is shorter than max event in file {i}.")
+            raw_sigs = [nems.signal.RasterizedSignal(
+                        fs=kwargs['rasterfs'], data=r,
+                        name='mua', recording=rec_name, chans=[str(c+1) for c in rawchans],
+                        epochs=e)
+                        for e, r in zip(mua_baphy_events, d)]
+            signals['mua'] = nems.signal.RasterizedSignal.concatenate_time(raw_sigs)
+
         if resp:
             spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)
             resp_sigs = [nems.signal.PointProcess(
@@ -743,7 +778,7 @@ class BAPHYExperiment:
 
     # ==================== DATA EXTRACTION METHODS =====================
 
-    def get_continuous_data(self, chans, rasterfs=None, lp=None, hp=None):
+    def get_continuous_data(self, chans, rasterfs=None, mua=None, rawlp=None, rawhp=None, muabp=None):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
@@ -815,40 +850,54 @@ class BAPHYExperiment:
                     # point to the local folder
                     openephys_folder = newpath
 
-            for filename in selected_data:
+            for i, filename in enumerate(selected_data):
                 full_filename = openephys_folder / filename
                 if os.path.isfile(full_filename):
                     log.info('%s already extracted, load faster...', filename)
                     data = io.load_continuous_openephys(str(full_filename))
-                    if rasterfs is None and lp is None and hp is None:
+                    if mua is not None:
+                        # filter data within bandwidth
+                        muabp = list(muabp)
+                        sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+                        d = abs(scipy.signal.sosfiltfilt(sos, data['data']))
+
+                        # calculate number of bins to sum mua over for resampling
+                        n = int(int(data['header']['sampleRate'])/rasterfs)
+                        # if signal is not divisible by requested sample rate, remove remainder
+                        d = d[:int(len(d) - len(d)%n)]
+                        # resample mua as sum of higher sampling rate bins - mua power
+                        d = np.sum(d.reshape(-1, n), axis=1)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+                    elif rasterfs is None and rawlp is None and rawhp is None:
                         print("no parameters specified")
                         continuous_data.append(data['data'][np.newaxis, :])
                         timestamp0.append(data['timestamps'][0])
-                    elif lp is not None and hp is not None and rasterfs is not None:
+                    elif rawlp is not None and rawhp is not None and rasterfs is not None:
                         print("bandpass filter and sample rate specified")
                         # filter data within bandwidth
-                        sos = scipy.signal.butter(4, [hp, lp], 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+                        sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
                         data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
                         resample_new_size = int(
                             np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
                         d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
                         timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                    elif lp is not None and hp is not None:
+                    elif rawlp is not None and rawhp is not None:
                         print("bandpass filter selected sample rate set to Nyquist")
                         # filter data within bandwidth
-                        sos = scipy.signal.butter(4, [hp, lp], 'bandpass', fs=int(data['header']['sampleRate']),
+                        sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
                                                   output='sos')
                         data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
                         resample_new_size = int(
-                            np.round(len(data['bpfiltered']) * lp*2 / int(data['header']['sampleRate'])))
+                            np.round(len(data['bpfiltered']) * rawlp*2 / int(data['header']['sampleRate'])))
                         d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
-                        timestamp0.append(data['timestamps'][0] * lp*2 / int(data['header']['sampleRate']))
-                    elif lp is not None and rasterfs is not None:
+                        timestamp0.append(data['timestamps'][0] * rawlp*2 / int(data['header']['sampleRate']))
+                    elif rawlp is not None and rasterfs is not None:
                         # filter data within bandwidth
                         print("lowpass filter selected and sample rate specified")
-                        sos = scipy.signal.butter(4, lp, 'lowpass', fs=int(data['header']['sampleRate']),
+                        sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
                                                   output='sos')
                         data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
                         resample_new_size = int(
@@ -856,10 +905,10 @@ class BAPHYExperiment:
                         d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
                         timestamp0.append(data['timestamps'][0] * rasterfs/ int(data['header']['sampleRate']))
-                    elif hp is not None and rasterfs is not None:
+                    elif rawhp is not None and rasterfs is not None:
                         # filter data within bandwidth
                         print("high pass filter selected and sample rate specified")
-                        sos = scipy.signal.butter(4, hp, 'highpass', fs=int(data['header']['sampleRate']),
+                        sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
                                                   output='sos')
                         data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'])
                         resample_new_size = int(
@@ -867,18 +916,18 @@ class BAPHYExperiment:
                         d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
                         timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                    elif lp is not None:
+                    elif rawlp is not None:
                         print("lowpass filter selected sample rate set to Nyquist")
-                        sos = scipy.signal.butter(4, lp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+                        sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
                         data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'], axis=1)
                         resample_new_size = int(
-                            np.round(len(data['lpfiltered']) * lp*2 / int(data['header']['sampleRate'])))
+                            np.round(len(data['lpfiltered']) * rawlp*2 / int(data['header']['sampleRate'])))
                         d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
                         continuous_data.append(d[np.newaxis, :])
-                        timestamp0.append(data['timestamps'][0] * lp*2  / int(data['header']['sampleRate']))
-                    elif hp is not None:
+                        timestamp0.append(data['timestamps'][0] * rawlp*2  / int(data['header']['sampleRate']))
+                    elif rawhp is not None:
                         print("highpass filter selected sample rate not adjusted")
-                        sos = scipy.signal.butter(4, hp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+                        sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
                         data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'], axis=1)
                         continuous_data.append(data['hpfiltered'][np.newaxis, :])
                         timestamp0.append(data['timestamps'][0])
