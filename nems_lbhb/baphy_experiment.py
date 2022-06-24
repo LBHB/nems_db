@@ -3,6 +3,7 @@ from pathlib import Path
 import logging
 import re
 import os
+import stat
 import os.path
 import pickle
 import pathlib as pl
@@ -137,7 +138,6 @@ class BAPHYExperiment:
             files.sort()
             self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
-
         # db-free options for loading specific cellids / parmfiles
         # here, must assume cellid = cells_to_load = cells_to_extract 
         # (so, might end up caching an extra, redundant, recording,
@@ -212,6 +212,9 @@ class BAPHYExperiment:
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
         self.folder = self.parmfile[0].parent
         self.experiment = [p.name.split('_', 1)[0] for p in self.parmfile]
+
+        # hard coded -- copy raw tgz files locally to load OE data
+        self.local_copy_raw = True
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
@@ -305,6 +308,17 @@ class BAPHYExperiment:
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
             raise IOError("DLC file doesn't exist")
+        else:
+            return [f.with_suffix(suffix) for f in filenames]
+
+    @property
+    @lru_cache(maxsize=128)
+    def facepcafile(self):
+        suffix = '.facePCs.h5'
+        log.info(f"Face PCA file suffix: {suffix}")
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
+            raise IOError("Face PCA file doesn't exist")
         else:
             return [f.with_suffix(suffix) for f in filenames]
 
@@ -510,6 +524,7 @@ class BAPHYExperiment:
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
         dlc = kwargs.get('dlc', False)
+        facepca = kwargs.get('facepca', False)
         stim = kwargs.get('stim', False)
         
         # default sampling rates depend on what signals are loaded
@@ -706,6 +721,23 @@ class BAPHYExperiment:
 
             signals['dlc'] = nems.signal.RasterizedSignal.concatenate_time(dlc_sigs)
 
+        if facepca:
+            f_traces = self.get_facepca_trace(exptevents=exptevents, **kwargs)
+
+            # multiple facepca signals
+            sigs = [f"PC{i}" for i in range(f_traces[0][0].shape[0])]
+            facepca_sigs = [nems.signal.RasterizedSignal(
+                fs=kwargs['rasterfs'], data=d[0],
+                name='facepca', recording=rec_name, chans=sigs,
+                epochs=baphy_events[i])
+                for (i, d) in enumerate(f_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                facepca_sigs = check_length(facepca_sigs, resp_sigs)
+
+            signals['facepca'] = nems.signal.RasterizedSignal.concatenate_time(facepca_sigs)
+
         if stim:
             #import pdb; pdb.set_trace()
             stim_sigs = [nems.signal.TiledSignal(
@@ -775,6 +807,34 @@ class BAPHYExperiment:
             selected_data = np.take(data_files, idx)
             continuous_data = []
             timestamp0 = []
+
+            if self.local_copy_raw:
+                filename = selected_data[-1]
+                full_filename = openephys_folder / filename
+                if ~os.path.isfile(full_filename):
+                    # file doesn't exist (still zipped?) unzip to a local folder
+                    tmppath = Path('/tmp/evpread/')
+                    newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+
+                    test_filename = newpath / filename
+                    if os.path.isfile(test_filename):
+                        log.info(f"Local un-tar-ed copy exists in: {newpath}")
+                    else:
+
+                        log.info(f"Temp untaring raw data to {newpath}")
+                        os.makedirs(tmppath, exist_ok=True)
+
+                        # open file
+                        file = tarfile.open(tarfile_fullpath)
+                        # extracting file
+                        file.extractall(tmppath, numeric_owner=True)
+                        file.close()
+                        os.chmod(tmppath / tarfile_fullpath.stem, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                        os.chmod(newpath, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+
+                    # point to the local folder
+                    openephys_folder = newpath
+
             for filename in selected_data:
                 full_filename = openephys_folder / filename
                 if os.path.isfile(full_filename):
@@ -860,7 +920,13 @@ class BAPHYExperiment:
         else:
             return [io.load_dlc_trace(str(p), **kwargs) for p in self.dlcfile]
 
-    # ===================================================================
+    def get_facepca_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [io.load_facepca_trace(str(p), exptevents=e, pc_count=kwargs['facepca'], **kwargs) for e, p in zip(exptevents, self.facepcafile)]
+        else:
+            return [io.load_facepca_trace(str(p), pc_count=kwargs['facepca'], **kwargs) for p in self.facepcafile]
+
+     # ===================================================================
 
     # ==================== BEHAVIOR METRIC METHODS ======================
     def get_behavior_performance(self, trials=None, tokens=None, **kwargs):

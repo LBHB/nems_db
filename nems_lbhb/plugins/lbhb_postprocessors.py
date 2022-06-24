@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 def ebc(loadkey):
     """
     ebc = evaluate_by_condition
+    ebc = evaluate_by_condition
        finds prediction correlations by condition
     """
     options = loadkey.split('.')[1:]
@@ -83,6 +84,22 @@ def tfheld(loadkey):
                                                                    'use_matched_recording': use_matched_recording,
                                                                    #'use_matched_random': use_matched_random,
                                                                    'use_same_recording': use_same_recording}]]
+    return xfspec
+
+@xform('rd')
+def rd(loadkey):
+    """
+    Run Decoding Analysis using context.
+    In the future, add options to specify options for the decoding analysis.
+    For now, just using defaults set in nems_lbhb.projects.nat_pup_decoding.do_decoding
+    """
+    use_pred = True
+    options = loadkey.split(".")
+    for op in options:
+        if op == "resp":
+            use_pred = False
+            
+    xfspec = [['nems_lbhb.postprocessing.run_decoding', {'use_pred': use_pred}]]
     return xfspec
 
 @xform()

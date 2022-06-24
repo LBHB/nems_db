@@ -5,6 +5,8 @@ import logging
 import nems.db as nd
 import nems.xforms
 
+import nems_lbhb.projects.nat_pup_decoding.do_decoding as decoding
+
 log = logging.getLogger(__name__)
 
 
@@ -15,10 +17,31 @@ def add_summary_statistics_by_condition(**context):
     # For new models the keyword 'ebc' (evaluate by condition) adds nems.xforms.add_summary_statistics_by_condition
 
 
+def run_decoding(use_pred, **ctx):
+    """
+    Run decoding analysis on LV model results.
+    For now, just use hardcoded dprime analysis options. These could be modified with the 
+    rd keyword in the future.
+
+    CRH 2022.05.21
+    """
+    if use_pred:
+        log.info("Running decoding analysis on pred data")
+    else:
+        log.info("Running decoding analysis on raw data")
+    success = decoding.do_decoding_analysis(lv_model=use_pred, **ctx)
+    # decoding results get saved in their own file, so don't really need to return anything
+    if success == 0:
+        return ctx
+    else:
+        raise ValueError("Decoding analysis failed")
+
+
 def run_decoding_analysis(IsReload=False, **kwargs):
     """
     Specialized postprocessor to queue decoding analysis for the model pred data
     """
+    raise DeprecationWarning("Use 'run_decoding'. It is cleaner.")
     if IsReload:
         log.info("Reload, skipping rda")
         return {}

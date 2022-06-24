@@ -61,13 +61,13 @@ def get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids):
             # if no such match, exclude cell
             continue
 
-    return a1_matched_cellids, peg_matched_cellids
+    return a1_matched_cellids, peg_matched_cellids, bins
 
 
 def get_matched_snr_mapping(a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids):
     modelnames = SIG_TEST_MODELS
 
-    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids)
+    a1_matched_cellids, peg_matched_cellids, _ = get_matched_snr_cells(a1_snr, peg_snr, a1_cellids, peg_cellids)
     cell_map_df = pd.DataFrame(data={'A1_cellid': a1_matched_cellids,
                                      'A1_snr': a1_snr_df.snr.loc[a1_matched_cellids].values,
                                      'PEG_cellid': peg_matched_cellids,
@@ -105,7 +105,7 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     test_snr = st.mannwhitneyu(a1_snr, peg_snr, alternative='two-sided')
 
     # force "exact" distribution match for given histogram bins
-    a1_matched_cellids, peg_matched_cellids = get_matched_snr_cells(a1_snr, peg_snr_sample, a1_cellids, peg_cellids)
+    a1_matched_cellids, peg_matched_cellids, bins = get_matched_snr_cells(a1_snr, peg_snr_sample, a1_cellids, peg_cellids)
     a1_matched_snr_df = a1_snr_df.loc[a1_matched_cellids]
     peg_matched_snr_df = peg_snr_df.loc[peg_matched_cellids]
 
@@ -211,16 +211,23 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
         _, inset_ax = plt.subplots()
     else:
         plt.sca(inset_ax)
-    # plt.hist(a1_snr, bins=bins, color=DOT_COLORS['pop LN'], label='a1', histtype='stepfilled', edgecolor='black')
-    # plt.hist(peg_snr, bins=bins, color=DOT_COLORS['2D CNN'], label='peg', histtype='stepfilled', edgecolor='black')
-    # plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black', fill=False,
-    #          hatch='...')
-    # plt.legend()
-    # inset_ax.xaxis.set_visible(False)
-    # inset_ax.yaxis.set_visible(False)
-    sns.stripplot(x='variable', y='SNR', data=combined_df, hue='matched', palette={0: 'lightgray', 1: 'black'},
-                  size=2, ax=inset_ax, jitter=jitter)
-    inset_ax.legend_.remove()
+
+    # Histogram version
+    # bins=bins -- this would be the actual bins used for matching the distributions, but it's a bit too fine
+    # for the figure size we ended up at.
+    plt.hist(a1_snr, bins=bins, label='a1', histtype='stepfilled', edgecolor='black', color='white')#DOT_COLORS['pop LN'])
+    plt.hist(peg_snr, bins=bins, label='peg', histtype='stepfilled', edgecolor='black', color='lightgray')#DOT_COLORS['2D CNN'],)
+    plt.hist(a1_matched_snr, bins=bins, label='matched', histtype='stepfilled', edgecolor='black', fill=False,
+             hatch='\\\\\\')
+    plt.legend()
+    plt.ylabel('Number of neurons')
+    plt.xlabel('SNR')
+
+
+    # Strip plot version
+    # sns.stripplot(x='variable', y='SNR', data=combined_df, hue='matched', palette={0: 'lightgray', 1: 'black'},
+    #               size=2, ax=inset_ax, jitter=jitter)
+    # inset_ax.legend_.remove()
     #sns.stripplot(data=combined_df_matched, palette={'A1': 'black', 'PEG': 'black'}, size=2, ax=inset_ax, jitter=jitter)
 
     plt.tight_layout()
@@ -236,64 +243,67 @@ def plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path, ax=None):
 
     a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids = load_snr_and_cellids(322, 323, a1_snr_path, peg_snr_path)
     cell_map_df = get_matched_snr_mapping(a1_snr, peg_snr, a1_snr_df, peg_snr_df, a1_cellids, peg_cellids)
-    a1_matched_cellids = cell_map_df.A1_cellid
+    #a1_matched_cellids = cell_map_df.A1_cellid
     peg_matched_cellids = cell_map_df.PEG_cellid
-    a1_r = nd.batch_comp(322, HELDOUT[:1], stat=PLOT_STAT).loc[a1_matched_cellids]
+    #a1_r = nd.batch_comp(322, HELDOUT[:1], stat=PLOT_STAT).loc[a1_matched_cellids]
     peg_r = nd.batch_comp(323, [HELDOUT_CROSSBATCH], stat=PLOT_STAT).loc[peg_matched_cellids]
-    test = st.wilcoxon(a1_r.values.flatten(), peg_r.values.flatten(), alternative='two-sided')
+    peg_r2 = nd.batch_comp(323, HELDOUT[:1], stat=PLOT_STAT).loc[peg_matched_cellids]
+    #test_crossbatch = st.wilcoxon(a1_r.values.flatten(), peg_r.values.flatten(), alternative='two-sided')
+    test_within_peg = st.wilcoxon(peg_r.values.flatten(), peg_r2.values.flatten(), alternative='two-sided')
 
-    a1_r = a1_r.rename(columns={HELDOUT[0]: 'A1'})
-    peg_r = peg_r.rename(columns={HELDOUT_CROSSBATCH: 'PEG'})
-    combined_r = a1_r.join(peg_r, how='outer')
-    combined_df = combined_r.join(a1_snr_df, how='left')
-    combined_df = combined_df.fillna(peg_snr_df.loc[peg_matched_cellids])
-    combined_df[PLOT_STAT] = np.nan
-    combined_df.r_ceiling.loc[a1_matched_cellids] = combined_df.A1.loc[a1_matched_cellids]
-    combined_df.r_ceiling.loc[peg_matched_cellids] = combined_df.PEG.loc[peg_matched_cellids]
-    combined_df['variable'] = 'A1'
-    combined_df['variable'].loc[peg_matched_cellids] = 'PEG'
-    combined_df = combined_df.drop(columns='A1')
-    combined_df = combined_df.drop(columns='PEG')
-    combined_df = combined_df.sort_values(by='snr')
-    combined_df = combined_df.reset_index(0)
+    #a1_r = a1_r.rename(columns={HELDOUT[0]: 'A1'})
+    peg_r = peg_r.rename(columns={HELDOUT_CROSSBATCH: 'cross-batch held'})
+    peg_r2 = peg_r2.rename(columns={HELDOUT[0]: 'PEG held'})
+    combined_r = peg_r.join(peg_r2, how='outer')
+    #combined_df = combined_r.join(peg_snr_df, how='left')
+    #combined_df = combined_df.fillna(peg_snr_df.loc[peg_matched_cellids])
+    #combined_df[PLOT_STAT] = np.nan
+    #combined_df.r_ceiling.loc[a1_matched_cellids] = combined_df.A1.loc[a1_matched_cellids]
+    #combined_df.r_ceiling.loc[peg_matched_cellids] = combined_df.PEG.loc[peg_matched_cellids]
+    #combined_df['variable'] = 'A1'
+    #combined_df['variable'].loc[peg_matched_cellids] = 'PEG'
+    #combined_df = combined_df.drop(columns='A1')
+    #combined_df = combined_df.drop(columns='PEG')
+    #combined_df = combined_df.sort_values(by='snr')
+    #combined_df = combined_df.reset_index(0)
 
-    sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
+    #sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
                   #hue='snr', palette=f'dark:{DOT_COLORS["1D CNNx2"]}',
-                  size=2, ax=ax, zorder=0)
-    sns.boxplot(x='variable', y=PLOT_STAT, data=combined_df, boxprops={'facecolor': 'None', 'linewidth': 1},
+                  #size=2, ax=ax, zorder=0)
+    sns.stripplot(data=combined_r, color=DOT_COLORS['1D CNNx2'], size=2, ax=ax, zorder=0)
+    plt.xticks(rotation=45, fontsize=6, ha='right')
+    sns.boxplot(data=combined_r, boxprops={'facecolor': 'None', 'linewidth': 1},
                      showcaps=False, showfliers=False, whiskerprops={'linewidth': 0}, ax=ax)
     #ax.legend_.remove()  # tried to color by snr but it's just really hard to see, and no pattern anyway
     plt.tight_layout()
 
-    return a1_r, peg_r, test
+    return peg_r, peg_r2, test_within_peg
 
 if __name__ == '__main__':
     a1_snr_path = int_path / str(a1) / 'snr_nat4.csv'
     peg_snr_path = int_path / str(peg) / 'snr_nat4.csv'
 
-    a1_r, peg_r = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path)
+    peg_r, peg_r2, test_within = plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path)
     plt.show(block=True)
 
+    fig9a, ax4a = plt.subplots(figsize=single_column_short)
+    fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
+    test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_matched, peg_md, \
+        peg_md_matched, a1_md_snr, a1_md_snr_matched, peg_md_snr, peg_md_snr_matched = plot_matched_snr(
+            a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
+    )
+    plt.show(block=True)
 
+    #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
+    #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
     #
-    # fig9a, ax4a = plt.subplots(figsize=single_column_short)
-    # fig9b, ax4b = plt.subplots(figsize=single_column_short)  # but actually resize manually in illustrator, as needed.
-    # test_c1, test_LN, test_dnn, test_snr, a1_md, a1_md_matched, peg_md, \
-    #     peg_md_matched, a1_md_snr, a1_md_snr_matched, peg_md_snr, peg_md_snr_matched = plot_matched_snr(
-    #         a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=False, ax=ax4a, inset_ax=ax4b
-    # )
-    # plt.show(block=True)
-    #
-    # #a1_snr_path = int_path  / str(a1) / 'snr_nat4.pkl'
-    # #peg_snr_path = int_path  / str(peg) / 'snr_nat4.pkl'
-    # #
-    # #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
-    #
-    # print("Sig. tests:\n"
-    #       "conv1Dx2: %s\n"
-    #       "LN: %s\n"
-    #       "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
-    #
+    #u_c1, p_c1, u_LN, p_LN, u_dnn, p_dnn = plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path)
+
+    print("Sig. tests:\n"
+          "conv1Dx2: %s\n"
+          "LN: %s\n"
+          "dnn1_single: %s\n"% (test_c1, test_LN, test_dnn))
+
     # # Generate mapping csv for use elsewhere
     # cell_map_df = get_matched_snr_mapping(a1, peg, a1_snr_path, peg_snr_path)
     # cell_map_df.to_csv(int_path / 'snr_subset_map.csv')

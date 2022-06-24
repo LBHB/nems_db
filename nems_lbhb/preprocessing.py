@@ -864,7 +864,7 @@ def add_pupil_mask(rec, state='big', mask_name='p_mask', evoked_only=True):
     r[mask_name] = bp['mask']
     return r
 
-def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, pupsort=False, reduce_mask=False, **kwargs):
+def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=False, add_per_stim=False, custom_epochs=False, respsort=False, pupsort=False, reduce_mask=False, pca_split=0, **kwargs):
     """
     Utility function for cc_norm fitter. Generates masking signals used by the fitter to make LV weights
       reproduce desired pattern of noise correlations in different conditions.
@@ -878,6 +878,22 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
     r = rec.copy()
     r = add_pupil_mask(r, state='big', mask_name='mask_large', evoked_only=evoked_only)
     r = add_pupil_mask(r, state='small', mask_name='mask_small', evoked_only=evoked_only)
+
+    if pca_split>0:
+        rmedian=np.nanmedian(r.apply_mask()['pca'].as_continuous())
+        #if 'PC0' in rec['state'].chans:
+        #    resp = rec['state'].extract_channels(['PC0']).as_continuous()[0, :]
+        #else:
+        resp = rec['pca'].as_continuous()[0, :]
+        rlarge = (resp > rmedian)
+        rsmall = (resp <= rmedian)
+        log.info(f"Splitting by pc0 large {rlarge.sum()} small {rsmall.sum()}")
+        r['mask_rlarge_lg'] = r['mask']._modified_copy((r['mask_large']._data * rlarge).astype(bool))
+        r['mask_rsmall_lg'] = r['mask']._modified_copy((r['mask_large']._data * rsmall).astype(bool))
+        r['mask_rlarge_sm'] = r['mask']._modified_copy((r['mask_small']._data * rlarge).astype(bool))
+        r['mask_rsmall_sm'] = r['mask']._modified_copy((r['mask_small']._data * rsmall).astype(bool))
+        
+        return {'rec': r}
 
     if custom_epochs:
         # special case, masking pupil per epoch/bin using a custom set of epochs.
@@ -1106,15 +1122,16 @@ def pupil_large_small_masks(rec, evoked_only=True, ev_bins=0, split_per_stim=Fal
         #import pdb;
         #pdb.set_trace()
 
-    # at the end, AND the large and small masks with the selected epochs
-    masks = [k for k in r.signals.keys()
-             if (k.startswith("mask_") and k!="mask_small" and k!="mask_large")]
-    m = np.zeros_like(r["mask"]._data)
-    for i in masks:
-        m += r[i]._data
-    r['mask_small'] = r['mask_small']._modified_copy(data=r['mask_small']._data * m)
-    r['mask_large'] = r['mask_large']._modified_copy(data=r['mask_large']._data * m)
-    log.info(f"Masks trimmed: sm: {r['mask_small']._data.sum()}  lg: {r['mask_large']._data.sum()}")
+    if add_per_stim or split_per_stim or custom_epochs or ev_bins:
+        # at the end, AND the large and small masks with the selected epochs
+        masks = [k for k in r.signals.keys()
+                 if (k.startswith("mask_") and k!="mask_small" and k!="mask_large")]
+        m = np.zeros_like(r["mask"]._data)
+        for i in masks:
+            m += r[i]._data
+        r['mask_small'] = r['mask_small']._modified_copy(data=r['mask_small']._data * m)
+        r['mask_large'] = r['mask_large']._modified_copy(data=r['mask_large']._data * m)
+        log.info(f"Masks trimmed: sm: {r['mask_small']._data.sum()}  lg: {r['mask_large']._data.sum()}")
     if reduce_mask:
         r['mask'] = r['mask']._modified_copy(data=r['mask_small']._data +r['mask_large']._data)
         log.info('Including main mask')

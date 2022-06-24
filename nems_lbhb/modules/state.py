@@ -953,8 +953,9 @@ class lv_norm(NemsModule):
                          'nems.plots.api.before_and_after',
                          'nems.plots.api.pred_resp',
                          'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all'],
-            'plot_fn_idx': 3,
+                         'nems.plots.api.state_vars_psth_all',
+                         'nems.plots.api.state_gain_parameters'],
+            'plot_fn_idx': 5,
             'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g}),
                       'd': ('Normal', {'mean': mean_d, 'sd': sd_d})}
         }
@@ -1115,8 +1116,9 @@ class indep_noise(NemsModule):
                          'nems.plots.api.before_and_after',
                          'nems.plots.api.pred_resp',
                          'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all'],
-            'plot_fn_idx': 3,
+                         'nems.plots.api.state_vars_psth_all',
+                         'nems.plots.api.state_gain_parameters'],
+            'plot_fn_idx': 5,
             'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g})}
         }
         if set_bounds:
@@ -1205,7 +1207,7 @@ class save_prediction(NemsModule):
                           'o': 'pred0'
                           },
             'plot_fns': [],
-            'prior': {'d': ('Normal', {'mean': np.zeros(10), 'sd': np.ones(10)})}
+            'prior': {'d': ('Normal', {'mean': np.zeros(1), 'sd': np.ones(1)})}
         }
         return save_prediction(**template)
 
@@ -1219,7 +1221,6 @@ class save_prediction(NemsModule):
 
         def fn_dummy(x):
             return x
-        #import pdb; pdb.set_trace()
         
         return [rec[i].transform(fn_dummy, o)]
 
