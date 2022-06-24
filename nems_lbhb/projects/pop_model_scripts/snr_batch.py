@@ -199,6 +199,9 @@ def sparseness_figs():
     sparseness_data_a1['area']='A1'
     sparseness_data_peg['area']='PEG'
     sparseness_data = pd.concat([sparseness_data_a1,sparseness_data_peg], ignore_index=True)
+    # TODO: (maybe) filter out cellids that aren't in sig cell list, in addition to the r>0.2 check in sparseness_by_batch
+    a1_cellids = get_significant_cells(322, SIG_TEST_MODELS, as_list=True)
+    peg_cellids = get_significant_cells(323, SIG_TEST_MODELS, as_list=True)
 
     d = sparseness_data_a1.loc[sparseness_data_a1.model==1].merge(sparseness_data_a1.loc[sparseness_data_a1.model==2], how='inner', on='cellid',
                                                                   suffixes=('_dnn','_ln'))

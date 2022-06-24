@@ -34,6 +34,26 @@ a1 = 322
 peg = 323
 stats_tests = []
 
+# a1_cells1 = get_significant_cells(322, SIG_TEST_MODELS, as_list=True)
+# a1_cells2 = get_significant_cells(322, ALL_FAMILY_MODELS, as_list=True)
+# peg_cells1 = get_significant_cells(323, SIG_TEST_MODELS, as_list=True)
+# peg_cells2 = get_significant_cells(323, ALL_FAMILY_MODELS, as_list=True)
+#
+# print(len(a1_cells1))
+# print(len(a1_cells2))
+# print(np.intersect1d(a1_cells1, a1_cells2).size)
+#
+# print(len(peg_cells1))
+# print(len(peg_cells2))
+# print(np.intersect1d(peg_cells1, peg_cells2).size)
+
+# TODO: yes, these are different. so update SIG_TEST_MODELs to include all 5 models
+#       and re-generate figures for final submission.
+
+import pdb; pdb.set_trace()
+# TODO: next time we re-generate figures, need to fix the cell significance test here and for sparseness figures,
+#       and need to fix figure numbers for clarity.
+
 ########################################################################################################################
 #################################   SCATTER/BAR PRED   #################################################################
 ########################################################################################################################
@@ -194,37 +214,40 @@ stats_tests.append(str(mds2))
 ########################################################################################################################
 
 
-fig6 = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=single_column_shorter)
+fig6, dpm = partial_est_plot(batch=a1, PLOT_STAT='r_ceiling', figsize=single_column_shorter)
 fig6.tight_layout()
+
+stats_tests.append('\n\nestimation subsampling stats tests (wilcoxon):')
+stats_tests.append(f'{dpm.index.values.tolist()}')
+stats_tests.append(f'{dpm.p.values.tolist()}')
 
 
 ########################################################################################################################
 #################################   EQUIVALENCE  #######################################################################
 ########################################################################################################################
 
-a1_corr_path = int_path  / str(a1) / 'corr_nat4.pkl'
-a1_corr_path_pop = int_path / str(a1) / 'corr_nat4_pop.pkl'
+a1_corr_path = int_path / str(a1) / 'corr_nat4.pkl'
+a1_corr_path_LN = int_path / str(a1) / 'corr_nat4_LN_test.pkl'
 peg_corr_path = int_path / str(peg) / 'corr_nat4.pkl'
-peg_corr_path_pop = int_path / str(peg) / 'corr_nat4_pop.pkl'
+peg_corr_path_LN = int_path / str(peg) / 'corr_nat4_LN_test.pkl'
 
-if 0:
-    from pop_correlation import generate_psth_correlations_pop
-    batch=322
-    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=a1_corr_path)
-    batch=323
-    generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=peg_corr_path)
-
-fig7, axes2 = plt.subplots(1, 2, figsize=single_column_shorter)
-axes2[0].set_box_aspect(1)
-axes2[1].set_box_aspect(1)
+fig7, axes2 = plt.subplots(1, 4, figsize=double_column_shorter)
 a1_corr, a1_stats7 = correlation_histogram(
-    a1, 'A1', load_path=a1_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[0])
+    a1, 'A1', load_path=a1_corr_path, use_pop_models=True, ax=axes2[0])
 peg_corr, peg_stats7 = correlation_histogram(
-    peg, 'PEG', load_path=peg_corr_path, force_rerun=False, use_pop_models=True, ax=axes2[1])
+    peg, 'PEG', load_path=peg_corr_path, use_pop_models=True, ax=axes2[1])
+a1_LN, _ = correlation_histogram(
+    a1, 'A1', load_path=a1_corr_path, use_pop_models=True, ax=axes2[2], plot_LN=True, LN_load=a1_corr_path_LN
+)
+peg_LN, _ = correlation_histogram(
+    peg, 'PEG', load_path=peg_corr_path, use_pop_models=True, ax=axes2[3], plot_LN=True, LN_load=peg_corr_path_LN
+)
+for ax in axes2:
+    ax.set_box_aspect(1)
 
 fig7.tight_layout()
-stats_tests.append("\n\ncorrelation histograms, A1 sig tests: %s" % a1_stats7)
-stats_tests.append("correlation histograms, PEG sig tests: %s" % peg_stats7)
+stats_tests.append(f"\n\ncorrelation histograms, A1 sig tests: {a1_stats7}")
+stats_tests.append(f"correlation histograms, PEG sig tests: {peg_stats7}")
 
 
 ########################################################################################################################

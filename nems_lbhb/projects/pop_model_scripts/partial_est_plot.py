@@ -130,9 +130,7 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     ax[1].set_xlabel('Fraction estimation data')
     ax[1].set_box_aspect(1)
 
-    print(dpm)
-
-    return f
+    return f, dpm
 
 
 if __name__ == '__main__':
