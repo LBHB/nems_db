@@ -132,7 +132,7 @@ SIG_TEST_MODELS = [
     #f"{load_string_single}_wc.18x4.g-fir.1x25x4-wc.4xR-lvl.R-dexp.R_{fit_string_single}", # Low_dim
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
-shortnamesp = ['1D CNN', '1D CNNx2', 'CNN single']
+shortnamesp = ['1D-CNN', '1Dx2CNN', 'single-CNN']
 #shortnames = ['conv1d','conv1dx2','dnn-sing']
 shortnamesp = [s+"_p" for s in shortnamesp]
 
@@ -152,7 +152,7 @@ ALL_FAMILY_MODELS = [
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
 
-shortnames = ['2D CNN', '1D CNN', '1D CNNx2', 'pop LN', 'CNN single']
+shortnames = ['2D-CNN', '1D-CNN', '1Dx2-CNN', 'pop-LN', 'single-CNN']
 #shortnames=['conv2d', 'conv1d', 'conv1dx2', 'ln-pop', 'dnn-sing']
 #shortnames=['conv1d','conv1dx2','dnn-sing']
 
@@ -245,9 +245,9 @@ fit_string3 = "tfinit.n.lr1e3.et3.rb10.es20.L2-newtf.n.lr1e4.es20.L2"
 PLOT_STAT = 'r_ceiling'
 #PLOT_STAT = 'r_test'
 
-DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#27717A', #'conv1dx2': 'purple',
-              '1D CNNx2': '#2B8AE0', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
-              'pop LN': '#7978B0', 'CNN single': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
+DOT_COLORS = {'2D-CNN': '#65C2AE', 'LN': 'black', '1D-CNN': '#27717A', #'conv1dx2': 'purple',
+              '1Dx2-CNN': '#2B8AE0', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
+              'pop-LN': '#7978B0', 'single-CNN': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
               'LN_2d': 'purple',
               'c1d2_input': 'blue',
               'c1d2_tiny': 'blue',
