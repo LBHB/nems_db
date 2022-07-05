@@ -22,7 +22,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     SIG_TEST_MODELS, mplparams,
     get_significant_cells, snr_by_batch, NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS, DOT_MARKERS, base_path,
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, compute_snr, int_path, 
-    a1, peg, base_path
+    a1, peg, base_path, double_column_shorter, column_and_half_short
 )
 
 import matplotlib as mpl
@@ -105,7 +105,8 @@ def sparseness_by_batch(batch, modelnames=None,
         #modelnames=[ALL_FAMILY_MODELS[2],ALL_FAMILY_MODELS[3] ]
 
     d = nd.batch_comp(batch, modelnames)
-    cellids = d.index
+    #cellids = d.index
+    cellids = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
 
     if rec is None:
         xf0, ctx0 = load_model_xform(cellids[0], batch, pop_reference_model, eval_model=True)
@@ -119,7 +120,7 @@ def sparseness_by_batch(batch, modelnames=None,
 
     for j, cellid in enumerate(cellids):
         r_test_all = d.loc[cellid].values.max()
-        if r_test_all>0.2:
+        if r_test_all>0:
             for i,m in enumerate(modelnames):
 
                 xf, ctx = load_model_xform(cellid, batch, m, eval_model=False)
@@ -211,29 +212,30 @@ def sparseness_figs():
     ax[2].set_xlabel('pop LN')
     ax[2].set_ylabel('1D CNNx2')
 
-    r_test_min=0.3
-    print(f"r_test_min={r_test_min}")
-    sd_r = sparseness_data.loc[sparseness_data['r_test_all']>r_test_min, ['area','cellid','model','S_r']].copy()
+    sd_r = sparseness_data[['area','cellid','model','S_r','r_test_all']].copy()
     sd_r['model']="act"
-    sd_r.columns=['area','cellid','model','S']
+    sd_r.columns=['area','cellid','model','S','r_test']
     sd_r = sd_r.drop_duplicates()
-    sd_p = sparseness_data.loc[sparseness_data['r_test_all']>r_test_min, ['area','cellid','model','S_p']].copy()
+    sd_p = sparseness_data[['area','cellid','model','S_p','r_test_all']].copy()
     sd_p = sd_p.loc[sd_p['model']>0]
     sd_p['model']=sd_p['model'].astype(str)
-    sd_p.columns=['area','cellid','model','S']
+    sd_p.columns=['area','cellid','model','S','r_test']
     sd = pd.concat([sd_p,sd_r],ignore_index=True)
-    sd.loc[sd['model']=='1.0','model']='1D CNN'
-    sd.loc[sd['model']=='2.0','model']='pop LN'
+    sd.loc[sd['model']=='1','model']='1D CNN'
+    sd.loc[sd['model']=='2','model']='pop LN'
     sd['label'] = sd['area'] + " " +sd['model']
     #tres=results.loc[(results[PLOT_STAT]<1) & results[PLOT_STAT]>-0.05]
 
+    r_test_min=0.0
+    print(f"r_test_min={r_test_min}")
+    sd_thr = sd.loc[sd['r_test']>r_test_min]
     #f,ax=plt.subplots()
-    sns.stripplot(x='label', y='S', hue='label', data=sd, zorder=0,
+    sns.stripplot(x='label', y='S', hue='label', data=sd_thr, zorder=0,
                   palette=['gray', DOT_COLORS['1D CNNx2'], DOT_COLORS['pop LN']]*2,
                   hue_order=['A1 act', 'A1 1D CNN', 'A1 pop LN', 'PEG act', 'PEG 1D CNN', 'PEG pop LN'],
                   order=['A1 act', 'A1 1D CNN', 'A1 pop LN', 'PEG act', 'PEG 1D CNN', 'PEG pop LN'],
                   jitter=0.2, size=2, ax=ax[3]) #[1,1]
-    sns.boxplot(x='label', y='S', data=sd, boxprops={'facecolor': 'None', 'linewidth': 1},
+    sns.boxplot(x='label', y='S', data=sd_thr, boxprops={'facecolor': 'None', 'linewidth': 1},
                 showcaps=False, showfliers=False, whiskerprops={'linewidth': 0},
                 order=['A1 act','A1 1D CNN','A1 pop LN','PEG act','PEG 1D CNN','PEG pop LN'], ax=ax[3]) #[1,1]
     plt.xticks(rotation=45, fontsize=6, ha='right')
@@ -251,14 +253,31 @@ def sparseness_figs():
     print(sd.groupby('label').median())
 
     f1.tight_layout()
+    sd['r_approx']=np.round(sd['r_test'],1)
+    ms = sd.groupby(['label','r_approx']).mean()
+    mp = ms.reset_index().pivot(index='r_approx',columns='label',values='S')
+    es = sd.groupby(['label','r_approx']).sem()
+    ep = es.reset_index().pivot(index='r_approx',columns='label',values='S')
 
-    return f1, tests
+    f2,ax=plt.subplots(1,2,figsize=column_and_half_short,sharex=True,sharey=True)
+    palette = ['gray', DOT_COLORS['1D CNNx2'], DOT_COLORS['pop LN']]
+    for c,p in zip(['A1 act','A1 pop LN','A1 1D CNN'],palette):
+        ax[0].errorbar(mp.index,mp[c].values,ep[c].values, color=p, label=c)
+    for c,p in zip(['PEG act','PEG pop LN','PEG 1D CNN'],palette):
+        ax[1].errorbar(mp.index,mp[c].values,ep[c].values, color=p, label=c)
+    ax[0].legend()
+    ax[1].legend()
+    ax[0].set_xlabel('r_test')
+    ax[0].set_ylabel('Sparseness')
+    return f1, f2, tests, sd
 
 if __name__ == '__main__':
     
-    f1 = sparseness_figs()
+    f1, f2, tests, sd = sparseness_figs()
 
-    
+    outpath='/auto/users/svd/docs/current/pop_coding/figures/'
+    #f1.savefig(outpath+'fig8_sparseness.pdf')
+    #f2.savefig(outpath+'fig8_sparseness_supp.pdf')
 
 
 
