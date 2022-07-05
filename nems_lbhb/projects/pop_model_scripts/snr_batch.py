@@ -199,6 +199,9 @@ def sparseness_figs():
     sparseness_data_a1['area']='A1'
     sparseness_data_peg['area']='PEG'
     sparseness_data = pd.concat([sparseness_data_a1,sparseness_data_peg], ignore_index=True)
+    # TODO: (maybe) filter out cellids that aren't in sig cell list, in addition to the r>0.2 check in sparseness_by_batch
+    a1_cellids = get_significant_cells(322, SIG_TEST_MODELS, as_list=True)
+    peg_cellids = get_significant_cells(323, SIG_TEST_MODELS, as_list=True)
 
     d = sparseness_data_a1.loc[sparseness_data_a1.model==1].merge(sparseness_data_a1.loc[sparseness_data_a1.model==2], how='inner', on='cellid',
                                                                   suffixes=('_dnn','_ln'))
@@ -244,9 +247,9 @@ def sparseness_figs():
     ref_models = ['A1 act','A1 1D CNN','PEG act','PEG 1D CNN']
     test_models = ['A1 1D CNN','A1 pop LN','PEG 1D CNN','PEG pop LN']
 
-    tests = [[m1,m2,st.mannwhitneyu(sd.loc[sd['label']==m1,'S'], sd.loc[sd['label']==m2,'S'], alternative='two-sided')]
+    tests = [[m1,m2,st.wilcoxon(sd.loc[sd['label']==m1,'S'], sd.loc[sd['label']==m2,'S'], alternative='two-sided')]
              for m1, m2 in zip(ref_models, test_models)]
-    print(pd.DataFrame(tests, columns=['ref','test','MannWhitney u,p']))
+    print(pd.DataFrame(tests, columns=['ref','test','Wilcoxon u,p']))
     print(sd.groupby('label').median())
 
     f1.tight_layout()
