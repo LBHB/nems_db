@@ -118,7 +118,8 @@ def pop_model_example(figsize=None):
     modelspec.meta['r_ceiling']=modelspec.meta['r_test'][rr]*1.1
     print(val['stim'].shape, val['resp'].shape, tctx['val']['stim'].shape)
     
-    f=pop_models.plot_layer_outputs(modelspec, val, index_range=np.arange(150,600), example_idx=15, figsize=figsize, altstim=tctx['val']['stim']);
+    f=pop_models.plot_layer_outputs(modelspec, val, index_range=np.arange(150,600), example_idx=15, figsize=figsize,
+                                    altstim=tctx['val']['stim'], cmap='pop_paper')
     
     return f
     
