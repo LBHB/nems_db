@@ -32,7 +32,7 @@ savefigs = False
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single, \
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, get_significant_cells, PLOT_STAT, \
     modelname_half_prefit, modelname_half_pop, modelname_half_fullfit, \
-    modelname_half_heldoutpop, modelname_half_heldoutfullfit, mplparams
+    modelname_half_heldoutpop, modelname_half_heldoutfullfit, mplparams, single_column_shorter
 
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)
@@ -95,7 +95,7 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
     ax[0].plot([0, 1], [0, 1], 'k--')
     x1,x2,xlabel='10', 'std', 'Standard'
-    y1,y2,ylabel='10', 'prefit','Pretrained'
+    y1,y2,ylabel='10', 'prefit','Pre-trained'
     x=dpred.loc[(dpred.midx==x1) & (dpred.fit==x2), [PLOT_STAT]]
     y=dpred.loc[(dpred.midx==y1) & (dpred.fit==y2), [PLOT_STAT]]
     _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
@@ -128,6 +128,7 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel, markersize=4.5)
     ax[1].legend(frameon=False)
     ax[1].set_xlabel('Fraction estimation data')
+    ax[1].set_ylim(0.5, 0.7)
     ax[1].set_box_aspect(1)
 
     return f, dpm
@@ -143,4 +144,4 @@ if __name__ == '__main__':
     single_column_tall = (3.5*sf, 6*sf)
     column_and_half_short = (5*sf, 2.5*sf)
     column_and_half_tall = (5*sf, 5*sf)
-    fig5 = partial_est_plot(batch=a1, PLOT_STAT=PLOT_STAT, figsize=column_and_half_short)
+    fig5 = partial_est_plot(batch=a1, PLOT_STAT=PLOT_STAT, figsize=single_column_shorter)

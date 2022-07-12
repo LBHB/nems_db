@@ -57,9 +57,9 @@ stats_tests = []
 ########################################################################################################################
 
 means = []
-fig3c, axes3c = plt.subplots(1, 2, figsize=single_column_shorter)
+fig3c, axes3c = plt.subplots(1, 2, figsize=(column_and_half_short))
 xlims = []
-ylims = []
+ylims = []  #[(0.425, 0.7), (0.325, 0.625)]  # hard-coded limits for pop paper
 
 for i, batch in enumerate([a1, peg]):
     show_legend = (i==0)
@@ -70,7 +70,9 @@ for i, batch in enumerate([a1, peg]):
                                                  dot_colors=DOT_COLORS, dot_markers=DOT_MARKERS,
                                                  plot_stat=PLOT_STAT, plot_medians=True,
                                                  labeled_models=ALL_FAMILY_MODELS,
-                                                 show_legend=show_legend)
+                                                 show_legend=show_legend,
+                                                 #y_lim=ylims[i]
+                                                 )
     means.append(model_mean)
     batch_name = 'A1' if batch == a1 else 'PEG'
     # axes3c[i].set_title(f'{batch_name}')

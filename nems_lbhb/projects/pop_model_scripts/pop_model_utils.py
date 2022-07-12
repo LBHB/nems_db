@@ -62,8 +62,9 @@ if linux_user=='svd':
     column_and_half_vshort = (5*sf, 1.5*sf)
     column_and_half_short = (5*sf, 2.5*sf)
     column_and_half_tall = (5*sf, 5*sf)
-    double_column_short = (7, 3)
-    double_column_shorter = (7, 2)
+    double_column_short = (7*sf, 3*sf)
+    double_column_shorter = (7*sf, 2*sf)
+    double_column_medium = (7*sf, 5*sf)
 else:
     single_column_shorter = (3.5, 2)
     single_column_short = (3.5, 3)
@@ -73,6 +74,7 @@ else:
     column_and_half_tall = (5, 6)
     double_column_short = (7, 3)
     double_column_shorter = (7, 2)
+    double_column_medium = (7, 5)
 #inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
 
 
