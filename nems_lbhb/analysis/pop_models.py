@@ -38,13 +38,13 @@ def subspace_overlap(u, v):
     from Sharpee PLoS CB 2017 paper
     u,v: n X x matrices sampling n-dim subspace of x-dim space
     """
-    n = u.shape[1]
+    n = u.shape[0]
 
-    _u = u / np.sqrt(np.sum(u ** 2, axis=0, keepdims=True))
-    _v = v / np.sqrt(np.sum(v ** 2, axis=0, keepdims=True))
+    _u = u / np.sqrt(np.sum(u ** 2, axis=1, keepdims=True))
+    _v = v / np.sqrt(np.sum(v ** 2, axis=1, keepdims=True))
 
-    num = np.power(np.abs(det(_u.T @ _v)), (1.0 / n))
-    den = np.power(np.abs(det(_u.T @ _u)) * np.abs(det(_v.T @ _v)), (0.5 / n))
+    num = np.power(np.abs(det(_u @ _v.T)), (1.0 / n))
+    den = np.power(np.abs(det(_u @ _u.T)) * np.abs(det(_v @ _v.T)), (0.5 / n))
 
     return num / den
 
