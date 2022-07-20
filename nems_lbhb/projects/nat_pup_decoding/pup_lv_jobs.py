@@ -90,7 +90,15 @@ elif batch == 331:
     modelname_base = "psth.fs4.pup.fpca3-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                      "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7" + \
                      "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
-
+    # 3 facepcs plus 2 pupil dims for LV, no pca
+    modelname_base = "psth.fs4.pup.fpca3-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                     "_stategain.5xR.x2,3,4-spred-lvnorm.8xR.so.x1,2,5,6,7-inoise.8xR.x1,3,4,5,6,7" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
+    # 3 facepcs plus 2 pupil dims for LV
+    modelname_base = "psth.fs4.pup.fpca3-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                     "_stategain.5xR.x1,3,4,5-spred-lvnorm.9xR.so.x2,3,6,7,8-inoise.9xR.x2,4,5,6,7,8" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
+    modelname_base="exp331"
     # batch 331 - actual data decoding
     resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp"+\
                 "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3"+\
@@ -108,6 +116,11 @@ elif batch==322:
     modelname_base = "psth.fs4.pup.fpca3-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                      "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7" + \
                      "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
+    # 3 facepcs plus 2 pupil dims for LV
+    modelname_base="exp322"
+    modelname_base = "psth.fs4.pup.fpca3-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                     "_stategain.5xR.x1,3,4,5-spred-lvnorm.9xR.so.x2,3,6,7,8-inoise.9xR.x2,4,5,6,7,8" + \
+                     "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
 
     # batch 322 - actual data decoding
     resp_modelname = f"psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.p2-aev-rd.resp"+\
@@ -121,6 +134,7 @@ modelnames, states = parse_modelname_base(modelname_base, batch)
 siteids, cellids = db.get_batch_sites(batch)
 
 #siteids=[siteids[0]]
+priority=2
 
 force_rerun = False
 
@@ -133,7 +147,7 @@ if run_in_lbhb:
     GPU_job=int(GPU_job)
     # first models, run locally so that recordings get generated.
     r = db.enqueue_models(siteids, batch, modelnames, executable_path=executable_path,
-                          force_rerun=force_rerun,script_path=script_path, GPU_job=GPU_job, user="svd")
+                          force_rerun=force_rerun,script_path=script_path, GPU_job=GPU_job, user="svd", priority=priority)
     for a, b in r:
         print(a, b)
 

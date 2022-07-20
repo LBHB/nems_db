@@ -12,8 +12,8 @@ import logging
 import re
 import numpy as np
 import copy
-import nems.epoch as ep
-import nems.signal as signal
+import nems0.epoch as ep
+import nems0.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 

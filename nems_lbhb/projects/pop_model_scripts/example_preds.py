@@ -18,14 +18,14 @@ params = {'axes.spines.right': False,
 mpl.rcParams.update(params)
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
-from nems.xforms import evaluate_step
+import nems0.epoch as ep
+from nems0.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 from nems_lbhb import baphy_experiment
-from nems.xform_helper import load_model_xform
+from nems0.xform_helper import load_model_xform
 from nems import xforms
 from nems_lbhb.plots import scatter_bin_lin
 from nems_lbhb.analysis import pop_models
@@ -48,8 +48,8 @@ def load_high_res_stim():
 
         b = baphy_experiment.BAPHYExperiment(batch=batch, cellid=cellid)
         tctx = {'rec': b.get_recording(loadkey="ozgf.fs100.ch64")}
-        tctx = xforms.evaluate_step(['nems.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM', 'keepfrac': 1.0}], tctx)
-        tctx = xforms.evaluate_step(['nems.xforms.average_away_stim_occurrences', {'epoch_regex': '^STIM'}], tctx)
+        tctx = xforms.evaluate_step(['nems0.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM', 'keepfrac': 1.0}], tctx)
+        tctx = xforms.evaluate_step(['nems0.xforms.average_away_stim_occurrences', {'epoch_regex': '^STIM'}], tctx)
         high_res_ctx = tctx
         
     return high_res_ctx

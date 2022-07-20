@@ -11,16 +11,16 @@ import pandas as pd
 import matplotlib.image as mpimg
 from PIL import Image
 
-import nems.plots.api as nplt
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-import nems.modelspec as ms
-import nems.epoch as ep
-import nems.preprocessing as preproc
-from nems.metrics.state import state_mod_index
-from nems.utils import find_module
+import nems0.plots.api as nplt
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+import nems0.modelspec as ms
+import nems0.epoch as ep
+import nems0.preprocessing as preproc
+from nems0.metrics.state import state_mod_index
+from nems0.utils import find_module
 import nems_lbhb.plots as lplt
-from nems.plots.file import save_figure, load_figure_img, load_figure_bytes, fig2BytesIO
+from nems0.plots.file import save_figure, load_figure_img, load_figure_bytes, fig2BytesIO
 
 line_colors = {'actual_psth': (0,0,0),
                'predicted_psth': 'red',

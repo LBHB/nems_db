@@ -10,20 +10,20 @@ import matplotlib.pyplot as plt
 import sys
 
 import nems
-import nems.initializers
-import nems.epoch as ep
-import nems.priors
-import nems.modelspec as ms
-import nems.plots.api as nplt
-import nems.metrics.api
-import nems.analysis.api
-import nems.utils
+import nems0.initializers
+import nems0.epoch as ep
+import nems0.priors
+import nems0.modelspec as ms
+import nems0.plots.api as nplt
+import nems0.metrics.api
+import nems0.analysis.api
+import nems0.utils
 import nems_lbhb.baphy as nb
-import nems.db as nd
-from nems.recording import Recording, load_recording
-from nems.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
+import nems0.db as nd
+from nems0.recording import Recording, load_recording
+from nems0.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
