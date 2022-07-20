@@ -37,15 +37,15 @@ from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
-import nems.signal
-import nems.recording
-import nems.db as db
-import nems.epoch as ep
-from nems.recording import Recording
-from nems.recording import load_recording
+import nems0.signal
+import nems0.recording
+import nems0.db as db
+import nems0.epoch as ep
+from nems0.recording import Recording
+from nems0.recording import load_recording
 import nems_lbhb.behavior as behavior
 from nems_lbhb import runclass
-from nems.uri import load_resource
+from nems0.uri import load_resource
 
 log = logging.getLogger(__name__)
 
@@ -492,7 +492,7 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
 
     # remove any preprocessing keywords in the loader string.
     if '-' in loadkey:
-        loader = nems.utils.escaped_split(loadkey, '-')[0]
+        loader = nems0.utils.escaped_split(loadkey, '-')[0]
     else:
         loader = loadkey
     log.info('loader=%s',loader)
@@ -2323,7 +2323,7 @@ def baphy_pupil_uri(pupilfilepath, **options):
                               exptevents=exptevents, **options)
 
     pupildata = np.stack([pupil_trace, is_rem], axis=1)
-    t_pupil = nems.signal.RasterizedSignal(
+    t_pupil = nems0.signal.RasterizedSignal(
             fs=options['rasterfs'], data=pupildata,
             name='pupil', recording=cachebb, chans=['pupil', 'rem'],
             epochs=event_times)

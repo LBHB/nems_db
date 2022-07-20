@@ -1,6 +1,6 @@
 import nems_lbhb.TwoStim_helpers as ts
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -9,20 +9,20 @@ import seaborn as sb
 import copy
 import numpy as np
 import SPO_helpers as sp
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
-import nems.metrics.corrcoef
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
+import nems0.metrics.corrcoef
 import copy
-import nems.epoch as ep
+import nems0.epoch as ep
 import scipy.stats as sst
 from nems_lbhb.gcmodel.figures.snr import compute_snr
-from nems.preprocessing import generate_psth_from_resp
-from nems.gui.recording_browser import browse_recording
-from nems.signal import concatenate_channels
+from nems0.preprocessing import generate_psth_from_resp
+from nems0.gui.recording_browser import browse_recording
+from nems0.signal import concatenate_channels
 
 # fitting stuff
 from nems import initializers
-from nems.fitters.api import scipy_minimize
+from nems0.fitters.api import scipy_minimize
 import nems
 
 import logging
@@ -53,9 +53,9 @@ def fit_bgfg_model(batch, site):
     rec.add_signal(bgfg_psth_signal)
 
     epoch_regex = '^STIM'
-    rec = nems.preprocessing.average_away_epoch_occurrences(rec, epoch_regex=epoch_regex)
+    rec = nems0.preprocessing.average_away_epoch_occurrences(rec, epoch_regex=epoch_regex)
     # mask out epochs with "null" in the name
-    ep = nems.epoch.epoch_names_matching(rec['psth'].epochs, '^STIM')
+    ep = nems0.epoch.epoch_names_matching(rec['psth'].epochs, '^STIM')
     for e in ep:
         if ('null' not in e) and ('0.5' not in e):
             print(e)
@@ -86,22 +86,22 @@ def fit_bgfg_model(batch, site):
 
     # RUN AN ANALYSIS
     # GOAL: Fit your model to your data, producing the improved modelspecs.
-    #       Note that: nems.analysis.* will return a list of modelspecs, sorted
+    #       Note that: nems0.analysis.* will return a list of modelspecs, sorted
     #       in descending order of how they performed on the fitter's metric.
 
     # then fit full nonlinear model
     fit_kwargs={'tolerance': 1e-5, 'max_iter': 100000}
-    modelspec = nems.analysis.api.fit_basic(est, modelspec, fitter=scipy_minimize,
+    modelspec = nems0.analysis.api.fit_basic(est, modelspec, fitter=scipy_minimize,
                                             fit_kwargs=fit_kwargs)
 
     # GENERATE SUMMARY STATISTICS
     print('Generating summary statistics ...')
 
     # generate predictions
-    est, val = nems.analysis.api.generate_prediction(est, val, modelspec)
+    est, val = nems0.analysis.api.generate_prediction(est, val, modelspec)
 
     # evaluate prediction accuracy
-    modelspec = nems.analysis.api.standard_correlation(est, val, modelspec)
+    modelspec = nems0.analysis.api.standard_correlation(est, val, modelspec)
 
     print("Performance: r_fit={0:.3f} r_test={1:.3f}".format(
             modelspec.meta['r_fit'][0][0],
@@ -110,7 +110,7 @@ def fit_bgfg_model(batch, site):
     ctx = {'modelspec': modelspec, 'rec': rec, 'val': val, 'est': est}
     xfspec=[]
 
-#import nems.gui.editors as gui
+#import nems0.gui.editors as gui
 #gui.browse_xform_fit(ctx, xfspec)
 
 
@@ -166,9 +166,9 @@ def fit_bgfg_model(batch, site):
 # rec.add_signal(bgfg_psth_signal)
 #
 # epoch_regex = '^STIM'
-# rec = nems.preprocessing.average_away_epoch_occurrences(rec, epoch_regex=epoch_regex)
+# rec = nems0.preprocessing.average_away_epoch_occurrences(rec, epoch_regex=epoch_regex)
 # # mask out epochs with "null" in the name
-# ep = nems.epoch.epoch_names_matching(rec['psth'].epochs, '^STIM')
+# ep = nems0.epoch.epoch_names_matching(rec['psth'].epochs, '^STIM')
 # for e in ep:
 #     if ('null' not in e) and ('0.5' not in e):
 #         print(e)
@@ -200,22 +200,22 @@ def fit_bgfg_model(batch, site):
 # # RUN AN ANALYSIS
 #
 # # GOAL: Fit your model to your data, producing the improved modelspecs.
-# #       Note that: nems.analysis.* will return a list of modelspecs, sorted
+# #       Note that: nems0.analysis.* will return a list of modelspecs, sorted
 # #       in descending order of how they performed on the fitter's metric.
 #
 # # then fit full nonlinear model
 # fit_kwargs={'tolerance': 1e-5, 'max_iter': 100000}
-# modelspec = nems.analysis.api.fit_basic(est, modelspec, fitter=scipy_minimize,
+# modelspec = nems0.analysis.api.fit_basic(est, modelspec, fitter=scipy_minimize,
 #                                         fit_kwargs=fit_kwargs)
 #
 # # GENERATE SUMMARY STATISTICS
 # print('Generating summary statistics ...')
 #
 # # generate predictions
-# est, val = nems.analysis.api.generate_prediction(est, val, modelspec)
+# est, val = nems0.analysis.api.generate_prediction(est, val, modelspec)
 #
 # # evaluate prediction accuracy
-# modelspec = nems.analysis.api.standard_correlation(est, val, modelspec)
+# modelspec = nems0.analysis.api.standard_correlation(est, val, modelspec)
 #
 # print("Performance: r_fit={0:.3f} r_test={1:.3f}".format(
 #         modelspec.meta['r_fit'][0][0],
@@ -224,7 +224,7 @@ def fit_bgfg_model(batch, site):
 # ctx = {'modelspec': modelspec, 'rec': rec, 'val': val, 'est': est}
 # xfspec=[]
 #
-# #import nems.gui.editors as gui
+# #import nems0.gui.editors as gui
 # #gui.browse_xform_fit(ctx, xfspec)
 #
 #

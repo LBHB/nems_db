@@ -4,11 +4,11 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 
-from nems.initializers import from_keywords
-from nems.utils import find_module, ax_remove_box
-import nems.xform_helper as xhelp
-from nems.analysis.fit_basic import fit_basic
-import nems.xforms as xforms
+from nems0.initializers import from_keywords
+from nems0.utils import find_module, ax_remove_box
+import nems0.xform_helper as xhelp
+from nems0.analysis.fit_basic import fit_basic
+import nems0.xforms as xforms
 
 from nems_lbhb.gcmodel.figures.definitions import *
 
@@ -150,7 +150,7 @@ def fit_to_simulation(fit_model, simulation_spec):
     Returns:
     --------
     ctx : dict
-        Xforms context. See nems.xforms.
+        Xforms context. See nems0.xforms.
 
     '''
     rec = get_default_ctx()['rec']

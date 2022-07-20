@@ -6,13 +6,13 @@ import time
 import matplotlib.pyplot as plt
 import sys, importlib
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join, smooth
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join, smooth
 from nems import get_setting
-from nems.xform_helper import _xform_exists, load_model_xform, fit_model_xform
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.xform_helper import _xform_exists, load_model_xform, fit_model_xform
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import POP_MODELS, SIG_TEST_MODELS
 from nems import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models

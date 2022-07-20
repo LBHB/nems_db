@@ -1080,7 +1080,7 @@ def psth_comp_figure(resp_idx, pair, unit, response, params, sigma=None, error=T
     import numpy as np
     sb.color_palette
     sb.color_palette('colorblind')
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
     plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))

@@ -1,5 +1,5 @@
 import nems_lbhb.projects.olp.OLP_plot_helpers as opl
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -96,11 +96,11 @@ else:
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import copy
-import nems.epoch as ep
-import nems.preprocessing as preproc
+import nems0.epoch as ep
+import nems0.preprocessing as preproc
 import SPO_helpers as sp
 import glob
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import re
 import itertools

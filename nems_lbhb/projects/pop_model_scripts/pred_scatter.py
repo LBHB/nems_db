@@ -8,8 +8,8 @@ import pandas as pd
 import scipy.stats as st
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 from nems_lbhb.analysis.statistics import arrays_to_p
 
 from pop_model_utils import mplparams, get_significant_cells, SIG_TEST_MODELS, \

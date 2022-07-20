@@ -13,7 +13,7 @@ from pathlib import Path
 
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 
 log = logging.getLogger(__name__)
 

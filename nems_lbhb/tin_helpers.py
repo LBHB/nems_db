@@ -10,7 +10,7 @@ from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems.preprocessing import make_state_signal
+from nems0.preprocessing import make_state_signal
 
 
 

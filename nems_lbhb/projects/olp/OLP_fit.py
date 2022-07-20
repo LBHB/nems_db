@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb   # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.recording as recording
+import nems0.recording as recording
 import numpy as np
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
 import pickle as pl
 import pandas as pd
 import sys
@@ -15,12 +15,12 @@ import os
 import re
 import seaborn as sns
 import itertools
-import nems.epoch as ep
+import nems0.epoch as ep
 import logging
 
 import glob
-import nems.analysis.api
-import nems.modelspec as ms
+import nems0.analysis.api
+import nems0.modelspec as ms
 import warnings
 import pandas as pd
 
@@ -28,19 +28,19 @@ import nems_lbhb.projects.olp.binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
 import nems_lbhb.fitEllipse as fE
 
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb  # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
-import nems.recording as recording
+import nems0.recording as recording
 import SPO_helpers as sp
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
-import nems.metrics.corrcoef
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
+import nems0.metrics.corrcoef
 import copy
-import nems.epoch as ep
+import nems0.epoch as ep
 import scipy.stats as sst
 from nems_lbhb.gcmodel.figures.snr import compute_snr
-from nems.preprocessing import generate_psth_from_resp
+from nems0.preprocessing import generate_psth_from_resp
 import logging
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.TwoStim_helpers as ts
@@ -346,21 +346,21 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
         r_lin_B_nc[_type] = ohel.r_noise_corrected(rB_st, rA_rB_st)
 
         if _type == '11':
-            r11 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r11 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '12':
-            r12 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r12 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '21':
-            r21 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r21 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '22':
-            r22 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r22 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         # rac = _r_single(X, N)
         # r_ceiling = [nmet.r_ceiling(p, rec, 'pred', 'resp') for p in val_copy]
 
     # Things that used to happen only for _type is 'C' but still seem valid
     r_A_B = np.corrcoef(rA_[ff], rB_[ff])[0, 1]
     r_A_B_nc = r_noise_corrected(rA_st, rB_st)
-    rAA = nems.metrics.corrcoef._r_single(rA_st, 200, 0)
-    rBB = nems.metrics.corrcoef._r_single(rB_st, 200, 0)
+    rAA = nems0.metrics.corrcoef._r_single(rA_st, 200, 0)
+    rBB = nems0.metrics.corrcoef._r_single(rB_st, 200, 0)
     Np = 0
     rAA_nc = np.zeros(Np)
     rBB_nc = np.zeros(Np)
@@ -398,9 +398,9 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
         val_copy['resp'] = val_copy['resp'].select_epochs([_type])
         # Correlation between linear 'model' (response to A plus response to B) and dual-voice response
         r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp')
-        # r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
+        # r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
         # Noise-corrected correlation between linear 'model' (response to A plus response to B) and dual-voice response
-        r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
+        r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
 
         pred = val_copy['linmodel'].as_continuous()
         resp = val_copy['resp'].as_continuous()
@@ -654,8 +654,8 @@ def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
         else:
             raise RuntimeError('not fit')
         # generate predictions
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
 
         return modelspecs, est_sub, val_sub
 

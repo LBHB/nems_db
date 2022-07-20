@@ -23,18 +23,18 @@ import os
 import io
 import logging
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join
-import nems.db as nd
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join
+import nems0.db as nd
 from nems import get_setting
-from nems.xform_helper import _xform_exists, generate_xforms_spec
-from nems.registry import KeywordRegistry
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.xform_helper import _xform_exists, generate_xforms_spec
+from nems0.registry import KeywordRegistry
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
-from nems.gui.recording_browser import browse_recording, browse_context
-import nems.gui.editors as gui
+from nems0.gui.recording_browser import browse_recording, browse_context
+import nems0.gui.editors as gui
 
 log = logging.getLogger(__name__)
 
@@ -190,8 +190,8 @@ if browse_results:
 ###########################################################################
 ###########################################################################
 
-import nems.gui.editors as gui
-import nems.xform_helper as xhelp
+import nems0.gui.editors as gui
+import nems0.xform_helper as xhelp
 
 #interesting cell, I think I can see what's going on there too
 #cellid="BRT038b-30-1"
@@ -213,7 +213,7 @@ ex = gui.browse_xform_fit(ctx, xfspec)
 ########################################################
 
 
-import nems.db as nd
+import nems0.db as nd
 
 batch=308
 

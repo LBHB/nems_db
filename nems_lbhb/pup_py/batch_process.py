@@ -2,7 +2,7 @@
 Simple helper function to batch queue pupil jobs
 """
 
-import nems.db as nd
+import nems0.db as nd
 import nems_db
 import sys
 import os

@@ -254,14 +254,14 @@ def SPOsev(kw):
 #    xfspec = [['nems0.xforms.load_recordings',
 #               {'recording_uri_list': recordings}]]
 #    if mask:
-#        xfspec.append(['nems.xforms.remove_all_but_correct_references', {}])
+#        xfspec.append(['nems0.xforms.remove_all_but_correct_references', {}])
 #    elif tar:
 #        epoch_regex = '^TAR_'
-#        xfspec.append(['nems.xforms.mask_all_but_targets', {}])
+#        xfspec.append(['nems0.xforms.mask_all_but_targets', {}])
 #    else:
-#        xfspec.append(['nems.xforms.mask_all_but_correct_references', {}])
+#        xfspec.append(['nems0.xforms.mask_all_but_correct_references', {}])
 #
-#    xfspec.append(['nems.xforms.generate_psth_from_resp',
+#    xfspec.append(['nems0.xforms.generate_psth_from_resp',
 #                   {'smooth_resp': smooth, 'epoch_regex': epoch_regex}])
 #
 #    return xfspec
@@ -279,19 +279,19 @@ def SPOsev(kw):
 #    state_signals, permute_signals, epoch2_shuffle = \
 #            _state_model_loadkey_helper(loadkey)
 #
-#    xfspec = [['nems.xforms.load_recordings',
+#    xfspec = [['nems0.xforms.load_recordings',
 #               {'recording_uri_list': recordings}],
-#              ['nems.xforms.make_state_signal',
+#              ['nems0.xforms.make_state_signal',
 #               {'state_signals': state_signals,
 #                'permute_signals': permute_signals,
 #                'new_signalname': 'state'}],
-#              ['nems.preprocessing.generate_stim_from_epochs',
+#              ['nems0.preprocessing.generate_stim_from_epochs',
 #               {'new_signal_name': 'stim',
 #                'epoch_regex': '^TAR_', 'epoch_shift': 5,
 #                'epoch2_regex': 'LICK', 'epoch2_shift': -5,
 #                'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
 #               ['rec'], ['rec']],
-#              ['nems.xforms.mask_all_but_targets', {}]]
+#              ['nems0.xforms.mask_all_but_targets', {}]]
 #
 #    return xfspec
 

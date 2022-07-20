@@ -5,10 +5,10 @@ import pandas as pd
 import scipy.stats as st
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
+import nems0.epoch as ep
 
 from pop_model_utils import (mplparams, get_significant_cells, get_rceiling_correction, SIG_TEST_MODELS, snr_by_batch,
                              NAT4_A1_SITES, NAT4_PEG_SITES, PLOT_STAT, DOT_COLORS,

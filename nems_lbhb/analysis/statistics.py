@@ -107,7 +107,7 @@ def df_to_site_dict(df, column_names=None):
 
     Examples
     --------
-    >>> df = nems.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
+    >>> df = nems0.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
     >>> dict_one, dict_two = df_to_site_dict(df, column_names=['model_one', 'model_two'])
     >>> boot_one = get_bootstrapped_sample(dict_one)
     >>> boot_two = get_bootstrapped_sample(dict_two)
@@ -141,7 +141,7 @@ def array_to_site_dict(array, cellids):
 
     Examples
     --------
-    >>> df = nems.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
+    >>> df = nems0.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
     >>> array = df['model_one'].values
     >>> cellids = df.index.values.tolist()
     >>> # array = ...  (compute stuff with array w/o changing ordering)

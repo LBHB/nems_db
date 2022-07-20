@@ -8,15 +8,15 @@ from functools import partial
 
 from lbhb.analysis import rdt
 
-import nems.analysis.api
-import nems.fitters.api
-import nems.preprocessing
-import nems.plots.api
-import nems.initializers
-import nems.metrics.corrcoef
-import nems.analysis.test_prediction
-import nems.xforms
-import nems.plots.file
+import nems0.analysis.api
+import nems0.fitters.api
+import nems0.preprocessing
+import nems0.plots.api
+import nems0.initializers
+import nems0.metrics.corrcoef
+import nems0.analysis.test_prediction
+import nems0.xforms
+import nems0.plots.file
 
 from nems import db
 
@@ -27,7 +27,7 @@ def do_fit(batch, cell, wcg_n, fir_n, shuffle_phase, shuffle_stream):
     est_times, val_times = rdt.preprocessing.split_est_val(recording, False)
 
     modelspec = rdt.modules.create_modelspec(recording, wcg_n, fir_n, True, 'dual')
-    modelspec = nems.priors.set_mean_phi(modelspec)
+    modelspec = nems0.priors.set_mean_phi(modelspec)
     model_name = '_'.join(m['id'] for m in modelspec)
 
     if shuffle_phase:
@@ -48,11 +48,11 @@ def do_fit(batch, cell, wcg_n, fir_n, shuffle_phase, shuffle_stream):
 
     # Fit all but the gain term. Do not include dexp (note the modelspec
     # slice).
-    mapper = partial(nems.fitters.mappers.simple_vector, subset=[0, 1, 3])
-    prefit_modelspec, = nems.analysis.api.fit_basic(
+    mapper = partial(nems0.fitters.mappers.simple_vector, subset=[0, 1, 3])
+    prefit_modelspec, = nems0.analysis.api.fit_basic(
         est_recording,
         modelspec[:-1],
-        fitter=nems.fitters.api.scipy_minimize,
+        fitter=nems0.fitters.api.scipy_minimize,
         fit_kwargs={'options': {'ftol': 1e-4, 'maxiter': 1000}},
     )
 
@@ -60,28 +60,28 @@ def do_fit(batch, cell, wcg_n, fir_n, shuffle_phase, shuffle_stream):
     modelspec[:-1] = copy.deepcopy(prefit_modelspec)
 
     # Fit all but the gain term. Include dexp this time.
-    mapper = partial(nems.fitters.mappers.simple_vector, subset=[0, 1, 3, 4])
-    strf_modelspec, = nems.analysis.api.fit_basic(
+    mapper = partial(nems0.fitters.mappers.simple_vector, subset=[0, 1, 3, 4])
+    strf_modelspec, = nems0.analysis.api.fit_basic(
         est_recording,
         modelspec,
-        fitter=nems.fitters.api.scipy_minimize,
+        fitter=nems0.fitters.api.scipy_minimize,
         fit_kwargs={'options': {'ftol': 1e-8, 'maxiter': 1000}},
     )
 
     # Now fit gain, level and dexp
-    mapper = partial(nems.fitters.mappers.simple_vector, subset=[2, 3, 4])
-    final_modelspecs = nems.analysis.api.fit_basic(
+    mapper = partial(nems0.fitters.mappers.simple_vector, subset=[2, 3, 4])
+    final_modelspecs = nems0.analysis.api.fit_basic(
         est_recording,
         strf_modelspec,
-        fitter=nems.fitters.api.scipy_minimize,
+        fitter=nems0.fitters.api.scipy_minimize,
         fit_kwargs={'options': {'ftol': 1e-10, 'maxiter': 5000}},
         mapper=mapper,
     )
 
-    est_pred, val_pred = nems.analysis.api \
+    est_pred, val_pred = nems0.analysis.api \
         .generate_prediction(est_recording, val_recording, final_modelspecs)
 
-    final_modelspecs = nems.analysis.api \
+    final_modelspecs = nems0.analysis.api \
         .standard_correlation(est_pred, val_pred, final_modelspecs)
 
     destination = f'/auto/data/nems_db/results/{batch}/{cell}/{model_name}/'
@@ -105,12 +105,12 @@ def do_fit(batch, cell, wcg_n, fir_n, shuffle_phase, shuffle_stream):
     if not os.path.exists(destination):
         os.makedirs(destination)
 
-    nems.xforms.save_analysis(destination, recording,
+    nems0.xforms.save_analysis(destination, recording,
                               modelspecs=final_modelspecs, xfspec=['custom'],
                               log='None', figures=[])
 
     context = {'est': est_pred, 'val': val_pred, 'modelspecs': final_modelspecs}
-    f = nems.plots.api.quickplot(context);
+    f = nems0.plots.api.quickplot(context);
     f.savefig(os.path.join(destination, 'quickplot.png'))
 
 
@@ -130,7 +130,7 @@ def main():
     args = parser.parse_args()
     if qid is not None:
         db.update_job_start(qid)
-        nems.utils.progress_fun = db.update_job_tick
+        nems0.utils.progress_fun = db.update_job_tick
 
     do_fit(args.batch, args.cell, args.wcg_n, args.fir_n, args.shuffle_phase,
            args.shuffle_stream)

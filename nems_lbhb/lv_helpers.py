@@ -15,7 +15,7 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
               n_random_samples=0, random_fit_subset=None,
               output_name='resp', **context):
     ''' 
-    Copied from nems.xforms.fit_basic. Only modification is that we change
+    Copied from nems0.xforms.fit_basic. Only modification is that we change
     the metric from standard nmse, as is used for fit_basic
     '''
     log.info(metric)
@@ -27,10 +27,10 @@ def fit_pupil_lv(modelspec, est, max_iter=1000, tolerance=1e-7,
         metric_fn = lambda d: pup_nc_nmse(d, 'pred', output_name, **context)
     elif metric == 'pup_dep_LVs':
         metric_fn = lambda d: pup_dep_LVs(d, 'pred', output_name, **context)
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
-    modelspec = nems.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
+    modelspec = nems0.analysis.api.fit_basic(est, modelspec, fit_kwargs=fit_kwargs,
         metric=metric_fn, fitter=fitter_fn)
 
     return {'modelspec': modelspec}
@@ -42,7 +42,7 @@ def pup_nmse(result, pred_name='pred', resp_name='resp', **context):
     When alpha > 0, we add a pupil constraint on the variance of the
     latent variable. Alpha is a hyperparam, can range from 0 to 1
     """
-    # standard nmse (following nems.metrics.mse.nmse)
+    # standard nmse (following nems0.metrics.mse.nmse)
     X1 = result[pred_name].as_continuous()
     X2 = result[resp_name].as_continuous()
     respstd = np.nanstd(X2)
@@ -79,7 +79,7 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
     When alpha > 0, we add a pupil constraint to minimize diff in nc
     between large and small pupil per stimulus.
     """
-    # standard nmse (following nems.metrics.mse.nmse)
+    # standard nmse (following nems0.metrics.mse.nmse)
     X1 = result[pred_name].as_continuous()
     X2 = result[resp_name].as_continuous()
     respstd = np.nanstd(X2)

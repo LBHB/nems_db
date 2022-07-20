@@ -10,9 +10,9 @@ import numpy as np
 import tensorflow as tf
 
 import nems_lbhb.preprocessing as preproc
-from nems.modules import NemsModule
-from nems.registry import xmodule
-from nems.tf.layers import BaseLayer
+from nems0.modules import NemsModule
+from nems0.registry import xmodule
+from nems0.tf.layers import BaseLayer
 
 log = logging.getLogger(__name__)
 

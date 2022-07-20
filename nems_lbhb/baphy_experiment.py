@@ -28,19 +28,20 @@ from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
-import nems.epoch as ep
-import nems.epoch as ep
-import nems.signal
-import nems.recording
-import nems.db as db
-from nems.recording import Recording
-from nems.recording import load_recording
+import nems0.epoch as ep
+import nems0.epoch as ep
+import nems0.signal
+import nems0.recording
+import nems0.db as db
+from nems0.recording import Recording
+from nems0.recording import load_recording
 import nems_lbhb.behavior as behavior
 import nems_lbhb.behavior_plots as bplot
 import nems_lbhb.baphy_io as io
-from nems.utils import recording_filename_hash
-from nems import get_setting
+from nems0.utils import recording_filename_hash
+from nems0 import get_setting
 
+log = logging.getLogger(__name__)
 log = logging.getLogger(__name__)
 
 stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
@@ -628,16 +629,16 @@ class BAPHYExperiment:
                 baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
                 baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
                 
-            raw_sigs = [nems.signal.RasterizedSignal(
+            raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='raw', recording=rec_name, chans=[str(c+1) for c in rawchans],
                         epochs=e)
                         for e, r in zip(baphy_events, d)]
-            signals['raw'] = nems.signal.RasterizedSignal.concatenate_time(raw_sigs)
+            signals['raw'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
             
         if resp:
             spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)
-            resp_sigs = [nems.signal.PointProcess(
+            resp_sigs = [nems0.signal.PointProcess(
                          fs=kwargs['rasterfs'], data=sp,
                          name='resp', recording=rec_name, chans=list(sp.keys()),
                          epochs=baphy_events[i]) 
@@ -666,7 +667,7 @@ class BAPHYExperiment:
             if np.all([type(p_traces[i][0]) is not np.ndarray for i in range(len(p_traces))]):
                 # multiple 'pupil signals'
                 # one always has to be the pupil trace itself
-                pupil_sigs = [nems.signal.RasterizedSignal(
+                pupil_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=p[0]['pupil'],
                         name='pupil', recording=rec_name, chans=['pupil'],
                         epochs=baphy_events[i])
@@ -674,7 +675,7 @@ class BAPHYExperiment:
 
                 # the rest are "pupil" extras to be packed into a single signal
                 extra_sigs = [sig for sig in p_traces[0][0].keys() if sig!='pupil']        
-                extra_sigs = [nems.signal.RasterizedSignal(
+                extra_sigs = [nems0.signal.RasterizedSignal(
                             fs=kwargs['rasterfs'], data=np.concatenate([p[0][sig] for sig in extra_sigs], axis=0),
                             name='pupil_extras', recording=rec_name, chans=extra_sigs,
                             epochs=baphy_events[i])
@@ -684,16 +685,16 @@ class BAPHYExperiment:
                     pupil_sigs = check_length(pupil_sigs, resp_sigs)
                     extra_sigs = check_length(extra_sigs, resp_sigs)
 
-                signals['pupil_extras'] = nems.signal.RasterizedSignal.concatenate_time(extra_sigs)
-                signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+                signals['pupil_extras'] = nems0.signal.RasterizedSignal.concatenate_time(extra_sigs)
+                signals['pupil'] = nems0.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
             else:
                 # at least one of the pupil files doesn't have "extras". Just load pupil
-                pupil_sigs = [nems.signal.RasterizedSignal(
+                pupil_sigs = [nems0.signal.RasterizedSignal(
                             fs=kwargs['rasterfs'], data=p[0],
                             name='pupil', recording=rec_name, chans=['pupil'],
                             epochs=baphy_events[i]) if type(p[0]) is np.ndarray else 
-                            nems.signal.RasterizedSignal(
+                            nems0.signal.RasterizedSignal(
                             fs=kwargs['rasterfs'], data=p[0]['pupil'],
                             name='pupil', recording=rec_name, chans=['pupil'],
                             epochs=baphy_events[i])
@@ -702,14 +703,14 @@ class BAPHYExperiment:
                 if resp:
                     pupil_sigs = check_length(pupil_sigs, resp_sigs)
 
-                signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+                signals['pupil'] = nems0.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
         if dlc:
             d_traces = self.get_dlc_trace(exptevents=exptevents, **kwargs)
 
             # multiple dlc signals
             sigs = list(d_traces[0][0].keys())
-            dlc_sigs = [nems.signal.RasterizedSignal(
+            dlc_sigs = [nems0.signal.RasterizedSignal(
                 fs=kwargs['rasterfs'], data=np.concatenate([d[0][sig] for sig in sigs], axis=0),
                 name='dlc', recording=rec_name, chans=sigs,
                 epochs=baphy_events[i])
@@ -719,14 +720,14 @@ class BAPHYExperiment:
             if resp:
                 dlc_sigs = check_length(dlc_sigs, resp_sigs)
 
-            signals['dlc'] = nems.signal.RasterizedSignal.concatenate_time(dlc_sigs)
+            signals['dlc'] = nems0.signal.RasterizedSignal.concatenate_time(dlc_sigs)
 
         if facepca:
             f_traces = self.get_facepca_trace(exptevents=exptevents, **kwargs)
 
             # multiple facepca signals
             sigs = [f"PC{i}" for i in range(f_traces[0][0].shape[0])]
-            facepca_sigs = [nems.signal.RasterizedSignal(
+            facepca_sigs = [nems0.signal.RasterizedSignal(
                 fs=kwargs['rasterfs'], data=d[0],
                 name='facepca', recording=rec_name, chans=sigs,
                 epochs=baphy_events[i])
@@ -736,32 +737,32 @@ class BAPHYExperiment:
             if resp:
                 facepca_sigs = check_length(facepca_sigs, resp_sigs)
 
-            signals['facepca'] = nems.signal.RasterizedSignal.concatenate_time(facepca_sigs)
+            signals['facepca'] = nems0.signal.RasterizedSignal.concatenate_time(facepca_sigs)
 
         if stim:
             #import pdb; pdb.set_trace()
-            stim_sigs = [nems.signal.TiledSignal(
+            stim_sigs = [nems0.signal.TiledSignal(
                             data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **kwargs)[0],
                             fs=kwargs['rasterfs'], name='stim',
                             epochs=baphy_events[i], recording=rec_name)
                         for i, p in enumerate(self.parmfile)]
 
-            signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
+            signals['stim'] = nems0.signal.TiledSignal.concatenate_time(stim_sigs)
 
         if len(signals)==0:
             # make a dummy signal
             fs = kwargs['rasterfs']
             #import pdb; pdb.set_trace()
-            file_sigs = [nems.signal.RasterizedSignal(
+            file_sigs = [nems0.signal.RasterizedSignal(
                           fs=fs, data=np.zeros((1,int(np.max(baphy_events[i]['end'])*fs)))+i,
                           name='fileidx', recording=rec_name, chans=['fileidx'],
                           epochs=baphy_events[i])
                           for (i, p) in enumerate(baphy_events)]
-            signals['fileidx'] = nems.signal.RasterizedSignal.concatenate_time(file_sigs)
+            signals['fileidx'] = nems0.signal.RasterizedSignal.concatenate_time(file_sigs)
 
         meta = kwargs
         meta['files'] = [str(p) for p in self.parmfile]
-        rec = nems.recording.Recording(signals=signals, meta=meta, name=rec_name)
+        rec = nems0.recording.Recording(signals=signals, meta=meta, name=rec_name)
 
         return rec
 

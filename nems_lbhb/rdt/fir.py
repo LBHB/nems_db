@@ -1,4 +1,4 @@
-from nems.modules import fir
+from nems0.modules import fir
 
 
 def basic(rec, coefficients):

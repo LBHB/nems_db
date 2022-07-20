@@ -40,7 +40,7 @@ regression_results = olp.multisite_reg_results(parmfiles)
 
 
 ####
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import scipy.ndimage.filters as sf
 from pathlib import Path
@@ -159,7 +159,7 @@ olp.psth_comp_figure([0,1,2], 0, 20, response, params, 2, True)
 olp.z_heatmaps_onepairs_figure([0,1,2], 0, response, params, tags=[12,20], sigma=2, arranged=True)
 
 ##Waveform plots for figure 1 of poster
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import numpy as np
@@ -204,7 +204,7 @@ fig.tight_layout()
 
 
 #wasting my time - or intro figure, whatever you want to call it
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 

@@ -11,8 +11,8 @@ import logging
 import numpy as np
 
 import nems_lbhb.preprocessing as preproc
-from nems.modules import NemsModule
-from nems.registry import xmodule
+from nems0.modules import NemsModule
+from nems0.registry import xmodule
 
 log = logging.getLogger(__name__)
 
@@ -343,11 +343,11 @@ class population_mod(NemsModule):
                                                          'n_inputs': 1, 'n_state_vars': 1, 'state_type': 'dc'
                                                          })
         options['plot_fns'] = options.get('plot_fns',
-                                          ['nems.plots.api.mod_output',
-                                           'nems.plots.api.before_and_after',
-                                           'nems.plots.api.pred_resp',
-                                           'nems.plots.api.state_vars_timeseries',
-                                           'nems.plots.api.state_vars_psth_all'])
+                                          ['nems0.plots.api.mod_output',
+                                           'nems0.plots.api.before_and_after',
+                                           'nems0.plots.api.pred_resp',
+                                           'nems0.plots.api.state_vars_timeseries',
+                                           'nems0.plots.api.state_vars_psth_all'])
         options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
         options['bounds'] = options.get('bounds', {})
         super().__init__(**options)
@@ -414,11 +414,11 @@ class population_mod(NemsModule):
                           'n_inputs': n_inputs,
                           'n_state_vars': n_state_vars,
                           'state_type': state_type},
-            'plot_fns': ['nems.plots.api.mod_output',
-                         'nems.plots.api.before_and_after',
-                         'nems.plots.api.pred_resp',
-                         'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fns': ['nems0.plots.api.mod_output',
+                         'nems0.plots.api.before_and_after',
+                         'nems0.plots.api.pred_resp',
+                         'nems0.plots.api.state_vars_timeseries',
+                         'nems0.plots.api.state_vars_psth_all'],
             'plot_fn_idx': 3,
             'prior': {'coefficients': ('Normal', {'mean': z, 'sd': z+0.1})}
         }
@@ -479,11 +479,11 @@ class sdexp_new(NemsModule):
                                                          'n_inputs': 1, 'chans': 1,
                                                          'state_type': 'both'})
         options['plot_fns'] = options.get('plot_fns',
-                                          ['nems.plots.api.mod_output',
-                                           'nems.plots.api.before_and_after',
-                                           'nems.plots.api.pred_resp',
-                                           'nems.plots.api.state_vars_timeseries',
-                                           'nems.plots.api.state_vars_psth_all'])
+                                          ['nems0.plots.api.mod_output',
+                                           'nems0.plots.api.before_and_after',
+                                           'nems0.plots.api.pred_resp',
+                                           'nems0.plots.api.state_vars_timeseries',
+                                           'nems0.plots.api.state_vars_psth_all'])
         options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
         options['bounds'] = options.get('bounds', {})
         super().__init__(**options)
@@ -576,11 +576,11 @@ class sdexp_new(NemsModule):
                           'chans': n_vars,
                           'per_channel': per_channel,
                           'state_type': 'both'},
-            'plot_fns': ['nems.plots.api.mod_output',
-                         'nems.plots.api.before_and_after',
-                         'nems.plots.api.pred_resp',
-                         'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all'],
+            'plot_fns': ['nems0.plots.api.mod_output',
+                         'nems0.plots.api.before_and_after',
+                         'nems0.plots.api.pred_resp',
+                         'nems0.plots.api.state_vars_timeseries',
+                         'nems0.plots.api.state_vars_psth_all'],
             'plot_fn_idx': 3,
             'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
                       'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
@@ -666,12 +666,12 @@ class state_hinge(NemsModule):
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
                                                          'n_inputs': 1, 'chans': 1,
                                                          'state_type': 'both'})
-        options['plot_fns'] = ['nems.plots.api.mod_output',
-                    'nems.plots.api.spectrogram_output',
-                    'nems.plots.api.before_and_after',
-                    'nems.plots.api.pred_resp',
-                    'nems.plots.api.state_vars_timeseries',
-                    'nems.plots.api.state_vars_psth_all']
+        options['plot_fns'] = ['nems0.plots.api.mod_output',
+                    'nems0.plots.api.spectrogram_output',
+                    'nems0.plots.api.before_and_after',
+                    'nems0.plots.api.pred_resp',
+                    'nems0.plots.api.state_vars_timeseries',
+                    'nems0.plots.api.state_vars_psth_all']
 
         options['plot_fn_idx'] = options.get('plot_fn_idx', 5)
         options['bounds'] = options.get('bounds', {})
@@ -858,11 +858,11 @@ class lv_norm(NemsModule):
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
             'lv': 'lv', 'additive': False })
         options['plot_fns'] = options.get('plot_fns',
-                                          ['nems.plots.api.mod_output',
-                                           'nems.plots.api.before_and_after',
-                                           'nems.plots.api.pred_resp',
-                                           'nems.plots.api.state_vars_timeseries',
-                                           'nems.plots.api.state_vars_psth_all'])
+                                          ['nems0.plots.api.mod_output',
+                                           'nems0.plots.api.before_and_after',
+                                           'nems0.plots.api.pred_resp',
+                                           'nems0.plots.api.state_vars_timeseries',
+                                           'nems0.plots.api.state_vars_psth_all'])
         options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
         options['bounds'] = options.get('bounds', {})
         super().__init__(**options)
@@ -949,12 +949,12 @@ class lv_norm(NemsModule):
                           'n_inputs': n_chans,
                           'n_states': n_states,
                           'exclude_chans': exclude_chans},
-            'plot_fns': ['nems.plots.api.mod_output',
-                         'nems.plots.api.before_and_after',
-                         'nems.plots.api.pred_resp',
-                         'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all',
-                         'nems.plots.api.state_gain_parameters'],
+            'plot_fns': ['nems0.plots.api.mod_output',
+                         'nems0.plots.api.before_and_after',
+                         'nems0.plots.api.pred_resp',
+                         'nems0.plots.api.state_vars_timeseries',
+                         'nems0.plots.api.state_vars_psth_all',
+                         'nems0.plots.api.state_gain_parameters'],
             'plot_fn_idx': 5,
             'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g}),
                       'd': ('Normal', {'mean': mean_d, 'sd': sd_d})}
@@ -1026,11 +1026,11 @@ class indep_noise(NemsModule):
         options['fn_kwargs'] = options.get('fn_kwargs', {'i': 'pred', 'o': 'pred', 's': 'state',
             'additive': False, 'indep': 'indep'})
         options['plot_fns'] = options.get('plot_fns',
-                                          ['nems.plots.api.mod_output',
-                                           'nems.plots.api.before_and_after',
-                                           'nems.plots.api.pred_resp',
-                                           'nems.plots.api.state_vars_timeseries',
-                                           'nems.plots.api.state_vars_psth_all'])
+                                          ['nems0.plots.api.mod_output',
+                                           'nems0.plots.api.before_and_after',
+                                           'nems0.plots.api.pred_resp',
+                                           'nems0.plots.api.state_vars_timeseries',
+                                           'nems0.plots.api.state_vars_psth_all'])
         options['plot_fn_idx'] = options.get('plot_fn_idx', 3)
         options['bounds'] = options.get('bounds', {})
         super().__init__(**options)
@@ -1112,12 +1112,12 @@ class indep_noise(NemsModule):
                           'n_inputs': n_chans,
                           'n_states': n_states,
                           'exclude_chans': exclude_chans},
-            'plot_fns': ['nems.plots.api.mod_output',
-                         'nems.plots.api.before_and_after',
-                         'nems.plots.api.pred_resp',
-                         'nems.plots.api.state_vars_timeseries',
-                         'nems.plots.api.state_vars_psth_all',
-                         'nems.plots.api.state_gain_parameters'],
+            'plot_fns': ['nems0.plots.api.mod_output',
+                         'nems0.plots.api.before_and_after',
+                         'nems0.plots.api.pred_resp',
+                         'nems0.plots.api.state_vars_timeseries',
+                         'nems0.plots.api.state_vars_psth_all',
+                         'nems0.plots.api.state_gain_parameters'],
             'plot_fn_idx': 5,
             'prior': {'g': ('Normal', {'mean': mean_g, 'sd': sd_g})}
         }

@@ -18,7 +18,7 @@ log = logging.getLogger()
 
 def dict_to_X(d):
     """
-    Transform dictionary of spike counts (returned by nems.recording.extract_epochs)
+    Transform dictionary of spike counts (returned by nems0.recording.extract_epochs)
     into a matrix of shape: (Neuron X Repetition X Stimulus X Time)
     """
     

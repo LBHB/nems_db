@@ -8,7 +8,7 @@ a non-standard configuration or generate a non-standard plot.
 import logging
 import re
 
-from nems.registry import xform, xmodule
+from nems0.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
@@ -25,17 +25,17 @@ def ebc(loadkey):
         if op == 'rmM':
             use_mask=False
     xfspec = [
-        ['nems.xforms.add_summary_statistics', {'use_mask': use_mask}],
-        ['nems.xforms.add_summary_statistics_by_condition',{'use_mask': use_mask}]
+        ['nems0.xforms.add_summary_statistics', {'use_mask': use_mask}],
+        ['nems0.xforms.add_summary_statistics_by_condition',{'use_mask': use_mask}]
     ]
     return xfspec
 
 @xform()
 def SPOpf(loadkey):
-    xfspec = [['nems.xforms.predict', {'use_mask': False}]]
+    xfspec = [['nems0.xforms.predict', {'use_mask': False}]]
     #xfspec.append(['nems_lbhb.SPO_helpers.mask_out_Squares', {}]) Not included in val anymore
     xfspec = xfspec + ebc('ebc.rmM')
-    xfspec.append(['nems.xforms.plot_summary', {'time_range':(5, 23.0)}])
+    xfspec.append(['nems0.xforms.plot_summary', {'time_range':(5, 23.0)}])
     xfspec.append(['nems_lbhb.SPO_helpers.plot_all_vals_',{}])
     # xfspec.append(['nems_lbhb.SPO_helpers.plot_linear_and_weighted_psths_model', {}])
 
@@ -44,16 +44,16 @@ def SPOpf(loadkey):
 @xform()
 def popsum(loadkey):
 
-    return [['nems.xforms.predict', {}],
-            ['nems.xforms.add_summary_statistics', {}],
-            ['nems.xforms.plot_summary', {}],
+    return [['nems0.xforms.predict', {}],
+            ['nems0.xforms.add_summary_statistics', {}],
+            ['nems0.xforms.plot_summary', {}],
             ['nems_lbhb.stateplots.quick_pop_state_plot', {}]]
 
 @xform()
 def popspc(loadkey):
-    return [['nems.xforms.predict', {}],
-            ['nems.xforms.add_summary_statistics', {}],
-            ['nems.xforms.plot_summary', {}],
+    return [['nems0.xforms.predict', {}],
+            ['nems0.xforms.add_summary_statistics', {}],
+            ['nems0.xforms.plot_summary', {}],
             ['nems_lbhb.analysis.pop_models.pop_space_summary', {'n_pc': 5}]]
 
 
@@ -115,9 +115,9 @@ def dstrf(loadkey):
     """
     Run Decoding Analysis
     """
-    return [['nems.xforms.predict', {}],
-            ['nems.xforms.add_summary_statistics', {}],
-            ['nems.xforms.plot_summary', {}],
+    return [['nems0.xforms.predict', {}],
+            ['nems0.xforms.add_summary_statistics', {}],
+            ['nems0.xforms.plot_summary', {}],
             ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
 
     return xfspec

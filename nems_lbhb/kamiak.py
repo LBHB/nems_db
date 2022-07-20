@@ -5,9 +5,9 @@ import logging
 import itertools
 
 import nems_lbhb.baphy as nb
-import nems.db as nd
-import nems.xforms as xforms
-from nems import get_setting
+import nems0.db as nd
+import nems0.xforms as xforms
+from nems0 import get_setting
 
 log = logging.getLogger(__name__)
 
@@ -123,8 +123,8 @@ def kamiak_array(cellids, batch, modelnames, output_path):
               "#SBATCH --partition=kamiak\n"
               "#SBATCH --job-name=NEMS\n"
               f"#SBATCH --array=1-{len(args_entries)}\n"
-              f"#SBATCH --output={logs}/{subdirectory}/NEMS.%A_%a.out\n"
-              f"#SBATCH --error={logs}/{subdirectory}/NEMS.%A_%a.err\n"
+              f"#SBATCH --output={logs}/{subdirectory}/nems0.%A_%a.out\n"
+              f"#SBATCH --error={logs}/{subdirectory}/nems0.%A_%a.err\n"
               "#SBATCH --time=1-23:59:00\n"
               "#SBATCH --nodes=1\n"
               "#SBATCH --ntasks-per-node=1\n"

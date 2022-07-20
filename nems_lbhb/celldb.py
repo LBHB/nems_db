@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.automap import automap_base
 
-from nems import db
+from nems0 import db
 
 def LBHB_Tables():
 

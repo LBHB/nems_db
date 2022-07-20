@@ -5,11 +5,11 @@ from scipy import stats, linalg
 import matplotlib.pyplot as plt
 
 import nems
-import nems.xform_helper as xhelp
-import nems.xforms as xforms
-import nems.db as nd
-import nems.epoch as ep
-from nems.utils import ax_remove_box
+import nems0.xform_helper as xhelp
+import nems0.xforms as xforms
+import nems0.db as nd
+import nems0.epoch as ep
+from nems0.utils import ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
@@ -91,7 +91,7 @@ def snr_by_batch(batch, gc, stp, LN, combined, save_path=None, load_path=None,
     if load_path is None:
         for site in siteids:
             rec_path = xwrap.generate_recording_uri(site, batch, loadkey=loadkey)
-            rec = nems.recording.load_recording(rec_path)
+            rec = nems0.recording.load_recording(rec_path)
             est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
             for cellid in rec['resp'].chans:
                 if cellid in cellids:

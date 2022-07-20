@@ -5,8 +5,8 @@ should occur intermingled with fitter keywords
 import logging
 import re
 
-from nems.plugins.default_fitters import init as nems_init
-from nems.registry import xform, xmodule
+from nems0.plugins.default_fitters import init as nems_init
+from nems0.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 

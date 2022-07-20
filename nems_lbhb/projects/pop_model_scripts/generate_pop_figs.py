@@ -13,7 +13,7 @@ from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     linux_user, ALL_FAMILY_MODELS, VERSION, count_fits, int_path, a1, peg, single_column_short, single_column_tall,
     column_and_half_short, column_and_half_tall, single_column_shorter, double_column_short, double_column_shorter
 )
-import nems.db as nd
+import nems0.db as nd
 
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)  # import from pop_model_utils

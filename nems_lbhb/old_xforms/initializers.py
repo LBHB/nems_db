@@ -3,13 +3,13 @@ import logging
 import copy
 import numpy as np
 
-from nems.utils import find_module
+from nems0.utils import find_module
 from nems_lbhb.old_xforms import keywords
-from nems.analysis.api import fit_basic
-from nems.fitters.api import scipy_minimize
-import nems.priors as priors
-import nems.modelspec as ms
-import nems.metrics.api as metrics
+from nems0.analysis.api import fit_basic
+from nems0.fitters.api import scipy_minimize
+import nems0.priors as priors
+import nems0.modelspec as ms
+import nems0.metrics.api as metrics
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def from_keywords(keyword_string, registry=keywords.defaults,
                   rec=None, meta={}):
     '''
     Returns a modelspec created by splitting keyword_string on underscores
-    and replacing each keyword with what is found in the nems.keywords.defaults
+    and replacing each keyword with what is found in the nems0.keywords.defaults
     registry. You may provide your own keyword registry using the
     registry={...} argument.
     '''

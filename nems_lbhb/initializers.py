@@ -19,16 +19,16 @@ import scipy.fftpack as fp
 import scipy.signal as ss
 import pandas as pd
 
-import nems.epoch as ep
-import nems.signal as signal
-from nems.utils import find_module, adjust_uri_prefix
-from nems.preprocessing import resp_to_pc
-from nems.initializers import load_phi
-import nems.db as nd
+import nems0.epoch as ep
+import nems0.signal as signal
+from nems0.utils import find_module, adjust_uri_prefix
+from nems0.preprocessing import resp_to_pc
+from nems0.initializers import load_phi
+import nems0.db as nd
 from nems_lbhb.xform_wrappers import _matching_cells
-from nems import xform_helper, xforms
-from nems.uri import save_resource
-from nems.utils import get_default_savepath
+from nems0 import xform_helper, xforms
+from nems0.uri import save_resource
+from nems0.utils import get_default_savepath
 
 log = logging.getLogger(__name__)
 
@@ -312,7 +312,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
 
 def pca_proj_layer(rec, modelspec, **ctx):
-    from nems.tf.cnnlink_new import fit_tf, fit_tf_init
+    from nems0.tf.cnnlink_new import fit_tf, fit_tf_init
 
     weight_chan_idx = find_module("weight_channels", modelspec, find_all_matches=True)
     w = weight_chan_idx[-1]

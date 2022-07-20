@@ -1,4 +1,4 @@
-import nems.db as nd
+import nems0.db as nd
 from nems import get_setting
 
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models

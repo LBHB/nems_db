@@ -3,11 +3,11 @@ import scipy.stats as st
 import pandas as pd
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
-from nems.xforms import evaluate_step
+import nems0.epoch as ep
+from nems0.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 
 from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, MODELGROUPS, HELDOUT, MATCHED, PLOT_STAT,

@@ -11,18 +11,18 @@ import logging
 import time
 from itertools import groupby
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-from nems.xform_helper import _xform_exists
-import nems.xform_helper as xhelp
-import nems.db as nd
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+from nems0.xform_helper import _xform_exists
+import nems0.xform_helper as xhelp
+import nems0.db as nd
 from nems import get_setting
-from nems.utils import escaped_split, escaped_join
-from nems.registry import KeywordRegistry
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.utils import escaped_split, escaped_join
+from nems0.registry import KeywordRegistry
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
-from nems.gui.recording_browser import browse_recording, browse_context
-import nems.gui.editors as gui
+from nems0.gui.recording_browser import browse_recording, browse_context
+import nems0.gui.editors as gui
 
 log = logging.getLogger(__name__)
 
@@ -108,29 +108,29 @@ if kw_kwargs is not None:
      xforms_init_context['kw_kwargs'] = kw_kwargs
 xforms_init_context['keywordstring'] = model_keywords
 xforms_init_context['meta'] = meta
-xfspec.append(['nems.xforms.init_context', xforms_init_context])
+xfspec.append(['nems0.xforms.init_context', xforms_init_context])
 
 # 1) Load the data
 xfspec.extend(xhelp._parse_kw_string(load_keywords, xforms_lib))
 
 # 2) generate a modelspec
-xfspec.append(['nems.xforms.init_from_keywords', {'registry': keyword_lib}])
-#xfspec.append(['nems.xforms.init_from_keywords', {}])
+xfspec.append(['nems0.xforms.init_from_keywords', {'registry': keyword_lib}])
+#xfspec.append(['nems0.xforms.init_from_keywords', {}])
 
 # 3) fit the data
 xfspec.extend(xhelp._parse_kw_string(fit_keywords, xforms_lib))
 
 # 4) add some performance statistics
-if not _xform_exists(xfspec, 'nems.xforms.predict'):
-    xfspec.append(['nems.xforms.predict', {}])
+if not _xform_exists(xfspec, 'nems0.xforms.predict'):
+    xfspec.append(['nems0.xforms.predict', {}])
 
 # 5) add some performance statistics (optional)
-if not _xform_exists(xfspec, 'nems.xforms.add_summary_statistics'):
-    xfspec.append(['nems.xforms.add_summary_statistics', {}])
+if not _xform_exists(xfspec, 'nems0.xforms.add_summary_statistics'):
+    xfspec.append(['nems0.xforms.add_summary_statistics', {}])
 
 # 6) generate plots (optional)
-if autoPlot and not _xform_exists(xfspec, 'nems.xforms.plot_summary'):
-    xfspec.append(['nems.xforms.plot_summary', {}])
+if autoPlot and not _xform_exists(xfspec, 'nems0.xforms.plot_summary'):
+    xfspec.append(['nems0.xforms.plot_summary', {}])
 
 # equivalent of xforms.evaluate():
 ctx = {}
@@ -149,7 +149,7 @@ if saveInDB:
     nd.update_results_table(modelspec)
 
 if browse_results:
-    #from nems.gui.recording_browser import browse_context
+    #from nems0.gui.recording_browser import browse_context
     #aw = browse_context(ctx, rec='val', signals=['stim', 'pred', 'resp'])
 
     ex = gui.browse_xform_fit(ctx, xfspec)

@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-import nems.epoch as ep
-from nems.plots.utils import ax_remove_box
-from nems.recording import load_recording
+import nems0.epoch as ep
+from nems0.plots.utils import ax_remove_box
+from nems0.recording import load_recording
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.gcmodel.contrast import make_contrast_signal
 from nems_lbhb.gcmodel.drc import rec_from_DRC

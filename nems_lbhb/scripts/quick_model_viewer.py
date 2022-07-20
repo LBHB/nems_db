@@ -7,14 +7,14 @@ Created on Wed Mar  7 15:30:15 2018
 """
 import numpy as np
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join, get_setting
-import nems.db as nd
-import nems.gui.editors as gui
-import nems.plots.api as nplt
-import nems.epoch as epoch
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join, get_setting
+import nems0.db as nd
+import nems0.gui.editors as gui
+import nems0.plots.api as nplt
+import nems0.epoch as epoch
 import matplotlib.pyplot as plt
 
 browse_results = False

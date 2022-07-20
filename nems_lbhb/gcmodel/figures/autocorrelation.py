@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
 from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems.recording import load_recording
-import nems.db as nd
+from nems0.recording import load_recording
+import nems0.db as nd
 from nems_lbhb.gcmodel.figures.utils import (get_dataframes,
                                              improved_cells_to_list)
 from nems_lbhb.gcmodel.figures.definitions import *

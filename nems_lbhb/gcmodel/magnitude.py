@@ -11,7 +11,7 @@ gc_magnitude_with_ctpred
 
 import numpy as np
 
-from nems.modules.nonlinearity import _logistic_sigmoid
+from nems0.modules.nonlinearity import _logistic_sigmoid
 
 
 def gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m):
@@ -22,7 +22,7 @@ def gc_magnitude(b, b_m, a, a_m, s, s_m, k, k_m):
 
     Parameters
     ----------
-    (See dynamic_simgoid and nems.modules.nonlinearity._logistic_sigmoid)
+    (See dynamic_simgoid and nems0.modules.nonlinearity._logistic_sigmoid)
     b : float
         base
     b_m : float

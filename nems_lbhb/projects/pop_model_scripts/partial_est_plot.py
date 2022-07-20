@@ -10,19 +10,19 @@ import sys, importlib
 import copy
 import pandas as pd
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-from nems.uri import json_numpy_obj_hook
-from nems.xform_helper import fit_model_xform, load_model_xform, _xform_exists
-from nems.utils import escaped_split, escaped_join, get_setting, find_module
-import nems.db as nd
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+from nems0.uri import json_numpy_obj_hook
+from nems0.xform_helper import fit_model_xform, load_model_xform, _xform_exists
+from nems0.utils import escaped_split, escaped_join, get_setting, find_module
+import nems0.db as nd
 from nems import get_setting
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems_lbhb.analysis import pop_models
-import nems.db as nd
-from nems.plots.heatmap import plot_heatmap
+import nems0.db as nd
+from nems0.plots.heatmap import plot_heatmap
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 log = logging.getLogger(__name__)

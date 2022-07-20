@@ -1,11 +1,11 @@
 import pylab as pl
 import numpy as np
 
-import nems.modelspec
+import nems0.modelspec
 
 
 def plot_gain(rec, modelspec, n_targets):
-    rec = nems.modelspec.evaluate(rec, modelspec)
+    rec = nems0.modelspec.evaluate(rec, modelspec)
 
     def get_mean(r, signal, epoch_name):
         e = r[signal].extract_epoch(epoch_name)

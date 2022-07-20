@@ -21,10 +21,10 @@ from scipy.ndimage import gaussian_filter1d, convolve1d
 import pickle
 import pandas as pd
 
-from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
+from nems0.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
     concatenate_state_channel
-from nems.epoch import epoch_names_matching
-import nems.db as nd
+from nems0.epoch import epoch_names_matching
+import nems0.db as nd
 
 
 log = logging.getLogger(__name__)
@@ -394,7 +394,7 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
                state_channel='pupil', psth_signal='psth',
                epoch_regex="^STIM_", smooth_resp=False, **kwargs):
     '''
-    Like nems.preprocessing.generate_psth_from_resp() but generates two PSTHs,
+    Like nems0.preprocessing.generate_psth_from_resp() but generates two PSTHs,
     one each for periods when state_channel is higher or lower than its
     median.
 
@@ -1259,7 +1259,7 @@ def add_epoch_signal(rec):
 
 
 def add_meta(rec):
-    from nems.signal import RasterizedSignal
+    from nems0.signal import RasterizedSignal
     if type(rec['resp']) is not RasterizedSignal:
         rec['resp'] = rec['resp'].rasterize()
 
@@ -1523,7 +1523,7 @@ def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', 
 
 if __name__ == '__main__':
 
-    from nems import recording, signal
+    from nems0 import recording, signal
 
     # # pop state delayed lines
     # data = np.zeros((2,30))

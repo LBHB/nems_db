@@ -9,7 +9,7 @@ Created on Thu Apr  2 20:58:16 2020
 import nems_lbhb.TwoStim_helpers as ts
 import nems_lbhb.OLP_plot_helpers as opl
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -843,7 +843,7 @@ def _regression_results(results, shuffle):
 
 def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
 
     f = plt.figure(figsize=(15, 9))
@@ -1015,7 +1015,7 @@ time = np.arange(0, err.shape[-1]) / fs
 
 def plot_psth(cellid_and_stim_str, weight_df=weight_df, plot_error=True):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
 
@@ -1156,7 +1156,7 @@ ax.set_title(f"{titles}")
 
 def plot_single_psth(cellid_and_stim_str, sound_type, df_filtered=df_filtered):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
     from scipy import stats

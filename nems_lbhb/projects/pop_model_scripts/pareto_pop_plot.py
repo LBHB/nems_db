@@ -2,8 +2,8 @@ import copy
 import numpy as np
 
 import nems_lbhb.plots
-import nems.db as nd
-from nems.utils import ax_remove_box
+import nems0.db as nd
+from nems0.utils import ax_remove_box
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (mplparams, SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS,
                                                                   PLOT_STAT, DOT_COLORS, DOT_MARKERS,

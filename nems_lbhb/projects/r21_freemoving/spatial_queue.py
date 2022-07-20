@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 
-from nems.analysis.gammatone.gtgram import gtgram
-import nems.epoch as ep
+from nems0.analysis.gammatone.gtgram import gtgram
+import nems0.epoch as ep
 from nems import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 

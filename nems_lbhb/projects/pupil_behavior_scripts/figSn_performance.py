@@ -10,7 +10,7 @@ import helpers as helper
 
 from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 from nems import get_setting
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 
 dump_path = get_setting('NEMS_RESULTS_DIR')
 

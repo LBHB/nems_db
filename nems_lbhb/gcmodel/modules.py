@@ -21,10 +21,10 @@ import logging
 import numpy as np
 from scipy.signal import convolve2d
 
-from nems.modules.fir import (per_channel, do_coefficients, _offset_coefficients,
+from nems0.modules.fir import (per_channel, do_coefficients, _offset_coefficients,
                               fir_exp_coefficients)
-from nems.modules.weight_channels import gaussian_coefficients
-from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
+from nems0.modules.weight_channels import gaussian_coefficients
+from nems0.modules.nonlinearity import _logistic_sigmoid, _double_exponential
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ def dynamic_sigmoid(rec, i, o, c, base, amplitude, shift, kappa,
     return [rec[i].transform(fn, o)]
 
 
-# Compatibility function for a plot routine in nems.plots.scatter
+# Compatibility function for a plot routine in nems0.plots.scatter
 # TODO: Better solution for this?
 def _dynamic_sigmoid(x, base, amplitude, shift, kappa, base_mod, amplitude_mod,
                      shift_mod, kappa_mod):

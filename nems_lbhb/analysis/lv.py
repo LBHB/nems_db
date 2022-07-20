@@ -4,7 +4,7 @@ Code for new(?) latent variable analysis associated with Aim 3b of R01 A1
 
 
 from sklearn.decomposition import PCA
-import nems.db as nd
+import nems0.db as nd
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,16 +26,16 @@ from sklearn.decomposition import PCA
 
 from scipy.optimize import fmin, minimize
 from scipy.signal import resample
-from nems.preprocessing import generate_psth_from_resp
+from nems0.preprocessing import generate_psth_from_resp
 from nems_lbhb.preprocessing import mask_high_repetion_stims
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems.preprocessing import make_state_signal
+from nems0.preprocessing import make_state_signal
 from nems_lbhb.tin_helpers import sort_targets, compute_ellipse, load_tbp_recording, pb_regress, \
    get_sound_labels, plot_average_psths, site_tuning_avg, site_tuning_curves
-from nems.xform_helper import fit_model_xform, load_model_xform
-import nems.db as nd
-from nems.metrics.lv import cc_err
+from nems0.xform_helper import fit_model_xform, load_model_xform
+import nems0.db as nd
+from nems0.metrics.lv import cc_err
 
 
 outpath="/auto/users/svd/projects/lv/pupil_nat/"

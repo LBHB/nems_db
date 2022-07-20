@@ -5,7 +5,7 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import glob
 import seaborn as sb
@@ -248,9 +248,9 @@ def add_stimtype_epochs(sig):
 
 def r_noise_corrected(X,Y,N_ac=200):
     '''This one is directly from Luke's'''
-    import nems.metrics.corrcoef
-    Xac = nems.metrics.corrcoef._r_single(X, N_ac,0)
-    Yac = nems.metrics.corrcoef._r_single(Y, N_ac,0)
+    import nems0.metrics.corrcoef
+    Xac = nems0.metrics.corrcoef._r_single(X, N_ac,0)
+    Yac = nems0.metrics.corrcoef._r_single(Y, N_ac,0)
     repcount = X.shape[0]
     rs = np.zeros((repcount,repcount))
     for nn in range(repcount):

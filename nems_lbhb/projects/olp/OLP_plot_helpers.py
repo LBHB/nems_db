@@ -7,7 +7,7 @@ import nems_lbhb.TwoStim_helpers as ts
 from scipy import stats
 import scipy.ndimage.filters as sf
 import glob
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 from pathlib import Path
 
@@ -385,7 +385,7 @@ def histogram_subplot_handler(df_dict, yax='cells', tags=None):
 
 def plot_psth(cellid_and_stim_str, df_filtered=weight_df, plot_error=True):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
 
@@ -460,7 +460,7 @@ def plot_psth(cellid_and_stim_str, df_filtered=weight_df, plot_error=True):
 
 def plot_psth_scatter(cellid_and_stim_str, df_filtered=weight_df, scatter='suppression'):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
 
@@ -622,7 +622,7 @@ def plot_single_psth(cellid_and_stim_str, sound_type, df_filtered=df_filtered):
 
 def psth_responses_by_kw(cellid_and_stim_str, df_filtered, kw, sound_type, sigma=2, save=False):
     # Version of popup psth plot that includes spectrograms below psth
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
     from pathlib import Path
@@ -718,7 +718,7 @@ def psth_responses_by_kw(cellid_and_stim_str, df_filtered, kw, sound_type, sigma
 
 
 def plot_weight_psth(cellid_and_stim_str, df_filtered, save=False):
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
     from pathlib import Path
@@ -962,7 +962,7 @@ def get_cellstring(cell, BG, FG, weight_df):
 
 def split_psth_multiple_units(df_filtered, sortby='random', order='low',
                               folder_ids=[2,3], sigma=2):
-    from nems.analysis.gammatone.gtgram import gtgram
+    from nems0.analysis.gammatone.gtgram import gtgram
     from scipy.io import wavfile
     import scipy.ndimage.filters as sf
     from pathlib import Path

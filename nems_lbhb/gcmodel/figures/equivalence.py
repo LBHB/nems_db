@@ -7,18 +7,18 @@ from scipy import stats, linalg
 import matplotlib.pyplot as plt
 import mplcursors
 
-import nems.xform_helper as xhelp
-import nems.xforms as xforms
-import nems.db as nd
-import nems.epoch as ep
-from nems.utils import ax_remove_box
+import nems0.xform_helper as xhelp
+import nems0.xforms as xforms
+import nems0.db as nd
+import nems0.epoch as ep
+from nems0.utils import ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
                                              adjustFigAspect,
                                              improved_cells_to_list,
                                              is_outlier, drop_common_outliers)
-from nems.metrics.stp import stp_magnitude
+from nems0.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
 from nems_db.params import fitted_params_per_batch
 from nems_lbhb.gcmodel.figures.definitions import *

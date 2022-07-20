@@ -10,23 +10,23 @@ log = logging.getLogger(__name__)
 import random
 import numpy as np
 import matplotlib.pyplot as plt
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb  # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
-import nems.recording as recording
-import nems.plots.api as nplt
+import nems0.recording as recording
+import nems0.plots.api as nplt
 import numpy as np
 import nems
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
-import nems.xforms as xforms
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
+import nems0.xforms as xforms
 import pickle as pl
 import pandas as pd
 import sys
 import os
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems_lbhb.TwoStim_helpers as ts
-import nems.epoch as ep
+import nems0.epoch as ep
 import seaborn as sb
 import scipy
 import nems_db.params
@@ -387,11 +387,11 @@ def plot_linear_and_weighted_psths_model(modelspec, val, rec, figures=None, IsRe
 def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
              modelspecs_dir='/auto/users/luke/Code/nems/modelspecs', fs=100, get_est=True, get_stim=True, batch=306):
     import glob
-    import nems.analysis.api
-    import nems.modelspec as ms
+    import nems0.analysis.api
+    import nems0.modelspec as ms
     import warnings
-    import nems.recording as recording
-    import nems.preprocessing as preproc
+    import nems0.recording as recording
+    import nems0.preprocessing as preproc
     import pandas as pd
     import copy
 
@@ -468,8 +468,8 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
         else:
             raise RuntimeError('not fit')
         # generate predictions
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
 
         return modelspecs, est_sub, val_sub
 
@@ -477,7 +477,7 @@ def load_SPO(pcellid, fit_epochs, modelspec_name, loader='env100',
 def plot_all_vals(val, modelspec, signames=['resp', 'pred'], channels=[0, 0, 0], subset=None,
                   plot_singles_on_dual=False, IncSwitchTime=None, separate_factor = 0):
     # NOTE TO SELF: Not sure why channels=[0,0,1]. Setting it as default, but when called by plot_linear_and_weighted_psths it should be [0,0,0]
-    from nems.plots.timeseries import timeseries_from_epoch
+    from nems0.plots.timeseries import timeseries_from_epoch
     import matplotlib.pyplot as plt
     import numpy as np
     from cycler import cycler
@@ -717,7 +717,7 @@ def smooth(x, window_len=11, passes=2, window='flat'):
 
 
 def export_all_vals(val, modelspec, signames=['resp', 'pred']):
-    from nems.plots.timeseries import timeseries_from_epoch
+    from nems0.plots.timeseries import timeseries_from_epoch
     import matplotlib.pyplot as plt
     import numpy as np
     from cycler import cycler
@@ -773,14 +773,14 @@ def export_all_vals(val, modelspec, signames=['resp', 'pred']):
 @memory.cache
 def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
     log.info(f'----- calc_psth_metrics for {cellid}')
-    import nems.db as nd  # NEMS database functions -- NOT celldb
+    import nems0.db as nd  # NEMS database functions -- NOT celldb
     import nems_lbhb.baphy as nb  # baphy-specific functions
     import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
-    import nems.recording as recording
+    import nems0.recording as recording
     import numpy as np
-    import nems.preprocessing as preproc
-    import nems.metrics.api as nmet
-    import nems.metrics.corrcoef
+    import nems0.preprocessing as preproc
+    import nems0.metrics.api as nmet
+    import nems0.metrics.corrcoef
     import copy
 
     options = {}
@@ -1035,9 +1035,9 @@ def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
         if ['C', 'CtoI'].count(_type) > 0:
             r_A_B = np.corrcoef(rA_[ff], rB_[ff])[0, 1]
             r_A_B_nc = r_noise_corrected(rA_st[:, ff], rB_st[:, ff])
-            rAA = nems.metrics.corrcoef._r_single(rA_st[:, ff], 200, 0)
-            rBB = nems.metrics.corrcoef._r_single(rB_st[:, ff], 200, 0)
-            rCC = nems.metrics.corrcoef._r_single(r_st[:, ff], 200, 0)
+            rAA = nems0.metrics.corrcoef._r_single(rA_st[:, ff], 200, 0)
+            rBB = nems0.metrics.corrcoef._r_single(rB_st[:, ff], 200, 0)
+            rCC = nems0.metrics.corrcoef._r_single(r_st[:, ff], 200, 0)
             Np = 100
             rAA_nc = np.zeros(Np)
             rBB_nc = np.zeros(Np)
@@ -1055,7 +1055,7 @@ def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
             min_nsA = rA_st.sum(axis=1).min()
             min_nsB = rB_st.sum(axis=1).min()
         else:
-            rII = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            rII = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         # rac = _r_single(X, N)
         # r_ceiling = [nmet.r_ceiling(p, rec, 'pred', 'resp') for p in val_copy]
 
@@ -1086,9 +1086,9 @@ def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
         val_copy['resp'] = val_copy['resp'].select_epochs([_type])
         # Correlation between linear 'model' (response to A plus response to B) and dual-voice response
         r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp')
-        # r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
+        # r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
         # Noise-corrected correlation between linear 'model' (response to A plus response to B) and dual-voice response
-        r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
+        r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
 
         pred = val_copy['linmodel'].as_continuous()
         resp = val_copy['resp'].as_continuous()
@@ -1234,9 +1234,9 @@ def calc_psth_metrics(batch, cellid, rec_file=None, fs=200):
 
 
 def r_noise_corrected(X, Y, N_ac=200):
-    import nems.metrics.corrcoef
-    Xac = nems.metrics.corrcoef._r_single(X, N_ac, 0)
-    Yac = nems.metrics.corrcoef._r_single(Y, N_ac, 0)
+    import nems0.metrics.corrcoef
+    Xac = nems0.metrics.corrcoef._r_single(X, N_ac, 0)
+    Yac = nems0.metrics.corrcoef._r_single(Y, N_ac, 0)
     repcount = X.shape[0]
     rs = np.zeros((repcount, repcount))
     for nn in range(repcount):
@@ -1256,13 +1256,13 @@ def r_noise_corrected(X, Y, N_ac=200):
 
 
 def calc_psth_metrics_orig(batch, cellid):
-    import nems.db as nd  # NEMS database functions -- NOT celldb
+    import nems0.db as nd  # NEMS database functions -- NOT celldb
     import nems_lbhb.baphy as nb  # baphy-specific functions
     import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
-    import nems.recording as recording
+    import nems0.recording as recording
     import numpy as np
-    import nems.preprocessing as preproc
-    import nems.metrics.api as nmet
+    import nems0.preprocessing as preproc
+    import nems0.metrics.api as nmet
     import copy
 
     options = {}
@@ -2661,7 +2661,7 @@ def calc_psth_weight_model(model, celldf=None, do_plot=False, fs=200, pth=None, 
     filepath = model['modelpath']
     xfspec, ctx = xforms.load_analysis(filepath, eval_model=False)
     assert xfspec[1][1]['loadkey'] == f'env.fs{fs}'
-    predict_ind = [i for i,xfa in enumerate(xfspec) if 'nems.xforms.predict' == xfa[0] ][0]
+    predict_ind = [i for i,xfa in enumerate(xfspec) if 'nems0.xforms.predict' == xfa[0] ][0]
     ctx, log_xf = xforms.evaluate(xfspec, ctx, stop=predict_ind+1)
     val = ctx['val']
     val['pred'].chans = val['resp'].chans
@@ -2894,7 +2894,7 @@ def load_modelspec_data(batch,cellids,modelnames):
     dat['svn_branch'] = ['svd_fsDB' for mx in msp]
     sg_un = []
     for mx in msp:
-        gi = nems.utils.find_module('state_gain', mx)
+        gi = nems0.utils.find_module('state_gain', mx)
         if gi is None:
             g = np.full((2, 3), np.NaN)
         else:
@@ -2966,7 +2966,7 @@ def load_modelspec_data_pop(batch,rep_cellids,pop_modelnames):
     #dat['svn_branch'] = ['svd_fsDB' for mx in msp]
     # sg_un = []
     # for mx in msp:
-    #     gi = nems.utils.find_module('state_gain', mx)
+    #     gi = nems0.utils.find_module('state_gain', mx)
     #     if gi is None:
     #         g = np.full((2, 3), np.NaN)
     #     else:
