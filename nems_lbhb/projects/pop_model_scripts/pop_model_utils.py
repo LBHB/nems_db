@@ -62,8 +62,9 @@ if linux_user=='svd':
     column_and_half_vshort = (5*sf, 1.5*sf)
     column_and_half_short = (5*sf, 2.5*sf)
     column_and_half_tall = (5*sf, 5*sf)
-    double_column_short = (7, 3)
-    double_column_shorter = (7, 2)
+    double_column_short = (7*sf, 3*sf)
+    double_column_shorter = (7*sf, 2*sf)
+    double_column_medium = (7*sf, 5*sf)
 else:
     single_column_shorter = (3.5, 2)
     single_column_short = (3.5, 3)
@@ -73,6 +74,7 @@ else:
     column_and_half_tall = (5, 6)
     double_column_short = (7, 3)
     double_column_shorter = (7, 2)
+    double_column_medium = (7, 5)
 #inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
 
 
@@ -133,7 +135,7 @@ SIG_TEST_MODELS = [
     #f"{load_string_single}_wc.18x4.g-fir.1x25x4-wc.4xR-lvl.R-dexp.R_{fit_string_single}", # Low_dim
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
-shortnamesp = ['1D CNN', '1D CNNx2', 'CNN single']
+shortnamesp = ['1D-CNN', '1Dx2CNN', 'single-CNN']
 #shortnames = ['conv1d','conv1dx2','dnn-sing']
 shortnamesp = [s+"_p" for s in shortnamesp]
 
@@ -153,7 +155,7 @@ ALL_FAMILY_MODELS = [
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
 
-shortnames = ['2D CNN', '1D CNN', '1D CNNx2', 'pop LN', 'CNN single']
+shortnames = ['2D-CNN', '1D-CNN', '1Dx2-CNN', 'pop-LN', 'single-CNN']
 #shortnames=['conv2d', 'conv1d', 'conv1dx2', 'ln-pop', 'dnn-sing']
 #shortnames=['conv1d','conv1dx2','dnn-sing']
 
@@ -246,9 +248,9 @@ fit_string3 = "tfinit.n.lr1e3.et3.rb10.es20.L2-newtf.n.lr1e4.es20.L2"
 PLOT_STAT = 'r_ceiling'
 #PLOT_STAT = 'r_test'
 
-DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#27717A', #'conv1dx2': 'purple',
-              '1D CNNx2': '#2B8AE0', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
-              'pop LN': '#7978B0', 'CNN single': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
+DOT_COLORS = {'2D-CNN': '#65C2AE', 'LN': 'black', '1D-CNN': '#27717A', #'conv1dx2': 'purple',
+              '1Dx2-CNN': '#2B8AE0', 'conv1dx2+dd': 'yellow', 'conv1dx2+d2': 'magenta', 'conv1dx2+d3': 'gray',
+              'pop-LN': '#7978B0', 'single-CNN': '#DB716E', 'c1dx2-stp': 'red', #'STP': 'lightblue', 'dnn1_single': '#DB716E'
               'LN_2d': 'purple',
               'c1d2_input': 'blue',
               'c1d2_tiny': 'blue',
@@ -265,9 +267,9 @@ DOT_COLORS = {'2D CNN': '#65C2AE', 'LN': 'black', '1D CNN': '#27717A', #'conv1dx
               }
 
 DOT_MARKERS = {#'conv1dx2': '^',
-               '2D CNN': 's', 'pop LN': 'o', '1D CNN': 'o',
-               'LN': '.', 'CNN single': 'v', 'c1dx2-stp': '*', #'STP': 'x', #'dnn1_single': 'v'
-               '1D CNNx2': '+', 'LN_2d': 'x',
+               '2D-CNN': 's', 'pop-LN': 'o', '1D-CNN': 'o',
+               'LN': '.', 'single-CNN': 'v', 'c1dx2-stp': '*', #'STP': 'x', #'dnn1_single': 'v'
+               '1Dx2-CNN': '+', 'LN_2d': 'x',
                'c1d2_input': '^',
                'c1d2_tiny': '>',
                'c1d2_output': 'v',
@@ -309,8 +311,8 @@ POP_MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dex
 
 # LN_pop ###############################################################################################################
 params = [4, 6, 10, 14, 30, 42, 60, 80, 100, 120, 150, 175, 200, 250, 300]
-MODELGROUPS['pop LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
-POP_MODELGROUPS['pop LN'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
+MODELGROUPS['pop-LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
+POP_MODELGROUPS['pop-LN'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
 
 
 # conv1d ###############################################################################################################
@@ -320,12 +322,12 @@ L1_L2 = [
     (60, 80), (80, 100), (100, 120), (120, 140),
     (140, 160), (170, 200), (200, 250), (230, 300)
 ]
-MODELGROUPS['1D CNN'] = [
+MODELGROUPS['1D-CNN'] = [
     f"{load_string_single}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
     + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_single}"
     for layer1, layer2 in L1_L2
 ]
-POP_MODELGROUPS['1D CNN'] = [
+POP_MODELGROUPS['1D-CNN'] = [
     f"{load_string_pop}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
     + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_pop}"
     for layer1, layer2 in L1_L2
@@ -339,12 +341,12 @@ L1_L2_L3 = [
     (70, 90, 120), (80, 100, 140), (90, 120, 160), (100, 140, 180),
     (120, 160, 220), (150, 200, 250), #(180, 250, 300)
 ]
-MODELGROUPS['1D CNNx2'] = [
+MODELGROUPS['1Dx2-CNN'] = [
     f"{load_string_single}_wc.18x{layer1}.g-fir.1x15x{layer1}-relu.{layer1}.f-wc.{layer1}x{layer2}-fir.1x10x{layer2}-"
     + f"relu.{layer2}.f-wc.{layer2}x{layer3}-relu.{layer3}-wc.{layer3}xR-lvl.R-dexp.R_{fit_string_single}"
     for layer1, layer2, layer3 in L1_L2_L3
 ]
-POP_MODELGROUPS['1D CNNx2'] = [
+POP_MODELGROUPS['1Dx2-CNN'] = [
     f"{load_string_pop}_wc.18x{layer1}.g-fir.1x15x{layer1}-relu.{layer1}.f-wc.{layer1}x{layer2}-fir.1x10x{layer2}-"
     + f"relu.{layer2}.f-wc.{layer2}x{layer3}-relu.{layer3}-wc.{layer3}xR-lvl.R-dexp.R_{fit_string_pop}"
     for layer1, layer2, layer3 in L1_L2_L3
@@ -419,12 +421,12 @@ POP_MODELGROUPS['1D CNNx2'] = [
 
 # try fixing with 10 filters
 dense_counts = [4, 8, 12, 20, 40, 50, 70, 90, 110, 130, 150, 175, 200, 250, 300]#, 400]
-MODELGROUPS['2D CNN'] = [
+MODELGROUPS['2D-CNN'] = [
     f"{load_string_single}_conv2d.10.8x3.rep3-wcn.{dense}-"
     + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_single_c2d}"
     for dense in dense_counts
 ]
-POP_MODELGROUPS['2D CNN'] = [
+POP_MODELGROUPS['2D-CNN'] = [
     f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.{dense}-"
     + f"relu.{dense}-wc.{dense}xR-lvl.R-dexp.R_{fit_string_pop_c2d}"
     for dense in dense_counts
@@ -476,11 +478,11 @@ POP_MODELGROUPS['2D CNN'] = [
 
 # dnn1_single ##########################################################################################################
 params = [2,3,4, 6, 9, 12, 15, 18]
-MODELGROUPS['CNN single'] = [
+MODELGROUPS['single-CNN'] = [
     f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_dnn}"
     for p in params
 ]
-POP_MODELGROUPS['CNN single'] = [
+POP_MODELGROUPS['single-CNN'] = [
     f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_nopre}"
     for p in params
 ]

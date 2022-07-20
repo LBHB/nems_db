@@ -152,7 +152,7 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     else:
         plt.sca(ax)
     bins = np.histogram(np.hstack([c.values for _, c in correlations.items()]), bins=20)[1]
-    colors = [DOT_COLORS['2D CNN'], DOT_COLORS['pop LN']]  # 1D CNNx2 in common, so color by other model
+    colors = [DOT_COLORS['2D-CNN'], DOT_COLORS['pop-LN']]  # 1D CNNx2 in common, so color by other model
 
     c1 = correlations['c2d_c1d']
     c2 = correlations['c1d_LN']
@@ -163,11 +163,11 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
                 histtype='stepfilled')
 
     else:
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D-CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
-        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop LN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop-LN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D-CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled', fc='None', hatch='\\\\\\\\')
 
     plt.xlabel('PSTH Correlation')
