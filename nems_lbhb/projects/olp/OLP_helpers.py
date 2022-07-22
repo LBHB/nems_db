@@ -235,6 +235,29 @@ def label_ep_type(ep_name):
     return stim_type
 
 
+def label_synth_type(ep_name):
+        '''Labels epochs that have one or two stimuli in it based on what kind of synthetic sound it is.
+        N = Normal RMS, C = Cochlear, T = Temporal, S = Spectral, U = Spectrotemporal, M = spectrotemporal
+        modulation, A = Non-RMS normalized unsynethic'''
+        if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
+            synth_type = None
+        elif len(ep_name.split('_')) == 3:
+            seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+            if len(seps[0].split('-')) >= 5 or len(seps[1].split('-')) >= 5:
+                if seps[0] != 'null':
+                    synth_type = seps[0].split('-')[4]
+                elif seps[1] != 'null':
+                    synth_type = seps[1].split('-')[4]
+                else:
+                    raise ValueError(f"Something went wrong with {ep_name}, both parts are 'null'")
+
+            else:
+                synth_type = 'A'
+        else:
+            synth_type = None
+
+        return synth_type
+
 def add_stimtype_epochs(sig):
     '''Mostly unneeded, just replaces epochs with their type instead of just
     labeling them as in label_ep_type'''

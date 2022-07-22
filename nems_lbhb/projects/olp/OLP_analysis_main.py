@@ -22,6 +22,10 @@ OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Marmosets_OLP_add_
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Marmosets_OLP_resp.h5'
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_corr.h5'  #New for testig corr
 
+#testing synthetic
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic_test.h5'
+
+
 batch = 328 #Ferret A1
 batch = 329 #Ferret PEG
 batch = 333 #Marmoset (HOD+TBR)
@@ -33,7 +37,7 @@ if fit == True:
     cell_list = cell_df['cellid'].tolist()
     cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
     cell_list = [cc for cc in cell_list if (cc[:6] == "CLT022") or (cc[:6] == 'CLT023')]
-    cell_list = cell_list[:5]
+    cell_list = [cc for cc in cell_list if (cc[:6] == "CLT030") or (cc[:6] == 'CLT033')]
     # cellid, parmfile = 'CLT007a-009-2', None
 
     metrics=[]
@@ -61,13 +65,17 @@ else:
 # df = df.query("cellid == 'CLT007a-002-1'")
 
 weights = False
+
+#testing synthetic
+OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/synth_test_weights.h5' #weight + corr
+##
 OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full.h5' #weight + corr
 if weights == True:
     weight_df = ofit.fit_weights(df, batch, fs)
 
     os.makedirs(os.path.dirname(OLP_weights_db_path),exist_ok=True)
     store = pd.HDFStore(OLP_weights_db_path)
-    df_store=copy.deepcopy(weight_df)
+    df_store = copy.deepcopy(weight_df)
     store['df'] = df_store.copy()
     store.close()
 
@@ -78,6 +86,10 @@ else:
 
 
 sound_stats = False
+
+#testing synthetic
+OLP_stats_db_path = '/auto/users/hamersky/olp_analysis/synethtic_test_full_sound.h5' #weight + corr
+##
 OLP_stats_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_sound_stats.h5' #weight + corr
 if sound_stats == True:
     sound_df = ohel.get_sound_statistics(weight_df, plot=False)
@@ -93,6 +105,25 @@ else:
     store = pd.HDFStore(OLP_stats_db_path)
     weight_df=store['df']
     store.close()
+
+##synthetic stuff
+quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
+
+fig, axe = plt.subplots(1, len(quad.synth_kind.unique()), sharey=True, figsize=(16,4))
+axes = axe.ravel()
+
+kinds = ['A', 'N', 'C', 'T', 'S', 'U', 'M']
+kind_name = ['Old Normalization\nUnsynthetic', 'RMS Normalization\nUnsynthetic', 'Cochlear',
+             'Temporal', 'Spectral', 'Spectrotemporal', 'Spectrotemporal\nModulation']
+
+for kk, ax in enumerate(axes):
+    df_kind = quad.loc[quad['synth_kind'] == kinds[kk]]
+    ax.bar("BG", df_kind.weightsA.mean(), color='deepskyblue')
+    ax.bar("FG", df_kind.weightsB.mean(), color='yellowgreen')
+    if kk == 0:
+        ax.set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+    ax.set_title(f"{kind_name[kk]}", fontweight='bold', fontsize=10)
+
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import copy

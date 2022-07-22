@@ -105,11 +105,14 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
     ep_names = resp.epochs[resp.epochs['name'].str.contains('STIM_')].copy()
     ep_names = ep_names.name.unique().tolist()
     ep_types = list(map(ohel.label_ep_type, ep_names))
-    ep_df = pd.DataFrame({'name': ep_names, 'type': ep_types})
+    ep_synth_type = list(map(ohel.label_synth_type, ep_names))
+
+    ep_df = pd.DataFrame({'name': ep_names, 'type': ep_types, 'synth_type': ep_synth_type})
 
     cell_df = []
     for cnt, stimmy in enumerate(ep_twostim):
         kind = ohel.label_pair_type(stimmy)
+        synth_kind = ohel.label_synth_type(stimmy)
         seps = (stimmy.split('_')[1], stimmy.split('_')[2])
         BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]
 
@@ -156,6 +159,7 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
 
         cell_df.append({'epoch': stimmy,
                         'kind': kind,
+                        'synth_kind': synth_kind,
                         'BG': BG,
                         'FG': FG,
                         'AcorAB': AcorAB,
@@ -552,11 +556,17 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
             'animal': cellid[:3]}
 
 
-def calc_psth_weight_resp(row, do_plot=False, find_mse_confidence=False, fs=200, paths=None):
+def calc_psth_weight_resp(row, do_plot=False, find_mse_confidence=False, fs=200, fit_type='Binaural'):
     print('load {}'.format(row.cellid))
+    if fit_type == 'Binaural':
+        fit_epoch = ['10', '01', '20', '02', '11', '12', '21', '22']
+    elif fit_type == 'Synthetic':
+        fit_epoch = ['N', 'C', 'T', 'S', 'U', 'M', 'A']
+    else:
+        fit_epoch = ['10', '01', '20', '02', '11', '12', '21', '22']
     modelspecs, est, val = load_TwoStim(int(row.batch),
                                         row.cellid,
-                                        ['10', '01', '20', '02', '11', '12', '21', '22'],
+                                        fit_epoch,
                                         None, fs=fs,
                                         get_est=False,
                                         get_stim=False)
@@ -625,7 +635,11 @@ def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
     df0 = val['resp'].epochs.copy()
     df2 = val['resp'].epochs.copy()
     # df0['name'] = df0['name'].apply(ts.parse_stim_type)
-    df0['name'] = df0['name'].apply(ohel.label_ep_type)
+    if fit_epochs == ['10', '01', '20', '02', '11', '12', '21', '22']:
+        df0['name'] = df0['name'].apply(ohel.label_ep_type)
+    elif fit_epochs == ['N', 'C', 'T', 'S', 'U', 'M', 'A']:
+        df0['name'] = df0['name'].apply(ohel.label_synth_type)
+
     df0 = df0.loc[df0['name'].notnull()]
     df3 = pd.concat([df0, df2])
 
