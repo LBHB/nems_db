@@ -136,7 +136,7 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
 
     # Filter by matched cellids,
     # then combine into single dataframe with columns for cellid, a1/peg, modelname, PLOT_STAT
-    short_names = ['CNN 1Dx2', 'pop LN', 'CNN single']
+    short_names = ['1Dx2 CNN', 'pop-LN', 'single-CNN']
     a1_short = [s + ' A1' for s in short_names]
     a1_rename = {k: v for k, v in zip(modelnames, a1_short)}
     a1_results = a1_results.rename(columns=a1_rename)
@@ -176,7 +176,7 @@ def plot_matched_snr(a1, peg, a1_snr_path, peg_snr_path, plot_sanity_check=True,
     else:
         plt.sca(ax)
     jitter = 0.2
-    palette = {0: DOT_COLORS['1D CNNx2'], 1: DOT_COLORS['pop LN'], 2: DOT_COLORS['CNN single']}
+    palette = {0: DOT_COLORS['1Dx2-CNN'], 1: DOT_COLORS['pop-LN'], 2: DOT_COLORS['single-CNN']}
 
     # plot removed cells "under" the remaining ones
     #tres = results_removed.loc[(results_removed[PLOT_STAT]<1) & results_removed[PLOT_STAT]>-0.05]
@@ -270,7 +270,7 @@ def plot_heldout_a1_vs_peg(a1_snr_path, peg_snr_path, ax=None):
     #sns.stripplot(x='variable', y=PLOT_STAT, data=combined_df, color=DOT_COLORS['1D CNNx2'],
                   #hue='snr', palette=f'dark:{DOT_COLORS["1D CNNx2"]}',
                   #size=2, ax=ax, zorder=0)
-    sns.stripplot(data=combined_r, color=DOT_COLORS['1D CNNx2'], size=2, ax=ax, zorder=0)
+    sns.stripplot(data=combined_r, color=DOT_COLORS['1Dx2-CNN'], size=2, ax=ax, zorder=0)
     plt.xticks(rotation=45, fontsize=6, ha='right')
     sns.boxplot(data=combined_r, boxprops={'facecolor': 'None', 'linewidth': 1},
                      showcaps=False, showfliers=False, whiskerprops={'linewidth': 0}, ax=ax)

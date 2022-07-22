@@ -16,6 +16,7 @@ mpl.rcParams.update(params)
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 from numpy.linalg import det
 from scipy.ndimage import zoom, gaussian_filter1d
@@ -38,13 +39,13 @@ def subspace_overlap(u, v):
     from Sharpee PLoS CB 2017 paper
     u,v: n X x matrices sampling n-dim subspace of x-dim space
     """
-    n = u.shape[1]
+    n = u.shape[0]
 
-    _u = u / np.sqrt(np.sum(u ** 2, axis=0, keepdims=True))
-    _v = v / np.sqrt(np.sum(v ** 2, axis=0, keepdims=True))
+    _u = u / np.sqrt(np.sum(u ** 2, axis=1, keepdims=True))
+    _v = v / np.sqrt(np.sum(v ** 2, axis=1, keepdims=True))
 
-    num = np.power(np.abs(det(_u.T @ _v)), (1.0 / n))
-    den = np.power(np.abs(det(_u.T @ _u)) * np.abs(det(_v.T @ _v)), (0.5 / n))
+    num = np.power(np.abs(det(_u @ _v.T)), (1.0 / n))
+    den = np.power(np.abs(det(_u @ _u.T)) * np.abs(det(_v @ _v.T)), (0.5 / n))
 
     return num / den
 
@@ -194,13 +195,21 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     #mask = zoom(mask,[2,2])
     #strf_all[mask]=np.nan
     mm = np.nanmax(np.abs(strf_all))
-   
+
+    pop_paper = False
     if cmap=='bwr':
         cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
         cmap.set_bad('lightgray',1.)
     elif cmap=='jet':
         cmap = mpl.cm.get_cmap(name='jet')
         cmap.set_bad('white',1.)
+    elif cmap == 'pop_paper':
+        red = (219 / 255, 114 / 255, 110 / 255)
+        blue = (66 / 255, 134 / 255, 198 / 255)
+        pop_paper_cmap = LinearSegmentedColormap.from_list('pop_paper', [blue, 'white', red], 256)
+        pop_paper_cmap.set_bad('lightgray', 1.)
+        cmap = pop_paper_cmap
+        pop_paper = True
     else:
         cmap = mpl.cm.get_cmap(name=cmap)
         cmap.set_bad('white',1.)
@@ -289,7 +298,11 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                     if c is not None:
                         col = c[i1,i0]
                         if np.abs(col)>0.3:
-                            if col>0:
+                            if pop_paper:
+                                col = np.tanh(2*col)  # shift toward extremes for darker visualization
+                                col = 0.5 * (col + 1)  # scale 0-1 instead of -1 to 1
+                                col = pop_paper_cmap(col)
+                            elif col>0:
                                 #col = [(1-col), 1-0.5*col, 1-0.5*col]
                                 col = [1-col, 1-col, 1-0.1*col]
                             else:

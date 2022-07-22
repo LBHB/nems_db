@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # hierarchachal bootstrap, see: cite biorxiv paper
 def get_bootstrapped_sample(variable, variable2=None, metric=None, even_sample=False, nboot=1000):
     '''
@@ -53,7 +54,7 @@ def get_bootstrapped_sample(variable, variable2=None, metric=None, even_sample=F
     return bootstats
 
 
-def get_direct_prob(sample1, sample2):
+def get_direct_prob(sample1, sample2, twosided=False):
     '''
     get_direct_prob Returns the direct probability of items from sample2 being
     greater than or equal to those from sample1.
@@ -89,5 +90,100 @@ def get_direct_prob(sample1, sample2):
     
     #Get the volume of the joint probability matrix in the upper triangle:
     p_test = np.sum(np.triu(p_joint_matrix))
+
+    #Convert one-sided p-value to two-sided
+    if twosided:
+        new_p = 2 * (1 - p_test)
+        if new_p > 1:
+            # one-sided value was in the "wrong" direction
+            new_p = p_test * 2
+        p_test = new_p
     
     return p_test, p_joint_matrix
+
+
+def df_to_site_dict(df, column_names=None):
+    """Convert dataframe with cellid index to dicts with one key per site, one dict per column.
+
+    Examples
+    --------
+    >>> df = nems.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
+    >>> dict_one, dict_two = df_to_site_dict(df, column_names=['model_one', 'model_two'])
+    >>> boot_one = get_bootstrapped_sample(dict_one)
+    >>> boot_two = get_bootstrapped_sample(dict_two)
+    >>> p = get_direct_probability(boot_one, boot_two)
+
+    """
+    if column_names is None:
+        column_names = df.columns.tolist()
+
+    cellids = df.index.values.tolist()
+    sites = list(set([c.split('-')[0] for c in cellids]))
+    dicts = []
+    for col in column_names:
+        col_dict = {}
+        for site in sites:
+            site_idx = df[col].index.str.contains(site)
+            site_vals = df[col].loc[site_idx].values
+            col_dict[site] = site_vals
+        dicts.append(col_dict)
+
+    return dicts
+
+
+def array_to_site_dict(array, cellids):
+    """Split 1D array by referencing cellids, formatted as a dict with one key per site.
+
+    Warnings
+    --------
+    Values in array must be in the same order as cellids
+    (i.e. the value in array[0] corresponds to cellids[0]).
+
+    Examples
+    --------
+    >>> df = nems.db.batch_comp(322, modelnames=['model_one', 'model_two', ...], stat='r_test')
+    >>> array = df['model_one'].values
+    >>> cellids = df.index.values.tolist()
+    >>> # array = ...  (compute stuff with array w/o changing ordering)
+    >>> site_dict = array_to_site_dict(array, cellids)
+    >>> boot = get_bootstrapped_sample(site_dict)
+
+    """
+    sites = list(set([c.split('-')[0] for c in cellids]))
+    site_dict = {}
+    for site in sites:
+        site_match = [c.startswith(site) for c in cellids]
+        site_idx = [i for i, m in enumerate(site_match) if m]
+        site_dict[site] = array[site_idx]
+
+    return site_dict
+
+
+def arrays_to_p(array1, array2, cellids, boot_kwargs=None, twosided=False):
+    """Compute direct probability for array2 >= array1."""
+    boot_kwargs = boot_kwargs if boot_kwargs is not None else {'nboot': 1000}
+    site_dict1 = array_to_site_dict(array1, cellids)
+    site_dict2 = array_to_site_dict(array2, cellids)
+    boot1 = get_bootstrapped_sample(site_dict1, variable2=None, **boot_kwargs)
+    boot2 = get_bootstrapped_sample(site_dict2, variable2=None, **boot_kwargs)
+    p, _ = get_direct_prob(boot1, boot2, twosided=twosided)
+
+    results = (p, f'hierarch. boot., options: {boot_kwargs}')
+    return results
+
+
+def df_to_p(df, column_names=None, boot_kwargs=None, twosided=False):
+    """Compute direct probability for df[col_name_2] >= df[col_name_1].
+
+    Only the first two column names will be used (or the first two columns,
+    if no column names are specified).
+
+    """
+    boot_kwargs = boot_kwargs if boot_kwargs is not None else {'nboot': 1000}
+    site_dicts = df_to_site_dict(df, column_names)[:2]
+    boots = [get_bootstrapped_sample(s, variable2=None, **boot_kwargs)
+             for s in site_dicts]
+    p, _ = get_direct_prob(*boots, twosided=twosided)
+
+    results = (p, f'hierarch. boot., options: {boot_kwargs}')
+    return results

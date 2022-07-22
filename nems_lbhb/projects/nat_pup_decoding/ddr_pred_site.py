@@ -97,6 +97,9 @@ def parse_modelname_base(modelname_base, batch=None):
                   'st.pca.pup+r2+s1,2', 'st.pca.pup+r2+s2', 'st.pca.pup+r2', 'st.pca0.pup+r2']
         #states = ['st.pca0.pup+r2+s0,1,2', 'st.pca0.pup+r2+s0,1,2',
         #          'st.pca0.pup+r2+s1,2', 'st.pca0.pup+r2+s2', 'st.pca0.pup+r2', 'st.pca0.pup+r2']
+    elif 'lvnorm.8' in str(modelname_base):
+        states = ['st.pca0.pup+r2+s0,1,2.fpc0', 'st.pca.pup+r2+s0,1,2.fpc0',
+                  'st.pca.pup+r2+s1,2.fpc', 'st.pca.pup+r2+s2.fpc', 'st.pca.pup+r2.fpc', 'st.pca0.pup+r2.fpc']
     else:
         states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1', 'st.pca.pup+r1+s1', 'st.pca.pup+r1']
 
@@ -117,15 +120,15 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, just_return_mean_dp
     if len(cellid)==0:
         raise ValueError(f"No match for site {site} batch {batch}")
 
-    if batch == 331:
-        if modelname_base is None:
+    if modelname_base is None:
+        if batch == 331:
             modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                              "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
                              "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
-    else:
-        modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
-                         "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                         "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
+        else:
+            modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                             "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
+                             "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
     log.info(f"site {site} modelname_base: {modelname_base}")
 
     modelnames, states = parse_modelname_base(modelname_base)
