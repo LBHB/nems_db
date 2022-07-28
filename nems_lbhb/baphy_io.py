@@ -798,7 +798,7 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if (options['stimfmt'] == 'gtgram'):
+    if options['stimfmt'] in ['gtgram','nenv','lenv']:
         # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
         stim, tags, stimparam = runclass.NAT_stim(None, exptparams, **options)
