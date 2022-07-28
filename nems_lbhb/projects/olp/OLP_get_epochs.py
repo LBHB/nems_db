@@ -7,7 +7,7 @@ import pandas as pd
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems0.epoch as ep
 
-font_size=8
+font_size = 8
 params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
           'axes.labelsize': font_size,

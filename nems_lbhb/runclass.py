@@ -68,7 +68,7 @@ def TBP(exptevents, exptparams):
                     baphy_tar_strings[parmidx] = baphy_tar_strings[parmidx].split(':N')[0]
                 else:
                     raise ValueError(f"Unknown case for TargetDistSet = {distSet}")
-        
+
         else:
 
             try:
@@ -94,8 +94,8 @@ def TBP(exptevents, exptparams):
                     baphy_tar_strings[parmidx] = baphy_tar_strings[parmidx].split(':N')[0]
                 else:
                     raise ValueError(f"Unknown case for TargetDistSet = {distSet}")
-        
-    
+
+
     # update the events
     for idx, ev in enumerate(event_targets):
         events.loc[events.name==ev, 'name'] = event_targets_new[idx]
@@ -246,7 +246,8 @@ def wav2env(w,fsin,fsout, axis=0, verbose=False):
     :param axis: int
         dimension along which to compute envelope
     :param verbose: bool
-        if True, plot waveform and envelope 
+        if True, plot waveform and envelope
+
     :return:
     """
 
@@ -297,7 +298,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
-    
+
     if exptparams['TrialObject'][1]['ReferenceClass']=='BigNat':
         sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
 
@@ -318,7 +319,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         file_unique=list(set(file_unique))
         if 'NULL' in file_unique:
             file_unique.remove('NULL')
-            
+
     elif ReferenceClass=='NaturalSounds':
         subset = ReferenceHandle['Subsets']
         if subset == 1:
@@ -327,7 +328,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set{subset}')
         stim_epochs = ReferenceHandle['Names']
         file_unique=[f.replace('.wav','') for f in stim_epochs]
-        
+
         wav1=file_unique.copy()
         chan1 = [0] * len(wav1)
         wav2=["NULL"] * len(wav1)
@@ -386,7 +387,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     Duration = ReferenceHandle['Duration']
     PostStimSilence = ReferenceHandle['PostStimSilence']
     log.info(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
-    
+
     wav_unique = {}
     fs0 = None
     for filename in file_unique:
@@ -509,7 +510,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         sg_pre = np.zeros((channels,int(np.floor(rasterfs*PreStimSilence))))
         sg_null = np.zeros((channels,duration_bins))
         sg_post = np.zeros((channels,int(np.floor(rasterfs*PostStimSilence))))
-        
+
         stimparam = {'f_min': f_min, 'f_max': f_max, 'rasterfs': rasterfs}
         padbins = int(np.ceil((window_time-hop_time)/2 * fs))
 
@@ -517,7 +518,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             if len(sg_unique)%100 == 99:
                 log.info(f"i={len(sg_unique)+1} {f} {w.std(axis=0)}")
             sg = [gtgram(np.pad(w[:,i],[padbins, padbins]), fs, window_time, hop_time, channels, f_min, f_max)
-                  if w[:,i].var()>0 else sg_null 
+                  if w[:,i].var()>0 else sg_null
                   for i in range(w.shape[1])]
 
             sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post], axis=1) for s in sg]
@@ -531,4 +532,3 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     return sg_unique, list(sg_unique.keys()), stimparam
 
 
-        
