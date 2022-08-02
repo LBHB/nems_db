@@ -35,6 +35,7 @@ import h5py
 
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
+from open_ephys.analysis import Session
 import pandas as pd
 import matplotlib.pyplot as plt
 import nems.signal
@@ -92,6 +93,155 @@ def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=
 ###############################################################################
 # Openephys utility functions
 ###############################################################################
+
+def JCW_file_finder(root_folder, filename):
+    """
+    little function to find the events folder under the different folder trees from different
+    versions of Open Ephys.
+    if its broken: Blame Jereme!
+    """
+    recording_root = Path(root_folder)
+    plist = list(recording_root.rglob(filename))
+    if len(plist) > 1:
+        raise RuntimeError("more than 1 record nodes?")
+    event_file = plist[0]
+    return event_file
+
+def jcw_load_openephys(openephys_folder, dtype = None):
+    """
+    loads data from open-ephys, binary, nwb, kwik formats given a directory if a newer file format is used. For older
+    file format versions, the old baphy_io continuous loader is used. If multiple record nodes are used, this
+    will check each record node for the specified data type. If multiple record nodes have the same data type, it
+    is assumed they contain different channel information and the data from each record node and the channel id lists
+    are concatenated (unlikely?). Will crash if more than one recording is identified within a record node.
+    
+    :param openephys_folder: recording directory
+    :param dtype: 'event', 'continuous', 'spike'
+    :return: list of data objects of the specified type - has methods for accessing data within object
+    
+    """
+    if dtype is None:
+        raise ValueError("Must specify a data type to load: events, continuous, or spike")
+    # create session object
+    session = Session(openephys_folder)
+    data = []
+    # check if session has record nodes or not
+    try:
+        if session.recordnodes:
+            print(str(len(session.recordnodes)) + " record node(s) found")
+            for i in range(len(session.recordnodes)):
+                recordnode_id = Path(session.recordnodes[i].directory).stem
+                recordings = session.recordnodes[i].recordings
+                if len(recordings) > 1:
+                    raise ValueError("number of recordings within record node is greater than 1 - usure how to handle")
+                for j in range(len(recordings)):
+                    recording = session.recordnodes[i].recordings[j]
+                    # load continuous, events, and or spikes from recording
+                    try:
+                        if dtype == 'continuous':
+                            data.append(recording.continuous)
+                        elif dtype == 'spikes':
+                            data.append(recording.spikes)
+                        elif dtype == 'events':
+                            data.append(recording.events)
+                    except:
+                        print("No " + dtype + "files found in record node " + recordnode_id)
+    except:
+        print("no record nodes found - trying to load recording info directly from session...")
+        recordings = session.recordings
+        if len(recordings) > 1:
+            raise ValueError("number of recordings is greater than 1 - usure how to handle")
+        for i in range(len(recordings)):
+            recording = session.recordings[i]
+            # load continuous, events, and or spikes from recording
+            try:
+                if dtype == 'continuous':
+                    data.append(recording.continuous)
+                elif dtype == 'spikes':
+                    data.append(recording.spikes)
+                elif dtype == 'events':
+                    data.append(recording.events)
+            except:
+                raise Exception("No " + dtype + "files found in recording")
+
+    return data
+
+def jcw_continuous_data_unpacking(continuous_data):
+    """
+    Unpacks continuous data objects returned in list format from jcw_load_openephys into a dictionary
+    with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
+    are the same across recording objects...which they should be unless something is weird about data streams sent
+    to different record nodes of the same type within a session?
+
+    :param continuous_data: list of objects from jcw_load_openephys with dtype = 'continuous'
+    :return: dictionary of header, timestamps, data, channels
+    """
+    data = []
+    channels = []
+    for i in range(len(continuous_data)):
+        data.append(np.transpose(continuous_data[i][0].samples))
+        channels.append(np.array(continuous_data[i][0].channels))
+    # should be the same for all channels minus channel specific info in header which I don't think
+    # baphy experiment needs?
+    timestamps = continuous_data[i][0].timestamps
+    header = continuous_data[i][0].header
+    data = np.vstack(data)
+    channels = np.concatenate(channels)
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'channels': channels,
+    }
+
+def jcw_load_trial_starts_openephys(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
+    data = jcw_load_openephys(openephys_folder, dtype = 'events')
+    df = pd.DataFrame(data[0])
+    rasterfs = jcw_load_sampling_rate_openephys(openephys_folder)
+    ts = df.query('(channel == 1) & (state == 1)')
+    return (ts['timestamp'].values) / float(rasterfs)
+
+def jcw_load_trial_starts_openephys_old(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = JCW_file_finder(openephys_folder, 'all_channels.events' )
+    # event_file = Path(openephys_folder) / 'all_channels.events'
+    data = oe.load(str(event_file))
+    header = data.pop('header')
+    df = pd.DataFrame(data)
+    ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+
+    return (ts['timestamps'].values) / float(header['sampleRate'])
+
+def jcw_load_sampling_rate_openephys(openephys_folder):
+    '''
+    Load sampling rate (samples/sec) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
+    data = oe.load(str(event_file))
+    return int(data['header']['sampleRate'])
+
 def load_trial_starts_openephys(openephys_folder):
     '''
     Load trial start times (seconds) from OpenEphys DIO
@@ -106,7 +256,7 @@ def load_trial_starts_openephys(openephys_folder):
     header = data.pop('header')
     df = pd.DataFrame(data)
     ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
-    
+
     return (ts['timestamps'].values) / float(header['sampleRate'])
 
 
