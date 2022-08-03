@@ -55,7 +55,6 @@ stim_cache_dir = '/auto/data/tmp/tstim/'  # location of cached stimuli
 spk_subdir = 'sorted/'   # location of spk.mat files relative to parmfiles
 
 # =================================================================
-
 def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=None, baphy_legacy_format=False):
     '''
     Parameters
@@ -93,6 +92,12 @@ def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=
 ###############################################################################
 # Openephys utility functions
 ###############################################################################
+
+def openephys_gui_version(openephys_folder):
+    settings_file = JCW_file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    version = np.array([int(num) for num in info['INFO']['VERSION'].split('.')])
+    return version
 
 def JCW_file_finder(root_folder, filename):
     """
@@ -144,6 +149,20 @@ def jcw_load_openephys(openephys_folder, dtype = None):
                             data.append(recording.spikes)
                         elif dtype == 'events':
                             data.append(recording.events)
+                        elif dtype == 'header':
+                            from open_ephys.analysis.formats.helpers import load
+
+                            events_file = os.path.join(recording.directory, 'all_channels' + recording.experiment_id + ".events")
+
+                            timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+
+                            header['processor_id'] = processor_id
+                            header['state'] = state
+                            header['channel'] = channel
+                            header['timestamps'] = timestamps
+                            data.append(header)
+
+                            data.append(header)
                     except:
                         print("No " + dtype + "files found in record node " + recordnode_id)
     except:
@@ -161,6 +180,14 @@ def jcw_load_openephys(openephys_folder, dtype = None):
                     data.append(recording.spikes)
                 elif dtype == 'events':
                     data.append(recording.events)
+                elif dtype == 'header':
+                    from open_ephys.analysis.formats.helpers import load
+
+                    events_file = os.path.join(recording.directory,
+                                               'all_channels' + recording.experiment_id + ".events")
+
+                    timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                    data.append(header)
             except:
                 raise Exception("No " + dtype + "files found in recording")
 
@@ -195,6 +222,32 @@ def jcw_continuous_data_unpacking(continuous_data):
         'channels': channels,
     }
 
+def load_trial_starts_openephys_master(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys .events file after finding version of OpenEphys.
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    version = openephys_gui_version(openephys_folder)
+    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
+    if version[1] >= 5:
+        data = jcw_load_openephys(openephys_folder, dtype = 'events')
+        header = jcw_load_openephys(openephys_folder, dtype='header')[0]
+        df = data[0]
+        rasterfs = jcw_load_sampling_rate_openephys(openephys_folder)
+        df.rename(columns={'timestamp':'timestamps'}, inplace=True)
+        ts = df.query('(channel == 1) & (state == 1)')
+    elif version[1] <= 4:
+        data = oe.load(str(event_file))
+        header = data.pop('header')
+        df = pd.DataFrame(data)
+        ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+
+    return (ts['timestamps'].values) / float(header['sampleRate'])
+
 def jcw_load_trial_starts_openephys(openephys_folder):
     '''
     Load trial start times (seconds) from OpenEphys DIO
@@ -206,6 +259,7 @@ def jcw_load_trial_starts_openephys(openephys_folder):
     '''
     event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
     data = jcw_load_openephys(openephys_folder, dtype = 'events')
+    header = jcw_load_openephys(openephys_folder, dtype='header')
     df = pd.DataFrame(data[0])
     rasterfs = jcw_load_sampling_rate_openephys(openephys_folder)
     ts = df.query('(channel == 1) & (state == 1)')
@@ -227,7 +281,7 @@ def jcw_load_trial_starts_openephys_old(openephys_folder):
     df = pd.DataFrame(data)
     ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
 
-    return (ts['timestamps'].values) / float(header['sampleRate'])
+    return (ts['timestamps'].to_numpy()[0]) / float(header['sampleRate'])
 
 def jcw_load_sampling_rate_openephys(openephys_folder):
     '''

@@ -346,7 +346,7 @@ class BAPHYExperiment:
     def get_trial_starts(self, method='openephys'):
         if method == 'openephys':
             # return [io.load_trial_starts_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
-            return [io.jcw_load_trial_starts_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
+            return [io.load_trial_starts_openephys_master(openephys_folder) for openephys_folder in self.openephys_folder]
         raise ValueError(f'Method "{method}" not supported')
 
     @lru_cache(maxsize=128)
@@ -552,7 +552,7 @@ class BAPHYExperiment:
         # load aligned baphy events
         if raw:
             exptevents = self.get_baphy_events(correction_method='openephys', **kwargs)
-        if mua:
+        elif mua:
             exptevents = self.get_baphy_events(correction_method='openephys', **kwargs)
         elif self.behavior:
             exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
@@ -979,7 +979,7 @@ class BAPHYExperiment:
                         sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
                         data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, data['data'], axis=1)
                         continuous_data.append(data['hpfiltered'][np.newaxis, :])
-                        timestamp0.append(data['timestamps'][0])
+                        timestamp0.append(data['timestamps'][0] / int(data['header']['sampleRate']))
                     else:
                         print("sample rate specified...downsampling data")
                         resample_new_size = int(np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
