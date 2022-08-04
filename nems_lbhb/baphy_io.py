@@ -96,12 +96,24 @@ def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=
 ###############################################################################
 
 def openephys_gui_version(openephys_folder):
-    settings_file = JCW_file_finder(openephys_folder, 'settings.xml')
+    settings_file = file_finder(openephys_folder, 'settings.xml')
     info = oes.XML2Dict(settings_file)
     version = np.array([int(num) for num in info['INFO']['VERSION'].split('.')])
     return version
 
-def JCW_file_finder(root_folder, filename):
+def format_finder(openephys_folder):
+    session = Session(openephys_folder)
+    format = []
+    try:
+        for i in range(len(session.recordnodes)):
+            format.append(session.recordnodes[i].format)
+    except:
+        for i in range(len(session.recordings)):
+            format.append((session.recordings[i].format))
+    return format
+
+
+def file_finder(root_folder, filename):
     """
     little function to find the events folder under the different folder trees from different
     versions of Open Ephys.
@@ -109,12 +121,14 @@ def JCW_file_finder(root_folder, filename):
     """
     recording_root = Path(root_folder)
     plist = list(recording_root.rglob(filename))
+    if len(plist) == 0:
+        raise IOError("requested file doesn't exist in given folder directory")
     if len(plist) > 1:
-        raise RuntimeError("more than 1 record nodes?")
-    event_file = plist[0]
-    return event_file
+        log.info("more than 1 record node, reading the first one for metadata. Is the second node spikes?")
+    file = plist[0]
+    return file
 
-def jcw_load_openephys(openephys_folder, dtype = None):
+def load_openephys(openephys_folder, dtype = None):
     """
     loads data from open-ephys, binary, nwb, kwik formats given a directory if a newer file format is used. For older
     file format versions, the old baphy_io continuous loader is used. If multiple record nodes are used, this
@@ -132,12 +146,14 @@ def jcw_load_openephys(openephys_folder, dtype = None):
     # create session object
     session = Session(openephys_folder)
     data = []
+    data_format = []
     # check if session has record nodes or not
     try:
         if session.recordnodes:
             print(str(len(session.recordnodes)) + " record node(s) found")
             for i in range(len(session.recordnodes)):
                 recordnode_id = Path(session.recordnodes[i].directory).stem
+                data_format.append(session.recordnodes[i].format)
                 recordings = session.recordnodes[i].recordings
                 if len(recordings) > 1:
                     raise ValueError("number of recordings within record node is greater than 1 - usure how to handle")
@@ -152,10 +168,15 @@ def jcw_load_openephys(openephys_folder, dtype = None):
                         elif dtype == 'events':
                             data.append(recording.events)
                         elif dtype == 'header':
-                            from open_ephys.analysis.formats.helpers import load
-                            events_file = os.path.join(recording.directory, 'all_channels' + recording.experiment_id + ".events")
-                            timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
-                            data.append(header)
+                            if data_format[i] == 'openephys':
+                                events_file = os.path.join(recording.directory, 'all_channels' + recording.experiment_id + ".events")
+                                timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                                data.append(header)
+                            elif data_format[i] == 'binary':
+                                print('record node format is binary...no header information')
+                                header = {}
+                                header['sampleRate'] = np.array([float(30000)])
+                                data.append(header)
                     except:
                         print("No " + dtype + "files found in record node " + recordnode_id)
     except:
@@ -182,25 +203,51 @@ def jcw_load_openephys(openephys_folder, dtype = None):
                 raise Exception("No " + dtype + "files found in recording")
     return data
 
-def jcw_continuous_data_unpacking(continuous_data):
+def continuous_data_unpacking(continuous_data):
     """
-    Unpacks continuous data objects returned in list format from jcw_load_openephys into a dictionary
+    Unpacks continuous data objects returned in list format from load_openephys into a dictionary
     with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
     are the same across recording objects...which they should be unless something is weird about data streams sent
     to different record nodes of the same type within a session?
 
-    :param continuous_data: list of objects from jcw_load_openephys with dtype = 'continuous'
+    :param continuous_data: list of objects from load_openephys with dtype = 'continuous'
     :return: dictionary of header, timestamps, data, channels
     """
     data = []
     channels = []
     for i in range(len(continuous_data)):
-        data.append(np.transpose(continuous_data[i][0].samples))
+        data.append(continuous_data[i][0].samples)
         channels.append(np.array(continuous_data[i][0].channels))
     # should be the same for all channels minus channel specific info in header which I don't think
     # baphy experiment needs?
     timestamps = continuous_data[i][0].timestamps
     header = continuous_data[i][0].header
+    data = np.vstack(data)
+    channels = np.concatenate(channels)
+
+def continuous_binary_data_unpacking(continuous_data):
+    """
+    Unpacks continuous data objects returned in list format from load_openephys into a dictionary
+    with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
+    are the same across recording objects...which they should be unless something is weird about data streams sent
+    to different record nodes of the same type within a session?
+
+    :param continuous_data: list of objects from load_openephys with dtype = 'continuous'
+    :return: dictionary of header, timestamps, data, channels
+    """
+    data = []
+    channels = []
+    for i in range(len(continuous_data)):
+        try:
+            data.append(continuous_data[i][0].samples.transpose())
+            channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+        except:
+            continue
+    # should be the same for all channels minus channel specific info in header which I don't think
+    # baphy experiment needs?
+    timestamps = continuous_data[0][0].timestamps
+    header = continuous_data[0][0].metadata
+    header['sampleRate'] = header['sample_rate']
     data = np.vstack(data)
     channels = np.concatenate(channels)
 
@@ -221,15 +268,15 @@ def load_trial_starts_openephys_master(openephys_folder):
         Path to OpenEphys folder
     '''
     version = openephys_gui_version(openephys_folder)
-    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
+    # event_file = file_finder(openephys_folder, filename='all_channels.events')
     if version[1] >= 5:
-        data = jcw_load_openephys(openephys_folder, dtype = 'events')
-        header = jcw_load_openephys(openephys_folder, dtype='header')[0]
+        data = load_openephys(openephys_folder, dtype = 'events')
+        header = load_openephys(openephys_folder, dtype='header')[0]
         df = data[0]
-        rasterfs = jcw_load_sampling_rate_openephys(openephys_folder)
         df.rename(columns={'timestamp':'timestamps'}, inplace=True)
         ts = df.query('(channel == 1) & (state == 1)')
     elif version[1] <= 4:
+        event_file = file_finder(openephys_folder, filename='all_channels.events')
         data = oe.load(str(event_file))
         header = data.pop('header')
         df = pd.DataFrame(data)
@@ -237,42 +284,8 @@ def load_trial_starts_openephys_master(openephys_folder):
 
     return (ts['timestamps'].values) / float(header['sampleRate'])
 
-def jcw_load_trial_starts_openephys(openephys_folder):
-    '''
-    Load trial start times (seconds) from OpenEphys DIO
 
-    Parameters
-    ----------
-    openephys_folder : str or Path
-        Path to OpenEphys folder
-    '''
-    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
-    data = jcw_load_openephys(openephys_folder, dtype = 'events')
-    header = jcw_load_openephys(openephys_folder, dtype='header')
-    df = pd.DataFrame(data[0])
-    rasterfs = jcw_load_sampling_rate_openephys(openephys_folder)
-    ts = df.query('(channel == 1) & (state == 1)')
-    return (ts['timestamp'].values) / float(rasterfs)
-
-def jcw_load_trial_starts_openephys_old(openephys_folder):
-    '''
-    Load trial start times (seconds) from OpenEphys DIO
-
-    Parameters
-    ----------
-    openephys_folder : str or Path
-        Path to OpenEphys folder
-    '''
-    event_file = JCW_file_finder(openephys_folder, 'all_channels.events' )
-    # event_file = Path(openephys_folder) / 'all_channels.events'
-    data = oe.load(str(event_file))
-    header = data.pop('header')
-    df = pd.DataFrame(data)
-    ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
-
-    return (ts['timestamps'].to_numpy()[0]) / float(header['sampleRate'])
-
-def jcw_load_sampling_rate_openephys(openephys_folder):
+def load_sampling_rate_openephys(openephys_folder):
     '''
     Load sampling rate (samples/sec) from OpenEphys DIO
 
@@ -281,11 +294,18 @@ def jcw_load_sampling_rate_openephys(openephys_folder):
     openephys_folder : str or Path
         Path to OpenEphys folder
     '''
-    event_file = JCW_file_finder(openephys_folder, filename='all_channels.events')
-    data = oe.load(str(event_file))
+    try:
+        event_file = file_finder(openephys_folder, filename='all_channels.events')
+        data = oe.load(str(event_file))
+    except:
+        data = {}
+        header = {}
+        header['sampleRate'] = np.array([30000.])
+        data['header'] = header
+
     return int(data['header']['sampleRate'])
 
-def load_trial_starts_openephys(openephys_folder):
+def old_load_trial_starts_openephys(openephys_folder):
     '''
     Load trial start times (seconds) from OpenEphys DIO
 
@@ -303,7 +323,7 @@ def load_trial_starts_openephys(openephys_folder):
     return (ts['timestamps'].values) / float(header['sampleRate'])
 
 
-def load_sampling_rate_openephys(openephys_folder):
+def old_load_sampling_rate_openephys(openephys_folder):
     '''
     Load sampling rate (samples/sec) from OpenEphys DIO
 
@@ -397,7 +417,7 @@ def load_continuous_openephys(fh):
     }
 
 ###############################################################################
-# data extraction
+# continuous data extraction
 ###############################################################################
 def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
                             experiment_openephys_tarfile_relpath, local_copy_raw,
@@ -421,13 +441,11 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
         # Use xml settings instead of the tar file. Much faster. Also, takes care
         # of channel mapping (I think)
-        # recChans, _ = oes.GetRecChs(str(openephys_folder / 'settings.xml'))
-        settings_file = JCW_file_finder(openephys_folder, 'settings.xml')
+        settings_file = file_finder(openephys_folder, 'settings.xml')
         recChans, _ = oes.GetRecChs(settings_file)
         connector = [i for i in recChans.keys()][0]
         # import pdb; pdb.set_trace()
         # handle channel remapping
-        # info = oes.XML2Dict(str(openephys_folder / 'settings.xml'))
         info = oes.XML2Dict(settings_file)
         mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
         mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
@@ -483,29 +501,43 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 # point to the local folder
                 openephys_folder = newpath
 
-            # create list of .continuous files found in path
+            # create list of files found in temporary folder for open-ephys or binary format
+            format = format_finder(openephys_folder)
             list_of_tmpfiles = []
             list_of_tmpfilepaths = []
-            for root, dirs, files in os.walk(openephys_folder):
-                list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
-            for root, dirs, files in os.walk(openephys_folder):
-                list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
-            try:
-                # check if files use CH naming as expected
-                if set(selected_data).issubset(list_of_tmpfiles):
-                    data = jcw_load_openephys(openephys_folder, dtype='continuous')
-                    data = jcw_continuous_data_unpacking(data)
-                else:
-                    raise Exception('Selected file names do not match temp file names: trying again after removing CH')
-                # remove CH from selected_data and check if files exist
-            except:
-                for i, selected_ch in enumerate(selected_data):
-                    new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
-                    selected_data[i] = new_filename
-                if set(selected_data).issubset(list_of_tmpfiles):
-                    log.info('no CH in filename, loading without it')
-                    data = jcw_load_openephys(openephys_folder, dtype='continuous')
-                    data = jcw_continuous_data_unpacking(data)
+            if format[0] == 'binary':
+                for root, dirs, files in os.walk(openephys_folder):
+                    list_of_tmpfiles = [fi for fi in files if fi.endswith(".dat")]
+                for root, dirs, files in os.walk(openephys_folder):
+                    list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".dat")]
+                try:
+                    data = load_openephys(openephys_folder, dtype='continuous')
+                    data = continuous_binary_data_unpacking(data)
+                except:
+                    raise IOError('loading binary data failed...still zipped?')
+
+            elif format[0] == 'open-ephys':
+                for root, dirs, files in os.walk(openephys_folder):
+                    list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
+                for root, dirs, files in os.walk(openephys_folder):
+                    list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
+            # check if all files are extracted and load data
+                try:
+                    # check if files use CH naming as expected
+                    if set(selected_data).issubset(list_of_tmpfiles):
+                        data = load_openephys(openephys_folder, dtype='continuous')
+                        data = continuous_data_unpacking(data)
+                    else:
+                        raise Exception('Selected file names do not match temp file names: trying again after removing CH')
+                    # remove CH from selected_data and check if files exist
+                except:
+                    for i, selected_ch in enumerate(selected_data):
+                        new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
+                        selected_data[i] = new_filename
+                    if set(selected_data).issubset(list_of_tmpfiles):
+                        log.info('no CH in filename, loading without it')
+                        data = load_openephys(openephys_folder, dtype='continuous')
+                        data = continuous_data_unpacking(data)
 
             # sort channels based on channel mapping
             recChans1 = [ch.split('CH')[1] for ch in recChans]

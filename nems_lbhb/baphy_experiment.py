@@ -352,8 +352,7 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def get_raw_sampling_rate(self, method='openephys'):
         if method == 'openephys':
-            # return [io.load_sampling_rate_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
-            return [io.jcw_load_sampling_rate_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
+            return [io.load_sampling_rate_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
         raise ValueError(f'Method "{method}" not supported')
 
     @lru_cache(maxsize=128)
