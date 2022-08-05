@@ -168,7 +168,7 @@ def load_openephys(openephys_folder, dtype = None):
                         elif dtype == 'events':
                             data.append(recording.events)
                         elif dtype == 'header':
-                            if data_format[i] == 'openephys':
+                            if data_format[i] == 'openephys' or data_format[i] == 'open-ephys':
                                 events_file = os.path.join(recording.directory, 'all_channels' + recording.experiment_id + ".events")
                                 timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
                                 data.append(header)
@@ -216,7 +216,7 @@ def continuous_data_unpacking(continuous_data):
     data = []
     channels = []
     for i in range(len(continuous_data)):
-        data.append(continuous_data[i][0].samples)
+        data.append(continuous_data[i][0].samples.transpose())
         channels.append(np.array(continuous_data[i][0].channels))
     # should be the same for all channels minus channel specific info in header which I don't think
     # baphy experiment needs?
@@ -224,6 +224,14 @@ def continuous_data_unpacking(continuous_data):
     header = continuous_data[i][0].header
     data = np.vstack(data)
     channels = np.concatenate(channels)
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'channels': channels,
+    }
+
 
 def continuous_binary_data_unpacking(continuous_data):
     """
@@ -516,7 +524,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 except:
                     raise IOError('loading binary data failed...still zipped?')
 
-            elif format[0] == 'open-ephys':
+            elif format[0] == 'open-ephys' or format[0] == 'openephys':
                 for root, dirs, files in os.walk(openephys_folder):
                     list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
                 for root, dirs, files in os.walk(openephys_folder):
