@@ -24,12 +24,20 @@ OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_corr.
 
 #testing synthetic
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic_test.h5'
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic.h5'
+##synthetic Full With sound stats and weights
+OLP_stats_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_Full.h5' #weight + corr
 
 
 batch = 328 #Ferret A1
 batch = 329 #Ferret PEG
 batch = 333 #Marmoset (HOD+TBR)
 batch = 340 #All ferret OLP
+
+##Get clathrus synthetic
+clt = [dd for dd in cell_list if dd[:3] == 'CLT']
+clt = clt[460:]
+
 batch = 339 #Binaural ferret OLP
 
 if fit == True:
@@ -70,6 +78,8 @@ weights = False
 OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/synth_test_weights.h5' #weight + corr
 ##
 OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full.h5' #weight + corr
+OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_weights.h5' #weight + corr
+
 if weights == True:
     weight_df = ofit.fit_weights(df, batch, fs)
 
@@ -106,23 +116,65 @@ else:
     weight_df=store['df']
     store.close()
 
-##synthetic stuff
+
+##############################################################################################
+# Plot weights of synthetic groups divided by sites that were pre-click removal
 quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-
-fig, axe = plt.subplots(1, len(quad.synth_kind.unique()), sharey=True, figsize=(16,4))
-axes = axe.ravel()
-
+# Have the different synthetic kinds labelled
 kinds = ['A', 'N', 'C', 'T', 'S', 'U', 'M']
 kind_name = ['Old Normalization\nUnsynthetic', 'RMS Normalization\nUnsynthetic', 'Cochlear',
              'Temporal', 'Spectral', 'Spectrotemporal', 'Spectrotemporal\nModulation']
+#Create aliases for the kinds so I can dumbly swap them out all so they can be in the right order
+alias = {'A': '1', 'N': '2', 'C': '3', 'T': '4', 'S': '5', 'U': '6', 'M': '7'}
+kind_alias = {'1': 'Old Normalization\nUnsynthetic', '2':' RMS Normalization\nUnsynthetic', '3':'Cochlear',
+              '4': 'Temporal', '5': 'Spectral', '6': 'Spectrotemporal', '7': 'Spectrotemporal\nModulation'}
+to_plot = quad.sort_values('cellid').copy()
+to_plot['ramp'] = to_plot.cellid.str[3:6]
+to_plot['ramp'] = pd.to_numeric(to_plot['ramp'])
+# Makes a new column that labels the early synthetic sites with click
+to_plot['has_click'] = np.logical_and(to_plot['ramp'] <= 37, to_plot['ramp'] >= 27)
+#
+test_plot = to_plot.loc[:,['synth_kind', 'weightsA', 'weightsB', 'has_click']].copy()
+test_plot['sort'] = test_plot['synth_kind']
+test_plot = test_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
+test_plot = test_plot.melt(id_vars=['synth_kind', 'has_click'], value_vars=['weightsA', 'weightsB'], var_name='weight_kind',
+             value_name='weights').replace({'weightsA':'BG', 'weightsB':'FG'}).replace(kind_alias)
+test_plot['has_click'] = test_plot['has_click'].astype(str)
+test_plot = test_plot.replace({'True': ' - With Click', 'False': ' - Clickless'})
+test_plot['kind'] = test_plot['weight_kind'] + test_plot['has_click']
+test_plot = test_plot.drop(labels=['has_click'], axis=1)
+plt.figure()
+ax = sb.barplot(x="synth_kind", y="weights", hue="kind", data=test_plot, ci=68, estimator=np.mean)
+##############################################################################################
+##############################################################################################
 
-for kk, ax in enumerate(axes):
-    df_kind = quad.loc[quad['synth_kind'] == kinds[kk]]
-    ax.bar("BG", df_kind.weightsA.mean(), color='deepskyblue')
-    ax.bar("FG", df_kind.weightsB.mean(), color='yellowgreen')
-    if kk == 0:
-        ax.set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
-    ax.set_title(f"{kind_name[kk]}", fontweight='bold', fontsize=10)
+##############################################################################################
+# Plot weights of different synthetic types all in one place next to each other for all sites
+quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
+# Have the different synthetic kinds labelled
+kinds = ['A', 'N', 'C', 'T', 'S', 'U', 'M']
+kind_name = ['Old Normalization\nUnsynthetic', 'RMS Normalization\nUnsynthetic', 'Cochlear',
+             'Temporal', 'Spectral', 'Spectrotemporal', 'Spectrotemporal\nModulation']
+#Create aliases for the kinds so I can dumbly swap them out all so they can be in the right order
+alias = {'A': '1', 'N': '2', 'C': '3', 'T': '4', 'S': '5', 'U': '6', 'M': '7'}
+kind_alias = {'1': 'Old Normalization\nUnsynthetic', '2':' RMS Normalization\nUnsynthetic', '3':'Cochlear',
+              '4': 'Temporal', '5': 'Spectral', '6': 'Spectrotemporal', '7': 'Spectrotemporal\nModulation'}
+# Extract only the relevant columns for plotting right now
+to_plot = quad.loc[:,['synth_kind', 'weightsA', 'weightsB']].copy()
+#sort them by the order of kinds so it'll plot in an order that I want to see
+to_plot['sort'] = to_plot['synth_kind']
+to_plot = to_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
+#Put the dataframe into a format that can be plotted easily
+to_plot = to_plot.melt(id_vars='synth_kind', value_vars=['weightsA', 'weightsB'], var_name='weight_kind',
+             value_name='weights').replace({'weightsA':'BG', 'weightsB':'FG'}).replace(kind_alias)
+#plot
+plt.figure()
+ax = sb.barplot(x="synth_kind", y="weights", hue="weight_kind", data=to_plot, ci=68, estimator=np.mean)
+##############################################################################################
+##############################################################################################
+
+
+
 
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
