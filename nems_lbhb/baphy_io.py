@@ -16,6 +16,8 @@ import re
 import os
 import os.path
 import pickle
+
+import pylab as pl
 import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
@@ -2548,14 +2550,24 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, animal, usespkfile=False):
+def get_mean_spike_waveform(cellid, animal=None, usespkfile=False):
     """
     Return 1-D numpy array containing the mean sorted
     spike waveform
+    There is two main methods:
+    1. The legacy one (usepkpfile==False), finds the phy generated npy files containing the waveforms
+    and mean waveforms for the classified clusters. This methods might fail when the Kilosort output has not cluste IDs
+    2. The new method (usespkfile==True), asumes there is a mean wavefomr in the sorted info generated when sort jobs
+    are finished and pushed to the database. This is a little circuitous since the phy npy waveforms are saved inside
+    matlab structs, that then have to be reloaded into python here...
+    This method is not backwards compatible, but it should hold consistency with ulterior analysis (?) and its the
+    preffered method
+    2022-08-16 MLE.
     """
     if type(cellid) != str:
         raise ValueError("cellid must be string type")
 
+    # new method
     if usespkfile:
         cparts = cellid.split("-")
         chan = int(cparts[1])
@@ -2571,11 +2583,10 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
                 sortinfo = sortinfo.T
 
             try:
-                # import pdb;pdb.set_trace()
                 mwf = sortinfo[0][chan - 1][0][0].flatten()[unit - 1]['MeanWaveform'].squeeze()
                 if len(mwf) > 0:
                     good_wf = True
-                    # log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+                    log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
 
             except:
                 mwf = np.array([])
@@ -2586,40 +2597,52 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
             log.info(f"No files for {cellid}")
             mwf = np.array([])
         elif not good_wf:
-            log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
-        return mwf
+            # log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+            raise RuntimeError(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
 
-    # get KS_cluster (if it exists... this is a new feature)
-    sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
-    kid = db.pd_query(sql).iloc[0][0]
+    # legacy method
+    else:
+        # get KS_cluster (if it exists... this is a new feature)
+        sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
+        kid = db.pd_query(sql).iloc[0][0]
 
-    # find phy results
-    site = cellid[:7]
-    path = f'/auto/data/daq/{animal}/{site[:-1]}/tmp/KiloSort/'
-    res_dirs = os.listdir(path)
-    res_dirs = [p for p in res_dirs if site in p]
-    results_dir = []
-    for r in res_dirs:
-        # find results dir with this cellid
-        rns = r.split(f'{site}_')[1].split('KiloSort')[0].split('_')[:-1]
-        rns = np.sort([int(r) for r in rns])
-        sql = f"SELECT stimfile from sCellFile WHERE cellid = '{cellid}'"
-        _rns = np.sort(db.pd_query(sql)['stimfile'].apply(lambda x: int(x.split(site)[1].split('_')[0])))
-        if np.all(_rns == rns):
-            results_dir = r
-    if results_dir == []:
-        raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
+        # find phy results
+        site = cellid.split('-')[0]
 
-    # get all waveforms for this sorted file
-    try:
-        w = np.load(path + results_dir + '/results/wft_mwf.npy')
-    except:
-        w = np.load(path + results_dir + '/results/mean_waveforms.npy')
-    clust_ids = pd.read_csv(path + results_dir + '/results/cluster_group.tsv', '\t').cluster_id
-    kidx = np.argwhere(clust_ids.values == kid)[0][0]
+        # finds the files associated with this sorted neuron. A single neuron might be present across experiments,
+        # so there can be multiple files, and we need to find the Kilosort run that encompases all of them
+        # e.g: [/auto/data/daq/Amanita/AMT020/AMT020a14_p_CPN.m , .../AMT020a15_p_CPN.m] -> ...
+        # ... /auto/data/daq/Amanita/AMT020/tmp/KiloSort/AMT020a_14_15_KiloSort2_minfr_goodchannels_to0
 
-    # get waveform
-    mwf = w[:, kidx]
+        sql = f"SELECT stimpath, stimfile from sCellFile where cellid = '{cellid}'"
+        cell_df = db.pd_query(sql)
+        stimpath = cell_df.stimpath.unique()
+        assert len(stimpath) == 1
+        path = Path(stimpath[0]) / 'tmp' / 'KiloSort'
+
+        # get the pair of numbers following the penetration, prior the underscore: AMT020a09_p_CPN.m -> 9
+        _rns = np.sort(cell_df.stimfile.str.extract(r'\D(\d{2})_').values.squeeze())
+        _rns = '_'.join([str(int(ii)) for ii in _rns])
+        sortpath = list(path.glob(f"{site}_{_rns}_KiloSort*"))
+
+        if len(sortpath) == 0:
+            raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
+        elif len(sortpath) > 1:
+            raise ValueError(f"multiple paths for {cellid} sort, which one is correct?:\n"
+                             f"{list(sortpath)}")
+
+        sortpath = sortpath[0]
+
+        # get all waveforms for this sorted file
+        try:
+            w = np.load(sortpath / 'results' / 'wft_mwf.npy')
+        except:
+            w = np.load(sortpath / 'results' / 'mean_waveforms.npy')
+        clust_ids = pd.read_csv(sortpath / 'results' / 'cluster_group.tsv', sep='\t').cluster_id
+        kidx = np.argwhere(clust_ids.values == kid)[0][0]
+
+        # get waveform
+        mwf = w[:, kidx]
 
     return mwf
 
