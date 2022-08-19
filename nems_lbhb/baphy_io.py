@@ -2550,31 +2550,39 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, animal=None, usespkfile=False):
+def get_mean_spike_waveform(cellid, usespkfile=None):
     """
-    Return 1-D numpy array containing the mean sorted
-    spike waveform
-    There is two main methods:
-    1. The legacy one (usepkpfile==False), finds the phy generated npy files containing the waveforms
-    and mean waveforms for the classified clusters. This methods might fail when the Kilosort output has not cluste IDs
-    2. The new method (usespkfile==True), asumes there is a mean wavefomr in the sorted info generated when sort jobs
-    are finished and pushed to the database. This is a little circuitous since the phy npy waveforms are saved inside
-    matlab structs, that then have to be reloaded into python here...
-    This method is not backwards compatible, but it should hold consistency with ulterior analysis (?) and its the
-    preffered method
-    2022-08-16 MLE.
+    Return 1-D numpy array containing the mean sorted spike waveform
+    :cellid: str
+    :usespkfile: Bool or None
+
+        1. The legacy one (usepkpfile==False), finds the phy generated npy files containing the waveforms
+        and mean waveforms for the classified clusters. This methods might fail when the Kilosort output has not cluste IDs
+        2. The new method (usespkfile==True), asumes there is a mean wavefomr in the sorted info generated when sort jobs
+        are finished and pushed to the database. This is a little circuitous since the phy npy waveforms are saved inside
+        matlab structs, that then have to be reloaded into python here...
+        This method is not backwards compatible, but it should hold consistency with ulterior analysis (?) and its the
+        preffered method
+
+        3. if  usespkfile is None, tries new then legacy approaches
+        2022-08-16 MLE.
     """
     if type(cellid) != str:
         raise ValueError("cellid must be string type")
 
     # new method
-    if usespkfile:
+    def usematfile():
         cparts = cellid.split("-")
         chan = int(cparts[1])
         unit = int(cparts[2])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
-        good_wf = False
+
+        if len(d) == 0:
+            # log.info(f"No files for {cellid}")
+            # mwf = np.array([])
+            raise RuntimeError(f"No files for {cellid}")
+
         for i in range(len(d)):
             spkfilepath = os.path.join(d['path'][i], d['respfile'][i])
             matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
@@ -2584,24 +2592,24 @@ def get_mean_spike_waveform(cellid, animal=None, usespkfile=False):
 
             try:
                 mwf = sortinfo[0][chan - 1][0][0].flatten()[unit - 1]['MeanWaveform'].squeeze()
-                if len(mwf) > 0:
-                    good_wf = True
-                    log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
-
             except:
-                mwf = np.array([])
-                log.info(f"Can't get Mean Waveform for {cellid} {i} {d['respfile'][i]}")
-            if good_wf:
+                # log.info(f"Can't get Mean Waveform for {cellid} {i} {d['respfile'][i]}")
+                continue
+
+            if len(mwf) > 0:
+                # log.info(f"Good Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
                 break
-        if len(d) == 0:
-            log.info(f"No files for {cellid}")
-            mwf = np.array([])
-        elif not good_wf:
+            else:
+                log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+
+        else:
             # log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
-            raise RuntimeError(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+            raise RuntimeError(f"Could not find a non Empty Mean Waveform across all {i} {cellid} files")
+
+        return mwf
 
     # legacy method
-    else:
+    def usenpyfile():
         # get KS_cluster (if it exists... this is a new feature)
         sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
         kid = db.pd_query(sql).iloc[0][0]
@@ -2643,6 +2651,22 @@ def get_mean_spike_waveform(cellid, animal=None, usespkfile=False):
 
         # get waveform
         mwf = w[:, kidx]
+        return mwf
+
+
+    if usespkfile is None:
+        try:
+            log.info('looking in spike.mat files')
+            mwf = usematfile()
+        except:
+            log.info('failed. looking in spike.npw files')
+            mwf = usenpyfile()
+    elif usespkfile is True:
+        mwf = usematfile()
+    elif usespkfile is False:
+        mwf = usenpyfile()
+    else:
+        raise ValueError(f'parameter usepkpfile has to be bool or None but is {usespkfile}')
 
     return mwf
 
@@ -2679,7 +2703,7 @@ def parse_cellid(options):
     cells_to_extract = None
 
     if ((cellid is None) | (batch is None)) & (mfilename is None):
-        raise ValueError("must provide cellid and batch or mfilename")
+        raise ValueError("must provide cellid and batch, or mfilename")
 
     siteid = None
     cell_list = None
