@@ -63,7 +63,7 @@ def Root2Dict(El):
                     Dict[SubEl.tag][SubEl.get('name')] = Root2Dict(SubEl)
 
                     Dict[SubEl.tag][SubEl.get('name')].update(
-                        {K: SubEl.get(K) for K in SubEl.keys() if K is not 'name'}
+                        {K: SubEl.get(K) for K in SubEl.keys() if K != 'name'}
                     )
 
                 else:
@@ -73,12 +73,12 @@ def Root2Dict(El):
                         ch_count+=1
                         Dict[newkey] = Root2Dict(SubEl)
                         Dict[newkey].update(
-                            {K: SubEl.get(K) for K in SubEl.keys() if K is not 'name'}
+                            {K: SubEl.get(K) for K in SubEl.keys() if K != 'name'}
                         )
                     else:
                         Dict[SubEl.tag] = Root2Dict(SubEl)
                         Dict[SubEl.tag].update(
-                            {K: SubEl.get(K) for K in SubEl.keys() if K is not 'name'}
+                            {K: SubEl.get(K) for K in SubEl.keys() if K != 'name'}
                         )
 
             else:

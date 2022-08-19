@@ -20,21 +20,7 @@ import nems.preprocessing as preproc
 from nems.metrics.state import state_mod_index
 from nems.utils import find_module
 import nems_lbhb.plots as lplt
-
-font_size=8
-params = {'legend.fontsize': font_size-2,
-          'figure.figsize': (8, 6),
-          'axes.labelsize': font_size,
-          'axes.titlesize': font_size,
-          'axes.spines.right': False,
-          'axes.spines.top': False,
-          'xtick.labelsize': font_size,
-          'ytick.labelsize': font_size,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-
-
-plt.rcParams.update(params)
+from nems.plots.file import save_figure, load_figure_img, load_figure_bytes, fig2BytesIO
 
 line_colors = {'actual_psth': (0,0,0),
                'predicted_psth': 'red',
@@ -1253,12 +1239,17 @@ def state_resp_coefs(rec, modelspec, ax=None,
     """
 
 
-def cc_comp(val, modelspec, ax=None, extra_epoch=None, **options):
+def cc_comp(val, modelspec, ax=None, extra_epoch=None, masknames=None, **options):
     ## display noise corr. matrices
-    f,ax = plt.subplots(4,3, figsize=(9,12))
+    f, ax = plt.subplots(4, 3, figsize=(9, 12))
     #f,ax = plt.subplots(4,3, figsize=(6,8), sharex='col', sharey='col')
 
-    if extra_epoch is not None:
+    if masknames is not None:
+        rec = val.copy()
+        small_idx = rec[masknames[0]].as_continuous()[0,:].astype(bool)
+        large_idx = rec[masknames[1]].as_continuous()[0,:].astype(bool)
+
+    elif extra_epoch is not None:
         rec=val.copy()
         rec=rec.and_mask(extra_epoch)
         rec = rec.apply_mask()
@@ -1431,3 +1422,63 @@ def state_ellipse_comp(rec, modelspec, epoch_regex="^STIM_", pc_base="noise", **
  
     return rt
 
+def ddr_pairs(val, modelspec, figures=None, **ctx):
+    rec = val.copy()
+
+    masks = ["_".join(k.split("_")[:-1]) for k in rec.signals.keys()
+             if (k.startswith("mask_") and k!="mask_small" and k!="mask_large")]
+    masks = list(set(masks))
+    masks.sort()
+    if 'pred0' in rec.signals.keys():
+        input_name = 'pred0'
+    else:
+        input_name = 'psth'
+    pred0 = rec[input_name].as_continuous()
+    pred = rec['pred'].as_continuous()
+    resp = rec['resp'].as_continuous()
+    pupil = rec['pupil'].as_continuous()
+
+    r=[]
+    p=[]
+    pup=[]
+    pmask=[]
+    for i, m in enumerate(masks):
+        ml = rec[m+"_lg"].as_continuous()[0,:]
+        ms = rec[m+"_sm"].as_continuous()[0,:]
+        r.append(np.concatenate((resp[:,ml],resp[:,ms]), axis=1))
+        p.append(np.concatenate((pred[:,ml],pred[:,ms]), axis=1))
+        pup.append(np.concatenate((pupil[:,ml],pupil[:,ms]), axis=1))
+        pmask.append(np.concatenate((np.ones((1,np.sum(ml)), dtype=bool),
+                                     np.zeros((1,np.sum(ms)), dtype=bool)),axis=1))
+        print(i,m,r[i].shape)
+
+    from charlieTools.nat_sounds_ms.decoding import plot_stimulus_pair
+    f,ax = plt.subplots(3,2,figsize=(6,9))
+
+    c = 0
+    for i in range(len(r)):
+        for j in range(i):
+            if c>=3:
+                break
+            mm = np.min([r[i].shape[1],r[j].shape[1]])
+            X_raw = np.stack((r[i][:,:mm],r[j][:,:mm]), axis=2)[:,:,:,np.newaxis]
+            X = np.stack((p[i][:,:mm],p[j][:,:mm]), axis=2)[:,:,:,np.newaxis]
+            X_pup = np.stack((pup[i][:,:mm],pup[j][:,:mm]), axis=2)[:,:,:,np.newaxis]
+            pup_mask = np.stack((pmask[i][:,:mm],pmask[j][:,:mm]), axis=2)[:,:,:,np.newaxis]
+
+
+            plot_stimulus_pair(X=X_raw, X_pup=X_pup, X_raw=X_raw, pup_mask=pup_mask,
+                               ellipse=True, pup_split=True, ax=ax[c,0])
+            plot_stimulus_pair(X=X, X_pup=X_pup, X_raw=X_raw, pup_mask=pup_mask,
+                               ellipse=True, pup_split=True, ax=ax[c,1])
+            ax[c,0].set_ylabel(f"({i},{j}")
+
+            c+=1
+    f.suptitle(modelspec.meta['modelname'])
+    plt.tight_layout()
+
+    if figures is None:
+        figures = []
+    figures.append(fig2BytesIO(f))
+
+    return {'figures': figures, 'modelspec': modelspec}

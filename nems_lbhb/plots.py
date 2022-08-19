@@ -10,13 +10,15 @@ import matplotlib.pyplot as plt
 import copy
 import pandas as pd
 import scipy.ndimage.filters as sf
+import seaborn as sns
+import scipy.stats as st
 
 import nems.plots.api as nplt
 import nems.xforms as xforms
 import nems.xform_helper as xhelp
 import nems.epoch as ep
 import nems.modelspec as ms
-from nems.utils import find_module, get_setting
+from nems.utils import find_module, get_setting, find_common
 import nems.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -24,12 +26,15 @@ from nems.modules.weight_channels import gaussian_coefficients
 from nems.modules.fir import da_coefficients
 from nems.gui.decorators import scrollable
 
-params = {'legend.fontsize': 6,
+font_size=8
+params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
-          'axes.labelsize': 8,
-          'axes.titlesize': 8,
-          'xtick.labelsize': 8,
-          'ytick.labelsize': 8,
+          'axes.labelsize': font_size,
+          'axes.titlesize': font_size,
+          'axes.spines.right': False,
+          'axes.spines.top': False,
+          'xtick.labelsize': font_size,
+          'ytick.labelsize': font_size,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
 plt.rcParams.update(params)
@@ -370,6 +375,51 @@ def quick_pred_comp(cellid, batch, modelname1, modelname2,
 
     return ax, ctx1, ctx2
 
+def scatter_model_set(modelnames=[], batch=322, cellids=None, stat='r_test', sf=1):
+    """
+    :param modelnames:
+    :param batch:
+    :param cellids:
+    :param stat:
+    :param sf: size of each plot (inches)
+    :return:
+    """
+
+    shortened, prefix, suffix = find_common(modelnames)
+    shortened = [s if len(s)>0 else "_" for s in shortened]
+    d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
+    dse = nd.batch_comp(batch, modelnames, cellids=cellids, stat='se_test')
+
+    modelcount = d.shape[1]
+    goodcells = (d/dse*2)>1
+    goodcells = goodcells.sum(axis=1)==modelcount
+    print(goodcells.sum(),goodcells.shape)
+    #import pdb; pdb.set_trace()
+    cols=modelcount-1
+    rows=modelcount-1
+    f,ax=plt.subplots(rows,cols, figsize=(cols*sf,rows*sf),sharex=True, sharey=True)
+    #goodcells = np.isnan(d).sum(axis=1)==0
+    for i in range(modelcount):
+        for j in range(i+1,modelcount):
+            a=d.loc[goodcells].values[:,i]
+            b=d.loc[goodcells].values[:,j]
+            mw=st.mannwhitneyu(a, b, alternative='two-sided')
+            medians = [np.median(a), np.median(b)]
+            ax[j-1,i].plot([0,1],[0,1],'--',color='gray')
+            ax[j-1,i].scatter(a,b,s=3,color='k')
+            if j==modelcount-1:
+                ax[j-1,i].set_xlabel(f"{shortened[i]} ({medians[0]:.3f})")
+            if i==0:
+                ax[j-1,i].set_ylabel(f"{shortened[j]} ({medians[1]:.3f})")
+            if sf>1:
+                ax[j-1,i].set_title(f"p={mw.pvalue:.3e}")
+    #ax[rows-1,0].bar(np.linspace(0.15,0.85,len(modelnames)),d.mean(),width=0.1)
+
+    print(d.loc[goodcells,:].median())
+    print(f"Good cells: {goodcells.sum()}/{len(goodcells)}")
+
+    return d
+
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
                  hist_range=[-1, 1], title='modelname/batch',
@@ -624,10 +674,12 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
 
     plt.axis('off')
 
-def plot_waveforms_64D(waveforms, cellids, ax=None):
-    if type(cellids) is not np.ndarray:
+def plot_waveforms_64D(waveforms, cellids=None, chans=None, norm=True, ax=None):
+    if (cellids is None) and (chans is None):
+        raise ValueError('cellids OR chans required')
+    if (cellids is not None) and (type(cellids) is not np.ndarray):
         cellids = np.array(cellids)
-
+    
     # Make a vector for each column of electrodes
 
     # left column + right column are identical
@@ -647,8 +699,10 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
         f, ax = plt.subplots(1, 1, figsize=(2, 6))
     
     #plt.scatter(locations[0,:],locations[1,:],facecolor='none',edgecolor='k',s=s)
-
-    electrodes = [int(x.split('-')[1]) for x in cellids]
+    if chans is not None:
+        electrodes = [int(c) for c in chans]
+    else:
+        electrodes = [int(x.split('-')[1]) for x in cellids]
 
     # for duplicate (multiple spikes on one electrode), plot all waveforms, just in different
     # colors    
@@ -670,7 +724,10 @@ def plot_waveforms_64D(waveforms, cellids, ax=None):
         for j, cidx in enumerate(cidxs):
             cidx = cidx.squeeze()
             mwf = waveforms[cidx, :]
-            mwf /= np.abs(np.max(np.abs(mwf))) 
+            if norm:
+                mwf /= np.abs(np.max(np.abs(mwf))) 
+            else:
+                mwf /= np.abs(np.max(np.abs(waveforms))) 
             mwf *= 0.1
             ax.plot(t, mwf + y, color=colors[j], lw=1)
     
@@ -753,7 +810,7 @@ def plot_mean_weights_64D(h=None, cellids=None, l4=None, vmin=None, vmax=None, t
     # left column + right column are identical
     el_shift = int(abs(max_shift)/3)
     tf=0
-    while tf is 0:
+    while tf == 0:
         if el_shift%3 != 0:
             el_shift += 1
         elif max_shift>0 and max_shift<3:
@@ -1392,12 +1449,14 @@ def LN_pop_plot(ctx, ctx0=None):
 
 def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None,
                       offset=None, dot_colors=None, dot_markers=None, max=None, ax=None,
-                      check_single_cell=False, plot_stat='r_test', mean_per_model=False):
+                      check_single_cell=False, plot_stat='r_test', mean_per_model=False,
+                      plot_medians=False):
 
     if (modelnames is None) and (modelgroups is None):
         raise ValueError("Must specify modelnames list or modelgroups dict")
     elif modelgroups is None:
         #modelgroups={'ALL': modelnames}
+        modelgroups={}
         pass
     else:
         modelnames = []
@@ -1444,8 +1503,12 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
         print(f"found {np.sum(goodcells)}/{len(goodcells)} good cells")
     #b_m = np.array((b_ceiling.loc[goodcells]**2).mean()[modelnames])
     # consider converting to r^2 with **2
-    model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
-    b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+    if not plot_medians:
+        model_mean = (b_ceiling.loc[goodcells, modelnames]).mean()
+        b_m = np.array((b_ceiling.loc[goodcells, modelnames]).mean())
+    else:
+        model_mean = (b_ceiling.loc[goodcells, modelnames]).median()
+        b_m = np.array((b_ceiling.loc[goodcells, modelnames]).median())
 
     cellids = b_n.index.tolist()
     siteids = list(set([c.split("-")[0] for c in cellids]))
@@ -1710,3 +1773,38 @@ def lv_logsig_plot(rec, modelspec, ax=None, **options):
     ax.set_title(modelspecs[idx])
 
     f.tight_layout()
+
+    
+def scatter_bin_lin(data, x, y, bins=10, s=3, color='lightgray', color2=None, ax=None, regular_bins=True):
+
+    if ax is None:
+        ax=plt.gca()
+        
+    if data.shape[0]>1500:
+        data_ = data.sample(1500, weights=data[x]**2)
+        #data_ = data.sample(3000)
+    else:
+        data_ = data
+    #sns.scatterplot(data=data_, x=x, y=y, s=3, ax=ax, color=color)
+    ax.scatter(data[x],data[y],s=s,color=color)
+    #histplot(data=data_, x=x, y=y, ax=ax, bins=30)
+
+    x = data[[x,y]].values
+
+    if regular_bins:
+        bb=np.linspace(x[:,0].min(), x[:,0].max(), bins+5);
+        bb=bb[np.concatenate((np.arange(bins-1), [bins+1, bins+4])) ]
+    else:
+        xs=np.sort(x[:,0])
+        xs[-1]+=1
+        bb=xs[np.round(np.linspace(0, len(xs)-1, bins+1)).astype(int)]
+
+    result = np.zeros((2,bins))
+    resulte = np.zeros((2,bins))
+
+    for i in range(bins):
+        b_ = (x[:,0]>=bb[i]) & (x[:,0]<bb[i+1]) & np.isfinite(x[:,1])
+        result[:,i] = np.nanmean(x[b_, :], axis=0)
+        resulte[:,i] = np.nanstd(x[b_, :], axis=0)/np.sqrt(np.sum(b_))
+    ax.errorbar(result[0], result[1], resulte[1], linewidth=2, color=color2)
+

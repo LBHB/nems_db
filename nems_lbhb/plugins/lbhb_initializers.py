@@ -33,4 +33,67 @@ def pclast(kw):
 
 @xform()
 def prefit(kw):
-    return [['nems_lbhb.initializers.initialize_with_prefit', {}]]
+    ops = kw.split('.')[1:]
+    kwargs = {}
+    kwargs['prefit_type']='site'
+
+    # use_full_model means population model (vs. single-cell fit used for dnn-single)
+    for op in ops:
+        if op.startswith("b"):
+            kwargs['pre_batch']=int(op[1:])
+        elif op=='nf':
+            kwargs['freeze_early']=False
+        elif op=='h':
+            kwargs['use_heldout'] = True
+        elif op=='m':
+            kwargs['use_matched'] = True
+        elif op=='s':
+            kwargs['use_simulated'] = True
+        elif op=='f':
+            kwargs['use_full_model'] = True
+
+    if 'hm' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched'
+    elif 'hs' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout'
+
+    elif 'hhm' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_half'
+    elif 'hqm' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_quarter'
+    elif 'hfm' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_fifteen'
+    elif 'htm' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'matched_ten'
+
+    elif 'hhs' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_half'
+    elif 'hqs' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_quarter'
+    elif 'hfs' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_fifteen'
+    elif 'hts' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'heldout_ten'
+    
+    elif 'init' in ops:
+        kwargs['prefit_type'] = 'init'
+    elif 'm' in ops:
+        kwargs['prefit_type'] = 'matched'
+    elif 'h' in ops:
+        kwargs['prefit_type'] = 'heldout'
+    
+    elif 'titan' in ops:
+        kwargs['use_full_model'] = True
+        kwargs['prefit_type'] = 'titan'
+
+    return [['nems_lbhb.initializers.initialize_with_prefit', kwargs]]

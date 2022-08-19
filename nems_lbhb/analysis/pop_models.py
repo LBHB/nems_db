@@ -3,8 +3,20 @@ import logging
 
 import json as jsonlib
 import matplotlib as mpl
+params = {'axes.spines.right': False,
+          'axes.spines.top': False,
+          'legend.fontsize': 10,
+          'axes.labelsize': 10,
+          'axes.titlesize': 10,
+          'xtick.labelsize': 10,
+          'ytick.labelsize': 10,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+mpl.rcParams.update(params)
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 from numpy.linalg import det
 from scipy.ndimage import zoom, gaussian_filter1d
@@ -27,19 +39,19 @@ def subspace_overlap(u, v):
     from Sharpee PLoS CB 2017 paper
     u,v: n X x matrices sampling n-dim subspace of x-dim space
     """
-    n = u.shape[1]
+    n = u.shape[0]
 
-    _u = u / np.sqrt(np.sum(u ** 2, axis=0, keepdims=True))
-    _v = v / np.sqrt(np.sum(v ** 2, axis=0, keepdims=True))
+    _u = u / np.sqrt(np.sum(u ** 2, axis=1, keepdims=True))
+    _v = v / np.sqrt(np.sum(v ** 2, axis=1, keepdims=True))
 
-    num = np.power(np.abs(det(_u.T @ _v)), (1.0 / n))
-    den = np.power(np.abs(det(_u.T @ _u)) * np.abs(det(_v.T @ _v)), (0.5 / n))
+    num = np.power(np.abs(det(_u @ _v.T)), (1.0 / n))
+    den = np.power(np.abs(det(_u @ _u.T)) * np.abs(det(_v @ _v.T)), (0.5 / n))
 
     return num / den
 
 
-def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=[0], memory=10,
-                  norm_mean=True, method='jacobian', **kwargs):
+def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channel=None, memory=20,
+                  norm_mean=True, method='jacobian', use_rand_seed=0, **kwargs):
 
     # remove static nonlinearities from end of modelspec chain
     modelspec = modelspec.copy()
@@ -58,16 +70,30 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
     stimchans = rec['stim'].shape[0]
     bincount = rec['pred'].shape[1]
     stim_mean = np.mean(rec['stim'].as_continuous(), axis=1, keepdims=True)
+    
+    if out_channel is None:
+        out_channel = [0]
+    
     if index_range is None:
-        index_range = np.arange(bincount)
-        if sample_count is not None:
+        stim_mag = rec['stim'].as_continuous().sum(axis=0)
+        stim_big = stim_mag > np.max(stim_mag) / 1000
+        index_range = np.arange(0, len(stim_mag))
+        index_range = index_range[(index_range > memory) & stim_big[index_range]]
+        print(f"big frames in index_range: {len(index_range)}")
+        if (sample_count is not None) and (len(index_range)>sample_count):
+            state = np.random.get_state()
+            np.random.seed(use_rand_seed)
             np.random.shuffle(index_range)
+            np.random.set_state(state)
+            
             index_range = index_range[:sample_count]
+            print(f"trimmed to {sample_count} random subset")
+
     sample_count = len(index_range)
     dstrf = np.zeros((sample_count, stimchans, memory, len(out_channel)))
     for i, index in enumerate(index_range):
-        if i % 50 == 0:
-            log.info(f"dSTRF: {i}/{len(index_range)} idx={index}")
+        if ((i+1) % 100 == 0):
+            log.info(f"dSTRF: {i+1}/{len(index_range)} idx={index}")
         if len(out_channel)==1:
             dstrf[i,:,:,0] = modelspec.get_dstrf(rec, index, memory, out_channel=out_channel, method=method)
         else:
@@ -78,6 +104,16 @@ def compute_dstrf(modelspec, rec, index_range=None, sample_count=100, out_channe
 
     return dstrf
 
+
+def dstrf_pred(modelspec, rec, dstrf, index_range):
+    stim = rec['stim'].as_continuous()
+    shape_ = dstrf.shape
+    pred = np.full((stim.shape[0],stim.shape[1],dstrf.shape[3]), np.NaN)
+    memory = dstrf.shape[2]
+    for cellidx in range(dstrf.shape[3]):
+        for i in range(len(index_range)):
+            pred[:, index_range[i],cellidx] = (stim[:, (index_range[i] - memory + 1):(index_range[i] + 1)] * dstrf[i, :, :, cellidx]).sum(axis=1)
+    return pred
 
 def strf_mtx(modelspec, rows=3, smooth=[1,2]):
     
@@ -120,7 +156,7 @@ def strf_mtx(modelspec, rows=3, smooth=[1,2]):
 
 def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100, 
                        smooth=[2,2], figsize=None, example_idx=0, cmap='bwr',
-                       performance_metric='r_ceiling', modelspec_ref=None, **kwargs):
+                       performance_metric='r_ceiling', modelspec_ref=None, altstim=None, **kwargs):
 
     fs = rec['resp'].fs
     nl_layers = [idx for idx,m in enumerate(modelspec) if (('nonlinearity' in m['fn']) and ('dlog' not in m['fn']))]
@@ -141,7 +177,7 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
         
     rows = len(nl_layers)+2
     if figsize is None:
-        figsize=(12, rows*1.5)
+        figsize=(10, rows*1)
 
     f = plt.figure(constrained_layout=True, figsize=figsize)
     gs = f.add_gridspec(rows, 4)
@@ -159,13 +195,21 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     #mask = zoom(mask,[2,2])
     #strf_all[mask]=np.nan
     mm = np.nanmax(np.abs(strf_all))
-   
+
+    pop_paper = False
     if cmap=='bwr':
         cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
         cmap.set_bad('lightgray',1.)
     elif cmap=='jet':
         cmap = mpl.cm.get_cmap(name='jet')
         cmap.set_bad('white',1.)
+    elif cmap == 'pop_paper':
+        red = (219 / 255, 114 / 255, 110 / 255)
+        blue = (66 / 255, 134 / 255, 198 / 255)
+        pop_paper_cmap = LinearSegmentedColormap.from_list('pop_paper', [blue, 'white', red], 256)
+        pop_paper_cmap.set_bad('lightgray', 1.)
+        cmap = pop_paper_cmap
+        pop_paper = True
     else:
         cmap = mpl.cm.get_cmap(name=cmap)
         cmap.set_bad('white',1.)
@@ -193,7 +237,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     ax_perf.set_yticks([0,0.5,1])
     ax_perf.set_title(performance_metric)
 
-    spec = rec['stim'].as_continuous()[:,index_range]
+    if altstim is not None:
+        spec = altstim.as_continuous()[:,index_range]
+    else:
+        spec = rec['stim'].as_continuous()[:,index_range]
     extent = [0.5/fs, (spec.shape[1]+0.5)/fs, 0.5, spec.shape[0]+0.5]
 
     if np.mean(spec==0)>0.5:
@@ -251,12 +298,16 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                     if c is not None:
                         col = c[i1,i0]
                         if np.abs(col)>0.3:
-                            if col>0:
+                            if pop_paper:
+                                col = np.tanh(2*col)  # shift toward extremes for darker visualization
+                                col = 0.5 * (col + 1)  # scale 0-1 instead of -1 to 1
+                                col = pop_paper_cmap(col)
+                            elif col>0:
                                 #col = [(1-col), 1-0.5*col, 1-0.5*col]
-                                col = [1-0.1*col, 1-col, 1-col]
+                                col = [1-col, 1-col, 1-0.1*col]
                             else:
                                 #col = [1+0.5*col, 1+0.5*col, 1+col]
-                                col = [1+col, 1+col, 1+0.1*col]
+                                col = [1+0.1*col, 1+col, 1+col]
 
                             ax1.plot([x0[i0], x1[i1]],[rows - (i), rows - (i+1)], 
                                      color=col, linewidth=0.5)
@@ -296,14 +347,126 @@ def force_signal_silence(rec, signal='stim'):
         rec[signal]=rec[signal].replace_epoch(e, s)
     return rec
 
-def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbins=3, maxbins=1500, n_pc=3):
+
+def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purple', labels='model', ax=None, figsize=None):
+    """
+    :param ctx:
+    :param cellid:
+    :param rr:
+    :param respcolor:
+    :param predcolor:
+    :param labels:
+    :param ax: list of two axis handles
+    :param figsize:
+    :return:
+    """
+    if type(ctx) is list:
+        mult_ctx=True
+        rec=ctx[0]['val']
+        modelspec=ctx[0]['modelspec']
+    else:
+        mult_ctx=False
+        rec = ctx['val']
+        modelspec=ctx['modelspec']
+
     cellids = rec['resp'].chans
     match=[c==cellid for c in cellids]
+    c = np.where(match)[0][0]
+    
+    if rr is None:
+        rr=np.arange(np.min((1000,rec['resp'].shape[1])))
+    if figsize is None:
+        figsize=(12,4)
+
+    if ax is None:
+        f,ax = plt.subplots(2, 1, sharex=True, figsize=figsize)
+    rr_orig=rr
+    tt=np.arange(len(rr))/rec['resp'].fs
+    
+    ax[0].imshow(rec['stim'].as_continuous()[:, rr_orig+1]**0.6, aspect='auto', origin='lower', cmap="gray_r",
+                 extent=[tt[0],tt[-1],0,rec['stim'].shape[0]])
+    ax[0].set_title(cellid + "/" + modelspec.meta['modelname'].split("_")[1])
+    ax[0].set_ylabel('Frequency', fontsize=8)
+
+    ax[1].plot(tt, rec['resp'].as_continuous()[c, rr_orig], linewidth=0.75, color=respcolor, label='resp');
+    if mult_ctx:
+        for e in range(len(ctx)):
+            print(f"{labels[e]} {predcolor[e]}")
+            r=ctx[e]['modelspec'].meta['r_ceiling'][c][0]
+            ax[1].plot(tt, ctx[e]['val']['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor[e], label=f"{labels[e]} r={r:.3f}");
+    else: 
+        ax[1].plot(tt, rec['pred'].as_continuous()[c, rr_orig], linewidth=0.75, color=predcolor, label=f"r={modelspec.meta['r_test'][c]}");
+
+    ax[1].legend(frameon=False, fontsize=8)
+    ax[1].set_xlabel('Time (s)', fontsize=8)
+    ax[1].set_ylabel('Spikes/sec', fontsize=8)
+    return ax[0].figure
+    
+from nems.utils import get_setting
+from scipy.ndimage import zoom
+
+
+def dstrf_pca_plot(pcs, pc_mag, cellids, clist=None, rows=1):
+    channel_count=pcs.shape[-1]
+    ccmax=rows*10
+    if clist is None:
+        clist=np.arange(np.min([ccmax,channel_count]))
+        
+    if len(clist)>ccmax:
+        clist=clist[:ccmax]
+    if len(clist)<10:
+        cols=len(clist)
+    else:
+        cols=10
+    f2,axs=plt.subplots(cols, 3*rows, figsize=(3*rows, cols*0.85))
+    for c,cadj in enumerate(clist):
+        cellid = cellids[cadj]
+        pc_rat = pc_mag[:,cadj]/pc_mag[:,cadj].sum()
+        for i in range(3):
+            mm=np.max(np.abs(pcs[i,:,:,cadj]))
+            _p = pcs[i,:,:,cadj]
+            #_p *= np.sign(_p.sum())
+            os = int(c/10)*3
+            _c = c % 10
+            
+            rat=(pc_rat[i] / pc_mag[0,cadj]) #  ** 2
+            #print(rat, mm)
+
+            strf = np.fliplr(_p)
+            strf[np.abs(strf)<np.std(strf)]=0
+            strf = zoom(strf, [2,2])*rat
+            #if np.abs(strf.min())>strf.max():
+            #    strf=-strf
+
+            ax = axs[_c, i+os]
+            ax.imshow(strf,cmap='bwr', aspect='auto',origin='lower', clim=[-mm, mm])
+            if i==0:
+                ax.set_ylabel(f'{cellid}', fontsize=6)
+            if _c==0:
+                ax.set_title(f'PC {i+1}', fontsize=6)
+            ax.text(ax.get_xlim()[1],ax.get_ylim()[0],
+                    f'{pc_rat[i]:.2f}', ha='right',va='bottom', fontsize=8)
+            if i+os<7:
+                ax.set_xticks([])
+            if (c>0) or (i+os<7):
+                ax.set_yticks([])
+            #ax.set_axis_off()
+            ax.set_xticks([])
+            ax.set_yticks([])
+            
+    plt.show()
+    return f2
+
+
+
+def dstrf_details(modelspec, rec,cellid,rr,dindex, dstrf=None, pcs=None, pc_mag=None, memory=20, stepbins=3, maxbins=1000, n_pc=3):
+    cellids = rec['resp'].chans
+    match = [c==cellid for c in cellids]
     c = np.where(match)[0][0]
         
     # analyze all output channels
     out_channel = [c]
-    channel_count=len(out_channel)
+    channel_count = len(out_channel)
 
     if dstrf is not None:
         stimmag = dstrf.shape[0]
@@ -317,7 +480,7 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
         dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
                               memory=memory, index_range=index_range)
 
-    if dpcs is None:
+    if pcs is None:
         # don't skip silent bins
 
         stim_big = stim_mag > np.max(stim_mag) / 1000
@@ -332,11 +495,11 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     
     c_=0
 
-    ii = np.arange(rr[0],rr[1])
+    ii = np.arange(rr[0],rr[-1])
     rr_orig = ii
     
     print(pcs.shape, dstrf.shape)
-    u = np.reshape(pcs[:,:,:,c_],[n_pc, -1])
+    u = np.reshape(pcs[:n_pc,:,:,c_],[n_pc, -1])
     d = np.reshape(dstrf[ii,:,:,c_],[len(ii),-1])
     pc_proj = d @ u.T
 
@@ -365,10 +528,10 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
     yl1=ax1.get_ylim()
 
     #ax2.plot(pc_proj);
-    ax2.plot(pred[:,rr_orig].T);
+    ax2.plot(pred[:n_pc, rr_orig].T);
     ax2.set_xlim(xl)
-    ax2.set_ylabel('pc projection')
-    ax2.legend(('PC1','PC2','PC3'), frameon=False)
+    ax2.set_ylabel('PC projection')
+    ax2.legend(('PC1', 'PC2', 'PC3'), frameon=False)
     yl2=ax2.get_ylim()
 
     dindex = np.array(dindex)
@@ -381,27 +544,30 @@ def dstrf_details(rec,cellid,rr,dindex, dstrf=None, dpcs=None, memory=20, stepbi
         ax1.plot([d,d],yl1,'--', color='darkgray')
         ax2.plot([d,d],yl2,'--', color='darkgray')
         _dstrf = dstrf[d+rr[0],:,:,c_]
-        if True:
+        if False:
+            # stack a copy scaled by the current stim
             #_dstrf = np.concatenate((_dstrf,stim[:,(d-_dstrf.shape[1]):d]*mmd), axis=0)
             _dstrf = np.concatenate((_dstrf,_dstrf*stim[:,(d-_dstrf.shape[1]):d]), axis=0)
-
             #_dstrf *= stim[:,(d-_dstrf.shape[1]):d]
         ds = np.fliplr(_dstrf)
-        ds=zoom(ds, [2,2])
-        ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'))
+        #ds=zoom(ds, [2,2])
+        ax[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmd, mmd], cmap=get_setting('WEIGHTS_CMAP'), interpolation='none')
         #plot_heatmap(ds, aspect='auto', ax=ax[i], interpolation=2, clim=[-mmd, mmd], show_cbar=False, xlabel=None, ylabel=None)
 
         ax[i].set_title(f"Frame {d}", fontsize=8)
-        if i<n_pc:
-            ds=np.fliplr(pcs[i,:,:,c_])
-            ds=zoom(ds, [2,2])
-            mmp = np.max(np.abs(ds))
+        ds = np.fliplr(pcs[0,:,:,c_])*pc_mag[0]
+        #ds = zoom(ds, [2,2])
+        mmp = np.max(np.abs(ds))
+        if i < n_pc:
+            ds = np.fliplr(pcs[i,:,:,c_]*pc_mag[i])
+            #ds = zoom(ds, [2,2])
             #ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp])
             ax3[i].imshow(ds, aspect='auto', origin='lower', clim=[-mmp, mmp], cmap=get_setting('WEIGHTS_CMAP'))
+            ax3[i].text(pcs.shape[2]-9, 1, f'PC{i}: {pc_mag[i,0]:0.3f}')
         else:
             ax3[i].set_axis_off()
 
-    ax[0].set_ylabel('example frames')
+    ax[0].set_ylabel('Example frames')
     ax3[0].set_ylabel('PCs')
 
     return f
@@ -422,32 +588,87 @@ def compute_dpcs(dstrf, pc_count=3):
         #d -= d.mean(axis=0, keepdims=0)
 
         _u, _s, _v = np.linalg.svd(d.T @ d)
-        _s = np.sqrt(_s)
+        #_s = np.sqrt(_s)
         _s /= np.sum(_s[:pc_count])
+        
         pcs[:, :, :, c] = np.reshape(_v[:pc_count, :],[pc_count, s[1], s[2]])
+        
+        mdstrf=dstrf[:, :, :, c].mean(axis=0)
+        if np.sum(mdstrf * pcs[0,:,:,c])<0:
+            pcs[0,:,:,c] = -pcs[0,:,:,c]
+            #print(f"{c} adjusted to {np.sum(mdstrf * pcs[0,:,:,c])}")
         pc_mag[:, c] = _s[:pc_count]
 
     return pcs, pc_mag
 
 
-def dstrf_pca(modelspec, rec, pc_count=3, out_channel=[0], memory=10, return_dstrf=False,
-              pca_index_range=None, **kwargs):
+def dstrf_pca(modelspec, rec, chunksize=20, out_channel=None, pc_count=3, 
+              return_dstrf=False, **dstrf_parms):
 
-    dstrf = compute_dstrf(modelspec, rec.copy(), out_channel=out_channel,
-                          memory=memory, **kwargs)
-
-    if pca_index_range is None:
-        pcs, pc_mag = compute_dpcs(dstrf, pc_count)
+    if out_channel is None:
+        cellcount = len(modelspec.meta['cellids'])
+        out_channel = list(np.arange(cellcount))
     else:
-        pcs, pc_mag = compute_dpcs(dstrf[pca_index_range, :, :], pc_count)
+        cellcount = len(out_channel)
+    chunkcount = int(np.ceil(cellcount/chunksize))
 
+    for chunk in range(chunkcount):
+        channels = list(range(chunk*chunksize,np.min([cellcount,(chunk+1)*chunksize])))
+        c1 = modelspec.meta['cellids'][channels[0]]
+        c2 = modelspec.meta['cellids'][channels[-1]]
+
+        print(f"Computing dSTRF(s) for chunk {chunk}: {channels[0]}-{channels[-1]} / cellid {c1} to {c2}")
+        dstrf_ = compute_dstrf(modelspec, rec, out_channel=channels, **dstrf_parms)
+        pcs_, pc_mag_ = compute_dpcs(dstrf_, pc_count=pc_count)
+        
+        if chunk==0:
+            dstrf = dstrf_.copy()
+            pcs = pcs_.copy()
+            pc_mag = pc_mag_.copy()
+        else:
+            if return_dstrf:
+                dstrf = np.concatenate((dstrf, dstrf_), axis=3)
+            pcs = np.concatenate((pcs, pcs_), axis=3)
+            pc_mag = np.concatenate((pc_mag, pc_mag_), axis=1)
+            
     if return_dstrf:
        return pcs, pc_mag, dstrf
     else:
        return pcs, pc_mag
 
 
-def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
+def dstrf_analysis(modelspec=None, est=None, val=None, figures=None, pc_count=5, memory=25,
+                   index_range=None, sample_count=1000,
+                   chunksize=25,
+                   IsReload=False, **kwargs):
+    """
+    Specialized postprocessor to analyze dstrf
+    """
+    if IsReload:
+        log.info("Reload, skipping dstrf_analysis")
+        return {}
+
+    pcs, pc_mag, dstrf = dstrf_pca(modelspec, est, pc_count=5, out_channel=None, memory=memory,
+                            index_range=None, sample_count=sample_count,
+                            return_dstrf=True, chunksize=chunksize)
+    modelspec.meta['dstrf_pcs'] = pcs
+    modelspec.meta['dstrf_pc_mag'] = pc_mag
+
+    rr = np.arange(150,600)
+    dindex = np.array([25, 125, 175, 275, 325, 425])+7
+    f = dstrf_details(modelspec, val, modelspec.meta['cellids'][0], rr, dindex, dstrf=None, pcs=pcs, pc_mag=pc_mag, memory=25, stepbins=3, maxbins=600, n_pc=3)
+    f.show()
+    if figures is None:
+        figures = [nplt.fig2BytesIO(f)]
+    else:
+        figures = figures.copy()
+        figures.append(nplt.fig2BytesIO(f))
+
+    return {'modelspec': modelspec, 'figures': figures}
+
+
+def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_pc=3, memory=20, 
+                      maxbins=1000, stepbins=3, IsReload=False, batching=True, **ctx):
 
     if IsReload and batching:
         return {}
@@ -633,9 +854,32 @@ def pop_space_summary(recname='est', modelspec=None, rec=None, figures=None, n_p
         return {'figures': [f, f2], 'modelspec': modelspec, 'pc_mag': pc_mag, 'pcs': pcs}
 
 
-def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, out_path="/tmp", 
-                out_base=None, fps=10, **kwargs):
-    #plt.close('all')
+def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=False, mult=False, threshold=0, out_path="/tmp", 
+                out_base=None, fps=10, zoom_factor = [2, 2], mode='images', dstrf_pred=None, **kwargs):
+    '''
+    Creates a dstrf movie. Either saves it to disk as .avi, previews the movie in a matplotlib window,
+    creates a figure and returns a function handle to load a specific frame, or makes a multipanel plot with requested frames.
+
+    To save to disk as .avi: use defaults (static=False, preview=False)
+    To preview the movie in a matplotlib window: preview=True
+    To create a figure and returns a function handle to load a specific frame: preview=2
+            Returns dstrf_frame, a fn that takes in integer input and loads that frame
+    To make a multipanel plot with requested frames: static=True
+
+    Arguments:
+    ----------
+    rec : recording object
+        recording object used to make the dstrf
+    preview : bool or int
+        if False and static=False, creates an avi
+        if True, plays movie in a matplotlib window
+        if 2, create a figure and returns a function handle to load a specific frame
+    mode : char in {'images','lines'}
+        images: makes strfs as images
+        lines: makes strfs as lines
+    zoom_factor : array-line, len 2
+        factor by which to upsample strf (frequency x time)
+    '''
 
     cellcount=len(out_channel)
     framecount=len(index_range)
@@ -645,91 +889,145 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
     index = index_range[i]
     memory = dstrf.shape[2]
 
-    stim=rec['stim'].as_continuous()-0.05
+    stim=rec['stim'].as_continuous() + 0.0  # -0.05
     stim[stim<0]=0
-    stim = np.exp(stim*2)-1
     
-    stim_lim = np.max(stim[:, index_range])*0.5
+    # compress
+    stim=stim ** 0.5
+    stim_lim = np.max(stim[:, index_range])
+    # alt: no compression, threshold max
+    #stim_lim = np.max(stim[:, index_range]) *0.5
 
-    s = stim[:, (index - memory*3):index]
-    print("stim_lim ", stim_lim)
+    s = stim[:, (index - memory+1):(index+1)]
+    #print("stim_lim ", stim_lim)
 
     im_list = []
     l1_list = []
     l2_list = []
+    l3_list = []
 
     if static:
         max_frames = np.min([10, framecount])
-        f, axs = plt.subplots(cellcount+1, max_frames, figsize=(16, 8))
+        f, axs = plt.subplots(cellcount+1, max_frames, figsize=(max_frames*1, (cellcount+1)*0.75))
         stim0col=0
     else:
         max_frames = framecount
         f, axs = plt.subplots(cellcount+1, 2, figsize=(4, 8))
+        if dstrf_pred is not None:
+            if mode == 'images':
+                raise RuntimeError('dstrf_pred for images not implemented (need to make more panels)')
+            elif mode == 'lines':
+                axs = np.hstack((axs,np.zeros((axs.shape[0],1))))
+                for cellidx in range(cellcount):
+                    axs[cellidx+1,2] = axs[cellidx+1,1].twinx()
+                dstrf_pred_sum = np.zeros((dstrf_pred.shape[1],dstrf_pred.shape[2]))
         stim0col=1
+        axs[0,0].remove()
     f.show()
 
-    im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', 
-                                           aspect='auto', cmap='Greys'))
+    if mode == 'images':
+        im_list.append(axs[0, stim0col].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower',
+                                               aspect='auto', cmap='Greys'))
+        axs[0, stim0col].set_yticks([])
+        axs[0, stim0col].set_xticks([])
+    elif mode == 'lines':
+        im_list.append(axs[0, stim0col].plot(s.T))
+        axs[0, stim0col].set_ylim([0, stim_lim])
+        axs[0, stim0col].legend(im_list[-1],('Ch1','Ch2'))
     axs[0, stim0col].set_ylabel('stim')
-    axs[0, stim0col].set_yticks([])
-    axs[0, stim0col].set_xticks([])
-    _title1 = axs[0, stim0col].set_title(f"dSTRF frame {index / fs:.3f}")
 
-    axs[0, 0].set_axis_off()
+    _title1 = axs[0, stim0col].set_title(f"dSTRF t={index / fs:.2f}")
+
+    #axs[0, 0].set_axis_off()
     for cellidx in range(cellcount):
         d = dstrf[i, :, :, cellidx].copy()
 
-        pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-        strf_lim = np.max(np.abs(dstrf[:, :, -1, cellidx])) * 2.0
+        pred_max = np.max(rec['pred'].as_continuous()[out_channel[cellidx], :])
+        pred_min = np.min(rec['pred'].as_continuous()[out_channel[cellidx], :])
+        pred_ptp = np.ptp(rec['pred'].as_continuous()[out_channel[cellidx], :])
+        strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) * 1.0
 
         if mult:
             strf_lim = strf_lim * stim_lim
             d = d * s
-        d=zoom(d,[2,2])
-        print(f"strf_lim[{cellidx}]: {strf_lim} shape: {d.shape}")
-        im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
+        d[np.abs(d)<threshold*strf_lim]=0
+        d = zoom(d, zoom_factor)
+        #print(f"strf_lim[{cellidx}]: {strf_lim} shape: {dstrf[:, :, :, cellidx].shape} reshape max: {np.abs(d).max()}")
+        if mode == 'images':
+            im_list.append(axs[cellidx+1,0].imshow(d, clim=[-strf_lim, strf_lim],
                                                interpolation='none', origin='lower',
                                                aspect='auto', cmap='bwr'))
-        axs[cellidx+1, 0].set_yticks([])
-        axs[cellidx+1, 0].set_xticks([])
+            axs[cellidx + 1, 0].set_yticks([])
+            axs[cellidx + 1, 0].set_xticks([])
+        elif mode == 'lines':
+            axs[cellidx + 1, 0].plot(np.zeros(d.shape[1]),color='grey')
+            im_list.append(axs[cellidx + 1, 0].plot(d.T))
+            axs[cellidx + 1, 0].set_ylim([-strf_lim, strf_lim])
+
         axs[cellidx+1, 0].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
-        ax_remove_box(axs[cellidx+1,0])
 
         if cellidx<cellcount-1:
             axs[cellidx+1, 1].set_xticklabels([])
 
         if not static:
-           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index], '-', color='purple')[0])
-           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*2):index], '-', color='gray')[0])
-           axs[cellidx+1, 1].set_ylim((0, pred_max))
-           axs[cellidx+1, 1].set_yticks([])
+           l1_list.append(axs[cellidx+1, 1].plot(rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index],
+                                                 '-', color='purple')[0])
+           #print(f"{index}: {rec['pred'].as_continuous()[out_channel[cellidx], index]}")
+           l2_list.append(axs[cellidx+1, 1].plot(rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*2):index],
+                                                 '-', color='gray')[0])
+           if dstrf_pred is not None:
+               if mode == 'lines':
+                   l3_list.append(axs[cellidx + 1, 2].plot(dstrf_pred[:,(index - memory * 2):index,cellidx].T,'--'))
+                   dstrf_pred_sum[:,cellidx] = dstrf_pred[:, :, cellidx].sum(axis=0)
+                   axs[cellidx+1, 2].set_ylim((np.nanmin(dstrf_pred_sum[:,cellidx]), np.nanmax(dstrf_pred_sum[:,cellidx])))
+           axs[cellidx+1, 1].set_ylim((pred_min, pred_max))
+           if mode == 'images': axs[cellidx+1, 1].set_yticks([])
 
     def dstrf_frame(i):
+        """
+        plot a frame for saving the animation
+        :param i:
+        :return:
+        """
         index = index_range[i]
-        s = stim[:, (index - memory*2):index]
-        im_list[0].set_data(s)
-
+        s = stim[:, (index - memory+1):(index+1)]
+        if mode == 'images':
+            im_list[0].set_data(s)
+        elif mode == 'lines':
+            for j, line_handle in enumerate(im_list[0]):
+                line_handle.set_ydata(s[j,:])
         for cellidx in range(cellcount):
             if mult:
                 d = dstrf[i, :, :, cellidx] * s
             else:
                 d = dstrf[i, :, :, cellidx]
-            d=zoom(d,[2,2])
-            im_list[cellidx+1].set_data(d)
-
+            d[np.abs(d)<threshold*strf_lim]=0
+            d=zoom(d, zoom_factor)
+            if mode == 'images':
+                im_list[cellidx+1].set_data(d)
+            elif mode == 'lines':
+                for j, line_handle in enumerate(im_list[cellidx+1]):
+                    line_handle.set_ydata(d[j,:])
             _t = np.arange(memory*2)
-            _r = rec['resp'].as_continuous()[cellidx, (index - memory*2-1):(index+1)]
+            _r = rec['resp'].as_continuous()[out_channel[cellidx], (index - memory*zoom_factor[1]-1):(index+1)]
             smooth_window=0.75
             #import pdb; pdb.set_trace()
             _r = gaussian_filter1d(_r, smooth_window, axis=0)[1:-1]
 
-            #print(f"{index}: {_t.shape} {_r.shape}")
-            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[cellidx, (index - memory*2):index]))
+            #print(f"{index}: {_t.shape} {_r.shape} {rec['pred'].as_continuous()[out_channel[cellidx], index]}")
+            l1_list[cellidx].set_data((_t, rec['pred'].as_continuous()[out_channel[cellidx], (index - memory*2):index]))
             l2_list[cellidx].set_data((_t, _r))
+        if dstrf_pred is not None:
+            if mode == 'lines':
+                for j, line_handle in enumerate(l3_list[0]):
+                    line_handle.set_ydata(dstrf_pred[j, (index - memory * 2):index, cellidx].T)
 
-        _title1.set_text(f"dSTRF frame {index/fs:.3f}")
+        _title1.set_text(f"dSTRF t={index/fs:.2f}")
 
-        return tuple(im_list + l1_list + l2_list + [_title1])
+        if mode == 'images':
+            return tuple(im_list + l1_list + l2_list + [_title1])
+        elif mode == 'lines':
+            return tuple([j for i in im_list for j in i] + l1_list + l2_list + [_title1])
 
     if static:
         #stim = np.sqrt(np.sqrt(rec['stim'].as_continuous()))
@@ -739,27 +1037,35 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         for i in range(1, max_frames):
            index = index_range[i]
 
-           s = stim[:, (index - memory):index]
-           axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
-           axs[0, i].set_title(f"dSTRF frame {index}")
+           s = stim[:, (index - memory+2):(index+2)]
+           if mode == 'images':
+               axs[0, i].imshow(s, clim=[0, stim_lim], interpolation='none', origin='lower', aspect='auto', cmap='Greys')
+           elif mode == 'lines':
+               axs[0, i].plot(s.T)
+           axs[0, i].set_title(f"dSTRF t={index/fs:.2f}")
            axs[0, i].set_yticks([])
            axs[0, i].set_xticks([])
 
            for cellidx in range(cellcount):
                d = dstrf[i, :, :, cellidx].copy()
 
-               pred_max = np.max(rec['pred'].as_continuous()[cellidx, :])
-               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx])) / 2
+               pred_max = np.max(rec['pred'].as_continuous()[out_channel[cellidx], :])
+               strf_lim = np.max(np.abs(dstrf[:, :, :, cellidx]))  # /2
                if mult:
                    strf_lim = strf_lim * stim_lim
                    d = d * s
-               d=zoom(d,[2,2])
-               axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower', 
+               d[np.abs(d)<threshold*strf_lim]=0
+               d = zoom(d, zoom_factor)
+               if mode == 'images':
+                   axs[cellidx+1, i].imshow(d, clim=[-strf_lim, strf_lim], interpolation='none', origin='lower',
                                         aspect='auto', cmap='bwr')
+               elif mode == 'lines':
+                   axs[cellidx+1, i].plot(d.T)
                axs[cellidx+1, i].set_yticks([])
                axs[cellidx+1, i].set_xticks([])
                #axs[cellidx+1, i].set_ylabel(f"{cellids[cellidx]}", fontsize=6)
-               ax_remove_box(axs[cellidx+1, i])
+               #ax_remove_box(axs[cellidx+1, i])
+
         if out_base is None:
             if mult:
                 out_base = f'{cellid}_{index_range[0]}-{index_range[-1]}_masked.pdf'
@@ -770,6 +1076,8 @@ def dstrf_movie(rec, dstrf, out_channel, index_range, static=False, preview=Fals
         f.savefig(out_file)
 
     elif preview:
+        if preview==2:
+            return dstrf_frame
         for i in range(framecount):
             dstrf_frame(i)
             plt.pause(0.01)
@@ -994,4 +1302,111 @@ def db_pca():
             axs[i,c].imshow(_p,aspect='auto',origin='lower', clim=[-mm, mm])
             axs[i,c].set_title(f'pc {i}: {pc_mag[i,c]:.3f}')
 
+def simulate_pop(n=10, modelstring=None):
 
+    from nems_lbhb.baphy_experiment import BAPHYExperiment
+    from nems.initializers import from_keywords, rand_phi
+    from nems_lbhb.baphy_io import fill_default_options
+
+    parmfile = '/auto/data/daq/Amanita/AMT004/AMT004b13_p_NAT.m'
+
+    options = {'stimfmt': 'ozgf', 'rasterfs': 100,
+               'chancount': 18, 'resp': False, 'pupil': False, 'stim': True
+              }
+    options = fill_default_options(options)
+
+    e=BAPHYExperiment(parmfile=parmfile)
+    rec=e.get_recording(**options)
+    rec['stim']=rec['stim'].rasterize().normalize()
+
+    if modelstring is None:
+        #modelstring = "wc.18x3.g-fir.3x10-lvl.1-dexp.1"
+        #modelstring = "wc.18x3.g-fir.3x10-lvl.1"
+        #modelstring = "wc.18x3.g-stp.3.q.s-do.3x20-lvl.1"
+        modelstring = "wc.18x3.g-stp.3.q.s-do.3x20-lvl.1-dexp.1"
+        
+    modelspec = from_keywords(modelstring)
+    
+    modelspec = rand_phi(modelspec, rand_count=n)['modelspec']
+
+    preds = []
+    for fitidx in range(modelspec.fit_count):
+        modelspec.set_fit(fitidx)
+        if 'gaussian' in modelspec[0]['fn']:
+            modelspec.phi[0]['mean'] = np.random.rand(modelspec.phi[0]['mean'].shape[0])
+            modelspec.phi[0]['sd'] /= 3
+            print(fitidx, "wc.g", modelspec.phi[0])
+
+        if 'stp' in modelspec[1]['fn']:
+            tau = modelspec.phi[1]['tau']
+            tau[tau<0.001]=0.001
+            modelspec.phi[1]['tau'] = tau * 1
+            modelspec.phi[1]['u'] *= 1
+            print(fitidx, "stp", modelspec.phi[1])
+            
+        if 'relu' in modelspec[2]['fn']:
+            modelspec.phi[2]['offset'] -= 0.05
+            print(fitidx, "relu offset", modelspec.phi[2]['offset'].T)
+
+        rec_ = modelspec.evaluate(rec=rec)
+        rec_['pred'].chans = [f'SIM000a-{fitidx:02d}-1']
+        d = rec_['pred']._data.copy()
+        d -= d[:10].mean()
+        d += np.random.randn(d.shape[0],d.shape[1])*d.std()/2 + d.std()/2
+        d[d<0]=0
+        preds.append(rec_['pred']._modified_copy(data=d))
+        
+    resp = preds[0].concatenate_channels(preds)
+    resp.name='resp'
+
+    if True:
+        stim = rec['stim']
+        m=stim._data.mean(axis=1,keepdims=True)
+        s=stim._data.std(axis=1,keepdims=True)
+        print(f'Stim mean/std={m.mean()}/{s.mean()}')
+        noise = np.random.randn(stim.shape[0],stim.shape[1])*m + s
+        nstim = stim._modified_copy(data=stim._data + noise)
+        nstim.epochs = stim.epochs.copy()
+        for i,e in nstim.epochs.iterrows():
+            if e['name'].endswith('.wav'):
+                k = e['name']
+                nstim.epochs.loc[i,'name']=k + "_noise"
+                #nstim._data[k + "_noise"] = nstim._data[k]
+
+        stim = stim.concatenate_time((stim,nstim))
+        resp = resp.concatenate_time((resp,resp))
+        resp.epochs = stim.epochs.copy()
+
+        rec.signals['stim']=stim
+    
+    rec.add_signal(resp)
+    rec.name = 'SIM000a'
+
+    plt.figure(figsize=(12, 3))
+    plt.plot(resp.as_continuous()[:, :1500].T)
+    for i in range(resp.shape[0]):
+        plt.text(0,resp._data[i,0],f"{i}", ha='right')
+        
+    return {'rec': rec, 'modelspec': modelspec}
+
+def align_yaxis(ax1, v1, ax2, v2):
+    """adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+    _, y1 = ax1.transData.transform((0, v1))
+    _, y2 = ax2.transData.transform((0, v2))
+    adjust_yaxis(ax2, (y1 - y2) / 2, v2)
+    adjust_yaxis(ax1, (y2 - y1) / 2, v1)
+
+
+def adjust_yaxis(ax, ydif, v):
+    """shift axis ax by ydiff, maintaining point v at the same location"""
+    inv = ax.transData.inverted()
+    _, dy = inv.transform((0, 0)) - inv.transform((0, ydif))
+    miny, maxy = ax.get_ylim()
+    miny, maxy = miny - v, maxy - v
+    if -miny > maxy or (-miny == maxy and dy > 0):
+        nminy = miny
+        nmaxy = miny * (maxy + dy) / (miny + dy)
+    else:
+        nmaxy = maxy
+        nminy = maxy * (miny + dy) / (maxy + dy)
+    ax.set_ylim(nminy + v, nmaxy + v)

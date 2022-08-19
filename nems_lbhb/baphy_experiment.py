@@ -1,16 +1,19 @@
-import shutil
 from functools import lru_cache
 from pathlib import Path
 import logging
 import re
 import os
+import stat
 import os.path
 import pickle
+import pathlib as pl
+
+import numpy as np
 import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
-import numpy as np
+import pandas as pd
 import json
 import sys
 import tarfile
@@ -20,11 +23,13 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 
-from nems_lbhb import runclass
+from nems_lbhb import runclass, baphy_io
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
 import pandas as pd
 import matplotlib.pyplot as plt
+import nems.epoch as ep
+import nems.epoch as ep
 import nems.signal
 import nems.recording
 import nems.db as db
@@ -124,6 +129,8 @@ class BAPHYExperiment:
             self.siteid = cellid[:7]
             self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
             self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
+            self.channels_to_load = nops['channels']
+            self.units_to_load = nops['units']
             self.rawid = nops['rawid']
             # get list of corresponding parmfiles at this site for these rawids
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
@@ -131,14 +138,29 @@ class BAPHYExperiment:
             files.sort()
             self.parmfile = [Path(f).with_suffix('.m') for f in files]
 
-
         # db-free options for loading specific cellids / parmfiles
         # here, must assume cellid = cells_to_load = cells_to_extract 
         # (so, might end up caching an extra, redundant, recording,
         # but this is the 'safe' way to do it.)
-        elif type(parmfile) is list:
+        elif (type(parmfile) is list): # or (type(parmfile) is str):
+            if type(parmfile) is str:
+                parmfile=[parmfile]
             self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
+
+
+
             self.batch = None
+            if rawid is None:
+                stems = [pl.Path(p).stem + '.m' for p in parmfile]
+                log.info(stems)
+                stemstring = "'" + "','".join(stems) + "'"
+                rawdata = db.pd_query(f"SELECT * from gDataRaw where parmfile in ({stemstring})")
+                rawid = []
+                for s in stems:
+                    rawid.append(rawdata.loc[rawdata.parmfile==s,'id'].values[0])
+
+            self.rawid = rawid
+            
             if cellid is not None:
                 if type(cellid) is list:
                     self.cells_to_extract = cellid
@@ -158,28 +180,35 @@ class BAPHYExperiment:
             self.parmfile = [Path(parmfile).with_suffix('.m')]
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
-            if cellid is not None:
-                if type(cellid) is list:
-                    self.cells_to_extract = cellid
-                    self.cells_to_load = cellid
-                    self.siteid = cellid[0][:7]
-                elif type(cellid) is str:
-                    self.cells_to_extract = [cellid]
-                    self.cells_to_load = [cellid]
-                    self.siteid = cellid[:7]
-                else:
-                    raise TypeError
+            self.rawid = [rawid] # todo infer from parmfile instad of parsing
+            if cellid is None and rawid is not None:
+                # finds all cellids in DB for this recording
+                cellid = db.get_cellids(rawid).tolist()
+
+            if type(cellid) is str:
+                cellid = [cellid]
+            elif type(cellid) is list:
+                pass
             else:
-                self.sited = os.path.split(parmfile)[-1][:7]
-                self.cells_to_load = None
-                self.cells_to_extract = None
+                raise ValueError(f"cellid must be a str or list of str but is {type(cellid)}")
+
+            self.cells_to_extract = cellid
+            self.cells_to_load = cellid
+            self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
+            self.units_to_load = [int(c.split("-")[2]) for c in cellid]
+            self.siteid = cellid[0].split('-')[0]
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
+        if len(self.parmfile)==0:
+            raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
-        # we can assume all parmfiles come from same folder/experiment (site)
+        # we cannot assume all parmfiles come from same folder/experiment (site+number)
         self.folder = self.parmfile[0].parent
-        self.experiment = self.parmfile[0].name.split('_', 1)[0]
+        self.experiment = [p.name.split('_', 1)[0] for p in self.parmfile]
+
+        # hard coded -- copy raw tgz files locally to load OE data
+        self.local_copy_raw = True
 
         # full file name will be unique though, so this is a list
         self.experiment_with_runclass = [Path(p.stem) for p in self.parmfile]
@@ -195,19 +224,34 @@ class BAPHYExperiment:
             self.batch = os.path.sep.join([self.animal, self.siteid])
         else:
             pass
-    
+
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+
+        if use_API:
+            newparmfile=[]
+            for p in self.parmfile:
+                prefix = 'http://' + get_setting('NEMS_BAPHY_API_HOST') + ":" + str(get_setting('NEMS_BAPHY_API_PORT')) + '/daq'
+                baphy_data_root = '/auto/data/daq'
+                newparmfile.append(str(p).replace(baphy_data_root, prefix))
+            log.info(f"Using remote parmfiles: {newparmfile}")
+            self.parmfile_WEB_API=newparmfile
+        else:
+            self.parmfile_WEB_API = None
+
+
     @property
     @lru_cache(maxsize=128)
     def openephys_folder(self):
-        path = self.folder / 'raw' / self.experiment
-        # cludge, since self.experiment takes the first listed experiment, here runclass does the same
-        # todo: make compatible with list of runs?
-        candidates = list(path.glob(f'{self.experiment_with_runclass[0]}*'))
-        if len(candidates) > 1:
-            raise ValueError('More than one candidate found')
-        if len(candidates) == 0:
-            raise ValueError('No candidates found')
-        return candidates[0]
+        folders = []
+        for e,er in zip(self.experiment, self.experiment_with_runclass):
+            path = self.folder / 'raw' / e
+            candidates = list(path.glob(er.as_posix() + '*'))
+            if len(candidates) > 1:
+                raise ValueError('More than one candidate found')
+            if len(candidates) == 0:
+                raise ValueError('No candidates found')
+            folders += candidates
+        return folders
 
     @property
     @lru_cache(maxsize=128)
@@ -215,8 +259,8 @@ class BAPHYExperiment:
         '''
         Return path to OpenEphys tarfile containing recordings
         '''
-        path = self.folder / 'raw' / self.experiment
-        return path.with_suffix('.tgz')
+        path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
+        return path
 
     @property
     @lru_cache(maxsize=128)
@@ -230,8 +274,9 @@ class BAPHYExperiment:
             with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
                 fh.open(filename)
         '''
-        parent = self.openephys_tarfile.parent
-        return self.openephys_folder.relative_to(parent)
+        return [f.relative_to(t.parent) for f,t in zip(self.openephys_folder, self.openephys_tarfile)]
+        #parent = self.openephys_tarfile.parent
+        #return self.openephys_folder.relative_to(parent)
 
     @property
     @lru_cache(maxsize=128)
@@ -243,10 +288,34 @@ class BAPHYExperiment:
     def spikefile(self):
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix('.spk.mat').exists() for f in filenames]):
-            raise IOError("Spike file doesn't exist") 
+            raise IOError("Spike file doesn't exist")
         else:
             return [f.with_suffix('.spk.mat') for f in filenames]
-    
+
+    @property
+    @lru_cache(maxsize=128)
+    def dlcfile(self):
+        suffix = '.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
+        # standardize output--alias to most recent run?
+        suffix = '.lick.dlc.h5'
+        log.info(f"DLC file suffix: {suffix}")
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
+            raise IOError("DLC file doesn't exist")
+        else:
+            return [f.with_suffix(suffix) for f in filenames]
+
+    @property
+    @lru_cache(maxsize=128)
+    def facepcafile(self):
+        suffix = '.facePCs.h5'
+        log.info(f"Face PCA file suffix: {suffix}")
+        filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
+        if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
+            raise IOError("Face PCA file doesn't exist")
+        else:
+            return [f.with_suffix(suffix) for f in filenames]
+
     @property
     @lru_cache(maxsize=128)
     def behavior(self):
@@ -270,24 +339,32 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def get_trial_starts(self, method='openephys'):
         if method == 'openephys':
-            return io.load_trial_starts_openephys(self.openephys_folder)
+            return [io.load_trial_starts_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
         raise ValueError(f'Method "{method}" not supported')
 
     @lru_cache(maxsize=128)
-    def get_baphy_events(self, correction_method='openephys', **kw):
+    def get_raw_sampling_rate(self, method='openephys'):
+        if method == 'openephys':
+            return [io.load_sampling_rate_openephys(openephys_folder) for openephys_folder in self.openephys_folder]
+        raise ValueError(f'Method "{method}" not supported')
+
+    @lru_cache(maxsize=128)
+    def get_baphy_events(self, correction_method='openephys', rasterfs=None, **kw):
         baphy_events = self.get_baphy_exptevents()
     
         if correction_method is None:
             return baphy_events
-        if correction_method == 'baphy':
+        elif correction_method == 'baphy':
             return [io.baphy_align_time_baphyparm(ev) for ev in baphy_events]
-        if correction_method == 'openephys':
+        elif correction_method == 'openephys':
             trial_starts = self.get_trial_starts('openephys')
-            return io.baphy_align_time_openephys(baphy_events, trial_starts, **kw)
-        if correction_method == 'spikes':
-            spikes_fs = self._get_spikes()
-            exptevents = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[0] for (ev, (sp, fs)) 
-                                in zip(baphy_events, spikes_fs)]
+            raw_rasterfs = self.get_raw_sampling_rate('openephys')
+            return [io.baphy_align_time_openephys(ev, ts, rfs, rasterfs) 
+                    for ev, ts, rfs in zip(baphy_events,trial_starts, raw_rasterfs)]
+        elif correction_method == 'spikes':
+            spikedata = self._get_spikes()
+            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], rasterfs)[0] for (ev, spd)
+                                in zip(baphy_events, spikedata)]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
@@ -350,14 +427,17 @@ class BAPHYExperiment:
         globalparams = [ep[0] for ep in self._get_baphy_parameters(userdef_convert=False)]
         return globalparams
 
-    def get_recording_uri(self, generate_if_missing=True, cellid=None, recache=False, **kwargs):
+    def get_recording_uri(self, generate_if_missing=True, cellid=None, loadkey=None, recache=False, **kwargs):
         '''
         This is where the kwargs contents are critical (for generating the correct 
         recording file hash)
 
         TODO: loadkey parsing?
         '''
-        kwargs = io.fill_default_options(kwargs)
+        if loadkey is not None:
+            kwargs = baphy_io.parse_loadkey(loadkey=loadkey, batch=self.batch)
+        else:
+            kwargs = io.fill_default_options(kwargs)
 
         # add BAPHYExperiment version to recording options
         # kwargs.update({'version': 'BAPHYExperiment.2'})
@@ -373,7 +453,7 @@ class BAPHYExperiment:
 
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
-                self.experiment[:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+                self.experiment[0][:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
 
         use_API = get_setting('USE_NEMS_BAPHY_API')
 
@@ -397,7 +477,7 @@ class BAPHYExperiment:
 
 
     @lru_cache(maxsize=128)
-    def get_recording(self, recache=False, generate_if_missing=True, **kwargs):
+    def get_recording(self, recache=False, generate_if_missing=True, loadkey=None, **kwargs):
         '''
         Steps to building a recording:
             1) Figure out which signals to load
@@ -408,10 +488,12 @@ class BAPHYExperiment:
                 append time for each parmfile
             3) Package all signals into recording
         '''
+        if loadkey is not None:
+            kwargs = baphy_io.parse_loadkey(loadkey=loadkey, batch=self.batch)
+
         # see if can load from cache, if not, call generate_recording
         data_file = self.get_recording_uri(generate_if_missing=False, recache=recache, **kwargs)
-        
-        # take care of the recache inside get_recording_uri 
+        # take care of the recache inside get_recording_uri
         # do we even need this if/else block here??? crh 01.22.2021
         if (not os.path.exists(data_file)): # | recache:
             kwargs.update({'mfiles': None})
@@ -426,15 +508,25 @@ class BAPHYExperiment:
 
         return rec
 
-    def generate_recording(self, **kwargs):
-        rec_name = self.experiment[:7]      
+    def generate_recording(self, rawchans=None, **kwargs):
+        rec_name = self.experiment[0][:7]     
+        
+        kwargs=baphy_io.fill_default_options(kwargs)
         
         # figure out signals to load, then load them (as lists)
+        raw = kwargs.get('raw', False)
         resp = kwargs.get('resp', False)
         pupil = kwargs.get('pupil', False)
+        dlc = kwargs.get('dlc', False)
+        facepca = kwargs.get('facepca', False)
         stim = kwargs.get('stim', False)
-        volt = kwargs.get('volt', False)
-
+        
+        # default sampling rates depend on what signals are loaded
+        if raw:
+            kwargs['rasterfs'] = kwargs.get('rasterfs', 400)
+        else:
+            kwargs['rasterfs'] = kwargs.get('rasterfs', 100)
+            
         # stim, lfp, photometry etc.
 
         # get correction method
@@ -442,9 +534,11 @@ class BAPHYExperiment:
 
         # get raw exptevents
         raw_exptevents = self.get_baphy_exptevents()
-        
+
         # load aligned baphy events
-        if self.behavior:
+        if raw:
+            exptevents = self.get_baphy_events(correction_method='openephys', **kwargs)
+        elif self.behavior:
             exptevents = self.get_behavior_events(correction_method=correction_method, **kwargs)
         else:
             exptevents = self.get_baphy_events(correction_method=correction_method, **kwargs)
@@ -452,7 +546,41 @@ class BAPHYExperiment:
         # trim epoch names, remove behavior columns labels etc.
         exptparams = self.get_baphy_exptparams()
         globalparams = self.get_baphy_globalparams()
-        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, **kwargs) for i, (bev, parm, gparm) in enumerate(zip(exptevents, exptparams, globalparams))]
+    
+        # get good/bad trials, if database
+        goodtrials = [None] * len(self.parmfile)
+        
+        # slightly convoluted steps to prevent warning
+        try:
+            batch=int(self.batch)
+        except:
+            batch=0
+        if batch>0:
+            d = db.get_batch_cell_data(batch=self.batch, cellid=self.siteid, label='parm',
+                                       rawid=self.rawid)
+        else:
+            d=[]
+        if len(d) > 0:
+            for i, parm in enumerate(self.parmfile):
+                trialcount = exptevents[i][exptevents[i]['name'].str.startswith('TRIALSTART')].shape[0]
+
+                s_goodtrials = d.loc[d['parm'].str.strip('.m')==str(parm).strip('.m'), 'goodtrials'].values[0]
+                if (s_goodtrials is not None) and (len(s_goodtrials)>0):
+                    log.info("goodtrials not empty: %s", s_goodtrials)
+                    s_goodtrials = re.sub("[\[\]]", "", s_goodtrials)
+                    g = re.split('" "|,',s_goodtrials)  #Split by space or by comma
+                    _goodtrials = np.zeros(trialcount, dtype=bool)
+
+                    for b in g:
+                        b1 = b.split(":")
+                        if (len(b1) == 1) or (len(b1[1])==0):
+                            # single trial in list, simulate colon syntax
+                            b1[1] = str(trialcount+1)
+                        _goodtrials[(int(b1[0])-1):int(b1[1])] = True
+
+                    goodtrials[i] = list(_goodtrials)
+        
+        baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, goodtrials=gtrials, **kwargs) for i, (bev, parm, gparm, gtrials) in enumerate(zip(exptevents, exptparams, globalparams, goodtrials))]
 
         # add speciality parsing of baphy_events for each parmfile. For example, tweaking epoch names etc. 
         for i, (bev, param) in enumerate(zip(baphy_events, exptparams)):
@@ -465,13 +593,44 @@ class BAPHYExperiment:
             if param['runclass']=='CPN':
                 #ToDo: format epochs for clarity and define if AllPermutations or Triplets
                 baphy_events[i], exptparams[i] = runclass.CPN(bev, param)
-        
-    
+
+        def check_length(ps, rs):
+            for i, (p, r) in enumerate(zip(ps, rs)):
+                rlen = r.ntimes
+                plen = p.as_continuous().shape[1]
+                if plen > rlen:
+                    ps[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
+                elif rlen > plen:
+                    pcount = p.as_continuous().shape[0]
+                    ps[i] = p._modified_copy(np.append(p.as_continuous(),
+                                                       np.ones([pcount, rlen - plen]) * np.nan, axis=1))
+            return ps
+
         signals = {}
+        
+        if raw:
+            if rawchans is None:
+                rawchans = np.arange(globalparams[0]['NumberOfElectrodes'])
+            fs = kwargs['rasterfs']
+            d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs)
+            #import pdb;pdb.set_trace()
+            for i in range(len(baphy_events)):
+                #s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
+                #e = np.round(baphy_events[i].loc[:,'end'] * float(fs)) - np.round(t0[i]/fs)
+                #diff = np.round((baphy_events[i].loc[:,'end'] - baphy_events[i].loc[:,'start']) * float(fs))
+                
+                baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
+                baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
+                
+            raw_sigs = [nems.signal.RasterizedSignal(
+                        fs=kwargs['rasterfs'], data=r,
+                        name='raw', recording=rec_name, chans=[str(c+1) for c in rawchans],
+                        epochs=e)
+                        for e, r in zip(baphy_events, d)]
+            signals['raw'] = nems.signal.RasterizedSignal.concatenate_time(raw_sigs)
+            
         if resp:
             spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)
-            spike_dicts = [dict(zip([self.siteid + "-" + x for x in d.keys()], d.values())) for
-                                    d in spike_dicts]
             resp_sigs = [nems.signal.PointProcess(
                          fs=kwargs['rasterfs'], data=sp,
                          name='resp', recording=rec_name, chans=list(sp.keys()),
@@ -485,7 +644,6 @@ class BAPHYExperiment:
                     signals['resp'] = signals['resp'].append_time(r)
             
         if pupil:
-
             def check_length(ps, rs):
                 for i, (p, r) in enumerate(zip(ps, rs)):
                     rlen = r.ntimes
@@ -497,9 +655,9 @@ class BAPHYExperiment:
                         ps[i] = p._modified_copy(np.append(p.as_continuous(), 
                                                 np.ones([pcount, rlen - plen]) * np.nan, axis=1))
                 return ps
-            
+
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
-            if type(p_traces[0][0]) is not np.ndarray:
+            if np.all([type(p_traces[i][0]) is not np.ndarray for i in range(len(p_traces))]):
                 # multiple 'pupil signals'
                 # one always has to be the pupil trace itself
                 pupil_sigs = [nems.signal.RasterizedSignal(
@@ -524,8 +682,13 @@ class BAPHYExperiment:
                 signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
 
             else:
+                # at least one of the pupil files doesn't have "extras". Just load pupil
                 pupil_sigs = [nems.signal.RasterizedSignal(
                             fs=kwargs['rasterfs'], data=p[0],
+                            name='pupil', recording=rec_name, chans=['pupil'],
+                            epochs=baphy_events[i]) if type(p[0]) is np.ndarray else 
+                            nems.signal.RasterizedSignal(
+                            fs=kwargs['rasterfs'], data=p[0]['pupil'],
                             name='pupil', recording=rec_name, chans=['pupil'],
                             epochs=baphy_events[i])
                             for (i, p) in enumerate(p_traces)]
@@ -534,6 +697,40 @@ class BAPHYExperiment:
                     pupil_sigs = check_length(pupil_sigs, resp_sigs)
 
                 signals['pupil'] = nems.signal.RasterizedSignal.concatenate_time(pupil_sigs)
+
+        if dlc:
+            d_traces = self.get_dlc_trace(exptevents=exptevents, **kwargs)
+
+            # multiple dlc signals
+            sigs = list(d_traces[0][0].keys())
+            dlc_sigs = [nems.signal.RasterizedSignal(
+                fs=kwargs['rasterfs'], data=np.concatenate([d[0][sig] for sig in sigs], axis=0),
+                name='dlc', recording=rec_name, chans=sigs,
+                epochs=baphy_events[i])
+                for (i, d) in enumerate(d_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                dlc_sigs = check_length(dlc_sigs, resp_sigs)
+
+            signals['dlc'] = nems.signal.RasterizedSignal.concatenate_time(dlc_sigs)
+
+        if facepca:
+            f_traces = self.get_facepca_trace(exptevents=exptevents, **kwargs)
+
+            # multiple facepca signals
+            sigs = [f"PC{i}" for i in range(f_traces[0][0].shape[0])]
+            facepca_sigs = [nems.signal.RasterizedSignal(
+                fs=kwargs['rasterfs'], data=d[0],
+                name='facepca', recording=rec_name, chans=sigs,
+                epochs=baphy_events[i])
+                for (i, d) in enumerate(f_traces)]
+
+            # make sure each pupil signal is the same len as resp, if resp exists
+            if resp:
+                facepca_sigs = check_length(facepca_sigs, resp_sigs)
+
+            signals['facepca'] = nems.signal.RasterizedSignal.concatenate_time(facepca_sigs)
 
         if stim:
             #import pdb; pdb.set_trace()
@@ -544,51 +741,6 @@ class BAPHYExperiment:
                         for i, p in enumerate(self.parmfile)]
 
             signals['stim'] = nems.signal.TiledSignal.concatenate_time(stim_sigs)
-
-        if volt:
-
-
-            # passes all channels for loading, TODO should pass a list of good channesl?
-            chans = np.s_[:]
-            raw_voltage, continuous_meta = self.get_continuous_data(chans, **kwargs)
-            raw_voltage  = raw_voltage - np.mean(raw_voltage, axis=0)
-
-            continuous_ts = continuous_meta[0]['timestamps']
-
-            events_meta = oe.load(str(self.openephys_folder / 'all_channels.events'))
-            fs = int(events_meta['header']['sampleRate'])
-            events_ts = events_meta['timestamps']
-
-            # crops the raw voltage to align with already created epochs
-            # Uses the first trial openephys timestamp to define the start of the relevant raw voltage
-            # Used the duration of the baphy_ epochs to coherce the sumber of samples of raw voltage
-
-            on_mask = np.logical_and(events_meta['eventType'] == 3,
-                                     events_meta['eventId'] == 1)  # eventType == 3 : TTL, AKA trial Onset
-            first_trial_start_smp = int(events_ts[on_mask][0] - continuous_ts[0])
-            exp_dur_smp = int(baphy_events[0].iloc[0,2] * fs)
-
-            aligned = raw_voltage[:, first_trial_start_smp:first_trial_start_smp+exp_dur_smp]
-
-            # # plots signal plus onseof offsets
-            # off_mask = np.logical_and(events_meta['eventType'] == 3, events_meta['eventId'] == 0)
-            # fig, ax = plt.subplots()
-            # ax.plot(raw_voltage[30,:1000000])
-            # onsets = (events_ts[on_mask] -  continuous_ts[0]).astype(int)
-            # offsets = (events_ts[off_mask] -  continuous_ts[0]).astype(int)
-            # for on in onsets:
-            #     if on >=1000000:
-            #         break
-            #     ax.axvline(on, color='green')
-            #
-            # for off in offsets:
-            #     if off >=1000000:
-            #         break
-            #     ax.axvline(off, color='red')
-
-            signals['volt'] = nems.signal.RasterizedSignal(data=aligned, fs=fs, name='volt',
-                                                           epochs=baphy_events[i], recording=rec_name)
-            pass
 
         if len(signals)==0:
             # make a dummy signal
@@ -609,12 +761,11 @@ class BAPHYExperiment:
 
     # ==================== DATA EXTRACTION METHODS =====================
 
-    def get_continuous_data(self, chans, **kwargs):
+    def get_continuous_data(self, chans, rasterfs=None):
         '''
         WARNING: This is a beta method. The interface and return value may
         change.
         chans (list or numpy slice): which electrodes to load data from
-        currently can deal only with a single run file
         '''
         # get filenames (TODO: can this be sped up?)
         #with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
@@ -622,118 +773,134 @@ class BAPHYExperiment:
         #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
         #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
 
-        # Use xml settings instead of the tar file. Much faster. Also, takes care
-        # of channel mapping (I think)
-        recChans, _ = oes.GetRecChs(str(self.openephys_folder / 'settings.xml'))
-        connector = [i for i in recChans.keys()][0]
-        #import pdb; pdb.set_trace()
-        # handle channel remapping
-        info = oes.XML2Dict(str(self.openephys_folder / 'settings.xml'))
-        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
-        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
-        for k in mapping_keys:
-            ch_num = mapping[k].get('Number')
-            if ch_num in recChans[connector]:
-                recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
+        continuous_data_list = []
+        timestamp0_list = []
+        
+        # iterate through each openephys_folder
+        for openephys_folder,tarfile_fullpath,tarfile_relpath in \
+               zip(self.openephys_folder,self.openephys_tarfile,self.openephys_tarfile_relpath):
+            # Use xml settings instead of the tar file. Much faster. Also, takes care
+            # of channel mapping (I think)
+            recChans, _ = oes.GetRecChs(str(openephys_folder / 'settings.xml'))
+            connector = [i for i in recChans.keys()][0]
+            #import pdb; pdb.set_trace()
+            # handle channel remapping
+            info = oes.XML2Dict(str(openephys_folder / 'settings.xml'))
+            mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+            mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+            for k in mapping_keys:
+                ch_num = mapping[k].get('Number')
+                if ch_num in recChans[connector]:
+                    recChans[connector][ch_num]['name_mapped'] = 'CH'+mapping[k].get('Mapping')
 
-        recChans = [recChans[connector][i]['name_mapped'] \
-                            for i in recChans[connector].keys()]
-        data_files = [connector + '_' + c + '.continuous' for c in recChans]
-        all_chans = np.arange(len(data_files))
-        idx = all_chans[chans].tolist()
-        selected_data = np.take(data_files, idx)
-        continuous_data = []
-        continuous_meta = []
-        for filename in selected_data:
-            remote_full_filename = self.openephys_folder / filename
-            local_full_filename = Path('/tmp/evpread') / Path(*self.openephys_folder.parts[4:]) / filename
-            if os.path.isfile(remote_full_filename):
-                log.info('%s already extracted, load faster...', filename)
-                data = io.load_continuous_openephys(str(remote_full_filename))
-                time_series = data.pop('data')
-                continuous_data.append(time_series[np.newaxis, :])
-                continuous_meta.append(data)
+            recChans = [recChans[connector][i]['name_mapped'] \
+                                for i in recChans[connector].keys()]
+            data_files = [connector + '_' + c + '.continuous' for c in recChans]
+            all_chans = np.arange(len(data_files))
+            idx = all_chans[chans].tolist()
+            selected_data = np.take(data_files, idx)
+            continuous_data = []
+            timestamp0 = []
 
-            # old approach, slow
-            # else:
-            #     with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
-            #         log.info("Extracting / loading %s...", filename)
-            #         full_filename = self.openephys_tarfile_relpath / filename
-            #         with tar_fh.extractfile(str(full_filename)) as fh:
-            #             data = io.load_continuous_openephys(fh)
-            #             continuous_data.append(data['data'][np.newaxis, :])
+            if self.local_copy_raw:
+                filename = selected_data[-1]
+                full_filename = openephys_folder / filename
+                if ~os.path.isfile(full_filename):
+                    # file doesn't exist (still zipped?) unzip to a local folder
+                    tmppath = Path('/tmp/evpread/')
+                    newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
 
-            else:
-                self.make_raw_copy()
-                data = io.load_continuous_openephys(str(local_full_filename))
-                time_series = data.pop('data')
-                continuous_data.append(time_series[np.newaxis, :])
-                continuous_meta.append(data)
+                    test_filename = newpath / filename
+                    if os.path.isfile(test_filename):
+                        log.info(f"Local un-tar-ed copy exists in: {newpath}")
+                    else:
 
-        continuous_data = np.concatenate(continuous_data, axis=0)
+                        log.info(f"Temp untaring raw data to {newpath}")
+                        os.makedirs(tmppath, exist_ok=True)
 
-        return continuous_data, continuous_meta
+                        # open file
+                        file = tarfile.open(tarfile_fullpath)
+                        # extracting file
+                        file.extractall(tmppath, numeric_owner=True)
+                        file.close()
+                        os.chmod(tmppath / tarfile_fullpath.stem, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                        os.chmod(newpath, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
+                    # point to the local folder
+                    openephys_folder = newpath
 
-    def make_raw_copy(self):
-        '''
-        Makes a local copy of the compressed raw open ephys data and uncompress locally for a speed gain
-        :return:
-        '''
+            for filename in selected_data:
+                full_filename = openephys_folder / filename
+                if os.path.isfile(full_filename):
+                    log.info('%s already extracted, load faster...', filename)
+                    data = io.load_continuous_openephys(str(full_filename))
+                    if rasterfs is None:
+                        continuous_data.append(data['data'][np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0])
+                    else:
+                        resample_new_size = int(np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
+                        d = scipy.signal.resample(data['data'], resample_new_size)
+                        continuous_data.append(d[np.newaxis, :])
+                        timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+                else:
+                    with tarfile.open(tarfile_fullpath, 'r:gz') as tar_fh:
+                        log.info("Extracting / loading %s...", filename)
+                        full_filename = tarfile_relpath / filename
+                        with tar_fh.extractfile(str(full_filename)) as fh:
+                            data = io.load_continuous_openephys(fh)
+                            if rasterfs is None:
+                                continuous_data.append(data['data'][np.newaxis, :])
+                                timestamp0.append(data['timestamps'][0])
+                            else:
+                                resample_new_size = int(np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
+                                d = scipy.signal.resample(data['data'], resample_new_size)
+                                continuous_data.append(d[np.newaxis, :])
+                                timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
 
-        self.local_OEP_folder = Path('/tmp/evpread') / Path(*self.openephys_folder.parts[4:])
+            continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+            timestamp0_list.append(timestamp0[0])
 
-        if  not self.local_OEP_folder.exists():
-
-            local_OEP_tarfile = Path('/tmp/evpread') / Path(*self.openephys_tarfile.parts[4:]).with_suffix('.tar')
-
-            log.info(f"making local copy and untarrig: {self.openephys_tarfile} to {self.local_OEP_folder}")
-
-            if  not local_OEP_tarfile.parent.exists():
-                local_OEP_tarfile.parent.mkdir(parents=True)
-
-            # copy over
-            cmd = f'gzip -dc {self.openephys_tarfile} > {local_OEP_tarfile}'
-            os.system(cmd)
-
-            # Uncompress
-            cmd = f'tar xf {local_OEP_tarfile} -C {local_OEP_tarfile.parent}'
-            os.system(cmd)
-
-            # set permissions, chmod codes are arcane
-            untarredfolder = local_OEP_tarfile.with_suffix('')
-            untarredfolder.chmod(17389) # set permissions to drwxr-xr-t
-            for subfolder in untarredfolder.glob('*'):
-                subfolder.chmod(16877)  # set permissions to drwxr-xr-x
-
-            local_OEP_tarfile.unlink()
-        else:
-            return
-
+        return continuous_data_list, timestamp0_list
+    
 
     def get_spike_data(self, exptevents, **kw):
         #for i, f in enumerate(self.parmfile):
         #    fn = str(f).split('/')[-1]
         #    exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
-        spikes_fs = self._get_spikes()
+        spikedata = self._get_spikes()
         if self.correction_method == 'spikes':
-            spikedicts = [io.baphy_align_time(ev, sp, fs, kw['rasterfs'])[1:3] for (ev, (sp, fs)) 
-                                    in zip(exptevents, spikes_fs)]
-            spike_dict = []
-            for sd in spikedicts:
-                units = sd[1]
+            spikedicts = []
+            for file_ind in range(len(exptevents)):
+                # (ev, (sp, fs)) in zip(exptevents, spikes_fs):
+                spikedict = {}
+                spiketimes = []
+                unit_names = []
+                _, spiketimes, unit_names = io.baphy_align_time(exptevents[file_ind], spikedata[file_ind]['sortinfo'],
+                                                                  spikedata[file_ind]['spikefs'], kw['rasterfs'])
+
                 if self.cells_to_load is not None:
-                    # only keep units included in self.cells_to_load
-                    units = [u for u in sd[1] if '-'.join([self.siteid, u]) in self.cells_to_load]
-                spiketimes = sd[0]
-                d = {}
-                for i, unit in enumerate(units):
-                    d[unit] = spiketimes[i]
-                spike_dict.append(d)
+                    for i in range(len(self.cells_to_load)):
+                        if self.channels_to_load is not None:
+                            # Use channel_to_load and units_to_load
+                            chan_unit_str = '{:02d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                        else:
+                            # Use cells_to_load, strip out siteid
+                            chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]
+                        try:
+                            mi = unit_names.index(chan_unit_str)
+                        except ValueError:
+                            #import pdb; pdb.set_trace()
+                            raise RuntimeError(
+                                f'{chan_unit_str} was asked to be loaded, but wasn''t found in the spk.mat file')
+                        spikedict[self.cells_to_load[i]] = spiketimes[mi]
+                else:
+                    for i, unit_name in enumerate(unit_names):
+                        spikedict[self.siteid + "-" + unit_name] = spiketimes[i]
+                spikedicts.append(spikedict)
         else:
             raise NotImplementedError
+        return spikedicts
 
-        return spike_dict
 
     def get_pupil_trace(self, exptevents=None, **kwargs):
         if exptevents is not None:
@@ -741,7 +908,19 @@ class BAPHYExperiment:
         else:
             return [io.load_pupil_trace(str(p), **kwargs) for p in self.pupilfile]
 
-    # ===================================================================
+    def get_dlc_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [io.load_dlc_trace(str(p), exptevents=e, **kwargs) for e, p in zip(exptevents, self.dlcfile)]
+        else:
+            return [io.load_dlc_trace(str(p), **kwargs) for p in self.dlcfile]
+
+    def get_facepca_trace(self, exptevents=None, **kwargs):
+        if exptevents is not None:
+            return [io.load_facepca_trace(str(p), exptevents=e, pc_count=kwargs['facepca'], **kwargs) for e, p in zip(exptevents, self.facepcafile)]
+        else:
+            return [io.load_facepca_trace(str(p), pc_count=kwargs['facepca'], **kwargs) for p in self.facepcafile]
+
+     # ===================================================================
 
     # ==================== BEHAVIOR METRIC METHODS ======================
     def get_behavior_performance(self, trials=None, tokens=None, **kwargs):
@@ -808,6 +987,8 @@ class BAPHYExperiment:
                 ev['end'] += epochs[-1]['end'].max()
                 ev['start'] += epochs[-1]['end'].max()
                 ev['Trial'] += epochs[-1]['Trial'].max()
+                if "soundTrialidx" not in epochs[-1].columns:
+                    raise ValueError("Can only be run on active exptevents / parmfiles, I think? crh 13.03.2022")
                 ev.loc[ev.soundTrialidx!=0, 'soundTrialidx'] += epochs[-1]['soundTrialidx'].max()
                 epochs.append(ev)
         return pd.concat(epochs, ignore_index=True)
@@ -879,8 +1060,15 @@ class BAPHYExperiment:
             BAPHY parms data and convert them to dictionaries. See
             :func:`baphy_convert_user_definable_fields` for example.
         '''
+        # If running remote, use remote uri, otherwise use direct path
+        use_API = get_setting('USE_NEMS_BAPHY_API')
+        if use_API:
+            parmfile = self.parmfile_WEB_API
+        else:
+            parmfile = self.parmfile
+
         # Returns tuple of global, expt and events
-        result = [io.baphy_parm_read(p) for p in self.parmfile]
+        result = [io.baphy_parm_read(p) for p in parmfile]
         if userdef_convert:
             [io.baphy_convert_user_definable_fields(r) for r in result]
         return result
@@ -891,14 +1079,15 @@ class BAPHYExperiment:
 
 # ==============  epoch manipulation functions  ================
 
-def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options):
+def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrials=None, **options):
     """
     Modify exptevents dataframe for nems epochs.
     This includes cleaning up event names and moving behavior
     labels to name columnn, if they exist. This is basically
     just a (slightly) cleaned up version of baphy_load_dataset.
-    """
 
+    goodtrials (added 08.08.2021) -- which baphy trials to keep
+    """
     epochs = []
 
     log.info('Creating trial epochs')
@@ -940,7 +1129,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options
         te.loc[0, 'end'] = file_end_time
         te.loc[0, 'name']= 'PASSIVE_EXPERIMENT'
 
-    epochs = epochs.append(te, ignore_index=True)
+    epochs = pd.concat([epochs, te], ignore_index=True)
     # append file name epoch
     mfilename = os.path.split(globalparams['tempMfile'])[-1].split('.')[0]
 
@@ -948,8 +1137,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options
     te.loc[0, 'end'] = file_end_time
     te.loc[0, 'name'] = 'FILE_'+mfilename
 
-    epochs = epochs.append(te, ignore_index=True)
-    
+    epochs = pd.concat([epochs, te], ignore_index=True)
     epochs = epochs.sort_values(by=['start', 'end'], 
                     ascending=[1, 0]).reset_index()
     epochs = epochs.drop(columns=['index'])
@@ -966,11 +1154,19 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, **options
     epochs = epochs[~start_events]
 
     # get rid of weird floating point precision 
-    epochs.at[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
-    epochs.at[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
+    epochs.loc[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]
+    epochs.loc[:, 'end'] = [np.round(x, 5) for x in epochs['end'].values]
 
-    # Final step, remove any duplicate epochs (that are getting created somewhere???)
+    # Remove any duplicate epochs (that are getting created somewhere???)
     epochs = epochs.drop_duplicates()
+
+    # if goodtrials exist, only keep epochs within "good" baphy trials
+    if goodtrials is not None:
+        bad_bounds = epochs[epochs.name=='TRIAL'][~np.array(goodtrials)][['start', 'end']].values
+        all_bounds = epochs[['start','end']].values
+
+        bad_epochs = ep.epoch_contained(all_bounds, bad_bounds)
+        epochs = epochs.drop(epochs.index[bad_epochs])
 
     return epochs
 
@@ -987,8 +1183,8 @@ def _make_trial_epochs(exptevents, exptparams, fidx=None, **options):
 
     trial_events = exptevents[exptevents['name'].str.startswith('TRIALSTART')].copy()
     end_events = exptevents[exptevents['name'].str.startswith('TRIALSTOP')]
-    trial_events.at[:, 'end'] = end_events['start'].values
-    trial_events.at[:, 'name'] = 'TRIAL'
+    trial_events.loc[:, 'end'] = end_events['start'].values
+    trial_events.loc[:, 'name'] = 'TRIAL'
 
     #if remove_post_lick:
     #   trial_events =  _remove_post_lick(trial_events, exptevents, **options)
@@ -1040,11 +1236,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
 
     #import pdb; pdb.set_trace()
 
-    ref_events.at[:, 'name'] = new_tags
-    ref_events.at[:, 'start'] = ref_starts.start.values
-    ref_events.at[:, 'end'] = ref_ends.end.values
+    ref_events.loc[:, 'name'] = new_tags
+    ref_events.loc[:, 'start'] = ref_starts.start.values
+    ref_events.loc[:, 'end'] = ref_ends.end.values
     ref_events2 = ref_events.copy()
-    ref_events2.at[:, 'name'] = 'REFERENCE'
+    ref_events2.loc[:, 'name'] = 'REFERENCE'
 
     ref_events = pd.concat([ref_events, ref_events2], ignore_index=True)
 
@@ -1060,11 +1256,11 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     
     tar_events = exptevents[exptevents.name.isin(tar_tags)].copy()
     new_tags = ['TAR_' + t.split(',')[1].replace(' ', '') for t in tar_events.name]
-    tar_events.at[:, 'name'] = new_tags
-    tar_events.at[:, 'start'] = tar_starts.start.values
-    tar_events.at[:, 'end'] = tar_ends.end.values
+    tar_events.loc[:, 'name'] = new_tags
+    tar_events.loc[:, 'start'] = tar_starts.start.values
+    tar_events.loc[:, 'end'] = tar_ends.end.values
     tar_events2 = tar_events.copy()
-    tar_events2.at[:, 'name'] = 'TARGET'
+    tar_events2.loc[:, 'name'] = 'TARGET'
     tar_events = pd.concat([tar_events, tar_events2], ignore_index=True)
 
     # Catch events (including spont)
@@ -1079,18 +1275,18 @@ def _make_stim_epochs(exptevents, exptparams, **options):
     
     cat_events = exptevents[exptevents.name.isin(cat_tags)].copy()
     new_tags = ['CAT_' + t.split(',')[1].replace(' ', '') for t in cat_events.name]
-    cat_events.at[:, 'name'] = new_tags
-    cat_events.at[:, 'start'] = cat_starts.start.values
-    cat_events.at[:, 'end'] = cat_ends.end.values
+    cat_events.loc[:, 'name'] = new_tags
+    cat_events.loc[:, 'start'] = cat_starts.start.values
+    cat_events.loc[:, 'end'] = cat_ends.end.values
     cat_events2 = cat_events.copy()
-    cat_events2.at[:, 'name'] = 'CATCH'
+    cat_events2.loc[:, 'name'] = 'CATCH'
     cat_events = pd.concat([cat_events, cat_events2], ignore_index=True)
 
     # pre/post stim events
     sil_tags = exptevents[exptevents.name.str.contains('Silence')].name.unique()
     sil_events = exptevents[exptevents.name.isin(sil_tags)].copy()
     new_tags = [t.split(',')[0].replace(' ', '') for t in sil_events.name]
-    sil_events.at[:, 'name'] = new_tags
+    sil_events.loc[:, 'name'] = new_tags
 
     # lick events
     lick_events = exptevents[exptevents.name=='LICK']
@@ -1124,7 +1320,7 @@ def _make_light_epochs(exptevents, exptparams, **options):
     light_events = exptevents[exptevents['name'].str.contains('LightStim')].copy()
     
     if light_events.shape[0] >= 1:
-        light_events.at[:, 'name'] = 'LIGHTON'
+        light_events.loc[:, 'name'] = 'LIGHTON'
         light_events = light_events.sort_values(
                 by=['start', 'end'], ascending=[1, 0]
                 ).reset_index()
@@ -1239,7 +1435,7 @@ def _truncate_trials(exptevents, **options):
 
         # for remaining events, just brute force truncate
         # truncate partial events
-        events.at[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
+        events.loc[e[(e.end > toff) & ~e.name.str.contains('.*Stim.*', regex=True) & ~e.name.str.contains('TRIALSTOP')].index, 'end'] = toff
         if events.loc[(events.Trial==t) & (events.name=='TRIALSTOP'),'start'].min() < toff:
             #print(t)
             #import pdb; pdb.set_trace()
@@ -1336,6 +1532,8 @@ def _merge_refTar_epochs(exptevents, OverlapRefTar):
         ref_idx = target_prestims.index-3
         refs = exptevents.loc[ref_idx]
         refs = refs[refs.start.values == target_prestims.start.values]
+        if len(refs) == 0:
+            return exptevents
 
         # set the poststim duration to the ref post stim (to get rid of long poststim tails)
         exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values

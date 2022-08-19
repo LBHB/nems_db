@@ -312,7 +312,7 @@ def create_trial_labels(exptparams, exptevents):
     # Number the (non NULL) sound trials
     new_events['soundTrialidx'] = 0
     trialidx = np.arange(1, (new_events.soundTrial!='NULL').sum()+1)
-    new_events.at[new_events.soundTrial!='NULL', 'soundTrialidx'] = trialidx
+    new_events.loc[new_events.soundTrial!='NULL', 'soundTrialidx'] = trialidx
 
     return new_events
 
@@ -373,7 +373,7 @@ def mark_invalid_trials(exptparams, exptevents, **options):
         # same for single sounds and overall trials
         # TODO add logic to use new structure in exptparams['TrialParams'][1]['CueSeg']
         # to determine cue trials for newer baphy files (after Luke's modifications)
-        nCueTrials = exptparams['TrialObject'][1]['CueTrialCount']
+        nCueTrials = exptparams['TrialObject'][1].get('CueTrialCount',0)
         if nCueTrials > 0:
             cue_hit_trials = events[events.name.str.contains('HIT_TRIAL')]['Trial'][:(nCueTrials+1)].values
             iv = events.Trial.isin(np.arange(1, cue_hit_trials.max()))

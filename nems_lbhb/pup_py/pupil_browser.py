@@ -154,10 +154,15 @@ class PupilBrowser:
         self.pupil_trace.draw()
         self.eye_movements.draw()
 
-        # save new frames
-        os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
 
-        frame_file = tmp_frame_folder + 'frame1.jpg'
+        # first make sure the tmp file doesn't exist for this user, just to avoid asking for overwrite permissions
+        os.system(f"rm {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+
+        # save new frames
+        #os.system("ffmpeg -ss {0} -i {1} -vframes 1 {2}frame%d.jpg".format(t, video, tmp_frame_folder))
+        os.system(f"ffmpeg -ss {t} -i {video} -vframes 1 {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+
+        frame_file = tmp_frame_folder + f'frame1_{getpass.getuser()}.jpg'
 
         self.plot_frame(frame_file)
 
@@ -445,7 +450,21 @@ class PupilBrowser:
         # get the pupil video file
         self.raw_video = filedialog.askopenfilename(initialdir = ps.ROOT_VIDEO_DIRECTORY,
                             title = "Select raw video file",
-                            filetypes = (("mj2 files","*.mj2*"), ("avi files","*.avi")))
+                            filetypes = (("avi files","*.avi"), ("mj2 files","*.mj2*") ))
+
+        params_file = os.path.split(self.raw_video)[-1].split('.')[0]
+        animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
+
+        self.video_name.delete(0, 'end')
+        self.animal_name.delete(0, 'end')
+        self.video_name.insert(0, params_file)
+        self.animal_name.insert(0, animal)
+
+        self.load_file()
+
+    def open_file(self, videofile):
+        # get the pupil video file
+        self.raw_video = videofile
 
         params_file = os.path.split(self.raw_video)[-1].split('.')[0]
         animal = os.path.split(self.raw_video)[0].split(os.path.sep)[4]
@@ -493,9 +512,11 @@ class PupilBrowser:
         # save first ten frames and display the first
         video = self.raw_video
 
-        os.system("ffmpeg -ss 00:00:00 -i {0} -vframes 1 {1}frame%d.jpg".format(video, tmp_frame_folder))
+        # first make sure the tmp file doesn't exist for this user, just to avoid asking for overwrite permissions
+        os.system(f"rm {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
+        os.system(f"ffmpeg -ss 00:00:00 -i {video} -vframes 1 {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
 
-        frame_file = tmp_frame_folder + 'frame1.jpg'
+        frame_file = tmp_frame_folder + f'frame1_{getpass.getuser()}.jpg'
 
         # define the species for this animal by querying the database
         self.species = nd.pd_query(f"SELECT species from gAnimal where animal='{self.animal_name.get()}'").values[0][0]
@@ -622,19 +643,23 @@ class PupilBrowser:
     def retrain(self):
         # retrain the model. This will happen on the queue (needs to be fit on gpu). Therefore, we'll start the queue
         # job and automatically exit the window
-        py_path = sys.executable
         script_path = os.path.split(os.path.split(nems_db.__file__)[0])[0]
         script_path = os.path.join(script_path, 'nems_lbhb', 'pup_py', 'training_script.py')
         username = getpass.getuser()
 
         default_epochs = 500
-        n_training_epochs = simpledialog.askstring('TrainingEpochs', 'How many training epochs would you like to use? Default is 500')
+        n_training_epochs = simpledialog.askstring('TrainingEpochs', 'How many training epochs would you like to use?', 
+                                                    initialvalue='500')
+        
         try:
             n_training_epochs = int(n_training_epochs)
             print(f"using {n_training_epochs} training epochs")
         except:
             print("using default -- 500 training epochs")
             n_training_epochs = default_epochs
+
+        py_path = simpledialog.askstring('Python executable', 'Which python would you like to run the training on? Make sure it has gpu tf. See nems_db/README.md for details on setting up environment', 
+                                            initialvalue=sys.executable)
 
         # add job to queue
         # nd.add_job_to_queue([], note="Pupil Job: Training CNN", executable_path=py_path,
@@ -688,4 +713,8 @@ class PupilBrowser:
 
 root = tk.Tk()
 my_gui = PupilBrowser(root)
+
+if len(sys.argv)>1:
+    my_gui.open_file(sys.argv[1])
+
 root.mainloop()
