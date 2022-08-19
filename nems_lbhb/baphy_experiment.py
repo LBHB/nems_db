@@ -629,7 +629,6 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             rawhp = kwargs['rawhp']
             rawlp = kwargs['rawlp']
-            # d, t0 = self.get_continuous_data(chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
             d, t0 = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
@@ -658,7 +657,6 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             muabp = kwargs['muabp']
             # get mua data
-            # d, t0 = self.get_continuous_data(mua=True, chans=rawchans, rasterfs=fs, muabp=muabp)
             d, t0 = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                  mua = True, chans=rawchans, rasterfs=fs, muabp=muabp)

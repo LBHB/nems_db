@@ -49,6 +49,7 @@ from nems.uri import load_resource
 from open_ephys.analysis import Session
 from open_ephys.analysis.formats.helpers import load
 import tarfile
+import re
 
 log = logging.getLogger(__name__)
 
@@ -233,7 +234,7 @@ def continuous_data_unpacking(continuous_data):
     }
 
 
-def continuous_binary_data_unpacking(continuous_data):
+def continuous_binary_data_unpacking(continuous_data, mua):
     """
     Unpacks continuous data objects returned in list format from load_openephys into a dictionary
     with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
@@ -247,15 +248,37 @@ def continuous_binary_data_unpacking(continuous_data):
     channels = []
     for i in range(len(continuous_data)):
         try:
-            data.append(continuous_data[i][0].samples.transpose())
-            channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+            channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][0])[0][0]
         except:
             continue
+        if mua:
+            if channel_type == 'AP' or channel_type == 'CH':
+                data.append(continuous_data[i][0].samples.transpose())
+                # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                channels.append([int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['names']))])
+                timestamps = continuous_data[i][0].timestamps
+                header = continuous_data[i][0].metadata
+                header['sampleRate'] = header['sample_rate']
+            else:
+                continue
+        else:
+            if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
+                data.append(continuous_data[i][0].samples.transpose())
+                # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                channels.append([int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['names']))])
+                timestamps = continuous_data[i][0].timestamps
+                header = continuous_data[i][0].metadata
+                header['sampleRate'] = header['sample_rate']
+            else:
+                continue
+
     # should be the same for all channels minus channel specific info in header which I don't think
     # baphy experiment needs?
-    timestamps = continuous_data[0][0].timestamps
-    header = continuous_data[0][0].metadata
-    header['sampleRate'] = header['sample_rate']
+    # timestamps = continuous_data[0][0].timestamps
+    # header = continuous_data[0][0].metadata
+    # header['sampleRate'] = header['sample_rate']
     data = np.vstack(data)
     channels = np.concatenate(channels)
 
@@ -305,6 +328,9 @@ def load_sampling_rate_openephys(openephys_folder):
     try:
         event_file = file_finder(openephys_folder, filename='all_channels.events')
         data = oe.load(str(event_file))
+    # hard coded for binary files without sampling rate info at this point - have sampling rate as value in database?
+    # or switch order of operations for loading continuous and extract temp data first prior to aligning where record
+    # node sampling rate information is available
     except:
         data = {}
         header = {}
@@ -466,7 +492,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
 
         recChans = [recChans[connector][i]['name_mapped'] \
-                    for i in recChans[connector].keys()]
+                    for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
         data_files = [connector + '_' + c + '.continuous' for c in recChans]
         all_chans = np.arange(len(data_files))
 
@@ -520,7 +546,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                     list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".dat")]
                 try:
                     data = load_openephys(openephys_folder, dtype='continuous')
-                    data = continuous_binary_data_unpacking(data)
+                    data = continuous_binary_data_unpacking(data, mua=mua)
                 except:
                     raise IOError('loading binary data failed...still zipped?')
 
