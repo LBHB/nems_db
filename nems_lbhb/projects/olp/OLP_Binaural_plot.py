@@ -43,7 +43,7 @@ def plot_binaural_psths(df, cellid, bg, fg, batch, save=False, close=False):
     rec['resp'] = rec['resp'].extract_channels([cellid])
     resp = copy.copy(rec['resp'].rasterize())
 
-    expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
+    expt_params = manager.get_baphy_exptparams()
     if len(expt_params) == 1:
         ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
     if len(expt_params) > 1:

@@ -34,6 +34,9 @@ def get_load_options(batch):
         options = {'rasterfs': 100,
                    'stim': False,
                    'resp': True}
+    # Maybe add this as the default? Could save time?
+    # options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+
     return options
 
 
