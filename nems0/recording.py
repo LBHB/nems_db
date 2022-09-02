@@ -755,7 +755,7 @@ class Recording:
             ep_all = ep.epoch_names_matching(epcopy, regex_str=epoch_regex)
             ep_sub = sum([e for k,e in groups.items()], [])
             ep_diff = list(set(ep_all)-set(ep_sub))
-            groups[0]=ep_diff
+            groups= {0: ep_diff, 1: ep_sub}
 
         if len(groups) > 2:
             l=np.array(list(groups.keys()))

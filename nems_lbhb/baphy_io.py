@@ -808,7 +808,7 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
     if options['stimfmt'] in ['gtgram', 'nenv', 'lenv']:
         # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
-        stim, tags, stimparam = runclass.NAT_stim(None, exptparams, **options)
+        stim, tags, stimparam = runclass.NAT_stim(epochs, exptparams, **options)
 
     elif (options['stimfmt'] == 'parm') & exptparams['TrialObject'][1]['ReferenceClass'].startswith('Torc'):
         import nems_lbhb.strf.torc_subfunctions as tsf

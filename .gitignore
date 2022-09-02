@@ -103,6 +103,9 @@ ENV/
 saved_analysis/
 saved_images/
 saved_models/
+nems0/configs/*
+!nems0/configs/__init__.py
+!nems0/configs/defaults.py
 
 #signals/
 *~

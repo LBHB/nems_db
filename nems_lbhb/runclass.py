@@ -366,18 +366,18 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         type1 = [''] * len(wav1)
         type2 = [''] * len(wav1)
     elif ReferenceClass == 'OverlappingPairs':
-        bg_folder = ReferenceHandle['BG_Folder']
-        fg_folder = ReferenceHandle['FG_Folder']
+        if 'BG_Folder' in ReferenceHandle.keys():
+            bg_folder = ReferenceHandle['BG_Folder']
+            fg_folder = ReferenceHandle['FG_Folder']
 
-        bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
-        fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
 
-        stim_epochs = ReferenceHandle['Names']
-        #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
-        wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
-        wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
+            stim_epochs = ReferenceHandle['Names']
+            #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
+            wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
+            wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
 
-        if ReferenceClass == "OverlappingPairs":
             # parse codes for synthetic sounds
             type1=[e.split("_")[0].split("-")[-1] for e in stim_epochs]
             type2=[e.split("_")[1].split("-")[-1] for e in stim_epochs]
@@ -386,12 +386,38 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             types = list(paths.keys())
             wav1 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav1,type1)]
             wav2 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav2,type2)]
-        else:
-            type1=['']*len(wav1)
-            type2=['']*len(wav2)
 
-        chan1=[int(e.split("_")[0].split("-")[3])-1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
-        chan2=[int(e.split("_")[1].split("-")[3])-1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
+            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+        else:
+            bg_folder = 'Background1'
+            fg_folder = ReferenceHandle['FG_Folder']
+            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+
+            stim_epochs = exptevents.loc[exptevents.name.str.startswith("STIM_"),'name']
+            stim_epochs = list(set([s.replace("STIM_","") for s in list(stim_epochs)]))
+
+            wav1 = []
+            wav2 = []
+            type1 = []
+            type2 = []
+            for e in stim_epochs:
+                e = e.replace("1_","1@").replace("null_","null@")
+                wav1.append(e.split("@")[0].split("-")[0])
+                wav2.append(e.split("@")[1].split("-")[0])
+                if wav1[-1]!='null':
+                    type1.append(float(e.split("@")[0].split("-")[1]))
+                else:
+                    type1.append(0.0)
+                if wav2[-1]!='null':
+                    type2.append(float(e.split("@")[1].split("-")[1]))
+                else:
+                    type2.append(0.0)
+
+            chan1 = [0]*len(wav1)
+            chan2 = [0]*len(wav2)
+
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
         #wav1 = [wav for wav in wav1 if wav != 'null']
         #wav2 = [wav for wav in wav2 if wav != 'null']
@@ -476,18 +502,29 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
+            print(f1,f2,w1.sum(), w2.sum())
 
             if ReferenceClass == "OverlappingPairs":
-                if t1 == 'null':
+                if f1 == 'null':
                     pass
+                elif type(t1) is float:
+                    si = int(t1 * fs0)
+                    w1[:si] = 0
+                    # scale peak-to-peak amplitude to OveralldB
+                    w1 = w1 / np.max(np.abs(w1)) * 5
                 elif not (t1 in (types + ['N'])):
                     # scale peak-to-peak amplitude to OveralldB
                     w1 = w1 / np.max(np.abs(w1)) * 5
                 else:
                     # scale by RMS amplitude
                     w1 = w1 / np.std(w1)
-                if t2 == 'null':
+                if f2 == 'null':
                     pass
+                elif type(t2) is float:
+                    si = int(t2 * fs0)
+                    w2[:si] = 0
+                    # scale peak-to-peak amplitude to OveralldB
+                    w2 = w2 / np.max(np.abs(w2)) * 5
                 elif not(t2 in (types + ['N'])):
                     # scale peak-to-peak amplitude to OveralldB
                     w2 = w2 / np.max(np.abs(w2)) * 5
