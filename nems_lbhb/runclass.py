@@ -268,6 +268,22 @@ def wav2env(w,fsin,fsout, axis=0, verbose=False):
 
     return env
 
+def remove_clicks(w, max_threshold=15, verbose=False):
+
+    w_clean = w
+
+    # log compress everything > 67% of max
+    crossover = 0.67 * max_threshold
+    ii = (w>crossover)
+    w_clean[ii] = crossover + np.log(w_clean[ii]-crossover+1);
+    jj = (w<-crossover)
+    w_clean[jj] = -crossover - np.log(-w_clean[jj]-crossover+1);
+
+    if verbose:
+       print(f'bins compressed down: {ii.sum()} up: {jj.sum()} max {np.abs(w).max():.2f}-->{np.abs(w_clean).max():.2f}')
+
+    return w_clean
+
 def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
              mono=False, binaural=False,
              **options):
@@ -299,7 +315,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
 
-    if exptparams['TrialObject'][1]['ReferenceClass']=='BigNat':
+    if (ReferenceClass=='BigNat') & \
+            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
         sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
@@ -310,9 +327,19 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         stim_epochs = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']
         #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
         wav1=[e.split("+")[0].split(":")[0] for e in stim_epochs]
-        wav2=[e.split("+")[1].split(":")[0] for e in stim_epochs]
         chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
-        chan2=[int(e.split("+")[1].split(":")[1])-1 for e in stim_epochs]
+        wav2 = []
+        chan2 = []
+        for e in stim_epochs:
+            if "+" in e:
+                wav2.append(e.split("+")[1].split(":")[0])
+                chan2.append(int(e.split("+")[1].split(":")[1])-1)
+            else:
+                wav2.append("NULL")
+                chan2.append(0)
+
+        type1 = [''] * len(wav1)
+        type2 = [''] * len(wav2)
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
         file_unique=wav1.copy()
         file_unique.extend(wav2)
@@ -320,12 +347,15 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         if 'NULL' in file_unique:
             file_unique.remove('NULL')
 
-    elif ReferenceClass=='NaturalSounds':
-        subset = ReferenceHandle['Subsets']
-        if subset == 1:
-            sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds')
+    elif (ReferenceClass == 'BigNat') | (ReferenceClass == 'NaturalSounds'):
+        if ReferenceClass == 'BigNat':
+            sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
         else:
-            sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set{subset}')
+            subset = ReferenceHandle['Subsets']
+            if subset == 1:
+                sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds')
+            else:
+                sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set{subset}')
         stim_epochs = ReferenceHandle['Names']
         file_unique=[f.replace('.wav','') for f in stim_epochs]
 
@@ -333,7 +363,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         chan1 = [0] * len(wav1)
         wav2=["NULL"] * len(wav1)
         chan2 = [0] * len(wav1)
-
+        type1 = [''] * len(wav1)
+        type2 = [''] * len(wav1)
     elif ReferenceClass == 'OverlappingPairs':
         bg_folder = ReferenceHandle['BG_Folder']
         fg_folder = ReferenceHandle['FG_Folder']
@@ -398,6 +429,14 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 fs, w = wavfile.read(Path(fg_root) / (filename + '.wav'))
         else:
             fs, w = wavfile.read(sound_root / (filename+'.wav'))
+        if w.dtype.name == 'int16':
+            w = w / 32767
+        elif w.dtype.name == 'int32':
+            w = w / 2147483647
+
+        if len(w)<fs*Duration:
+            w = np.pad(w, [0, int(fs*Duration)-len(w)])
+
         if fs0 is None:
             fs0 = fs
         elif fs != fs0:
@@ -413,12 +452,12 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
 
         # 10ms ramp at onset:
         w = w[:duration_samples].astype(float)
-        ramp = np.hanning(.005 * fs*2)
+        ramp = np.hanning(.005 * fs * 2)
         ramp = ramp[:int(np.floor(len(ramp)/2))]
         w[:len(ramp)] *= ramp
         w[-len(ramp):] = w[-len(ramp):] * np.flipud(ramp)
 
-        wav_unique[filename] = w[:,np.newaxis]
+        wav_unique[filename] = w[:, np.newaxis]
 
     if separate_files_only:
         # combine into pairs that were actually presented
@@ -429,17 +468,17 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         for (f1,c1,t1,f2,c2,t2,n) in zip(wav1,chan1,type1,wav2,chan2,type2,stim_epochs):
             #print(f1,f2)
             if f1.upper() != "NULL":
-                w1 = wav_unique[f1]
+                w1 = wav_unique[f1].copy()
                 if f2.upper() != "NULL":
-                    w2 = wav_unique[f2]
+                    w2 = wav_unique[f2].copy()
                 else:
                     w2 = np.zeros(w1.shape)
             else:
-                w2 = wav_unique[f2]
+                w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
 
-            if (ReferenceClass == "OverlappingPairs"):
-                if t1=='null':
+            if ReferenceClass == "OverlappingPairs":
+                if t1 == 'null':
                     pass
                 elif not (t1 in (types + ['N'])):
                     # scale peak-to-peak amplitude to OveralldB
@@ -447,7 +486,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 else:
                     # scale by RMS amplitude
                     w1 = w1 / np.std(w1)
-                if t2=='null':
+                if t2 == 'null':
                     pass
                 elif not(t2 in (types + ['N'])):
                     # scale peak-to-peak amplitude to OveralldB
@@ -456,7 +495,11 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                     # scale by RMS amplitude
                     w2 = w2 / np.std(w2)
 
-            w = np.zeros((w1.shape[0],max_chans))
+            elif ReferenceClass == "BigNat":
+                w1 = remove_clicks(w1 * ReferenceHandle['FixedAmpScale'], 15)
+                w2 = remove_clicks(w2 * ReferenceHandle['FixedAmpScale'], 15)
+
+            w = np.zeros((w1.shape[0], max_chans))
             if (binaural is None) | (binaural == False):
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
@@ -464,7 +507,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
-                db_atten=10
+                db_atten = 10
                 factor = 10**(-db_atten/20)
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)

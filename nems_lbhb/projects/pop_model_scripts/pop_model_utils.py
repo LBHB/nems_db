@@ -22,7 +22,7 @@ mplparams = {
 }
 mpl.rcParams.update(mplparams)
 
-import nems
+import nems0
 import nems0.epoch as ep
 import nems0.db as nd
 import nems_lbhb.xform_wrappers as xwrap

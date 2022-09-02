@@ -3,7 +3,7 @@ import itertools
 import logging
 from contextlib import contextmanager
 
-from nems import db
+from nems0 import db
 
 log = logging.getLogger(__name__)
 

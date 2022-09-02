@@ -20,6 +20,7 @@ nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 from batch_norm import get_batch_norm_params
+from nems0 import utils
 
 import logging
 log = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ if __name__ == '__main__':
 
     if 'QUEUEID' in os.environ:
         queueid = os.environ['QUEUEID']
-        nems0.utils.progress_fun = nd.update_job_tick
+        utils.progress_fun = nd.update_job_tick
 
     else:
         queueid = 0
