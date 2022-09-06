@@ -1100,7 +1100,7 @@ def get_cell_files(cellid=None, runclass=None, rawid=None):
     sql = ("SELECT sCellFile.*,gRunClass.name, gSingleRaw.isolation FROM sCellFile INNER JOIN "
            "gRunClass on sCellFile.runclassid=gRunClass.id "
            " INNER JOIN "
-           "gSingleRaw on sCellFile.rawid=gSingleRaw.rawid and sCellFile.cellid=gSingleRaw.cellid WHERE 1")
+           "gSingleRaw on sCellFile.rawid=gSingleRaw.rawid and sCellFile.singleid=gSingleRaw.singleid WHERE 1")
     if cellid is not None:
         sql += " AND sCellFile.cellid like %s"
         params = params+("%"+cellid+"%",)

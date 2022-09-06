@@ -374,6 +374,15 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
 
             stim_epochs = ReferenceHandle['Names']
+        else:
+            bg_folder = 'Background1'
+            fg_folder = ReferenceHandle['FG_Folder']
+            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+
+            stim_epochs=[]
+
+        if len(stim_epochs)>0:
             #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
             wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
             wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
@@ -390,11 +399,6 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
             chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
         else:
-            bg_folder = 'Background1'
-            fg_folder = ReferenceHandle['FG_Folder']
-            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
-            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
-
             stim_epochs = exptevents.loc[exptevents.name.str.startswith("STIM_"),'name']
             stim_epochs = list(set([s.replace("STIM_","") for s in list(stim_epochs)]))
 

@@ -431,7 +431,8 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 
 def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
-             learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
+             validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
              **context):
     """
     Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
@@ -470,23 +471,37 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         X_est = np.expand_dims(est.apply_mask()[input_name].as_continuous().T, axis=0)
         Y_est = np.expand_dims(est.apply_mask()[output_name].as_continuous().T, axis=0)
 
-        fitter_options = {'learning_rate': learning_rate*2, 'epochs': int(max_iter/2)}
+        fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
+                          'early_stopping_patience': early_stopping_patience,
+                          'early_stopping_tolerance': tolerance,
+                          'validation_split': validation_split,
+                          'learning_rate': learning_rate*2, 'epochs': int(max_iter/2),
+                          }
         
         log.info(f'({backend}) Fitting without NL ...')
         log.info(f"lr={fitter_options['learning_rate']} epochs={fitter_options['epochs']}")
         modelspec.layers[-1].skip_nonlinearity()
+        from nems.layers import ShortTermPlasticity
+        #for i, l in enumerate(modelspec.layers):
+        #    if isinstance(l, ShortTermPlasticity):
+        #        log.info(f'Freezing parameters for layer {i}: {l.name}')
+        #        modelspec.layers[i].freeze_parameters()
         modelspec = modelspec.fit(
             input=X_est, target=Y_est, backend=backend,
             fitter_options=fitter_options, batch_size=None)
 
-        fitter_options = {'learning_rate': learning_rate, 'epochs': max_iter}
-        log.info(f'({backend}) Now fitting with NL ...')
         modelspec.layers[-1].unskip_nonlinearity()
+        for i, l in enumerate(modelspec.layers):
+            modelspec.layers[i].unfreeze_parameters()
+
+        fitter_options['learning_rate'] = learning_rate
+        fitter_options['epochs'] = max_iter
+        log.info(f'({backend}) Now fitting with NL ...')
         modelspec = modelspec.fit(
             input=X_est, target=Y_est, backend=backend,
             fitter_options=fitter_options, batch_size=None)
 
-        modelspec.backend=None
+        modelspec.backend = None
     return {'modelspec': modelspec}
 
 
@@ -1513,9 +1528,9 @@ def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, re
 
     modelspec.meta['spont_mean']=spont_rate
     modelspec.meta['evoked_mean']=evoked_mean
-    if model_engine=='nems0':
+    if model_engine == 'nems0':
         modelspec.set_cell(0)
-
+    log.info(f"r_test={modelspec.meta['r_test']}")
     return {'modelspec': modelspec}
 
 
