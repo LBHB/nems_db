@@ -419,6 +419,8 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
     if not IsReload:
         if meta is None:
             meta = {}
+        keywordstring = init.fill_keyword_string_values(keywordstring, **context)
+        log.info(f'modelspec: {keywordstring}')
         modelspec = Model.from_keywords(keywordstring)
         modelspec = modelspec.sample_from_priors()
         modelspec.meta = meta.copy()

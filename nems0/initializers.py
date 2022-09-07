@@ -22,6 +22,94 @@ log = logging.getLogger(__name__)
 #default_kws.register_plugins(get_setting('KEYWORD_PLUGINS'))
 
 
+def fill_keyword_string_values(keyword_string,
+                               rec=None, rec_list=None,
+                               input_name='stim', output_name='resp', **ctx):
+
+    if rec_list is None:
+        rec_list=[rec]
+    cell_count = len(rec_list)
+
+    keywords = keyword_string.split('-')
+    new_keywords = []
+    _rec=rec_list[0]
+
+    for kw in keywords:
+
+        shared = True
+        if (kw.startswith("fir.Nx") or kw.startswith("wc.Nx")) and \
+                (_rec is not None):
+            N = _rec[input_name].nchans
+            kw_old = kw
+            kw = kw.replace(".N", ".{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+        elif kw.startswith("stategain.N") and (_rec is not None):
+            N = _rec['state'].nchans
+            kw_old = kw
+            kw = kw.replace("stategain.N", "stategain.{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+        elif (kw.endswith(".N")) and (_rec is not None):
+            N = _rec[input_name].nchans
+            kw_old = kw
+            kw = kw.replace(".N", ".{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+        elif (kw.endswith(".cN")) and (_rec is not None):
+            N = _rec[input_name].nchans
+            kw_old = kw
+            kw = kw.replace(".cN", ".c{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+
+        elif (kw.endswith("xN")) and (_rec is not None):
+            N = _rec[input_name].nchans
+            kw_old = kw
+            kw = kw.replace("xN", "x{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+
+        elif ("xN" in kw) and (_rec is not None):
+            N = _rec[input_name].nchans
+            kw_old = kw
+            kw = kw.replace("xN", "x{}".format(N))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+
+        if (".S" in kw or ".Sx" in kw) and (_rec is not None):
+            S = _rec['state'].nchans
+            kw_old = kw
+            kw = kw.replace(".S", ".{}".format(S))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+
+        if ("xS" in kw) and (_rec is not None):
+            S = _rec['state'].nchans
+            kw_old = kw
+            kw = kw.replace("xS", "x{}".format(S))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+
+        if (".R" in kw) and (_rec is not None):
+            R = _rec[output_name].nchans
+            kw_old = kw
+            kw = kw.replace(".R", ".{}".format(R))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+            shared = False  #  "R" means output-dependent
+        if ("xR" in kw) and (_rec is not None):
+            R = _rec[output_name].nchans
+            kw_old = kw
+            kw = kw.replace("xR", "x{}".format(R))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+            shared = False  #  "R" means output-dependent
+
+        other_xr = re.findall(r"[x\.]?[0-9]+[R]", kw)
+        if bool(other_xr):
+            R = _rec[output_name].nchans
+            kw_old = kw
+            digits = int(re.findall("[0-9]+", other_xr[0])[0])
+            kw = kw.replace("{}R".format(digits), "{}".format(digits*R))
+            log.info("kw: dynamically subbing %s with %s", kw_old, kw)
+            shared = False  #  "R" means output-dependent
+
+        log.info('kw: %s', kw)
+        new_keywords.append(kw)
+
+    return "-".join(new_keywords)
+
 def from_keywords(keyword_string, registry=None, rec=None, meta={}, rec_list=None, branch_at=0,
                   init_phi_to_mean_prior=True, input_name='stim', output_name='resp'):
     '''
