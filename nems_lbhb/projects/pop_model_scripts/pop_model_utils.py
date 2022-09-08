@@ -57,6 +57,7 @@ if not base_path.is_dir():
 # TODO: adjust figure sizes
 if linux_user=='svd':
     sf=1
+    single_column_shorter = (3.5, 2*sf)
     single_column_short = (3.5*sf, 2.5*sf)
     single_column_tall = (3.5*sf, 6*sf)
     column_and_half_vshort = (5*sf, 1.5*sf)

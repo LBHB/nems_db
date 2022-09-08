@@ -506,7 +506,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
-            print(f1,f2,w1.sum(), w2.sum())
+            log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
 
             if ReferenceClass == "OverlappingPairs":
                 if f1 == 'null':
@@ -539,6 +539,12 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             elif ReferenceClass == "BigNat":
                 w1 = remove_clicks(w1 * ReferenceHandle['FixedAmpScale'], 15)
                 w2 = remove_clicks(w2 * ReferenceHandle['FixedAmpScale'], 15)
+
+            elif ReferenceClass == "NaturalSounds":
+                if f1.lower() != 'null':
+                    w1 = w1 / np.max(np.abs(w1)) * 5
+                if f2.lower() != 'null':
+                    w2 = w2 / np.max(np.abs(w2)) * 5
 
             w = np.zeros((w1.shape[0], max_chans))
             if (binaural is None) | (binaural == False):

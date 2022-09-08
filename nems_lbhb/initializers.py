@@ -170,6 +170,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             post_part += ".ver2"
         elif modelname_parts[2].endswith("ver1"):
             post_part += ".ver1"
+        if modelname_parts[0].startswith("gtgram"):
+            pre_part = pre_part.replace("ozgf","gtgram")
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         if pre_batch is None:
@@ -179,7 +181,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         if type(cellid) is list:
             cellid = cellid[0]
         siteid = cellid.split("-")[0]
-        allsiteids, allcellids = nd.get_batch_sites(batch, modelname_filter=model_search)
+        allsiteids, allcellids = nd.get_batch_sites(pre_batch, modelname_filter=model_search)
         allsiteids = [s.split(".")[0] for s in allsiteids]
 
         if (batch==323) and (pre_batch==322):
@@ -194,7 +196,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif siteid in allsiteids:
             # don't need to generalize, load from actual fit
             pre_cellid = cellid
-        elif batch in [322, 334]:
+        elif pre_batch in [322, 334]:
             pre_cellid = 'ARM029a-07-6'
         elif pre_batch == 323:
             pre_cellid = 'ARM017a-01-9'
