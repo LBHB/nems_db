@@ -209,7 +209,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         # exact same model, just fit for site, now being fit for single cell
         pre_parts = modelname_parts[0].split("-")
         post_parts = modelname_parts[2].split("-")
-        model_search = modelname_parts[0] + "%%" + modelname_parts[1] + "%%" + "-".join(post_parts[1:])
+        model_search = modelname_parts[0] + "%%" + modelname_parts[1] + "%%" + "-".join(post_parts[2:])
 
         pre_cellid = cellid[0]
         pre_batch = batch
@@ -290,13 +290,16 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     log.info(f"model_search: {model_search}")
 
-    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'" + \
+       " ORDER BY id DESC"
     #log.info(sql)
     
     d = nd.pd_query(sql)
     #old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
     old_uri = adjust_uri_prefix(d['modelpath'][0])
-    log.info(f"Importing parameters from {old_uri}")
+    old_modelname=d['modelname'][0]
+    old_cellid=d['cellid'][0]
+    log.info(f"Importing parameters from {old_cellid}/{old_modelname}")
 
     mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
     print(mspaths)
