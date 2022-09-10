@@ -291,7 +291,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     log.info(f"model_search: {model_search}")
 
     sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'" + \
-       " ORDER BY id DESC"
+       " ORDER BY r_fit DESC"
     #log.info(sql)
     
     d = nd.pd_query(sql)
