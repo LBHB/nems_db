@@ -311,6 +311,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
+        new_ctx['freeze_idx'] = list(np.arange(freeze_layer_count))
     if prefit_type == 'init':
         new_ctx['skip_init'] = True
     return new_ctx

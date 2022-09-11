@@ -308,6 +308,7 @@ def rand_phi(modelspec, rand_count=10, IsReload=False, skip_init=False,
     modelspec = modelspec.copy(jack_index=0)
 
     modelspec.tile_fits(rand_count)
+    log.info(f'randomizing {rand_count} models, freeze_idx={freeze_idx}')
 
     # set random seed for reproducible results
     save_state = np.random.get_state()
@@ -324,9 +325,10 @@ def rand_phi(modelspec, rand_count=10, IsReload=False, skip_init=False,
             else:
                 modelspec = priors.set_random_phi(modelspec)
             for j in freeze_idx:
-                log.debug(f'fit {i} reverting {j}')
-                for k in modelspec.phi[j].keys():
-                    modelspec.phi[j][k] = save_phi[j][k].copy()
+                log.debug(f'fit {i} reverting frozen layer {j}')
+                if modelspec.phi[j]:
+                    for k in modelspec.phi[j].keys():
+                        modelspec.phi[j][k] = save_phi[j][k].copy()
 
     modelspec.set_cell(0)
     modelspec.set_fit(0)
