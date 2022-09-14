@@ -1030,17 +1030,26 @@ def shfcat(kw):
     format:
 
     e.g. shfcat.i.resp0.state.o.state
+    e.g. shfcat.i.resp0.state.o.state.mm
     meaning it takes stim and shuffles it (0), the state as is (no zero, no shuffle) and concatenate into a signal called
     state (overwriting the original on)
+    for the second example, a trailing pair of letters denote the normalization type applied over the whole output signal
     """
     # keyword arguments, state is default input and output if not specified
     raw_signals = re.findall('\.i\.(.*)\.o\.', kw)[0].split('.')
+    output_signal = re.findall('\.o\.(\w+)', kw)[0]
 
-    output_signal = re.findall('\.o\.(\w+)\Z', kw)[0]
+    norm_method = re.findall('(?<!\.o)\.(\w{2})\Z', kw) # matches to letters following a dot as long as there is no '.o' prior the dot
+    norm_method = norm_method[0] if norm_method else 'no' # default no normalization
 
     # parses the input signals. defining the action to do with each according to the code
     code_map = {'0': 'shuffle',
                 '1': 'roll'}
+
+    norm_map = {'no': 'none',
+                'mm': 'minmax',
+                'ms': 'meanstd',
+                'sp': 'spont'}
 
     input_signals = list()
     to_shuffle = list()
@@ -1056,6 +1065,7 @@ def shfcat(kw):
     return [['nems_lbhb.preprocessing.shuffle_and_concat_signals',
              {'signals': input_signals,
               'to_shuffle': to_shuffle,
-              'output_signal': output_signal},
+              'output_signal': output_signal,
+              'norm_method': norm_map[norm_method]},
              ['rec'], ['rec']
              ]]

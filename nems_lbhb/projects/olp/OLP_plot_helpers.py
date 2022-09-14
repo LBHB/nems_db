@@ -10,6 +10,9 @@ import glob
 from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 from pathlib import Path
+from nems.analysis.gammatone.gtgram import gtgram
+import nems_lbhb.projects.olp.OLP_helpers as ohel
+
 
 df_filtered, weight_df, titles, bins = [], [], [], []
 
@@ -222,7 +225,7 @@ def get_keyword_list(kws, weight_df=weight_df, pathidx=[2, 3],
     return df_filtered, kw_info, fn_args
 
 
-def get_resp_and_stim_info(cellid_and_stim_str, df_filtered):
+def get_resp_and_stim_info_old_format(cellid_and_stim_str, df_filtered):
     cellid, stimA, stimB = cellid_and_stim_str.split(':')
     cell_df = df_filtered.loc[cellid]
     this_cell_stim = cell_df[(cell_df['namesA'] == stimA) & (cell_df['namesB'] == stimB)].iloc[0]
@@ -249,6 +252,45 @@ def get_resp_and_stim_info(cellid_and_stim_str, df_filtered):
         folder_ids = [2,3]
     elif animal_id == 'ARM':
         folder_ids = [1,2]
+
+    parms = {'cellid': cellid, 'animal_id': animal_id, 'BG': BG, 'FG': FG, 'resp': resp,
+             'this_cell_stim': this_cell_stim, 'fs': fs, 'folder_ids': folder_ids}
+
+    return parms
+
+
+
+def get_resp_and_stim_info(cellid_and_stim_str, df_filtered):
+    cellid, stimA, stimB = cellid_and_stim_str.split(':')
+    cell_df = df_filtered.loc[df_filtered.cellid == cellid]
+    this_cell_stim = cell_df[(cell_df['BG'] == stimA) & (cell_df['FG'] == stimB)].iloc[0]
+    animal_id = cellid[:3]
+
+    if animal_id == 'HOD' or animal_id == 'TBR':
+        batch = 333
+    elif animal_id == 'ARM':
+        # got to code in for batch to differentiate between A1 and PEG batches,
+        # where can I get that info above?
+        batch = 0
+    elif animal_id == 'CLT':
+        batch = 340
+
+    fs=100
+    expt = BAPHYExperiment(cellid=cellid, batch=batch)
+    rec = expt.get_recording(rasterfs=fs, resp=True, stim=False)
+    resp = rec['resp'].rasterize()
+
+    BG, FG = stimA.split('-')[0], stimB.split('-')[0]
+
+    #parts for spectrograms now
+    if animal_id == 'HOD':
+        folder_ids = [1,1]
+    elif animal_id == 'TBR':
+        folder_ids = [2,3]
+    elif animal_id == 'ARM':
+        folder_ids = [1,2]
+    elif animal_id == 'CLT':
+        folder_ids = [2,3]
 
     parms = {'cellid': cellid, 'animal_id': animal_id, 'BG': BG, 'FG': FG, 'resp': resp,
              'this_cell_stim': this_cell_stim, 'fs': fs, 'folder_ids': folder_ids}
@@ -830,12 +872,17 @@ def plot_weight_psth(cellid_and_stim_str, df_filtered, save=False):
 
 
 def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
+    '''This function works a little backwards. But it takes this string of a stimulus
+    and the weight_df and turns it into a schematic of the linear weighted model. Cool.
+    But, generating the stimulus string is dumb and should get simplified. But if it's
+    just for this function I'm not too worried right now, going to make a wrapper for it in
+    /OLP_figures 2022_08_25'''
     parms = get_resp_and_stim_info(cellid_and_stim_str, df_filtered)
     cellid, animal_id, BG, FG, resp, this_cell_stim, fs, folder_ids = parms.values()
 
     weightBG, weightFG = this_cell_stim['weightsA'], this_cell_stim['weightsB']
-    epochs = [f'STIM_{BG}-0-1_null', f'STIM_null_{FG}-0-1', f'STIM_{BG}-0-1_{FG}-0-1']
-    # , f'STIM_{BG}-0.5-1_{FG}-0-1']
+    epo = this_cell_stim.epoch
+    epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
 
     resp = resp.extract_channels([cellid])
     r = resp.extract_epochs(epochs)
@@ -885,12 +932,13 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
     ax[7].set_xticks([]), ax[7].set_yticks([]), ax[7].set_xlabel('')
     ax[7].set_xticklabels([]), ax[7].set_yticklabels([]), ax[7].set_ylabel('')
 
-    folder_ids = [2,3]
+    folder_ids = parms['folder_ids']
     bg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
                         f'Background{folder_ids[0]}/*.wav'))
     fg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
                         f'Foreground{folder_ids[1]}/*.wav'))
-    bg_path, fg_path = bg_dir[int(BG[:2]) - 1], fg_dir[int(FG[:2]) - 1]
+    bg_path = [bb for bb in bg_dir if epo.split('_')[1].split('-')[0][:2] in bb][0]
+    fg_path = [ff for ff in fg_dir if epo.split('_')[2].split('-')[0][:2] in ff][0]
 
     xf = 100
     xmin, xmax = ax[1].get_xlim()
@@ -906,7 +954,7 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
     ax[0].set_xticklabels([]), ax[0].set_yticklabels([])
     ax[0].spines['top'].set_visible(False), ax[0].spines['bottom'].set_visible(False)
     ax[0].spines['left'].set_visible(False), ax[0].spines['right'].set_visible(False)
-    ax[0].set_ylabel(f"BG: {BG[2:]}", rotation=0, fontweight='bold',
+    ax[0].set_ylabel(f"BG: {epo.split('_')[1][2:].split('-')[0]}", rotation=0, fontweight='bold',
                      size=8, labelpad=-5)
 
     sfs, W = wavfile.read(fg_path)
@@ -918,7 +966,7 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
     ax[2].set_xticklabels([]), ax[2].set_yticklabels([])
     ax[2].spines['top'].set_visible(False), ax[2].spines['bottom'].set_visible(False)
     ax[2].spines['left'].set_visible(False), ax[2].spines['right'].set_visible(False)
-    ax[2].set_ylabel(f"FG: {FG[2:]}", rotation=0, fontweight='bold',
+    ax[2].set_ylabel(f"FG: {epo.split('_')[2][2:].split('-')[0]}", rotation=0, fontweight='bold',
                      size=8, labelpad=-5)
 
     Ws = WA + W
@@ -933,8 +981,6 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
     ax[4].set_ylabel(f"BG+FG", rotation=0, fontweight='bold',
                      size=8, labelpad=-5)
 
-
-
     ymin, ymax = ax[1].get_ylim()
     ax[0].vlines([0, 1 * fs], ymin, ymax, color='black', lw=0.5)
     ax[0].hlines([ymin + 2, ymax], 0, 1 * fs, color='black', lw=0.5)
@@ -948,7 +994,7 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
                     fontweight='bold', size=8)
 
 
-def get_cellstring(cell, BG, FG, weight_df):
+def get_cellstring_old_format(cell, BG, FG, weight_df):
     '''Pretty simple, just gets a cell string in a format that the above two functions take.
     It doesn't have to be this way, but it was an easy existing framework for it.'''
     cellid_and_stim_strs = [index[0] + ':' + nameA + ':' + nameB for index, nameA, nameB in \
@@ -956,6 +1002,19 @@ def get_cellstring(cell, BG, FG, weight_df):
                                 weight_df['namesA'], weight_df['namesB'])]
     cellid_and_stim_str = [ee for ee in cellid_and_stim_strs if ee.split(':')[0] == cell
                            if ee.split(':')[1][:2] == BG if ee.split(':')[2][:2] == FG][0]
+
+    return cellid_and_stim_str
+
+
+def get_cellstring(cell, BG, FG, weight_df):
+    '''Changed on 2022_08_25 to reflect current naming conventions in weight_df.
+    Pretty simple, just gets a cell string in a format that the above two functions take.
+    It doesn't have to be this way, but it was an easy existing framework for it.'''
+    cellid_and_stim_strs = [index + ':' + nameA + ':' + nameB for index, nameA, nameB in \
+                            zip(weight_df.cellid.values,
+                                weight_df['BG'], weight_df['FG'])]
+    cellid_and_stim_str = [ee for ee in cellid_and_stim_strs if ee.split(':')[0] == cell
+                           if ee.split(':')[1] == BG if ee.split(':')[2] == FG][0]
 
     return cellid_and_stim_str
 
@@ -1157,15 +1216,15 @@ def split_psth_highest_lowest(df_filtered, sortby='suppression', rows=15, folder
         axn = 9
 
 
-def histogram_summary_plot(weight_df, threshold=0.05, quad_return=[3, 2, 6]):
+def histogram_summary_plot(weight_df, threshold=0.05):
     '''Pretty niche plot that will plot BG+/FG+ histograms and compare BG and FG weights,
     then plot BG+/FG- histogram and BG-/FG+ histogram separate and then compare BG and FG
     again in a bar graph. I guess you could put any thresholded quadrants you want, but the
     default is the only that makes sense. Last figure on APAN/SFN poster.'''
-    quad, _ = quadrants_by_FRns(weight_df, threshold=threshold, quad_return=quad_return)
+    quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=[3, 2, 6])
     quad3, quad2, quad6 = quad.values()
 
-    f = plt.figure(figsize=(15, 7))
+    f = plt.figure(figsize=(15, 7)) # I made the height 5 for NGP retreat poster
     histA = plt.subplot2grid((7, 17), (0, 0), rowspan=5, colspan=3)
     meanA = plt.subplot2grid((7, 17), (0, 4), rowspan=5, colspan=2)
     histB = plt.subplot2grid((7, 17), (0, 8), rowspan=5, colspan=3)
@@ -1182,8 +1241,8 @@ def histogram_summary_plot(weight_df, threshold=0.05, quad_return=[3, 2, 6]):
     ax[0].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
     ax[0].legend(('Background', 'Foreground'), fontsize=7)
     ax[0].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=12)
-    ax[0].set_title(f"Respond to both\nBG and FG alone", fontweight='bold', fontsize=16)
-    ax[0].set_xlabel("Weight", fontweight='bold', fontsize=12)
+    ax[0].set_title(f"Respond to both\nBG and FG alone", fontweight='bold', fontsize=15)
+    ax[0].set_xlabel("Mean Weight", fontweight='bold', fontsize=12)
     ymin, ymax = ax[0].get_ylim()
 
     BG1, FG1 = np.mean(quad3.weightsA), np.mean(quad3.weightsB)
@@ -1191,8 +1250,13 @@ def histogram_summary_plot(weight_df, threshold=0.05, quad_return=[3, 2, 6]):
     ttest1 = stats.ttest_ind(quad3.weightsA, quad3.weightsB)
     ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
     ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
-    ax[1].set_ylabel('Weight', fontweight='bold', fontsize=12)
-    ax[1].set_ylim(0, 0.79)
+    ax[1].set_ylabel('Mean Weight', fontweight='bold', fontsize=12)
+    # ax[1].set_ylim(0, 0.79)
+    if ttest1.pvalue < 0.001:
+        title = 'p<0.001'
+    else:
+        title = f"{ttest1.pvalue:.3f}"
+    ax[1].set_title(title, fontsize=8)
 
     BG2, FG2 = np.mean(quad6.weightsA), np.mean(quad2.weightsB)
     BG2sem, FG2sem = stats.sem(quad6.weightsA), stats.sem(quad2.weightsB)
@@ -1200,7 +1264,15 @@ def histogram_summary_plot(weight_df, threshold=0.05, quad_return=[3, 2, 6]):
     ax[4].bar("BG", BG2, yerr=BG2sem, color='deepskyblue')
     ax[4].bar("FG", FG2, yerr=FG2sem, color='yellowgreen')
     ax[4].set_ylabel("Weight", fontweight='bold', fontsize=12)
-    ax[4].set_ylim(0, 0.79)
+    # ax[4].set_ylim(0, 0.79)
+    if ttest2.pvalue < 0.001:
+        title = 'p<0.001'
+    else:
+        title = f"{ttest2.pvalue:.3f}"
+    ax[4].set_title(title, fontsize=8)
+    mean_big = np.max([BG1, FG1, BG2, FG2])
+    ax[1].set_ylim(0, mean_big+(mean_big*0.1))
+    ax[4].set_ylim(0, mean_big+(mean_big*0.1))
 
     na, xa = np.histogram(quad6.weightsA, bins=edges)
     na = na / na.sum() * 100
@@ -1209,14 +1281,16 @@ def histogram_summary_plot(weight_df, threshold=0.05, quad_return=[3, 2, 6]):
     ax[2].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
     ax[3].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
     ax[2].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=12)
-    ax[2].set_title(f"Respond to BG\nalone only", fontweight='bold', fontsize=16)
-    ax[3].set_title(f"Respond to FG\nalone only", fontweight='bold', fontsize=16)
+    ax[2].set_title(f"Respond to BG\nalone only", fontweight='bold', fontsize=15)
+    ax[3].set_title(f"Respond to FG\nalone only", fontweight='bold', fontsize=15)
     ax[2].set_xlabel("Weight", fontweight='bold', fontsize=12)
     ax[3].set_xlabel("Weight", fontweight='bold', fontsize=12)
-    ax[2].set_ylim(ymin, ymax), ax[3].set_ylim(ymin, ymax)
+    biggest = np.max([na,nb])
+    # ax[2].set_ylim(ymin, ymax), ax[3].set_ylim(ymin, ymax)
+    ax[2].set_ylim(ymin, biggest), ax[3].set_ylim(ymin, biggest)
     ax[3].set_yticks([])
 
-    return ttest1, ttest2
+    return ttest1, ttest2, [quad3.shape[0], quad2.shape[0], quad6.shape[0]]
 
 
 def histogram_subplot_handler(df_dict, yax='cells', tags=None):
@@ -1276,3 +1350,311 @@ def save_psths_bgfg_sort(weight_df):
 
         for css in cellid_and_stim_strs:
             psth_responses_by_kw(css, df_filtered, kw, plotids['sound_type'], sigma=2, save=True)
+
+
+# Interactive plotting helpers
+def generate_interactive_plot(df, xcolumn='bg_FR', ycolumn='fg_FR',
+                              threshold=0.05, sigma=None, sort=True):
+    '''Little wrapper function of taking a dataframe and making the interactive scatter
+    plot. You can define what x and y values should be, but default and what I'd probably
+    always use is FR. Sigma of 2 seems to be nice, but do you. Made and put here 2022_08_31.'''
+    plotids, df_filtered, fnargs = {'xcol': xcolumn, 'ycol': ycolumn,
+                                    'fn':interactive_plot_click_psth_heatmap}, \
+                                   df.copy(), {'df_filtered': df, 'sigma':sigma, 'sort':sort}
+    cellid_and_stim_strs= [index+':'+nameA+':'+nameB for index,nameA,nameB in \
+                          zip(df_filtered.cellid.values,
+                              df_filtered['BG'],df_filtered['FG'])]
+    f, ax = plt.subplots(1,1)
+    phi=interactive_scatter(df_filtered[plotids['xcol']].values,
+                             df_filtered[plotids['ycol']].values,
+                             cellid_and_stim_strs, plotids,
+                             ax=ax, fn=plotids['fn'], thresh=threshold, fnargs=fnargs)
+
+
+def interactive_plot_click_psth_heatmap(cellid_and_stim_str,
+                                        df_filtered=weight_df, sigma=None, sort=True):
+    '''The business of the interactive scatter'''
+
+    # Kind of old way of getting cell parameters, but it works. I'd prefer to nixx the
+    # cellid_and_stim_str thing.
+    parms = get_resp_and_stim_info(cellid_and_stim_str, df_filtered)
+    cellid, animal_id, BG, FG, response, this_cell_stim, fs, folder_ids, pre, dur = parms.values()
+
+    weightBG, weightFG = this_cell_stim['weightsA'], this_cell_stim['weightsB']
+    epo = this_cell_stim.epoch
+    epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
+
+    resp = response.extract_channels([cellid])
+    r = resp.extract_epochs(epochs)
+
+    # Make the husk of this plot
+    fig, axes = plt.subplots(figsize=(15, 9))
+    psth = plt.subplot2grid((11, 16), (0, 0), rowspan=4, colspan=8)
+    specA = plt.subplot2grid((11, 16), (5, 0), rowspan=2, colspan=8)
+    specB = plt.subplot2grid((11, 16), (8, 0), rowspan=2, colspan=8)
+    BGheat = plt.subplot2grid((11, 16), (0, 10), rowspan=2, colspan=5)
+    FGheat = plt.subplot2grid((11, 16), (3, 10), rowspan=2, colspan=5)
+    combheat = plt.subplot2grid((11, 16), (6, 10), rowspan=2, colspan=5)
+    diffheat = plt.subplot2grid((11, 16), (9, 10), rowspan=2, colspan=5)
+    cbar_main = plt.subplot2grid((11, 16), (3, 15), rowspan=2, colspan=1)
+    cbar_diff = plt.subplot2grid((11, 16), (9, 15), rowspan=2, colspan=1)
+    ax = [psth, specA, specB, BGheat, FGheat, combheat, diffheat, cbar_main, cbar_diff]
+
+    # Gather some helpful plotting things including responses
+    prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
+    time = (np.arange(0, r[epochs[0]].shape[-1]) / fs ) - prestim
+
+    bg_alone, fg_alone, combo = epochs[0], epochs[1], epochs[2]
+    r_mean = {e:np.squeeze(np.nanmean(r[e], axis=0)) for e in epochs}
+    r_mean['Weight Model'] = (r_mean[bg_alone] * weightBG) + (r_mean[fg_alone] * weightFG)
+    r_mean['Linear Sum'] = r_mean[bg_alone] + r_mean[fg_alone]
+
+    colors = ['deepskyblue', 'yellowgreen', 'lightcoral', 'dimgray', 'black']
+    styles = ['-', '-', '-', '-', ':']
+
+    # Plotting the psth
+    for e, c, s in zip(r_mean.keys(), colors, styles):
+        ax[0].plot(time, sf.gaussian_filter1d(r_mean[e], sigma=1)
+                    * fs, color=c, linestyle=s, label=e)
+    ax[0].legend((f'BG, weight={np.around(this_cell_stim.weightsA, 2)}, FR={np.around(this_cell_stim.bg_FR, 3)}',
+                  f'FG, weight={np.around(this_cell_stim.weightsB, 2)}, FR={np.around(this_cell_stim.fg_FR, 3)}',
+                  'Both',
+                  'Weight Model, r={:.2f}'.format(this_cell_stim.r),
+                  'Linear Sum'))
+    ax[0].set_title(f"{cellid_and_stim_str} sup:{this_cell_stim['supp']}")
+    ymin, ymax = ax[0].get_ylim()
+    ax[0].vlines([0,1.0], ymin, ymax, color='black', lw=0.75, ls='--')
+    ax[0].vlines(0.5, ymax*0.5, ymax, color='black', lw=0.75, ls=':')
+    ax[0].set_xlim((-prestim * 0.5), (1 + (prestim * 0.75)))
+
+    # Getting spectrograms to plot BG and FG
+    folder_ids = parms['folder_ids']
+    bg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                        f'Background{folder_ids[0]}/*.wav'))
+    fg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                        f'Foreground{folder_ids[1]}/*.wav'))
+    bg_path = [bb for bb in bg_dir if epo.split('_')[1].split('-')[0][:2] in bb][0]
+    fg_path = [ff for ff in fg_dir if epo.split('_')[2].split('-')[0][:2] in ff][0]
+
+    xf = 100
+    low, high = ax[0].get_xlim()
+    low, high = low * xf, high * xf
+
+    sfs, W = wavfile.read(bg_path)
+    spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+    ax[1].imshow(spec, aspect='auto', origin='lower', extent=[0,spec.shape[1], 0, spec.shape[0]])
+    ax[1].set_xlim(low, high)
+    ax[1].set_xticks([0, 20, 40, 60, 80]), ax[1].set_yticks([])
+    ax[1].set_xticklabels([0, 0.2, 0.4, 0.6, 0.8]), ax[1].set_yticklabels([])
+    ax[1].spines['top'].set_visible(False), ax[1].spines['bottom'].set_visible(False)
+    ax[1].spines['left'].set_visible(False), ax[1].spines['right'].set_visible(False)
+    ax[1].set_ylabel(f"BG: {BG}", fontweight='bold', fontsize=8)
+
+    sfs, W = wavfile.read(fg_path)
+    spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+    ax[2].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]])
+    ax[2].set_xlim(low, high)
+    ax[2].set_xticks([0, 20, 40, 60, 80]), ax[2].set_yticks([])
+    ax[2].set_xticklabels([0, 0.2, 0.4, 0.6, 0.8]), ax[2].set_yticklabels([])
+    ax[2].spines['top'].set_visible(False), ax[2].spines['bottom'].set_visible(False)
+    ax[2].spines['left'].set_visible(False), ax[2].spines['right'].set_visible(False)
+    ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=8)
+    ax[2].set_ylabel(f"FG: {FG}", fontweight='bold', fontsize=8)
+
+    # Get all other cells from this site
+    site = cellid[:7]
+    this_site = df_filtered.loc[(df_filtered['cellid'].str.contains(site)) &
+                                (df_filtered.epoch == epo)]
+    site_ids = this_site.cellid.tolist()
+    num_ids = [cc[8:] for cc in site_ids]
+
+    # Normalize response and extract the BG_null, null_FG, and combo epochs
+    norm_spont, SR, STD = ohel.remove_spont_rate_std(response)
+    epor = norm_spont.extract_epochs(epochs)
+    resp_plot = np.stack([np.nanmean(aa, axis=0) for aa in list(epor.values())])
+
+    # Normalize response to max response for each unit, across all three stim
+    for nn in range(resp_plot.shape[1]):
+        # max_val = np.max(np.abs(resp_plot[:,nn,int(prestim*fs):int((prestim+dur)*fs)]))
+        max_val = np.max(np.abs(resp_plot[:,nn,:]))
+        resp_plot[:,nn,:] = resp_plot[:,nn,:] / max_val
+
+    # Get difference array before smoothing
+    ls_array = resp_plot[0,:,:] + resp_plot[1,:,:]
+    # diff_array = resp_plot[2,:,:] - resp_plot[1,:,:]
+    diff_array = resp_plot[2,:,:] - ls_array
+
+    if sort == True:
+        sort_array = diff_array[:, int(prestim*fs):int((prestim+dur)*fs)]
+        means = list(np.nanmean(sort_array, axis=1))
+        indexes = list(range(len(means)))
+        sort_df = pd.DataFrame(list(zip(means, indexes)), columns=['mean', 'idx'])
+        sort_df = sort_df.sort_values('mean', ascending=False)
+        sort_list = sort_df.idx
+        diff_array = diff_array[sort_list, :]
+        resp_plot = resp_plot[:, sort_list, :]
+        num_array = np.asarray(num_ids)
+        num_ids = list(num_array[sort_list])
+        print(num_ids)
+
+    # Smooth if you have given it a sigma by which to smooth
+    if sigma:
+        resp_plot = sf.gaussian_filter1d(resp_plot, sigma, axis=2)
+        diff_array = sf.gaussian_filter1d(diff_array, sigma, axis=1)
+    # Get the min and max of the array, find the biggest magnitude and set max and min
+    # to the abs and -abs of that so that the colormap is centered at zero
+    cmax, cmin = np.max(resp_plot), np.min(resp_plot)
+    biggest = np.maximum(np.abs(cmax),np.abs(cmin))
+    cmax, cmin = np.abs(biggest), -np.abs(biggest)
+
+    # Plot BG, FG, Combo
+    for (ww, qq) in enumerate(range(3,6)):
+        dd = ax[qq].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
+                           cmap='bwr', aspect='auto', origin='lower',
+                           extent=[time[0], time[-1], 0, len(this_site)])
+        ax[qq].vlines([int(pre), int(pre+dur)], ymin=0, ymax=len(this_site),
+                      color='black', lw=1, ls=':')
+        ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
+        ax[qq].set_yticks([*range(0, len(this_site))])
+        ax[qq].set_yticklabels(num_ids, fontsize=5)
+        ax[qq].set_title(f"{epochs[ww]}", fontsize=8, fontweight='bold')
+    ax[5].set_xlabel('Time (s)', fontweight='bold', fontsize=8)
+    # Add the colorbar to the axis to the right of these, the diff will get separate cbar
+    fig.colorbar(dd, ax=ax[7])
+    ax[7].spines['top'].set_visible(False), ax[7].spines['right'].set_visible(False)
+    ax[7].spines['bottom'].set_visible(False), ax[7].spines['left'].set_visible(False)
+    ax[7].set_yticks([]), ax[7].set_xticks([])
+
+    # Plot the difference heatmap with its own colorbar
+    dmax, dmin = np.max(diff_array), np.min(diff_array)
+    biggestd = np.maximum(np.abs(dmax),np.abs(dmin))
+    dmax, dmin = np.abs(biggestd), -np.abs(biggestd)
+    ddd = ax[6].imshow(diff_array, vmin=dmin, vmax=dmax,
+                           cmap='PiYG', aspect='auto', origin='lower',
+                           extent=[time[0], time[-1], 0, len(this_site)])
+    ax[6].vlines([0, int(dur)], ymin=0, ymax=len(this_site),
+                 color='black', lw=1, ls=':')
+    ax[6].set_yticks([*range(0, len(this_site))])
+    ax[6].set_yticklabels(num_ids, fontsize=5)
+    ax[6].set_title(f"Difference (Combo - FG)", fontsize=8, fontweight='bold')
+    ax[6].set_xlabel('Time (s)', fontsize=8, fontweight='bold')
+
+    fig.colorbar(ddd, ax=ax[8])
+    ax[8].spines['top'].set_visible(False), ax[8].spines['right'].set_visible(False)
+    ax[8].spines['bottom'].set_visible(False), ax[8].spines['left'].set_visible(False)
+    ax[8].set_yticks([]), ax[8].set_xticks([])
+
+
+def get_resp_and_stim_info(cellid_and_stim_str, df_filtered):
+    '''Finished and moved here from OLP_fitting_Greg on 2022_08_31. Kind of an antiquated
+    way of getting cell info using this cellid_and_stim_str format of loading. It's fine.'''
+    cellid, stimA, stimB = cellid_and_stim_str.split(':')
+    cell_df = df_filtered.loc[df_filtered.cellid == cellid]
+    this_cell_stim = cell_df[(cell_df['BG'] == stimA) & (cell_df['FG'] == stimB)].iloc[0]
+    animal_id = cellid[:3]
+
+    if animal_id == 'HOD' or animal_id == 'TBR':
+        batch = 333
+    elif animal_id == 'ARM':
+        # got to code in for batch to differentiate between A1 and PEG batches,
+        # where can I get that info above?
+        batch = 0
+    elif animal_id == 'CLT':
+        batch = 340
+    else:
+        raise ValueError(f"You need to add {animal_id} to the list in get_resp_and_stim_info.")
+
+    fs=100
+    expt = BAPHYExperiment(cellid=cellid, batch=batch)
+    rec = expt.get_recording(rasterfs=fs, resp=True, stim=False)
+    expt_params = expt.get_baphy_exptparams()  # Using Charlie's manager
+    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+    resp = rec['resp'].rasterize()
+
+    BG, FG = stimA.split('-')[0], stimB.split('-')[0]
+
+    #parts for spectrograms now
+    if animal_id == 'HOD':
+        folder_ids = [1,1]
+    elif animal_id == 'TBR':
+        folder_ids = [2,3]
+    elif animal_id == 'ARM':
+        folder_ids = [1,2]
+    elif animal_id == 'CLT':
+        folder_ids = [2,3]
+    else:
+        folder_ids = [2,3] # Any other animals for the foreseeable future should use this
+
+    parms = {'cellid': cellid, 'animal_id': animal_id, 'BG': BG, 'FG': FG, 'resp': resp,
+             'this_cell_stim': this_cell_stim, 'fs': fs, 'folder_ids': folder_ids,
+             'prestim': ref_handle['PreStimSilence'], 'stim_dur': ref_handle['Duration']}
+
+    return parms
+
+
+def interactive_scatter(x, y, names, ids, ax=None, fn=None, fnargs={}, dv=None,
+                      thresh=None, color='animal', **kwargs):
+    '''Most of the guts here are taken from Luke's function about interactive plotting.
+    I really don't know what everything does exactly but it points to my above function
+    when you click on a scatter point. Moved from OLP_fitting_Greg 2022_08_31.'''
+    if ax is None:
+        ax = plt.gca()
+    if 'marker' not in kwargs:
+        kwargs['marker'] = '.'
+    if 'linestyle' not in kwargs:
+        kwargs['linestyle'] = 'none'
+    if 'sound_type' in ids:
+        kwargs['sound_type'] = ids['sound_type']
+    good_inds = np.where(np.isfinite(x + y))[0]
+    x = x[good_inds]
+    y = y[good_inds]
+    names = [names[g] for g in good_inds]
+    if type(fn) is list:
+        for i in range(len(fnargs)):
+            if 'pth' in fnargs[i].keys():
+                fnargs[i]['pth'] = [fnargs[i]['pth'][gi] for gi in good_inds]
+    plot_df = pd.DataFrame(data=list(zip(x, y, [n[:3] for n in names])), index=names,
+                           columns=[ids['xcol'], ids['ycol'], 'animal'])
+    if color == 'FG':
+        color = [aa.split(':')[2].split('-')[0][2:].replace('_', '') for aa in plot_df.index]
+    # plot_df = pd.DataFrame(data=list(zip(x, y, [n[:3] for n in names])), index=names,
+    #                        columns=['weightBG', 'weightFG', 'animal'])
+    fig, ax = plt.subplots()
+    ax = sns.scatterplot(x=ids['xcol'], y=ids['ycol'], data=plot_df, hue=color, picker=5, ax=ax)
+    # ax = sns.scatterplot(x='weightBG', y='weightFG', data=plot_df, hue='animal', picker=5, ax =ax)
+    if thresh:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        ax.vlines([thresh, -thresh], ymin, ymax, color='black', lw=0.5)
+        ax.hlines([thresh, -thresh], xmin, xmax, color='black', lw=0.5)
+
+    art = ax.collections[0]
+    if 'keyword' in ids:
+        ax.set_title(f"{ids['keyword']}: {ids['sound_type']}")
+
+    # art, = ax.plot(x, y, picker=5, **kwargs)
+    # art=ax.scatter(x,y,picker=5)
+
+    def onpick(event):
+        if event.artist == art:
+            # ind = good_inds[event.ind[0]]
+            ind = event.ind[0]
+            print('onpick scatter: {}: {} ({},{})'.format(ind, names[ind], np.take(x, ind), np.take(y, ind)))
+            if dv is not None:
+                dv[0] = names[ind]
+            if fn is None:
+                print('fn is none?')
+            elif type(fn) is list:
+                for fni, fna in zip(fn, fnargs):
+                    fni(names[ind], **fna)
+                    # fni(names[ind],**fna,ind=ind)
+            else:
+                fn(names[ind], **fnargs)
+
+    def on_plot_hover(event):
+        for curve in ax.get_lines():
+            if curve.contains(event)[0]:
+                print('over {0}'.format(curve.get_gid()))
+
+    ax.figure.canvas.mpl_connect('pick_event', onpick)
+    return art

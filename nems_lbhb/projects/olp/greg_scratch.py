@@ -1,5 +1,10 @@
 import OLP_analysis as olp
 
+#################################################################################
+#### 2022_08_25 #################################################################
+#### Can't tell what this is specifically for, looks like an old way to load me
+#### parmfiles and then do a regression. Keeping around for now
+
 parmfiles = ['/auto/data/daq/Armillaria/ARM013/ARM013b32_p_OLP',   #0
              '/auto/data/daq/Armillaria/ARM015/ARM015b15_p_OLP',   #1
              '/auto/data/daq/Armillaria/ARM029/ARM029a14_p_OLP',   #15
@@ -36,14 +41,16 @@ params = olp.load_experiment_params(parmfile, rasterfs=100, sub_spont=True)
 response = olp.get_response(params, sub_spont=False)
 
 regression_results = olp.multisite_reg_results(parmfiles)
+#################################################################################
+#################################################################################
 
 
-
-####
-from nems0.analysis.gammatone.gtgram import gtgram
+#################################################################################
+#### 2022_08_25 #################################################################
+#### Can't tell what this is specifically for, loads some BGs and FGs and then
+#### separately plots just some random FGs as bad looking specs or waveforms
+from nems.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
-import scipy.ndimage.filters as sf
-from pathlib import Path
 import matplotlib.pyplot as plt
 import glob
 import numpy as np
@@ -57,38 +64,32 @@ fgs = fg_dir[5:15] # marms
 names = [aa.split('/')[-1] for aa in fgs]
 
 pl = 0
-
 fig, axes = plt.subplots(5,1, sharey=True)
 ax = axes.ravel()
 for pl in range(len(fgs)):
     path = fgs[pl]
     sfs, W = wavfile.read(path)
     spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 32000)
-
     # ax[pl].plot(W)
     ax[pl].set_title(f"{names[pl]}")
     ax[pl].imshow(np.log(spec), aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]])
-
 fig.tight_layout()
 
 pl = 0
-
 fig, axes = plt.subplots(5,1, sharey=True)
 ax = axes.ravel()
-
 for pl in range(len(fgs)):
     path = fgs[pl]
     sfs, W = wavfile.read(path)
-
     # ax[pl].plot(W)
     ax[pl].set_title(f"{names[pl]}")
     ax[pl].plot(W)
-
 fig.tight_layout()
+#################################################################################
+#################################################################################
 
 
-###
-
+response, params = olp._response_params(parmfile)
 
 olp.psth_fulls_allunits(1, response, params, 2)
 unit = 8
@@ -148,117 +149,9 @@ ax[1].errorbar(x, stim_coeffs, yerr=stim_err, color='black')
 ax[1].set_xlabel('Stimulus Pair', fontweight='bold', size=15)
 ax[1].axhline(0, linestyle=':', color='black')
 
-##########
-##########
-#FIGURE FOR POSTER PSTHS and stuff
-import OLP_analysis as olp
-parmfile = '/auto/data/daq/Tabor/TBR012/TBR012a14_p_OLP.m'
-response, params = olp._response_params(parmfile)
-olp.psth_comp_figure([0,1,2], 0, 12, response, params, 2, True)
-olp.psth_comp_figure([0,1,2], 0, 20, response, params, 2, True)
-olp.z_heatmaps_onepairs_figure([0,1,2], 0, response, params, tags=[12,20], sigma=2, arranged=True)
-
-##Waveform plots for figure 1 of poster
-from nems0.analysis.gammatone.gtgram import gtgram
-from scipy.io import wavfile
-import matplotlib.pyplot as plt
-import numpy as np
-
-#Fulls, probably don't use
-path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set3/'
-BG_path = path + 'cat312_rec1_wind_excerpt1.wav'
-FG_path = path + '00cat669_rec2_marmoset_chirp_excerpt1.wav'
-
-#partials actually used
-path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
-BG_path = path + 'Background2/10Wind.wav'
-FG_path = path + 'Foreground3/07Chirp.wav'
-
-paths = [BG_path, FG_path]
-wavs = []
-tags = ['Background\n(BG)', 'Foreground\n(FG)', 'BG+FG\nCombo']
-tags = ['Sound Texture -\nBackground (BG)', 'Marmoset Vocalization -\nForeground (FG)', 'BG+FG Combination']
-colors = ['deepskyblue', 'yellowgreen', 'dimgray']
-
-fig, ax = plt.subplots(3, 1, sharex=True, sharey=True, figsize=(6,6))
-for nn, pth in enumerate(paths):
-    sfs, W = wavfile.read(pth)
-    ax[nn].plot(W, color=colors[nn])
-
-    ax[nn].spines['top'].set_visible(False), ax[nn].spines['bottom'].set_visible(False)
-    ax[nn].spines['left'].set_visible(False), ax[nn].spines['right'].set_visible(False)
-    ax[nn].set_yticks([]), ax[nn].set_xticks([])
-    ax[nn].set_title(f"{tags[nn]}", fontweight='bold', fontsize=18)
-    # ax[nn].set_ylabel(f"{tags[nn]}", fontweight='bold', fontsize=16, rotation=0, labelpad=25)
-
-    wavs.append(W)
-
-comb = wavs[0] + wavs[1]
-ax[2].plot(comb, color=colors[2])
-ax[2].spines['top'].set_visible(False), ax[2].spines['bottom'].set_visible(False)
-ax[2].spines['left'].set_visible(False), ax[2].spines['right'].set_visible(False)
-ax[2].set_yticks([]), ax[2].set_xticks([])
-# ax[2].set_ylabel(f"{tags[2]}", fontweight='bold', fontsize=16, rotation=0, labelpad=25)
-ax[2].set_title(f"{tags[2]}", fontweight='bold', fontsize=18)
-fig.tight_layout()
 
 
-#wasting my time - or intro figure, whatever you want to call it
-from nems0.analysis.gammatone.gtgram import gtgram
-from scipy.io import wavfile
-import matplotlib.pyplot as plt
 
-path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set3/'
-piano_path = path + 'cat268_rec1_classicalsolo_haydn_piano-sonata-53_24sec_excerpt1.wav'
-bass_path = path + 'cat20_rec1_acoustic_bass_gillespie_bass_solo_excerpt1.wav'
-violin_path = path + 'cat394_rec1_violin_excerpt1.wav'
-paths = [piano_path, violin_path, bass_path]
-
-fig, ax = plt.subplots(5,1, figsize=(7.5,10))
-specs = []
-for nn, pth in enumerate(paths):
-    sfs, W = wavfile.read(pth)
-    spec = gtgram(W, sfs, 0.02, 0.01, 48, 0, 12000)
-    ax[nn].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
-                  cmap='gray_r')
-    # ax[nn].set_xticks([0, 100, 200, 300, 400]), ax[nn].set_yticks([])
-    # ax[nn].set_xticklabels([0, 1.0, 2.0, 3.0, 4.0]), ax[nn].set_yticklabels([])
-    ax[nn].set_yticks([]), ax[nn].set_xticks([])
-    # ax[nn].spines['top'].set_visible(False), ax[nn].spines['bottom'].set_visible(False)
-    # ax[nn].spines['left'].set_visible(False), ax[nn].spines['right'].set_visible(False)
-
-    specs.append(spec)
-
-comb = specs[0] + specs[1] + specs[2]
-ax[4].imshow(comb, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
-             cmap='gray_r')
-ax[3].set_yticks([]), ax[3].set_xticks([])
-ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
-ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
-ax[4].set_yticks([]), ax[4].set_xticks([])
-# ax[4].spines['top'].set_visible(False), ax[4].spines['bottom'].set_visible(False)
-# ax[4].spines['left'].set_visible(False), ax[4].spines['right'].set_visible(False)
-ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
-ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
-
-##2/7/22 add to make the waveforms for WIP
-fig, ax = plt.subplots(5,1, figsize=(7.5,10), sharey=True)
-waves = []
-for nn, pth in enumerate(paths):
-    sfs, W = wavfile.read(pth)
-    ax[nn].plot(W, color='dimgrey', lw=1)
-    ax[nn].set_yticks([]), ax[nn].set_xticks([])
-    waves.append(W)
-comb = waves[0] + waves[1] + waves[2]
-ax[4].plot(comb, color='dimgrey', lw=1)
-ax[3].set_yticks([]), ax[3].set_xticks([])
-ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
-ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
-ax[4].set_yticks([]), ax[4].set_xticks([])
-ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
-ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
-
-####
 
 import OLP_analysis as olp
 import numpy as np
@@ -969,52 +862,6 @@ ax.set_title(f"Combo {lab_comb} {parameters[site]['combos'][lab_comb]}")
 
 
 
-def z_heatmaps_onepairs(resp_idx, pair, response, params, sigma=None, arranged=False):
-    """Plots a two column figure of subplots, one for each sound pair, displaying a heat map
-    of the zscore for all the units."""
-    zscore, z_params = olp.get_z(resp_idx, response, params)
-
-    if sigma is not None:
-        zscore = sf.gaussian_filter1d(zscore, sigma, axis=2)
-        zmin, zmax = np.min(np.min(zscore, axis=2)), np.max(np.max(zscore, axis=2))
-        abs_max = max(abs(zmin),zmax)
-    else:
-        zmin, zmax = np.min(np.min(zscore, axis=1)), np.max(np.max(zscore, axis=1))
-        abs_max = max(abs(zmin),zmax)
-
-    if arranged:
-        prebin = int(params['PreStimSilence'] * params['fs'])
-        postbin = int((params['stim length'] - params['PostStimSilence']) * params['fs'])
-        z_time_avg = np.nanmean(zscore[pair,:,prebin:postbin], axis=1)
-        idx = np.argsort(z_time_avg)
-        zscore = zscore[:, idx, :]
-
-    fig, ax = plt.subplots()
-
-    im = ax.imshow(zscore[pair, :, :], aspect='auto', cmap='RdBu_r',
-              extent=[-0.5, (zscore[pair, :, :].shape[1] / params['fs']) -
-                      0.5, zscore[pair, :, :].shape[0], 0], vmin=-abs_max, vmax=abs_max)
-    ax.set_title(f"Pair {pair}: BG {params['pairs'][pair][0]} - FG {params['pairs'][pair][1]}",
-                 fontweight='bold')
-    ymin, ymax = ax.get_ylim()
-    ax.vlines([0, params['Duration']], ymin, ymax, colors='black', linestyles='--', lw=1)
-    xmin, xmax = ax.get_xlim()
-    ax.set_xlim(xmin + 0.3, xmax - 0.2)
-    ax.set_xticks([0, 0.5, 1.0])
-
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    fig.colorbar(im, cax=cbar_ax)
-
-    # fig.text(0.5, 0.03, 'Time from onset (s)', ha='center', va='center', fontweight='bold')
-    fig.text(0.05, 0.5, 'Neurons', ha='center', va='center', rotation='vertical', fontweight='bold')
-
-    # fig.suptitle(f"Experiment {params['experiment']} - Combo Index {z_params['resp_idx']} - "
-    #              f"{z_params['idx_names']} - Sigma {sigma}\n"
-    #              f"{z_params['label']}", fontweight='bold')
 
 
 
-#plot electrode shank
-from nems_lbhb.plots import plot_weights_64D
-plot_weights_64D(np.zeros(64),[f'AMT001a-{x}-1' for x in range(64)])

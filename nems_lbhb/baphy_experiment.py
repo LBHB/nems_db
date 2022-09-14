@@ -182,28 +182,22 @@ class BAPHYExperiment:
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
             self.rawid = [rawid] # todo infer from parmfile instad of parsing
-            if cellid is not None:
-                
-                if type(cellid) is list:
-                    self.cells_to_extract = cellid
-                    self.cells_to_load = cellid
-                    self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
-                    self.units_to_load = [int(c.split("-")[2]) for c in cellid]
-                    self.siteid = cellid[0][:7]
-                elif type(cellid) is str:
-                    t = cellid.split("-")
-                    self.cells_to_extract = [cellid]
-                    self.cells_to_load = [cellid]
-                    self.channels_to_load = [int(t[1])]
-                    self.units_to_load = [int(t[2])]
-                    self.siteid = cellid[:7]
-                else:
-                    raise TypeError
+            if cellid is None and rawid is not None:
+                # finds all cellids in DB for this recording
+                cellid = db.get_cellids(rawid).tolist()
+
+            if type(cellid) is str:
+                cellid = [cellid]
+            elif type(cellid) is list:
+                pass
             else:
-                self.sited = os.path.split(parmfile)[-1][:7]
-                self.cells_to_load = None
-                self.cells_to_extract = None
-                self.units_to_load = None
+                raise ValueError(f"cellid must be a str or list of str but is {type(cellid)}")
+
+            self.cells_to_extract = cellid
+            self.cells_to_load = cellid
+            self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
+            self.units_to_load = [int(c.split("-")[2]) for c in cellid]
+            self.siteid = cellid[0].split('-')[0]
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')

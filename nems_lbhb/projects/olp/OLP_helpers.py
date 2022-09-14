@@ -34,6 +34,9 @@ def get_load_options(batch):
         options = {'rasterfs': 100,
                    'stim': False,
                    'resp': True}
+    # Maybe add this as the default? Could save time?
+    # options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+
     return options
 
 
@@ -163,6 +166,25 @@ def path_tabor_get_epochs(stim_epochs, rec, resp, params):
     # full = pd.concat([good_epochs, selected_silences]).sort_values(by=['start', 'end'], ascending=[True, False], ignore_index=True)
 
     return stim_epochs, rec, resp
+
+
+def remove_clicks(w, max_threshold=15, verbose=False):
+    '''SVD made in 2022_09. Same as the matlab function when OLP is called, it takes the high power
+    clicks away from an RMS normalized signal and log scales things above the threshold.'''
+    w_clean = w
+
+    # log compress everything > 67% of max
+    crossover = 0.67 * max_threshold
+    ii = (w>crossover)
+    w_clean[ii] = crossover + np.log(w_clean[ii]-crossover+1);
+    jj = (w<-crossover)
+    w_clean[jj] = -crossover - np.log(-w_clean[jj]-crossover+1);
+
+    if verbose:
+       print(f'bins compressed down: {ii.sum()} up: {jj.sum()} max {np.abs(w).max():.2f}-->{np.abs(w_clean).max():.2f}')
+
+    return w_clean
+
 
 
 def calc_base_reliability(full_resp):
@@ -392,6 +414,171 @@ def weight_hist(df, tag=None, y='cells', ax=None):
         ax.legend(('Background', 'Foreground'), fontsize=4)
 
 
+def get_sound_statistics_full(weight_df):
+    '''Updated 2022_09_13. Added mean relative gain for each sound. The rel_gain is BG or FG
+    respectively.
+    Updated 2022_09_12. Now it can take a DF that has multiple synthetic conditions and pull
+    the stats for the synthetic sounds. The dataframe will label these by column synth_kind
+    and you should pull out them that way, because they all have the same name in the name
+    column. Additionally, RMS normalization stats were added in RMS_norm and max_norm powers.
+    5/12/22 Takes a cellid and batch and figures out all the sounds that were played
+    in that experiment and calculates some stastistics it plots side by side. Also outputs
+    those numbers in a cumbersome dataframe'''
+    lfreq, hfreq, bins = 100, 24000, 48
+    cid, btch = weight_df.cellid.iloc[0], weight_df.batch.iloc[0]
+    manager = BAPHYExperiment(cellid=cid, batch=btch)
+    expt_params = manager.get_baphy_exptparams()
+    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+    BG_folder, FG_folder = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+
+    bbs = list(set([bb.split('_')[1][:2] for bb in weight_df.epoch]))
+    ffs = list(set([ff.split('_')[2][:2] for ff in weight_df.epoch]))
+    bbs.sort(key=int), ffs.sort(key=int)
+
+    synths = list(weight_df.synth_kind.unique())
+    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                  'S': 'Spectral', 'C': 'Cochlear'}
+
+    # if 'N' in synths and 'A' in synths:
+    #     synths.remove('A')
+
+    syn_df = []
+    for syn in synths:
+        # This is getting the mean rel gain for each sound (FG rel gain for FGs, etc)
+        synth_df = weight_df.loc[weight_df.synth_kind==syn].copy()
+        bg_df = synth_df[['BG', 'BG_rel_gain']]
+        fg_df = synth_df[['FG', 'FG_rel_gain']]
+
+        bg_mean = bg_df.groupby(by='BG').agg(mean=('BG_rel_gain', np.mean)).reset_index().\
+            rename(columns={'BG': 'short_name'})
+        fg_mean = fg_df.groupby(by='FG').agg(mean=('FG_rel_gain', np.mean)).reset_index().\
+            rename(columns={'FG': 'short_name'})
+        mean_df = pd.concat([bg_mean, fg_mean])
+
+        # This is just loading the sounds and stuffs
+        if syn=='A' or syn=='N':
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{ff}*.wav'))[0] for ff in ffs]
+        else:
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                f'{BG_folder}/{kind_dict[syn]}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                f'{FG_folder}/{kind_dict[syn]}/{ff}*.wav'))[0] for ff in ffs]
+
+        paths = bg_paths + fg_paths
+        bgname = [bb.split('/')[-1].split('.')[0] for bb in bg_paths]
+        fgname = [ff.split('/')[-1].split('.')[0] for ff in fg_paths]
+        names = bgname + fgname
+
+        Bs, Fs = ['BG'] * len(bgname), ['FG'] * len(fgname)
+        labels = Bs + Fs
+
+        sounds = []
+        means = np.empty((bins, len(names)))
+        means[:] = np.NaN
+        for cnt, sn, pth, ll in zip(range(len(labels)), names, paths, labels):
+            sfs, W = wavfile.read(pth)
+            spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+            # to measure rms power... for rms-normed signals:
+            rms_normed = np.std(remove_clicks(W / W.std(), 15))
+            # for max-normed signals:
+            max_normed = np.std(W / np.abs(W).max()) * 5
+
+            dev = np.std(spec, axis=1)
+
+            freq_mean = np.nanmean(spec, axis=1)
+            x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+            csm = np.cumsum(freq_mean)
+            big = np.max(csm)
+
+            freq75 = x_freq[np.abs(csm - (big * 0.75)).argmin()]
+            freq25 = x_freq[np.abs(csm - (big * 0.25)).argmin()]
+            freq50 = x_freq[np.abs(csm - (big * 0.5)).argmin()]
+            bandw = np.log2(freq75 / freq25)
+
+            means[:, cnt] = freq_mean
+
+            sounds.append({'name': sn.split('_')[0],
+                           'type': ll,
+                           'synth_kind': syn,
+                           'std': dev,
+                           'bandwidth': bandw,
+                           '75th': freq75,
+                           '25th': freq25,
+                           'center': freq50,
+                           'spec': spec,
+                           'mean_freq': freq_mean,
+                           'freq_stationary': np.std(freq_mean),
+                           'RMS_norm_power': rms_normed,
+                           'max_norm_power': max_normed,
+                           'short_name': sn[2:].split('_')[0].replace(' ', '')})
+
+        sound_df = pd.DataFrame(sounds)
+        # Merge the relative gain data into the DF of sounds
+        sound_df = pd.merge(sound_df, mean_df, on='short_name').rename(columns={'mean': 'rel_gain'})
+
+        # Add mod spec calculations to sound_df, 2022_08_26
+        mods = np.empty((sound_df.iloc[0].spec.shape[0], sound_df.iloc[0].spec.shape[1],
+                         len(sound_df)))
+        mods[:] = np.NaN
+        mod_list = []
+        for cnt, ii in enumerate(sound_df.name):
+            row = sound_df.loc[sound_df.name == ii]
+            spec = row['spec'].values[0]
+            mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
+            mods[:, :, cnt] = mod
+            mod_list.append(mod)
+        avmod = np.nanmean(mods, axis=2)
+        norm_list = [aa - avmod for aa in mod_list]
+        avmod = avmod[:, :, np.newaxis]
+        normmod = mods - avmod
+        clow, chigh = np.min(normmod), np.max(normmod)
+        sound_df['modspec'] = mod_list
+        sound_df['normmod'] = norm_list
+        # selfsounds['normmod'] = norm_list
+
+        trimspec = [aa[24:, 30:69] for aa in sound_df['modspec']]
+        negs = [aa[:, :20] for aa in trimspec]
+        negs = [aa[:, ::-1] for aa in negs]
+        poss = [aa[:, -20:] for aa in trimspec]
+        trims = [(nn + pp) / 2 for (nn, pp) in zip(negs, poss)]
+        sound_df['trimspec'] = trims
+
+        # Collapses across each access
+        ots = [np.nanmean(aa, axis=0) for aa in trims]
+        ofs = [np.nanmean(aa, axis=1) for aa in trims]
+
+        tbins, fbins = 100, 48
+
+        wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1 / tbins))
+        wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1 / 6))
+
+        wt2 = wt[50:70]
+        wf2 = wf[24:]
+
+        cumwt = [np.cumsum(aa) / np.sum(aa) for aa in ots]
+        bigt = [np.max(aa) for aa in cumwt]
+        freq50t = [wt2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumwt, bigt)]
+
+        cumft = [np.cumsum(aa) / np.sum(aa) for aa in ofs]
+        bigf = [np.max(aa) for aa in cumft]
+        freq50f = [wf2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumft, bigf)]
+
+        sound_df['avgwt'], sound_df['avgft'] = ots, ofs
+        sound_df['cumwt'], sound_df['cumft'] = cumwt, cumft
+        sound_df['t50'], sound_df['f50'] = freq50t, freq50f
+        sound_df['meanT'], sound_df['meanF'] = ots, ofs
+        # End mod spec addition 2022_08_26
+        syn_df.append(sound_df)
+
+    main_df = pd.concat(syn_df)
+
+    return main_df
+
+
 def get_sound_statistics(weight_df, plot=True):
     '''5/12/22 Takes a cellid and batch and figures out all the sounds that were played
     in that experiment and calculates some stastistics it plots side by side. Also outputs
@@ -453,6 +640,59 @@ def get_sound_statistics(weight_df, plot=True):
 
     sound_df = pd.DataFrame(sounds)
 
+    # Add mod spec calculations to sound_df, 2022_08_26
+    mods = np.empty((sound_df.iloc[0].spec.shape[0], sound_df.iloc[0].spec.shape[1],
+                     len(sound_df)))
+    mods[:] = np.NaN
+    mod_list = []
+    for cnt, ii in enumerate(sound_df.name):
+        row = sound_df.loc[sound_df.name == ii]
+        spec = row['spec'].values[0]
+        mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
+        mods[:, :, cnt] = mod
+        mod_list.append(mod)
+    avmod = np.nanmean(mods, axis=2)
+    norm_list = [aa - avmod for aa in mod_list]
+    avmod = avmod[:, :, np.newaxis]
+    normmod = mods - avmod
+    clow, chigh = np.min(normmod), np.max(normmod)
+    sound_df['modspec'] = mod_list
+    sound_df['normmod'] = norm_list
+    # selfsounds['normmod'] = norm_list
+
+    trimspec = [aa[24:, 30:69] for aa in sound_df['modspec']]
+    negs = [aa[:, :20] for aa in trimspec]
+    negs = [aa[:, ::-1] for aa in negs]
+    poss = [aa[:, -20:] for aa in trimspec]
+    trims = [(nn + pp) / 2 for (nn, pp) in zip(negs, poss)]
+    sound_df['trimspec'] = trims
+
+    # Collapses across each access
+    ots = [np.nanmean(aa, axis=0) for aa in trims]
+    ofs = [np.nanmean(aa, axis=1) for aa in trims]
+
+    tbins, fbins = 100, 48
+
+    wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1 / tbins))
+    wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1 / 6))
+
+    wt2 = wt[50:70]
+    wf2 = wf[24:]
+
+    cumwt = [np.cumsum(aa) / np.sum(aa) for aa in ots]
+    bigt = [np.max(aa) for aa in cumwt]
+    freq50t = [wt2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumwt, bigt)]
+
+    cumft = [np.cumsum(aa) / np.sum(aa) for aa in ofs]
+    bigf = [np.max(aa) for aa in cumft]
+    freq50f = [wf2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumft, bigf)]
+
+    sound_df['avgwt'], sound_df['avgft'] = ots, ofs
+    sound_df['cumwt'], sound_df['cumft'] = cumwt, cumft
+    sound_df['t50'], sound_df['f50'] = freq50t, freq50f
+    sound_df['meanT'], sound_df['meanF'] = ots, ofs
+    # End mod spec addition 2022_08_26
+
     # allmean = np.nanmean(means, axis=1, keepdims=True)
     # norm_mean = [aa / allmean for aa in sound_df.mean_freq]
     # freq_stationarity = [np.std(aa) for aa in allmean]
@@ -495,23 +735,79 @@ def get_sound_statistics(weight_df, plot=True):
     return sound_df
 
 
+def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
+    '''2022_09_14. This is a way to look at the sound stats (passed as a list) from a sound_df and compare them. But also, if you add
+    lines, a dictionary, which passes keys as those matching something found in stats, with a cutoff. That cut off will
+    be drawn as a line on that subplot for that stat and it will also tell you what sounds are below that threshold,
+    returning those sounds in a dictionary where the stat is a key and the values are a list of 'bad' sounds. Labels
+    are optional, passing it will look prettier than it defaulting the labels to what the sound stat in the df.'''
+    sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
+    sound_df.rename(columns={'std': 'Tstationary', 'freq_stationary': 'Fstationary', 'RMS_norm_power': 'RMS_power',
+                             'max_norm_power': 'max_power'}, inplace=True)
+    if isinstance(stats, list):
+        lens = len(stats)
+    elif isinstance(stats, str):
+        lens, stats = 1, [stats]
+
+    if lens <= 3:
+        hh, ww = 1, lens
+    else:
+        hh, ww = int(np.ceil(lens / 3)), 3
+    sound_df['Tstationary'] = [np.mean(aa) for aa in sound_df['Tstationary']]
+
+    fig, axes = plt.subplots(hh, ww, figsize=(ww * 5, hh * 5))
+    axes = np.ravel(axes)
+
+    bads = {}
+    for cnt, (ax, st) in enumerate(zip(axes, stats)):
+        sb.barplot(x='short_name', y=st,
+                   palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
+                   data=sound_df, ci=68, ax=ax)
+        ax.set_xticklabels(sound_df.short_name, rotation=90, fontweight='bold', fontsize=7)
+        if labels:
+            ax.set_ylabel(labels[cnt], fontweight='bold', fontsize=12)
+        else:
+            ax.set_ylabel(stats[cnt], fontweight='bold', fontsize=12)
+        ax.spines['top'].set_visible(True), ax.spines['right'].set_visible(True)
+        ax.set(xlabel=None)
+
+        if st in lines.keys():
+            xmin, xmax = ax.get_xlim()
+            ax.hlines(lines[st], xmin=xmin, xmax=xmax, ls=':', color='black')
+            ax.set_xlim(xmin, xmax)
+            bad_df = sound_df.loc[sound_df[st] <= lines[st]]
+            bads[st] = bad_df.short_name.tolist()
+    axes[0].set_title(f"Synth: {synth_kind}", fontsize=10, fontweight='bold')
+    return bads
+
+
 def add_sound_stats(weight_df, sound_df):
+    '''Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
+    I updated it so that it takes synth kind into account when adding the statistics, and
+    also adds RMS and max power for the sounds.'''
     BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
     BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
     BGmerge['BG'] = [aa[2:].replace(' ', '') for aa in BGdf.name]
     BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['std']]
     BGmerge['BG_bandwidth'] = BGdf.bandwidth.tolist()
     BGmerge['BG_Fstationary'] = BGdf.freq_stationary.tolist()
+    BGmerge['BG_RMS_power'] = BGdf.RMS_norm_power.tolist()
+    BGmerge['BG_max_power'] = BGdf.max_norm_power.tolist()
+    BGmerge['synth_kind'] = BGdf.synth_kind.tolist()
 
     FGmerge['FG'] = [aa[2:].replace(' ', '') for aa in FGdf.name]
     FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['std']]
     FGmerge['FG_bandwidth'] = FGdf.bandwidth.tolist()
     FGmerge['FG_Fstationary'] = FGdf.freq_stationary.tolist()
+    FGmerge['FG_RMS_power'] = FGdf.RMS_norm_power.tolist()
+    FGmerge['FG_max_power'] = FGdf.max_norm_power.tolist()
+    FGmerge['synth_kind'] = FGdf.synth_kind.tolist()
 
-    weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG'], validate='m:1')
-    weight_df = pd.merge(right=FGmerge, left=weight_df, on=['FG'], validate='m:1')
+    weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG', 'synth_kind'], validate='m:1')
+    weight_df = pd.merge(right=FGmerge, left=weight_df, on=['FG', 'synth_kind'], validate='m:1')
 
     return weight_df
+
 
 
 def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
