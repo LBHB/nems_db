@@ -489,98 +489,9 @@ f.suptitle(f"{area}", fontweight='bold', fontsize=12)
 
 
 
-#add mod spec to sound_df
-mods = np.empty((sound_df.iloc[0].spec.shape[0], sound_df.iloc[0].spec.shape[1],
-                 len(sound_df)))
-mods[:] = np.NaN
-mod_list = []
-for cnt, ii in enumerate(sound_df.name):
-    row = sound_df.loc[sound_df.name==ii]
-    spec = row['spec'].values[0]
-    mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
-    mods[:, :, cnt] = mod
-    mod_list.append(mod)
-avmod = np.nanmean(mods, axis=2)
-norm_list = [aa - avmod for aa in mod_list]
-avmod = avmod[:,:,np.newaxis]
-normmod = mods - avmod
-clow, chigh = np.min(normmod), np.max(normmod)
-sound_df['modspec'] = mod_list
-sound_df['normmod'] = norm_list
-# selfsounds['normmod'] = norm_list
-
-trimspec = [aa[24:, 30:69] for aa in sound_df['modspec']]
-negs = [aa[:, :20] for aa in trimspec]
-negs = [aa[:, ::-1] for aa in negs]
-poss = [aa[:, -20:] for aa in trimspec]
-trims = [(nn + pp) /2 for (nn, pp) in zip(negs, poss)]
-sound_df['trimspec'] = trims
-
-ots = [np.nanmean(aa, axis=0) for aa in trims]
-ofs = [np.nanmean(aa, axis=1) for aa in trims]
-
-wt2 = wt[50:70]
-wf2 = wf[24:]
-
-cumwt = [np.cumsum(aa)/np.sum(aa) for aa in ots]
-bigt = [np.max(aa) for aa in cumwt]
-freq50t = [wt2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumwt, bigt)]
-
-cumft = [np.cumsum(aa)/np.sum(aa) for aa in ofs]
-bigf = [np.max(aa) for aa in cumft]
-freq50f = [wf2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumft, bigf)]
-
-sound_df['cumwt'], sound_df['cumft'] = cumwt, cumft
-sound_df['t50'], sound_df['f50'] = freq50t, freq50f
-sound_df['meanT'], sound_df['meanF'] = ots, ofs
 
 
 
-
-
-
-
-
-
-#plots a bunch of wt and wf lines with average, cumsum, and 50%
-f, axes = plt.subplots(2, 3, figsize=(12,7))
-ax = axes.ravel()
-for aa in ots[:20]:
-    ax[0].plot(wt2, aa, color='deepskyblue')
-for aa in ots[20:]:
-    ax[0].plot(wt2, aa, color='yellowgreen')
-ax[0].set_xlabel('wt (Hz)', fontweight='bold', fontsize=8)
-ax[0].set_ylabel('Average', fontweight='bold', fontsize=8)
-
-for aa in cumwt[:20]:
-    ax[1].plot(aa, color='deepskyblue')
-for aa in cumwt[20:]:
-    ax[1].plot(aa, color='yellowgreen')
-ax[1].set_ylabel('Cumulative Sum', fontweight='bold', fontsize=8)
-ax[1].set_xlabel('wt (Hz)', fontweight='bold', fontsize=8)
-
-bgs, fgs = np.nanmean(freq50t[:20]), np.nanmean(freq50t[20:])
-ax[2].boxplot([freq50t[:20], freq50t[20:]], labels=['BG','FG'])
-ax[2].set_ylabel('Median', fontweight='bold', fontsize=8)
-
-# f, ax = plt.subplots(1, 3, figsize=(12,5))
-for aa in ofs[:20]:
-    ax[3].plot(wf2, aa, color='deepskyblue')
-for aa in ofs[20:]:
-    ax[3].plot(wf2, aa, color='yellowgreen')
-ax[3].set_xlabel('wf (cycles/s)', fontweight='bold', fontsize=8)
-ax[3].set_ylabel('Average', fontweight='bold', fontsize=8)
-
-for aa in cumft[:20]:
-    ax[4].plot(aa, color='deepskyblue')
-for aa in cumft[20:]:
-    ax[4].plot(aa, color='yellowgreen')
-ax[4].set_ylabel('Cumulative Sum', fontweight='bold', fontsize=8)
-ax[4].set_xlabel('wf (cycles/s)', fontweight='bold', fontsize=8)
-
-bgs, fgs = np.nanmean(freq50f[:20]), np.nanmean(freq50f[20:])
-ax[5].boxplot([freq50f[:20], freq50f[20:]], labels=['BG','FG'])
-ax[5].set_ylabel('Median', fontweight='bold', fontsize=8)
 
 ##reproduce the jittered scatters with mod spec stuff
 BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
@@ -677,137 +588,105 @@ ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
 ax[1].legend()
 
 
-#barplot of these hopefully
-fig, ax = plt.subplots(2, 1, figsize=(5, 8))
 
-sb.barplot(x='name', y='t50', palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
-           data=sound_df, ci=68, ax=ax[0], errwidth=1)
-ax[0].set_xticklabels(sound_df.name, rotation=90, fontweight='bold', fontsize=7)
-ax[0].set_ylabel('wt (Hz)', fontweight='bold', fontsize=12)
-ax[0].spines['top'].set_visible(True), ax[0].spines['right'].set_visible(True)
-ax[0].set(xlabel=None)
+def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
+                         jitter=[0.2,0.03,0.25],
+                         quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11'):
+    '''Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
+    a usual situation it would be Tstationariness, bandwidth, and Fstationariness compared to relative
+    gain. Can also be compared to weights.
+    y_metric refers to the FIRST one it will input, for relative_gain this is not an issue. If you want
+    to differentiate between weights the sound affects in others vs how that sound is weighted itself,
+    input the one as it relates to BG, so 'weightsB' will be 'how that sound effects others' and will
+    know to make the metric 'weightsA' for the FGs, for example.
+    When inputting x_metric names, always make it a list. All entries should be found in the df being
+    passed, but you should remove the BG_ or FG_ prefix.
+    Made into a function from OLP_analysis_main on 2022_09_07'''
+    quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
+    quad = quad.loc[(quad.area==area) & (quad.synth_kind==synth_kind) & (quad.kind==bin_kind)]
+    quad = quad.copy()
 
-sb.barplot(x='name', y='f50',
-           palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
-           data=sound_df, ax=ax[1])
-ax[1].set_xticklabels(sound_df.name, rotation=90, fontweight='bold', fontsize=7)
-ax[1].set_ylabel('wf (cycles/s)', fontweight='bold', fontsize=12)
-ax[1].spines['top'].set_visible(True), ax[1].spines['right'].set_visible(True)
-ax[1].set(xlabel=None)
+    # I use 2.5 for relative gain, I'm sure weights have one too...
+    if metric_filter:
+        quad = quad.loc[quad[y_metric] <= metric_filter]
+        quad = quad.loc[quad[y_metric] >= -metric_filter]
 
-fig.tight_layout()
+    if y_metric=='BG_rel_gain':
+        y_metric2, title, ylabel = 'FG_rel_gain', 'Relative Gain', 'Relative Gain'
+    elif y_metric=='weightsB':
+        y_metric2, title, ylabel = 'weightsA', 'How this sound effects a concurrent sound', 'Weight'
+    elif y_metric=='weightsA':
+        y_metric2, title, ylabel = 'weightsB', 'How this sound itself is weighted', 'Weight'
+    else:
+        y_metric2, title, ylabel = y_metric, y_metric, y_metric
+
+    fig, axes = plt.subplots(1, len(x_metrics), figsize=(len(x_metrics)*4, 5))
+
+    for cnt, (ax, met) in enumerate(zip(axes, x_metrics)):
+        # Add a column that is the data for that metric, but jittered, for viewability
+        quad[f'jitter_BG_{met}'] = quad[f'BG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
+        quad[f'jitter_FG_{met}'] = quad[f'FG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
+        # Do the plotting
+        sb.scatterplot(x=f'jitter_BG_{met}', y=y_metric, data=quad, ax=ax, s=3, color='deepskyblue')
+        sb.scatterplot(x=f'jitter_FG_{met}', y=y_metric2, data=quad, ax=ax, s=3, color='yellowgreen')
+        ax.set_xlabel(x_labels[cnt], fontweight='bold', fontsize=10)
+        if cnt==0:
+            ax.set_ylabel(ylabel, fontweight='bold', fontsize=10)
+        else:
+            ax.set_ylabel('')
+
+        # Run a regression
+        Y = np.concatenate((quad[y_metric].values, quad[y_metric2].values))
+        X = np.concatenate((quad[f'BG_{met}'].values, quad[f'FG_{met}'].values))
+        reg = stats.linregress(X, Y)
+        x = np.asarray(ax.get_xlim())
+        y = reg.slope * x + reg.intercept
+        ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+                                                 f"coef: {reg.rvalue:.3f}\n"
+                                                 f"p = {reg.pvalue:.3f}")
+        ax.legend()
 
 
-
-
-##Prep for big mod spec figrues
-quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-quad = quad.copy()
-
-bgsub = quad[['BG', 'weightsA', 'weightsB']].copy()
-fgsub = quad[['FG', 'weightsB', 'weightsA']].copy()
-
-bgsub.rename(columns={'BG':'name', 'weightsA':'selfweight', 'weightsB':'effectweight'}, inplace=True)
-fgsub.rename(columns={'FG':'name', 'weightsB':'selfweight', 'weightsA':'effectweight'}, inplace=True)
-weights = pd.concat([bgsub, fgsub], axis=0)
-means = weights.groupby('name').agg('mean')
-selfy = weights.groupby('name').agg(selfweight=('selfweight',np.mean)).reset_index()
-effect = weights.groupby('name').agg(effectweight=('effectweight',np.mean)).reset_index()
-# selfsort = selfy.sort_values('selfweight').reset_index()
-# effectsort = effect.sort_values('effectweight').reset_index()
-
-fn = lambda x: x[2:].replace(' ', '')
-sound_df['sound'] = sound_df.name.apply(fn)
-sound_df.rename(columns={'name':'fullname', 'sound':'name'}, inplace=True)
-
-selfsounds = selfy.merge(sound_df, on='name').sort_values('selfweight')
-effectsounds = effect.merge(selfsounds, on='name').sort_values('effectweight', ascending=False)
-self_sort = selfsounds.fullname
-effect_sort = effectsounds.fullname
-
-w = 13
-h = 3
-t = 1
-tbins = 100
-fbins = 48
-lfreq = 100
-hfreq = 24000
-
-tmod = (tbins / t) / 2
-xbound = tmod * 0.4
-wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1 / tbins))
-wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1 / 6))
-
-##plot mod specs in order ascending of their weight
-f, axes = plt.subplots(h*2, w, figsize=(18,8))
-ax = axes.ravel()
-AX = list(np.arange(0,13)) + list(np.arange(26,39)) + list(np.arange(52,65))
-
-for aa, snd in zip(AX, self_sort):
-    row = selfsounds.loc[selfsounds.fullname == snd]
-    spec = row['spec'].values[0]
-    mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
-
-    ax[aa].imshow(spec, aspect='auto', origin='lower')
-    ax[aa+13].imshow(np.sqrt(mod), aspect='auto', origin='lower',
-                 extent=(wt[0]+0.5, wt[-1]+0.5, wf[0], wf[-1]))
-    ax[aa].set_yticks([]), ax[aa].set_xticks([])
-    ax[aa+13].set_xlim(-xbound, xbound)
-    ax[aa+13].set_ylim(0,np.max(wf))
-    if aa == 0 or aa == 13 or aa == 26:
-        ax[aa+13].set_ylabel("wf (cycles/s)", fontweight='bold', fontsize=6)
-    if aa >= 52:
-        ax[aa+13].set_xlabel("wt (Hz)", fontweight='bold', fontsize=6)
-    ax[aa].set_title(f"{row['name'].values[0]}: {np.around(row['selfweight'].values[0], 3)}", fontweight='bold', fontsize=8)
-
-##plot mod specs in order descending of the weight they cause in paired sound
-f, axes = plt.subplots(h*2, w, figsize=(18,8))
-ax = axes.ravel()
-AX = list(np.arange(0,13)) + list(np.arange(26,39)) + list(np.arange(52,65))
-
-for aa, snd in zip(AX, effect_sort):
-    row = effectsounds.loc[effectsounds.fullname == snd]
-    spec = row['spec'].values[0]
-    mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
-
-    ax[aa].imshow(spec, aspect='auto', origin='lower')
-    ax[aa+13].imshow(np.sqrt(mod), aspect='auto', origin='lower',
-                 extent=(wt[0]+0.5, wt[-1]+0.5, wf[0], wf[-1]))
-    ax[aa].set_yticks([]), ax[aa].set_xticks([])
-    ax[aa+13].set_xlim(-xbound, xbound)
-    ax[aa+13].set_ylim(0,np.max(wf))
-    if aa == 0 or aa == 13 or aa == 26:
-        ax[aa+13].set_ylabel("wf (cycles/s)", fontweight='bold', fontsize=6)
-    if aa >= 52:
-        ax[aa+13].set_xlabel("wt (Hz)", fontweight='bold', fontsize=6)
-    ax[aa].set_title(f"{row['name'].values[0]}: {np.around(row['effectweight'].values[0], 3)}", fontweight='bold', fontsize=8)
-
-##plot normed mod specs in order ascending of their weight
-f, axes = plt.subplots(h*2, w, figsize=(18,8))
-ax = axes.ravel()
-AX = list(np.arange(0,13)) + list(np.arange(26,39)) + list(np.arange(52,65))
-
-for aa, snd in zip(AX, self_sort):
-    row = selfsounds.loc[selfsounds.fullname == snd]
-    spec = row['spec'].values[0]
-    mod = row['normmod'].values[0]
-
-    ax[aa].imshow(spec, aspect='auto', origin='lower')
-    ax[aa+13].imshow(mod, aspect='auto', origin='lower',
-                 extent=(wt[0]+0.5, wt[-1]+0.5, wf[0], wf[-1]), vmin=clow, vmax=chigh)
-    ax[aa].set_yticks([]), ax[aa].set_xticks([])
-    ax[aa+13].set_xlim(-xbound, xbound)
-    ax[aa+13].set_ylim(0,np.max(wf))
-    if aa == 0 or aa == 13 or aa == 26:
-        ax[aa+13].set_ylabel("wf (cycles/s)", fontweight='bold', fontsize=6)
-    if aa >= 52:
-        ax[aa+13].set_xlabel("wt (Hz)", fontweight='bold', fontsize=6)
-    ax[aa].set_title(f"{row['name'].values[0]}: {np.around(row['selfweight'].values[0], 3)}", fontweight='bold', fontsize=8)
+    fig.suptitle(f"{title} - RMS Nat", fontweight='bold', fontsize=10)
 
 
 
-##plot single mod specs
-obip.plot_mod_spec(2)
+
+
+
+
+    Y = np.concatenate((quad['weightsB'].values, quad['weightsA'].values))
+    X = np.concatenate((quad['BG_Tstationary'].values, quad['FG_Tstationary'].values))
+    reg = stats.linregress(X, Y)
+    x = np.asarray(ax.get_xlim())
+    y = reg.slope * x + reg.intercept
+v
+    ax[0].legend()
+
+    X = np.concatenate((quad['BG_bandwidth'].values, quad['FG_bandwidth'].values))
+    reg = stats.linregress(X, Y)
+    x = np.asarray(ax[1].get_xlim())
+    y = reg.slope * x + reg.intercept
+    ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+                                             f"coef: {reg.rvalue:.3f}\n"
+                                             f"p = {reg.pvalue:.3f}")
+    ax[1].legend()
+
+    X = np.concatenate((quad['BG_Fstationary'].values, quad['FG_Fstationary'].values))
+    reg = stats.linregress(X, Y)
+    x = np.asarray(ax[2].get_xlim())
+    y = reg.slope * x + reg.intercept
+    ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+                                             f"coef: {reg.rvalue:.3f}\n"
+                                             f"p = {reg.pvalue:.3f}")
+    ax[2].legend()
+
+
+
+
+
+
+
 
 
 
@@ -873,6 +752,10 @@ ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
                         f"p = {reg.pvalue:.3f}")
 ax[2].legend()
 
+
+
+
+#
 f, ax = plt.subplots(1, 3, figsize=(12,5))
 sb.scatterplot(x='jitter_BG_Tstationary', y='weightsA', data=quad, ax=ax[0], s=3)
 sb.scatterplot(x='jitter_FG_Tstationary', y='weightsB', data=quad, ax=ax[0], s=3)
@@ -918,6 +801,7 @@ ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
                         f"p = {reg.pvalue:.3f}")
 ax[2].legend()
 
+### SOME SCATTERS THAT ARE NICE
 #plot, with regression, FR v weighted FR
 from scipy import stats
 quad['FRbg*weightA'] = quad['bg_FR'] * quad['weightsA']

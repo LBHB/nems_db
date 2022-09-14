@@ -49,7 +49,7 @@ import nems_lbhb.TwoStim_helpers as ts
 log = logging.getLogger(__name__)
 from nems import db
 
-def OLP_fit_weights(batch, parmfile=None, loadpath=None, savepath=None, filter=None,
+def OLP_fit_weights(batch=340, parmfile=None, loadpath=None, savepath=None, filter=None,
                     cells=None, fs=100):
     '''Puts all the compontents that go into weight_df into one command. Gives you the option
     to save the resulting dataframe it returns. But mainly it gives you the option to either
@@ -95,8 +95,23 @@ def OLP_fit_weights(batch, parmfile=None, loadpath=None, savepath=None, filter=N
         # Fits weights
         weight_df = fit_weights(df, batch, fs)
 
-        # Adds sound stats to the weight_df
-        sound_df = ohel.get_sound_statistics(weight_df, plot=False)
+        # # Adds sound stats to the weight_df
+        # sound_df = ohel.get_sound_statistics(weight_df, plot=False)
+        # weight_df = ohel.add_sound_stats(weight_df, sound_df)
+
+        # Adding 2022_09_14. If this doesn't work, figure it out, or revert to the lines above
+        # Line below should add synthetic parameters to files that are too old to have that
+        if 'synth_kind' not in weight_df:
+            weight_df['synth_kind'] = 'A'
+        # Line below should add binaural parameters to files that are too old to have that
+        if 'kind' not in weight_df:
+            weight_df['kind'] = '11'
+        # Adds relative gain so that sound_df can be computed with it, but also because it's useful
+        weight_df['BG_rel_gain'] = (weight_df.weightsA - weight_df.weightsB) / \
+                                   (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
+        weight_df['FG_rel_gain'] = (weight_df.weightsB - weight_df.weightsA) / \
+                                   (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
+        sound_df = ohel.get_sound_statistics_full(weight_df)
         weight_df = ohel.add_sound_stats(weight_df, sound_df)
 
         if savepath:
