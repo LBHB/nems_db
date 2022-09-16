@@ -302,7 +302,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     log.info(f"Importing parameters from {old_cellid}/{old_modelname}")
 
     mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
-    print(mspaths)
+    log.info(mspaths)
     prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
 
     #_, prefit_ctx = xform_helper.load_model_xform(
