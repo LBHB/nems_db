@@ -229,7 +229,14 @@ def fit_model_xform(cellid, batch, modelname, autoPlot=True, saveInDB=False,
     else:
         cell_name = cellid
 
-    if 'modelpath' not in modelspec.meta:
+    if ctx['modelspec'].meta.get('engine', 'nems0') == 'nems-lite':
+        if 'modelpath' not in modelspec.meta:
+            prefix = get_setting('NEMS_RESULTS_DIR')
+            destination = os.path.join(prefix, str(batch), cell_name)
+        else:
+            destination = modelspec.meta['modelpath']
+
+    elif 'modelpath' not in modelspec.meta:
         prefix = get_setting('NEMS_RESULTS_DIR')
         destination = os.path.join(prefix, str(batch), cell_name, modelspec.get_longname())
 
@@ -286,7 +293,10 @@ def fit_model_xform(cellid, batch, modelname, autoPlot=True, saveInDB=False,
         figs = ctx['figures']
     else:
         figs = []
-    if ctx.get('save_context', False):
+
+    if ctx['modelspec'].meta.get('engine', 'nems0') == 'nems-lite':
+        xforms.save_lite(xfspec=xfspec, **ctx)
+    elif ctx.get('save_context', False):
         ctx['log'] = log_xf
         save_data = xforms.save_context(save_destination,
                                         ctx=ctx,

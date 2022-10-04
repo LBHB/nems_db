@@ -155,6 +155,16 @@ ALL_FAMILY_MODELS = [
     f"{load_string_single}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # LN_pop
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
+ALL_TRUNC_POP = [
+    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.R-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
+    f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
+    f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
+]
+ALL_TRUNC_MODELS = [
+    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.R-lvl.R-dexp.R_{fit_string_single_c2d}",  #c2d
+    f"{load_string_single}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100xR-lvl.R-dexp.R_{fit_string_single}", # c1d
+    f"{load_string_single}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80xR-lvl.R-dexp.R_{fit_string_single}", # c1dx2+d
+]
 
 shortnames = ['2D-CNN', '1D-CNN', '1Dx2-CNN', 'pop-LN', 'single-CNN']
 #shortnames=['conv2d', 'conv1d', 'conv1dx2', 'ln-pop', 'dnn-sing']

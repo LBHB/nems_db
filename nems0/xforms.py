@@ -454,10 +454,10 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         raise ValueError("Inputs modelspec and est required")
 
     # convert signal matrices to nems-lite format
-    X_est = est.apply_mask()[input_name].as_continuous().T
-    Y_est = est.apply_mask()[output_name].as_continuous().T
+    X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
+    Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
     if 'state' in est.signals.keys():
-        S_est = est.apply_mask()['state'].as_continuous().T
+        S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
     else:
         S_est = None
     if backend == 'scipy':
@@ -534,11 +534,11 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
-    X_est = est[input_name].as_continuous().T
-    X_val = val[input_name].as_continuous().T
+    X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
+    X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
     if 'state' in est.signals.keys():
-        S_est = est['state'].as_continuous().T
-        S_val = val['state'].as_continuous().T
+        S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
+        S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
     else:
         S_est = None
         S_val = None
@@ -562,10 +562,10 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
         return {'figures': figures}
 
     # convert signal matrices to nems-lite format
-    X_val = val.apply_mask()[input_name].as_continuous().T
-    Y_val = val.apply_mask()[output_name].as_continuous().T
+    X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
+    Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
     if 'state' in val.signals.keys():
-        S_val = val.apply_mask()['state'].as_continuous().T
+        S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
     else:
         S_val = None
     from nems.visualization import model

@@ -285,7 +285,7 @@ def remove_clicks(w, max_threshold=15, verbose=False):
     return w_clean
 
 def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
-             mono=False, binaural=False,
+             mono=False, binaural=False, binsplit=True,
              **options):
     """
     :param exptevents: from baphy
@@ -619,6 +619,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 sg.append(sgshuff)
             sg_unique[f] = np.concatenate(sg, axis=0)
 
+            if binsplit and (binaural!=False):
+                sg_unique[f]=np.reshape(sg_unique[f],[channels,-1,sg_unique[f].shape[1]])
     return sg_unique, list(sg_unique.keys()), stimparam
 
 

@@ -53,6 +53,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
+        xi = find_module("WeightChannelsNew", modelspec, find_all_matches=True)
+    if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")
 
     copy_layers = xi[-1]
