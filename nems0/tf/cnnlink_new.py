@@ -239,7 +239,7 @@ def fit_tf(
     # update seed based on fit index
     seed += modelspec.fit_index
 
-    if (freeze_layers is not None) and len(freeze_layers) and (len(freeze_layers)==freeze_layers[-1]+1):
+    if False and (freeze_layers is not None) and len(freeze_layers) and (len(freeze_layers)==freeze_layers[-1]+1):
         truncate_model=True
         modelspec_trunc, est_trunc = \
             initializers.modelspec_remove_input_layers(modelspec, est, remove_count=len(freeze_layers))
