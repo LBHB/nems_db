@@ -501,19 +501,30 @@ def get_sound_statistics_full(weight_df):
 
             means[:, cnt] = freq_mean
 
+            # 2022_09_23 Adding power spectrum stats
+            temp = np.abs(np.fft.fft(spec, axis=1))
+            freq = np.abs(np.fft.fft(spec, axis=0))
+
+            temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)[1:].std()
+            freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)[1:].std()
+
             sounds.append({'name': sn.split('_')[0],
                            'type': ll,
                            'synth_kind': syn,
-                           'std': dev,
+                           'Tstationary': np.nanmean(dev),
                            'bandwidth': bandw,
                            '75th': freq75,
                            '25th': freq25,
                            'center': freq50,
                            'spec': spec,
                            'mean_freq': freq_mean,
-                           'freq_stationary': np.std(freq_mean),
+                           'Fstationary': np.std(freq_mean),
                            'RMS_norm_power': rms_normed,
                            'max_norm_power': max_normed,
+                           'temp_ps': temp,
+                           'freq_ps': freq,
+                           'temp_ps_std': temp_ps,
+                           'freq_ps_std': freq_ps,
                            'short_name': sn[2:].split('_')[0].replace(' ', '')})
 
         sound_df = pd.DataFrame(sounds)
@@ -782,25 +793,46 @@ def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
 
 
 def add_sound_stats(weight_df, sound_df):
-    '''Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
+    '''Updated 2022_09_23. Added t50 and f50 and modspec stuff to weight_df
+    Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
     I updated it so that it takes synth kind into account when adding the statistics, and
     also adds RMS and max power for the sounds.'''
     BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
     BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
     BGmerge['BG'] = [aa[2:].replace(' ', '') for aa in BGdf.name]
-    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['std']]
+    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['Tstationary']]
     BGmerge['BG_bandwidth'] = BGdf.bandwidth.tolist()
-    BGmerge['BG_Fstationary'] = BGdf.freq_stationary.tolist()
+    BGmerge['BG_Fstationary'] = BGdf.Fstationary.tolist()
     BGmerge['BG_RMS_power'] = BGdf.RMS_norm_power.tolist()
     BGmerge['BG_max_power'] = BGdf.max_norm_power.tolist()
+    BGmerge['BG_temp_ps'] = BGdf.temp_ps.tolist()
+    BGmerge['BG_temp_ps_std'] = BGdf.temp_ps_std.tolist()
+    BGmerge['BG_freq_ps'] = BGdf.freq_ps.tolist()
+    BGmerge['BG_freq_ps_std'] = BGdf.freq_ps_std.tolist()
+    # BGmerge['BG_avgwt'] = BGdf.avgwt.tolist()
+    # BGmerge['BG_avgft'] = BGdf.avgft.tolist()
+    # BGmerge['BG_cumwt'] = BGdf.cumwt.tolist()
+    # BGmerge['BG_cumft'] = BGdf.cumft.tolist()
+    BGmerge['BG_t50'] = BGdf.t50.tolist()
+    BGmerge['BG_f50'] = BGdf.f50.tolist()
     BGmerge['synth_kind'] = BGdf.synth_kind.tolist()
 
     FGmerge['FG'] = [aa[2:].replace(' ', '') for aa in FGdf.name]
-    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['std']]
+    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['Tstationary']]
     FGmerge['FG_bandwidth'] = FGdf.bandwidth.tolist()
-    FGmerge['FG_Fstationary'] = FGdf.freq_stationary.tolist()
+    FGmerge['FG_Fstationary'] = FGdf.Fstationary.tolist()
     FGmerge['FG_RMS_power'] = FGdf.RMS_norm_power.tolist()
     FGmerge['FG_max_power'] = FGdf.max_norm_power.tolist()
+    FGmerge['FG_temp_ps'] = FGdf.temp_ps.tolist()
+    FGmerge['FG_temp_ps_std'] = FGdf.temp_ps_std.tolist()
+    FGmerge['FG_freq_ps'] = FGdf.freq_ps.tolist()
+    FGmerge['FG_freq_ps_std'] = FGdf.freq_ps_std.tolist()
+    # FGmerge['FG_avgwt'] = FGdf.avgwt.tolist()
+    # FGmerge['FG_avgft'] = FGdf.avgft.tolist()
+    # FGmerge['FG_cumwt'] = FGdf.cumwt.tolist()
+    # FGmerge['FG_cumft'] = FGdf.cumft.tolist()
+    FGmerge['FG_t50'] = FGdf.t50.tolist()
+    FGmerge['FG_f50'] = FGdf.f50.tolist()
     FGmerge['synth_kind'] = FGdf.synth_kind.tolist()
 
     weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG', 'synth_kind'], validate='m:1')

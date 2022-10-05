@@ -1,4 +1,4 @@
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import numpy as np
@@ -635,12 +635,15 @@ def resp_weight_multi_scatter(weight_df, synth_kind='N', threshold=0.03, quads=3
     axes[3].set_xlabel("FG FR", fontsize=12, fontweight='bold')
 
 
-def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None):
+def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None, r_cut=None):
     '''2022_09_06. Takes a DF (you filter it by types of sounds and area beforehand) and will plot
     a histogram showing the relative weights for a certain quadrant. It said distplot is deprecated
     so I'll have to figure something else out with histplot or displot, but coloring the histogram
     was a big task I couldn't figure out. Can kicked down the road.'''
     quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
     if synth_kind:
         quad = quad.loc[quad.synth_kind == synth_kind]
     # Calculate relative gain and percent suppressed
@@ -666,14 +669,17 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
     ax.set_xlabel('Relative Gain', fontweight='bold', fontsize=12)
     ax.set_ylabel('Density', fontweight='bold', fontsize=12)
     ax.set_title(f'{synth_kind} - Percent\nSuppression:\n{a1_percent_supp}', fontsize=8)
+    if r_cut:
+        fig.suptitle(f"r >= {r_cut}")
     fig.tight_layout()
 
 
 def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
                          jitter=[0.25,0.2,0.03],
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
-                         title_text=''):
-    '''Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
+                         title_text='', r_cut=None):
+    '''Updated 2022_09_21 to add the ability to filter the dataframe by model fit accuracy.
+    Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
     a usual situation it would be Tstationariness, bandwidth, and Fstationariness compared to relative
     gain. Can also be compared to weights.
     y_metric refers to the FIRST one it will input, for relative_gain this is not an issue. If you want
@@ -685,6 +691,9 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
     Made into a function from OLP_analysis_main on 2022_09_07'''
     quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
     quad = quad.loc[(quad.area==area) & (quad.synth_kind==synth_kind) & (quad.kind==bin_kind)]
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
     quad = quad.copy()
 
     # I use 2.5 for relative gain, I'm sure weights have one too...
@@ -730,4 +739,75 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
         ax.legend()
 
 
-    fig.suptitle(f"{title} - {synth_kind} - {title_text}", fontweight='bold', fontsize=10)
+    fig.suptitle(f"{title} - {synth_kind} - {title_text} - r >= {r_cut}", fontweight='bold', fontsize=10)
+
+
+def scatter_model_accuracy(df, stat='FG_rel_gain', bin_kind='11', synth_kind='N', threshold=0.03):
+    '''2022_09_16. Takes a dataframe and filters it according to your inputs, then plots the three quadrants
+    of positive firing rate as a scatter comparing model accuracy with relative_gain.'''
+    df = df.dropna(axis=0, subset='r')
+    df = df.loc[df.synth_kind==synth_kind]
+    df = df.loc[df.kind==bin_kind]
+
+    labels = ['BG and FG alone\nevoke response', 'Only BG alone\nevokes response', 'Only FG alone\nevokes response']
+    quads = [3, 6, 2]
+    fig, axes = plt.subplots(1, 3, figsize=(12,4))
+    for cnt, (ax, qd) in enumerate(zip(axes, quads)):
+        quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=qd)
+        sb.scatterplot(data=quad, x=quad.r, y=quad[stat], s=3, ax=ax)
+
+        X, Y = quad.r.values, quad[stat].values
+        reg = stats.linregress(X, Y)
+        x = np.asarray(ax.get_xlim())
+        y = reg.slope * x + reg.intercept
+        ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+                                              f"coef: {reg.rvalue:.3f}\n"
+                                              f"p = {reg.pvalue:.3f}")
+        ax.legend()
+        ax.set_xlabel("Model Fit (r)", fontweight='bold', fontsize=8)
+        ax.set_title(f"{labels[cnt]}", fontsize=10, fontweight='bold')
+        ax.set_ylabel(f"{stat}", fontweight='bold', fontsize=8)
+
+
+def r_filtered_weight_histogram_summary(df, synth_kind='N', bin_kind='11', manual=None, cut=2, threshold=0.03):
+    '''2022_09_16. Takes a dataframe, removes NaNs from model fit, then filters based on criteria,
+    then splits into two dataframes for above and below the median r value. If you include manual,
+    it'll add an extra plot for the manually definied lower r cutoff. It'll then pop up three
+    separate plots.'''
+    r_df = df.dropna(axis=0, subset='r')
+    r_df = r_df.loc[r_df.synth_kind==synth_kind]
+    r_df = r_df.loc[r_df.kind==bin_kind]
+    r_df = r_df.loc[(r_df.weightsA > -cut) & (r_df.weightsA < cut) &
+                    (r_df.weightsB > -cut) & (r_df.weightsB < cut)]
+    mid_r = np.median(r_df.r)
+    goods = r_df.loc[r_df.r >= mid_r]
+    bads = r_df.loc[r_df.r <=mid_r]
+    to_plot = [goods, bads]
+    labels = [f'r >= {mid_r}, {synth_kind}, {bin_kind}', f'r < {mid_r}, {synth_kind}, {bin_kind}']
+    if manual:
+        extra = r_df.loc[r_df.r >= manual]
+        to_plot.append(extra)
+        labels.append(f'r >= {manual}, {synth_kind}, {bin_kind}')
+
+    for dff, lbl in zip(to_plot, labels):
+        oph.histogram_summary_plot(dff, 0.03, title_text=lbl)
+
+
+
+def weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=None):
+    '''2022_09_30. Uses the usual stuff to calculate the old way of calculating suppression:
+    ((rAB-sp) - (rA-sp) + (rB-sp)) / (rA-sp) + (rB-sp), and compares it with average weight:
+    (wFG+wBG) / 2. Then scatters them.'''
+    weight_df['avg_weight'] = (weight_df.weightsA + weight_df.weightsB) / 2
+    weight_df['avg_supp'] = (-weight_df['supp']) / (weight_df['bg_FR'] + weight_df['fg_FR'])
+    quad, _ = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
+    fig, ax = plt.subplots(1,1,figsize=(8,8))
+    ax.scatter(x=quad.avg_supp, y=quad.avg_weight, s=1)
+    ax.set_xlabel('(LS - rAB) / rA+rB', fontweight='bold', fontsize=10)
+    ax.set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
+    ax.set_ylim(0, 1.25), ax.set_xlim(-1.5, 1.5)
+    ax.set_title(f'r >= {r_cut} - n={quad.shape[0]}', fontsize=10, fontweight='bold')
+    fig.tight_layout()

@@ -1,4 +1,4 @@
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import numpy as np

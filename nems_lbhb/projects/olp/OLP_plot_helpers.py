@@ -10,7 +10,7 @@ import glob
 from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 from pathlib import Path
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 
 
@@ -1216,7 +1216,7 @@ def split_psth_highest_lowest(df_filtered, sortby='suppression', rows=15, folder
         axn = 9
 
 
-def histogram_summary_plot(weight_df, threshold=0.05):
+def histogram_summary_plot(weight_df, threshold=0.05, title_text=None):
     '''Pretty niche plot that will plot BG+/FG+ histograms and compare BG and FG weights,
     then plot BG+/FG- histogram and BG-/FG+ histogram separate and then compare BG and FG
     again in a bar graph. I guess you could put any thresholded quadrants you want, but the
@@ -1289,6 +1289,9 @@ def histogram_summary_plot(weight_df, threshold=0.05):
     # ax[2].set_ylim(ymin, ymax), ax[3].set_ylim(ymin, ymax)
     ax[2].set_ylim(ymin, biggest), ax[3].set_ylim(ymin, biggest)
     ax[3].set_yticks([])
+
+    if title_text:
+        f.suptitle(f"{title_text}", fontweight='bold', fontsize=12)
 
     return ttest1, ttest2, [quad3.shape[0], quad2.shape[0], quad6.shape[0]]
 

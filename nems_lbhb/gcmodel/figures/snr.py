@@ -4,7 +4,7 @@ import scipy.stats as st
 from scipy import stats, linalg
 import matplotlib.pyplot as plt
 
-import nems
+import nems0
 import nems0.xform_helper as xhelp
 import nems0.xforms as xforms
 import nems0.db as nd
