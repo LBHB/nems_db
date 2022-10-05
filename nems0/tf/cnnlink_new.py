@@ -16,7 +16,7 @@ import nems0.utils
 from nems0 import initializers, recording, get_setting
 from nems0 import modelspec as mslib
 from nems0.tf import callbacks, loss_functions, modelbuilder
-from nems0.tf.layers import Conv2D_NEMS
+from nems0.tf.layers import Conv2D_NEMS, WeightChannelsNew
 from nems0.initializers import init_static_nl
 
 log = logging.getLogger(__name__)
@@ -298,7 +298,7 @@ def fit_tf(
         initializer=initializer, freeze_layers=freeze_layers,
         kernel_regularizer=kernel_regularizer)
 
-    if np.any([isinstance(layer, Conv2D_NEMS) for layer in model_layers]):
+    if np.any([isinstance(layer, Conv2D_NEMS) or isinstance(layer, WeightChannelsNew) for layer in model_layers]):
         # need a "channel" dimension for Conv2D (like rgb channels, not frequency). Only 1 channel for our data.
         stim_train = stim_train[..., np.newaxis]
         train_data = train_data[..., np.newaxis]

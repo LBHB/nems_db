@@ -74,7 +74,7 @@ if 0:
     # round 2 all family models
     modelnames = ALL_FAMILY_MODELS
     modelnames = [ALL_FAMILY_MODELS[0]]
-    modelnames = ALL_TRUNC_MODELS[1:]
+    modelnames = ALL_TRUNC_MODELS
 
     useGPU = False
     for batch in batches:
