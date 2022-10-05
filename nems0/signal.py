@@ -180,6 +180,7 @@ class SignalBase:
         self.name = name
         self.recording = recording
         self.chans = chans
+        self.n_extradims = []
         self.epochs = epochs
         self.meta = meta
         self.signal_type = str(type(self))
@@ -855,7 +856,7 @@ class SignalBase:
 
     @property
     def shape(self):
-        return self.nchans, self.ntimes
+        return tuple([self.nchans]+self.n_extradims+[self.ntimes])
 
     def select_times(self, times):
         raise NotImplementedError
@@ -1094,7 +1095,13 @@ class RasterizedSignal(SignalBase):
         # Install the indexers
         self.iloc = SimpleSignalIndexer(self)
         self.loc = LabelSignalIndexer(self)
-        self.nchans, self.ntimes = self._data.shape
+        s = self._data.shape
+        self.nchans = s[0]
+        self.ntimes = s[-1]
+        if len(s) > 2:
+            self.n_extradims = list(s[1:-1])
+        else:
+            self.n_extradims = []
         self.signal_type = str(type(self))
 
         # Verify that we have a long time series
@@ -1320,21 +1327,17 @@ class RasterizedSignal(SignalBase):
 
         data = self.as_continuous()
         n_chans = data.shape[0]
+        epoch_shape = [n_epochs] + list(data.shape[:-1]) + [n_samples]
         if data.dtype == bool:
-            epoch_data = np.full((n_epochs, n_chans, n_samples), False,
-                                 dtype=bool)
+            epoch_data = np.full(epoch_shape, False, dtype=bool)
         else:
-            epoch_data = np.full((n_epochs, n_chans, n_samples), np.nan)
+            epoch_data = np.full(epoch_shape, np.nan)
         # print(epoch)
 
         for i, (lb, ub) in enumerate(epoch_indices):
             if ub > data.shape[-1]:
                 ub = data.shape[-1]
             samples = ub-lb
-            #print(samples)
-            #print([lb, ub])
-            #print(data[..., lb:ub].shape)
-            #print(epoch_data[i, ..., :samples].shape)
             try:
                 epoch_data[i, ..., :samples] = data[..., lb:ub]
             except:
@@ -1852,39 +1855,30 @@ class RasterizedSignal(SignalBase):
 
         for epoch, epoch_data in epoch_dict.items():
             indices = self.get_epoch_indices(epoch, mask=mask)
-            if epoch_data.ndim == 2:
+            if epoch_data.ndim == data.ndim:
                 # ndim==2: single PSTH to be inserted in every matching epoch
                 for lb, ub in indices:
-                    # SVD kludge to deal with rounding from floating-point time
-                    # to integer bin index --- DEPRECATED????
-#                    if ub-lb < epoch_data.shape[1]:
-#                        # epoch data may be too long bc padded with nans,
-#                        # truncate!
-#                        epoch_data = epoch_data[:, 0:(ub-lb)]
-#                        # ub += epoch_data.shape[1]-(ub-lb)
-#                    elif ub-lb > epoch_data.shape[1]:
-#                        ub -= (ub-lb)-epoch_data.shape[1]
-                    if ub-lb > epoch_data.shape[1]:
-                        ub = lb + epoch_data.shape[1]
-                    if ub > data.shape[1]:
-                        ub = data.shape[1]
+                    if ub-lb > epoch_data.shape[-1]:
+                        ub = lb + epoch_data.shape[-1]
+                    if ub > data.shape[-1]:
+                        ub = data.shape[-1]
                     #print(ub-lb)
                     #print(epoch_data.shape)
-                    data[:, lb:ub] = epoch_data[:, :(ub-lb)]
+                    data[..., lb:ub] = epoch_data[..., :(ub-lb)]
 
             else:
                 # ndim==3: different segment to insert for each epoch
                 # (assume epoch_data.shape[1] == len(indices))
                 ii = 0
                 for lb, ub in indices:
-                    if ub > data.shape[1]:
-                        ub = data.shape[1]
+                    if ub > data.shape[-1]:
+                        ub = data.shape[-1]
                     n = ub-lb
-                    data[:, lb:ub] = epoch_data[ii, :, :n]
+                    data[..., lb:ub] = epoch_data[ii, ..., :n]
                     ii += 1
 
         if preserve_nan:
-            data[:, nan_bins] = np.nan
+            data[..., nan_bins] = np.nan
 
         return self._modified_copy(data)
 
@@ -1973,7 +1967,7 @@ class RasterizedSignal(SignalBase):
 
         mask = self.epochs['name'].isin(list_of_epoch_names)
         for (lb, ub) in self.get_epoch_indices(mask):
-            new_data[:, lb:ub] = self._data[:, lb:ub]
+            new_data[..., lb:ub] = self._data[..., lb:ub]
 
         if np.all(np.isnan(new_data)):
             warnings.warn("No matched occurrences for epochs: \n{}\n"
@@ -2569,9 +2563,9 @@ class TiledSignal(SignalBase):
         if self.fs*maxtime > maxbin:
             maxbin = int(self.fs*maxtime)
         tags = list(self._data.keys())
-        chancount = self._data[tags[0]].shape[0]
+        chancount = list(self._data[tags[0]].shape[:-1])
 
-        z = np.zeros([chancount, maxbin])
+        z = np.zeros(chancount + [maxbin])
         zsig = RasterizedSignal(fs=self.fs, data=z, name=self.name,
                                 recording=self.recording, chans=self.chans,
                                 epochs=self.epochs, meta=self.meta)

@@ -553,6 +553,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options.update({'runclass': 'VOC'})
         elif op == 'bin':
             options.update({'binaural': 'crude'})
+        elif op == 'bin0':
+            options.update({'binaural': 'crude', 'binsplit': False})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader=' + loader)

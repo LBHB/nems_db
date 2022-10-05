@@ -1537,7 +1537,7 @@ def _merge_refTar_epochs(exptevents, OverlapRefTar):
             return exptevents
 
         # set the poststim duration to the ref post stim (to get rid of long poststim tails)
-        exptevents.at[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
+        exptevents.loc[target_prestims.index+2, 'end'] = exptevents.loc[refs.index+2, 'end'].values
 
         exptevents = exptevents.drop(refs.index)   # drop ref pre stim
         exptevents = exptevents.drop(refs.index+1) # drop ref stim

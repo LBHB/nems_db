@@ -1,13 +1,14 @@
 import nems0.db as nd
-from nems import get_setting
+from nems0 import get_setting
 
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single,\
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, ALL_FAMILY_MODELS, ALL_FAMILY_POP, get_significant_cells, \
     VERSION, HELDOUT, MATCHED, HELDOUT_pop, MATCHED_pop, \
-    DNN_SINGLE_MODELS, DNN_SINGLE_STAGE2, LN_SINGLE_MODELS, STP_SINGLE_MODELS,\
-    NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS, count_fits
+    DNN_SINGLE_MODELS, DNN_SINGLE_STAGE2, LN_SINGLE_MODELS,\
+    NAT4_A1_SITES, NAT4_PEG_SITES, MODELGROUPS, POP_MODELGROUPS, count_fits, \
+    ALL_TRUNC_MODELS, ALL_TRUNC_POP
 
 # parameters for adding to queue
 batches = [322, 323]   # ,334]  # 334 is merged A1+PEG megabatch
@@ -17,7 +18,7 @@ lbhb_user = "svd"
 
 # exacloud settings:
 executable_path_exa = '/home/users/davids/anaconda3/envs/nems/bin/python'
-script_path_exa = '/home/users/davids/nems/scripts/fit_single.py'
+script_path_exa = '/home/users/davids/nems_db/scripts/nems0_scripts/fit_single.py'
 ssh_key = '/home/svd/.ssh/id_rsa'
 user = "davids"
 
@@ -32,6 +33,7 @@ mfb = {322: modelname_filter,
 # ROUND 1, all families pop
 if 0:
     modelnames = ALL_FAMILY_POP[:-1]
+    modelnames = ALL_TRUNC_POP
     useGPU = True
 
     for batch in batches:
@@ -72,6 +74,7 @@ if 0:
     # round 2 all family models
     modelnames = ALL_FAMILY_MODELS
     modelnames = [ALL_FAMILY_MODELS[0]]
+    modelnames = ALL_TRUNC_MODELS[1:]
 
     useGPU = False
     for batch in batches:

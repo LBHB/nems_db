@@ -53,6 +53,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
+        xi = find_module("WeightChannelsNew", modelspec, find_all_matches=True)
+    if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")
 
     copy_layers = xi[-1]
@@ -302,7 +304,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     log.info(f"Importing parameters from {old_cellid}/{old_modelname}")
 
     mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
-    print(mspaths)
+    log.info(mspaths)
     prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
 
     #_, prefit_ctx = xform_helper.load_model_xform(

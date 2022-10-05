@@ -14,6 +14,7 @@ import socket
 import matplotlib.pyplot as plt
 import numpy as np
 
+import nems0
 import nems0.db as nd
 import nems0.metrics.api as metrics
 import nems0.plots.api as nplt
@@ -452,26 +453,41 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
     if (modelspec is None) or (est is None):
         raise ValueError("Inputs modelspec and est required")
 
+    # convert signal matrices to nems-lite format
+    X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
+    Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
+    if 'state' in est.signals.keys():
+        S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
+    else:
+        S_est = None
     if backend == 'scipy':
-        # convert signal matrices to nems-lite format
-        X_est = est.apply_mask()[input_name].as_continuous().T
-        Y_est = est.apply_mask()[output_name].as_continuous().T
+
         fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': max_iter}}
 
-        log.info(f'({backend}) Fitting without NL ...')
-        modelspec.layers[-1].skip_nonlinearity()
-        modelspec = modelspec.fit(input=X_est, target=Y_est, backend=backend,
-                                  fitter_options=fitter_options)
+        try:
+            modelspec.layers[-1].skip_nonlinearity()
+            fit_stage_1 = True
+        except:
+            log.info('No NL to exclude from stage 1 fit')
+            fit_stage_1 = False
 
-        log.info(f'({backend}) Now fitting with NL ...')
-        modelspec.layers[-1].unskip_nonlinearity()
-        modelspec = modelspec.fit(input=X_est, target=Y_est, backend=backend,
-                                  fitter_options=fitter_options)
+        if fit_stage_1:
+            log.info(f'({backend}) Fitting without NL ...')
+            modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
+                                      backend=backend, fitter_options=fitter_options)
+
+            log.info(f'({backend}) Now fitting with NL ...')
+            modelspec.layers[-1].unskip_nonlinearity()
+
+        modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
+                                  backend=backend, fitter_options=fitter_options)
 
     elif backend=='tf':
         # convert signal matrices to nems-lite format
-        X_est = np.expand_dims(est.apply_mask()[input_name].as_continuous().T, axis=0)
-        Y_est = np.expand_dims(est.apply_mask()[output_name].as_continuous().T, axis=0)
+        X_est = np.expand_dims(X_est, axis=0)
+        Y_est = np.expand_dims(Y_est, axis=0)
+        if S_est is not None:
+            S_est = np.expand_dims(S_est, axis=0)
 
         fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
                           'early_stopping_patience': early_stopping_patience,
@@ -480,27 +496,35 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                           'learning_rate': learning_rate*2, 'epochs': int(max_iter/2),
                           }
         
-        log.info(f'({backend}) Fitting without NL ...')
-        log.info(f"lr={fitter_options['learning_rate']} epochs={fitter_options['epochs']}")
-        modelspec.layers[-1].skip_nonlinearity()
-        from nems.layers import ShortTermPlasticity
-        #for i, l in enumerate(modelspec.layers):
-        #    if isinstance(l, ShortTermPlasticity):
-        #        log.info(f'Freezing parameters for layer {i}: {l.name}')
-        #        modelspec.layers[i].freeze_parameters()
-        modelspec = modelspec.fit(
-            input=X_est, target=Y_est, backend=backend,
-            fitter_options=fitter_options, batch_size=None)
+        try:
+            modelspec.layers[-1].skip_nonlinearity()
+            fit_stage_1 = True
+        except:
+            log.info('No NL to exclude from stage 1 fit')
+            fit_stage_1 = False
 
-        modelspec.layers[-1].unskip_nonlinearity()
+        if fit_stage_1:
+            log.info(f'({backend}) Fitting without NL ...')
+            log.info(f"lr={fitter_options['learning_rate']} epochs={fitter_options['epochs']}")
+            from nems.layers import ShortTermPlasticity
+            #for i, l in enumerate(modelspec.layers):
+            #    if isinstance(l, ShortTermPlasticity):
+            #        log.info(f'Freezing parameters for layer {i}: {l.name}')
+            #        modelspec.layers[i].freeze_parameters()
+            modelspec = modelspec.fit(
+                input=X_est, target=Y_est, state=S_est, backend=backend,
+                fitter_options=fitter_options, batch_size=None)
+
+            log.info(f'({backend}) Now fitting with NL ...')
+            modelspec.layers[-1].unskip_nonlinearity()
+
         for i, l in enumerate(modelspec.layers):
             modelspec.layers[i].unfreeze_parameters()
 
         fitter_options['learning_rate'] = learning_rate
         fitter_options['epochs'] = max_iter
-        log.info(f'({backend}) Now fitting with NL ...')
         modelspec = modelspec.fit(
-            input=X_est, target=Y_est, backend=backend,
+            input=X_est, target=Y_est, state=S_est, backend=backend,
             fitter_options=fitter_options, batch_size=None)
 
         modelspec.backend = None
@@ -510,12 +534,18 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
-    X_est = est[input_name].as_continuous().T
-    X_val = val[input_name].as_continuous().T
+    X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
+    X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
+    if 'state' in est.signals.keys():
+        S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
+        S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
+    else:
+        S_est = None
+        S_val = None
 
-    prediction = modelspec.predict(X_est)
+    prediction = modelspec.predict(X_est, state=S_est)
     est['pred']=est[output_name]._modified_copy(data=prediction.T)
-    prediction = modelspec.predict(X_val)
+    prediction = modelspec.predict(X_val, state=S_val)
     val['pred']=val[output_name]._modified_copy(data=prediction.T)
 
     return {'val': val, 'est': est}
@@ -532,11 +562,15 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
         return {'figures': figures}
 
     # convert signal matrices to nems-lite format
-    X_val = val[input_name].as_continuous().T
-    Y_val = val[output_name].as_continuous().T
+    X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
+    Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
+    if 'state' in val.signals.keys():
+        S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
+    else:
+        S_val = None
     from nems.visualization import model
     fig = model.plot_model_with_parameters(
-        modelspec, X_val, target=Y_val, sampling_rate=val[output_name].fs)
+        modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
 
     # Needed to make into a Bytes because you can't deepcopy figures!
     figures.append(nplt.fig2BytesIO(fig))
