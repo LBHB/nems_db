@@ -5,7 +5,7 @@ import matplotlib.ticker as mticker
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from sklearn.decomposition import PCA
-from nems import db
+from nems0 import db
 
 
 def penetration_map(sites, equal_aspect=False, flip_X=False, flatten=False, flip_YZ=False, landmarks=None):

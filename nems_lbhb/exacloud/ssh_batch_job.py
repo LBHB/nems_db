@@ -144,7 +144,7 @@ if __name__ == '__main__':
     exec_group = parser.add_argument_group('Script execution')
 
     exec_default = Path(r'/home/exacloud/lustre1/LBHB/code/python-envs/nems-gpu/bin/python')
-    exec_group.add_argument('--exec_path', type=Path, help='Python executable location, defaults to standard nems.',
+    exec_group.add_argument('--exec_path', type=Path, help='Python executable location, defaults to standard nems0.',
                             default=exec_default)
     script_default = Path(r'/home/exacloud/lustre1/LBHB/code/NEMS/scripts/fit_single.py')
     exec_group.add_argument('--script_path', type=Path, help='Python script to call, defaults to "fit_single.py".',

@@ -8,8 +8,9 @@ import pandas as pd
 import scipy.stats as st
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
+from nems_lbhb.analysis.statistics import arrays_to_p
 
 from pop_model_utils import mplparams, get_significant_cells, SIG_TEST_MODELS, \
     ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, DOT_COLORS, shortnames, base_path, a1, peg, \
@@ -84,10 +85,10 @@ def plot_conv_scatters(batch):
     fig, ax = plt.subplots(1,3,figsize=(12,4))
 
     # LN vs DNN-single
-    plot_pred_scatter(batch, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[4]], labels=['1Ds CNN','pop LN'], ax=ax[0])
+    plot_pred_scatter(batch, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[4]], labels=['1Dx2-CNN','pop-LN'], ax=ax[0])
 
     # LN vs conv1dx2+d
-    plot_pred_scatter(batch, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1D CNN','pop LN'], ax=ax[0])
+    plot_pred_scatter(batch, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['1Dx2-CNN','pop-LN'], ax=ax[0])
 
     # conv2d vs conv1dx2+d
     sig = (sig_scores[ALL_FAMILY_MODELS[0]] - se_scores[ALL_FAMILY_MODELS[0]] > sig_scores[ALL_FAMILY_MODELS[2]] + se_scores[ALL_FAMILY_MODELS[2]]) | \
@@ -163,6 +164,7 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
         # compare each model to every other model
         for m2, s2 in zip(reduced_modelnames, reduced_shortnames):
             stats_test = st.wilcoxon(r_values[m1], r_values[m2], alternative='two-sided')
+            #stats_test = arrays_to_p(r_values[m1], r_values[m2], cellids, twosided=True)
             key = f'{s1} vs {s2}'
             stats_results[key] = stats_test
 

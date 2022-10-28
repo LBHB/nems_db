@@ -7,12 +7,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nems_lbhb.xform_wrappers as nw
-import nems.plots.api as nplt
-import nems.db as nd
-from nems.xform_helper import load_model_xform
-import nems.gui.editors as gui
-from nems.recording import load_recording
-from nems.preprocessing import generate_stim_from_epochs
+import nems0.plots.api as nplt
+import nems0.db as nd
+from nems0.xform_helper import load_model_xform
+import nems0.gui.editors as gui
+from nems0.recording import load_recording
+from nems0.preprocessing import generate_stim_from_epochs
 
 modelname="psth.fs20.pup-ld-st.pup.beh-evs.tar.lic_fir.Nx40-lvl.1-stategain.3_jk.nf10-init.st-basic"
 batch=307

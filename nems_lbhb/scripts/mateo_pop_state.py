@@ -12,29 +12,29 @@ import os
 import io
 #from sklearn.decomposition import PCA
 
-# import nems.recording
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-import nems.utils
-from nems.recording import load_recording
-import nems.preprocessing as preproc
-import nems.epoch as ep
-import nems.modelspec as ms
+# import nems0.recording
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+import nems0.utils
+from nems0.recording import load_recording
+import nems0.preprocessing as preproc
+import nems0.epoch as ep
+import nems0.modelspec as ms
 # import nems_lbhb.baphy as nb
-#import nems.db as nd
+#import nems0.db as nd
 import nems_lbhb.xform_wrappers as nw
 
 from nems import get_setting
-from nems.registry import KeywordRegistry
-from nems.plugins import default_keywords
-from nems.plugins import default_loaders
-from nems.plugins import default_initializers
-from nems.plugins import default_fitters
-from nems.signal import RasterizedSignal
-import nems.plots.api as nplt
-from nems.fitters.api import scipy_minimize
-#from nems.gui.recording_browser import browse_recording, browse_context
+from nems0.registry import KeywordRegistry
+from nems0.plugins import default_keywords
+from nems0.plugins import default_loaders
+from nems0.plugins import default_initializers
+from nems0.plugins import default_fitters
+from nems0.signal import RasterizedSignal
+import nems0.plots.api as nplt
+from nems0.fitters.api import scipy_minimize
+#from nems0.gui.recording_browser import browse_recording, browse_context
 
 import logging
 log = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ modelspecs[0][0]['meta'].update(meta)
 
 
 """
-xfspec.append(['nems.xforms.average_away_stim_occurrences', {}])
+xfspec.append(['nems0.xforms.average_away_stim_occurrences', {}])
 
 # MODEL SPEC
 # modelspecname = 'dlog_wcg18x1_stp1_fir1x15_lvl1_dexp1'
@@ -108,21 +108,21 @@ modelspecname = 'wc.18x1.g_fir.1x15_lvl.1'
 
 meta = {'cellid': 'TAR010c-18-1', 'batch': 271, 'modelname': modelspecname}
 
-xfspec.append(['nems.xforms.init_from_keywords',
+xfspec.append(['nems0.xforms.init_from_keywords',
                {'keywordstring': modelspecname, 'meta': meta}])
 
-xfspec.append(['nems.xforms.fit_basic_init', {}])
-xfspec.append(['nems.xforms.fit_basic', {}])
-# xfspec.append(['nems.xforms.fit_basic_shrink', {}])
-#xfspec.append(['nems.xforms.fit_basic_cd', {}])
-# xfspec.append(['nems.xforms.fit_iteratively', {}])
-xfspec.append(['nems.xforms.predict',    {}])
-# xfspec.append(['nems.xforms.add_summary_statistics',    {}])
-xfspec.append(['nems.analysis.api.standard_correlation', {},
+xfspec.append(['nems0.xforms.fit_basic_init', {}])
+xfspec.append(['nems0.xforms.fit_basic', {}])
+# xfspec.append(['nems0.xforms.fit_basic_shrink', {}])
+#xfspec.append(['nems0.xforms.fit_basic_cd', {}])
+# xfspec.append(['nems0.xforms.fit_iteratively', {}])
+xfspec.append(['nems0.xforms.predict',    {}])
+# xfspec.append(['nems0.xforms.add_summary_statistics',    {}])
+xfspec.append(['nems0.analysis.api.standard_correlation', {},
                ['est', 'val', 'modelspecs', 'rec'], ['modelspecs']])
 
 # GENERATE PLOTS
-xfspec.append(['nems.xforms.plot_summary',    {}])
+xfspec.append(['nems0.xforms.plot_summary',    {}])
 
 # actually do the fit
 ctx, log_xf = xforms.evaluate(xfspec)

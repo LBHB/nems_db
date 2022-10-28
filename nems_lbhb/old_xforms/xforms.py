@@ -4,18 +4,18 @@ import copy
 import socket
 import logging
 
-import nems.analysis.api
+import nems0.analysis.api
 import nems_lbhb.old_xforms.initializers as init
-import nems.metrics.api as metrics
-import nems.modelspec as ms
-from nems.modelspec import set_modelspec_metadata, get_modelspec_metadata, get_modelspec_shortname
-import nems.plots.api as nplt
+import nems0.metrics.api as metrics
+import nems0.modelspec as ms
+from nems0.modelspec import set_modelspec_metadata, get_modelspec_metadata, get_modelspec_shortname
+import nems0.plots.api as nplt
 import nems_lbhb.old_xforms.preprocessing as preproc
-import nems.priors as priors
-from nems.uri import save_resource, load_resource
-from nems.utils import iso8601_datestring, find_module
-from nems.fitters.api import scipy_minimize, coordinate_descent
-from nems.recording import load_recording
+import nems0.priors as priors
+from nems0.uri import save_resource, load_resource
+from nems0.utils import iso8601_datestring, find_module
+from nems0.fitters.api import scipy_minimize, coordinate_descent
+from nems0.recording import load_recording
 
 import numpy as np
 
@@ -46,7 +46,7 @@ def xfspec_shortname(xformspec):
     '''
     Given an xformspec, makes a shortname for it.
     '''
-    n = len('nems.xforms.')
+    n = len('nems0.xforms.')
     fn_names = [xf[n:] for xf, xfa in xformspec]
     name = ".".join(fn_names)
     return name
@@ -342,7 +342,7 @@ def fit_basic_init(modelspecs, est, IsReload=False, **context):
     if not IsReload:
         modelspecs = [init.prefit_LN(
                 est, modelspecs[0],
-                analysis_function=nems.analysis.api.fit_basic,
+                analysis_function=nems0.analysis.api.fit_basic,
                 fitter=scipy_minimize,
                 tolerance=10**-5.5, max_iter=700)]
 
@@ -363,7 +363,7 @@ def fit_basic_shr_init(modelspecs, est, IsReload=False, **context):
         metric=lambda data: metrics.nmse_shrink(data, 'pred', 'resp')
         modelspecs = [init.prefit_LN(
                 est, modelspecs[0],
-                analysis_function=nems.analysis.api.fit_basic,
+                analysis_function=nems0.analysis.api.fit_basic,
                 fitter=scipy_minimize,
                 metric=metric,
                 tolerance=10**-5, max_iter=700)]
@@ -407,13 +407,13 @@ def fit_state_init(modelspecs, est, IsReload=False, **context):
 
             m = init.prefit_LN(
                     dc, m,
-                    analysis_function=nems.analysis.api.fit_basic,
+                    analysis_function=nems0.analysis.api.fit_basic,
                     fitter=scipy_minimize,
                     tolerance=10**-4, max_iter=700)
             # fit a bit more to settle in STP variables and anything else
             # that might have been excluded
             fit_kwargs = {'tolerance': 10**-4.5, 'max_iter': 500}
-            m = nems.analysis.api.fit_basic(
+            m = nems0.analysis.api.fit_basic(
                     dc, m, fit_kwargs=fit_kwargs,
                     fitter=scipy_minimize)[0]
             rep_idx = find_module('replicate_channels', m)
@@ -454,7 +454,7 @@ def fit_iter_init(modelspecs, est, IsReload=False, **context):
     if not IsReload:
         modelspecs = [init.prefit_LN(
                 est, modelspecs[0],
-                analysis_function=nems.analysis.api.fit_basic,
+                analysis_function=nems0.analysis.api.fit_basic,
                 fitter=scipy_minimize,
                 tolerance=10**-4, max_iter=700)]
 
@@ -479,14 +479,14 @@ def fit_basic(modelspecs, est, max_iter=1000, tolerance=1e-7,
             for m, d in zip(modelspecs, est):
                 i += 1
                 log.info("Fitting JK {}/{}".format(i, njacks))
-                modelspecs_out += nems.analysis.api.fit_basic(
+                modelspecs_out += nems0.analysis.api.fit_basic(
                         d, m, fit_kwargs=fit_kwargs,
                         metric=metric,
                         fitter=scipy_minimize)
             modelspecs = modelspecs_out
         else:
             # standard single shot
-            modelspecs = [nems.analysis.api.fit_basic(
+            modelspecs = [nems0.analysis.api.fit_basic(
                     est, modelspec, fit_kwargs=fit_kwargs,
                     metric=metric,
                     fitter=scipy_minimize)[0]
@@ -516,14 +516,14 @@ def fit_basic_cd(modelspecs, est, max_iter=1000, tolerance=1e-8,
             for m, d in zip(modelspecs, est):
                 i += 1
                 log.info("Fitting JK {}/{}".format(i, njacks))
-                modelspecs_out += nems.analysis.api.fit_basic(
+                modelspecs_out += nems0.analysis.api.fit_basic(
                         d, m, fit_kwargs=fit_kwargs,
                         metric=metric,
                         fitter=coordinate_descent)
             modelspecs = modelspecs_out
         else:
             # standard single shot
-            modelspecs = [nems.analysis.api.fit_basic(
+            modelspecs = [nems0.analysis.api.fit_basic(
                     est, modelspec, fit_kwargs=fit_kwargs,
                     metric=metric,
                     fitter=coordinate_descent)[0]
@@ -544,7 +544,7 @@ def fit_module_sets(modelspecs, est, max_iter=1000, IsReload=False,
             for m, d in zip(modelspecs, est):
                 i += 1
                 log.info("Fitting JK %d/%d", i, njacks)
-                modelspecs_out += nems.analysis.api.fit_module_sets(
+                modelspecs_out += nems0.analysis.api.fit_module_sets(
                         d, m, fit_kwargs=fit_kwargs, fitter=fitter,
                         module_sets=module_sets, invert=False,
                         tolerance=tolerance, max_iter=max_iter,
@@ -552,7 +552,7 @@ def fit_module_sets(modelspecs, est, max_iter=1000, IsReload=False,
             modelspecs = modelspecs_out
         else:
             modelspecs = [
-                    nems.analysis.api.fit_module_sets(
+                    nems0.analysis.api.fit_module_sets(
                             est, modelspec, fit_kwargs=fit_kwargs,
                             fitter=fitter, module_sets=module_sets,
                             invert=invert, tolerance=tolerance,
@@ -578,7 +578,7 @@ def fit_iteratively(modelspecs, est, tol_iter=100, fit_iter=20, IsReload=False,
             for m, d in zip(modelspecs, est):
                 i += 1
                 log.info("Fitting JK %d/%d", i, njacks)
-                modelspecs_out += nems.analysis.api.fit_iteratively(
+                modelspecs_out += nems0.analysis.api.fit_iteratively(
                         d, m, fit_kwargs=fit_kwargs, fitter=fitfun,
                         module_sets=module_sets, invert=False,
                         tolerances=tolerances, tol_iter=tol_iter,
@@ -587,7 +587,7 @@ def fit_iteratively(modelspecs, est, tol_iter=100, fit_iter=20, IsReload=False,
             modelspecs = modelspecs_out
         else:
             modelspecs = [
-                    nems.analysis.api.fit_iteratively(
+                    nems0.analysis.api.fit_iteratively(
                             est, modelspec, fit_kwargs=fit_kwargs,
                             fitter=fitfun, module_sets=module_sets,
                             invert=invert, tolerances=tolerances,
@@ -603,7 +603,7 @@ def fit_n_times_from_random_starts(modelspecs, est, ntimes,
     if not IsReload:
         if len(modelspecs) > 1:
             raise ValueError('I only work on 1 modelspec')
-        modelspecs = [nems.analysis.api.fit_from_priors(est,
+        modelspecs = [nems0.analysis.api.fit_from_priors(est,
                                                         modelspec,
                                                         ntimes=ntimes)
                       for modelspec in modelspecs]
@@ -616,7 +616,7 @@ def fit_random_subsets(modelspecs, est, nsplits,
     if not IsReload:
         if len(modelspecs) > 1:
             raise ValueError('I only work on 1 modelspec')
-        modelspecs = nems.analysis.api.fit_random_subsets(est,
+        modelspecs = nems0.analysis.api.fit_random_subsets(est,
                                                           modelspecs[0],
                                                           nsplits=nsplits)
     return {'modelspecs': modelspecs}
@@ -628,7 +628,7 @@ def fit_equal_subsets(modelspecs, est, nsplits,
     if not IsReload:
         if len(modelspecs) > 1:
             raise ValueError('I only work on 1 modelspec')
-        modelspecs = nems.analysis.api.fit_subsets(est,
+        modelspecs = nems0.analysis.api.fit_subsets(est,
                                                    modelspecs[0],
                                                    nsplits=nsplits)
     return {'modelspecs': modelspecs}
@@ -640,7 +640,7 @@ def fit_jackknifes(modelspecs, est, njacks,
     if not IsReload:
         if len(modelspecs) > 1:
             raise ValueError('I only work on 1 modelspec')
-        modelspecs = nems.analysis.api.fit_jackknifes(est,
+        modelspecs = nems0.analysis.api.fit_jackknifes(est,
                                                       modelspecs[0],
                                                       njacks=njacks)
     return {'modelspecs': modelspecs}
@@ -651,7 +651,7 @@ def fit_nfold(modelspecs, est, ftol=1e-7, maxiter=1000,
     ''' fitting n fold, one from each entry in est '''
     if not IsReload:
         fit_kwargs = {'options': {'ftol': ftol, 'maxiter': maxiter}}
-        modelspecs = nems.analysis.api.fit_nfold(
+        modelspecs = nems0.analysis.api.fit_nfold(
                 est, modelspecs, fitter=scipy_minimize,
                 fit_kwargs=fit_kwargs)
     return {'modelspecs': modelspecs}
@@ -665,7 +665,7 @@ def fit_cd_nfold(modelspecs, est, ftol=1e-7, maxiter=1000, step_size=0.1,
     if not IsReload:
         fit_kwargs = {'tolerance': ftol, 'max_iter': maxiter,
                       'step_size': step_size}
-        modelspecs = nems.analysis.api.fit_nfold(
+        modelspecs = nems0.analysis.api.fit_nfold(
                 est, modelspecs, fitter=coordinate_descent,
                 fit_kwargs=fit_kwargs)
     return {'modelspecs': modelspecs}
@@ -678,7 +678,7 @@ def fit_nfold_shrinkage(modelspecs, est, ftol=1e-7, maxiter=1000,
     if not IsReload:
         metric = lambda d: metrics.nmse_shrink(d, 'pred', 'resp')
         fit_kwargs = {'options': {'tolerance': tolerance, 'max_iter': max_iter}}
-        modelspecs = nems.analysis.api.fit_nfold(
+        modelspecs = nems0.analysis.api.fit_nfold(
                 est, modelspecs, metric=metric,
                 fitter=scipy_minimize,
                 fit_kwargs=fit_kwargs)
@@ -694,12 +694,12 @@ def fit_cd_nfold_shrinkage(modelspecs, est, ftol=1e-7, maxiter=1000,
         fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter,
                       'step_size': 0.05}
         metric = lambda d: metrics.nmse(d, 'pred', 'resp')
-        modelspecs = nems.analysis.api.fit_nfold(
+        modelspecs = nems0.analysis.api.fit_nfold(
                 est, modelspecs, metric=metric,
                 fit_kwargs=fit_kwargs,
                 fitter=coordinate_descent)
         fit_kwargs = {'options': {'tolerance': tolerance, 'max_iter': max_iter}}
-        modelspecs = nems.analysis.api.fit_nfold(
+        modelspecs = nems0.analysis.api.fit_nfold(
                 est, modelspecs, metric=metric,
                 fitter=scipy_minimize,
                 fit_kwargs=fit_kwargs)
@@ -715,7 +715,7 @@ def predict(modelspecs, est, val, **context):
     # modelspecs = metrics.add_summary_statistics(est, val, modelspecs)
     # TODO: Add statistics to metadata of every modelspec
 
-    est, val = nems.analysis.api.generate_prediction(est, val, modelspecs)
+    est, val = nems0.analysis.api.generate_prediction(est, val, modelspecs)
 
     return {'val': val, 'est': est}
 
@@ -724,7 +724,7 @@ def add_summary_statistics(est, val, modelspecs, rec=None, **context):
     # modelspecs = metrics.add_summary_statistics(est, val, modelspecs, rec)
     # TODO: Add statistics to metadata of every modelspec
 
-    modelspecs = nems.analysis.api.standard_correlation(
+    modelspecs = nems0.analysis.api.standard_correlation(
             est, val, modelspecs, rec=rec)
 
     return {'modelspecs': modelspecs}
@@ -773,16 +773,16 @@ def fill_in_default_metadata(rec, modelspecs, IsReload=False, **context):
 # TODO: Perturb around the modelspec to get confidence intervals
 
 # TODO: Use simulated annealing (Slow, arguably gets stuck less often)
-# modelspecs = nems.analysis.fit_basic(est, modelspec,
-#                                   fitter=nems.fitter.annealing)
+# modelspecs = nems0.analysis.fit_basic(est, modelspec,
+#                                   fitter=nems0.fitter.annealing)
 
 # TODO: Use Metropolis algorithm (Very slow, gives confidence interval)
-# modelspecs = nems.analysis.fit_basic(est, modelspec,
-#                                   fitter=nems.fitter.metropolis)
+# modelspecs = nems0.analysis.fit_basic(est, modelspec,
+#                                   fitter=nems0.fitter.metropolis)
 
 # TODO: Use 10-fold cross-validated evaluation
-# fitter = partial(nems.cross_validator.cross_validate_wrapper, gradient_descent, 10)
-# modelspecs = nems.analysis.fit_cv(est, modelspec, folds=10)
+# fitter = partial(nems0.cross_validator.cross_validate_wrapper, gradient_descent, 10)
+# modelspecs = nems0.analysis.fit_cv(est, modelspec, folds=10)
 
 
 def tree_path(recording, modelspecs, xfspec):

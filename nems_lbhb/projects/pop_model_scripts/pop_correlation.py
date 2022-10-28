@@ -7,8 +7,8 @@ import pandas as pd
 import scipy.stats as st
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 
 from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, EQUIVALENCE_MODELS_SINGLE,
                              EQUIVALENCE_MODELS_POP, DOT_COLORS, MODELGROUPS)
@@ -132,17 +132,8 @@ def generate_psth_correlations_single(batch, modelnames, save_path=None, load_pa
     return corrs
 
 
-def get_significance_scores(correlations):
-    # Run wilcoxon test on each pair of correlations, return p-values and t-scores
-    #t1, p1 = st.wilcoxon(correlations['c2d_c1d'], correlations['c2d_LN'], alternative='two-sided')
-    test2 = st.wilcoxon(correlations['c2d_c1d'], correlations['c1d_LN'], alternative='two-sided')
-    #t3, p3 = st.wilcoxon(correlations['c2d_LN'], correlations['c1d_LN'], alternative='two-sided')
-
-    return [test2]
-
-
 def correlation_histogram(batch, batch_name, save_path=None, load_path=None, test_limit=None, force_rerun=False,
-                          use_pop_models=False, ax=None, skip_new_cells=True, do_scatter=False):
+                          use_pop_models=False, ax=None, skip_new_cells=True, plot_LN=False, LN_save=None, LN_load=None):
     # Load correlations and significance tests
     if use_pop_models:
         correlations = generate_psth_correlations_pop(batch, EQUIVALENCE_MODELS_POP, save_path=save_path,
@@ -152,13 +143,8 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
                                                          load_path=load_path, test_limit=test_limit,
                                                          force_rerun=force_rerun, skip_new_cells=skip_new_cells)
 
-    # TODO: if this analysis is redone, should edit the above functions to just remove
-    #       this comparison altogether.
-    #       Alternatively, talked about doing *all* comparisons and then adding a separate
-    #       triangular heatmap to represent them.
     correlations = correlations.drop('c2d_LN', axis=1)
-
-    stats_tests = get_significance_scores(correlations)
+    stats_tests = st.wilcoxon(correlations['c2d_c1d'], correlations['c1d_LN'], alternative='two-sided')
 
     # Plot all distributions of correlations on common bins
     if ax is None:
@@ -166,30 +152,26 @@ def correlation_histogram(batch, batch_name, save_path=None, load_path=None, tes
     else:
         plt.sca(ax)
     bins = np.histogram(np.hstack([c.values for _, c in correlations.items()]), bins=20)[1]
+    colors = [DOT_COLORS['2D-CNN'], DOT_COLORS['pop-LN']]  # 1D CNNx2 in common, so color by other model
 
-    if do_scatter:
-        ax.scatter(correlations['c2d_c1d'], correlations['c1d_LN'], c='black', s=2)
-        ax.plot([[0,0], [1,1]], c='black', linestyle='dashed', linewidth=1)
-        ax.set_xlabel('R(conv1Dx2, conv2D)')
-        ax.set_ylabel('R(conv1Dx2, LN_pop')
-        ax.set_ylim(0,1)
-        ax.set_xlim(0,1)
+    c1 = correlations['c2d_c1d']
+    c2 = correlations['c1d_LN']
+    if plot_LN:
+        c3 = sanity_check_LN(batch, [MODELGROUPS['LN'][4], EQUIVALENCE_MODELS_SINGLE[2]], save_path=LN_save,
+                             load_path=LN_load)
+        ax.hist(c3, bins=bins, alpha=1.0, color='darkgray', edgecolor='black', linewidth=0.5,
+                histtype='stepfilled')
+
     else:
-        colors = [DOT_COLORS['2D CNN'], DOT_COLORS['pop LN']]  # 1D CNNx2 in common, so color by other model
-
-        c1 = correlations['c2d_c1d']
-        c2 = correlations['c1d_LN']
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D-CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
-        #ax.text(np.median(c1), 0, '*', va='bottom', ha='center')
-        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop LN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c2, bins=bins, alpha=1, color=DOT_COLORS['pop-LN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled')
-        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D CNN'], edgecolor='black', linewidth=0.5,
+        ax.hist(c1, bins=bins, alpha=1, color=DOT_COLORS['2D-CNN'], edgecolor='black', linewidth=0.5,
                 histtype='stepfilled', fc='None', hatch='\\\\\\\\')
-        #ax.text(np.median(c2), 0, '*', va='bottom', ha='center')
 
-        plt.xlabel('PSTH Correlation')
-        plt.ylabel('Count')
+    plt.xlabel('PSTH Correlation')
+    plt.ylabel('Count')
 
     #plt.title('%s' % batch_name)
     #plt.legend()
@@ -235,18 +217,25 @@ if __name__ == '__main__':
     # peg_corr, peg_p, peg_t = correlation_histogram(peg, 'PEG', save_path=None, test_limit=None, load_path=peg_corr_path, force_rerun=True)
 
     # To run plot when everything is done
-    a1_corr, a1_stats = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
-                                                skip_new_cells=True, do_scatter=False, ax=ax1)
-    peg_corr, peg_stats = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
-                                                   skip_new_cells=True, do_scatter=False, ax=ax2)
-    fig.tight_layout()
+    # a1_corr, a1_stats = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path, force_rerun=False,
+    #                                             skip_new_cells=True, ax=ax1)
+    # peg_corr, peg_stats = correlation_histogram(peg, 'PEG', save_path=a1_corr_path, load_path=peg_corr_path, force_rerun=False,
+    #                                                skip_new_cells=True, ax=ax2)
+    # fig.tight_layout()
 
     # T-statistic, p-value
-    print("A1 sig tests: %s" % a1_stats)
-    print("PEG sig tests: %s" % peg_stats)
+    # print("A1 sig tests: %s" % a1_stats)
+    # print("PEG sig tests: %s" % peg_stats)
 
     # test LN vs pop_LN
     # a1_corr_LN = sanity_check_LN(a1, [MODELGROUPS['LN'][4], EQUIVALENCE_MODELS_SINGLE[2]],
     #                              save_path=a1_corr_path_LN, load_path=a1_corr_path_LN)
     # peg_corr_LN = sanity_check_LN(peg, [MODELGROUPS['LN'][4], EQUIVALENCE_MODELS_SINGLE[2]],
     #                               save_path=peg_corr_path_LN, load_path=peg_corr_path_LN)
+
+    a1_corr, _ = correlation_histogram(a1, 'A1', save_path=a1_corr_path, load_path=a1_corr_path,
+                                              ax=ax1, plot_LN=True, LN_save=a1_corr_path_LN, LN_load=a1_corr_path_LN)
+    peg_corr, _ = correlation_histogram(peg, 'PEG', save_path=peg_corr_path, load_path=peg_corr_path,
+                                                ax=ax2, plot_LN=True, LN_save=peg_corr_path_LN, LN_load=peg_corr_path_LN)
+    fig.tight_layout()
+    plt.show(block=True)

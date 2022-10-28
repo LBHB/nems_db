@@ -4,7 +4,7 @@ import numpy as np
 from scipy.signal import convolve2d, butter, sosfilt
 
 from nems import db
-from nems.utils import smooth
+from nems0.utils import smooth
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.baphy_io import load_continuous_openephys

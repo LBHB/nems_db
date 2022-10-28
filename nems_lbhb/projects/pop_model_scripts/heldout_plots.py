@@ -3,11 +3,11 @@ import scipy.stats as st
 import pandas as pd
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
-from nems.xforms import evaluate_step
+import nems0.epoch as ep
+from nems0.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 
 from pop_model_utils import (mplparams, get_significant_cells, SIG_TEST_MODELS, MODELGROUPS, HELDOUT, MATCHED, PLOT_STAT,
@@ -43,7 +43,7 @@ def generate_heldout_plots(batch, batch_name, sig_test_models=SIG_TEST_MODELS, a
 
     significant_cells = get_significant_cells(batch, sig_test_models, as_list=True)
     #short_names = ['conv2d', 'conv1d', 'conv1dx2+d', 'LN_pop', 'dnn1']
-    short_names = ['1D CNNx2', 'pop LN', 'CNN single']
+    short_names = ['1Dx2-CNN', 'pop-LN', 'single-CNN']
     if len(short_names) != len(HELDOUT):
         raise ValueError('length of short_names must equal number of models in HELDOUT / MATCHED')
     r_ceilings = get_heldout_results(batch, significant_cells, short_names)
@@ -75,7 +75,7 @@ def generate_heldout_plots(batch, batch_name, sig_test_models=SIG_TEST_MODELS, a
     #                          DOT_COLORS['LN_pop'],DOT_COLORS['LN_pop'],
     #                          DOT_COLORS['dnn1_single'],DOT_COLORS['dnn1_single']],
     sns.stripplot(x='model', y=PLOT_STAT, hue='hue_tag', data=tres, zorder=0, order=value_vars, jitter=0.2, ax=ax,
-                  palette=[DOT_COLORS['1D CNNx2'],DOT_COLORS['pop LN'],DOT_COLORS['CNN single']],
+                  palette=[DOT_COLORS['1Dx2-CNN'],DOT_COLORS['pop-LN'],DOT_COLORS['single-CNN']],
                   size=2)
     ax.legend_.remove()
     sns.boxplot(x='model', y=PLOT_STAT, data=tres, boxprops={'facecolor': 'None', 'linewidth': 1},
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     tests2, sig2, r2, m2, mds2 = generate_heldout_plots(peg, 'PEG', ax=axes3[1])
     axes3[1].set_ylabel('')
 
-    short_names = ['1D CNNx2', 'pop LN', 'CNN single']
+    short_names = ['1Dx2-CNN', 'pop-LN', 'single-CNN']
     print('Make sure short_names matches actual modelnames used!')
     print('short_names: %s' % short_names)
     print('HELDOUT: %s' % HELDOUT)

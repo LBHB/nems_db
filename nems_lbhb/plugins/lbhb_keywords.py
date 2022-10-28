@@ -3,15 +3,15 @@ import logging
 import copy
 import numpy as np
 
-from nems.registry import xform, xmodule
-from nems.plugins.default_keywords import wc, lvl, fir, firexp
+from nems0.registry import xform, xmodule
+from nems0.plugins.default_keywords import wc, lvl, fir, firexp
 
 log = logging.getLogger(__name__)
 
 @xmodule()
 def ctwc(kw):
     '''
-    Same as nems.plugins.keywords.fir but renamed for contrast
+    Same as nems0.plugins.keywords.fir but renamed for contrast
     to avoid confusion in the modelname and allow different
     options to be supported if needed.
     '''
@@ -38,7 +38,7 @@ def gcwc(kw):
 @xmodule()
 def ctfir(kw):
     '''
-    Same as nems.plugins.keywords.fir but renamed for contrast
+    Same as nems0.plugins.keywords.fir but renamed for contrast
     to avoid confusion in the modelname and allow different
     options to be supported if needed.
     '''
@@ -70,7 +70,7 @@ def ctfir(kw):
 
     if n_banks > 1:
         template = {
-                'fn': 'nems.modules.fir.filter_bank',
+                'fn': 'nems0.modules.fir.filter_bank',
                 'fn_kwargs': {'i': 'ctpred', 'o': 'ctpred',
                               'bank_count': n_banks},
                 'prior': {
@@ -78,19 +78,19 @@ def ctfir(kw):
                 }
     else:
         template = {
-                'fn': 'nems.modules.fir.basic',
+                'fn': 'nems0.modules.fir.basic',
                 'fn_kwargs': {'i': 'ctpred', 'o': 'ctpred'},
                 'prior': {
                     'coefficients': ('Normal', p_coefficients)},
-                'plot_fns': ['nems.plots.api.mod_output',
-                             'nems.plots.api.strf_heatmap',
-                             'nems.plots.api.strf_timeseries'],
+                'plot_fns': ['nems0.plots.api.mod_output',
+                             'nems0.plots.api.strf_heatmap',
+                             'nems0.plots.api.strf_timeseries'],
                 'plot_fn_idx': 1,
                 }
 
 #    p_coefficients = {'beta': np.full((n_outputs * n_banks, n_coefs), 0.1)}
 #    template = {
-#            'fn': 'nems.modules.fir.filter_bank',
+#            'fn': 'nems0.modules.fir.filter_bank',
 #            'fn_kwargs': {'i': 'ctpred', 'o': 'ctpred', 'bank_count': n_banks},
 #            'prior': {'coefficients': ('Exponential', p_coefficients)},
 #            }
@@ -130,7 +130,7 @@ def OOfir(kw):
 @xmodule()
 def ctlvl(kw):
     '''
-    Same as nems.plugins.keywords.lvl but renamed for
+    Same as nems0.plugins.keywords.lvl but renamed for
     contrast.
     '''
     m = lvl(kw[2:])
@@ -299,10 +299,10 @@ def dsig(kw):
                       'eq': eq,
                       'norm': norm,
                       'alternate': alternate},
-        'plot_fns': ['nems.plots.api.mod_output',
-                     'nems.plots.api.pred_resp',
-                     'nems.plots.api.before_and_after',
-                     'nems.plots.api.nl_scatter'],
+        'plot_fns': ['nems0.plots.api.mod_output',
+                     'nems0.plots.api.pred_resp',
+                     'nems0.plots.api.before_and_after',
+                     'nems0.plots.api.nl_scatter'],
         'plot_fn_idx': 1,
         'prior': {'base': ('Exponential', {'beta': [0.1]}),
                   'amplitude': ('Normal', {'mean': [2.0], 'sd': 1.0}),
@@ -541,7 +541,7 @@ def lvlogsig(kw):
                 'd': ('Normal', {'mean': zeros, 'sd': ones}),
                 'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
                 'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
-        'plot_fns': ['nems.plots.api.pred_resp',
+        'plot_fns': ['nems0.plots.api.pred_resp',
                      'nems_lbhb.plots.lv_logsig_plot'],
             'plot_fn_idx': 0,
         'bounds': {'g': (None, None)}
@@ -561,7 +561,7 @@ def lvlogsig(kw):
         'prior': {'g': ('Normal', {'mean': zeros, 'sd': ones}),
                 'b': ('Normal', {'mean': baseline_u, 'sd': baseline_sd}),
                 'a': ('Normal', {'mean': amplitude, 'sd': amp_sd})},
-        'plot_fns': ['nems.plots.api.pred_resp',
+        'plot_fns': ['nems0.plots.api.pred_resp',
                      'nems_lbhb.plots.lv_logsig_plot'],
             'plot_fn_idx': 0,
         'bounds': {'g': (None, None)}
@@ -834,11 +834,11 @@ def sdexp(kw):
         'fn_kwargs': {'i': 'pred',
                       'o': 'pred',
                       's': state},
-        'plot_fns': ['nems.plots.api.mod_output',
-                     'nems.plots.api.before_and_after',
-                     'nems.plots.api.pred_resp',
-                     'nems.plots.api.state_vars_timeseries',
-                     'nems.plots.api.state_vars_psth_all'],
+        'plot_fns': ['nems0.plots.api.mod_output',
+                     'nems0.plots.api.before_and_after',
+                     'nems0.plots.api.pred_resp',
+                     'nems0.plots.api.state_vars_timeseries',
+                     'nems0.plots.api.state_vars_psth_all'],
         'plot_fn_idx': 3,
         'prior': {'base_g': ('Normal', {'mean': base_mean_g, 'sd': base_sd_g}),
                   'amplitude_g': ('Normal', {'mean': amp_mean_g, 'sd': amp_sd_g}),
@@ -907,15 +907,15 @@ def stategainchan(kw):
     d_mean = zeros
     d_sd = ones
 
-    plot_fns = ['nems.plots.api.mod_output_all',
-                'nems.plots.api.mod_output',
-                'nems.plots.api.before_and_after',
-                'nems.plots.api.pred_resp',
-                'nems.plots.api.state_vars_timeseries',
-                'nems.plots.api.state_vars_psth_all']
+    plot_fns = ['nems0.plots.api.mod_output_all',
+                'nems0.plots.api.mod_output',
+                'nems0.plots.api.before_and_after',
+                'nems0.plots.api.pred_resp',
+                'nems0.plots.api.state_vars_timeseries',
+                'nems0.plots.api.state_vars_psth_all']
     if 'g' in options:
         template = {
-            'fn': 'nems.modules.state.state_gain',
+            'fn': 'nems0.modules.state.state_gain',
             'fn_kwargs': {'i': 'pred',
                           'o': 'pred',
                           's': 'state',
@@ -926,7 +926,7 @@ def stategainchan(kw):
             }
     else:
         template = {
-            'fn': 'nems.modules.state.state_dc_gain',
+            'fn': 'nems0.modules.state.state_dc_gain',
             'fn_kwargs': {'i': 'pred',
                           'o': 'pred',
                           's': 'state',
@@ -951,7 +951,7 @@ def pmod(kw):
     :param kw:
     :return:
     """
-    from nems.registry import keyword_lib
+    from nems0.registry import keyword_lib
 
     options = kw.split('.')
     in_out_pattern = re.compile(r'^(\d{1,})x(\d{1,})$')

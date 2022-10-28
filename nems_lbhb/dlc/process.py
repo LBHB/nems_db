@@ -2,7 +2,7 @@
 import deeplabcut as dlc
 import os
 import glob
-import nems.db as db
+import nems0.db as db
 
 def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
              site_path="/auto/data/daq/Clathrus/CLT011/",

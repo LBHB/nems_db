@@ -10,19 +10,19 @@ import sys, importlib
 import copy
 import pandas as pd
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-from nems.uri import json_numpy_obj_hook
-from nems.xform_helper import fit_model_xform, load_model_xform, _xform_exists
-from nems.utils import escaped_split, escaped_join, get_setting, find_module
-import nems.db as nd
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+from nems0.uri import json_numpy_obj_hook
+from nems0.xform_helper import fit_model_xform, load_model_xform, _xform_exists
+from nems0.utils import escaped_split, escaped_join, get_setting, find_module
+import nems0.db as nd
 from nems import get_setting
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems_lbhb.analysis import pop_models
-import nems.db as nd
-from nems.plots.heatmap import plot_heatmap
+import nems0.db as nd
+from nems0.plots.heatmap import plot_heatmap
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ savefigs = False
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single, \
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, get_significant_cells, PLOT_STAT, \
     modelname_half_prefit, modelname_half_pop, modelname_half_fullfit, \
-    modelname_half_heldoutpop, modelname_half_heldoutfullfit, mplparams
+    modelname_half_heldoutpop, modelname_half_heldoutfullfit, mplparams, single_column_shorter
 
 import matplotlib as mpl
 mpl.rcParams.update(mplparams)
@@ -95,7 +95,7 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
     ax[0].plot([0, 1], [0, 1], 'k--')
     x1,x2,xlabel='10', 'std', 'Standard'
-    y1,y2,ylabel='10', 'prefit','Pretrained'
+    y1,y2,ylabel='10', 'prefit','Pre-trained'
     x=dpred.loc[(dpred.midx==x1) & (dpred.fit==x2), [PLOT_STAT]]
     y=dpred.loc[(dpred.midx==y1) & (dpred.fit==y2), [PLOT_STAT]]
     _d = x.merge(y, how='inner', left_index=True, right_index=True, suffixes=('_x','_y'))
@@ -128,11 +128,10 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel, markersize=4.5)
     ax[1].legend(frameon=False)
     ax[1].set_xlabel('Fraction estimation data')
+    ax[1].set_ylim(0.5, 0.7)
     ax[1].set_box_aspect(1)
 
-    print(dpm)
-
-    return f
+    return f, dpm
 
 
 if __name__ == '__main__':
@@ -145,4 +144,4 @@ if __name__ == '__main__':
     single_column_tall = (3.5*sf, 6*sf)
     column_and_half_short = (5*sf, 2.5*sf)
     column_and_half_tall = (5*sf, 5*sf)
-    fig5 = partial_est_plot(batch=a1, PLOT_STAT=PLOT_STAT, figsize=column_and_half_short)
+    fig5 = partial_est_plot(batch=a1, PLOT_STAT=PLOT_STAT, figsize=single_column_shorter)

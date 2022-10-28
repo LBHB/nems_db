@@ -6,7 +6,7 @@ import pandas as pd
 # from projects.olp.OLP_analysis_main import sound_df
 from scipy import stats
 import scipy.ndimage.filters as sf
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 from pathlib import Path
 import glob
@@ -43,7 +43,7 @@ def plot_binaural_psths(df, cellid, bg, fg, batch, save=False, close=False):
     rec['resp'] = rec['resp'].extract_channels([cellid])
     resp = copy.copy(rec['resp'].rasterize())
 
-    expt_params = manager.get_baphy_exptparams()  # Using Charlie's manager
+    expt_params = manager.get_baphy_exptparams()
     if len(expt_params) == 1:
         ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
     if len(expt_params) > 1:
@@ -441,26 +441,3 @@ def histogram_summary_plot(df, threshold=0.05, area='A1'):
     return ttest1, ttest2
 
 
-def plot_mod_spec(idx, df=sound_df, lfreq=100, hfreq=2400, fbins=48,
-                  tbins=100, t=1):
-    row = df.iloc[idx]
-    spec = row['spec']
-    mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
-
-    # oct = np.log2(hfreq/lfreq)
-    # fmod = (bins/oct) / 2
-    tmod = (tbins/t) / 2
-    xbound = tmod*0.4
-
-    wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1/tbins))
-    wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1/6))
-
-    f, ax = plt.subplots(2, 1, figsize=(5, 5))
-    ax[0].imshow(spec, aspect='auto', origin='lower')
-    ax[1].imshow(np.sqrt(mod), aspect='auto', origin='lower',
-                 extent=(wt[0]+0.5, wt[-1]+0.5, wf[0], wf[-1]))
-    ax[1].set_xlim(-xbound, xbound)
-    ax[1].set_ylim(0,np.max(wf))
-    ax[1].set_ylabel("wf (cycles/s)", fontweight='bold', fontsize=10)
-    ax[1].set_xlabel("wt (Hz)", fontweight='bold', fontsize=10)
-    ax[0].set_title(f"{row['name']}", fontweight='bold', fontsize=14)

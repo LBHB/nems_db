@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-import nems.db as nd
-import nems.xform_helper as xhelp
-import nems.xforms as xf
+import nems0.db as nd
+import nems0.xform_helper as xhelp
+import nems0.xforms as xf
 from nems_db.params import fitted_params_per_batch
 from nems_lbhb.gcmodel.figures.utils import adjustFigAspect, forceAspect
-from nems.utils import find_module
+from nems0.utils import find_module
 
 
 # TODO: Need to clean these up, some can probably be deleted.

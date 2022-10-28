@@ -74,7 +74,7 @@ def rdt_gain(rec, fg_gain, bg_gain, single_gain):
 
 def apply_gain(rec, i='fg+bg', o='pred', offset=0):
     """
-    compress fg and bg streams based on dlog(.. offset) (from nems.modules.nonlinearity)
+    compress fg and bg streams based on dlog(.. offset) (from nems0.modules.nonlinearity)
     then apply stream-specific gain and then sum. offset specifies compression
     :param rec: recording object
     :param i: string identifying of input stream signals (fg+bg or fg_pred+bg_pred)

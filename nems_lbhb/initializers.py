@@ -19,16 +19,16 @@ import scipy.fftpack as fp
 import scipy.signal as ss
 import pandas as pd
 
-import nems.epoch as ep
-import nems.signal as signal
-from nems.utils import find_module, adjust_uri_prefix
-from nems.preprocessing import resp_to_pc
-from nems.initializers import load_phi
-import nems.db as nd
+import nems0.epoch as ep
+import nems0.signal as signal
+from nems0.utils import find_module, adjust_uri_prefix
+from nems0.preprocessing import resp_to_pc
+from nems0.initializers import load_phi
+import nems0.db as nd
 from nems_lbhb.xform_wrappers import _matching_cells
-from nems import xform_helper, xforms
-from nems.uri import save_resource
-from nems.utils import get_default_savepath
+from nems0 import xform_helper, xforms
+from nems0.uri import save_resource
+from nems0.utils import get_default_savepath
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +52,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         return {}
 
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
+    if len(xi) == 0:
+        xi = find_module("WeightChannelsNew", modelspec, find_all_matches=True)
     if len(xi) == 0:
         raise ValueError(f"modelspec has not weight_channels layer to align")
 
@@ -170,6 +172,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             post_part += ".ver2"
         elif modelname_parts[2].endswith("ver1"):
             post_part += ".ver1"
+        if modelname_parts[0].startswith("gtgram"):
+            pre_part = pre_part.replace("ozgf","gtgram")
 
         model_search = "_".join([pre_part, modelname_parts[1], post_part])
         if pre_batch is None:
@@ -179,7 +183,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         if type(cellid) is list:
             cellid = cellid[0]
         siteid = cellid.split("-")[0]
-        allsiteids, allcellids = nd.get_batch_sites(batch, modelname_filter=model_search)
+        allsiteids, allcellids = nd.get_batch_sites(pre_batch, modelname_filter=model_search)
         allsiteids = [s.split(".")[0] for s in allsiteids]
 
         if (batch==323) and (pre_batch==322):
@@ -194,7 +198,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         elif siteid in allsiteids:
             # don't need to generalize, load from actual fit
             pre_cellid = cellid
-        elif batch in [322, 334]:
+        elif pre_batch in [322, 334]:
             pre_cellid = 'ARM029a-07-6'
         elif pre_batch == 323:
             pre_cellid = 'ARM017a-01-9'
@@ -207,7 +211,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         # exact same model, just fit for site, now being fit for single cell
         pre_parts = modelname_parts[0].split("-")
         post_parts = modelname_parts[2].split("-")
-        model_search = modelname_parts[0] + "%%" + modelname_parts[1] + "%%" + "-".join(post_parts[1:])
+        model_search = modelname_parts[0] + "%%" + modelname_parts[1] + "%%" + "-".join(post_parts[2:])
 
         pre_cellid = cellid[0]
         pre_batch = batch
@@ -288,16 +292,19 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     log.info(f"model_search: {model_search}")
 
-    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'"
+    sql = f"SELECT * FROM Results WHERE batch={pre_batch} and cellid='{pre_cellid}' and modelname like '{model_search}'" + \
+       " ORDER BY r_fit DESC"
     #log.info(sql)
     
     d = nd.pd_query(sql)
     #old_uri = adjust_uri_prefix(d['modelpath'][0] + '/modelspec.0000.json')
     old_uri = adjust_uri_prefix(d['modelpath'][0])
-    log.info(f"Importing parameters from {old_uri}")
+    old_modelname=d['modelname'][0]
+    old_cellid=d['cellid'][0]
+    log.info(f"Importing parameters from {old_cellid}/{old_modelname}")
 
     mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
-    print(mspaths)
+    log.info(mspaths)
     prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
 
     #_, prefit_ctx = xform_helper.load_model_xform(
@@ -306,13 +313,14 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
+        new_ctx['freeze_idx'] = list(np.arange(freeze_layer_count))
     if prefit_type == 'init':
         new_ctx['skip_init'] = True
     return new_ctx
 
 
 def pca_proj_layer(rec, modelspec, **ctx):
-    from nems.tf.cnnlink_new import fit_tf, fit_tf_init
+    from nems0.tf.cnnlink_new import fit_tf, fit_tf_init
 
     weight_chan_idx = find_module("weight_channels", modelspec, find_all_matches=True)
     w = weight_chan_idx[-1]

@@ -8,11 +8,11 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 
 from nems_lbhb.xform_wrappers import load_batch_modelpaths
-import nems.db as nd
-import nems.modelspec as ms
-from nems.uri import load_resource
-from nems.utils import find_common
-from nems import get_setting
+import nems0.db as nd
+import nems0.modelspec as ms
+from nems0.uri import load_resource
+from nems0.utils import find_common
+from nems0 import get_setting
 
 log = logging.getLogger(__name__)
 

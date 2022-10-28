@@ -3,14 +3,14 @@ import copy
 
 import numpy as np
 
-import nems.epoch as ep
-import nems.modelspec as ms
-from nems.utils import find_module
-from nems.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
+import nems0.epoch as ep
+import nems0.modelspec as ms
+from nems0.utils import find_module
+from nems0.initializers import (prefit_to_target, prefit_mod_subset, init_dexp,
                                init_logsig, init_relsat)
-from nems.analysis.api import fit_basic
-import nems.fitters.api
-import nems.metrics.api as metrics
+from nems0.analysis.api import fit_basic
+import nems0.fitters.api
+import nems0.metrics.api as metrics
 from nems import priors
 
 log = logging.getLogger(__name__)
@@ -75,10 +75,10 @@ def init_contrast_model(est, modelspec, IsReload=False,
         counterparts.
     fitter : str
         Name of the optimization function to use, e.g. scipy_minimize
-        or coordinate_descent. It will be imported from nems.fitters.api
+        or coordinate_descent. It will be imported from nems0.fitters.api
     metric : str
         Name of the metric to optimize, e.g. 'nmse'. It will be imported
-        from nems.metrics.api
+        from nems0.metrics.api
     context : dictionary
         For use with xforms, contents will be updated by the return value.
 
@@ -96,13 +96,13 @@ def init_contrast_model(est, modelspec, IsReload=False,
     # If there's no dynamic_sigmoid module, try doing
     # the normal linear-nonlinear initialization instead.
     if not find_module('dynamic_sigmoid', modelspec):
-        new_ms = nems.initializers.prefit_LN(est, modelspec, max_iter=max_iter,
+        new_ms = nems0.initializers.prefit_LN(est, modelspec, max_iter=max_iter,
                                              tolerance=tolerance)
         return {'modelspec': new_ms}
 
     # Set up kwargs for prefit function.
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:

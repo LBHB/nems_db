@@ -16,11 +16,11 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 from nems import get_setting
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 import nems_lbhb.pupil_behavior_scripts.helpers as helper
-import nems.xform_helper as xhelp
-import nems.db as db
+import nems0.xform_helper as xhelp
+import nems0.db as db
 from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
 
 

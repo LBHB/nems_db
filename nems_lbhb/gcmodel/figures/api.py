@@ -6,7 +6,7 @@ from multiprocessing import Process
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf
 
-import nems.xform_helper as xhelp
+import nems0.xform_helper as xhelp
 from nems_lbhb.gcmodel.figures.autocorrelation import (load_batch_results,
                                                        tau_vs_model_performance)
 from nems_lbhb.gcmodel.figures.drc import test_DRC_with_contrast

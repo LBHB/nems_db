@@ -1,7 +1,7 @@
 import nems_lbhb.TwoStim_helpers as ts
 import nems_lbhb.projects.olp.OLP_plot_helpers as opl
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -226,6 +226,22 @@ opl.split_psth_highest_lowest(df_filtered, sortby='suppression', rows=18, sigma=
 #If you just want standard scatter of BG weight v FG weight
 plotids, df_filtered, fnargs = {'xcol': 'weightsA', 'ycol': 'weightsB', 'fn':opl.plot_psth}, \
                                weight_df.copy(), {'df_filtered': weight_df}
+
+#Adding 2022_08_29 for new weight_df names
+weight_df = weight_df.rename(columns={'BG':'namesA', 'FG':'namesB', 'bg_FR':'BG_FRns',
+                              'fg_FR':'FG_FRns'})
+plotids, df_filtered, fnargs = {'xcol': 'BG_FRns', 'ycol': 'FG_FRns', 'fn':opl.plot_psth_scatter}, \
+                               weight_df.copy(), {'df_filtered': weight_df, 'scatter': 'suppression'}
+cellid_and_stim_strs= [index+':'+nameA+':'+nameB for index,nameA,nameB in \
+                      zip(df_filtered.cellid.values,
+                          df_filtered['namesA'],df_filtered['namesB'])]
+f, ax = plt.subplots(1,1)
+phi=ts.scatterplot_print(df_filtered[plotids['xcol']].values,
+                         df_filtered[plotids['ycol']].values,
+                         cellid_and_stim_strs, plotids,
+                         ax=ax,fn=plotids['fn'], thresh=threshold, fnargs=fnargs)
+
+
 
 #interactive plot using firing rates
 plotids, df_filtered, fnargs = {'xcol': 'BG_FRns', 'ycol': 'FG_FRns', 'fn':opl.plot_psth_scatter}, \

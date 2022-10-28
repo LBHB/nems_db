@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-import nems.db as nd
+import nems0.db as nd
 from pop_model_utils import get_significant_cells, SIG_TEST_MODELS, PLOT_STAT
 
 

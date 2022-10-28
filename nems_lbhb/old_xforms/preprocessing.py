@@ -1,8 +1,8 @@
 import warnings
 import numpy as np
-import nems.epoch as ep
+import nems0.epoch as ep
 import pandas as pd
-from nems.signal import RasterizedSignal
+from nems0.signal import RasterizedSignal
 import copy
 from scipy.signal import convolve2d
 

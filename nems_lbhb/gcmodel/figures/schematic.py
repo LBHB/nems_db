@@ -5,12 +5,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-import nems.modelspec as ms
-import nems.xform_helper as xhelp
-from nems.utils import find_module
-from nems.modules.nonlinearity import _logistic_sigmoid, _double_exponential
-from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
-from nems.metrics.stp import stp_magnitude
+import nems0.modelspec as ms
+import nems0.xform_helper as xhelp
+from nems0.utils import find_module
+from nems0.modules.nonlinearity import _logistic_sigmoid, _double_exponential
+from nems0.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
+from nems0.metrics.stp import stp_magnitude
 
 
 def pred_resp_parameters(cellid, batch, gc_model):

@@ -33,7 +33,7 @@ import nems_lbhb.projects.nat_pup_decoding.dim_reduction as dr
 
 import nems
 import nems_lbhb.baphy as nb
-import nems.db as nd
+import nems0.db as nd
 import logging
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     # ============================== SAVE PARAMETERS ===================================
     # define save directory
-    path = nems.get_setting("NEMS_RESULTS_DIR")
+    path = nems0.get_setting("NEMS_RESULTS_DIR")
 
     # ========================== Define analysis options ========================
     # these are harcoded right now, but should be editable in the future

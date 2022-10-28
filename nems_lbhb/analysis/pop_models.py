@@ -16,17 +16,18 @@ mpl.rcParams.update(params)
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 from numpy.linalg import det
 from scipy.ndimage import zoom, gaussian_filter1d
 
 from nems import xforms
-import nems.plots.api as nplt
-from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
-from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
-from nems.uri import NumpyEncoder
-from nems.utils import get_setting, smooth
-from nems.modules.fir import per_channel
+import nems0.plots.api as nplt
+from nems0.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems0.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
+from nems0.uri import NumpyEncoder
+from nems0.utils import get_setting, smooth
+from nems0.modules.fir import per_channel
 
 
 log = logging.getLogger(__name__)
@@ -38,13 +39,13 @@ def subspace_overlap(u, v):
     from Sharpee PLoS CB 2017 paper
     u,v: n X x matrices sampling n-dim subspace of x-dim space
     """
-    n = u.shape[1]
+    n = u.shape[0]
 
-    _u = u / np.sqrt(np.sum(u ** 2, axis=0, keepdims=True))
-    _v = v / np.sqrt(np.sum(v ** 2, axis=0, keepdims=True))
+    _u = u / np.sqrt(np.sum(u ** 2, axis=1, keepdims=True))
+    _v = v / np.sqrt(np.sum(v ** 2, axis=1, keepdims=True))
 
-    num = np.power(np.abs(det(_u.T @ _v)), (1.0 / n))
-    den = np.power(np.abs(det(_u.T @ _u)) * np.abs(det(_v.T @ _v)), (0.5 / n))
+    num = np.power(np.abs(det(_u @ _v.T)), (1.0 / n))
+    den = np.power(np.abs(det(_u @ _u.T)) * np.abs(det(_v @ _v.T)), (0.5 / n))
 
     return num / den
 
@@ -194,13 +195,21 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     #mask = zoom(mask,[2,2])
     #strf_all[mask]=np.nan
     mm = np.nanmax(np.abs(strf_all))
-   
+
+    pop_paper = False
     if cmap=='bwr':
         cmap = mpl.cm.get_cmap(name=get_setting('WEIGHTS_CMAP'))
         cmap.set_bad('lightgray',1.)
     elif cmap=='jet':
         cmap = mpl.cm.get_cmap(name='jet')
         cmap.set_bad('white',1.)
+    elif cmap == 'pop_paper':
+        red = (219 / 255, 114 / 255, 110 / 255)
+        blue = (66 / 255, 134 / 255, 198 / 255)
+        pop_paper_cmap = LinearSegmentedColormap.from_list('pop_paper', [blue, 'white', red], 256)
+        pop_paper_cmap.set_bad('lightgray', 1.)
+        cmap = pop_paper_cmap
+        pop_paper = True
     else:
         cmap = mpl.cm.get_cmap(name=cmap)
         cmap.set_bad('white',1.)
@@ -289,7 +298,11 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
                     if c is not None:
                         col = c[i1,i0]
                         if np.abs(col)>0.3:
-                            if col>0:
+                            if pop_paper:
+                                col = np.tanh(2*col)  # shift toward extremes for darker visualization
+                                col = 0.5 * (col + 1)  # scale 0-1 instead of -1 to 1
+                                col = pop_paper_cmap(col)
+                            elif col>0:
                                 #col = [(1-col), 1-0.5*col, 1-0.5*col]
                                 col = [1-col, 1-col, 1-0.1*col]
                             else:
@@ -389,7 +402,7 @@ def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purpl
     ax[1].set_ylabel('Spikes/sec', fontsize=8)
     return ax[0].figure
     
-from nems.utils import get_setting
+from nems0.utils import get_setting
 from scipy.ndimage import zoom
 
 
@@ -1206,7 +1219,7 @@ def stp_pca():
 
 def db_test(out_channel=[6,7,8]):
     #get_results_file(batch, modelnames=None, cellids=None)
-    from nems.db import get_results_file
+    from nems0.db import get_results_file
     batch = 289
     #modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.q-fir.2x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
     modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-fir.4x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
@@ -1235,7 +1248,7 @@ def db_test(out_channel=[6,7,8]):
 
 
 def db_load():
-    from nems.xform_helper import load_model_xform
+    from nems0.xform_helper import load_model_xform
     batch = 289
     #modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.q-fir.2x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
     modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-fir.4x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
@@ -1292,7 +1305,7 @@ def db_pca():
 def simulate_pop(n=10, modelstring=None):
 
     from nems_lbhb.baphy_experiment import BAPHYExperiment
-    from nems.initializers import from_keywords, rand_phi
+    from nems0.initializers import from_keywords, rand_phi
     from nems_lbhb.baphy_io import fill_default_options
 
     parmfile = '/auto/data/daq/Amanita/AMT004/AMT004b13_p_NAT.m'

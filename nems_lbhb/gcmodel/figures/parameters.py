@@ -6,10 +6,10 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
-import nems.xform_helper as xhelp
-import nems.db as nd
-import nems.epoch as ep
-from nems.utils import find_module, ax_remove_box
+import nems0.xform_helper as xhelp
+import nems0.db as nd
+import nems0.epoch as ep
+from nems0.utils import find_module, ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,
@@ -18,13 +18,13 @@ from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              is_outlier,
                                              drop_common_outliers)
 from nems_lbhb.gcmodel.figures.respstats import _binned_xvar, _binned_yavg
-from nems.metrics.stp import stp_magnitude
+from nems0.metrics.stp import stp_magnitude
 from nems_lbhb.gcmodel.magnitude import gc_magnitude
-from nems.modules.nonlinearity import _double_exponential
+from nems0.modules.nonlinearity import _double_exponential
 from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_db.params import fitted_params_per_batch
-import nems.modelspec as ms
-from nems.modules.nonlinearity import _double_exponential, _saturated_rectifier
+import nems0.modelspec as ms
+from nems0.modules.nonlinearity import _double_exponential, _saturated_rectifier
 from nems_lbhb.gcmodel.figures.definitions import *
 
 log = logging.getLogger(__name__)

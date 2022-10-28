@@ -1,9 +1,9 @@
 import re
 import numpy as np
 
-from nems.plugins.default_fitters import basic, iter, _parse_basic, _parse_iter, _extract_options
-from nems.utils import escaped_split
-from nems.registry import xform, xmodule
+from nems0.plugins.default_fitters import basic, iter, _parse_basic, _parse_iter, _extract_options
+from nems0.utils import escaped_split
+from nems0.registry import xform, xmodule
 
 
 @xform()
@@ -82,7 +82,7 @@ def gc2(fitkey):
             kwargs['n_random'] = nr
         elif op.startswith('rp'):
             rc = int(op[1:])
-            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+            xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rc}])
         elif op == 'SC':
             kwargs['summed_contrast'] = True
             kwargs['post_copy'] = False
@@ -117,7 +117,7 @@ def gc3(fitkey):
             kwargs['n_random'] = nr
         elif op.startswith('rp'):
             rc = int(op[1:])
-            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+            xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rc}])
 
     xfspec.append(['nems_lbhb.gcmodel.fitters.fit_gc3', kwargs])
     return xfspec
@@ -170,7 +170,7 @@ def testLN(fitkey):
             kwargs['prefit_max_iter'] = int(re.match(pattern, op).group(1))
         elif op.startswith('r'):
             rc = int(op[1:])
-            xfspec.append(['nems.initializers.rand_phi', {'rand_count': rc}])
+            xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rc}])
     xfspec.append(['nems_lbhb.gcmodel.fitters.test_LN', kwargs])
     return xfspec
 
@@ -241,8 +241,8 @@ def popiter(fitkey):
         flip_pcs = True
     else:
         flip_pcs = False
-    xfspec = [['nems.analysis.fit_pop_model.init_pop_pca', {'flip_pcs': flip_pcs}],
-              ['nems.analysis.fit_pop_model.fit_population_iteratively',
+    xfspec = [['nems0.analysis.fit_pop_model.init_pop_pca', {'flip_pcs': flip_pcs}],
+              ['nems0.analysis.fit_pop_model.fit_population_iteratively',
                {'module_sets': module_sets, 'fitter': fitter,
                 'tolerances': tolerances, 'tol_iter': tol_iter,
                 'fit_iter': fit_iter}]]
@@ -268,7 +268,7 @@ def pupLVbasic(fitkey):
     xfspec = []
 
     if rand_count>1:
-        xfspec.append(['nems.initializers.rand_phi', {'rand_count': rand_count}])
+        xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rand_count}])
 
     metric = 'pup_nmse'
     if pup_constraint == 'lv_var':
@@ -281,7 +281,7 @@ def pupLVbasic(fitkey):
         metric = 'pup_dep_LVs'
         metric_fn = 'nems_lbhb.lv_helpers.pup_dep_LVs'
 
-    xfspec.append(['nems.xforms.fit_wrapper',
+    xfspec.append(['nems0.xforms.fit_wrapper',
                   {'max_iter': max_iter,
                    'fitter': fitter, 'tolerance': tolerance,
                    'metric': metric,
@@ -290,7 +290,7 @@ def pupLVbasic(fitkey):
                    'signed_correlation': signed_correlation}])
 
     if choose_best:
-        xfspec.append(['nems.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn,
+        xfspec.append(['nems0.analysis.test_prediction.pick_best_phi', {'metric_fn': metric_fn,
                                                                        'alpha': alpha,
                                                                        'signed_correlation': signed_correlation
                                                                        }])

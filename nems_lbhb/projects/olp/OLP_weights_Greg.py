@@ -1,14 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb   # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.recording as recording
+import nems0.recording as recording
 import numpy as np
 import TwoStim_helpers as ts
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
 import pickle as pl
 import pandas as pd
 import sys
@@ -17,21 +17,21 @@ import re
 import itertools
 sys.path.insert(0,'/auto/users/luke/Code/Python/Utilities')
 import fitEllipse as fE
-import nems.epoch as ep
+import nems0.epoch as ep
 import logging
 log = logging.getLogger(__name__)
 
 def calc_psth_metrics_Greg(batch, cellid,):
     import numpy as np
     import SPO_helpers as sp
-    import nems.preprocessing as preproc
-    import nems.metrics.api as nmet
-    import nems.metrics.corrcoef
+    import nems0.preprocessing as preproc
+    import nems0.metrics.api as nmet
+    import nems0.metrics.corrcoef
     import copy
-    import nems.epoch as ep
+    import nems0.epoch as ep
     import scipy.stats as sst
     from nems_lbhb.gcmodel.figures.snr import compute_snr
-    from nems.preprocessing import generate_psth_from_resp
+    from nems0.preprocessing import generate_psth_from_resp
     import logging
     log = logging.getLogger(__name__)
 

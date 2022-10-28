@@ -1,12 +1,12 @@
 
 ####################################################
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import numpy as np
 import seaborn as sb
 import scipy.stats as sst
 from nems_lbhb.gcmodel.figures.snr import compute_snr
-from nems.preprocessing import generate_psth_from_resp
+from nems0.preprocessing import generate_psth_from_resp
 import scipy.ndimage.filters as sf
 from pathlib import Path
 import os

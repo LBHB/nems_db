@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 
-from nems.utils import ax_remove_box
-import nems.db as nd
+from nems0.utils import ax_remove_box
+import nems0.db as nd
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     SIG_TEST_MODELS, get_significant_cells, set_equal_axes, PLOT_STAT, DOT_COLORS, ALL_FAMILY_MODELS
 )

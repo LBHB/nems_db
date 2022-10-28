@@ -12,14 +12,14 @@ import numpy as np
 
 import nems_lbhb.stateplots as stateplots
 import nems_lbhb.plots as lplt
-import nems.recording as recording
-import nems.epoch as ep
-import nems.xforms as xforms
-#import nems.xform_helper as xhelp
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.xforms as xforms
+#import nems0.xform_helper as xhelp
 #import nems_lbhb.xform_wrappers as nw
-import nems.db as nd
-import nems.plots.api as nplt
-from nems.utils import find_module
+import nems0.db as nd
+import nems0.plots.api as nplt
+from nems0.utils import find_module
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),

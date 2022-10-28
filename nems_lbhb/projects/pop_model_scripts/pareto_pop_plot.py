@@ -2,8 +2,8 @@ import copy
 import numpy as np
 
 import nems_lbhb.plots
-import nems.db as nd
-from nems.utils import ax_remove_box
+import nems0.db as nd
+from nems0.utils import ax_remove_box
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (mplparams, SIG_TEST_MODELS, MODELGROUPS, POP_MODELGROUPS,
                                                                   PLOT_STAT, DOT_COLORS, DOT_MARKERS,
@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 
 
 def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, dot_colors=None, dot_markers=None,
-                      fill_styles=None, plot_stat='r_test', plot_medians=False, labeled_models=None, show_legend=True):
+                      fill_styles=None, plot_stat='r_test', plot_medians=False, labeled_models=None, show_legend=True,
+                      y_lim=None):
 
     if labeled_models is None:
         labeled_models = []
@@ -66,7 +67,10 @@ def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, 
         ax.legend(handles, labels, loc='lower right', fontsize=7, frameon=False)
     ax.set_xlabel('Free parameters per neuron')
     ax.set_ylabel('Median prediction correlation')
-    ax.set_ylim((overall_min, overall_max))
+    if y_lim is None:
+        ax.set_ylim((overall_min, overall_max))
+    else:
+        ax.set_ylim(*y_lim)
     ax_remove_box(ax)
     plt.tight_layout()
 

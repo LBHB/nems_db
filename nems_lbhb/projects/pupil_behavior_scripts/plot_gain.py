@@ -3,7 +3,7 @@ Simple script to inspect gain/dc signals over time for sdexp model fits
 """
 
 import matplotlib.pyplot as plt
-import nems.xform_helper as xhelp
+import nems0.xform_helper as xhelp
 
 cellid = 'BRT016f-a1'
 batch = 309

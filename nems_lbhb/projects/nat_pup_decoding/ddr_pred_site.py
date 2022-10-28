@@ -20,8 +20,6 @@ ddr_pred_site.ddr_plot_pred_sum(df, labels, modelnames)
 
 """
 
-
-
 import numpy as np
 import os
 import io
@@ -35,21 +33,21 @@ import pandas as pd
 import seaborn as sns
 from scipy import stats
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join, smooth
-from nems import get_setting
-from nems.xform_helper import _xform_exists, load_model_xform, fit_model_xform
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders,
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join, smooth
+from nems0 import get_setting
+from nems0.xform_helper import _xform_exists, load_model_xform, fit_model_xform
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import POP_MODELS, SIG_TEST_MODELS
-from nems import db
-from nems.recording import load_recording
+from nems0 import db
+from nems0.recording import load_recording
 from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems import epoch as ep
-from charlieTools.nat_sounds_ms.decoding import plot_stimulus_pair
+from nems0 import epoch as ep
+#from charlieTools.nat_sounds_ms.decoding import plot_stimulus_pair
 import nems_lbhb.projects.nat_pup_decoding.decoding as decoding
 
 log = logging.getLogger(__name__)
@@ -66,15 +64,16 @@ ALL_SITES = ['BOL005c', 'BOL006b', 'bbl086b', 'bbl099g', 'bbl104h', 'BRT026c', '
 def parse_modelname_base(modelname_base, batch=None):
 
     if batch is None:
-        if 'epcpn' in modelname_base:
+        if ('epcpn' in modelname_base) or ('331' in modelname_base):
             batch = 331
         else:
             batch = 322
+            
     if 'plgsm.er5' in modelname_base:
         short_set=True
     else:
         short_set=False
-
+        
     if short_set:
         resp_modelname = f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{'st.pca.pup+r1'}-plgsm.er5-aev-rd.resp" + \
                      "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
@@ -89,7 +88,49 @@ def parse_modelname_base(modelname_base, batch=None):
                          "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
                          "_tfinit.xx0.n.lr1e4.cont.et4.i20-lvnoise.r4-aev-ccnorm.md.t1.f0.ss3"
 
-    if 'lvnorm.6' in str(modelname_base):
+    if 'exp331'==modelname_base:
+        #states = ['st.pca0.pup0.fpc0', 'st.pca.pup0.fpc0', 'st.pca.pup.fpc',
+        #          'st.pca.pup+r2+s2.fpc', 'st.pca.pup+r2.fpc', 'st.pca.pup+r3.fpc']
+        #modelspecs = ["_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+        #              "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+        #              "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+        #              "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7",
+        #              "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7",
+        #              "_stategain.5xR.x1,3,4,5-spred-lvnorm.9xR.so.x2,3,6,7,8-inoise.9xR.x2,4,5,6,7,8"]
+        states = ['st.pca0.pup0.fpc0', 'st.pca.pup0.fpc0', 'st.pca.pup.fpc',
+                  'st.pca.pup+r1.fpc', 'st.pca.pup+r2.fpc', 'st.pca.pup+r3.fpc']
+        modelspecs = ["_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1,3-spred-lvnorm.7xR.so.x2,3,4,5,6-inoise.7xR.x2,4,5,6",
+                      "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7",
+                      "_stategain.5xR.x1,3,4,5-spred-lvnorm.9xR.so.x2,3,6,7,8-inoise.9xR.x2,4,5,6,7,8"]
+
+        modelnames = [resp_modelname] + \
+            [f"psth.fs4.pup.fpca3-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev-rd" + \
+             ms + "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3" 
+             for s,ms in zip(states,modelspecs)]
+            
+        return modelnames,states
+        
+    if 'exp322'==modelname_base:
+        states = ['st.pca0.pup0.fpc0', 'st.pca.pup0.fpc0', 'st.pca.pup.fpc', 
+                  'st.pca.pup+r1.fpc', 'st.pca.pup+r2.fpc', 'st.pca.pup+r3.fpc']
+        modelspecs = ["_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1-spred-lvnorm.6xR.so.x2,3,4,5-inoise.6xR.x2,3,4,5",
+                      "_stategain.5xR.x1,3-spred-lvnorm.7xR.so.x2,3,4,5,6-inoise.7xR.x2,4,5,6",
+                      "_stategain.5xR.x1,3,4-spred-lvnorm.8xR.so.x2,3,5,6,7-inoise.8xR.x2,4,5,6,7",
+                      "_stategain.5xR.x1,3,4,5-spred-lvnorm.9xR.so.x2,3,6,7,8-inoise.9xR.x2,4,5,6,7,8"]
+        
+        modelnames = [resp_modelname] + \
+            [f"psth.fs4.pup.fpca3-ld-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev-rd" + \
+             ms + "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3" 
+             for s,ms in zip(states,modelspecs)]
+            
+        return modelnames,states
+        
+    elif 'lvnorm.6' in str(modelname_base):
         states = ['st.pca0.pup+r3+s0,1,2,3', 'st.pca.pup+r3+s0,1,2,3',
                   'st.pca.pup+r3+s1,2,3', 'st.pca.pup+r3+s2,3', 'st.pca.pup+r3+s3', 'st.pca0.pup+r3+s3']
     elif 'lvnorm.5' in str(modelname_base):
@@ -97,6 +138,15 @@ def parse_modelname_base(modelname_base, batch=None):
                   'st.pca.pup+r2+s1,2', 'st.pca.pup+r2+s2', 'st.pca.pup+r2', 'st.pca0.pup+r2']
         #states = ['st.pca0.pup+r2+s0,1,2', 'st.pca0.pup+r2+s0,1,2',
         #          'st.pca0.pup+r2+s1,2', 'st.pca0.pup+r2+s2', 'st.pca0.pup+r2', 'st.pca0.pup+r2']
+    elif 'lvnorm.8xR.so.x1,2,5,6,7' in str(modelname_base):
+        states = ['st.pup+r3+s0,1,2.fpc0', 'st.pup+r3+s0,1,2,3.fpc0',
+                  'st.pup+r3+s1,2,3.fpc', 'st.pup+r3+s2,3.fpc', 'st.pup+r3+s3.fpc', 'st.pup+r3.fpc']
+    elif 'lvnorm.8' in str(modelname_base):
+        states = ['st.pca0.pup+r2+s0,1,2.fpc0', 'st.pca.pup+r2+s0,1,2.fpc0',
+                  'st.pca.pup+r2+s1,2.fpc', 'st.pca.pup+r2+s2.fpc', 'st.pca.pup+r2.fpc', 'st.pca0.pup+r2.fpc']
+    elif 'lvnorm.9' in str(modelname_base):
+        states = ['st.pca0.pup+r3+s0,1,2,3.fpc0', 'st.pca.pup+r3+s0,1,2,3.fpc0',
+                  'st.pca.pup+r3+s1,2,3.fpc', 'st.pca.pup+r3+s2,3.fpc', 'st.pca.pup+r3+s3.fpc', 'st.pca.pup+r3.fpc']
     else:
         states = ['st.pca0.pup+r1+s0,1', 'st.pca.pup+r1+s0,1', 'st.pca.pup+r1+s1', 'st.pca.pup+r1']
 
@@ -117,15 +167,15 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, just_return_mean_dp
     if len(cellid)==0:
         raise ValueError(f"No match for site {site} batch {batch}")
 
-    if batch == 331:
-        if modelname_base is None:
+    if modelname_base is None:
+        if batch == 331:
             modelname_base = "psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
                              "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
                              "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.t4.f0.ss3"
-    else:
-        modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
-                         "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
-                         "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
+        else:
+            modelname_base = "psth.fs4.pup-ld-hrc-psthfr.z-pca.cc1.no.p-{0}-plgsm.p2-aev-rd" + \
+                             "_stategain.2xR.x1,3-spred-lvnorm.4xR.so.x2-inoise.4xR.x3" + \
+                             "_tfinit.xx0.n.lr1e4.cont.et4.i50000-lvnoise.r8-aev-ccnorm.md.t5.f0.ss3"
     log.info(f"site {site} modelname_base: {modelname_base}")
 
     modelnames, states = parse_modelname_base(modelname_base)
@@ -151,9 +201,10 @@ def ddr_pred_site_sim(site, batch=None, modelname_base=None, just_return_mean_dp
                                                                     (('_'.join(v[1].split('_')[:-1]), int(v[1].split('_')[-1])) in mask_bins)]
                 all_combos = raw_res.evoked_stimulus_pairs
                 val_combos = [c for c in all_combos if c not in fit_combos]
-            s=raw_df["sp_dp"]/(raw_df["sp_dp"]+raw_df["bp_dp"])
-            l=raw_df["bp_dp"]/(raw_df["sp_dp"]+raw_df["bp_dp"])
-            dp[i,:] = [s.mean(), l.mean]
+            s=raw_df["sp_dp"] # /(raw_df["sp_dp"]+raw_df["bp_dp"])
+            l=raw_df["bp_dp"] # /(raw_df["sp_dp"]+raw_df["bp_dp"])
+            #print(s, l)
+            dp[i,:] = [s.mean(), l.mean()]
         return labels,dp
             
     f, ax = plt.subplots(4, len(modelnames), figsize=(8, 6), sharex='row', sharey='row');
@@ -291,7 +342,7 @@ def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
     if len(modelnames)==5:
         c1,c2,c3=[1,2,3]
     elif len(modelnames)==7:
-        c1,c2,c3=[2,3,4]
+        c1,c2,c3=[2,4,5]
 
     plt.close('all')
     f1, ax = plt.subplots(len(labels), 1, figsize=(4,10), sharex=True)
@@ -300,9 +351,10 @@ def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
     for i in range(len(labels)):
         d = df[labels[i]]
         d.columns=shortlabels
-        sns.stripplot(data=d, s=2, ax=ax[i])
-        ax[i].errorbar(np.arange(len(labels[i])), d.median(),
-                        d.std()/np.sqrt(len(d)))
+        #sns.stripplot(data=d, s=2, ax=ax[i])
+        sns.barplot(data=d, ci=None, estimator=np.median, ax=ax[i])
+        #ax[i].errorbar(np.arange(len(labels[i])), d.median(),
+        #                d.std()/np.sqrt(len(d)))
         ax[i].set_ylabel(cats[i])
         #sns.pointplot(data=df[labels[i]], ci=95, color='black', lw=1, markers='', join=False, s=0, ax=ax[i])
     ax[-1].set_xticklabels(shortlabels, rotation = 45)
@@ -312,9 +364,12 @@ def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
     if thr_name==None:
         thr_name='pupil_range'
     print(f'threshold col: {thr_name} val: {thr}')
+
     s=df[thr_name].copy()
     pidx=s>thr
     s = 30*(s-s.min())+1
+    s[:]=10
+    
     print(f"thr={thr}, valid={pidx.sum()}/{len(pidx)}")
     for i in range(len(labels)):
         l=labels[i]
@@ -326,9 +381,12 @@ def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
         ax[i,0].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
         a=df[l[c2]]
         b=df[l[c3]]
-
+        c=df['batch'].values.astype(str)
+        c[c=='331']='blue'
+        c[c=='322']='orange'
+        
         W,p = stats.wilcoxon(a[pidx],b[pidx])
-        ax[i,0].scatter(df[l[c2]],df[l[c3]],s=s)
+        ax[i,0].scatter(df[l[c2]],df[l[c3]], s=s, color=c)
         ax[i,0].set_xlabel(shortlabels[c2], fontsize=fontsize)
         ax[i,0].set_ylabel(shortlabels[c3], fontsize=fontsize)
         ax[i,0].set_title(f"{cats[i]} {p:.3f}", fontsize=fontsize)
@@ -337,7 +395,7 @@ def ddr_plot_pred_sum(df, labels, modelnames, thr=0.45, thr_name=None):
         b=df[l[c3]][s>thr]
         W,p = stats.wilcoxon(a[pidx],b[pidx])
         ax[i,1].plot([mmin,mmax],[mmin,mmax],'k--',lw=0.5)
-        ax[i,1].scatter(df[l[c1]],df[l[c3]],s=s)
+        ax[i,1].scatter(df[l[c1]],df[l[c3]],s=s, color=c)
         ax[i,1].set_xlabel(shortlabels[c1], fontsize=fontsize)
         ax[i,1].set_ylabel(shortlabels[c3], fontsize=fontsize)
         ax[i,1].set_title(f"{cats[i]} {p:.3f}", fontsize=fontsize)

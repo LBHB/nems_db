@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
 
-import nems.db as nd
+import nems0.db as nd
 from nems_db.params import fitted_params_per_batch
 from nems_lbhb.gcmodel.figures.utils import improved_cells_to_list, is_outlier
 from nems_lbhb.gcmodel.figures.parameters import _df_to_array

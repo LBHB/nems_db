@@ -3,14 +3,14 @@ import os
 import glob
 import numpy as np
 
-from nems.xforms import load_analysis
+from nems0.xforms import load_analysis
 
 """
 examples illustrating how to load CC models exported from the lab without
 a database connect.
 
 Note, models exported using this command:
-from nems.db import export_fits
+from nems0.db import export_fits
 export_fits(315, 
         ['psth.fs20.pup-ld-st.pup.fil-ref-psthfr.s_stategain.S_jk.nf20-basic',
          'psth.fs20.pup-ld-st.pup.fil0-ref-psthfr.s_stategain.S_jk.nf20-basic',

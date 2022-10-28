@@ -11,9 +11,10 @@ import pandas as pd
 import copy
 from pathlib import Path
 
+from scipy.signal import hilbert, resample
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def TBP(exptevents, exptparams):
                     baphy_tar_strings[parmidx] = baphy_tar_strings[parmidx].split(':N')[0]
                 else:
                     raise ValueError(f"Unknown case for TargetDistSet = {distSet}")
-        
+
         else:
 
             try:
@@ -93,8 +94,8 @@ def TBP(exptevents, exptparams):
                     baphy_tar_strings[parmidx] = baphy_tar_strings[parmidx].split(':N')[0]
                 else:
                     raise ValueError(f"Unknown case for TargetDistSet = {distSet}")
-        
-    
+
+
     # update the events
     for idx, ev in enumerate(event_targets):
         events.loc[events.name==ev, 'name'] = event_targets_new[idx]
@@ -236,14 +237,60 @@ def CPN (exptevents, exptparams):
 
     return new_events, new_params
 
+def wav2env(w,fsin,fsout, axis=0, verbose=False):
+    """
+    extract and downsample waveform from envelope
+    :param w:
+    :param fsin:
+    :param fsout:
+    :param axis: int
+        dimension along which to compute envelope
+    :param verbose: bool
+        if True, plot waveform and envelope
+
+    :return:
+    """
+
+    duration = len(w)/fsin
+
+    analytic_signal = hilbert(w)
+    amplitude_envelope = np.abs(hilbert(w))
+
+    new_samples = int(np.round(duration * fsout))
+
+    env = resample(amplitude_envelope, new_samples)
+    if verbose:
+        tin = np.arange(len(w)) / fsin
+        tout = np.arange(len(env)) / fsout
+        plt.plot(tin, w, label='signal')
+        plt.plot(tout, env, label='envelope')
+        plt.legend()
+
+    return env
+
+def remove_clicks(w, max_threshold=15, verbose=False):
+
+    w_clean = w
+
+    # log compress everything > 67% of max
+    crossover = 0.67 * max_threshold
+    ii = (w>crossover)
+    w_clean[ii] = crossover + np.log(w_clean[ii]-crossover+1);
+    jj = (w<-crossover)
+    w_clean[jj] = -crossover - np.log(-w_clean[jj]-crossover+1);
+
+    if verbose:
+       print(f'bins compressed down: {ii.sum()} up: {jj.sum()} max {np.abs(w).max():.2f}-->{np.abs(w_clean).max():.2f}')
+
+    return w_clean
 
 def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
-             mono=False, binaural=False,
+             mono=False, binaural=False, binsplit=True,
              **options):
     """
     :param exptevents: from baphy
     :param exptparams: from baphy
-    :param stimfmt: string, currently must be 'wav' or 'gtgram'
+    :param stimfmt: string, currently must be 'wav', 'gtgram', 'nenv'
     :param separate_files_only: boolean [=False]
         if True, just return each individual sound file rather than combinations
         (eg, as specified for binaural stim)
@@ -267,8 +314,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     ReferenceClass = exptparams['TrialObject'][1]['ReferenceClass']
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
-    
-    if exptparams['TrialObject'][1]['ReferenceClass']=='BigNat':
+
+    if (ReferenceClass=='BigNat') & \
+            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
         sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
@@ -279,50 +327,108 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         stim_epochs = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']
         #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
         wav1=[e.split("+")[0].split(":")[0] for e in stim_epochs]
-        wav2=[e.split("+")[1].split(":")[0] for e in stim_epochs]
         chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
-        chan2=[int(e.split("+")[1].split(":")[1])-1 for e in stim_epochs]
+        wav2 = []
+        chan2 = []
+        for e in stim_epochs:
+            if "+" in e:
+                wav2.append(e.split("+")[1].split(":")[0])
+                chan2.append(int(e.split("+")[1].split(":")[1])-1)
+            else:
+                wav2.append("NULL")
+                chan2.append(0)
+
+        type1 = [''] * len(wav1)
+        type2 = [''] * len(wav2)
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
         file_unique=wav1.copy()
         file_unique.extend(wav2)
         file_unique=list(set(file_unique))
         if 'NULL' in file_unique:
             file_unique.remove('NULL')
-            
-    elif ReferenceClass=='NaturalSounds':
-        subset = ReferenceHandle['Subsets']
-        if subset == 1:
-            sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds')
+
+    elif (ReferenceClass == 'BigNat') | (ReferenceClass == 'NaturalSounds'):
+        if ReferenceClass == 'BigNat':
+            sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
         else:
-            sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set{subset}')
+            subset = ReferenceHandle['Subsets']
+            if subset == 1:
+                sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds')
+            else:
+                sound_root=Path(f'/auto/users/svd/code/baphy/Config/lbhb/SoundObjects/@NaturalSounds/sounds_set{subset}')
         stim_epochs = ReferenceHandle['Names']
         file_unique=[f.replace('.wav','') for f in stim_epochs]
-        
+
         wav1=file_unique.copy()
         chan1 = [0] * len(wav1)
         wav2=["NULL"] * len(wav1)
         chan2 = [0] * len(wav1)
-
+        type1 = [''] * len(wav1)
+        type2 = [''] * len(wav1)
     elif ReferenceClass == 'OverlappingPairs':
-        bg_folder = ReferenceHandle['BG_Folder']
-        fg_folder = ReferenceHandle['FG_Folder']
+        if 'BG_Folder' in ReferenceHandle.keys():
+            bg_folder = ReferenceHandle['BG_Folder']
+            fg_folder = ReferenceHandle['FG_Folder']
 
-        bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
-        fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
 
-        stim_epochs = ReferenceHandle['Names']
-        #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
-        wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
-        wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
-        chan1=[int(e.split("_")[0].split("-")[3])-1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
-        chan2=[int(e.split("_")[1].split("-")[3])-1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+            stim_epochs = ReferenceHandle['Names']
+        else:
+            bg_folder = 'Background1'
+            fg_folder = ReferenceHandle['FG_Folder']
+            bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
+            fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
+
+            stim_epochs=[]
+
+        if len(stim_epochs)>0:
+            #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
+            wav1=[e.split("_")[0].split("-")[0] for e in stim_epochs]
+            wav2=[e.split("_")[1].split("-")[0] for e in stim_epochs]
+
+            # parse codes for synthetic sounds
+            type1=[e.split("_")[0].split("-")[-1] for e in stim_epochs]
+            type2=[e.split("_")[1].split("-")[-1] for e in stim_epochs]
+
+            paths = {'C': 'Cochlear', 'T': 'Temporal', 'S': 'Spectral', 'U': 'Spectrotemporal', 'M': 'SpectrotemporalMod'}
+            types = list(paths.keys())
+            wav1 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav1,type1)]
+            wav2 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav2,type2)]
+
+            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
+            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+        else:
+            stim_epochs = exptevents.loc[exptevents.name.str.startswith("STIM_"),'name']
+            stim_epochs = list(set([s.replace("STIM_","") for s in list(stim_epochs)]))
+
+            wav1 = []
+            wav2 = []
+            type1 = []
+            type2 = []
+            for e in stim_epochs:
+                e = e.replace("1_","1@").replace("null_","null@")
+                wav1.append(e.split("@")[0].split("-")[0])
+                wav2.append(e.split("@")[1].split("-")[0])
+                if wav1[-1]!='null':
+                    type1.append(float(e.split("@")[0].split("-")[1]))
+                else:
+                    type1.append(0.0)
+                if wav2[-1]!='null':
+                    type2.append(float(e.split("@")[1].split("-")[1]))
+                else:
+                    type2.append(0.0)
+
+            chan1 = [0]*len(wav1)
+            chan2 = [0]*len(wav2)
+
         #log.info(wav1[0],chan1[0],wav2[0],chan2[0])
         #wav1 = [wav for wav in wav1 if wav != 'null']
         #wav2 = [wav for wav in wav2 if wav != 'null']
 
-        file_unique=wav1.copy()
+        file_unique = wav1.copy()
         file_unique.extend(wav2)
-        file_unique=list(set(file_unique))
+        file_unique = list(set(file_unique))
         file_unique = [f for f in file_unique if f != 'null']
 
         log.info('NOTE: Stripping spaces from epoch names in OverlappingPairs files')
@@ -342,7 +448,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     Duration = ReferenceHandle['Duration']
     PostStimSilence = ReferenceHandle['PostStimSilence']
     log.info(f"Pre/Dur/Pos: {PreStimSilence}/{Duration}/{PostStimSilence}")
-    
+
     wav_unique = {}
     fs0 = None
     for filename in file_unique:
@@ -353,27 +459,35 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 fs, w = wavfile.read(Path(fg_root) / (filename + '.wav'))
         else:
             fs, w = wavfile.read(sound_root / (filename+'.wav'))
+        if w.dtype.name == 'int16':
+            w = w / 32767
+        elif w.dtype.name == 'int32':
+            w = w / 2147483647
+
+        if len(w)<fs*Duration:
+            w = np.pad(w, [0, int(fs*Duration)-len(w)])
+
         if fs0 is None:
             fs0 = fs
         elif fs != fs0:
-            raise ValueError("fs mismatch between wav files. Need to implement resampling!")
+            this_samples = len(w)
+            adjusted_samples = int(this_samples/fs*fs0)
+            w = resample(w, adjusted_samples)
+            fs=fs0
+            print(f'Adjusting sampling rate for {filename} to {fs0}')
+            #raise ValueError("fs mismatch between wav files. Need to implement resampling!")
 
         #print(f"{filename} fs={fs} len={w.shape}")
         duration_samples = int(np.floor(Duration * fs))
 
         # 10ms ramp at onset:
         w = w[:duration_samples].astype(float)
-        ramp = np.hanning(.01 * fs*2)
+        ramp = np.hanning(.005 * fs * 2)
         ramp = ramp[:int(np.floor(len(ramp)/2))]
-        w[:len(ramp)] *= ramp        
+        w[:len(ramp)] *= ramp
         w[-len(ramp):] = w[-len(ramp):] * np.flipud(ramp)
-        
-        # scale peak-to-peak amplitude to OveralldB
-        w=w/np.max(np.abs(w))*5
-        sf= 10**((80-OveralldB)/20)
-        w /= sf
-        
-        wav_unique[filename] = w[:,np.newaxis]
+
+        wav_unique[filename] = w[:, np.newaxis]
 
     if separate_files_only:
         # combine into pairs that were actually presented
@@ -381,18 +495,58 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     else:
         wav_all = {}
         fs_all = {}
-        for (f1,c1,f2,c2,n) in zip(wav1,chan1,wav2,chan2,stim_epochs):
+        for (f1,c1,t1,f2,c2,t2,n) in zip(wav1,chan1,type1,wav2,chan2,type2,stim_epochs):
             #print(f1,f2)
             if f1.upper() != "NULL":
-                w1 = wav_unique[f1]
+                w1 = wav_unique[f1].copy()
                 if f2.upper() != "NULL":
-                    w2 = wav_unique[f2]
+                    w2 = wav_unique[f2].copy()
                 else:
                     w2 = np.zeros(w1.shape)
             else:
-                w2 = wav_unique[f2]
+                w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
-            w = np.zeros((w1.shape[0],max_chans))
+            log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
+
+            if ReferenceClass == "OverlappingPairs":
+                if f1 == 'null':
+                    pass
+                elif type(t1) is float:
+                    si = int(t1 * fs0)
+                    w1[:si] = 0
+                    # scale peak-to-peak amplitude to OveralldB
+                    w1 = w1 / np.max(np.abs(w1)) * 5
+                elif not (t1 in (types + ['N'])):
+                    # scale peak-to-peak amplitude to OveralldB
+                    w1 = w1 / np.max(np.abs(w1)) * 5
+                else:
+                    # scale by RMS amplitude
+                    w1 = w1 / np.std(w1)
+                if f2 == 'null':
+                    pass
+                elif type(t2) is float:
+                    si = int(t2 * fs0)
+                    w2[:si] = 0
+                    # scale peak-to-peak amplitude to OveralldB
+                    w2 = w2 / np.max(np.abs(w2)) * 5
+                elif not(t2 in (types + ['N'])):
+                    # scale peak-to-peak amplitude to OveralldB
+                    w2 = w2 / np.max(np.abs(w2)) * 5
+                else:
+                    # scale by RMS amplitude
+                    w2 = w2 / np.std(w2)
+
+            elif ReferenceClass == "BigNat":
+                w1 = remove_clicks(w1 * ReferenceHandle['FixedAmpScale'], 15)
+                w2 = remove_clicks(w2 * ReferenceHandle['FixedAmpScale'], 15)
+
+            elif ReferenceClass == "NaturalSounds":
+                if f1.lower() != 'null':
+                    w1 = w1 / np.max(np.abs(w1)) * 5
+                if f2.lower() != 'null':
+                    w2 = w2 / np.max(np.abs(w2)) * 5
+
+            w = np.zeros((w1.shape[0], max_chans))
             if (binaural is None) | (binaural == False):
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
@@ -400,21 +554,45 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
-                db_atten=10
+                db_atten = 10
                 factor = 10**(-db_atten/20)
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
 
+            # scale to OveralldB level
+            sf = 10 ** ((80 - OveralldB) / 20)
+            w /= sf
+
             wav_all[n] = w
+
+    # pad with zeros and convert to from wav to output format (or passthrough wav)
+    sg_unique = {}
+    stimparam = {'rasterfs': rasterfs}
 
     if stimfmt=='wav':
         for f,w in wav_all.items():
-            wav_all[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
+            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
                                          w,
-                                         np.zeros((int(np.floor(fs*PostStimSilence)),max_chans))],axis=0)
-        return wav_all
+                                         np.zeros((int(np.floor(fs*PostStimSilence)),max_chans))],axis=0).T
 
-    if stimfmt=='gtgram':
+    elif stimfmt == 'nenv':
+
+        for f, w in wav_all.items():
+            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(rasterfs * PreStimSilence)), max_chans)),
+                                         wav2env(w, fs, rasterfs),
+                                         np.zeros((int(np.floor(rasterfs * PostStimSilence)), max_chans))], axis=0).T
+
+    elif stimfmt == 'lenv':
+        def compress(x):
+            y = np.log(x+1)
+            y[y<0]=0
+            return y
+        for f, w in wav_all.items():
+            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(rasterfs * PreStimSilence)), max_chans)),
+                                         compress(wav2env(w, fs, rasterfs)),
+                                         np.zeros((int(np.floor(rasterfs * PostStimSilence)), max_chans))], axis=0).T
+
+    elif stimfmt=='gtgram':
         window_time = 1 / rasterfs
         hop_time = 1 / rasterfs
 
@@ -422,8 +600,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         sg_pre = np.zeros((channels,int(np.floor(rasterfs*PreStimSilence))))
         sg_null = np.zeros((channels,duration_bins))
         sg_post = np.zeros((channels,int(np.floor(rasterfs*PostStimSilence))))
-        
-        sg_unique = {}
+
         stimparam = {'f_min': f_min, 'f_max': f_max, 'rasterfs': rasterfs}
         padbins = int(np.ceil((window_time-hop_time)/2 * fs))
 
@@ -431,7 +608,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             if len(sg_unique)%100 == 99:
                 log.info(f"i={len(sg_unique)+1} {f} {w.std(axis=0)}")
             sg = [gtgram(np.pad(w[:,i],[padbins, padbins]), fs, window_time, hop_time, channels, f_min, f_max)
-                  if w[:,i].var()>0 else sg_null 
+                  if w[:,i].var()>0 else sg_null
                   for i in range(w.shape[1])]
 
             sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post], axis=1) for s in sg]
@@ -442,7 +619,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 sg.append(sgshuff)
             sg_unique[f] = np.concatenate(sg, axis=0)
 
-        return sg_unique, list(sg_unique.keys()), stimparam
+            if binsplit and (binaural!=False):
+                sg_unique[f]=np.reshape(sg_unique[f],[channels,-1,sg_unique[f].shape[1]])
+    return sg_unique, list(sg_unique.keys()), stimparam
 
 
-        

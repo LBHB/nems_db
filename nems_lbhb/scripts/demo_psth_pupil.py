@@ -10,18 +10,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nems
-import nems.initializers
-import nems.epoch as ep
-import nems.priors
-import nems.preprocessing as preproc
-import nems.modelspec as ms
-import nems.plots.api as nplt
-import nems.analysis.api
-import nems.utils
-import nems.uri
+import nems0.initializers
+import nems0.epoch as ep
+import nems0.priors
+import nems0.preprocessing as preproc
+import nems0.modelspec as ms
+import nems0.plots.api as nplt
+import nems0.analysis.api
+import nems0.utils
+import nems0.uri
 from nems import recording
-from nems.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
-from nems.metrics.state import single_state_mod_index
+from nems0.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
+from nems0.metrics.state import single_state_mod_index
 
 # ----------------------------------------------------------------------------
 # CONFIGURATION
@@ -100,7 +100,7 @@ modelname = 'stategain.S'
 meta = {'cellid': cellid, 'modelname': modelname}
 
 # Method #1: create from "shorthand" keyword string
-modelspec = nems.initializers.from_keywords(modelname, rec=rec, meta=meta)
+modelspec = nems0.initializers.from_keywords(modelname, rec=rec, meta=meta)
 
 modelspecs = [modelspec]
 
@@ -123,12 +123,12 @@ ests, vals, m = preproc.mask_est_val_for_jackknife(rec, modelspecs=None,
 # RUN AN ANALYSIS
 
 # GOAL: Fit your model to your data, producing the improved modelspecs.
-#       Note that: nems.analysis.* will return a list of modelspecs, sorted
+#       Note that: nems0.analysis.* will return a list of modelspecs, sorted
 #       in descending order of how they performed on the fitter's metric.
 
 logging.info('Fitting modelspec(s)...')
 
-modelspecs = nems.analysis.api.fit_nfold(ests, modelspecs,
+modelspecs = nems0.analysis.api.fit_nfold(ests, modelspecs,
                                          fitter=scipy_minimize)
 
 # above is shorthand for:
@@ -138,7 +138,7 @@ modelspecs = nems.analysis.api.fit_nfold(ests, modelspecs,
 #     i+=1
 #     logging.info("Fitting JK {}/{}".format(i,nfolds))
 #     modelspecs_out += \
-#         nems.analysis.api.fit_basic(d, m, fitter=scipy_minimize)
+#         nems0.analysis.api.fit_basic(d, m, fitter=scipy_minimize)
 # modelspecs = modelspecs_out
 
 # ----------------------------------------------------------------------------
@@ -153,12 +153,12 @@ modelspecs = nems.analysis.api.fit_nfold(ests, modelspecs,
 logging.info('Generating summary statistics...')
 
 # generate predictions
-ests, vals = nems.analysis.api.generate_prediction(ests, vals, modelspecs)
+ests, vals = nems0.analysis.api.generate_prediction(ests, vals, modelspecs)
 
 # evaluate prediction accuracy
-modelspecs = nems.analysis.api.standard_correlation(ests, vals, modelspecs)
+modelspecs = nems0.analysis.api.standard_correlation(ests, vals, modelspecs)
 
-s = nems.metrics.api.state_mod_index(vals[0], epoch='REFERENCE',
+s = nems0.metrics.api.state_mod_index(vals[0], epoch='REFERENCE',
                                      psth_name='pred',
                                      state_sig='state', state_chan=[])
 modelspecs[0][0]['meta']['state_mod'] = s

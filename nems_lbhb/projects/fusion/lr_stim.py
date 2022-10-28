@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from nems import db
-from nems.recording import load_recording
-import nems.preprocessing as preproc
-from nems.plots.api import raster
-from nems.utils import smooth
+from nems0.recording import load_recording
+import nems0.preprocessing as preproc
+from nems0.plots.api import raster
+from nems0.utils import smooth
 
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment

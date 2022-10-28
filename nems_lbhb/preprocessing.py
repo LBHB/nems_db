@@ -12,8 +12,8 @@ import logging
 import re
 import numpy as np
 import copy
-import nems.epoch as ep
-import nems.signal as signal
+import nems0.epoch as ep
+import nems0.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 
@@ -21,10 +21,10 @@ from scipy.ndimage import gaussian_filter1d, convolve1d
 import pickle
 import pandas as pd
 
-from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
+from nems0.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
     concatenate_state_channel
-from nems.epoch import epoch_names_matching
-import nems.db as nd
+from nems0.epoch import epoch_names_matching
+import nems0.db as nd
 
 
 log = logging.getLogger(__name__)
@@ -394,7 +394,7 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
                state_channel='pupil', psth_signal='psth',
                epoch_regex="^STIM_", smooth_resp=False, **kwargs):
     '''
-    Like nems.preprocessing.generate_psth_from_resp() but generates two PSTHs,
+    Like nems0.preprocessing.generate_psth_from_resp() but generates two PSTHs,
     one each for periods when state_channel is higher or lower than its
     median.
 
@@ -1259,7 +1259,7 @@ def add_epoch_signal(rec):
 
 
 def add_meta(rec):
-    from nems.signal import RasterizedSignal
+    from nems0.signal import RasterizedSignal
     if type(rec['resp']) is not RasterizedSignal:
         rec['resp'] = rec['resp'].rasterize()
 
@@ -1467,7 +1467,7 @@ def stack_signal_as_delayed_lines(rec, signal, delay, duration, use_window_mean,
     return rec
 
 
-def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', **kwargs):
+def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', norm_method='none', **kwargs):
     """
     Takes a list of signals and booleans, shuffles (or not) each signal according to the boolean
     and stack the signals into a new one with the specified output_signal name
@@ -1477,53 +1477,34 @@ def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', 
     concat_sig = list()
     channels = list()
     for ss, (sig, transf) in enumerate(zip(signals, to_shuffle)):
+        # kludge: fix random seed to index of state signal in list
+        # this avoids using the same seed for each shuffled signal
+        # but also makes shuffling reproducible
         if transf == 'shuffle':
-            # kludge: fix random seed to index of state signal in list
-            # this avoids using the same seed for each shuffled signal
-            # but also makes shuffling reproducible
             concat_sig.append(rec[sig].shuffle_time(rand_seed=ss,
                                                mask=rec['mask'])._data)
         elif transf == 'roll':
-            rand_seed = ss
-            mask = rec['mask']
-
-            x = rec[sig]._data.copy()  # Much faster
-            arr = np.arange(x.shape[1])
-            if mask is None:
-                arr0 = arr[np.isfinite(x[0, :])]
-            else:
-                arr0 = arr[mask.as_continuous()[0, :].astype(bool) & np.isfinite(x[0, :])]
-
-            # defines base roll size based on the total shape of the recording.
-            base_roll = int(arr0.shape[0]/7) # 1/7th is a luck number
-
-            save_state = np.random.get_state()
-            np.random.seed(rand_seed)
-
-            for i in range(x.shape[0]):
-                # rolls each channel independently between -1000 and 1000 samples
-                x[i, arr0] = np.roll(x[i, arr0], int(base_roll* 2 * np.random.random_sample() - base_roll))
-
-            # restore random state
-            np.random.set_state(save_state)
-
-            concat_sig.append(x)
+            concat_sig.append(rec[sig].randroll_time(rand_seed=ss,
+                                                     mask=rec['mask'])._data)
 
         elif transf == 'pass':
             concat_sig.append(rec[sig]._data)
         else:
-            raise ValueError(f"undefined transformation in to_shuffle: {transf}")
+            raise ValueError(f"undefined keyworkd in to_shuffle: {transf}")
 
         channels.extend(rec[sig].chans)
 
     out_arr = np.concatenate(concat_sig, axis=0)
 
-    rec[output_signal] = rec[signals[0]]._modified_copy(data=out_arr, chans=channels, name=output_signal)
+    s = rec[signals[0]]._modified_copy(data=out_arr, chans=channels, name=output_signal)
+    s = s.normalize(norm_method, b=None, g=None, mask=rec['mask'])
+
+    rec[output_signal] = s
     return rec
 
 if __name__ == '__main__':
 
-    from nems import recording, signal
+    from nems0 import recording, signal
 
     # # pop state delayed lines
     # data = np.zeros((2,30))

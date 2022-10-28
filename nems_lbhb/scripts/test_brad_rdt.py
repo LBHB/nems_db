@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 from nems import xforms
 import nems_lbhb.xform_wrappers as nw
-from nems.gui.recording_browser import browse_recording, browse_context
+from nems0.gui.recording_browser import browse_recording, browse_context
 
 #from nems_lbhb.rdt import plugins
 #os.environ['KEYWORD_PLUGINS'] = f'["{plugins.__file__}"]'
@@ -32,18 +32,18 @@ recording_uri = '/Users/svd/python/nems/recordings/chn019a_e3a6a2e25b582125a7a6e
 shuff_streams=False
 shuff_rep=False
 xfspec = [
-    ('nems.xforms.init_context', {'batch': batch, 'cellid': cellid, 'keywordstring': keywordstring,
+    ('nems0.xforms.init_context', {'batch': batch, 'cellid': cellid, 'keywordstring': keywordstring,
                                   'recording_uri': recording_uri}),
     ('nems_lbhb.rdt.io.load_recording', {}),
     ('nems_lbhb.rdt.preprocessing.rdt_shuffle', {'shuff_streams': shuff_streams, 'shuff_rep': shuff_rep}),
     ('nems_lbhb.rdt.preprocessing.split_est_val', {}),
     ('nems_lbhb.rdt.xforms.format_keywordstring', {}),
-    ('nems.xforms.init_from_keywords', {}),
-    ('nems.xforms.fit_basic_init', {}),
-    ('nems.xforms.fit_basic', {}),
-    ('nems.xforms.predict', {}),
-    ('nems.xforms.add_summary_statistics', {}),
-    ('nems.xforms.plot_summary', {}),
+    ('nems0.xforms.init_from_keywords', {}),
+    ('nems0.xforms.fit_basic_init', {}),
+    ('nems0.xforms.fit_basic', {}),
+    ('nems0.xforms.predict', {}),
+    ('nems0.xforms.add_summary_statistics', {}),
+    ('nems0.xforms.plot_summary', {}),
 ]
 
 ctx = {}

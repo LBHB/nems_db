@@ -4,17 +4,17 @@ import os
 import io
 import pandas as pd
 
-#import nems.recording
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-import nems.utils
-import nems.db as nd
-import nems.recording as recording
-import nems.epoch as ep
+#import nems0.recording
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+import nems0.utils
+import nems0.db as nd
+import nems0.recording as recording
+import nems0.epoch as ep
 from nems import get_setting
 
-#import nems.baphy as nb
+#import nems0.baphy as nb
 import nems_lbhb.xform_wrappers as nw
 import nems_lbhb.stateplots as sp
 from nems_lbhb.pupil_behavior_scripts import common

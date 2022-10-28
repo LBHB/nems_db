@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb   # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.recording as recording
+import nems0.recording as recording
 import numpy as np
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
 import pickle as pl
 import pandas as pd
 import sys
@@ -15,12 +15,12 @@ import os
 import re
 import seaborn as sns
 import itertools
-import nems.epoch as ep
+import nems0.epoch as ep
 import logging
 
 import glob
-import nems.analysis.api
-import nems.modelspec as ms
+import nems0.analysis.api
+import nems0.modelspec as ms
 import warnings
 import pandas as pd
 
@@ -28,26 +28,106 @@ import nems_lbhb.projects.olp.binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
 import nems_lbhb.fitEllipse as fE
 
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb  # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
-import nems.recording as recording
-import SPO_helpers as sp
-import nems.preprocessing as preproc
-import nems.metrics.api as nmet
-import nems.metrics.corrcoef
+import nems0.recording as recording
+import nems_lbhb.SPO_helpers as sp
+import nems0.preprocessing as preproc
+import nems0.metrics.api as nmet
+import nems0.metrics.corrcoef
 import copy
-import nems.epoch as ep
+import nems0.epoch as ep
 import scipy.stats as sst
 from nems_lbhb.gcmodel.figures.snr import compute_snr
-from nems.preprocessing import generate_psth_from_resp
+from nems0.preprocessing import generate_psth_from_resp
 import logging
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.TwoStim_helpers as ts
 
 
 log = logging.getLogger(__name__)
-from nems import db
+from nems0 import db
+
+def OLP_fit_weights(batch=340, parmfile=None, loadpath=None, savepath=None, filter=None,
+                    cells=None, fs=100):
+    '''Puts all the compontents that go into weight_df into one command. Gives you the option
+    to save the resulting dataframe it returns. But mainly it gives you the option to either
+    pass an entire batch to it or take a single parmfile and only use the cells from that.
+    Added 2022_08_23 getting things together after CLT recordings.'''
+    if not loadpath:
+        if cells:
+            # Give me the option of manually feeding it a list of cells I got from somewhere else
+            cell_list = cells
+        else:
+            if parmfile:
+                manager = BAPHYExperiment(parmfile)
+                options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+                rec = manager.get_recording(**options)
+                cell_list = rec.signals['resp'].chans
+            else:
+                cell_df = nd.get_batch_cells(batch)
+                cell_list = cell_df['cellid'].tolist()
+                if isinstance(filter, str):
+                    cell_list = [cc for cc in cell_list if filter in cc]
+                elif isinstance(filter, list):
+                    if len(filter) <= 2:
+                        cell_list = [cc for cc in cell_list if (filter[0] in cc) or (filter[-1] in cc)]
+                    else:
+                        cell_list = [cc for cc in cell_list if cc[:6] in filter]
+                else:
+                    raise ValueError(f"Can't filter by {filter}, must be a single string or list of two strings.")
+                if len(cell_list) == 0:
+                    raise ValueError(f"You did something wrong with your filter, there are no cells left.")
+
+        cell_list = ohel.manual_fix_units(cell_list)  # So far only useful for two TBR cells
+
+        # Gets some cell metrics
+        metrics=[]
+        for cellid in cell_list:
+            cell_metric = calc_psth_metrics(batch, cellid)
+            cell_metric.insert(loc=0, column='cellid', value=cellid)
+            print(f"Adding cellid {cellid}.")
+            metrics.append(cell_metric)
+        df = pd.concat(metrics)
+        df.reset_index()
+
+        # Fits weights
+        weight_df = fit_weights(df, batch, fs)
+
+        # # Adds sound stats to the weight_df
+        # sound_df = ohel.get_sound_statistics(weight_df, plot=False)
+        # weight_df = ohel.add_sound_stats(weight_df, sound_df)
+
+        # Adding 2022_09_14. If this doesn't work, figure it out, or revert to the lines above
+        # Line below should add synthetic parameters to files that are too old to have that
+        if 'synth_kind' not in weight_df:
+            weight_df['synth_kind'] = 'A'
+        # Line below should add binaural parameters to files that are too old to have that
+        if 'kind' not in weight_df:
+            weight_df['kind'] = '11'
+        # Adds relative gain so that sound_df can be computed with it, but also because it's useful
+        weight_df['BG_rel_gain'] = (weight_df.weightsA - weight_df.weightsB) / \
+                                   (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
+        weight_df['FG_rel_gain'] = (weight_df.weightsB - weight_df.weightsA) / \
+                                   (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
+        sound_df = ohel.get_sound_statistics_full(weight_df)
+        weight_df = ohel.add_sound_stats(weight_df, sound_df)
+
+        if savepath:
+            os.makedirs(os.path.dirname(savepath), exist_ok=True)
+            store = pd.HDFStore(savepath)
+            df_store = copy.deepcopy(weight_df)
+            store['df'] = df_store.copy()
+            store.close()
+
+    else:
+        store = pd.HDFStore(loadpath)
+        weight_df = store['df']
+        store.close()
+
+    return weight_df
+
 
 def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
     start_win_offset = 0  # Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
@@ -105,11 +185,14 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
     ep_names = resp.epochs[resp.epochs['name'].str.contains('STIM_')].copy()
     ep_names = ep_names.name.unique().tolist()
     ep_types = list(map(ohel.label_ep_type, ep_names))
-    ep_df = pd.DataFrame({'name': ep_names, 'type': ep_types})
+    ep_synth_type = list(map(ohel.label_synth_type, ep_names))
+
+    ep_df = pd.DataFrame({'name': ep_names, 'type': ep_types, 'synth_type': ep_synth_type})
 
     cell_df = []
     for cnt, stimmy in enumerate(ep_twostim):
         kind = ohel.label_pair_type(stimmy)
+        synth_kind = ohel.label_synth_type(stimmy)
         seps = (stimmy.split('_')[1], stimmy.split('_')[2])
         BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]
 
@@ -156,6 +239,7 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
 
         cell_df.append({'epoch': stimmy,
                         'kind': kind,
+                        'synth_kind': synth_kind,
                         'BG': BG,
                         'FG': FG,
                         'AcorAB': AcorAB,
@@ -346,21 +430,21 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
         r_lin_B_nc[_type] = ohel.r_noise_corrected(rB_st, rA_rB_st)
 
         if _type == '11':
-            r11 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r11 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '12':
-            r12 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r12 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '21':
-            r21 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r21 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         elif _type == '22':
-            r22 = nems.metrics.corrcoef._r_single(r_st, 200, 0)
+            r22 = nems0.metrics.corrcoef._r_single(r_st, 200, 0)
         # rac = _r_single(X, N)
         # r_ceiling = [nmet.r_ceiling(p, rec, 'pred', 'resp') for p in val_copy]
 
     # Things that used to happen only for _type is 'C' but still seem valid
     r_A_B = np.corrcoef(rA_[ff], rB_[ff])[0, 1]
     r_A_B_nc = r_noise_corrected(rA_st, rB_st)
-    rAA = nems.metrics.corrcoef._r_single(rA_st, 200, 0)
-    rBB = nems.metrics.corrcoef._r_single(rB_st, 200, 0)
+    rAA = nems0.metrics.corrcoef._r_single(rA_st, 200, 0)
+    rBB = nems0.metrics.corrcoef._r_single(rB_st, 200, 0)
     Np = 0
     rAA_nc = np.zeros(Np)
     rBB_nc = np.zeros(Np)
@@ -398,9 +482,9 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
         val_copy['resp'] = val_copy['resp'].select_epochs([_type])
         # Correlation between linear 'model' (response to A plus response to B) and dual-voice response
         r_fit_linmodel_NM[_type] = nmet.corrcoef(val_copy, 'linmodel', 'resp')
-        # r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
+        # r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy,rec,'linmodel', 'resp',exclude_neg_pred=False)[0]
         # Noise-corrected correlation between linear 'model' (response to A plus response to B) and dual-voice response
-        r_ceil_linmodel[_type] = nems.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
+        r_ceil_linmodel[_type] = nems0.metrics.corrcoef.r_ceiling(val_copy, rec, 'linmodel', 'resp')[0]
 
         pred = val_copy['linmodel'].as_continuous()
         resp = val_copy['resp'].as_continuous()
@@ -552,11 +636,17 @@ def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
             'animal': cellid[:3]}
 
 
-def calc_psth_weight_resp(row, do_plot=False, find_mse_confidence=False, fs=200, paths=None):
+def calc_psth_weight_resp(row, do_plot=False, find_mse_confidence=False, fs=200, fit_type='Binaural'):
     print('load {}'.format(row.cellid))
+    if fit_type == 'Binaural':
+        fit_epoch = ['10', '01', '20', '02', '11', '12', '21', '22']
+    elif fit_type == 'Synthetic':
+        fit_epoch = ['N', 'C', 'T', 'S', 'U', 'M', 'A']
+    else:
+        fit_epoch = ['10', '01', '20', '02', '11', '12', '21', '22']
     modelspecs, est, val = load_TwoStim(int(row.batch),
                                         row.cellid,
-                                        ['10', '01', '20', '02', '11', '12', '21', '22'],
+                                        fit_epoch,
                                         None, fs=fs,
                                         get_est=False,
                                         get_stim=False)
@@ -625,7 +715,11 @@ def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
     df0 = val['resp'].epochs.copy()
     df2 = val['resp'].epochs.copy()
     # df0['name'] = df0['name'].apply(ts.parse_stim_type)
-    df0['name'] = df0['name'].apply(ohel.label_ep_type)
+    if fit_epochs == ['10', '01', '20', '02', '11', '12', '21', '22']:
+        df0['name'] = df0['name'].apply(ohel.label_ep_type)
+    elif fit_epochs == ['N', 'C', 'T', 'S', 'U', 'M', 'A']:
+        df0['name'] = df0['name'].apply(ohel.label_synth_type)
+
     df0 = df0.loc[df0['name'].notnull()]
     df3 = pd.concat([df0, df2])
 
@@ -654,8 +748,8 @@ def load_TwoStim(batch, cellid, fit_epochs, modelspec_name, loader='env100',
         else:
             raise RuntimeError('not fit')
         # generate predictions
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
-        est_sub, val_sub = nems.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
+        est_sub, val_sub = nems0.analysis.api.generate_prediction(est_sub, val_sub, modelspecs)
 
         return modelspecs, est_sub, val_sub
 
@@ -687,3 +781,271 @@ def fit_weights(df, batch, fs=100):
 
     return weights_df
 
+
+def calc_psth_weights_of_model_responses_list(val, names, signame='resp',
+                                              get_nrmse_fn=False, cuts=None):
+    '''Moved from OLP_analysis_main on 2022_10_03. I don't know what this is for. It is possible
+    it is from TwoStim Helpers and no longer has a use. There are no uses or implementations
+    in my code, but it all looks like things I would use...'''
+    sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[0]])
+    sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[1]])
+    # sig_SR=np.ones(sig1.shape)
+    sigO = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[2]])
+
+    # fsigs=np.vstack((sig1,sig2,sig_SR)).T
+    fsigs = np.vstack((sig1, sig2)).T
+    ff = np.all(np.isfinite(fsigs), axis=1) & np.isfinite(sigO)
+    close_to_zero = np.array([np.allclose(fsigs[ff, i], 0, atol=1e-17) for i in (0, 1)])
+    if all(close_to_zero):
+        # Both input signals have all their values close to 0. Set weights to 0.
+        weights = np.zeros(2)
+        rank = 1
+    elif any(close_to_zero):
+        weights_, residual_sum, rank, singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff, ~close_to_zero], 1),
+                                                                        sigO[ff], rcond=None)
+        weights = np.zeros(2)
+        weights[~close_to_zero] = weights_
+    else:
+        weights, residual_sum, rank, singular_values = np.linalg.lstsq(fsigs[ff, :], sigO[ff], rcond=None)
+        # residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
+
+    # calc CC between weight model and actual response
+    pred = np.dot(weights, fsigs[ff, :].T)
+    cc = np.corrcoef(pred, sigO[ff])
+    r_weight_model = cc[0, 1]
+
+    # norm_factor = np.std(sigO[ff])
+    norm_factor = np.mean(sigO[ff] ** 2)
+
+    if rank == 1:
+        min_nMSE = 1
+        min_nRMSE = 1
+    else:
+        # min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor
+        pred = np.dot(weights, fsigs[ff, :].T)
+        min_nRMSE = np.sqrt(((sigO[ff] - pred) ** 2).mean()) / np.sqrt(
+            norm_factor)  # minimim normalized root mean squared error
+        min_nMSE = ((sigO[ff] - pred) ** 2).mean() / norm_factor  # minimim normalized mean squared error
+
+    # create NMSE caclulator for later
+    if get_nrmse_fn:
+        def get_nrmse(weights=weights):
+            pred = np.dot(weights, fsigs[ff, :].T)
+            nrmse = np.sqrt(((pred - sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
+            return nrmse
+    else:
+        get_nrmse = np.nan
+
+    weights[close_to_zero] = np.nan
+    return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
+
+### From OLP_analysis_main on 2022_10_03. I don't think this has any use, but stashing it here in
+### case... If you don't miss it by the next time you come across this, just trash it.
+# def get_sep_stim_names(stim_name):
+#     seps = [m.start() for m in re.finditer('_(\d|n)', stim_name)]
+#     if len(seps) < 2 or len(seps) > 2:
+#         return None
+#     else:
+#         return [stim_name[seps[0] + 1:seps[1]], stim_name[seps[1] + 1:]]
+#
+# weight_list = []
+# batch = 339
+# fs = 100
+# lfreq, hfreq, bins = 100, 24000, 48
+# threshold = 0.75
+# cell_df = nd.get_batch_cells(batch)
+# cell_list = cell_df['cellid'].tolist()
+# cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
+#
+# fit_epochs = ['10', '01', '20', '02', '11', '12', '21', '22']
+# loader = 'env100'
+# modelspecs_dir = '/auto/users/luke/Code/nems/modelspecs'
+#
+# for cellid in cell_list:
+#     loadkey = 'ns.fs100'
+#     manager = BAPHYExperiment(cellid=cellid, batch=batch)
+#     options = {'rasterfs': 100,
+#                'stim': False,
+#                'resp': True}
+#     rec = manager.get_recording(**options)
+#
+#     #GET sound envelopes and get the indices for chopping?
+#     expt_params = manager.get_baphy_exptparams()
+#     ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+#     FG_folder, fgidx = ref_handle['FG_Folder'], list(set(ref_handle['Foreground']))
+#     fgidx.sort(key=int)
+#     idxstr = [str(ff).zfill(2) for ff in fgidx]
+#
+#     fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+#                            f'{FG_folder}/{ff}*.wav'))[0] for ff in idxstr]
+#     fgname = [ff.split('/')[-1].split('.')[0].replace(' ', '') for ff in fg_paths]
+#     ep_fg = [f"STIM_null_{ff}" for ff in fgname]
+#
+#     prebins = int(ref_handle['PreStimSilence'] * options['rasterfs'])
+#     postbins = int(ref_handle['PostStimSilence'] * options['rasterfs'])
+#     durbins = int(ref_handle['Duration'] * options['rasterfs'])
+#     trialbins = durbins + postbins
+#
+#     env_cuts = {}
+#     for nm, pth in zip(fgname, fg_paths):
+#         sfs, W = wavfile.read(pth)
+#         spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+#
+#         env = np.nanmean(spec, axis=0)
+#         cutoff = np.max(env) * threshold
+#
+#         # aboves = np.squeeze(np.argwhere(env >= cutoff))
+#         # belows = np.squeeze(np.argwhere(env < cutoff))
+#
+#         highs, lows, whole_thing = env >= cutoff, env < cutoff, env > 0
+#         prestimFalse = np.full((prebins,), False)
+#         poststimTrue = np.full((trialbins - len(env),), True)
+#         poststimFalse = np.full((trialbins - len(env),), False)
+#
+#         full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
+#         aboves = np.concatenate((prestimFalse, highs, poststimFalse))
+#         belows = np.concatenate((prestimFalse, lows, poststimFalse))
+#         belows_post = np.concatenate((prestimFalse, lows, poststimTrue))
+#
+#         env_cuts[nm] = [full, aboves, belows, belows_post]
+#
+#         f, ax = plt.subplots(3, 1, sharex=True, sharey=True)
+#         ax[0].plot(env)
+#         ax[0].hlines(cutoff, 0, 100, ls=':')
+#         ax[0].set_title(f"{nm}")
+#         ax[1].plot(env[aboves])
+#         ax[2].plot(env[belows])
+#
+#     rec['resp'].fs = fs
+#     rec['resp'] = rec['resp'].extract_channels([cellid])
+#     resp = copy.copy(rec['resp'].rasterize())
+#
+#     _, SR, _ = ohel.remove_spont_rate_std(resp)
+#
+#     stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
+#
+#     val = rec.copy()
+#     val['resp'] = val['resp'].rasterize()
+#     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
+#
+#     est_sub = None
+#
+#     df0 = val['resp'].epochs.copy()
+#     df2 = val['resp'].epochs.copy()
+#     df0['name'] = df0['name'].apply(ohel.label_ep_type)
+#     df0 = df0.loc[df0['name'].notnull()]
+#     df3 = pd.concat([df0, df2])
+#
+#     val['resp'].epochs = df3
+#     val_sub = copy.deepcopy(val)
+#     val_sub['resp'] = val_sub['resp'].select_epochs(fit_epochs)
+#
+#     val = val_sub
+#     fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
+#     val['resp'] = val['resp'].transform(fn)
+#
+#     print(f'calc weights {cellid}')
+#
+#     #where twostims fit actually begins
+#     epcs = val.epochs[val.epochs['name'].str.count('-0-1') >= 1].copy()
+#     sepname = epcs['name'].apply(get_sep_stim_names)
+#     epcs['nameA'] = [x[0] for x in sepname.values]
+#     epcs['nameB'] = [x[1] for x in sepname.values]
+#
+#     # epochs with two sounds in them
+#     epcs_twostim = epcs[epcs['name'].str.count('-0-1') == 2].copy()
+#
+#     A, B, AB, sepnames = ([], [], [], [])  # re-defining sepname
+#     for i in range(len(epcs_twostim)):
+#         if any((epcs['nameA'] == epcs_twostim.iloc[i].nameA) & (epcs['nameB'] == 'null')) \
+#                 and any((epcs['nameA'] == 'null') & (epcs['nameB'] == epcs_twostim.iloc[i].nameB)):
+#             A.append('STIM_' + epcs_twostim.iloc[i].nameA + '_null')
+#             B.append('STIM_null_' + epcs_twostim.iloc[i].nameB)
+#             AB.append(epcs_twostim['name'].iloc[i])
+#             sepnames.append(sepname.iloc[i])
+#
+#     #Calculate weights
+#     subsets = len(list(env_cuts.values())[0])
+#     weights = np.zeros((2, len(AB), subsets))
+#     Efit = np.zeros((5,len(AB), subsets))
+#     nMSE = np.zeros((len(AB), subsets))
+#     nf = np.zeros((len(AB), subsets))
+#     r = np.zeros((len(AB), subsets))
+#     cut_len = np.zeros((len(AB), subsets-1))
+#     get_error=[]
+#
+#     for i in range(len(AB)):
+#         names=[[A[i]],[B[i]],[AB[i]]]
+#         Fg = names[1][0].split('_')[2].split('-')[0]
+#         cut_list = env_cuts[Fg]
+#
+#         for ss, cut in enumerate(cut_list):
+#             weights[:,i,ss], Efit[:,i,ss], nMSE[i,ss], nf[i,ss], _, r[i,ss], _ = \
+#                     calc_psth_weights_of_model_responses_list(val, names,
+#                                                               signame='resp', cuts=cut)
+#             if ss != 0:
+#                 cut_len[i, ss-1] = np.sum(cut)
+#             # get_error.append(ge)
+#
+#     if subsets == 4:
+#         weight_df = pd.DataFrame(
+#             [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values,
+#              weights[0, :, 0], weights[1, :, 0], nMSE[:, 0], nf[:, 0], r[:, 0],
+#              weights[0, :, 1], weights[1, :, 1], nMSE[:, 1], nf[:, 1], r[:, 1], cut_len[:,0],
+#              weights[0, :, 2], weights[1, :, 2], nMSE[:, 2], nf[:, 2], r[:, 2], cut_len[:,1],
+#              weights[0, :, 3], weights[1, :, 3], nMSE[:, 3], nf[:, 3], r[:, 3], cut_len[:,2],])
+#         weight_df = weight_df.T
+#         weight_df.columns = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE', 'nf', 'r',
+#                              'weightsA_h', 'weightsB_h', 'nMSE_h', 'nf_h', 'r_h', 'h_idxs',
+#                              'weightsA_l', 'weightsB_l', 'nMSE_l', 'nf_l', 'r_l', 'l_idxs',
+#                              'weightsA_lp', 'weightsB_lp', 'nMSE_lp', 'nf_lp', 'r_lp', 'lp_idxs']
+#         cols = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE']
+#         print(weight_df[cols])
+#
+#         weight_df = weight_df.astype({'weightsA': float, 'weightsB': float,
+#                                       'weightsA_h': float, 'weightsB_h': float,
+#                                       'weightsA_l': float, 'weightsB_l': float,
+#                                       'weightsA_lp': float, 'weightsB_lp': float,
+#                                       'nMSE': float, 'nf': float, 'r': float,
+#                                       'nMSE_h': float, 'nf_h': float, 'r_h': float,
+#                                       'nMSE_l': float, 'nf_l': float, 'r_l': float,
+#                                       'nMSE_lp': float, 'nf_lp': float, 'r_lp': float,
+#                                       'h_idxs': float, 'l_idxs': float, 'lp_idxs': float})
+#
+#     else:
+#         raise ValueError(f"Only {subsets} subsets. You got lazy and didn't make this part"
+#                          f"flexible yet.")
+#
+#
+#     weight_df.insert(loc=0, column='cellid', value=cellid)
+#
+#     weight_list.append(weight_df)
+#
+# weight_df0 = pd.concat(weight_list)
+#
+#
+# ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df0.namesA, weight_df0.namesB)]
+# weight_df0 = weight_df0.drop(columns=['namesA', 'namesB'])
+# weight_df0['epoch'] = ep_names
+#
+# weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
+# weight_df0['threshold'] = str(int(threshold * 100))
+# if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
+#     raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
+#
+# ##load here.
+# OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights20.h5'  # weight + corr
+# OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights.h5'  # weight + corr
+#
+# part_weights = False
+# if part_weights == True:
+#     os.makedirs(os.path.dirname(OLP_partialweights_db_path),exist_ok=True)
+#     store = pd.HDFStore(OLP_partialweights_db_path)
+#     df_store=copy.deepcopy(weight_df0)
+#     store['df'] = df_store.copy()
+#     store.close()
+#
+# else:
+#     store = pd.HDFStore(OLP_partialweights_db_path)
+#     weight_df0=store['df']
+#     store.close()

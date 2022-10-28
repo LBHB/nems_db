@@ -17,12 +17,12 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 import nems_lbhb.baphy_io as nio
 import common
-import nems.epoch as ep
+import nems0.epoch as ep
 
 from nems_lbhb.strf import strf
 from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems.recording import load_recording
-from nems.xforms import load_recordings
+from nems0.recording import load_recording
+from nems0.xforms import load_recordings
 from nems_lbhb.strf.torc_subfunctions import interpft, strfplot, get_strf_tuning, \
     strf_torc_pred, strf_est_core
 
