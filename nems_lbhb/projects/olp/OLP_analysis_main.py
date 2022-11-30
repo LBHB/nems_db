@@ -10,6 +10,7 @@ import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.projects.olp.OLP_fit as ofit
 import nems_lbhb.projects.olp.OLP_Binaural_plot as obip
 
+from scipy import stats
 
 
 sb.color_palette

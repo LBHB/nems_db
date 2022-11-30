@@ -9,6 +9,7 @@ from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import glob
 import seaborn as sb
+import re
 
 def manual_fix_units(cell_list):
     '''I don't know why these units are incorrectly saved. But it was just these two, add
@@ -43,6 +44,7 @@ def get_load_options(batch):
 def remove_olp_test(rec):
     '''In some cases the olp test and real olp are sorted together and will both come up. The real one
     is always last of OLPs run. So take that one.'''
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
     if passive.shape[0] >= 2:
         # if OLP test was sorted in here as well, slice it out of the epochs and data
         print(f"Multiple ({passive.shape[0]}) OLPs found in {cellid}")
@@ -116,7 +118,8 @@ def get_expt_params(resp, manager, cellid):
                                     for s in range(len(soundies))]
     params['units'], params['response'] = resp.chans, resp
     params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
-    params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+    ## Took this out for fitting ARM data, not sure why ref_handle for that experiment doesn't have BG_Folder ONLY
+    # params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
     if 'Binaural' in ref_handle.keys():
         params['Binaural'] = ref_handle['Binaural']
     else:
@@ -263,8 +266,10 @@ def label_synth_type(ep_name):
         modulation, A = Non-RMS normalized unsynethic'''
         if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
             synth_type = None
-        elif len(ep_name.split('_')) == 3:
-            seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        # elif len(ep_name.split('_')) == 3:
+        #     seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+            seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
             if len(seps[0].split('-')) >= 5 or len(seps[1].split('-')) >= 5:
                 if seps[0] != 'null':
                     synth_type = seps[0].split('-')[4]
@@ -858,3 +863,58 @@ def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
         AX.set_ylabel("Frequency (Hz)", fontweight='bold', fontsize=8)
         AX.set_xlabel("Time (s)", fontweight='bold', fontsize=8)
         AX.set_title(f"{row.type}: {row['name'][2:]}", fontweight='bold', fontsize=10)
+
+
+def filter_weight_df(df, suffixes=['_end', '_start'], fr_thresh=0.03, r_thresh=0.6, quad_return=3, bin_kind='11', area=None,
+                     synth_kind='A', weight_lims=[-1, 2], bads=True, bad_filt={'RMS_power': 0.95, 'max_power': 0.3}):
+    '''2022_11_09. Takes a df of weights and you can specify a bunch of filters I commonly use and will apply them all
+    separately, which is nice because I've always done this as a clusterfuck.'''
+    if area:
+        df = df.loc[df.area==area]
+    if fr_thresh:
+        filt_labels = [[f"bg_FR{fl}", f"fg_FR{fl}"] for fl in suffixes]
+        for ff in filt_labels:
+            if quad_return == 3:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 2:
+                df = df.loc[(np.abs(df[ff[0]]) <= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 6:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (np.abs(df[ff[1]]) <= fr_thresh)]
+            else:
+                raise ValueError(f"quad_return parameter must be 3, 2, or 6, you gave {quat_return}.")
+    if r_thresh:
+        r_filt_labels = [[f"r{fl}", f"r{fl}"] for fl in suffixes]
+        for rf in r_filt_labels:
+            df = df.loc[(df[rf[0]] >= r_thresh) & (df[rf[1]] >= r_thresh)]
+    if bin_kind:
+        df = df.loc[df.kind==bin_kind]
+    if synth_kind:
+        df = df.loc[df.synth_kind==synth_kind]
+    if weight_lims:
+        if isinstance(weight_lims, int):
+            weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+        if len(weight_lims) == 2:
+            w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in suffixes]
+            for wf in w_filt_labels:
+                df = df.loc[(df[wf[0]] < weight_lims[1]) & (df[wf[0]] > weight_lims[0]) &
+                            (df[wf[1]] < weight_lims[1]) & (df[wf[1]] > weight_lims[0])]
+        else:
+            raise ValueError(f"You put '{weight_lims}' as your weight cuts, make it two values or a single int.")
+    if bads == True:
+        sound_df = get_sound_statistics_full(df)
+        if synth_kind == 'A':
+            stat = 'max_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['Max Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind=synth_kind)
+            bads = list(bad_dict[stat])
+        else:
+            stat = 'RMS_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['RMS Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind='N')
+            bads = list(bad_dict[stat])
+        df = df.loc[df['BG'].apply(lambda x: x not in bads)]
+        df = df.loc[df['FG'].apply(lambda x: x not in bads)]
+
+    return df
+
+
