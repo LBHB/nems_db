@@ -34,24 +34,33 @@ import glob
 import nems0.epoch as ep
 
 
-def plot_synthetic_weights(weight_df, areas=None, thresh=0.03, quads=3, synth_show=None, r_cut=None):
+def plot_synthetic_weights(weight_df, plotA='weightsA', plotB='weightsB', areas=None, thresh=0.03, quads=3,
+                           synth_show=None, r_cut=None, title=None):
     '''2022_09_21. Added model fit filter (r_cut)
     Plot a bar graph comparing the BG and FG weights for the different synthetic conditions. Can
     specify if you want one or both areas and also which combination of synthetic conditions you
     want to plot, as described by a list of the strings for their codes. If you want to plot all minus
     the control for the control (A), simply use A- as the synth_show.'''
     quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if len(plotA.split('_')) > 1:
+        r_name = f"r_{plotA.split('_')[-1]}"
+    else:
+        r_name = 'r'
+
     if r_cut:
-        quad = quad.dropna(axis=0, subset='r')
-        quad = quad.loc[quad.r >= r_cut]
+        quad = quad.dropna(axis=0, subset=r_name)
+        quad = quad.loc[quad[r_name] >= r_cut]
     #Create aliases for the kinds so I can dumbly swap them out all so they can be in the right order
-    alias = {'A': '1', 'N': '2', 'C': '3', 'T': '4', 'S': '5', 'U': '6', 'M': '7'}
-    kind_alias = {'1': 'Non-RMS Norm\nNatural', '2':' RMS Norm\nNatural', '3':'Cochlear',
-                  '4': 'Temporal', '5': 'Spectral', '6': 'Spectro-\ntemporal', '7': 'Spectrotemporal\nModulation'}
+    alias = {'A': '1', 'N': '2', 'M': '3', 'U': '4', 'S': '5', 'T': '6', 'C': '7'}
+    kind_alias = {'1': 'Non-RMS Norm\nNatural', '2': 'RMS Norm\nNatural', '3': 'Spectrotemporal\nModulation',
+                  '4': 'Spectro-\ntemporal', '5': 'Spectral', '6': 'Temporal', '7': 'Cochlear'}
+    kind_alias = {'A': 'Non-RMS Norm Natural', 'N': 'RMS Norm Natural', 'M': 'Spectrotemporal\nModulation',
+                  'U': 'Spectrotemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
+
 
     # Shortcut to typing in all the actual conditions minus the control of the control
     if synth_show == 'A-':
-        synth_show = ['N', 'C', 'T', 'S', 'U', 'M']
+        synth_show = ['N', 'M', 'U', 'S', 'T', 'C']
 
     # This let's you only show certain synthetic kinds, but it will always be ordered in the same way
     if synth_show:
@@ -63,32 +72,45 @@ def plot_synthetic_weights(weight_df, areas=None, thresh=0.03, quads=3, synth_sh
     # If you just want one area it can do that, or a list of areas. If you do nothing it'll plot
     # as many areas as are represented in the df (should only be two at most...)
     if isinstance(areas, str):
-        fig, axes = plt.subplots(1, 1, figsize=(width,4))
+        fig, axes = plt.subplots(1, len(synth_show), figsize=(width*2,4))
         areas = [areas]
     elif isinstance(areas, list):
-        fig, axes = plt.subplots(len(areas), 1, figsize=(width,4*len(areas)), sharey=True)
+        fig, axes = plt.subplots(len(areas), len(synth_show), figsize=(width*2,4*len(areas)), sharey=True)
     else:
-        fig, axes = plt.subplots(len(weight_df.area.unique()), 1,
-                                 figsize=(width,4*(len(weight_df.area.unique()))), sharey=True)
+        fig, axes = plt.subplots(len(weight_df.area.unique()), (len(synth_show)),
+                                 figsize=(width*2,4*(len(weight_df.area.unique()))), sharey=True)
         areas = weight_df.area.unique().tolist()
+    axes = np.ravel(axes)
 
-    for (ax, area) in zip(axes, areas):
-        area_df = quad.loc[quad.area == area]
+    if len(areas) > 1:
+        synth_show_full = synth_show * 2
+        area_show = [[nn] * len(synth_show) for nn in areas]
+        area_show = [item for sublist in area_show for item in sublist]
+    else:
+        area_show = [areas] * len(synth_show)
+
+    for cnt, (ax, ar, syn) in enumerate(zip(axes, area_show, synth_show_full)):
+        area_df = quad.loc[quad.area == ar]
         # Extract only the relevant columns for plotting right now
-        to_plot = area_df.loc[:,['synth_kind', 'weightsA', 'weightsB']].copy()
+        to_plot = area_df.loc[:,['synth_kind', plotA, plotB]].copy()
+        to_plot = to_plot.loc[to_plot.synth_kind == syn]
         # Sort them by the order of kinds so it'll plot in an order that I want to see
-        to_plot['sort'] = to_plot['synth_kind']
-        to_plot = to_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
-        # Put the dataframe into a format that can be plotted easily
-        to_plot = to_plot.melt(id_vars='synth_kind', value_vars=['weightsA', 'weightsB'], var_name='weight_kind',
-                     value_name='weights').replace({'weightsA':'BG', 'weightsB':'FG'}).replace(kind_alias)
+        # to_plot['sort'] = to_plot['synth_kind']
+        # to_plot = to_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
+        to_plot = to_plot.melt(id_vars='synth_kind', value_vars=[plotA, plotB], var_name='weight_kind',
+                     value_name='weights').replace({plotA:'BG', plotB:'FG'}).replace(kind_alias)
 
         # Plot
         sb.barplot(ax=ax, x="synth_kind", y="weights", hue="weight_kind", data=to_plot, ci=68, estimator=np.mean)
-        ax.set_title(area, fontsize=12, fontweight='bold')
-        ax.set_xlabel('')
+        if cnt == 0 or cnt == len(synth_show):
+            ax.set_ylabel(f"{ar}\n\nweights", fontweight='bold', fontsize=10)
+        else:
+            ax.set_ylabel('')
+        ax.set_xticklabels(''), ax.set_xlabel('')
         ax.legend(loc='upper right')
-        ax.set_ylabel('Model Weights', fontsize=8, fontweight='bold')
+        if cnt < len(synth_show):
+            ax.set_title(f"{kind_alias[syn]}", fontweight='bold', fontsize=10)
+        fig.suptitle(f"{title} - {plotA}, {plotB}")
 
 
 def plot_ramp_comparison(weight_df, thresh=0.03, quads=3):
@@ -207,7 +229,7 @@ def relative_gain_synthetic_histograms(weight_df, thresh=0.03, quads=3, synth_sh
 
 
 def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, area='A1', batch=340,
-                                              synth_show=None, r_cut=None, rel_cut=2.5):
+                                              synth_show=None, r_cut=None, rel_cut=2.5, figsize=(12,20)):
     '''Made 2022_09_08. Makes the big figure on panel 5 of my 2022 NGP Poster. It takes a dataframe
     and a list of the synthetic code letters and vertically arranges them as histograms of relative
     gain, all aligned on the same zero so you can ideally see the shift. You also can put in a BG
@@ -235,8 +257,8 @@ def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, 
     lens = len(synth_show)
     hists, bgs, fgs = [], [], []
     # fig, axes = plt.subplots(len(synth_show), 3, figsize=(8, len(synth_show)*2))
-    fig, axes = plt.subplots(figsize=(8, lens*2))
-    fig, axes = plt.subplots(figsize=(12, 18))
+    # fig, axes = plt.subplots(figsize=(8, lens*2))
+    fig, axes = plt.subplots(figsize=figsize)
     for aa in range(lens):
         hist = plt.subplot2grid((lens*5, 15), (0+(aa*5), 11), rowspan=4, colspan=4)
         bgsp = plt.subplot2grid((lens*5, 15), (1+(aa*5), 0), rowspan=3, colspan=4)
@@ -322,7 +344,7 @@ def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, 
             ax[qqq].spines['left'].set_visible(True), ax[qqq].spines['right'].set_visible(True)
             if ww == 1:
                 ax[qqq].set_ylabel(f"{kind_alias[synth_show[qq]]}", fontsize=12, fontweight='bold',
-                                   horizontalalignment='center', rotation=0, labelpad=40,
+                                   horizontalalignment='center', rotation=90, labelpad=40,
                                    verticalalignment='center')
             if qq == 0 and ww == 1:
                 ax[qqq].set_title(f"BG: {bg}", fontweight='bold', fontsize=10)
@@ -696,6 +718,232 @@ def checkout_mods(sound_num, weight_df, thresh=0.03, quads=3, r_cut=None, area=N
     return pd.DataFrame(names)
 
 
+def checkout_mods_tidier(sound_num, df, show=['N', 'M', 'U', 'S', 'T', 'C'],
+                         thresh=0.03, quads=3, r_cut=None, area=None):
+    '''2022_10_24 Updated to make tidier. Takes a number from the list of names (you have to run it once first with
+    a random number to get the indexes printed out) and will plot some modulation specs along
+    the degraded synthetic sounds. Nice for browsing.'''
+    quad, threshold = ohel.quadrants_by_FR(df, threshold=thresh, quad_return=quads)
+    if area:
+        quad = quad.loc[quad.area == area]
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
+
+    lfreq, hfreq, bins = 100, 24000, 48
+    cid, btch = df.cellid.iloc[0], df.batch.iloc[0]
+    manager = BAPHYExperiment(cellid=cid, batch=btch)
+    expt_params = manager.get_baphy_exptparams()
+    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+    BG_folder, FG_folder = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+
+    bbs = list(set([bb.split('_')[1][:2] for bb in df.epoch]))
+    ffs = list(set([ff.split('_')[2][:2] for ff in df.epoch]))
+    bbs.sort(key=int), ffs.sort(key=int)
+
+    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                 'S': 'Spectral', 'C': 'Cochlear'}
+    kind_alias = {'A': 'Non-RMS Norm Natural', 'N': 'RMS Norm Natural', 'M': 'Spectrotemporal Modulation',
+                  'U': 'Spectrotemporal', 'S': 'Spectral (-temp)', 'T': 'Temporal (-spec)', 'C': 'Cochlear (-spec, -temp)'}
+
+    fig, axes = plt.subplots(3, len(show), figsize=(len(show)*3, 6))
+    ax = np.ravel(axes, 'F')
+    dd = 0
+    for syn in show:
+        # This is getting the mean rel gain for each sound (FG rel gain for FGs, etc)
+        synth_df = quad.loc[quad.synth_kind == syn].copy()
+        bg_df = synth_df[['BG', 'BG_rel_gain']]
+        fg_df = synth_df[['FG', 'FG_rel_gain']]
+
+        bg_mean = bg_df.groupby(by='BG').agg(mean=('BG_rel_gain', np.mean)).reset_index(). \
+            rename(columns={'BG': 'short_name'})
+        fg_mean = fg_df.groupby(by='FG').agg(mean=('FG_rel_gain', np.mean)).reset_index(). \
+            rename(columns={'FG': 'short_name'})
+        mean_df = pd.concat([bg_mean, fg_mean])
+
+        # This is just loading the sounds and stuffs
+        if syn == 'A' or syn == 'N':
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{ff}*.wav'))[0] for ff in ffs]
+        else:
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{kind_dict[syn]}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{kind_dict[syn]}/{ff}*.wav'))[0] for ff in ffs]
+
+        paths = bg_paths + fg_paths
+        bgname = [bb.split('/')[-1].split('.')[0] for bb in bg_paths]
+        fgname = [ff.split('/')[-1].split('.')[0] for ff in fg_paths]
+        names = bgname + fgname
+
+        Bs, Fs = ['BG'] * len(bgname), ['FG'] * len(fgname)
+        labels = Bs + Fs
+
+        cnt, sn, pth, ll = sound_num, names[sound_num], paths[sound_num], labels[sound_num]
+        sn = sn.split('_')[0]
+        sn = sn.replace(' ', '')
+
+        sfs, W = wavfile.read(pth)
+        spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+        # 2022_09_23 Adding power spectrum stats
+        temp = np.abs(np.fft.fft(spec, axis=1))
+        freq = np.abs(np.fft.fft(spec, axis=0))
+
+        temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)
+        freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)
+
+        if dd == 0:
+            ax[dd].set_ylabel(sn, fontsize=10, fontweight='bold')
+        ax[dd].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                     cmap='gray_r')
+        qq = np.nanmean(synth_df.loc[synth_df[ll] == sn[2:], f"{ll}_rel_gain"])
+        ax[dd].set_title(f"{qq:.2f}")
+        ax[dd].set_title(f"{kind_alias[syn]}\nRel Gain: {qq:.2f}", fontweight='bold', fontsize=8)
+        ax[dd].spines['top'].set_visible(True), ax[dd].spines['right'].set_visible(True)
+        ax[dd].set_xticks([]), ax[dd].set_yticks([])
+
+        dd += 1
+        if dd == 1:
+            ax[dd].set_ylabel('Temporal P.S.', fontsize=8, fontweight='bold')
+        ax[dd].plot(temp_ps[1:])
+        ax[dd].set_title(f"{temp_ps[1:].std():.2f}")
+
+        dd += 1
+        if dd == 2:
+            ax[dd].set_ylabel('Freq P.S.', fontsize=8, fontweight='bold')
+        ax[dd].plot(freq_ps[1:])
+        ax[dd].set_title(f"{freq_ps[1:].std():.2f}")
+
+        dd += 1
+
+    fig.tight_layout()
+
+    return pd.DataFrame(names)
+
+
+def checkout_mods_cleaner(sound_num, weight_df, synths=['N', 'M', 'S', 'T', 'C'], thresh=0.03, quads=3, r_cut=None, area=None):
+    '''2022_11_01. Updated to show full modulation power spectrum and just cleaned up display for shownig Sam things.
+    2022_09_28. Takes a number from the list of names (you have to run it once first with
+    a random number to get the indexes printed out) and will plot some modulation specs along
+    the degraded synthetic sounds. Nice for browsing.'''
+    quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if area:
+        quad = quad.loc[quad.area == area]
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
+
+    lfreq, hfreq, bins = 100, 24000, 48
+    cid, btch = weight_df.cellid.iloc[0], weight_df.batch.iloc[0]
+    manager = BAPHYExperiment(cellid=cid, batch=btch)
+    expt_params = manager.get_baphy_exptparams()
+    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+    BG_folder, FG_folder = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+
+    bbs = list(set([bb.split('_')[1][:2] for bb in weight_df.epoch]))
+    ffs = list(set([ff.split('_')[2][:2] for ff in weight_df.epoch]))
+    bbs.sort(key=int), ffs.sort(key=int)
+
+    # synths = list(weight_df.synth_kind.unique())
+    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                 'S': 'Spectral', 'C': 'Cochlear'}
+    kind_alias = {'A': 'Non-RMS Norm Natural', 'N': 'RMS Norm\nNatural', 'M': 'Spectrotemporal\nModulation',
+                  'U': 'Spectrotemporal', 'S': 'Spectral\n(-temp)', 'T': 'Temporal\n(-spec)', 'C': 'Cochlear\n(-spec, -temp)'}
+
+    # sound_num = 27
+
+    fig, axes = plt.subplots(3, len(synths)*2, figsize=(20, 5))
+    ax = np.ravel(axes, 'F')
+    dd = 0
+    for syn in synths:
+        # This is getting the mean rel gain for each sound (FG rel gain for FGs, etc)
+        synth_df = quad.loc[quad.synth_kind == syn].copy()
+        bg_df = synth_df[['BG', 'BG_rel_gain']]
+        fg_df = synth_df[['FG', 'FG_rel_gain']]
+
+        bg_mean = bg_df.groupby(by='BG').agg(mean=('BG_rel_gain', np.mean)).reset_index(). \
+            rename(columns={'BG': 'short_name'})
+        fg_mean = fg_df.groupby(by='FG').agg(mean=('FG_rel_gain', np.mean)).reset_index(). \
+            rename(columns={'FG': 'short_name'})
+        mean_df = pd.concat([bg_mean, fg_mean])
+
+        # This is just loading the sounds and stuffs
+        if syn == 'A' or syn == 'N':
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{ff}*.wav'))[0] for ff in ffs]
+        else:
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{kind_dict[syn]}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{kind_dict[syn]}/{ff}*.wav'))[0] for ff in ffs]
+
+        paths = bg_paths + fg_paths
+        bgname = [bb.split('/')[-1].split('.')[0] for bb in bg_paths]
+        fgname = [ff.split('/')[-1].split('.')[0] for ff in fg_paths]
+        names = bgname + fgname
+
+        Bs, Fs = ['BG'] * len(bgname), ['FG'] * len(fgname)
+        labels = Bs + Fs
+
+        cnt, sn, pth, ll = sound_num, names[sound_num], paths[sound_num], labels[sound_num]
+        sn = sn.split('_')[0]
+        sn = sn.replace(' ', '')
+
+        sfs, W = wavfile.read(pth)
+        spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+        # 2022_09_23 Adding power spectrum stats
+        temp = np.abs(np.fft.fft(spec, axis=1))
+        freq = np.abs(np.fft.fft(spec, axis=0))
+
+        temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)
+        freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)
+        mod = np.sqrt(np.fft.fftshift(np.abs(np.fft.fft2(spec))))
+
+        ax[dd].imshow(spec, origin='lower', cmap='gray_r')
+        qq = np.nanmean(synth_df.loc[synth_df[ll] == sn[2:], f"{ll}_rel_gain"])
+        ax[dd].set_title(f"{kind_alias[syn]}\nRG: {qq:.2f}", fontsize=8, fontweight='bold')
+        ax[dd].set_yticks([]), ax[dd].set_xticks([])
+        if dd == 0:
+            ax[dd].set_ylabel(f"{ll} -\n{sn}", fontsize=8, fontweight='bold')
+        dd += 1
+        if dd == 1:
+            ax[dd].set_ylabel('Temporal\nP.S.', fontsize=8, fontweight='bold')
+        ax[dd].imshow(np.sqrt(temp), origin='lower', cmap='gray_r')
+        ax[dd].set_yticks([]), ax[dd].set_xticks([])
+        dd += 1
+        if dd == 2:
+            ax[dd].set_ylabel('Spectral\nP.S.', fontsize=8, fontweight='bold')
+        ax[dd].imshow(np.sqrt(freq), origin='lower', cmap='gray_r')
+        ax[dd].set_yticks([]), ax[dd].set_xticks([])
+        dd += 1
+        # ax[dd].spines['top'].set_visible(False), ax[dd].spines['bottom'].set_visible(False)
+        # ax[dd].spines['left'].set_visible(False), ax[dd].spines['right'].set_visible(False)
+        width_mod = int(np.floor(mod.shape[1] / 2))
+        height_mod = int(np.floor(mod.shape[0] / 2))
+        ax[dd].imshow(mod[height_mod:, width_mod:], origin='lower', cmap='gray_r')
+        ax[dd].set_yticks([]), ax[dd].set_xticks([])
+        ax[dd].set_title("Modspec", fontsize=7, fontweight='bold')
+        # qq = np.nanmean(synth_df.loc[synth_df[ll] == sn[2:], f"{ll}_rel_gain"])
+        # ax[dd].set_title(f"{qq:.2f}")
+        dd += 1
+        ax[dd].plot(temp_ps[1:])
+        ax[dd].set_title(f"{temp_ps[1:].std():.2f}", fontweight='bold')
+        dd += 1
+        ax[dd].plot(freq_ps[1:])
+        ax[dd].set_title(f"{freq_ps[1:].std():.2f}", fontweight='bold')
+        dd += 1
+
+    fig.tight_layout()
+
+    return pd.DataFrame(names)
+
+
 def rel_gain_synth_scatter(df, show=['N','M','U','S','T','C'], thresh=0.03,
                            quads=3, r_cut=None, area=None):
     '''2022_09_29. Currently an exploratory figure that could easily be adapted to something
@@ -963,3 +1211,92 @@ def synth_scatter_metrics(df, first='temp_ps_std', second='freq_ps_std', metric=
 
     fig.suptitle(f"r >= {r_cut} - Quadrant {quads} - FR Thresh: {thresh} - Area: {area}")
     fig.tight_layout()
+
+
+def synthetic_summary_relative_gain_bar(weight_df0):
+    '''2022_11_23. This generates the summary of the synthetic histograms for FG relative gain and plots them as a
+    horizontal bar graph and returns the statistics that are Bonferroni corrected. It is currently not flexible to
+    include different synthetic conditions but that's fine for now.'''
+    M = weight_df0.loc[weight_df0.synth_kind == 'M']
+    S = weight_df0.loc[weight_df0.synth_kind == 'S']
+    T = weight_df0.loc[weight_df0.synth_kind == 'T']
+    C = weight_df0.loc[weight_df0.synth_kind == 'C']
+
+    MS = stats.ttest_ind(M['FG_rel_gain'], S['FG_rel_gain']).pvalue
+    MT = stats.ttest_ind(M['FG_rel_gain'], T['FG_rel_gain']).pvalue
+    SC = stats.ttest_ind(S['FG_rel_gain'], C['FG_rel_gain']).pvalue
+    TC = stats.ttest_ind(T['FG_rel_gain'], C['FG_rel_gain']).pvalue
+    stat_dict = {'MS': MS * 4, 'MT': MT * 4, 'SC': SC * 4, 'TC': TC * 4}
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 9))
+
+    ax.barh(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+            width=[np.nanmean(C['FG_rel_gain']), np.nanmean(T['FG_rel_gain']),
+                   np.nanmean(S['FG_rel_gain']), np.nanmean(M['FG_rel_gain'])],
+            label=f'Total (n=)', color='dimgrey', linestyle='None', height=0.9)  # , marker=symbols[cnt])
+
+    ax.errorbar(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+                x=[np.nanmean(C['FG_rel_gain']), np.nanmean(T['FG_rel_gain']),
+                   np.nanmean(S['FG_rel_gain']), np.nanmean(M['FG_rel_gain'])],
+                xerr=[stats.sem(C['FG_rel_gain']), stats.sem(T['FG_rel_gain']),
+                      stats.sem(S['FG_rel_gain']), stats.sem(M['FG_rel_gain'])],
+                yerr=None, color='black', linestyle='None')
+
+    ax.yaxis.tick_right()
+    ax.yaxis.set_label_position("right")
+    ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+    ax.tick_params(axis='x', labelsize=14)
+    ax.set_xlabel("Relative FG Suppresion", fontsize=18, fontweight='bold')
+    ax.set_yticklabels(['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'], fontsize=14,
+                       fontweight='bold')
+    fig.tight_layout()
+
+    return stat_dict
+
+
+def synthetic_summary_relative_gain_multi_bar(weight_df0, suffixes=['', '_start', '_end']):
+    '''2022_11_30. Same thing as the original but it takes suffixes and adjusts the size based on that.
+    2022_11_23. This generates the summary of the synthetic histograms for FG relative gain and plots them as a
+    horizontal bar graph and returns the statistics that are Bonferroni corrected. It is currently not flexible to
+    include different synthetic conditions but that's fine for now.'''
+    M = weight_df0.loc[weight_df0.synth_kind == 'M']
+    S = weight_df0.loc[weight_df0.synth_kind == 'S']
+    T = weight_df0.loc[weight_df0.synth_kind == 'T']
+    C = weight_df0.loc[weight_df0.synth_kind == 'C']
+
+    stat_dict = {}
+    for ss in suffixes:
+        MS = stats.ttest_ind(M[f'FG_rel_gain{ss}'], S[f'FG_rel_gain{ss}']).pvalue
+        MT = stats.ttest_ind(M[f'FG_rel_gain{ss}'], T[f'FG_rel_gain{ss}']).pvalue
+        SC = stats.ttest_ind(S[f'FG_rel_gain{ss}'], C[f'FG_rel_gain{ss}']).pvalue
+        TC = stats.ttest_ind(T[f'FG_rel_gain{ss}'], C[f'FG_rel_gain{ss}']).pvalue
+        stat_dict[f'MS{ss}'], stat_dict[f'MT{ss}'], stat_dict[f'SC{ss}'], stat_dict[f'TC{ss}'] = MS*4, MT*4, SC*4, TC*4
+
+    fig, axes = plt.subplots(1, len(suffixes), figsize=(len(suffixes*7), 9))
+
+    for ax, ss in zip(axes, suffixes):
+        ax.barh(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+                width=[np.nanmean(C[f'FG_rel_gain{ss}']), np.nanmean(T[f'FG_rel_gain{ss}']),
+                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}'])],
+                label=f'Total (n=)', color='dimgrey', linestyle='None', height=0.9)  # , marker=symbols[cnt])
+
+        ax.errorbar(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+                    x=[np.nanmean(C[f'FG_rel_gain{ss}']), np.nanmean(T[f'FG_rel_gain{ss}']),
+                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}'])],
+                    xerr=[stats.sem(C[f'FG_rel_gain{ss}']), stats.sem(T[f'FG_rel_gain{ss}']),
+                          stats.sem(S[f'FG_rel_gain{ss}']), stats.sem(M[f'FG_rel_gain{ss}'])],
+                    yerr=None, color='black', linestyle='None')
+
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position("right")
+        ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+        ax.tick_params(axis='x', labelsize=14)
+        ax.set_xlabel("Relative FG Suppresion", fontsize=18, fontweight='bold')
+        ax.set_yticklabels(['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'], fontsize=14,
+                           fontweight='bold')
+        ax.set_title(ss, fontsize=12, fontweight='bold')
+    fig.tight_layout()
+
+    return stat_dict

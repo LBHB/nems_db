@@ -65,15 +65,37 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'
 
 
 def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N',
-                     sigma=None, error=True):
+                     sigma=None, error=True, title=None, figsize=(9,6), plot_ls=True, plot_pred=True):
     '''Makes panel three of APAN 2021 poster and NGP 2022 poster, this is a better way than the way
     normalized_linear_error_figure in this file does it, which relies on an old way of loading and
     saving the data that doesn't use DFs and is stupid. The other way also only works with marmoset
     and maybe early ferret data, but definitely not binaural and synthetics. Use this, it's better.
-    It does lack the linear error stat though, but that's not important anymore 2022_09_01.'''
+    It does lack the linear error stat though, but that's not important anymore 2022_09_01.
+    for SFN 2022
+    poster3_psths_with_specs(weight_df, 'CLT052d-018-1', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='PEG - Mixed Suppression')
+    poster3_psths_with_specs(weight_df, 'CLT008a-046-2', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='A1 - FG Suppression')
+    012 for models example
+    poster3_psths_with_specs(weight_df, 'CLT012a-052-1', 'Bees', 'Bugle', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False)
+    poster3_psths_with_specs(weight_df, 'CLT052d-018-1', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='PEG - Mixed Suppression', figsize=(8,15), plot_ls=False)
+
+    poster3_psths_with_specs(weight_df, 'CLT009a-028-2', 'Bulldozer', 'FightSqueak', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False)
+    for 2022_12 WIP
+    poster3_psths_with_specs(weight_df, 'CLT012a-052-1', 'Bees', 'Bugle', batch=340, bin_kind='11', synth_kind='A',
+                         sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=True)
+    poster3_psths_with_specs(weight_df, 'CLT009a-028-2', 'Bulldozer', 'FightSqueak', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=True)
+    poster3_psths_with_specs(weight_df, 'CLT052d-018-1', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='PEG - Mixed Suppression', figsize=(8, 15), plot_ls=False, plot_pred=True)
+
+    '''
 
     # Make figure bones. Could add another spectrogram below, there's space.
-    f = plt.figure(figsize=(8, 6))
+    f = plt.figure(figsize=figsize)
     psth = plt.subplot2grid((18, 3), (4, 0), rowspan=5, colspan=6)
     specA = plt.subplot2grid((18, 3), (0, 0), rowspan=2, colspan=6)
     specB = plt.subplot2grid((18, 3), (2, 0), rowspan=2, colspan=6)
@@ -93,6 +115,7 @@ def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth
 
     epo = row.epoch
     epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
+    single_ep = [cc for cc in epochs if 'null' in cc]
 
     rec['resp'] = rec['resp'].extract_channels([cellid])
     resp = copy.copy(rec['resp'].rasterize())
@@ -101,6 +124,7 @@ def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth
     norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
     r = norm_spont.extract_epochs(epochs)
     ls = np.squeeze(np.nanmean(r[epochs[0]] + r[epochs[1]],axis=0))
+
 
     # Some plotting calculations
     prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
@@ -121,12 +145,24 @@ def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth
             ax[2].fill_between(time, sf.gaussian_filter1d((mean_resp - sem) * rec['resp'].fs, sigma),
                             sf.gaussian_filter1d((mean_resp + sem) * rec['resp'].fs, sigma),
                                alpha=0.4, color=colors[cnt])
-    # Plot the linear sum line
-    if sigma:
-        ax[2].plot(time, sf.gaussian_filter1d(ls * rec['resp'].fs, sigma), color='dimgray',
-                ls='--', label='Linear Sum')
-    if not sigma:
-        ax[2].plot(time, ls * rec['resp'].fs, color='dimgray', ls='--', label='Linear Sum')
+    if plot_ls:
+        # Plot the linear sum line
+        if sigma:
+            ax[2].plot(time, sf.gaussian_filter1d(ls * rec['resp'].fs, sigma), color='dimgray',
+                    ls='--', label='Linear Sum')
+        if not sigma:
+            ax[2].plot(time, ls * rec['resp'].fs, color='dimgray', ls='--', label='Linear Sum')
+
+    if plot_pred:
+        BG_resp, FG_resp = np.squeeze(np.nanmean(r[single_ep[0]], axis=0)), np.squeeze(np.nanmean(r[single_ep[1]], axis=0))
+        weightedA = BG_resp * row.weightsA
+        weightedB = FG_resp * row.weightsB
+        pred = weightedA + weightedB
+        if sigma:
+            ax[2].plot(time, sf.gaussian_filter1d(pred * rec['resp'].fs, sigma), color='salmon', label='Model\nPrediction')
+        if not sigma:
+            ax[2].plot(time, pred * rec['resp'].fs, color='salmon', label='Model\nPrediction')
+
     ax[2].set_xlim(-0.2, (dur + 0.3))        # arbitrary window I think is nice
     ymin, ymax = ax[2].get_ylim()
 
@@ -140,7 +176,11 @@ def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth
     ax[2].spines['top'].set_visible(True), ax[2].spines['right'].set_visible(True)
     # ax[2].vlines(params['SilenceOnset'], ymax * .9, ymax, colors='black', linestyles='-', lw=0.25)
 
-    ax[0].set_title(f"{cellid}", fontweight='bold', size=16)
+    if title:
+        ax[0].set_title(f"wBG: {row.weightsA:.2f} wFG: {row.weightsB:.2f}\n{title}", fontweight='bold', size=16)
+    else:
+        ax[0].set_title(f"{cellid}", fontweight='bold', size=16)
+
     xmin, xmax = ax[2].get_xlim()
 
     # Spectrogram part
@@ -334,6 +374,176 @@ def poster3_response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=34
     ax[5].spines['top'].set_visible(False), ax[5].spines['right'].set_visible(False)
     ax[5].spines['bottom'].set_visible(False), ax[5].spines['left'].set_visible(False)
     ax[5].set_yticks([]), ax[5].set_xticks([])
+
+
+def poster4_plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.75, strict_r=True):
+    '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
+    with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
+    stay True at this point'''
+    areas = list(df.area.unique())
+
+    # This can be mushed into one liners using list comprehension and show_suffixes
+    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+
+    quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                   & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+
+    quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
+                   & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
+
+    fig, ax = plt.subplots(1, 4, figsize=(15, 6), sharey=True)
+    ax = np.ravel(ax)
+
+    colors = ['mediumorchid', 'darkorange', 'orangered', 'green']
+
+    stat_list = []
+    filt_list = []
+    for num, aa in enumerate(areas):
+        area_df = quad3.loc[quad3.area==aa]
+        if strict_r == True:
+            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+
+        # for cnt, ss in enumerate(show_suffixes):
+        else:
+            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
+
+        for ee, an in enumerate(list(filt.animal.unique())):
+            animal_df = filt.loc[filt.animal == an]
+            ax[num].scatter(x=['BG_start', 'BG_end'],
+                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                               label=f'{an} (n={len(animal_df)})', color=colors[ee]) #, marker=symbols[cnt])
+            ax[num].scatter(x=['FG_start', 'FG_end'],
+                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                               color=colors[ee]) #, marker=symbols[cnt])
+            ax[num].errorbar(x=['BG_start', 'BG_end'],
+                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                           yerr=[stats.sem(animal_df[f'weightsA_start']), stats.sem(animal_df[f'weightsA_end'])], xerr=None,
+                           color=colors[ee])
+            ax[num].errorbar(x=['FG_start', 'FG_end'],
+                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                           yerr=[stats.sem(animal_df[f'weightsB_start']), stats.sem(animal_df[f'weightsB_end'])], xerr=None,
+                           color=colors[ee])
+
+            ax[num].legend(fontsize=10, loc='upper right')
+
+        BGsBGe = stats.ttest_ind(filt['weightsA_start'], filt['weightsA_end'])
+        FGsFGe = stats.ttest_ind(filt['weightsB_start'], filt['weightsB_end'])
+        BGsFGs = stats.ttest_ind(filt['weightsA_start'], filt['weightsB_start'])
+        BGeFGe = stats.ttest_ind(filt['weightsA_end'], filt['weightsB_end'])
+
+        tts = {f"BGsBGe_{aa}": BGsBGe.pvalue, f"FGsFGe_{aa}": FGsFGe.pvalue,
+               f"BGsFGs_{aa}": BGsFGs.pvalue, f"BGeFGe_{aa}": BGeFGe.pvalue}
+        print(tts)
+        stat_list.append(tts)
+
+        ax[0].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+        ax[num].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
+        ax[num].tick_params(axis='both', which='major', labelsize=10)
+        ax[num].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
+
+        filt_list.append(filt)
+
+    for num, aa in enumerate(areas):
+        area_FG, area_BG = quad2.loc[quad2.area == aa], quad6.loc[quad6.area == aa]
+
+        # for cnt, ss in enumerate(show_suffixes):
+        filt_BG = area_BG.loc[(area_BG['r_start'] >= r_thresh) & (area_BG['r_end'] >= r_thresh)]
+        filt_FG = area_FG.loc[(area_FG['r_start'] >= r_thresh) & (area_FG['r_end'] >= r_thresh)]
+        animal_BG, animal_FG = filt_BG.loc[filt_BG.animal == an], filt_FG.loc[filt_FG.animal == an]
+        ax[num+len(areas)].scatter(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
+                           label=f'BG+/FGo or\nBGo/FG+ (n={len(filt_BG)}, {len(filt_FG)})', color="black") #, marker=symbols[cnt])
+        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],color='black')
+                           # label=f'{an} (n={len(animal_BG)}, {len(animal_FG)})', color='dimgrey') #, marker=symbols[cnt])
+        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
+                       yerr=[stats.sem(filt_BG[f'weightsA_start']), stats.sem(filt_BG[f'weightsA_end'])], xerr=None,
+                       color='black')
+        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],
+                       yerr=[stats.sem(filt_FG[f'weightsB_start']), stats.sem(filt_FG[f'weightsB_end'])], xerr=None,
+                       color='black')
+
+        area_df = quad3.loc[quad3.area==aa]
+        if strict_r == True:
+            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+        else:
+            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
+
+        ax[num + len(areas)].scatter(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                        label=f'BG+/FG+ (n={len(filt)})', color='dimgrey')  # , marker=symbols[cnt])
+        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                        color='dimgrey')  # , marker=symbols[cnt])
+        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
+                         y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                         yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
+                         xerr=None,
+                         color='dimgrey')
+        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
+                         y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                         yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
+                         xerr=None,
+                         color='dimgrey')
+
+        BGsBGe = stats.ttest_ind(filt_BG['weightsA_start'], filt_BG['weightsA_end'])
+        FGsFGe = stats.ttest_ind(filt_FG['weightsB_start'], filt_FG['weightsB_end'])
+
+        ttt = {f'BGsBGe_null_{aa}': BGsBGe.pvalue, f'FGsFGe_null_{aa}': FGsFGe.pvalue}
+        stat_list.append(ttt)
+
+        ax[num+len(areas)].legend(fontsize=10, loc='upper right')
+        ax[2].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+        ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
+        ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
+        ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
+
+    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}", fontweight='bold', fontsize=10)
+
+
+    fig, ax = plt.subplots(1, 4, figsize=(12, 6), sharey=True)
+
+    edges = np.arange(-1, 2, .05)
+
+    axn = 0
+    for num, aaa in enumerate(areas):
+        to_plot = filt_list[num]
+
+        na, xa = np.histogram(to_plot['weightsA_start'], bins=edges)
+        na = na / na.sum() * 100
+        nb, xb = np.histogram(to_plot['weightsB_start'], bins=edges)
+        nb = nb / nb.sum() * 100
+
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+        ax[axn].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[axn].set_title(f"{aaa} - 0-0.5s", fontweight='bold', fontsize=14)
+        ax[axn].tick_params(axis='both', which='major', labelsize=10)
+        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+
+        axn += 1
+
+        na, xa = np.histogram(to_plot['weightsA_end'], bins=edges)
+        na = na / na.sum() * 100
+        nb, xb = np.histogram(to_plot['weightsB_end'], bins=edges)
+        nb = nb / nb.sum() * 100
+
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+        ax[axn].legend(('Background', 'Foreground'), fontsize=12)
+        ax[0].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[2].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[axn].set_title(f"{aaa} - 0.5-1s", fontweight='bold', fontsize=14)
+        ax[axn].tick_params(axis='both', which='major', labelsize=10)
+        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+
+
+        axn += 1
+
+    return stat_list
 
 
 def poster4_histogram_summary_plot(weight_df, threshold=0.05):
