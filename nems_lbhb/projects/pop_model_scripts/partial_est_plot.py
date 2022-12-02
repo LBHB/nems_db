@@ -16,7 +16,7 @@ from nems0.uri import json_numpy_obj_hook
 from nems0.xform_helper import fit_model_xform, load_model_xform, _xform_exists
 from nems0.utils import escaped_split, escaped_join, get_setting, find_module
 import nems0.db as nd
-from nems import get_setting
+from nems0 import get_setting
 from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
 from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
@@ -124,11 +124,12 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
         dpm.loc[int(midx), 'p'] = p
 
-    ax[1].plot(dpm.index, dpm['std'], '-s', color='gray', label=xlabel, markersize=4.5)
-    ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel, markersize=4.5)
+    max_pred = dpm['std'].max()
+    ax[1].plot(dpm.index, dpm['std']/max_pred, '-s', color='gray', label=xlabel, markersize=4.5)
+    ax[1].plot(dpm.index, dpm['prefit']/max_pred, '-o', color='k', label=ylabel, markersize=4.5)
     ax[1].legend(frameon=False)
     ax[1].set_xlabel('Fraction estimation data')
-    ax[1].set_ylim(0.5, 0.7)
+    #ax[1].set_ylim(0.5, 0.7)
     ax[1].set_box_aspect(1)
 
     return f, dpm

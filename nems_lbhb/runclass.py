@@ -349,7 +349,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
 
     elif (ReferenceClass == 'BigNat') | (ReferenceClass == 'NaturalSounds'):
         if ReferenceClass == 'BigNat':
-            sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
+            sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
+            sound_root = sound_root.replace("H:/", "/auto/data/")
+            sound_root = Path(sound_root)
         else:
             subset = ReferenceHandle['Subsets']
             if subset == 1:

@@ -88,16 +88,18 @@ elif load_method==1:
                  X_val=X_val, Y_val=Y_val)
         d = np.load('/tmp/TAR010c-18-2.npz')
 
-    X_norm=X_est.max()
+    X_norm = X_est.max()
     X_est /= X_norm
     X_val /= X_norm
     
     #model = Model.from_keywords('wc.18x1.g-fir.15x1-dexp.1')
-    model = Model.from_keywords('wc.18x1x2-fir.15x1x2-relu.2-wc.2x1-dexp.1')
-    model = Model.from_keywords('wc.18x2-fir.15x2-dexp.1')
     modelspec = 'wc.18x1-fir.15x1-stp.1x1-dexp.1'
-    modelspec = 'wc.18x2.g-stp.2x1-fir.15x2-dexp.1'
+    modelspec = 'wc.18x1x2.g-fir.15x1x2-wc.2x1-dexp.1'
+    #modelspec = 'wc.18x2.g-fir.15x2-dexp.1'
 
+    #modelspec = 'wc.18x1-fir.15x1.s2-dexp.1'
+    #Y_est = Y_est[::2,:]
+    #Y_val = Y_val[::2,:]
 elif load_method==2:
     # download demo data
     recording.get_demo_recordings(signals_dir)
@@ -228,24 +230,31 @@ model.sample_from_priors()
 # inputs (whereas `backend='tf'`, for example, would use `Layer.tf_layer`).
 # See `nems.models.base.Model.fit` for additional fitting options.
 
-backend='scipy'
+backend='tf'
+split_batches = True
 if backend=='tf':
-    fitter_options = {'cost_function': 'squared_error', 'early_stopping_delay': 100, 'early_stopping_patience': 10,
-                  'early_stopping_tolerance': 1e-3, 'validation_split': 0.0,
+    fitter_options = {'cost_function': 'squared_error', 'early_stopping_delay': 50, 'early_stopping_patience': 10,
+                  'early_stopping_tolerance': 1e-3, 'validation_split': 0.2,
                   'learning_rate': 5e-3, 'epochs': 2000}
+
+    if split_batches:
+        est_n = 90
+        x_bins_per_trial = int(X_est.shape[0]/est_n)
+        y_bins_per_trial = int(Y_est.shape[0]/est_n)
+        y = np.reshape(Y_est, [est_n, y_bins_per_trial, -1])
+        x = np.reshape(X_est, [est_n, x_bins_per_trial, -1])
+    else:
+        x = np.expand_dims(X_est, axis=0)
+        y = np.expand_dims(Y_est, axis=0)
 
     # Trying a TF fit:
     model.layers[-1].skip_nonlinearity()
-    model = model.fit(input=np.expand_dims(X_est, axis=0),
-              target=np.expand_dims(Y_est, axis=0), backend='tf',
-              fitter_options=fitter_options,
-              batch_size=None)
+    model = model.fit(input=x, target=y, backend='tf',
+              fitter_options=fitter_options, batch_size=None)
 
     model.layers[-1].unskip_nonlinearity()
-    model = model.fit(input=np.expand_dims(X_est, axis=0),
-              target=np.expand_dims(Y_est, axis=0), backend='tf',
-              fitter_options=fitter_options,
-              batch_size=None)
+    model = model.fit(input=x, target=y, backend='tf',
+              fitter_options=fitter_options, batch_size=None)
 
 else:
     print('Fitting without NL ...')
@@ -282,7 +291,9 @@ plt.plot(d2)
 
 prediction = model.predict(X_val)
 cc = np.corrcoef(prediction[:, 0], Y_val[:, 0])[0, 1]
+print("pred xc:", cc)
 
+"""
 wc = model.layers[0].coefficients
 fir = model.layers[1].coefficients
 
@@ -363,3 +374,4 @@ ax[5].plot(x4[:1000,:])
 ax[5].plot(Y_val[:1000,0])
 ax[5].set_ylabel('dexp output')
 
+"""

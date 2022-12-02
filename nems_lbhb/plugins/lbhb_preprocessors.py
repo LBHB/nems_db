@@ -845,6 +845,21 @@ def sm(load_key):
 
 
 @xform()
+def dec(kw):
+    options = kw.split('.')[1:]
+    strides = 1
+    signal = 'resp'
+    for op in options:
+        if op.startswith('s'):
+            strides = int(op[1:])
+        elif op.startswith('t'):
+            signal = op[1:]
+
+    xfspec=[['nems0.preprocessing.decimate_signal',
+            {'signal': signal, 'strides': strides}]]
+    return xfspec
+
+@xform()
 def rscsw(load_key, cellid, batch):
     """
     generate the signals for sliding window model. It's intended that these be

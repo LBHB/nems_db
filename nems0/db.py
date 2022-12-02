@@ -753,9 +753,9 @@ def update_results_table(modelspec, preview=None,
     Batches = db_tables['Batches']
     session = Session()
     results_id = None
-
-    for cellidx in range(modelspec.cell_count):
-        modelspec.cell_index = cellidx
+    cell_count = 1
+    for cellidx in range(cell_count):
+        #modelspec.cell_index = cellidx
         cellids = modelspec.meta.get('cellids', [modelspec.meta.get('cellid','CELL')])
         if ('r_test' in modelspec.meta.keys()) and (len(modelspec.meta['r_test'])<len(cellids)):
             cellids=cellids[:len(modelspec.meta['r_test'])]
@@ -885,8 +885,10 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
                     v = modelspec.meta[k][i[0]]
                 else:
                     v = modelspec.meta[k][0]
+                    
             except BaseException:
                 v = modelspec.meta[k]
+
             finally:
                 try:
                     v = np.asscalar(v)
@@ -900,6 +902,8 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
             v = modelspec.meta[k]
     else:
         v = default
+    if isinstance(v, np.ndarray):
+        v = v.item()
 
     return v
 

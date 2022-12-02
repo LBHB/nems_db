@@ -307,9 +307,235 @@ def baphy_mat2py(s):
 
     return s8
 
+def get_parmfile_format(parmfile):
+
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if os.path.exists(asfile):
+        return 'baphy'
+    elif os.path.exists(aspath):
+        return 'psi'
+    else:
+        return None
+
+def adjust_parmfile_name(parmfile):
+
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if os.path.exists(asfile):
+        return asfile
+    elif os.path.exists(aspath):
+        return aspath
+    else:
+        return None
+
+
+def psi_parm_read(filepath):
+    """
+    read parameter from psi datafolder. Relevant info in event_log.csv
+    and trial_log.csv
+    match spect of baphy loader:
+       exptevents.columns = ['name', 'start', 'end', 'Trial']
+    :param filepath:
+    :return:
+    """
+    eventfile = Path(filepath) / "event_log.csv"
+    trialfile = Path(filepath) / "trial_log.csv"
+    globalfile = Path(filepath) / "globalparams.json"
+
+    prestimsilence=0.5
+    poststimsilence=0.5
+
+    root1, parmfile = os.path.split(filepath)
+    root2, penname = os.path.split(root1)
+    root3, ferret = os.path.split(root2)
+    parts = parmfile.split('_')
+    siteid = parts[0][:-2]
+    runclass = parts[2];
+    ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
+
+    if os.path.isfile(globalfile):
+        with open(globalfile, 'r') as f:
+            globalparams = json.load(f)
+        globalparams['Tester'] = globalparams['experimenter']
+        globalparams['Ferret'] = globalparams['animal']
+        if globalparams['training']=='Physiology+behavior':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+    else:
+        log.info('***** Kludge alert!! Hard coding many baphy settings. *****')
+        globalparams = {}
+        globalparams['rawfilename'] = os.path.join(filepath, 'raw')
+        globalparams['Tester'] = 'jwingert'
+        globalparams['Ferret'] = 'Prince'
+        globalparams['runclass'] = runclass
+
+        if parts[2]=='a':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+        globalparams['SiteID'] = siteid
+
+    globalparams['HWSetup'] = 17
+    globalparams['date'] = ctime.strftime("%Y-%m-%d")
+    globalparams['SiteID'] = siteid
+    globalparams['HWparams'] = {'DAQSystem': 'Open-Ephys'}
+    globalparams['NumberOfElectrodes'] = 384
+    globalparams['stim_system'] = 'psi'
+    globalparams['Module'] = 'psi'
+    globalparams['ExperimentComplete'] = 1
+    globalparams['tempMfile'] = filepath
+
+    T = pd.read_csv(trialfile)
+    E = pd.read_csv(eventfile)
+    rparms = T.loc[0]
+    TrialObject = {1: {
+        'ReferenceClass': 'BigNat',
+        'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
+                                'PostStimSilence': poststimsilence,
+                                'SoundPath': rparms.background_wav_sequence_path,
+                                'Duration': rparms.background_wav_sequence_duration,
+                                'Normalization': rparms.background_wav_sequence_normalization ,
+                                'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                'fit_range': rparms.background_wav_sequence_fit_range,
+                                'fit_reps': rparms.background_wav_sequence_fit_reps,
+                                'test_range': rparms.background_wav_sequence_test_range,
+                                'test_reps': rparms.background_wav_sequence_test_reps,
+                                'iti_duration': rparms.iti_duration,
+                            'Names': {},
+                            'descriptor': 'BigNat'
+                            }},
+        'TargetClass': 'Tone',
+        'TargetHandle': {1:{ 'descriptor': 'Tone'
+                        }},
+        'OveralldB': rparms.background_wav_sequence_level}
+    }
+    exptparams = {'runclass': runclass,
+                  'StartTime': ctime.strftime("%H:%M:%S"),
+                  'BehaveObjectClass': 'psi-go-nogo',
+                  'TrialObject': TrialObject,
+                  'TotalRepetitions': 1,
+                  'Repetition': 1,
+                  }
+
+    event_count = len(E)
+    cols = E.columns
+    if 'trial' in cols:
+        E['Trial'] = E['trial']
+        guess_trials=False
+    else:
+        E['Trial'] = 1
+        guess_trials=True
+    E['duration'] = 0
+    for ee, r in E.iterrows():
+        if str(r['info'])!='nan':
+            info = json.loads(r['info'])
+            if 'duration' in info.keys():
+                if ~np.isinf(info['duration']):
+                    E.loc[ee,'duration'] = info['duration']
+
+        if r['event'] == 'background_added':
+            E_pausenext = E.loc[(E['event']=='background_paused') &
+                                (E['timestamp']>r['timestamp']) &
+                                (E['timestamp']<r['timestamp']+E.loc[ee,'duration'])]
+            if (len(E_pausenext)>0):
+                E.loc[ee, 'duration'] = E_pausenext['timestamp'].min()-E.loc[ee, 'timestamp']
+                print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
+    E['start'] = E['timestamp']
+    E['end'] = E['start'] + E['duration']
+    E['name'] = E['event']
+    E['Info'] = E['info']
+    E.loc[E['Info'].astype(str)=='nan','Info']=''
+    E.loc[E['Trial']==0,'Trial']=1
+
+    exptevents=E[['start','end','name','Trial','Info']].copy()
+
+    if guess_trials:
+        start_events = exptevents.loc[exptevents['name']=='trial_start']
+        for ee in range(len(exptevents)):
+            tt=(start_events['start']<=exptevents.loc[ee,'start']).sum()
+            if tt>1:
+                exptevents.loc[ee,'Trial']=tt
+
+    trialstarts = exptevents.loc[exptevents['name']=='trial_start',['Trial','start']].values
+    trialstarts2 = T[['trial_number','trial_start']].values
+    if trialstarts2.shape[0]<trialstarts.shape[0]:
+        Tlen=trialstarts2.shape[0]
+        dmean=np.sum(np.abs(trialstarts[:Tlen,1]-trialstarts2[:Tlen,1]))
+        if dmean>0:
+            log.info(f"Trial counts E: {trialstarts.shape[0]} T: {trialstarts2.shape[0]} ")
+            log.info(f"WARNING!! Truncated start time diff: {dmean} sec")
+    elif trialstarts2.shape[0]>trialstarts.shape[0]:
+        raise ValueError("Trial log has more trials than event log???")
+
+    # adjust timestamps to reference current trial rather than absolute
+    target_events = exptevents.loc[exptevents['name']=='target_start'].copy()
+
+    #for ee, r in target_events.iterrows():
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'end'] -= r['start']
+
+    tstart_events = exptevents.loc[exptevents['name']=='target_start'].reset_index(drop=True)
+    tstart_events['name']='TRIALSTART'
+    tstart_events['end'] = tstart_events['start']
+    tstart_events['Info'] = ''
+    tstop_events = tstart_events.copy()
+    tstop_events['name'] = 'TRIALSTOP'
+    tstop_events['Trial'] -= 1
+    tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
+    tstop_events.loc[tstop_events.Trial==0,['Trial']] = exptevents['Trial'].max()
+    tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
+
+    bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+    Names = []
+    for ee, r in bg_events.iterrows():
+        info = json.loads(r['Info'])
+        Names.append(f'{info["metadata"]["filename"]}.wav')
+        bg_events.loc[ee, 'name'] = f'Stim , {info["metadata"]["filename"]}.wav , Reference'
+        bg_events.loc[ee, 'Info'] = ''
+    Names = list(set(Names))
+    Names.sort()
+    TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+
+    tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
+                                (exptevents['Trial']<=Tlen)].copy()
+    for ee, r in tar_events.iterrows():
+        trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
+        snr = trialinfo['snr']
+        target_freq = trialinfo['target_tone_frequency']
+        trial_type = trialinfo['trial_type']
+        if 'nogo' in trial_type:
+            name = f'Stim , {target_freq}+-InfdB , Catch'
+        else:
+            name = f'Stim , {target_freq}+{snr}dB , Target'
+        tar_events.loc[ee, 'name'] = name
+        tar_events.loc[ee, 'Info'] = ''
+    stimevents = pd.concat([bg_events, tar_events])
+    prestimevents=stimevents.copy()
+    starts = prestimevents['start'].copy()
+    prestimevents['start'] = starts-prestimsilence
+    prestimevents['end'] = starts
+    prestimevents['name'] = prestimevents['name'].str.replace('Stim ,','PreStimSilence ,')
+    poststimevents = stimevents.copy()
+    stops = poststimevents['end'].copy()
+    poststimevents['start'] = stops
+    poststimevents['end'] = stops+poststimsilence
+    poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
+
+    exptevents = pd.concat([exptevents,tstart_events,tstop_events,stimevents,prestimevents,poststimevents], ignore_index=True)
+    exptevents = exptevents.sort_values(by=['Trial','start'])
+
+    globalparams['rawfilecount'] = Tlen
+
+    return globalparams, exptparams, exptevents
 
 def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
+
+    if os.path.isdir(filepath):
+        return psi_parm_read(filepath)
+
     s = load_resource(str(filepath))
     if type(s) is str:
         s = s.split("\n")
@@ -1060,32 +1286,41 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
     hit_trials = exptevents[exptevents.name == "BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
     # import pdb; pdb.set_trace()
+    TrialStart_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
+    )
     TrialLen_sec = np.array(
         exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
     )
+    if TrialStart_sec.sum()>0:
+        TrialLen_sec -= TrialStart_sec
+        offset_exists = True
+    else:
+        offset_exists = False
+
     if len(hit_trials):
         TrialLen_sec[hit_trials - 1] = max_event_times[hit_trials - 1]
 
     TrialLen_spikefs = np.concatenate(
         (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
     )
+    if ~offset_exists:
+        for ch in range(0, chancount):
+            if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
+                s = sortinfo[ch][0][sortidx]['unitSpikes']
+                s = np.reshape(s, (-1, 1))
+                unitcount = s.shape[0]
+                for u in range(0, unitcount):
+                    st = s[u, 0]
 
-    for ch in range(0, chancount):
-        if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
-            s = sortinfo[ch][0][sortidx]['unitSpikes']
-            s = np.reshape(s, (-1, 1))
-            unitcount = s.shape[0]
-            for u in range(0, unitcount):
-                st = s[u, 0]
-
-                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
-                for trialidx in range(1, TrialCount + 1):
-                    ff = (st[0, :] == trialidx)
-                    if np.sum(ff):
-                        utrial_spikefs = np.max(st[1, ff])
-                        TrialLen_spikefs[trialidx, 0] = np.max(
-                            [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
-                        )
+                    # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
+                    for trialidx in range(1, TrialCount + 1):
+                        ff = (st[0, :] == trialidx)
+                        if np.sum(ff):
+                            utrial_spikefs = np.max(st[1, ff])
+                            TrialLen_spikefs[trialidx, 0] = np.max(
+                                [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
+                            )
 
     # using the trial lengths, figure out adjustments to trial event times.
     if finalfs:
@@ -1108,9 +1343,16 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
         # print("Adjusting trial {0} by {1} sec"
         #       .format(Trialidx,Offset_sec[Trialidx-1]))
         ff = (exptevents['Trial'] == Trialidx)
-        exptevents.loc[ff, ['start', 'end']] = (
-                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
-        )
+        if offset_exists:
+            s_ = TrialStart_sec[Trialidx-1]
+            s_fs = np.ceil(s_ * finalfs) / finalfs
+            exptevents.loc[ff, ['start', 'end']] = \
+                    exptevents.loc[ff, ['start', 'end']] - s_ + s_fs
+            Offset_spikefs[Trialidx - 1] = s_fs * spikefs
+        else:
+            exptevents.loc[ff, ['start', 'end']] = (
+                    exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
+            )
 
         # ff = ((exptevents['Trial'] == Trialidx)
         #       & (exptevents['end'] > Offset_sec[Trialidx]))

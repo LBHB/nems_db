@@ -34,7 +34,15 @@ def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
 
     vid_paths = [os.path.join(site_path, v) for v in vids]
     output_aliased = [os.path.join(path_sorted, v.replace(".avi",".dlc.h5")) for v in vids]
+
+    if 0:
+        # STEP 1. Train DNN
+        # before running, update pose_cfg.yaml to use last snapshot from previous iteration as initial condition
+        # (rather than starting over from visnet)
+        dlc.train_network(path_config, shuffle=1, displayiters=500)
+
     if 1:
+        # STEP 2. extract feature values from video
         dlc.analyze_videos(path_config, vid_paths, videotype='avi', destfolder=path_sorted)
 
         for v,a in zip(vids, output_aliased):
@@ -48,9 +56,11 @@ def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
                 os.system(f"ln -s {list_of_files[-1]} {a}")
 
     if 0:
+        # STEP 3. opitonal, generate a video with features labeled
         dlc.create_labeled_video(path_config, vid_paths, videotype='avi', destfolder=path_sorted)
 
     if 0:
+        # STEP 4. evaluate and decide if necessary to refine
         # identify "bad" frames and save in training set
         dlc.extract_outlier_frames(path_config, vid_paths, destfolder=path_sorted, automatic=True)
 
@@ -58,10 +68,7 @@ def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
         dlc.refine_labels(path_config)
 
     if 0:
+        # STEP 5. add the new labels to a new training set, go back to STEP 1 to refine the model
         dlc.merge_datasets(path_config)
         dlc.create_training_dataset(path_config, net_type='resnet_50', augmenter_type='imgaug')
 
-    if 0:
-        # before running, update pose_cfg.yaml to use last snapshot from previous iteration as initial condition
-        # (rather than starting over from visnet)
-        dlc.train_network(path_config, shuffle=1, displayiters=100)

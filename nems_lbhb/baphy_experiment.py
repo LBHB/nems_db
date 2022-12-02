@@ -126,6 +126,7 @@ class BAPHYExperiment:
                 'rawid': rawid
             }
             cells_to_extract, nops = io.parse_cellid(parse_cellid_options)
+            
             self.batch = batch
             self.siteid = cellid[:7]
             self.cells_to_extract = cells_to_extract # this is all cells to be extracted from the recording
@@ -137,7 +138,8 @@ class BAPHYExperiment:
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
             files = list(set(list(d['parm'])))
             files.sort()
-            self.parmfile = [Path(f).with_suffix('.m') for f in files]
+            self.parmfile = [io.adjust_parmfile_name(p) for p in files]
+            self.parmformat = [io.get_parmfile_format(p) for p in self.parmfile]
 
         # db-free options for loading specific cellids / parmfiles
         # here, must assume cellid = cells_to_load = cells_to_extract 
@@ -146,13 +148,12 @@ class BAPHYExperiment:
         elif (type(parmfile) is list): # or (type(parmfile) is str):
             if type(parmfile) is str:
                 parmfile=[parmfile]
-            self.parmfile = [Path(p).with_suffix('.m') for p in parmfile]
-
-
+            self.parmfile = [io.adjust_parmfile_name(p) for p in parmfile]
+            self.parmformat = [io.get_parmfile_format(p) for p in parmfile]
 
             self.batch = None
             if rawid is None:
-                stems = [pl.Path(p).stem + '.m' for p in parmfile]
+                stems = [os.path.basename(p) for p in parmfile]
                 log.info(stems)
                 stemstring = "'" + "','".join(stems) + "'"
                 rawdata = db.pd_query(f"SELECT * from gDataRaw where parmfile in ({stemstring})")
@@ -178,7 +179,8 @@ class BAPHYExperiment:
                 self.cells_to_load = None
                 self.cells_to_extract = None
         else:
-            self.parmfile = [Path(parmfile).with_suffix('.m')]
+            self.parmfile = [io.adjust_parmfile_name(parmfile)]
+            self.parmformat = [io.get_parmfile_format(parmfile)]
             self.siteid = os.path.split(parmfile)[-1][:7]
             self.batch = None
             self.rawid = [rawid] # todo infer from parmfile instad of parsing
@@ -205,6 +207,7 @@ class BAPHYExperiment:
             raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
+
         self.folder = self.parmfile[0].parent
         self.experiment = [p.name.split('_', 1)[0] for p in self.parmfile]
 
@@ -244,9 +247,13 @@ class BAPHYExperiment:
     @lru_cache(maxsize=128)
     def openephys_folder(self):
         folders = []
-        for e,er in zip(self.experiment, self.experiment_with_runclass):
-            path = self.folder / 'raw' / e
-            candidates = list(path.glob(er.as_posix() + '*'))
+        for e,er,fmt in zip(self.experiment, self.experiment_with_runclass, self.parmformat):
+            if fmt=='baphy':
+                path = self.folder / 'raw' / e
+                candidates = list(path.glob(er.as_posix() + '*'))
+            else:
+                path = self.folder / er / 'raw'
+                candidates = list(path.glob('*'))
             if len(candidates) > 1:
                 raise ValueError('More than one candidate found')
             if len(candidates) == 0:
@@ -260,7 +267,8 @@ class BAPHYExperiment:
         '''
         Return path to OpenEphys tarfile containing recordings
         '''
-        path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
+        #path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
+        path = [r.with_suffix('.tgz') for r in self.openephys_folder]
         return path
 
     @property
@@ -331,8 +339,11 @@ class BAPHYExperiment:
         try:
             # TODO add check for openephys files. For now,
             # just use spikes if a spikefile exists
-            self.spikefile
-            method = 'spikes'
+            if 'psi' in self.parmformat:
+                method = 'psi'
+            else:
+                self.spikefile
+                method = 'spikes'
         except IOError:
             method = 'baphy'
         return method
@@ -357,12 +368,12 @@ class BAPHYExperiment:
             return baphy_events
         elif correction_method == 'baphy':
             return [io.baphy_align_time_baphyparm(ev) for ev in baphy_events]
-        elif correction_method == 'openephys':
+        elif correction_method in ['openephys']:
             trial_starts = self.get_trial_starts('openephys')
             raw_rasterfs = self.get_raw_sampling_rate('openephys')
             return [io.baphy_align_time_openephys(ev, ts, rfs, rasterfs) 
                     for ev, ts, rfs in zip(baphy_events,trial_starts, raw_rasterfs)]
-        elif correction_method == 'spikes':
+        elif correction_method in ['spikes','psi']:
             spikedata = self._get_spikes()
             exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], rasterfs)[0] for (ev, spd)
                                 in zip(baphy_events, spikedata)]
@@ -869,7 +880,7 @@ class BAPHYExperiment:
         #    fn = str(f).split('/')[-1]
         #    exptevents[i].to_pickle('/auto/users/hellerc/code/scratch/exptevents_io_{}.pickle'.format(fn))
         spikedata = self._get_spikes()
-        if self.correction_method == 'spikes':
+        if self.correction_method in ['spikes','psi']:
             spikedicts = []
             for file_ind in range(len(exptevents)):
                 # (ev, (sp, fs)) in zip(exptevents, spikes_fs):
@@ -1108,7 +1119,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
     # this step includes removing post lick events for 
     # active files
     behavior = False
-    if exptparams['BehaveObjectClass'] not in ['ClassicalConditioning', 'Passive']:
+    if exptparams['BehaveObjectClass'] not in ['psi-go-nogo', 'ClassicalConditioning', 'Passive']:
         log.info('Creating behavior epochs')
         behavior = True
         behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
@@ -1152,7 +1163,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
     epochs.loc[end_events, 'end'] = final_trial_end
 
     start_events = (epochs['start'] >= final_trial_end)
-    epochs = epochs[~start_events]
+    epochs = epochs.loc[~start_events].copy().reset_index(drop=True)
 
     # get rid of weird floating point precision 
     epochs.loc[:, 'start'] = [np.round(x, 5) for x in epochs['start'].values]

@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import nems0
+import nems0.epoch as ep
 import nems0.db as nd
 import nems0.metrics.api as metrics
 import nems0.plots.api as nplt
@@ -454,16 +455,16 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         raise ValueError("Inputs modelspec and est required")
 
     # convert signal matrices to nems-lite format
-    X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
-    Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
-    if 'state' in est.signals.keys():
-        S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
-    else:
-        S_est = None
     if backend == 'scipy':
 
-        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': max_iter}}
-
+        X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
+        else:
+            S_est = None
+        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
+        log.info(f"{fitter_options}")
         try:
             modelspec.layers[-1].skip_nonlinearity()
             fit_stage_1 = True
@@ -484,16 +485,24 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 
     elif backend=='tf':
         # convert signal matrices to nems-lite format
-        X_est = np.expand_dims(X_est, axis=0)
-        Y_est = np.expand_dims(Y_est, axis=0)
-        if S_est is not None:
-            S_est = np.expand_dims(S_est, axis=0)
+        X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+        
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+        else:
+            S_est = None
+            
+        #X_est = np.expand_dims(X_est, axis=0)
+        #Y_est = np.expand_dims(Y_est, axis=0)
+        #if S_est is not None:
+        #    S_est = np.expand_dims(S_est, axis=0)
 
         fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
                           'early_stopping_patience': early_stopping_patience,
                           'early_stopping_tolerance': tolerance,
                           'validation_split': validation_split,
-                          'learning_rate': learning_rate*2, 'epochs': int(max_iter/2),
+                          'learning_rate': learning_rate*10, 'epochs': int(max_iter/2),
                           }
         
         try:
@@ -601,6 +610,7 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
         save_resource(fig_uri, data=figure)
     save_resource(os.path.join(destination, 'log.txt'), data=log)
     save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
+    return destination
 
 
 def init_from_keywords(keywordstring, meta={}, IsReload=False,

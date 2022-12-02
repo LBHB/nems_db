@@ -1002,6 +1002,13 @@ def smooth_signal_epochs(rec, signal='resp', epoch_regex='^STIM_',
 
     return {'rec': newrec}
 
+def decimate_signal(rec, stride=2, signal='resp', **context):
+
+    new_rec = rec.copy()
+    new_rec[signal] = new_rec[signal].decimate(stride=stride)
+
+    return {'rec': new_rec}
+
 
 def smooth_epoch_segments(sig, epoch_regex='^STIM_', mask=None):
     """
