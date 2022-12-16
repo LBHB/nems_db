@@ -31,9 +31,11 @@ else:
     parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
 
 ## load the recording
-parmfile = "/auto/data/daq/Prince/PRN015/PRN015b10_p_BNT.m"
-rawid = 146876
-ex = BAPHYExperiment(parmfile=parmfile, rawid=rawid)
+parmfile = "/auto/data/daq/Teonancatl/TNC057/TNC057a07_p_BNB.m"
+rawid = None
+#parmfile = "/auto/data/daq/Prince/PRN015/PRN015b04_p_BNB.m"
+#rawid = 146865
+ex = BAPHYExperiment(parmfile=[parmfile])
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
 rec = ex.get_recording(raw=True, resp=False, stim=False, recache=False, rawchans=None, rasterfs=1500)

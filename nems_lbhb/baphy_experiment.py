@@ -174,6 +174,8 @@ class BAPHYExperiment:
                     self.siteid = cellid[:7]
                 else:
                     raise TypeError
+                self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
+                self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
             else:
                 self.siteid = os.path.split(parmfile[0])[-1][:7]
                 self.cells_to_load = None

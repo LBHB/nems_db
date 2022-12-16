@@ -13,7 +13,7 @@ GENERAL_REQUIRES = [
         'pandas', 'pymysql', 'sqlalchemy',
         'numpy', 'scipy', 'matplotlib', 'mpld3', 'boto3',
         'bcrypt', 'pillow', 'numpy', 'scipy', 'requests',
-        'h5py', 'configparser', 'tables'
+        'h5py', 'configparser', 'tables', 'open-ephys-python-tools'
         ]
 # pycharm also requires: tornado
 # TF modules require tensorflow

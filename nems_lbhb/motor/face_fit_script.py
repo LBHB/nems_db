@@ -23,7 +23,6 @@ import deeplabcut as dlc
 import numpy as np
 
 import nems0.db as nd
-import nems
 
 import nems_lbhb.motor.nems_dlc_settings as ds
 from nems_lbhb.motor import face_tools
@@ -44,6 +43,7 @@ except Exception as e:
 if __name__ == '__main__':
 
     if 'QUEUEID' in os.environ:
+        import nems0.utils
         queueid = int(os.environ['QUEUEID'])
         nems0.utils.progress_fun = nd.update_job_tick
     else:
