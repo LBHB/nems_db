@@ -306,7 +306,8 @@ class BAPHYExperiment:
     def dlcfile(self):
         suffix = '.lickDLC_resnet50_multividJan14shuffle1_1030000.h5'
         # standardize output--alias to most recent run?
-        suffix = '.lick.dlc.h5'
+        #suffix = '.lick.dlc.h5'
+        suffix = '.dlc.h5'
         log.info(f"DLC file suffix: {suffix}")
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
@@ -1124,7 +1125,13 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
         behavior = True
         behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
         epochs.append(behavior_epochs)
-        
+    elif exptparams['BehaveObjectClass'] in ['psi-go-nogo']:
+        behavior_epochs = exptevents.loc[
+            (exptevents.name.str.endswith('_TRIAL') |
+             exptevents.name.str.startswith('LICK'))
+        ]
+        epochs.append(behavior_epochs)
+
     epochs = pd.concat(epochs, ignore_index=True)#, sort=False)
     file_start_time = epochs['start'].min()
     file_end_time = epochs['end'].max()

@@ -423,10 +423,10 @@ def psi_parm_read(filepath):
     cols = E.columns
     if 'trial' in cols:
         E['Trial'] = E['trial']
-        guess_trials=False
+        guess_trials = False
     else:
         E['Trial'] = 1
-        guess_trials=True
+        guess_trials = True
     E['duration'] = 0
     for ee, r in E.iterrows():
         if str(r['info'])!='nan':
@@ -441,11 +441,17 @@ def psi_parm_read(filepath):
                                 (E['timestamp']<r['timestamp']+E.loc[ee,'duration'])]
             if (len(E_pausenext)>0):
                 E.loc[ee, 'duration'] = E_pausenext['timestamp'].min()-E.loc[ee, 'timestamp']
-                print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
+                #print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
     E['start'] = E['timestamp']
     E['end'] = E['start'] + E['duration']
     E['name'] = E['event']
     E['Info'] = E['info']
+    experiment_end = E.loc[E.event=='experiment_end','start'].max()
+    if experiment_end==0:
+        experiment_end = E.loc[E.event == 'trial_end', 'start'].max()
+
+    E.loc[E.end>experiment_end,'end']=experiment_end
+
     E.loc[E['Info'].astype(str)=='nan','Info']=''
     E.loc[E['Trial']==0,'Trial']=1
 
@@ -458,19 +464,40 @@ def psi_parm_read(filepath):
             if tt>1:
                 exptevents.loc[ee,'Trial']=tt
 
+    if 'trial_number' not in T.columns:
+        T['trial_number']=np.arange(T.shape[0],dtype=int)+1
     trialstarts = exptevents.loc[exptevents['name']=='trial_start',['Trial','start']].values
-    trialstarts2 = T[['trial_number','trial_start']].values
+    trialstarts2 = T[['trial_number', 'trial_start']].values
+    Tlen = trialstarts.shape[0]
     if trialstarts2.shape[0]<trialstarts.shape[0]:
         Tlen=trialstarts2.shape[0]
-        dmean=np.sum(np.abs(trialstarts[:Tlen,1]-trialstarts2[:Tlen,1]))
-        if dmean>0:
-            log.info(f"Trial counts E: {trialstarts.shape[0]} T: {trialstarts2.shape[0]} ")
-            log.info(f"WARNING!! Truncated start time diff: {dmean} sec")
+        exptevents['old_trial']=exptevents['Trial'].copy()
+        exptevents['Trial'] = 0
+        for t in range(1,Tlen+1):
+            mm = np.argmin(np.abs(trialstarts[:,1]-trialstarts2[t-1,1]))
+            exptevents.loc[exptevents['old_trial']==(mm+1),'Trial']=t
+        for i,r in exptevents.loc[exptevents.Trial==0].iterrows():
+            try:
+                next_trial = trialstarts[trialstarts[:,1]>r['start'],0].min()
+            except:
+                next_trial = Tlen
+                pass
+            print(i, next_trial, r['start'],r['end'], r['name'], r['Info'])
+        log.info(f"Trial counts adjusted E: {trialstarts.shape[0]} to T: {trialstarts2.shape[0]} ")
+        exptevents = exptevents.drop(columns='old_trial')
+        #dmean=np.sum(np.abs(trialstarts[:Tlen,1]-trialstarts2[:Tlen,1]))
+        #if dmean > 0:
+        #    log.info(f"Trial counts E: {trialstarts.shape[0]} T: {trialstarts2.shape[0]} ")
+        #    log.info(f"WARNING!! Truncated start time diff: {dmean} sec")
     elif trialstarts2.shape[0]>trialstarts.shape[0]:
         raise ValueError("Trial log has more trials than event log???")
 
-    # adjust timestamps to reference current trial rather than absolute
-    target_events = exptevents.loc[exptevents['name']=='target_start'].copy()
+    if (exptevents['Trial'] > Tlen).sum() > 0:
+        log.info('Removing events after last trial')
+    exptevents=exptevents.loc[(exptevents['Trial']<=Tlen) & (exptevents['Trial']>0)]
+
+    # DONT adjust timestamps to reference current trial rather than absolute
+    # target_events = exptevents.loc[exptevents['name']=='target_start'].copy()
 
     #for ee, r in target_events.iterrows():
     #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
@@ -484,7 +511,7 @@ def psi_parm_read(filepath):
     tstop_events['name'] = 'TRIALSTOP'
     tstop_events['Trial'] -= 1
     tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
-    tstop_events.loc[tstop_events.Trial==0,['Trial']] = exptevents['Trial'].max()
+    tstop_events.loc[tstop_events.Trial==0,['Trial']] = Tlen
     tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
 
     bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
@@ -523,8 +550,35 @@ def psi_parm_read(filepath):
     poststimevents['end'] = stops+poststimsilence
     poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
 
-    exptevents = pd.concat([exptevents,tstart_events,tstop_events,stimevents,prestimevents,poststimevents], ignore_index=True)
-    exptevents = exptevents.sort_values(by=['Trial','start'])
+    trial_number = T['trial_number']
+    videostart = T['psivideo_frame_ts']
+    videostart -= videostart[0]
+    videoframes = T['psivideo_frames_written']
+    videoname = videoframes.apply(lambda x: f"PSIVIDEO,{x:.0f}")
+    d_ = {'start': videostart, 'end': videostart, 'name': videoname,
+          'Trial': trial_number, 'Info': ''}
+    videoevents = pd.DataFrame(d_)
+
+    response_ts = T['response_ts']
+    response_outcome = T['score']
+    response_name = response_outcome.apply(lambda x: f"LICK , {x}")
+
+    d_ = {'start': response_ts, 'end': response_ts, 'name': response_name,
+          'Trial': trial_number, 'Info': ''}
+    responseevents = pd.DataFrame(d_)
+    responseevents = responseevents.loc[np.isfinite(response_ts)]
+
+    trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
+    n_outcomes = len(trial_outcomes)
+    d_ = {'start': tstart_events['start'][:n_outcomes],
+          'end': tstop_events['start'][:n_outcomes],
+          'name': trial_outcomes, 'Trial': trial_number, 'Info': ''}
+    outcomeevents = pd.DataFrame(d_)
+
+    exptevents = pd.concat([exptevents, tstart_events, tstop_events, stimevents,
+                            prestimevents, poststimevents, videoevents,
+                            responseevents, outcomeevents], ignore_index=True)
+    exptevents = exptevents.sort_values(by=['Trial','start']).reset_index(drop=True)
 
     globalparams['rawfilecount'] = Tlen
 
@@ -1857,8 +1911,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         return big_rs, strialidx
 
 
-def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
-                   verbose=False, rasterfs=30, dlc_threshold=-1, fill_invalid='mean',
+def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False,
+                   rasterfs=30, dlc_threshold=-1, fill_invalid='interpolate', max_gap=2,
                    **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
@@ -1895,13 +1949,35 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
         y = dataframe[scorer][bp]['y'].values
         threshold_check = dataframe[scorer][bp]['likelihood'].values > dlc_threshold
         bad_frame_count = (~threshold_check).sum()
-        if fill_invalid == 'mean':
-            x[~threshold_check] = np.nanmean(x[threshold_check])
-            y[~threshold_check] = np.nanmean(y[threshold_check])
+        assume_videofs=30
+        if bad_frame_count==0:
+            pass
+            # no bad frames
+        elif (fill_invalid == 'interpolate'):
+            invalid_onsets = np.where(np.diff(threshold_check.astype(int))==-1)[0]+1
+            invalid_offsets = np.where(np.diff(threshold_check.astype(int))==1)[0]+1
+            if invalid_onsets[0] > invalid_offsets[0]:
+                invalid_onsets = np.concatenate(([0], invalid_onsets))
+            if invalid_onsets[-1] > invalid_offsets[-1]:
+                invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
+            for (a, b) in zip(invalid_onsets, invalid_offsets):
+                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap ):
+                    x[a:b] = np.linspace(x[a-1], x[b], b-a)
+                    y[a:b] = np.linspace(y[a - 1], y[b], b - a)
+                else:
+                    x[a:b] = np.nan
+                    y[a:b] = np.nan
 
-            if bad_frame_count > 0:
-                log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
-        else:
+        elif (fill_invalid == 'mean'):
+            log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+            if (fill_invalid == 'mean') & (bad_frame_count > 0) & (max_gap > 0):
+
+                x[~threshold_check] = np.nanmean(x[threshold_check])
+                y[~threshold_check] = np.nanmean(y[threshold_check])
+
+                if bad_frame_count > 0:
+                    log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+        else: # nan
             x[~threshold_check] = np.nan
             y[~threshold_check] = np.nan
             if bad_frame_count > 0:
@@ -1933,41 +2009,70 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     # resample and remove dropped frames
 
     # find and parse lick trace events
-    pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    #pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    pp = exptevents['name'].str.startswith('LICK,')
+    if pp.sum() > 0:
+        # yes, there were LICK events, load baphy style
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 1])
+        firstframe = np.zeros([ntrials + 1])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'] - 1)
+            s = x['name'].split(",[")
+            p = eval("[" + s[1])
+            # print("{0} p=[{1}".format(i,s[1]))
+            timestamp[t] = p[0]
+            firstframe[t] = int(p[1])
 
-    trials = list(exptevents.loc[pp, 'Trial'])
-    ntrials = len(trials)
-    timestamp = np.zeros([ntrials + 1])
-    firstframe = np.zeros([ntrials + 1])
-    for i, x in exptevents.loc[pp].iterrows():
-        t = int(x['Trial'] - 1)
-        s = x['name'].split(",[")
+        pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
+        lastidx = np.argwhere(pp)[-1]
+
+        s = exptevents.iloc[lastidx[0]]['name'].split(",[")
         p = eval("[" + s[1])
-        # print("{0} p=[{1}".format(i,s[1]))
-        timestamp[t] = p[0]
-        firstframe[t] = int(p[1])
-    pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
-    lastidx = np.argwhere(pp)[-1]
+        timestamp[-1] = p[0]
+        firstframe[-1] = int(p[1])
 
-    s = exptevents.iloc[lastidx[0]]['name'].split(",[")
-    p = eval("[" + s[1])
-    timestamp[-1] = p[0]
-    firstframe[-1] = int(p[1])
+        # align DLC signals with other events, probably by
+        # removing extra bins from between trials
+        ff = exptevents['name'].str.startswith('TRIALSTART')
+        start_events = exptevents.loc[ff, ['start']].reset_index()
+        start_events['StartBin'] = (
+            np.round(start_events['start'] * rasterfs)
+        ).astype(int)
+        start_e = list(start_events['StartBin'])
+        ff = (exptevents['name'] == 'TRIALSTOP')
+        stop_events = exptevents.loc[ff, ['start']].reset_index()
+        stop_events['StopBin'] = (
+            np.round(stop_events['start'] * rasterfs)
+        ).astype(int)
+        stop_e = list(stop_events['StopBin'])
 
-    # align DLC signals with other events, probably by
-    # removing extra bins from between trials
-    ff = exptevents['name'].str.startswith('TRIALSTART')
-    start_events = exptevents.loc[ff, ['start']].reset_index()
-    start_events['StartBin'] = (
-        np.round(start_events['start'] * rasterfs)
-    ).astype(int)
-    start_e = list(start_events['StartBin'])
-    ff = (exptevents['name'] == 'TRIALSTOP')
-    stop_events = exptevents.loc[ff, ['start']].reset_index()
-    stop_events['StopBin'] = (
-        np.round(stop_events['start'] * rasterfs)
-    ).astype(int)
-    stop_e = list(stop_events['StopBin'])
+    else:
+        # assume PSIVIDEO format instead
+        pp = exptevents['name'].str.startswith('PSIVIDEO')
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 2])
+        firstframe = np.zeros([ntrials + 2])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'])
+            s = x['name'].split(",")
+
+            timestamp[t] = x['start']
+            firstframe[t] = int(s[1])
+            #print(f"Trial {t+1} time={timestamp[t]:.2f} frames={firstframe[t]:.0f}")
+        nominal_fr = int(np.round(firstframe[-2]/timestamp[-2]))
+        final_frames = data_array.shape[1]-firstframe[-2]
+        firstframe[-1] = data_array.shape[1]
+        timestamp[-1] = timestamp[-2]+final_frames/nominal_fr
+        start_e = (timestamp[:-1] * rasterfs).astype(int)
+        stop_e = (timestamp[1:] * rasterfs).astype(int)
+        if stop_e[0]==0:
+            start_e = start_e[1:]
+            stop_e = stop_e[1:]
+            timestamp = timestamp[1:]
+            firstframe = firstframe[1:]
 
     # calculate frame count and duration of each trial
     duration = np.diff(np.append(start_e, stop_e[-1]) / rasterfs)
@@ -1979,11 +2084,11 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     for sigidx, signal in enumerate(l):
         extras = False
         # warp/resample each trial to compensate for dropped frames
-        strialidx = np.zeros([ntrials + 1])
+        strialidx = np.zeros([len(frame_count) + 1])
         # big_rs = np.array([[]])
-        all_fs = np.empty([ntrials])
+        all_fs = np.empty([len(frame_count)])
 
-        for ii in range(0, ntrials):
+        for ii in range(len(frame_count)):
             d = data_array[sigidx, int(firstframe[ii]):int(firstframe[ii] + frame_count[ii])]
 
             fs = frame_count[ii] / duration[ii]

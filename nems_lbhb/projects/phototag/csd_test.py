@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import convolve2d, butter, sosfilt
 
-from nems import db
+from nems0 import db
 from nems0.utils import smooth
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
@@ -28,11 +28,12 @@ else:
     parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a19_p_BNB.m"
-
+    parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
 
 ## load the recording
-parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
-ex = BAPHYExperiment(parmfile=parmfile)
+parmfile = "/auto/data/daq/Prince/PRN015/PRN015b10_p_BNT.m"
+rawid = 146876
+ex = BAPHYExperiment(parmfile=parmfile, rawid=rawid)
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
 rec = ex.get_recording(raw=True, resp=False, stim=False, recache=False, rawchans=None, rasterfs=1500)
