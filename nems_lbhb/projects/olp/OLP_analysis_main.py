@@ -24,7 +24,7 @@ OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_corr.
 
 #testing synthetic
 OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic_test.h5'
-OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic.h5'
+OLP_cell_metrics_db_path = '/auto/users/hamersky/olp_analysis/synthetic.h5'  #<-- the one you ran yesterday
 ##synthetic Full With sound stats and weights
 OLP_stats_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_Full.h5' #weight + corr
 
@@ -44,8 +44,8 @@ if fit == True:
     cell_df = nd.get_batch_cells(batch)
     cell_list = cell_df['cellid'].tolist()
     cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
-    cell_list = [cc for cc in cell_list if (cc[:6] == "CLT022") or (cc[:6] == 'CLT023')]
-    cell_list = [cc for cc in cell_list if (cc[:6] == "CLT030") or (cc[:6] == 'CLT033')]
+    # cell_list = [cc for cc in cell_list if (cc[:6] == "CLT022") or (cc[:6] == 'CLT023')]
+    # cell_list = [cc for cc in cell_list if (cc[:6] == "CLT030") or (cc[:6] == 'CLT033')]
     # cellid, parmfile = 'CLT007a-009-2', None
 
     metrics=[]
@@ -75,7 +75,7 @@ else:
 weights = False
 
 #testing synthetic
-OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/synth_test_weights.h5' #weight + corr
+OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/synth_test_weights.h5' #weight + corr <--Used on full
 ##
 OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full.h5' #weight + corr
 OLP_weights_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_weights.h5' #weight + corr
@@ -115,65 +115,6 @@ else:
     store = pd.HDFStore(OLP_stats_db_path)
     weight_df=store['df']
     store.close()
-
-
-##############################################################################################
-# Plot weights of synthetic groups divided by sites that were pre-click removal
-quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-# Have the different synthetic kinds labelled
-kinds = ['A', 'N', 'C', 'T', 'S', 'U', 'M']
-kind_name = ['Old Normalization\nUnsynthetic', 'RMS Normalization\nUnsynthetic', 'Cochlear',
-             'Temporal', 'Spectral', 'Spectrotemporal', 'Spectrotemporal\nModulation']
-#Create aliases for the kinds so I can dumbly swap them out all so they can be in the right order
-alias = {'A': '1', 'N': '2', 'C': '3', 'T': '4', 'S': '5', 'U': '6', 'M': '7'}
-kind_alias = {'1': 'Old Normalization\nUnsynthetic', '2':' RMS Normalization\nUnsynthetic', '3':'Cochlear',
-              '4': 'Temporal', '5': 'Spectral', '6': 'Spectrotemporal', '7': 'Spectrotemporal\nModulation'}
-to_plot = quad.sort_values('cellid').copy()
-to_plot['ramp'] = to_plot.cellid.str[3:6]
-to_plot['ramp'] = pd.to_numeric(to_plot['ramp'])
-# Makes a new column that labels the early synthetic sites with click
-to_plot['has_click'] = np.logical_and(to_plot['ramp'] <= 37, to_plot['ramp'] >= 27)
-#
-test_plot = to_plot.loc[:,['synth_kind', 'weightsA', 'weightsB', 'has_click']].copy()
-test_plot['sort'] = test_plot['synth_kind']
-test_plot = test_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
-test_plot = test_plot.melt(id_vars=['synth_kind', 'has_click'], value_vars=['weightsA', 'weightsB'], var_name='weight_kind',
-             value_name='weights').replace({'weightsA':'BG', 'weightsB':'FG'}).replace(kind_alias)
-test_plot['has_click'] = test_plot['has_click'].astype(str)
-test_plot = test_plot.replace({'True': ' - With Click', 'False': ' - Clickless'})
-test_plot['kind'] = test_plot['weight_kind'] + test_plot['has_click']
-test_plot = test_plot.drop(labels=['has_click'], axis=1)
-plt.figure()
-ax = sb.barplot(x="synth_kind", y="weights", hue="kind", data=test_plot, ci=68, estimator=np.mean)
-##############################################################################################
-##############################################################################################
-
-##############################################################################################
-# Plot weights of different synthetic types all in one place next to each other for all sites
-quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-# Have the different synthetic kinds labelled
-kinds = ['A', 'N', 'C', 'T', 'S', 'U', 'M']
-kind_name = ['Old Normalization\nUnsynthetic', 'RMS Normalization\nUnsynthetic', 'Cochlear',
-             'Temporal', 'Spectral', 'Spectrotemporal', 'Spectrotemporal\nModulation']
-#Create aliases for the kinds so I can dumbly swap them out all so they can be in the right order
-alias = {'A': '1', 'N': '2', 'C': '3', 'T': '4', 'S': '5', 'U': '6', 'M': '7'}
-kind_alias = {'1': 'Old Normalization\nUnsynthetic', '2':' RMS Normalization\nUnsynthetic', '3':'Cochlear',
-              '4': 'Temporal', '5': 'Spectral', '6': 'Spectrotemporal', '7': 'Spectrotemporal\nModulation'}
-# Extract only the relevant columns for plotting right now
-to_plot = quad.loc[:,['synth_kind', 'weightsA', 'weightsB']].copy()
-#sort them by the order of kinds so it'll plot in an order that I want to see
-to_plot['sort'] = to_plot['synth_kind']
-to_plot = to_plot.replace(alias).sort_values('sort').drop('sort', axis=1).copy()
-#Put the dataframe into a format that can be plotted easily
-to_plot = to_plot.melt(id_vars='synth_kind', value_vars=['weightsA', 'weightsB'], var_name='weight_kind',
-             value_name='weights').replace({'weightsA':'BG', 'weightsB':'FG'}).replace(kind_alias)
-#plot
-plt.figure()
-ax = sb.barplot(x="synth_kind", y="weights", hue="weight_kind", data=to_plot, ci=68, estimator=np.mean)
-##############################################################################################
-##############################################################################################
-
-
 
 
 
@@ -384,40 +325,7 @@ for cellid in cell_list:
         raise ValueError(f"Only {subsets} subsets. You got lazy and didn't make this part"
                          f"flexible yet.")
 
-    # val_range = lambda x: max(x) - min(x)
-    # val_range.__name__ = 'range'
-    # MI = lambda x: np.mean([np.abs(np.diff(pair)) / np.abs(np.sum(pair)) for pair in itertools.combinations(x, 2)])
-    # MI.__name__ = 'meanMI'
-    # MIall = lambda x: (max(x) - min(x)) / np.abs(max(x) + min(x))
-    # MIall.__name__ = 'meanMIall'
-    #
-    # fns = ['count', val_range, 'std', MI, MIall, 'sum']
-    # WeightAgroups = weight_df.groupby('namesA')[['weightsA', 'weightsB']].agg(fns)
-    # WeightAgroups = WeightAgroups[WeightAgroups['weightsA']['count'] > 1]
-    # WeightBgroups = weight_df.groupby('namesB')[['weightsA', 'weightsB']].agg(fns)
-    # WeightBgroups = WeightBgroups[WeightBgroups['weightsA']['count'] > 1]
-    #
-    # cols = ['count', 'range', 'meanMIall']
-    # print('Grouped by A, A weight metrics:')
-    # print(WeightAgroups['weightsA'][cols])
-    # print('Grouped by A, B weight metrics:')
-    # print(WeightAgroups['weightsB'][cols])
-    # print('Grouped by B, A weight metrics:')
-    # print(WeightBgroups['weightsA'][cols])
-    # print('Grouped by B, B weight metrics:')
-    # print(WeightBgroups['weightsB'][cols])
-    #
-    # names = AB
-    # namesA = A
-    # namesB = B
-    # D = locals()
-    # D = {k: D[k] for k in (
-    # 'weights', 'Efit', 'nMSE', 'nf', 'get_nrmse', 'r', 'names', 'namesA',
-    # 'namesB', 'weight_df', 'WeightAgroups', 'WeightBgroups')}
-    #
-    # d = {k + 'R': v for k, v in D.items()}
-    #
-    # weightDF = d['weight_dfR']
+
     weight_df.insert(loc=0, column='cellid', value=cellid)
 
     weight_list.append(weight_df)
@@ -899,7 +807,7 @@ for aa, snd in zip(AX, self_sort):
 
 
 ##plot single mod specs
-obip.lot_mod_spec(2)
+obip.plot_mod_spec(2)
 
 
 

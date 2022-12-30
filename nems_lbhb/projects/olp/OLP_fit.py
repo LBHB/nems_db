@@ -49,6 +49,71 @@ import nems_lbhb.TwoStim_helpers as ts
 log = logging.getLogger(__name__)
 from nems import db
 
+def OLP_fit_weights(batch, parmfile=None, loadpath=None, savepath=None, filter=None,
+                    cells=None, fs=100):
+    '''Puts all the compontents that go into weight_df into one command. Gives you the option
+    to save the resulting dataframe it returns. But mainly it gives you the option to either
+    pass an entire batch to it or take a single parmfile and only use the cells from that.
+    Added 2022_08_23 getting things together after CLT recordings.'''
+    if not loadpath:
+        if cells:
+            # Give me the option of manually feeding it a list of cells I got from somewhere else
+            cell_list = cells
+        else:
+            if parmfile:
+                manager = BAPHYExperiment(parmfile)
+                options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+                rec = manager.get_recording(**options)
+                cell_list = rec.signals['resp'].chans
+            else:
+                cell_df = nd.get_batch_cells(batch)
+                cell_list = cell_df['cellid'].tolist()
+                if isinstance(filter, str):
+                    cell_list = [cc for cc in cell_list if filter in cc]
+                elif isinstance(filter, list):
+                    if len(filter) <= 2:
+                        cell_list = [cc for cc in cell_list if (filter[0] in cc) or (filter[-1] in cc)]
+                    else:
+                        cell_list = [cc for cc in cell_list if cc[:6] in filter]
+                else:
+                    raise ValueError(f"Can't filter by {filter}, must be a single string or list of two strings.")
+                if len(cell_list) == 0:
+                    raise ValueError(f"You did something wrong with your filter, there are no cells left.")
+
+        cell_list = ohel.manual_fix_units(cell_list)  # So far only useful for two TBR cells
+
+        # Gets some cell metrics
+        metrics=[]
+        for cellid in cell_list:
+            cell_metric = calc_psth_metrics(batch, cellid)
+            cell_metric.insert(loc=0, column='cellid', value=cellid)
+            print(f"Adding cellid {cellid}.")
+            metrics.append(cell_metric)
+        df = pd.concat(metrics)
+        df.reset_index()
+
+        # Fits weights
+        weight_df = fit_weights(df, batch, fs)
+
+        # Adds sound stats to the weight_df
+        sound_df = ohel.get_sound_statistics(weight_df, plot=False)
+        weight_df = ohel.add_sound_stats(weight_df, sound_df)
+
+        if savepath:
+            os.makedirs(os.path.dirname(savepath), exist_ok=True)
+            store = pd.HDFStore(savepath)
+            df_store = copy.deepcopy(weight_df)
+            store['df'] = df_store.copy()
+            store.close()
+
+    else:
+        store = pd.HDFStore(loadpath)
+        weight_df = store['df']
+        store.close()
+
+    return weight_df
+
+
 def calc_psth_metrics(batch, cellid, parmfile=None, paths=None):
     start_win_offset = 0  # Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
     if parmfile:
