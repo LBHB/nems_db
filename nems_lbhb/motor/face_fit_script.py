@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     log.info("face_fit_script complete")
 
-    if db_exists & queueid > 0:
+    if db_exists & (queueid > 0):
         nd.update_job_complete(queueid)
 
 

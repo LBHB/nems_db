@@ -826,8 +826,8 @@ def psi_parm_read(filepath):
     trialfile = Path(filepath) / "trial_log.csv"
     globalfile = Path(filepath) / "globalparams.json"
 
-    prestimsilence=0.5
-    poststimsilence=0.5
+    prestimsilence=0.0
+    poststimsilence=0.0
 
     root1, parmfile = os.path.split(filepath)
     root2, penname = os.path.split(root1)
@@ -919,12 +919,12 @@ def psi_parm_read(filepath):
                     E.loc[ee,'duration'] = info['duration']
 
         if r['event'] == 'background_added':
-            E_pausenext = E.loc[(E['event']=='background_paused') &
-                                (E['timestamp']>r['timestamp']) &
+            E_pausenext = E.loc[(E.index>ee) & (E['event']=='background_paused') &
                                 (E['timestamp']<r['timestamp']+E.loc[ee,'duration'])]
             if (len(E_pausenext)>0):
                 E.loc[ee, 'duration'] = E_pausenext['timestamp'].min()-E.loc[ee, 'timestamp']
                 #print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
+                
     E['start'] = E['timestamp']
     E['end'] = E['start'] + E['duration']
     E['name'] = E['event']
@@ -937,9 +937,9 @@ def psi_parm_read(filepath):
 
     E.loc[E['Info'].astype(str)=='nan','Info']=''
     E.loc[E['Trial']==0,'Trial']=1
-
-    exptevents=E[['start','end','name','Trial','Info']].copy()
-
+    
+    exptevents=E.loc[E['duration']>=0,['start','end','name','Trial','Info']].reset_index(drop=True)
+    
     if guess_trials:
         start_events = exptevents.loc[exptevents['name']=='trial_start']
         for ee in range(len(exptevents)):
@@ -1021,7 +1021,10 @@ def psi_parm_read(filepath):
             name = f'Stim , {target_freq}+{snr}dB , Target'
         tar_events.loc[ee, 'name'] = name
         tar_events.loc[ee, 'Info'] = ''
+    
+    # add pre- and post- silences
     stimevents = pd.concat([bg_events, tar_events])
+    stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
     prestimevents=stimevents.copy()
     starts = prestimevents['start'].copy()
     prestimevents['start'] = starts-prestimsilence
@@ -1822,7 +1825,9 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
 
     hit_trials = exptevents[exptevents.name == "BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-    # import pdb; pdb.set_trace()
+
+    # check to see if Trial starts are already non-zero (ie, psi-style, in abs trial time. 
+    # unlike baphy where trialstart is 0 for each trial)
     TrialStart_sec = np.array(
         exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
     )
@@ -1841,7 +1846,9 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
     TrialLen_spikefs = np.concatenate(
         (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
     )
-    if ~offset_exists:
+
+    if not offset_exists:
+        # figure out offsets based on max spike time in each trial. Kind of backwards...
         for ch in range(0, chancount):
             if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
                 s = sortinfo[ch][0][sortidx]['unitSpikes']
@@ -1859,43 +1866,39 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                                 [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
                             )
 
-    # using the trial lengths, figure out adjustments to trial event times.
-    if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
-        # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs * finalfs) / finalfs * spikefs
-        )
-        # TrialLen_spikefs = (
-        #        np.ceil(TrialLen_spikefs / spikefs*finalfs + 1) / finalfs*spikefs
-        #        )
-        # print(TrialLen_spikefs)
+        # using the trial lengths, figure out adjustments to trial event times.
+        Offset_spikefs = np.cumsum(TrialLen_spikefs)
+        if finalfs:
+            log.info('Rounding trial start times to even number of rasterfs bins')
+            Offset_spikefs = np.ceil(Offset_spikefs / spikefs * finalfs) / finalfs * spikefs
+        Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
 
-    Offset_spikefs = np.cumsum(TrialLen_spikefs)
-    Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
-    # adjust times in exptevents to approximate time since experiment started
-    # rather than time since trial started (native format)
-    for Trialidx in range(1, TrialCount + 1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
-        ff = (exptevents['Trial'] == Trialidx)
-        if offset_exists:
-            s_ = TrialStart_sec[Trialidx-1]
-            s_fs = np.ceil(s_ * finalfs) / finalfs
-            exptevents.loc[ff, ['start', 'end']] = \
-                    exptevents.loc[ff, ['start', 'end']] - s_ + s_fs
-            Offset_spikefs[Trialidx - 1] = s_fs * spikefs
-        else:
+        # adjust times in exptevents to approximate time since experiment started
+        # rather than time since trial started (native format)
+        for Trialidx in range(1, TrialCount + 1):
+            # print("Adjusting trial {0} by {1} sec"
+            #       .format(Trialidx,Offset_sec[Trialidx-1]))
+            ff = (exptevents['Trial'] == Trialidx)
             exptevents.loc[ff, ['start', 'end']] = (
                     exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
             )
 
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
+            # ff = ((exptevents['Trial'] == Trialidx)
+            #       & (exptevents['end'] > Offset_sec[Trialidx]))
+            # badevents, = np.where(ff)
+            # print("{0} events past end of trial?".format(len(badevents)))
+            # exptevents.drop(badevents)
+    else:
+        # offset_exists
+        ss = exptevents['start']
+        dd = exptevents['end'] - exptevents['start']
+        ss = np.ceil(ss*finalfs) / finalfs
+        dd = np.ceil(dd*finalfs) / finalfs
+        exptevents['start'] = ss
+        exptevents['end'] = ss + dd
+        
+        Offset_sec = np.array(exptevents.loc[exptevents['name'] == "TRIALSTART"]['start'])
+        Offset_spikefs = Offset_sec * spikefs
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -1961,6 +1964,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                 #    else:
                 #        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                 #    spiketimes.append([])
+                
     return exptevents, spiketimes, unit_names
 
 
@@ -2547,6 +2551,12 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
             #print(f"Trial {t+1} time={timestamp[t]:.2f} frames={firstframe[t]:.0f}")
         nominal_fr = int(np.round(firstframe[-2]/timestamp[-2]))
         final_frames = data_array.shape[1]-firstframe[-2]
+        if final_frames<0:
+            log.info('TRUNCATED VIDEO?????? PADDING WITH NANS')
+            sh = (data_array.shape[0], int(firstframe[-2]-data_array.shape[1]+3))
+            data_array=np.concatenate((data_array, np.ones(sh)*np.nan),axis=1)
+            final_frames = data_array.shape[1]-firstframe[-2]
+
         firstframe[-1] = data_array.shape[1]
         timestamp[-1] = timestamp[-2]+final_frames/nominal_fr
         start_e = (timestamp[:-1] * rasterfs).astype(int)
@@ -2580,8 +2590,7 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
             ti = np.arange(
                 (1 / rasterfs) / 2, duration[ii] + (1 / rasterfs) / 2, 1 / rasterfs
             )
-            # print("{0} len(d)={1} len(ti)={2} fs={3}"
-            #       .format(ii,len(d),len(ti),fs))
+            print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
             _f = interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:

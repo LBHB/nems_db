@@ -182,6 +182,17 @@ def evs(loadkey):
 
     return xfspec
 
+@xform()
+def ststim(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+    xfspec = [['nems0.preprocessing.concatenate_input_channels',
+               {'input_signals': ['state'],
+                'input_name': 'stim'}, ['rec'], ['rec']]]
+    return xfspec
+
 
 @xform()
 def st(loadkey):
@@ -225,6 +236,12 @@ def st(loadkey):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
             this_sig = ["pupil_dup2"]
+        elif l.startswith("dm"):
+            if len(l) == 2:
+                dummy_count = 1
+            else:
+                dummy_count = int(l[2])
+            this_sig = [f"dummy{i}" for i in range(dummy_count)]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):

@@ -269,8 +269,17 @@ class BAPHYExperiment:
         '''
         Return path to OpenEphys tarfile containing recordings
         '''
+        path = []
+        for i, e in enumerate(self.experiment):
+            testfile = (self.folder / 'raw' / e).with_suffix('.tgz')
+            if os.path.exists(testfile):
+                path.append(testfile)
+            else:
+                path.append(self.folder / 'raw' / self.openephys_folder[i])
+
         #path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
-        path = [r.with_suffix('.tgz') for r in self.openephys_folder]
+        #path = [r.with_suffix('.tgz') for r in self.openephys_folder]
+
         return path
 
     @property

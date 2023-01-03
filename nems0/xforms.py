@@ -836,12 +836,12 @@ def sev(kw):
     ops = kw.split('.')[1:]
     parms={'epoch_regex': '^STIM'}
     continuous=False
-    if 'seq' in ops:
-        parms['epoch_regex']='^STIM_se'
-    if 'cont' in ops:
-        continuous=True
     for op in ops:
-        if op.startswith("k"):
+        if op=='seq':
+            parms['epoch_regex']='^STIM_se'
+        elif op=='cont':
+            continuous=True
+        elif op.startswith("k"):
             parms['keepfrac']=int(op[1:]) / 100
         elif op.startswith("f"):
             parms['filemask']=op[1:]
@@ -1549,6 +1549,9 @@ def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, re
                 spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
             else:
                 spont_rate = np.nanmean(prestimsilence)
+        elif prestimsilence.shape[0]>0:
+            log.info('Zero prestimsilence?')
+            spont_rate=0
         else:
             try:
                 prestimsilence = resp.extract_epoch('TRIALPreStimSilence')

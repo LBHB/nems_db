@@ -122,7 +122,7 @@ if __name__ == '__main__':
     if 'summary' in action_list:
         from nems_lbhb.motor import face_tools
 
-        face_tools.summary_plot(vid_paths)
+        fig=face_tools.summary_plot(vid_paths)
 
     if 'refine' in action_list:
         # identify "bad" frames and save in training set
@@ -140,9 +140,10 @@ if __name__ == '__main__':
         # (rather than starting over from visnet)
         dlc.train_network(path_config, shuffle=1, displayiters=100)
 
-    log.info("face_fit_script complete")
+    log.info(f"face_fit_script complete db_exists={db_exists} qid={queueid}")
 
-    if db_exists & queueid > 0:
+    if db_exists & (queueid > 0):
+        log.info('Marking job complete in celldb')
         nd.update_job_complete(queueid)
 
 
