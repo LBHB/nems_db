@@ -813,7 +813,9 @@ def adjust_parmfile_name(parmfile):
 
     asfile = Path(parmfile).with_suffix('.m')
     aspath = Path(parmfile).with_suffix('')
-    if os.path.exists(asfile):
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return asfile
+    elif os.path.exists(asfile):
         return asfile
     elif os.path.exists(aspath):
         return aspath
