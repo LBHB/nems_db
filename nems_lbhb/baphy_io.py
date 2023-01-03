@@ -798,11 +798,11 @@ def baphy_mat2py(s):
 
 def get_parmfile_format(parmfile):
 
-    asfile = Path(parmfile).with_suffix('.m')
-    aspath = Path(parmfile).with_suffix('')
     if get_setting('USE_NEMS_BAPHY_API'):
         return 'baphy'
-    elif os.path.exists(asfile):
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if os.path.exists(asfile):
         return 'baphy'
     elif os.path.exists(aspath):
         return 'psi'
