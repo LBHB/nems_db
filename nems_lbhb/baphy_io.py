@@ -42,6 +42,7 @@ import matplotlib.pyplot as plt
 import nems0.signal
 import nems0.recording
 import nems0.db as db
+from nems0 import get_setting
 import nems0.epoch as ep
 from nems0.recording import Recording
 from nems0.recording import load_recording
@@ -799,7 +800,9 @@ def get_parmfile_format(parmfile):
 
     asfile = Path(parmfile).with_suffix('.m')
     aspath = Path(parmfile).with_suffix('')
-    if os.path.exists(asfile):
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return 'baphy'
+    elif os.path.exists(asfile):
         return 'baphy'
     elif os.path.exists(aspath):
         return 'psi'
