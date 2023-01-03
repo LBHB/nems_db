@@ -49,8 +49,8 @@ import nems_lbhb.behavior as behavior
 from nems_lbhb import runclass
 
 from nems0.uri import load_resource
-from open_ephys.analysis import Session
-from open_ephys.analysis.formats.helpers import load
+#from open_ephys.analysis import Session
+#from open_ephys.analysis.formats.helpers import load
 import tarfile
 import re
 
@@ -108,6 +108,9 @@ def openephys_gui_version(openephys_folder):
     return version
 
 def format_finder(openephys_folder):
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
+
     session = Session(openephys_folder)
     format = []
     try:
@@ -150,6 +153,8 @@ def load_openephys(openephys_folder, dtype = None):
     if dtype is None:
         raise ValueError("Must specify a data type to load: events, continuous, spike, or header")
     # create session object
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
     session = Session(openephys_folder)
     data = []
     data_format = []
