@@ -444,20 +444,23 @@ def load_trial_starts_openephys_master(openephys_folder):
         df['stream_type'] = df['stream_name'].str.split('-').str[1]
         #ts = df.query('(line == 1) & (state == 1)')
         ts = df.query("line == 1 and state == 1 and stream_type == 'LFP'")
+        return ts['timestamps'].values
+
     elif 6 > version[1] >= 5:
         data = load_openephys_archived(openephys_folder, dtype = 'events')
         header = load_openephys_archived(openephys_folder, dtype='header')[0]
         df = data[0]
         df.rename(columns={'timestamp':'timestamps'}, inplace=True)
         ts = df.query('(channel == 1) & (state == 1)')
+        return (ts['timestamps'].values) / float(header['sampleRate'])
+
     elif version[1] <= 4:
         event_file = file_finder(openephys_folder, filename='all_channels.events')
         data = oe.load(str(event_file))
         header = data.pop('header')
         df = pd.DataFrame(data)
         ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
-
-    return (ts['timestamps'].values) / float(header['sampleRate'])
+        return (ts['timestamps'].values) / float(header['sampleRate'])
 
 
 def load_sampling_rate_openephys(openephys_folder):
@@ -817,7 +820,6 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             selected_chans = np.take(recChans1, idx)
             selected_chans_xpos = np.take(channel_xpos, idx)
             selected_chans_ypos = np.take(channel_ypos, idx)
-            selected_chans_str = [str(ch) for ch in selected_chans]
             selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
     else:
         for openephys_folder, tarfile_fullpath, tarfile_relpath in \
@@ -861,6 +863,8 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             selected_chans_ypos = np.take(channel_ypos, idx)
             selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
 
+    selected_chans_str = [str(ch) for ch in selected_chans]
+
     # create list of files found in temporary folder for open-ephys or binary format and check if selected channel files exist and load data. If binary and file exists just load data.
     list_of_tmpfiles = []
     list_of_tmpfilepaths = []
@@ -873,9 +877,12 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             if version[1] < 6:
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
+                timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+
             elif version[1] >=6:
                 data = load_openephys(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
+                timestamp0 = int(data['timestamps'][0] * rasterfs)
         except:
             raise IOError('loading binary data failed...still zipped?')
 
@@ -902,6 +909,9 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 log.info('no CH in filename, loading without it')
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_data_unpacking(data)
+        timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+
+    log.info(f'timestamp0 is {timestamp0}')
 
     # remove temporary data
     if os.path.exists(tmppath):
@@ -910,11 +920,11 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
     # sort channels based on channel mapping
     raw_chans = data['channels']
     continuous_data = []
-    timestamp0 = []
+    #timestamp0 = []
     for selected_ch in selected_chans:
         raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
         temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
-        if mua is not None:
+        if mua is True:
             # filter data within bandwidth
             muabp = list(muabp)
             sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
@@ -927,11 +937,11 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             # resample mua as sum of higher sampling rate bins - mua power
             d = np.sum(d.reshape(-1, n), axis=1)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
         elif rasterfs is None and rawlp is None and rawhp is None:
             print("no parameters specified")
             continuous_data.append(temp_data[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0])
+            #timestamp0.append(data['timestamps'][0])
         elif rawlp is not None and rawhp is not None and rasterfs is not None:
             print("bandpass filter and sample rate specified")
             # filter data within bandwidth
@@ -942,7 +952,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
         elif rawlp is not None and rawhp is not None:
             print("bandpass filter selected sample rate set to 4*Nyquist")
             # filter data within bandwidth
@@ -953,7 +963,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
         elif rawlp is not None and rasterfs is not None:
             # filter data within bandwidth
             print("lowpass filter selected and sample rate specified")
@@ -964,7 +974,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
         elif rawhp is not None and rasterfs is not None:
             # filter data within bandwidth
             print("high pass filter selected and sample rate specified")
@@ -975,7 +985,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
         elif rawlp is not None:
             print("lowpass filter selected sample rate set to 4*Nyquist")
             sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
@@ -984,23 +994,22 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
         elif rawhp is not None:
             print("highpass filter selected sample rate not adjusted")
             sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
             data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
             continuous_data.append(data['hpfiltered'][np.newaxis, :])
-            timestamp0.append(data['timestamps'][0])
+            #timestamp0.append(data['timestamps'][0])
         else:
             print("sample rate specified...downsampling data")
             resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
             d = scipy.signal.resample(temp_data, resample_new_size)
             continuous_data.append(d[np.newaxis, :])
-            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
 
     continuous_data_list.append(np.concatenate(continuous_data, axis=0))
-    timestamp0_list.append(timestamp0[0])
-
+    timestamp0_list.append(timestamp0)
 
     return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_str
 
