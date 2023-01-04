@@ -56,8 +56,6 @@ from nems0.uri import load_resource
 #from open_ephys.analysis.formats.helpers import load
 from open_ephys_archived.analysis import Session as Session_archived
 from open_ephys_archived.analysis.formats.helpers import load as load_archived
-from open_ephys.analysis import Session
-from open_ephys.analysis.formats.helpers import load
 import tarfile
 import re
 import gzip
