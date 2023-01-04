@@ -34,6 +34,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 import h5py
+import shutil
 
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
@@ -50,11 +51,16 @@ import nems_lbhb.behavior as behavior
 from nems_lbhb import runclass
 
 from nems0.uri import load_resource
+
 #from open_ephys.analysis import Session
 #from open_ephys.analysis.formats.helpers import load
+from open_ephys_archived.analysis import Session as Session_archived
+from open_ephys_archived.analysis.formats.helpers import load as load_archived
+from open_ephys.analysis import Session
+from open_ephys.analysis.formats.helpers import load
 import tarfile
 import re
-
+import gzip
 
 log = logging.getLogger(__name__)
 
@@ -118,8 +124,11 @@ def format_finder(openephys_folder):
         for i in range(len(session.recordnodes)):
             format.append(session.recordnodes[i].format)
     except:
-        for i in range(len(session.recordings)):
-            format.append((session.recordings[i].format))
+        if len(session.recordings) > 0:
+            for i in range(len(session.recordings)):
+                format.append((session.recordings[i].format))
+        else:
+            format = ['openephys']
     return format
 
 
@@ -156,6 +165,7 @@ def load_openephys(openephys_folder, dtype = None):
     # create session object
     from open_ephys.analysis import Session
     from open_ephys.analysis.formats.helpers import load
+    
     session = Session(openephys_folder)
     data = []
     data_format = []
@@ -196,6 +206,87 @@ def load_openephys(openephys_folder, dtype = None):
         recordings = session.recordings
         if len(recordings) > 1:
             raise ValueError("number of recordings is greater than 1 - usure how to handle")
+        elif len(recordings) == 0:
+            raise ValueError("number of recordings is 0 - Old OE file format?")
+        for i in range(len(recordings)):
+            recording = session.recordings[i]
+            # load continuous, events, and or spikes from recording
+            try:
+                if dtype == 'continuous':
+                    data.append(recording.continuous)
+                elif dtype == 'spikes':
+                    data.append(recording.spikes)
+                elif dtype == 'events':
+                    data.append(recording.events)
+                elif dtype == 'header':
+                    events_file = os.path.join(recording.directory,
+                                               'all_channels' + recording.experiment_id + ".events")
+                    timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                    data.append(header)
+            except:
+                raise Exception("No " + dtype + "files found in recording")
+    return data
+
+def load_openephys_archived(openephys_folder, dtype=None):
+    """
+    loads data from open-ephys, binary, nwb, kwik formats given a directory if a newer file format is used. For older
+    file format versions, the old baphy_io continuous loader is used. If multiple record nodes are used, this
+    will check each record node for the specified data type. If multiple record nodes have the same data type, it
+    is assumed they contain different channel information and the data from each record node and the channel id lists
+    are concatenated (unlikely?). Will crash if more than one recording is identified within a record node.
+
+    :param openephys_folder: recording directory
+    :param dtype: 'event', 'continuous', 'spike'
+    :return: list of data objects of the specified type - has methods for accessing data within object
+
+    """
+    if dtype is None:
+        raise ValueError("Must specify a data type to load: events, continuous, spike, or header")
+    # create session object
+    session = Session_archived(openephys_folder)
+    data = []
+    data_format = []
+    # check if session has record nodes or not
+    try:
+        if session.recordnodes:
+            print(str(len(session.recordnodes)) + " record node(s) found")
+            for i in range(len(session.recordnodes)):
+                recordnode_id = Path(session.recordnodes[i].directory).stem
+                data_format.append(session.recordnodes[i].format)
+                recordings = session.recordnodes[i].recordings
+                if len(recordings) > 1:
+                    raise ValueError("number of recordings within record node is greater than 1 - usure how to handle")
+                for j in range(len(recordings)):
+                    recording = session.recordnodes[i].recordings[j]
+                    # load continuous, events, and or spikes from recording
+                    try:
+                        if dtype == 'continuous':
+                            data.append(recording.continuous)
+                        elif dtype == 'spikes':
+                            data.append(recording.spikes)
+                        elif dtype == 'events':
+                            data.append(recording.events)
+                        elif dtype == 'header':
+                            if data_format[i] == 'openephys' or data_format[i] == 'open-ephys':
+                                events_file = os.path.join(recording.directory,
+                                                           'all_channels' + recording.experiment_id + ".events")
+                                timestamps, processor_id, state, channel, header = load_archived(events_file,
+                                                                                        recording.recording_index)
+                                data.append(header)
+                            elif data_format[i] == 'binary':
+                                print('record node format is binary...no header information')
+                                header = {}
+                                header['sampleRate'] = np.array([float(30000)])
+                                data.append(header)
+                    except:
+                        print("No " + dtype + "files found in record node " + recordnode_id)
+    except:
+        print("no record nodes found - trying to load recording info directly from session...")
+        recordings = session.recordings
+        if len(recordings) > 1:
+            raise ValueError("number of recordings is greater than 1 - usure how to handle")
+        elif len(recordings) == 0:
+            raise ValueError("number of recordings is 0 - Old OE file format?")
         for i in range(len(recordings)):
             recording = session.recordings[i]
             # load continuous, events, and or spikes from recording
@@ -228,8 +319,12 @@ def continuous_data_unpacking(continuous_data):
     data = []
     channels = []
     for i in range(len(continuous_data)):
-        data.append(continuous_data[i][0].samples.transpose())
-        channels.append(np.array(continuous_data[i][0].channels))
+        if bool(continuous_data[i]):
+            data.append(continuous_data[i][0].samples.transpose())
+            channels.append(np.array(continuous_data[i][0].channels))
+        else:
+            continue
+            
     # should be the same for all channels minus channel specific info in header which I don't think
     # baphy experiment needs?
     timestamps = continuous_data[i][0].timestamps
@@ -245,7 +340,7 @@ def continuous_data_unpacking(continuous_data):
     }
 
 
-def continuous_binary_data_unpacking(continuous_data, mua):
+def continuous_binary_data_unpacking(continuous_data, version, mua):
     """
     Unpacks continuous data objects returned in list format from load_openephys into a dictionary
     with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
@@ -258,31 +353,61 @@ def continuous_binary_data_unpacking(continuous_data, mua):
     data = []
     channels = []
     for i in range(len(continuous_data)):
-        try:
-            channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][0])[0][0]
-        except:
-            continue
-        if mua:
-            if channel_type == 'AP' or channel_type == 'CH':
-                data.append(continuous_data[i][0].samples.transpose())
-                # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
-                channels.append([int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+        if bool(continuous_data[i]):
+            try:
+                if version[1] < 6:
+                    channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][0])[0][0]
+                    if mua:
+                        if channel_type == 'AP' or channel_type == 'CH':
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['names']))])
-                timestamps = continuous_data[i][0].timestamps
-                header = continuous_data[i][0].metadata
-                header['sampleRate'] = header['sample_rate']
-            else:
-                continue
-        else:
-            if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
-                data.append(continuous_data[i][0].samples.transpose())
-                # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
-                channels.append([int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                    else:
+                        if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['names']))])
-                timestamps = continuous_data[i][0].timestamps
-                header = continuous_data[i][0].metadata
-                header['sampleRate'] = header['sample_rate']
-            else:
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                elif version[1] >= 6:
+                    channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][0])[0][0]
+                    if mua:
+                        if channel_type == 'AP' or channel_type == 'CH':
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                    else:
+                        if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+            except:
                 continue
 
     # should be the same for all channels minus channel specific info in header which I don't think
@@ -311,9 +436,17 @@ def load_trial_starts_openephys_master(openephys_folder):
     '''
     version = openephys_gui_version(openephys_folder)
     # event_file = file_finder(openephys_folder, filename='all_channels.events')
-    if version[1] >= 5:
+    if version[1] >= 6:
         data = load_openephys(openephys_folder, dtype = 'events')
         header = load_openephys(openephys_folder, dtype='header')[0]
+        df = data[0]
+        df.rename(columns={'timestamp':'timestamps'}, inplace=True)
+        df['stream_type'] = df['stream_name'].str.split('-').str[1]
+        #ts = df.query('(line == 1) & (state == 1)')
+        ts = df.query("line == 1 and state == 1 and stream_type == 'LFP'")
+    elif 6 > version[1] >= 5:
+        data = load_openephys_archived(openephys_folder, dtype = 'events')
+        header = load_openephys_archived(openephys_folder, dtype='header')[0]
         df = data[0]
         df.rename(columns={'timestamp':'timestamps'}, inplace=True)
         ts = df.query('(channel == 1) & (state == 1)')
@@ -464,6 +597,151 @@ def load_continuous_openephys(fh):
 ###############################################################################
 # continuous data extraction
 ###############################################################################
+def gunzip(source, destination, buffer_size=200*1024*1024):
+    with gzip.open(source) as s:
+        with open(destination, 'wb') as d:
+            shutil.copyfileobj(s, d, buffer_size)
+
+def extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+    """
+    Should take a folder and extract the continuous data for open_ephys files and binary files that are tar or gzip compressed to local machine.
+    If recording is a neuropixel recording, only locally extract the LFP files which are smaller. Return parent of files, list of filenames, and list of filepaths.
+
+    :param version: Version of GUI that was used to record data
+    :param format: "open-ephys", "openephys", "binary"
+    :param experiment_openephys_folder:
+    :param experiment_openephys_tarfile:
+    :param experiment_openephys_tarfile_relpath:
+    :return:
+    """
+    # local copy path
+    tmppath = Path('/tmp/evpread/')
+    
+    # if file is tared
+    if not None in experiment_openephys_tarfile:
+        if version[1] < 6:
+            for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+                    zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+                # Use xml settings instead of the tar file. Much faster. Also, takes care
+                # of channel mapping (I think)
+                settings_file = file_finder(openephys_folder, 'settings.xml')
+                # If version is lower than 6 extract data using old method which requires mapping probe names to recorded names
+                # and allows for only extracting subset of channels
+                if version[1] < 6:
+                    recChans, _ = oes.GetRecChs(settings_file)
+                    connector = [i for i in recChans.keys()][0]
+                    # import pdb; pdb.set_trace()
+                    # handle channel remapping
+                    info = oes.XML2Dict(settings_file)
+                    mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+                    mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+                    for k in mapping_keys:
+                        ch_num = mapping[k].get('Number')
+                        if ch_num in recChans[connector]:
+                            # if info['INFO']['VERSION'] == '0.5.5.2':
+                            #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+                            # else:
+                            recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+            
+                    recChans = [recChans[connector][i]['name_mapped'] \
+                                for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+                    data_files = [connector + '_' + c + '.continuous' for c in recChans]
+                    all_chans = np.arange(len(data_files))
+            
+                    if type(chans) is tuple:
+                        chans = list(chans)
+            
+                    idx = all_chans[chans].tolist()
+                    selected_data = np.take(data_files, idx)
+                    
+                    continuous_data = []
+                    timestamp0 = []
+        
+                    # unzip tarfiles to temp local folder
+                    filename = selected_data[-1]
+                    full_filename = openephys_folder / filename
+                    if ~os.path.isfile(full_filename):
+                        # file doesn't exist (still zipped?) unzip to a local folder
+                        # tmppath = Path('/tmp/evpread/')
+                        newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+        
+                        test_filename = newpath / filename
+                        if os.path.isfile(test_filename):
+                            log.info(f"Local un-tar-ed copy exists in: {newpath}")
+                        else:
+                            log.info(f"Temp untaring raw data to {newpath}")
+                            os.umask(0)
+                            os.makedirs(tmppath, mode=0o777, exist_ok=True)
+                            # open file
+                            file = tarfile.open(tarfile_fullpath)
+                            # extracting file
+                            file.extractall(tmppath, numeric_owner=True)
+                            file.close()
+        
+                            for root, dirs, files in os.walk(tmppath):
+                                for d in dirs:
+                                    os.chmod(os.path.join(root, d), 0o777)
+                                for f in files:
+                                    os.chmod(os.path.join(root, f), 0o777)
+                        # point to the local folder
+                        openephys_folder = newpath
+    # if file is not tared is it gzipped?
+    elif None in experiment_openephys_tarfile:
+        log.info("No tarfiles...gzip?")
+        # find gz LFP files
+        # gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/continuous.dat.gz', recursive=True)
+        # for f in gz_file_paths:
+        #     if os.path.dirname(f).endswith('-LFP'):
+        #         gz_LFP_file = f
+        #         gz_LFP_filepath = os.path.dirname(f)
+        #     else:
+        #         continue
+        gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/*.gz', recursive=True)
+        for f in gz_file_paths:
+            if os.path.dirname(f).endswith('-LFP'):
+                if os.path.basename(f).split('.')[0] == 'continuous':
+                    gz_LFP_file = f
+                    gz_LFP_filepath = os.path.dirname(f)
+                elif os.path.basename(f).split('.')[0] == 'timestamps':
+                    gz_LFP_timestamps_file = f
+                    gz_LFP_timestamps_filepath = os.path.dirname(f)
+                elif os.path.basename(f).split('.')[0] == 'sample_numbers':
+                    gz_LFP_sample_numbers_file = f
+                    gz_LFP_sample_numbers_filepath = os.path.dirname(f)
+            else:
+                continue
+        # make a temp path that copies all non-gzipped files (new open-ephys loader detects record node paths/timestamps/etc. and crashes if path structure doesn't match)
+        gz_path_split = gz_LFP_file.split('/')
+        source = '/'.join(gz_path_split[:9])
+        tmp_destination = tmppath / '/'.join(gz_path_split[7:9])
+        shutil.copytree(source, tmp_destination, ignore=shutil.ignore_patterns('*.gz'), dirs_exist_ok=True)
+        
+        # make new file destination to unzip raw LFP data/timestamps/sample_numbers
+        tmp_gz_path = tmppath / '/'.join(gz_path_split[7:-1])
+        continuous_newfile = tmp_gz_path / 'continuous.dat'
+        ts_newfile = tmp_gz_path / 'timestamps.npy'
+        smp_num_newfile = tmp_gz_path / 'sample_numbers.npy'
+
+        #set write permissions to new temp folder
+        log.info(f"Temp unzipping raw data to {tmp_gz_path}")
+        os.umask(0)
+        os.makedirs(tmp_gz_path, mode=0o777, exist_ok=True)
+
+        # gunzip .gz files to new tmp destination
+        gunzip(gz_LFP_file, continuous_newfile)
+        gunzip(gz_LFP_timestamps_file, ts_newfile)
+        gunzip(gz_LFP_sample_numbers_file, smp_num_newfile)
+        for root, dirs, files in os.walk(tmp_destination):
+            for d in dirs:
+                os.chmod(os.path.join(root, d), 0o777)
+            for f in files:
+                os.chmod(os.path.join(root, f), 0o777)
+        # point to the local folder
+        openephys_folder = tmp_destination
+
+    return openephys_folder
+
+
 def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
                             experiment_openephys_tarfile_relpath, local_copy_raw,
                             chans, rasterfs=None, mua=None, rawlp=None, rawhp=None, muabp=None):
@@ -481,220 +759,494 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
     continuous_data_list = []
     timestamp0_list = []
 
-    # iterate through each openephys_folder
-    for openephys_folder, tarfile_fullpath, tarfile_relpath in \
-            zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
-        # Use xml settings instead of the tar file. Much faster. Also, takes care
-        # of channel mapping (I think)
-        settings_file = file_finder(openephys_folder, 'settings.xml')
-        recChans, _ = oes.GetRecChs(settings_file)
-        connector = [i for i in recChans.keys()][0]
-        # import pdb; pdb.set_trace()
-        # handle channel remapping
-        info = oes.XML2Dict(settings_file)
-        mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
-        mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
-        for k in mapping_keys:
-            ch_num = mapping[k].get('Number')
-            if ch_num in recChans[connector]:
-                # if info['INFO']['VERSION'] == '0.5.5.2':
-                #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
-                # else:
-                recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+    # check version and file format and grab recording settings
+    version = openephys_gui_version(experiment_openephys_folder[0])
+    format = format_finder(experiment_openephys_folder[0])
+    settings_file = file_finder(experiment_openephys_folder[0], 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    
+    # extract data to tmp local folder and return local folder path
+    tmppath = extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile,
+                            experiment_openephys_tarfile_relpath)
+    
+    # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        if version[1] < 6:
+            # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
+            # recorded channels
+            channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
+            channel_names =  list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
+            channel_nums = [channel_info[ch]['number'] for ch in channel_names]
+            LFP_channel_names = [ch for ch in channel_names if ch[:3] == 'LFP']
+            LFP_channel_nums = [channel_info[ch]['number'] for ch in LFP_channel_names]
+            channel_state = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL']
+            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+        elif version[1] >= 6:
+            # find settings file for record node with LFP data - jk, they all have the same information. Still need to find where "recorded channel" info is.
+            # couple of files where a "subset" of channels was supposedly recorded still appear to have data for every channel...Can not find "record node" relevant parameters.
+            # Going to move forward under the assumption that every channel is recorded.
 
-        recChans = [recChans[connector][i]['name_mapped'] \
-                    for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
-        data_files = [connector + '_' + c + '.continuous' for c in recChans]
-        all_chans = np.arange(len(data_files))
-
-        if type(chans) is tuple:
-            chans = list(chans)
-
-        idx = all_chans[chans].tolist()
-        selected_data = np.take(data_files, idx)
-        continuous_data = []
-        timestamp0 = []
-
-        # unzip tarfiles to temp local folder
-        if local_copy_raw:
-            filename = selected_data[-1]
-            full_filename = openephys_folder / filename
-            tmppath = Path('/tmp/evpread/')
-            if ~os.path.isfile(full_filename):
-                # file doesn't exist (still zipped?) unzip to a local folder
-                # tmppath = Path('/tmp/evpread/')
-                newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
-
-                test_filename = newpath / filename
-                if os.path.isfile(test_filename):
-                    log.info(f"Local un-tar-ed copy exists in: {newpath}")
-                else:
-                    log.info(f"Temp untaring raw data to {newpath}")
-                    os.umask(0)
-                    os.makedirs(tmppath, mode=0o777, exist_ok=True)
-                    # open file
-                    file = tarfile.open(tarfile_fullpath)
-                    # extracting file
-                    file.extractall(tmppath, numeric_owner=True)
-                    file.close()
-
-                    for root, dirs, files in os.walk(tmppath):
-                        for d in dirs:
-                            os.chmod(os.path.join(root, d), 0o777)
-                        for f in files:
-                            os.chmod(os.path.join(root, f), 0o777)
-                # point to the local folder
-                openephys_folder = newpath
-
-            # create list of files found in temporary folder for open-ephys or binary format
-            format = format_finder(openephys_folder)
-            list_of_tmpfiles = []
-            list_of_tmpfilepaths = []
-            if format[0] == 'binary':
-                for root, dirs, files in os.walk(openephys_folder):
-                    list_of_tmpfiles = [fi for fi in files if fi.endswith(".dat")]
-                for root, dirs, files in os.walk(openephys_folder):
-                    list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".dat")]
-                try:
-                    data = load_openephys(openephys_folder, dtype='continuous')
-                    data = continuous_binary_data_unpacking(data, mua=mua)
-                except:
-                    raise IOError('loading binary data failed...still zipped?')
-
-            elif format[0] == 'open-ephys' or format[0] == 'openephys':
-                for root, dirs, files in os.walk(openephys_folder):
-                    list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
-                for root, dirs, files in os.walk(openephys_folder):
-                    list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
-            # check if all files are extracted and load data
-                try:
-                    # check if files use CH naming as expected
-                    if set(selected_data).issubset(list_of_tmpfiles):
-                        data = load_openephys(openephys_folder, dtype='continuous')
-                        data = continuous_data_unpacking(data)
-                    else:
-                        raise Exception('Selected file names do not match temp file names: trying again after removing CH')
-                    # remove CH from selected_data and check if files exist
-                except:
-                    for i, selected_ch in enumerate(selected_data):
-                        new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
-                        selected_data[i] = new_filename
-                    if set(selected_data).issubset(list_of_tmpfiles):
-                        log.info('no CH in filename, loading without it')
-                        data = load_openephys(openephys_folder, dtype='continuous')
-                        data = continuous_data_unpacking(data)
-
-            # sort channels based on channel mapping
-            recChans1 = [ch.split('CH')[1] for ch in recChans]
+            # gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/continuous.dat.gz', recursive=True)
+            # for f in gz_file_paths:
+            #     if os.path.dirname(f).endswith('-LFP'):
+            #         if os.path.basename(f).split('.')[0] == 'continuous':
+            #             gz_LFP_filepath = os.path.dirname(f)
+            #     else:
+            #         continue
+            # # get settings file in record node directory with LFP data
+            # record_node_path = gz_LFP_filepath[:gz_LFP_filepath.find("/exp")+1]
+            # settings_file = glob.glob(record_node_path + '/**/settings.xml', recursive=True)[0]
+            # info = oes.XML2Dict(settings_file)
+            
+            # sort channels and get x/y pos
+            channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys())
+            ch_prefix  = channel_nums[0][:2]
+            channel_nums1 = np.sort([int(ch[2:]) for ch in channel_nums])
+            channel_nums_sorted = [ch_prefix + str(ch) for ch in channel_nums1]
+            ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            channel_xpos = [ELECTRODE_XPOS[ch] for ch in channel_nums_sorted]
+            channel_ypos = [ELECTRODE_YPOS[ch] for ch in channel_nums_sorted]
+            all_chans = channel_nums1
+            if type(chans) is tuple:
+                chans = list(chans)
+            idx = all_chans[chans].tolist()
+            recChans1 = channel_nums1 + 1
             selected_chans = np.take(recChans1, idx)
-            raw_chans = data['channels']
-            for selected_ch in selected_chans:
-                raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
-                temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
-                if mua is not None:
-                    # filter data within bandwidth
-                    muabp = list(muabp)
-                    sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
-                    d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+            selected_chans_xpos = np.take(channel_xpos, idx)
+            selected_chans_ypos = np.take(channel_ypos, idx)
+            selected_chans_str = [str(ch) for ch in selected_chans]
+            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
+    else:
+        for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+                zip(experiment_openephys_folder, experiment_openephys_tarfile,
+                    experiment_openephys_tarfile_relpath):
+            # Use xml settings instead of the tar file. Much faster. Also, takes care
+            # of channel mapping (I think)
+            settings_file = file_finder(openephys_folder, 'settings.xml')
+            # If version is lower than 6 extract data using old method which requires mapping probe names to recorded names
+            # and allows for only extracting subset of channels
+            recChans, _ = oes.GetRecChs(settings_file)
+            connector = [i for i in recChans.keys()][0]
+            # import pdb; pdb.set_trace()
+            # handle channel remapping
+            info = oes.XML2Dict(settings_file)
+            mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+            mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+            for k in mapping_keys:
+                ch_num = mapping[k].get('Number')
+                if ch_num in recChans[connector]:
+                    # if info['INFO']['VERSION'] == '0.5.5.2':
+                    #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+                    # else:
+                    recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
 
-                    # calculate number of bins to sum mua over for resampling
-                    n = int(int(data['header']['sampleRate']) / rasterfs)
-                    # if signal is not divisible by requested sample rate, remove remainder
-                    d = d[:int(len(d) - len(d) % n)]
-                    # resample mua as sum of higher sampling rate bins - mua power
-                    d = np.sum(d.reshape(-1, n), axis=1)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                elif rasterfs is None and rawlp is None and rawhp is None:
-                    print("no parameters specified")
-                    continuous_data.append(temp_data[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0])
-                elif rawlp is not None and rawhp is not None and rasterfs is not None:
-                    print("bandpass filter and sample rate specified")
-                    # filter data within bandwidth
-                    sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
-                                              output='sos')
-                    data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    resample_new_size = int(
-                        np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                elif rawlp is not None and rawhp is not None:
-                    print("bandpass filter selected sample rate set to 4*Nyquist")
-                    # filter data within bandwidth
-                    sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
-                                              output='sos')
-                    data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    resample_new_size = int(
-                        np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
-                elif rawlp is not None and rasterfs is not None:
-                    # filter data within bandwidth
-                    print("lowpass filter selected and sample rate specified")
-                    sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
-                                              output='sos')
-                    data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    resample_new_size = int(
-                        np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                elif rawhp is not None and rasterfs is not None:
-                    # filter data within bandwidth
-                    print("high pass filter selected and sample rate specified")
-                    sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
-                                              output='sos')
-                    data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    resample_new_size = int(
-                        np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-                elif rawlp is not None:
-                    print("lowpass filter selected sample rate set to 4*Nyquist")
-                    sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
-                    data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    resample_new_size = int(
-                        np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
-                elif rawhp is not None:
-                    print("highpass filter selected sample rate not adjusted")
-                    sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
-                    data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-                    continuous_data.append(data['hpfiltered'][np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0])
-                else:
-                    print("sample rate specified...downsampling data")
-                    resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
-                    d = scipy.signal.resample(temp_data, resample_new_size)
-                    continuous_data.append(d[np.newaxis, :])
-                    timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            recChans = [recChans[connector][i]['name_mapped'] \
+                        for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+            data_files = [connector + '_' + c + '.continuous' for c in recChans]
+            all_chans = np.arange(len(data_files))
+
+            if type(chans) is tuple:
+                chans = list(chans)
+
+            idx = all_chans[chans].tolist()
+            selected_data = np.take(data_files, idx)
+            recChans1 = [ch.split('CH')[1] for ch in recChans]
+            channel_xpos = [None for ch in selected_data]
+            channel_ypos = [None for ch in selected_data]
+            selected_chans = np.take(recChans1, idx)
+            selected_chans_xpos = np.take(channel_xpos, idx)
+            selected_chans_ypos = np.take(channel_ypos, idx)
+            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
+
+    # create list of files found in temporary folder for open-ephys or binary format and check if selected channel files exist and load data. If binary and file exists just load data.
+    list_of_tmpfiles = []
+    list_of_tmpfilepaths = []
+    if format[0] == 'binary':
+        list_of_tmpfiles = glob.glob(str(tmppath) + '/**/*.dat', recursive=True)
+        for f in list_of_tmpfiles:
+            if os.path.basename(f).split('.')[0] == 'continuous':
+                list_of_tmpfilepaths.append(os.path.dirname(f))
+        try:
+            if version[1] < 6:
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_binary_data_unpacking(data, version, mua=mua)
+            elif version[1] >=6:
+                data = load_openephys(tmppath, dtype='continuous')
+                data = continuous_binary_data_unpacking(data, version, mua=mua)
+        except:
+            raise IOError('loading binary data failed...still zipped?')
+
+    elif format[0] == 'open-ephys' or format[0] == 'openephys':
+        for root, dirs, files in os.walk(tmppath):
+            list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
+        for root, dirs, files in os.walk(tmppath):
+            list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
+        # check if all files are extracted and attempt to load data with new loader v0.1.3
+        try:
+            # check if files use CH naming as expected
+            if set(selected_data).issubset(list_of_tmpfiles):
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_data_unpacking(data)
+            else:
+                raise Exception(
+                    'Selected file names do not match temp file names: trying again after removing CH')
+            # remove CH from selected_data and check if files exist
+        except:
+            for i, selected_ch in enumerate(selected_data):
+                new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
+                selected_data[i] = new_filename
+            if set(selected_data).issubset(list_of_tmpfiles):
+                log.info('no CH in filename, loading without it')
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_data_unpacking(data)
+
+    # remove temporary data
+    if os.path.exists(tmppath):
+        shutil.rmtree(tmppath)
+
+    # sort channels based on channel mapping
+    raw_chans = data['channels']
+    continuous_data = []
+    timestamp0 = []
+    for selected_ch in selected_chans:
+        raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
+        temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
+        if mua is not None:
+            # filter data within bandwidth
+            muabp = list(muabp)
+            sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+            d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+
+            # calculate number of bins to sum mua over for resampling
+            n = int(int(data['header']['sampleRate']) / rasterfs)
+            # if signal is not divisible by requested sample rate, remove remainder
+            d = d[:int(len(d) - len(d) % n)]
+            # resample mua as sum of higher sampling rate bins - mua power
+            d = np.sum(d.reshape(-1, n), axis=1)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rasterfs is None and rawlp is None and rawhp is None:
+            print("no parameters specified")
+            continuous_data.append(temp_data[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0])
+        elif rawlp is not None and rawhp is not None and rasterfs is not None:
+            print("bandpass filter and sample rate specified")
+            # filter data within bandwidth
+            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawlp is not None and rawhp is not None:
+            print("bandpass filter selected sample rate set to 4*Nyquist")
+            # filter data within bandwidth
+            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+        elif rawlp is not None and rasterfs is not None:
+            # filter data within bandwidth
+            print("lowpass filter selected and sample rate specified")
+            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawhp is not None and rasterfs is not None:
+            # filter data within bandwidth
+            print("high pass filter selected and sample rate specified")
+            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawlp is not None:
+            print("lowpass filter selected sample rate set to 4*Nyquist")
+            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+        elif rawhp is not None:
+            print("highpass filter selected sample rate not adjusted")
+            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            continuous_data.append(data['hpfiltered'][np.newaxis, :])
+            timestamp0.append(data['timestamps'][0])
         else:
-            filename = selected_data[-1]
-            with tarfile.open(tarfile_fullpath, 'r:gz') as tar_fh:
-                log.info("Extracting / loading %s...", filename)
-                full_filename = tarfile_relpath / filename
-                with tar_fh.extractfile(str(full_filename)) as fh:
-                    data = load_continuous_openephys(fh)
-                    if rasterfs is None:
-                        continuous_data.append(data['data'][np.newaxis, :])
-                        timestamp0.append(data['timestamps'][0])
-                    else:
-                        resample_new_size = int(
-                            np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
-                        d = scipy.signal.resample(data['data'], resample_new_size)
-                        continuous_data.append(d[np.newaxis, :])
-                        timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            print("sample rate specified...downsampling data")
+            resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(temp_data, resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
 
-        continuous_data_list.append(np.concatenate(continuous_data, axis=0))
-        timestamp0_list.append(timestamp0[0])
+    continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+    timestamp0_list.append(timestamp0[0])
 
-    return continuous_data_list, timestamp0_list
+
+    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_str
+
+
+# def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
+#                             experiment_openephys_tarfile_relpath, local_copy_raw,
+#                             chans, rasterfs=None, mua=None, rawlp=None, rawhp=None, muabp=None):
+#     '''
+#     WARNING: This is a beta method. The interface and return value may
+#     change.
+#     chans (list or numpy slice): which electrodes to load data from
+#     '''
+#     # get filenames (TODO: can this be sped up?)
+#     # with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+#     #    log.info("Finding filenames in tarfile...")
+#     #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+#     #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+#
+#     continuous_data_list = []
+#     timestamp0_list = []
+#
+#     # check version and file format
+#     version = openephys_gui_version(experiment_openephys_folder[0])
+#     format = format_finder(experiment_openephys_folder[0])
+#
+#     # iterate through each openephys_folder
+#     for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+#             zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+#         # Use xml settings instead of the tar file. Much faster. Also, takes care
+#         # of channel mapping (I think)
+#         settings_file = file_finder(openephys_folder, 'settings.xml')
+#
+#         if version[1] < 6:
+#             recChans, _ = oes.GetRecChs(settings_file)
+#             connector = [i for i in recChans.keys()][0]
+#         # import pdb; pdb.set_trace()
+#         # handle channel remapping
+#         info = oes.XML2Dict(settings_file)
+#         mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+#         mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+#         for k in mapping_keys:
+#             ch_num = mapping[k].get('Number')
+#             if ch_num in recChans[connector]:
+#                 # if info['INFO']['VERSION'] == '0.5.5.2':
+#                 #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+#                 # else:
+#                 recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+#
+#         recChans = [recChans[connector][i]['name_mapped'] \
+#                     for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+#         data_files = [connector + '_' + c + '.continuous' for c in recChans]
+#         all_chans = np.arange(len(data_files))
+#
+#         if type(chans) is tuple:
+#             chans = list(chans)
+#
+#         idx = all_chans[chans].tolist()
+#         selected_data = np.take(data_files, idx)
+#         continuous_data = []
+#         timestamp0 = []
+#
+#         # unzip tarfiles to temp local folder
+#         if local_copy_raw:
+#             filename = selected_data[-1]
+#             full_filename = openephys_folder / filename
+#             tmppath = Path('/tmp/evpread/')
+#             if ~os.path.isfile(full_filename):
+#                 # file doesn't exist (still zipped?) unzip to a local folder
+#                 # tmppath = Path('/tmp/evpread/')
+#                 newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+#
+#                 test_filename = newpath / filename
+#                 if os.path.isfile(test_filename):
+#                     log.info(f"Local un-tar-ed copy exists in: {newpath}")
+#                 else:
+#                     log.info(f"Temp untaring raw data to {newpath}")
+#                     os.umask(0)
+#                     os.makedirs(tmppath, mode=0o777, exist_ok=True)
+#                     # open file
+#                     file = tarfile.open(tarfile_fullpath)
+#                     # extracting file
+#                     file.extractall(tmppath, numeric_owner=True)
+#                     file.close()
+#
+#                     for root, dirs, files in os.walk(tmppath):
+#                         for d in dirs:
+#                             os.chmod(os.path.join(root, d), 0o777)
+#                         for f in files:
+#                             os.chmod(os.path.join(root, f), 0o777)
+#                 # point to the local folder
+#                 openephys_folder = newpath
+#
+#             # create list of files found in temporary folder for open-ephys or binary format
+#             list_of_tmpfiles = []
+#             list_of_tmpfilepaths = []
+#             if format[0] == 'binary':
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfiles = [fi for fi in files if fi.endswith(".dat")]
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".dat")]
+#                 try:
+#                     data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                     data = continuous_binary_data_unpacking(data, version, mua=mua)
+#                 except:
+#                     raise IOError('loading binary data failed...still zipped?')
+#
+#             elif format[0] == 'open-ephys' or format[0] == 'openephys':
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
+#             # check if all files are extracted and attempt to load data with new loader v0.1.3
+#                 try:
+#                     # check if files use CH naming as expected
+#                     if set(selected_data).issubset(list_of_tmpfiles):
+#                         data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                         data = continuous_data_unpacking(data)
+#                     else:
+#                         raise Exception('Selected file names do not match temp file names: trying again after removing CH')
+#                     # remove CH from selected_data and check if files exist
+#                 except:
+#                     for i, selected_ch in enumerate(selected_data):
+#                         new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
+#                         selected_data[i] = new_filename
+#                     if set(selected_data).issubset(list_of_tmpfiles):
+#                         log.info('no CH in filename, loading without it')
+#                         data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                         data = continuous_data_unpacking(data)
+#
+#             # remove temporary data
+#             newpath = tmppath / tarfile_fullpath.stem
+#             if os.path.exists(newpath):
+#                 shutil.rmtree(newpath)
+#
+#             # sort channels based on channel mapping
+#             recChans1 = [ch.split('CH')[1] for ch in recChans]
+#             selected_chans = np.take(recChans1, idx)
+#             raw_chans = data['channels']
+#             for selected_ch in selected_chans:
+#                 raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
+#                 temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
+#                 if mua is not None:
+#                     # filter data within bandwidth
+#                     muabp = list(muabp)
+#                     sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+#
+#                     # calculate number of bins to sum mua over for resampling
+#                     n = int(int(data['header']['sampleRate']) / rasterfs)
+#                     # if signal is not divisible by requested sample rate, remove remainder
+#                     d = d[:int(len(d) - len(d) % n)]
+#                     # resample mua as sum of higher sampling rate bins - mua power
+#                     d = np.sum(d.reshape(-1, n), axis=1)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rasterfs is None and rawlp is None and rawhp is None:
+#                     print("no parameters specified")
+#                     continuous_data.append(temp_data[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0])
+#                 elif rawlp is not None and rawhp is not None and rasterfs is not None:
+#                     print("bandpass filter and sample rate specified")
+#                     # filter data within bandwidth
+#                     sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawlp is not None and rawhp is not None:
+#                     print("bandpass filter selected sample rate set to 4*Nyquist")
+#                     # filter data within bandwidth
+#                     sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+#                 elif rawlp is not None and rasterfs is not None:
+#                     # filter data within bandwidth
+#                     print("lowpass filter selected and sample rate specified")
+#                     sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawhp is not None and rasterfs is not None:
+#                     # filter data within bandwidth
+#                     print("high pass filter selected and sample rate specified")
+#                     sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawlp is not None:
+#                     print("lowpass filter selected sample rate set to 4*Nyquist")
+#                     sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+#                 elif rawhp is not None:
+#                     print("highpass filter selected sample rate not adjusted")
+#                     sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     continuous_data.append(data['hpfiltered'][np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0])
+#                 else:
+#                     print("sample rate specified...downsampling data")
+#                     resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(temp_data, resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#         else:
+#             filename = selected_data[-1]
+#             with tarfile.open(tarfile_fullpath, 'r:gz') as tar_fh:
+#                 log.info("Extracting / loading %s...", filename)
+#                 full_filename = tarfile_relpath / filename
+#                 with tar_fh.extractfile(str(full_filename)) as fh:
+#                     data = load_continuous_openephys(fh)
+#                     if rasterfs is None:
+#                         continuous_data.append(data['data'][np.newaxis, :])
+#                         timestamp0.append(data['timestamps'][0])
+#                     else:
+#                         resample_new_size = int(
+#                             np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
+#                         d = scipy.signal.resample(data['data'], resample_new_size)
+#                         continuous_data.append(d[np.newaxis, :])
+#                         timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#
+#         continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+#         timestamp0_list.append(timestamp0[0])
+#
+#     return continuous_data_list, timestamp0_list
+
 
 ###############################################################################
 # Unsorted functions

@@ -2333,7 +2333,7 @@ class PointProcess(SignalBase):
             meta=base.meta,
             data=data,
             epochs=epochs,
-            safety_checks=False
+            safety_checks=False,
         )
 
     def append_time(self, new_signal):
