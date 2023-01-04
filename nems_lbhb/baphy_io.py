@@ -43,12 +43,17 @@ import matplotlib.pyplot as plt
 import nems0.signal
 import nems0.recording
 import nems0.db as db
+from nems0 import get_setting
 import nems0.epoch as ep
 from nems0.recording import Recording
 from nems0.recording import load_recording
 import nems_lbhb.behavior as behavior
 from nems_lbhb import runclass
+
 from nems0.uri import load_resource
+
+#from open_ephys.analysis import Session
+#from open_ephys.analysis.formats.helpers import load
 from open_ephys_archived.analysis import Session as Session_archived
 from open_ephys_archived.analysis.formats.helpers import load as load_archived
 from open_ephys.analysis import Session
@@ -56,6 +61,7 @@ from open_ephys.analysis.formats.helpers import load
 import tarfile
 import re
 import gzip
+
 log = logging.getLogger(__name__)
 
 # paths to baphy data -- standard locations on elephant
@@ -109,6 +115,9 @@ def openephys_gui_version(openephys_folder):
     return version
 
 def format_finder(openephys_folder):
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
+
     session = Session(openephys_folder)
     format = []
     try:
@@ -154,6 +163,9 @@ def load_openephys(openephys_folder, dtype = None):
     if dtype is None:
         raise ValueError("Must specify a data type to load: events, continuous, spike, or header")
     # create session object
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
+    
     session = Session(openephys_folder)
     data = []
     data_format = []
@@ -312,6 +324,7 @@ def continuous_data_unpacking(continuous_data):
             channels.append(np.array(continuous_data[i][0].channels))
         else:
             continue
+            
     # should be the same for all channels minus channel specific info in header which I don't think
     # baphy experiment needs?
     timestamps = continuous_data[i][0].timestamps
@@ -1234,6 +1247,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
 #
 #     return continuous_data_list, timestamp0_list
 
+
 ###############################################################################
 # Unsorted functions
 ###############################################################################
@@ -1334,9 +1348,296 @@ def baphy_mat2py(s):
 
     return s8
 
+def get_parmfile_format(parmfile):
+
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return 'baphy'
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if os.path.exists(asfile):
+        return 'baphy'
+    elif os.path.exists(aspath):
+        return 'psi'
+    else:
+        return None
+
+def adjust_parmfile_name(parmfile):
+
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return asfile
+    elif os.path.exists(asfile):
+        return asfile
+    elif os.path.exists(aspath):
+        return aspath
+    else:
+        return None
+
+
+def psi_parm_read(filepath):
+    """
+    read parameter from psi datafolder. Relevant info in event_log.csv
+    and trial_log.csv
+    match spect of baphy loader:
+       exptevents.columns = ['name', 'start', 'end', 'Trial']
+    :param filepath:
+    :return:
+    """
+    eventfile = Path(filepath) / "event_log.csv"
+    trialfile = Path(filepath) / "trial_log.csv"
+    globalfile = Path(filepath) / "globalparams.json"
+
+    prestimsilence=0.0
+    poststimsilence=0.0
+
+    root1, parmfile = os.path.split(filepath)
+    root2, penname = os.path.split(root1)
+    root3, ferret = os.path.split(root2)
+    parts = parmfile.split('_')
+    siteid = parts[0][:-2]
+    runclass = parts[2];
+    ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
+
+    if os.path.isfile(globalfile):
+        with open(globalfile, 'r') as f:
+            globalparams = json.load(f)
+        globalparams['Tester'] = globalparams['experimenter']
+        globalparams['Ferret'] = globalparams['animal']
+        if globalparams['training']=='Physiology+behavior':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+    else:
+        log.info('***** Kludge alert!! Hard coding many baphy settings. *****')
+        globalparams = {}
+        globalparams['rawfilename'] = os.path.join(filepath, 'raw')
+        globalparams['Tester'] = 'jwingert'
+        globalparams['Ferret'] = 'Prince'
+        globalparams['runclass'] = runclass
+
+        if parts[2]=='a':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+        globalparams['SiteID'] = siteid
+
+    globalparams['HWSetup'] = 17
+    globalparams['date'] = ctime.strftime("%Y-%m-%d")
+    globalparams['SiteID'] = siteid
+    globalparams['HWparams'] = {'DAQSystem': 'Open-Ephys'}
+    globalparams['NumberOfElectrodes'] = 384
+    globalparams['stim_system'] = 'psi'
+    globalparams['Module'] = 'psi'
+    globalparams['ExperimentComplete'] = 1
+    globalparams['tempMfile'] = filepath
+
+    T = pd.read_csv(trialfile)
+    E = pd.read_csv(eventfile)
+    rparms = T.loc[0]
+    TrialObject = {1: {
+        'ReferenceClass': 'BigNat',
+        'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
+                                'PostStimSilence': poststimsilence,
+                                'SoundPath': rparms.background_wav_sequence_path,
+                                'Duration': rparms.background_wav_sequence_duration,
+                                'Normalization': rparms.background_wav_sequence_normalization ,
+                                'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                'fit_range': rparms.background_wav_sequence_fit_range,
+                                'fit_reps': rparms.background_wav_sequence_fit_reps,
+                                'test_range': rparms.background_wav_sequence_test_range,
+                                'test_reps': rparms.background_wav_sequence_test_reps,
+                                'iti_duration': rparms.iti_duration,
+                            'Names': {},
+                            'descriptor': 'BigNat'
+                            }},
+        'TargetClass': 'Tone',
+        'TargetHandle': {1:{ 'descriptor': 'Tone'
+                        }},
+        'OveralldB': rparms.background_wav_sequence_level}
+    }
+    exptparams = {'runclass': runclass,
+                  'StartTime': ctime.strftime("%H:%M:%S"),
+                  'BehaveObjectClass': 'psi-go-nogo',
+                  'TrialObject': TrialObject,
+                  'TotalRepetitions': 1,
+                  'Repetition': 1,
+                  }
+
+    event_count = len(E)
+    cols = E.columns
+    if 'trial' in cols:
+        E['Trial'] = E['trial']
+        guess_trials = False
+    else:
+        E['Trial'] = 1
+        guess_trials = True
+    E['duration'] = 0
+    for ee, r in E.iterrows():
+        if str(r['info'])!='nan':
+            info = json.loads(r['info'])
+            if 'duration' in info.keys():
+                if ~np.isinf(info['duration']):
+                    E.loc[ee,'duration'] = info['duration']
+
+        if r['event'] == 'background_added':
+            E_pausenext = E.loc[(E.index>ee) & (E['event']=='background_paused') &
+                                (E['timestamp']<r['timestamp']+E.loc[ee,'duration'])]
+            if (len(E_pausenext)>0):
+                E.loc[ee, 'duration'] = E_pausenext['timestamp'].min()-E.loc[ee, 'timestamp']
+                #print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
+                
+    E['start'] = E['timestamp']
+    E['end'] = E['start'] + E['duration']
+    E['name'] = E['event']
+    E['Info'] = E['info']
+    experiment_end = E.loc[E.event=='experiment_end','start'].max()
+    if experiment_end==0:
+        experiment_end = E.loc[E.event == 'trial_end', 'start'].max()
+
+    E.loc[E.end>experiment_end,'end']=experiment_end
+
+    E.loc[E['Info'].astype(str)=='nan','Info']=''
+    E.loc[E['Trial']==0,'Trial']=1
+    
+    exptevents=E.loc[E['duration']>=0,['start','end','name','Trial','Info']].reset_index(drop=True)
+    
+    if guess_trials:
+        start_events = exptevents.loc[exptevents['name']=='trial_start']
+        for ee in range(len(exptevents)):
+            tt=(start_events['start']<=exptevents.loc[ee,'start']).sum()
+            if tt>1:
+                exptevents.loc[ee,'Trial']=tt
+
+    if 'trial_number' not in T.columns:
+        T['trial_number']=np.arange(T.shape[0],dtype=int)+1
+    trialstarts = exptevents.loc[exptevents['name']=='trial_start',['Trial','start']].values
+    trialstarts2 = T[['trial_number', 'trial_start']].values
+    Tlen = trialstarts.shape[0]
+    if trialstarts2.shape[0]<trialstarts.shape[0]:
+        Tlen=trialstarts2.shape[0]
+        exptevents['old_trial']=exptevents['Trial'].copy()
+        exptevents['Trial'] = 0
+        for t in range(1,Tlen+1):
+            mm = np.argmin(np.abs(trialstarts[:,1]-trialstarts2[t-1,1]))
+            exptevents.loc[exptevents['old_trial']==(mm+1),'Trial']=t
+        for i,r in exptevents.loc[exptevents.Trial==0].iterrows():
+            try:
+                next_trial = trialstarts[trialstarts[:,1]>r['start'],0].min()
+            except:
+                next_trial = Tlen
+                pass
+            print(i, next_trial, r['start'],r['end'], r['name'], r['Info'])
+        log.info(f"Trial counts adjusted E: {trialstarts.shape[0]} to T: {trialstarts2.shape[0]} ")
+        exptevents = exptevents.drop(columns='old_trial')
+        #dmean=np.sum(np.abs(trialstarts[:Tlen,1]-trialstarts2[:Tlen,1]))
+        #if dmean > 0:
+        #    log.info(f"Trial counts E: {trialstarts.shape[0]} T: {trialstarts2.shape[0]} ")
+        #    log.info(f"WARNING!! Truncated start time diff: {dmean} sec")
+    elif trialstarts2.shape[0]>trialstarts.shape[0]:
+        raise ValueError("Trial log has more trials than event log???")
+
+    if (exptevents['Trial'] > Tlen).sum() > 0:
+        log.info('Removing events after last trial')
+    exptevents=exptevents.loc[(exptevents['Trial']<=Tlen) & (exptevents['Trial']>0)]
+
+    # DONT adjust timestamps to reference current trial rather than absolute
+    # target_events = exptevents.loc[exptevents['name']=='target_start'].copy()
+
+    #for ee, r in target_events.iterrows():
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'end'] -= r['start']
+
+    tstart_events = exptevents.loc[exptevents['name']=='target_start'].reset_index(drop=True)
+    tstart_events['name']='TRIALSTART'
+    tstart_events['end'] = tstart_events['start']
+    tstart_events['Info'] = ''
+    tstop_events = tstart_events.copy()
+    tstop_events['name'] = 'TRIALSTOP'
+    tstop_events['Trial'] -= 1
+    tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
+    tstop_events.loc[tstop_events.Trial==0,['Trial']] = Tlen
+    tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
+
+    bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+    Names = []
+    for ee, r in bg_events.iterrows():
+        info = json.loads(r['Info'])
+        Names.append(f'{info["metadata"]["filename"]}.wav')
+        bg_events.loc[ee, 'name'] = f'Stim , {info["metadata"]["filename"]}.wav , Reference'
+        bg_events.loc[ee, 'Info'] = ''
+    Names = list(set(Names))
+    Names.sort()
+    TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+
+    tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
+                                (exptevents['Trial']<=Tlen)].copy()
+    for ee, r in tar_events.iterrows():
+        trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
+        snr = trialinfo['snr']
+        target_freq = trialinfo['target_tone_frequency']
+        trial_type = trialinfo['trial_type']
+        if 'nogo' in trial_type:
+            name = f'Stim , {target_freq}+-InfdB , Catch'
+        else:
+            name = f'Stim , {target_freq}+{snr}dB , Target'
+        tar_events.loc[ee, 'name'] = name
+        tar_events.loc[ee, 'Info'] = ''
+    
+    # add pre- and post- silences
+    stimevents = pd.concat([bg_events, tar_events])
+    stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
+    prestimevents=stimevents.copy()
+    starts = prestimevents['start'].copy()
+    prestimevents['start'] = starts-prestimsilence
+    prestimevents['end'] = starts
+    prestimevents['name'] = prestimevents['name'].str.replace('Stim ,','PreStimSilence ,')
+    poststimevents = stimevents.copy()
+    stops = poststimevents['end'].copy()
+    poststimevents['start'] = stops
+    poststimevents['end'] = stops+poststimsilence
+    poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
+
+    trial_number = T['trial_number']
+    videostart = T['psivideo_frame_ts']
+    videostart -= videostart[0]
+    videoframes = T['psivideo_frames_written']
+    videoname = videoframes.apply(lambda x: f"PSIVIDEO,{x:.0f}")
+    d_ = {'start': videostart, 'end': videostart, 'name': videoname,
+          'Trial': trial_number, 'Info': ''}
+    videoevents = pd.DataFrame(d_)
+
+    response_ts = T['response_ts']
+    response_outcome = T['score']
+    response_name = response_outcome.apply(lambda x: f"LICK , {x}")
+
+    d_ = {'start': response_ts, 'end': response_ts, 'name': response_name,
+          'Trial': trial_number, 'Info': ''}
+    responseevents = pd.DataFrame(d_)
+    responseevents = responseevents.loc[np.isfinite(response_ts)]
+
+    trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
+    n_outcomes = len(trial_outcomes)
+    d_ = {'start': tstart_events['start'][:n_outcomes],
+          'end': tstop_events['start'][:n_outcomes],
+          'name': trial_outcomes, 'Trial': trial_number, 'Info': ''}
+    outcomeevents = pd.DataFrame(d_)
+
+    exptevents = pd.concat([exptevents, tstart_events, tstop_events, stimevents,
+                            prestimevents, poststimevents, videoevents,
+                            responseevents, outcomeevents], ignore_index=True)
+    exptevents = exptevents.sort_values(by=['Trial','start']).reset_index(drop=True)
+
+    globalparams['rawfilecount'] = Tlen
+
+    return globalparams, exptparams, exptevents
 
 def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
+
+    if os.path.isdir(filepath):
+        return psi_parm_read(filepath)
+
     s = load_resource(str(filepath))
     if type(s) is str:
         s = s.split("\n")
@@ -2086,10 +2387,21 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
 
     hit_trials = exptevents[exptevents.name == "BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-    # import pdb; pdb.set_trace()
+
+    # check to see if Trial starts are already non-zero (ie, psi-style, in abs trial time. 
+    # unlike baphy where trialstart is 0 for each trial)
+    TrialStart_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
+    )
     TrialLen_sec = np.array(
         exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
     )
+    if TrialStart_sec.sum()>0:
+        TrialLen_sec -= TrialStart_sec
+        offset_exists = True
+    else:
+        offset_exists = False
+
     if len(hit_trials):
         TrialLen_sec[hit_trials - 1] = max_event_times[hit_trials - 1]
 
@@ -2097,53 +2409,58 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
         (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
     )
 
-    for ch in range(0, chancount):
-        if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
-            s = sortinfo[ch][0][sortidx]['unitSpikes']
-            s = np.reshape(s, (-1, 1))
-            unitcount = s.shape[0]
-            for u in range(0, unitcount):
-                st = s[u, 0]
+    if not offset_exists:
+        # figure out offsets based on max spike time in each trial. Kind of backwards...
+        for ch in range(0, chancount):
+            if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
+                s = sortinfo[ch][0][sortidx]['unitSpikes']
+                s = np.reshape(s, (-1, 1))
+                unitcount = s.shape[0]
+                for u in range(0, unitcount):
+                    st = s[u, 0]
 
-                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
-                for trialidx in range(1, TrialCount + 1):
-                    ff = (st[0, :] == trialidx)
-                    if np.sum(ff):
-                        utrial_spikefs = np.max(st[1, ff])
-                        TrialLen_spikefs[trialidx, 0] = np.max(
-                            [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
-                        )
+                    # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
+                    for trialidx in range(1, TrialCount + 1):
+                        ff = (st[0, :] == trialidx)
+                        if np.sum(ff):
+                            utrial_spikefs = np.max(st[1, ff])
+                            TrialLen_spikefs[trialidx, 0] = np.max(
+                                [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
+                            )
 
-    # using the trial lengths, figure out adjustments to trial event times.
-    if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
-        # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs * finalfs) / finalfs * spikefs
-        )
-        # TrialLen_spikefs = (
-        #        np.ceil(TrialLen_spikefs / spikefs*finalfs + 1) / finalfs*spikefs
-        #        )
-        # print(TrialLen_spikefs)
+        # using the trial lengths, figure out adjustments to trial event times.
+        Offset_spikefs = np.cumsum(TrialLen_spikefs)
+        if finalfs:
+            log.info('Rounding trial start times to even number of rasterfs bins')
+            Offset_spikefs = np.ceil(Offset_spikefs / spikefs * finalfs) / finalfs * spikefs
+        Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
 
-    Offset_spikefs = np.cumsum(TrialLen_spikefs)
-    Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
-    # adjust times in exptevents to approximate time since experiment started
-    # rather than time since trial started (native format)
-    for Trialidx in range(1, TrialCount + 1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
-        ff = (exptevents['Trial'] == Trialidx)
-        exptevents.loc[ff, ['start', 'end']] = (
-                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
-        )
+        # adjust times in exptevents to approximate time since experiment started
+        # rather than time since trial started (native format)
+        for Trialidx in range(1, TrialCount + 1):
+            # print("Adjusting trial {0} by {1} sec"
+            #       .format(Trialidx,Offset_sec[Trialidx-1]))
+            ff = (exptevents['Trial'] == Trialidx)
+            exptevents.loc[ff, ['start', 'end']] = (
+                    exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
+            )
 
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
+            # ff = ((exptevents['Trial'] == Trialidx)
+            #       & (exptevents['end'] > Offset_sec[Trialidx]))
+            # badevents, = np.where(ff)
+            # print("{0} events past end of trial?".format(len(badevents)))
+            # exptevents.drop(badevents)
+    else:
+        # offset_exists
+        ss = exptevents['start']
+        dd = exptevents['end'] - exptevents['start']
+        ss = np.ceil(ss*finalfs) / finalfs
+        dd = np.ceil(dd*finalfs) / finalfs
+        exptevents['start'] = ss
+        exptevents['end'] = ss + dd
+        
+        Offset_sec = np.array(exptevents.loc[exptevents['name'] == "TRIALSTART"]['start'])
+        Offset_spikefs = Offset_sec * spikefs
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -2209,6 +2526,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                 #    else:
                 #        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                 #    spiketimes.append([])
+                
     return exptevents, spiketimes, unit_names
 
 
@@ -2642,8 +2960,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         return big_rs, strialidx
 
 
-def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
-                   verbose=False, rasterfs=30, dlc_threshold=-1, fill_invalid='mean',
+def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False,
+                   rasterfs=30, dlc_threshold=-1, fill_invalid='interpolate', max_gap=2,
                    **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
@@ -2680,13 +2998,35 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
         y = dataframe[scorer][bp]['y'].values
         threshold_check = dataframe[scorer][bp]['likelihood'].values > dlc_threshold
         bad_frame_count = (~threshold_check).sum()
-        if fill_invalid == 'mean':
-            x[~threshold_check] = np.nanmean(x[threshold_check])
-            y[~threshold_check] = np.nanmean(y[threshold_check])
+        assume_videofs=30
+        if bad_frame_count==0:
+            pass
+            # no bad frames
+        elif (fill_invalid == 'interpolate'):
+            invalid_onsets = np.where(np.diff(threshold_check.astype(int))==-1)[0]+1
+            invalid_offsets = np.where(np.diff(threshold_check.astype(int))==1)[0]+1
+            if invalid_onsets[0] > invalid_offsets[0]:
+                invalid_onsets = np.concatenate(([0], invalid_onsets))
+            if invalid_onsets[-1] > invalid_offsets[-1]:
+                invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
+            for (a, b) in zip(invalid_onsets, invalid_offsets):
+                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap ):
+                    x[a:b] = np.linspace(x[a-1], x[b], b-a)
+                    y[a:b] = np.linspace(y[a - 1], y[b], b - a)
+                else:
+                    x[a:b] = np.nan
+                    y[a:b] = np.nan
 
-            if bad_frame_count > 0:
-                log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
-        else:
+        elif (fill_invalid == 'mean'):
+            log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+            if (fill_invalid == 'mean') & (bad_frame_count > 0) & (max_gap > 0):
+
+                x[~threshold_check] = np.nanmean(x[threshold_check])
+                y[~threshold_check] = np.nanmean(y[threshold_check])
+
+                if bad_frame_count > 0:
+                    log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+        else: # nan
             x[~threshold_check] = np.nan
             y[~threshold_check] = np.nan
             if bad_frame_count > 0:
@@ -2718,41 +3058,76 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     # resample and remove dropped frames
 
     # find and parse lick trace events
-    pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    #pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    pp = exptevents['name'].str.startswith('LICK,')
+    if pp.sum() > 0:
+        # yes, there were LICK events, load baphy style
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 1])
+        firstframe = np.zeros([ntrials + 1])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'] - 1)
+            s = x['name'].split(",[")
+            p = eval("[" + s[1])
+            # print("{0} p=[{1}".format(i,s[1]))
+            timestamp[t] = p[0]
+            firstframe[t] = int(p[1])
 
-    trials = list(exptevents.loc[pp, 'Trial'])
-    ntrials = len(trials)
-    timestamp = np.zeros([ntrials + 1])
-    firstframe = np.zeros([ntrials + 1])
-    for i, x in exptevents.loc[pp].iterrows():
-        t = int(x['Trial'] - 1)
-        s = x['name'].split(",[")
+        pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
+        lastidx = np.argwhere(pp)[-1]
+
+        s = exptevents.iloc[lastidx[0]]['name'].split(",[")
         p = eval("[" + s[1])
-        # print("{0} p=[{1}".format(i,s[1]))
-        timestamp[t] = p[0]
-        firstframe[t] = int(p[1])
-    pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
-    lastidx = np.argwhere(pp)[-1]
+        timestamp[-1] = p[0]
+        firstframe[-1] = int(p[1])
 
-    s = exptevents.iloc[lastidx[0]]['name'].split(",[")
-    p = eval("[" + s[1])
-    timestamp[-1] = p[0]
-    firstframe[-1] = int(p[1])
+        # align DLC signals with other events, probably by
+        # removing extra bins from between trials
+        ff = exptevents['name'].str.startswith('TRIALSTART')
+        start_events = exptevents.loc[ff, ['start']].reset_index()
+        start_events['StartBin'] = (
+            np.round(start_events['start'] * rasterfs)
+        ).astype(int)
+        start_e = list(start_events['StartBin'])
+        ff = (exptevents['name'] == 'TRIALSTOP')
+        stop_events = exptevents.loc[ff, ['start']].reset_index()
+        stop_events['StopBin'] = (
+            np.round(stop_events['start'] * rasterfs)
+        ).astype(int)
+        stop_e = list(stop_events['StopBin'])
 
-    # align DLC signals with other events, probably by
-    # removing extra bins from between trials
-    ff = exptevents['name'].str.startswith('TRIALSTART')
-    start_events = exptevents.loc[ff, ['start']].reset_index()
-    start_events['StartBin'] = (
-        np.round(start_events['start'] * rasterfs)
-    ).astype(int)
-    start_e = list(start_events['StartBin'])
-    ff = (exptevents['name'] == 'TRIALSTOP')
-    stop_events = exptevents.loc[ff, ['start']].reset_index()
-    stop_events['StopBin'] = (
-        np.round(stop_events['start'] * rasterfs)
-    ).astype(int)
-    stop_e = list(stop_events['StopBin'])
+    else:
+        # assume PSIVIDEO format instead
+        pp = exptevents['name'].str.startswith('PSIVIDEO')
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 2])
+        firstframe = np.zeros([ntrials + 2])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'])
+            s = x['name'].split(",")
+
+            timestamp[t] = x['start']
+            firstframe[t] = int(s[1])
+            #print(f"Trial {t+1} time={timestamp[t]:.2f} frames={firstframe[t]:.0f}")
+        nominal_fr = int(np.round(firstframe[-2]/timestamp[-2]))
+        final_frames = data_array.shape[1]-firstframe[-2]
+        if final_frames<0:
+            log.info('TRUNCATED VIDEO?????? PADDING WITH NANS')
+            sh = (data_array.shape[0], int(firstframe[-2]-data_array.shape[1]+3))
+            data_array=np.concatenate((data_array, np.ones(sh)*np.nan),axis=1)
+            final_frames = data_array.shape[1]-firstframe[-2]
+
+        firstframe[-1] = data_array.shape[1]
+        timestamp[-1] = timestamp[-2]+final_frames/nominal_fr
+        start_e = (timestamp[:-1] * rasterfs).astype(int)
+        stop_e = (timestamp[1:] * rasterfs).astype(int)
+        if stop_e[0]==0:
+            start_e = start_e[1:]
+            stop_e = stop_e[1:]
+            timestamp = timestamp[1:]
+            firstframe = firstframe[1:]
 
     # calculate frame count and duration of each trial
     duration = np.diff(np.append(start_e, stop_e[-1]) / rasterfs)
@@ -2764,11 +3139,11 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     for sigidx, signal in enumerate(l):
         extras = False
         # warp/resample each trial to compensate for dropped frames
-        strialidx = np.zeros([ntrials + 1])
+        strialidx = np.zeros([len(frame_count) + 1])
         # big_rs = np.array([[]])
-        all_fs = np.empty([ntrials])
+        all_fs = np.empty([len(frame_count)])
 
-        for ii in range(0, ntrials):
+        for ii in range(len(frame_count)):
             d = data_array[sigidx, int(firstframe[ii]):int(firstframe[ii] + frame_count[ii])]
 
             fs = frame_count[ii] / duration[ii]
@@ -2777,8 +3152,7 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
             ti = np.arange(
                 (1 / rasterfs) / 2, duration[ii] + (1 / rasterfs) / 2, 1 / rasterfs
             )
-            # print("{0} len(d)={1} len(ti)={2} fs={3}"
-            #       .format(ii,len(d),len(ti),fs))
+            print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
             _f = interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:

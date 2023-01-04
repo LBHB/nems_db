@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import convolve2d, butter, sosfilt
 
-from nems import db
+from nems0 import db
 from nems0.utils import smooth
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems_lbhb.baphy_io import load_continuous_openephys
+from nems_lbhb.baphy_io import load_continuous_openephys, jcw_get_continuous_data
 from nems_lbhb.plots import plot_waveforms_64D
 
 USE_DB = False
@@ -28,12 +28,23 @@ else:
     parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a03_p_BNB.m"
     parmfile = "/auto/data/daq/Teonancatl/TNC006/TNC006a19_p_BNB.m"
-
+    parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
 
 ## load the recording
-parmfile = "/auto/data/daq/Tartufo/TAR010/TAR010a03_p_BNB.m"
-ex = BAPHYExperiment(parmfile=parmfile)
+parmfile = "/auto/data/daq/Teonancatl/TNC057/TNC057a07_p_BNB.m"
+rawid = None
+#parmfile = "/auto/data/daq/Prince/PRN015/PRN015b04_p_BNB.m"
+#rawid = 146865
+ex = BAPHYExperiment(parmfile=[parmfile])
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
+
+
+chans = np.arange(384)
+continuous_data_list, timestamp0_list = \
+    jcw_get_continuous_data(ex.openephys_folder, ex.openephys_tarfile,
+                            ex.openephys_tarfile_relpath, ex.local_copy_raw,
+                            chans, rasterfs=50, mua=False, rawlp=1, rawhp=50)
+
 
 rec = ex.get_recording(raw=True, resp=False, stim=False, recache=False, rawchans=None, rasterfs=1500)
 

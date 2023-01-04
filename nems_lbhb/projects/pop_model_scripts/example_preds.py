@@ -26,7 +26,7 @@ from nems0.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 from nems_lbhb import baphy_experiment
 from nems0.xform_helper import load_model_xform
-from nems import xforms
+from nems0 import xforms
 from nems_lbhb.plots import scatter_bin_lin
 from nems_lbhb.analysis import pop_models
 
@@ -125,8 +125,9 @@ def pop_model_example(figsize=None):
     return f
     
 if __name__ == '__main__':
-    
-    fig = aciknos_examples()
+    pass
+    #fig = aciknos_examples()
+    #fig = pop_model_example(figsize=None)
     #filename=base_path / 'fig5_pred_example.pdf'
     #fig.savefig(filename, format='pdf', dpi='figure')
 

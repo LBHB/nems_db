@@ -837,7 +837,7 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='resp',
         get_nrmse = np.nan
 
     weights[close_to_zero] = np.nan
-    return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
+    return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model#, get_error
 
 ### From OLP_analysis_main on 2022_10_03. I don't think this has any use, but stashing it here in
 ### case... If you don't miss it by the next time you come across this, just trash it.

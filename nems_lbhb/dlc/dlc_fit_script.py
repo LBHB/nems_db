@@ -23,9 +23,9 @@ import deeplabcut as dlc
 import numpy as np
 
 import nems0.db as nd
+import nems0
 
 import nems_lbhb.motor.nems_dlc_settings as ds
-from nems_lbhb.motor import face_tools
 
 import logging
 log = logging.getLogger(__name__)
@@ -63,13 +63,28 @@ if __name__ == '__main__':
     else:
         action_list = ['fit','summary']
 
-
     # location of DLC model
     # change if using a different DLC model
     if len(sys.argv) > 3:
         path_config = sys.argv[3]
     else:
         path_config = ds.DEFAULT_DLC_MODEL
+
+    video_base = os.path.basename(video_file)
+    if video_base.startswith('recording'):
+        # create softlink in parent dir
+        video_path = os.path.dirname(video_file)
+        old_video_file = video_file
+        video_file = video_path+'.avi'
+        if os.path.exists(video_file):
+            pass
+        else:
+            os.symlink(old_video_file, video_file)
+    elif ~os.path.exists(video_file):
+        # see if this is expected softlink
+        orig_guess = video_file.replace('.avi','/recording.avi')
+        if os.path.exists(orig_guess):
+            os.symlink(orig_guess, video_file)
 
     vid_dir, base_file = os.path.split(video_file)
     animal_path, penname = os.path.split(vid_dir)
@@ -105,7 +120,9 @@ if __name__ == '__main__':
         dlc.create_labeled_video(path_config, vid_paths, videotype='avi', destfolder=path_sorted)
 
     if 'summary' in action_list:
-        face_tools.summary_plot(vid_paths)
+        from nems_lbhb.motor import face_tools
+
+        fig=face_tools.summary_plot(vid_paths)
 
     if 'refine' in action_list:
         # identify "bad" frames and save in training set
@@ -123,9 +140,10 @@ if __name__ == '__main__':
         # (rather than starting over from visnet)
         dlc.train_network(path_config, shuffle=1, displayiters=100)
 
-    log.info("face_fit_script complete")
+    log.info(f"face_fit_script complete db_exists={db_exists} qid={queueid}")
 
     if db_exists & (queueid > 0):
+        log.info('Marking job complete in celldb')
         nd.update_job_complete(queueid)
 
 

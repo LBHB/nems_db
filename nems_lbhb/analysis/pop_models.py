@@ -21,7 +21,7 @@ import numpy as np
 from numpy.linalg import det
 from scipy.ndimage import zoom, gaussian_filter1d
 
-from nems import xforms
+from nems0 import xforms
 import nems0.plots.api as nplt
 from nems0.plots.api import ax_remove_box, spectrogram, fig2BytesIO
 from nems0.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
@@ -229,10 +229,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     if modelspec_ref is not None:
         r_test0 = modelspec_ref.meta[performance_metric]
         ax_perf.plot(r_test0, color='lightgray')
-    r_test = modelspec.meta[performance_metric]
-    ax_perf.plot(r_test, color='black')
-    ax_perf.plot([0, len(r_test)],[0, 0], '--', color='gray')
-    ax_perf.set_xlabel('unit #')
+    r_test = modelspec.meta[performance_metric].flatten()
+    ax_perf.bar(np.arange(len(r_test)), r_test, color='black')
+    ax_perf.plot([0, len(r_test)],[0, 0], '--', color='gray', lw=0.5)
+    ax_perf.set_xlabel('Unit #')
     ax_perf.set_ylim([-0.05, 1])
     ax_perf.set_yticks([0,0.5,1])
     ax_perf.set_title(performance_metric)
