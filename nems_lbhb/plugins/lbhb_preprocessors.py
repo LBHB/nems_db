@@ -193,6 +193,26 @@ def ststim(loadkey):
                 'input_name': 'stim'}, ['rec'], ['rec']]]
     return xfspec
 
+@xform()
+def dlc(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+
+    options = {'sig': 'dlc'}
+
+    ops = loadkey.split(".")
+    for op in ops:
+        if op.isnumeric():
+            options['keep_dims'] = int(op)
+        elif op == 'nan':
+            options['empty_values'] = np.nan
+
+    xfspec = [['nems_lbhb.preprocessing.impute_multi', options]]
+
+    return xfspec
+
 
 @xform()
 def st(loadkey):
@@ -230,6 +250,8 @@ def st(loadkey):
             this_sig = ["pupil"]
         elif l.startswith("ppp"):
             this_sig = ["pupiln"]
+        elif l.startswith("dlc"):
+            this_sig = ["dlc"]
         elif l.startswith("dlp"):
             this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):

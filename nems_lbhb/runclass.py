@@ -398,8 +398,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             wav1 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav1,type1)]
             wav2 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav2,type2)]
 
-            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
-            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if (e.split("_")[0] != 'null') and (len(e.split("_")[0].split("-"))>3) else 0 for e in stim_epochs]
+            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if (e.split("_")[1] != 'null') and (len(e.split("_")[1].split("-"))>3) else 0 for e in stim_epochs]
         else:
             stim_epochs = exptevents.loc[exptevents.name.str.startswith("STIM_"),'name']
             stim_epochs = list(set([s.replace("STIM_","") for s in list(stim_epochs)]))
