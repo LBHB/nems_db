@@ -41,6 +41,7 @@ import nems_lbhb.baphy_io as io
 from nems0.utils import recording_filename_hash
 from nems0 import get_setting
 
+
 log = logging.getLogger(__name__)
 log = logging.getLogger(__name__)
 
@@ -217,6 +218,7 @@ class BAPHYExperiment:
         # add some new attributes for purposes of caching recordings
         self.animal = str(self.parmfile[0].parent).split(os.path.sep)[4]
         penname = str(self.parmfile[0].parent).split(os.path.sep)[5]
+
         # if batch is None, set batch = 'animal/siteid', unless "training" in parmfile.
         # If training, save in training director by setting batch = 'animal/trainingXXXX'
         if (self.batch is None) & ('training' in penname):
@@ -260,7 +262,21 @@ class BAPHYExperiment:
         '''
         Return path to OpenEphys tarfile containing recordings
         '''
-        path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
+        path = []
+        for i, e in enumerate(self.experiment):
+            testfile = (self.folder / 'raw' / e).with_suffix('.tgz')
+            if os.path.isfile(testfile):
+                path.append(testfile)
+            else:
+                testfile = (self.folder / 'raw' / self.openephys_folder[i])
+                if os.path.isfile(testfile):
+                    path.append(self.folder / 'raw' / self.openephys_folder[i])
+                else:
+                    path.append(None)
+                
+        #path = [(self.folder / 'raw' / e).with_suffix('.tgz') for e in self.experiment]
+        #path = [r.with_suffix('.tgz') for r in self.openephys_folder]
+
         return path
 
     @property
@@ -275,9 +291,14 @@ class BAPHYExperiment:
             with tarfile.open(manager.openephys_tarfile, 'r:gz') as fh:
                 fh.open(filename)
         '''
-        return [f.relative_to(t.parent) for f,t in zip(self.openephys_folder, self.openephys_tarfile)]
+        if None in self.openephys_tarfile:
+            return [None]
+        else:
+            return [f.relative_to(t.parent) for f,t in zip(self.openephys_folder, self.openephys_tarfile)]
+            
         #parent = self.openephys_tarfile.parent
         #return self.openephys_folder.relative_to(parent)
+
 
     @property
     @lru_cache(maxsize=128)
@@ -624,7 +645,7 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             rawhp = kwargs['rawhp']
             rawlp = kwargs['rawlp']
-            d, t0 = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy, selected_chs = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
             #import pdb;pdb.set_trace()
@@ -641,8 +662,8 @@ class BAPHYExperiment:
                     raise ValueError("Length of raw trace is shorter than max event in file {i}.")
             raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
-                        name='raw', recording=rec_name, chans=[str(c+1) for c in rawchans],
-                        epochs=e)
+                        name='raw', recording=rec_name, chans=selected_chs,
+                        epochs=e, meta={'channel_xy': channel_xy})
                         for e, r in zip(raw_baphy_events, d)]
             signals['raw'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 
@@ -652,7 +673,7 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             muabp = kwargs['muabp']
             # get mua data
-            d, t0 = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                  mua = True, chans=rawchans, rasterfs=fs, muabp=muabp)
             # create rasterized signal object
@@ -670,7 +691,7 @@ class BAPHYExperiment:
             raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='mua', recording=rec_name, chans=[str(c+1) for c in rawchans],
-                        epochs=e)
+                        epochs=e, channel_xy=channel_xy)
                         for e, r in zip(mua_baphy_events, d)]
             signals['mua'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 

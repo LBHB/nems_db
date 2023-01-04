@@ -52,7 +52,7 @@ def Root2Dict(El):
     Dict = {}
     #if El.tag == 'EDITOR':
     #    import pdb; pdb.set_trace()
-    if El.getchildren():
+    if len(list(El)):
         ch_count = 0
         for SubEl in El:
             if SubEl.keys():
