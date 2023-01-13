@@ -22,7 +22,7 @@ import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
-from scipy.interpolate import interp1d
+from scipy import interpolate
 import numpy as np
 import collections
 import json
@@ -1901,9 +1901,12 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
         options['siteid'] = siteid
 
     if batch is not None:
-        options["batch"] = batch
-        if int(batch) in [263, 294]:
-            options["runclass"] = "VOC"
+        try:
+            options["batch"] = batch
+            if int(batch) in [263, 294]:
+                options["runclass"] = "VOC"
+        except:
+            options['batch'] = 0
 
     if cellid is not None:
         options["cellid"] = cellid
@@ -2909,7 +2912,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             )
             # print("{0} len(d)={1} len(ti)={2} fs={3}"
             #       .format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -3160,7 +3163,7 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
                 (1 / rasterfs) / 2, duration[ii] + (1 / rasterfs) / 2, 1 / rasterfs
             )
             print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -3313,7 +3316,7 @@ def load_facepca_trace(facepcafilepath, exptevents=None, return_raw=False,
             )
             # print("{0} len(d)={1} len(ti)={2} fs={3}"
             #       .format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -3962,7 +3965,7 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, usespkfile=None):
+def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=False):
     """
     Return 1-D numpy array containing the mean sorted spike waveform
     :cellid: str
@@ -4065,7 +4068,15 @@ def get_mean_spike_waveform(cellid, usespkfile=None):
         mwf = w[:, kidx]
         return mwf
 
-
+    if load_from_db:
+        try:
+            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
+            d=db.pd_query(sql)
+            if len(d)>0:
+                mwf=np.array(eval(d.loc[0,'mean_waveform']))
+                return mwf
+        except:
+            pass
     if usespkfile is None:
         try:
             log.info('looking in spike.mat files')
@@ -4079,8 +4090,103 @@ def get_mean_spike_waveform(cellid, usespkfile=None):
         mwf = usenpyfile()
     else:
         raise ValueError(f'parameter usepkpfile has to be bool or None but is {usespkfile}')
+    if save_to_db:
+        s_mwf = ",".join([f"{x:.3f}" for x in mwf])
+        print("Mean waveform:", s_mwf)
+        sql = f"UPDATE gSingleCell set mean_waveform='[{s_mwf}]' WHERE cellid='{cellid}'"
+        db.sql_command(sql)
 
     return mwf
+
+def get_depth_info(cellid=None, siteid=None, rawid=None):
+    """
+    :param cellid:
+    :param siteid:
+    :param rawid:
+    :return:
+    """
+    if (cellid is not None):
+        if type(cellid) is str:
+            cellid = [cellid]
+        siteid = db.get_siteid(cellid[0])
+    else:
+        sql = f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'"
+        cellid = list(db.pd_query(sql)['cellid'])
+
+    sql="SELECT * FROM gDataRaw WHERE not(isnull(depthinfo)) and depthinfo<>''"
+    if siteid is not None:
+        sql += f" AND cellid='{siteid}'"
+    if rawid is not None:
+        rawstr = f" AND rawid={rawid}"
+    else:
+        rawstr = ""
+    sql += rawstr
+    dinfo = db.pd_query(sql)
+    if len(dinfo)==0:
+        raise ValueError(f"No depthinfo for siteid {siteid}")
+    d = json.loads(dinfo.loc[0,'depthinfo'])
+
+    dcell = {}
+    for c in cellid:
+        dcell[c] = {'siteid': siteid}
+        chstr = str(int(c.split("-")[1]))
+        dcell[c]['layer'], dcell[c]['depth'] = d[chstr]
+        try:
+            sql=f"SELECT * FROM gSingleRaw WHERE cellid='{c}'" + rawstr
+            dcell[c]['iso'] = db.pd_query(sql).iloc[0]['isolation']
+        except:
+            dcell[c]['iso'] = 0
+            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
+
+    return pd.DataFrame(dcell).T
+
+def get_spike_info(cellid=None, siteid=None, rawid=None):
+    """
+    :param cellid:
+    :param siteid:
+    :param rawid:
+    :return:
+    """
+    df_cell = get_depth_info(cellid=cellid, siteid=siteid, rawid=rawid)
+
+    df_cell[['sw','ptr','fwhm','mwf']] = np.nan
+    df_cell['mwf']=df_cell['mwf'].astype(object)
+    #df_cell = df_cell.reset_index()
+    #df_cell = df_cell.set_index('cellid')
+    for c in df_cell.index:
+        print(c)
+        mwf = get_mean_spike_waveform(c, save_to_db=True)[:-1]
+        mwf_len = len(mwf)
+        fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
+        mwf = fit2(np.linspace(0, mwf_len, 100))
+        fs = 100 / (mwf_len / 30000)
+
+        mwf /= abs(mwf).max()
+        df_cell.at[c, 'mwf'] = mwf
+        if mwf[np.argmax(np.abs(mwf))]>0:
+            mwf=-mwf
+        if mwf[np.argmax(np.abs(mwf))]<0:
+            trough = np.argmin(mwf[5:-5]) + 5
+            peak = np.argmax(mwf[trough:-5]) + trough
+
+            # force 0 to be the mean of the positive waveform preceding the valley
+            mi = np.argmax(mwf[:trough])
+            baseline = np.mean(mwf[:mi])
+            mwf -= baseline
+
+            df_cell.loc[c,'sw'] = (peak - trough) / fs * 1000 # ms
+
+            # get fwhm (of valley)
+            left = np.argmin(np.abs(mwf[:trough] - (mwf[trough] / 2)))
+            right = np.argmin(np.abs(mwf[trough:] - (mwf[trough] / 2))) + trough
+            df_cell.loc[c,'fwhm'] = right - left
+
+            if mwf[peak]<=0:
+                df_cell.loc[c,'ptr'] = 0
+            else:
+                df_cell.loc[c,'ptr'] = abs(mwf[peak]) / abs(mwf[trough])
+
+    return df_cell
 
 
 def parse_cellid(options):

@@ -1084,17 +1084,19 @@ def get_batch_cell_data(batch=None, cellid=None, rawid=None, label=None):
     return d
 
 
-def get_batches(name=None):
+def get_batches(name=None, verbose=True):
     # eg, sql="SELECT * from Batches WHERE batch=301"
-    engine = Engine()
     params = ()
     sql = "SELECT *,id as batch FROM sBatch WHERE 1"
     if name is not None:
         sql += " AND name like %s"
         params = params+("%"+name+"%",)
-    d = pd.read_sql(sql=sql, con=engine, params=params)
-
-    return d
+    d = pd_query(sql=sql, params=params)
+    if verbose:
+        for i, r in d.iterrows():
+            print(f"{r['batch']}: {r['name']} runclassid={r.runclassid}")
+    else:
+        return d
 
 
 def get_cell_files(cellid=None, runclass=None, rawid=None):

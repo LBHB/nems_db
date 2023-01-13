@@ -556,7 +556,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
-                db_atten = 10
+                db_atten = 6
                 factor = 10**(-db_atten/20)
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
