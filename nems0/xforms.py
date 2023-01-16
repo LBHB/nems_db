@@ -839,8 +839,13 @@ def sev(kw):
     for op in ops:
         if op=='seq':
             parms['epoch_regex']='^STIM_se'
-        elif op=='cont':
-            continuous=True
+        elif op == 'cont':
+            continuous = True
+        elif op == 'mono':
+            parms['selection'] = 'mono'
+        elif op == 'bin':
+            parms['selection'] = 'bin'
+            continuous = True
         elif op.startswith("k"):
             parms['keepfrac']=int(op[1:]) / 100
         elif op.startswith("f"):
@@ -1589,19 +1594,22 @@ def add_summary_statistics_by_condition(est, val, modelspec, evaluation_conditio
             epochs_list=evaluation_conditions,rec=rec, use_mask=use_mask)
     return {'modelspec': modelspec}
 
-def plot_summary(modelspec, val, figures=None, IsReload=False,
+def plot_summary(modelspec, val, IsReload=False,
                  figures_to_load=None, time_range = None, **context):
     # CANNOT initialize figures=[] in optional args our you will create a bug
 
-    if figures is None:
-        figures = []
-    if not IsReload:
+    figures = context.get('figures', [])
+    if IsReload:
+        if figures_to_load is not None:
+            figures.extend([load_resource(f) for f in figures_to_load])
+
+    elif modelspec.meta.get('fitter', 'basic')=='ccnorm':
+        from nems0.plots.state import cc_comp
+        return cc_comp(modelspec=modelspec, val=val, **context)
+    else:
         fig = modelspec.quickplot(time_range=time_range)
         # Needed to make into a Bytes because you can't deepcopy figures!
         figures.append(nplt.fig2BytesIO(fig))
-    else:
-        if figures_to_load is not None:
-            figures.extend([load_resource(f) for f in figures_to_load])
 
     return {'figures': figures}
 

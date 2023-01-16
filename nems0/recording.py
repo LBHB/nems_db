@@ -725,9 +725,14 @@ class Recording:
         return self._split_helper(lambda s: s.split_by_epochs(epochs_for_est,
                                                               epochs_for_val))
 
-    def split_using_epoch_occurrence_counts(self, epoch_regex=None, keepfrac=1,
+    def split_using_epoch_occurrence_counts(self, epoch_regex=None, keepfrac=1, selection=None,
                                             filemask=None, verbose=False, **context):
-        '''
+        """
+        :param epoch_regex:
+        :param keepfrac:
+        :param selection
+        :return:
+
         Returns (est, val) given a recording rec, a signal name 'stim_name', and an
         epoch_regex that matches 'various' epochs. This function will throw an exception
         when there are not exactly two values for the number of epoch occurrences; i.e.
@@ -742,7 +747,8 @@ class Recording:
         repetitions of the same stimuli so that we can more accurately estimate the peri-
         stimulus time histogram (PSTH). This function tries to split the data into those
         two data sets based on the epoch occurrence counts.
-        '''
+        """
+
         if filemask is None:
             groups = ep.group_epochs_by_occurrence_counts(self.epochs, epoch_regex)
         else:
@@ -756,7 +762,6 @@ class Recording:
             ep_sub = sum([e for k,e in groups.items()], [])
             ep_diff = list(set(ep_all)-set(ep_sub))
             groups= {0: ep_diff, 1: ep_sub}
-
         if len(groups) > 2:
             l=np.array(list(groups.keys()))
             k=l>np.mean(l)
@@ -789,7 +794,22 @@ class Recording:
         n_occurrences = sorted(groups.keys())
         lo_rep_epochs = groups[n_occurrences[0]]
         hi_rep_epochs = groups[n_occurrences[1]]
-        
+
+        if selection is not None:
+            mono_epochs = [e for e in lo_rep_epochs if 'NULL' in e]
+            bin_epochs = [e for e in lo_rep_epochs if 'NULL' not in e]
+            if selection == 'mono':
+                if len(mono_epochs) > len(bin_epochs):
+                    mono_epochs = mono_epochs[slice(0, -1, 2)]
+                    log.info('Mono stim only in fit set. Slicing subset to match len(bin_epochs)')
+                else:
+                    log.info(f"Mono stim only in fit set")
+                lo_rep_epochs = mono_epochs
+            elif selection == 'bin':
+                log.info(f"Binaural stim only in fit set")
+                lo_rep_epochs = bin_epochs
+            else:
+                raise ValueError(f"selection={selection} unknown")
         lo_count=len(lo_rep_epochs)
         keep_count=int(np.ceil(keepfrac*lo_count))
         if keepfrac<1:
