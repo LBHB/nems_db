@@ -1888,8 +1888,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options.update({'runclass': 'VOC'})
         elif op == 'bin':
             options.update({'binaural': 'crude'})
-        elif op == 'bin0':
-            options.update({'binaural': 'crude', 'binsplit': False})
+        elif op.startswith('bin'):
+            options.update({'binaural': float(op[3:]), 'binsplit': False})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader=' + loader)
@@ -4130,7 +4130,13 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     for c in cellid:
         dcell[c] = {'siteid': siteid}
         chstr = str(int(c.split("-")[1]))
-        dcell[c]['layer'], dcell[c]['depth'] = d[chstr]
+
+        dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
+        if dcell[c]['layer'].isnumeric():
+            dcell[c]['area'] = d['site area']
+        else:
+            dcell[c]['area'] = dcell[c]['layer']
+
         try:
             sql=f"SELECT * FROM gSingleRaw WHERE cellid='{c}'" + rawstr
             dcell[c]['iso'] = db.pd_query(sql).iloc[0]['isolation']
@@ -4140,7 +4146,7 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
 
     return pd.DataFrame(dcell).T
 
-def get_spike_info(cellid=None, siteid=None, rawid=None):
+def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     """
     :param cellid:
     :param siteid:
@@ -4155,7 +4161,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None):
     #df_cell = df_cell.set_index('cellid')
     for c in df_cell.index:
         print(c)
-        mwf = get_mean_spike_waveform(c, save_to_db=True)[:-1]
+        mwf = get_mean_spike_waveform(c, save_to_db=save_to_db)[:-1]
         mwf_len = len(mwf)
         fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
         mwf = fit2(np.linspace(0, mwf_len, 100))
@@ -4185,6 +4191,42 @@ def get_spike_info(cellid=None, siteid=None, rawid=None):
                 df_cell.loc[c,'ptr'] = 0
             else:
                 df_cell.loc[c,'ptr'] = abs(mwf[peak]) / abs(mwf[trough])
+
+    if save_to_db:
+        df_cell['cellid'] = df_cell.index
+        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[1]))
+        a = list(df_cell['area'])
+        if 'A1' in a:
+            default_area='A1'
+        elif 'PEG' in a:
+            default_area='PEG'
+        elif 'FC' in a:
+            default_area='FC'
+        elif 'BRD' in a:
+            default_area='BRD'
+        siteid=df_cell.iloc[0]['siteid']
+        sql = ("SELECT gPenetration.penname,gPenetration.numchans,gCellMaster.area FROM" +
+                " gPenetration INNER JOIN gCellMaster on gPenetration.id=gCellMaster.penid" +
+                f" WHERE gCellMaster.cellid='{siteid}'")
+        dp = db.pd_query(sql)
+        numchans = dp.loc[0,'numchans']
+        area_list = [''] * numchans
+        area_list[-1]=default_area
+        for i, r in df_cell.iterrows():
+            area_list[r['channum']-1] = r['area']
+        for i in range(numchans-2,-1,-1):
+            if area_list[i]=='':
+                area_list[i]=area_list[i+1]
+        area_string = ",".join(area_list)
+        if area_string!=dp.loc[0,'area']:
+            print('saving area labels back to sCellFile and gSingleCell')
+            sql = f"UPDATE gCellMaster set area='{area_string}' WHERE cellid='{siteid}'"
+            db.sql_command(sql)
+            for i, r in df_cell.iterrows():
+                sql = f"UPDATE gSingleCell SET area='{r.area}' WHERE cellid='{r.cellid}'"
+                db.sql_command(sql)
+                sql = f"UPDATE sCellFile SET area='{r.area}' WHERE cellid='{r.cellid}'"
+                db.sql_command(sql)
 
     return df_cell
 

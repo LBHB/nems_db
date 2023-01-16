@@ -8,9 +8,11 @@ from nems_lbhb.xform_wrappers import baphy_load_wrapper, generate_recording_uri
 from nems0.recording import load_recording
 from nems0 import db
 
-site_list = ['CLT007a', 'CLT014a', 'PRN007a', 'PRN014b', 'PRN015b', 'PRN023a']
+#site_list = ['CLT007a', 'CLT014a', 'PRN007a', 'PRN014b', 'PRN015b', 'PRN023a']
+site_list = ['CLT007a', 'CLT008a', 'CLT009a', 'CLT011a', 'CLT012a',
+             'PRN014b', 'PRN015b']
 
-d = [baphy_io.get_spike_info(siteid=s) for s in site_list]
+d = [baphy_io.get_spike_info(siteid=s, save_to_db=True) for s in site_list]
 d = pd.concat(d)
 
 #recs = []
@@ -34,7 +36,7 @@ j.ax_joint.plot([0.1, 0.8], [800, 800], 'k--')
 
 plt.figure()
 bad=0
-for i,r in d.loc[d.siteid=='PRN023a'].iterrows():
+for i,r in d.loc[d.siteid=='CLT007a'].iterrows():
     x0=r['sw']
     y0=r['depth']/1000
     mwf = -r['mwf']/10 + y0

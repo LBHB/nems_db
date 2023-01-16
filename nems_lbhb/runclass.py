@@ -303,9 +303,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     :param f_max: float
         gtgram max frequency
     :param mono: boolean [False]
-        if True, collapse wavs to single channel (dumb control for binaural)
-    :param binaural:
-        if True, apply model to simulate sound at each ear. Currently, a very dumb HRTF
+        if True, collapse into single channel but create fake shuffled channel to match dimensionality
+    :param binaural: {None, str}
+        if "crude", apply model to simulate sound at each ear. Currently, a very dumb HRTF
     :param options: dict
         extra stuff to pass through
     :return:
@@ -317,6 +317,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
 
     if (ReferenceClass=='BigNat') & \
             (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
+        # Binaural natural sounds
         sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
@@ -553,6 +554,12 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
                 w[:, [c2]] += w2
+            elif type(binaural) is float:
+                db_atten = binaural
+                factor = 10**(-db_atten/20)
+                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
@@ -566,7 +573,10 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             w /= sf
 
             wav_all[n] = w
-
+    if (binaural is None) | (binaural == False):
+        log.info('No binaural processing')
+    else:
+        log.info(f'binaural db_atten = {db_atten}')
     # pad with zeros and convert to from wav to output format (or passthrough wav)
     sg_unique = {}
     stimparam = {'rasterfs': rasterfs}
