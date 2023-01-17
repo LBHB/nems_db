@@ -836,30 +836,47 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
             mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
             for k in mapping_keys:
-                ch_num = mapping[k].get('Number')
-                if ch_num in recChans[connector]:
-                    # if info['INFO']['VERSION'] == '0.5.5.2':
-                    #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
-                    # else:
-                    recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+                if mapping[k].get('Enabled') == '1':
+                    ch_num = mapping[k].get('Number')
+                    if ch_num in recChans[connector]:
+                        # if info['INFO']['VERSION'] == '0.5.5.2':
+                        #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+                        # else:
+                        recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
 
-            recChans = [recChans[connector][i]['name_mapped'] \
+            # list of recorded channel numbers in OE scheme
+            recChans_list = [recChans[connector][i]['name_mapped'] \
                         for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
-            data_files = [connector + '_' + c + '.continuous' for c in recChans]
+            # list of mapped channel numbers in probe scheme - assuming channel map used is correct
+            recChan_probe = [str(int(recChans[connector][i]['number'] )+1) \
+                        for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+            data_files = [connector + '_' + c + '.continuous' for c in recChans_list]
             all_chans = np.arange(len(data_files))
+
+            # not a good directory to use for UCLA probe channel map...but couldn't find the original location
+            # need to find 128 channel directory. This assumes using UCLA 64D reversed. There is a 64D/M? recordings floating around.
+            # This should work for majority of cases and should be remedied if correct channel maps are found.
+            # In future may want to search channel map/probe location in db to find what type was used. Hack by looking at channel nums.
+
+            if len(all_chans) == 64:
+                chan_map_pd = pd.read_csv(
+                    '/auto/users/wingertj/code/csd_project/src/probe_specific/channel_map_64D_reverse.csv',
+                    delimiter=',', header=None, names=["channel number", "x", "y"])
+            elif len(all_chans) == 128:
+                pass
+            else:
+                raise ValueError("Unknown channel number: what probe is being used? add channel map")
+
+            all_chans_xy = {str(chan_map_pd['channel number'][i]): [str(chan_map_pd['x'][i]),str(chan_map_pd['y'][i])] for i in range(len(chan_map_pd))}
 
             if type(chans) is tuple:
                 chans = list(chans)
-
             idx = all_chans[chans].tolist()
             selected_data = np.take(data_files, idx)
-            recChans1 = [ch.split('CH')[1] for ch in recChans]
-            channel_xpos = [None for ch in selected_data]
-            channel_ypos = [None for ch in selected_data]
+            recChans1 = [ch.split('CH')[1] for ch in recChans_list]
             selected_chans = np.take(recChans1, idx)
-            selected_chans_xpos = np.take(channel_xpos, idx)
-            selected_chans_ypos = np.take(channel_ypos, idx)
-            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
+            selected_probe_chans = np.take(recChan_probe, idx)
+            selected_chans_xypos = {ch:all_chans_xy[ch] for ch in selected_probe_chans}
 
     selected_chans_str = [str(ch) for ch in selected_chans]
 
