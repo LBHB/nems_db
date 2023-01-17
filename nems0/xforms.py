@@ -838,17 +838,19 @@ def sev(kw):
     continuous=False
     for op in ops:
         if op=='seq':
-            parms['epoch_regex']='^STIM_se'
+            parms['epoch_regex'] = '^STIM_se'
         elif op == 'cont':
             continuous = True
         elif op == 'mono':
             parms['selection'] = 'mono'
         elif op == 'bin':
             parms['selection'] = 'bin'
+        elif op == 'match':
+            parms['selection'] = 'match'
         elif op.startswith("k"):
-            parms['keepfrac']=int(op[1:]) / 100
+            parms['keepfrac'] = int(op[1:]) / 100
         elif op.startswith("f"):
-            parms['filemask']=op[1:]
+            parms['filemask'] = op[1:]
         else:
             parms['epoch_regex'] = op
     

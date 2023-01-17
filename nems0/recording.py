@@ -811,8 +811,12 @@ class Recording:
                 log.info(f"Binaural stim only in fit set")
                 lo_rep_epochs = bin_epochs
             elif selection == 'match':
-                log.info('Macthing fit set size to mono- or bin-only fits')
-                raise ValueError('matched not supported yet')
+                mono_epochs = [e for e in lo_rep_epochs if 'NULL' in e]
+                bin_epochs = [e for e in lo_rep_epochs if 'NULL' not in e]
+                minlen = np.min([len(mono_epochs),len(bin_epochs)])
+                l = int(minlen/2)
+                log.info(f'Matching fit set size to mono- or bin-only fits ({l} each)')
+                lo_rep_epochs = mono_epochs[:l] + bin_epochs[:(minlen-l)]
             else:
                 raise ValueError(f"selection={selection} unknown")
         lo_count=len(lo_rep_epochs)
