@@ -816,7 +816,7 @@ class Recording:
                 minlen = np.min([len(mono_epochs),len(bin_epochs)])
                 l = int(minlen/2)
                 log.info(f'Matching fit set size to mono- or bin-only fits ({l} each)')
-                lo_rep_epochs = mono_epochs[:l] + bin_epochs[:(minlen-l)]
+                lo_rep_epochs = mono_epochs[slice(0,l*2,2)] + bin_epochs[slice(0,(minlen-l)*2,2)]
             else:
                 raise ValueError(f"selection={selection} unknown")
         lo_count=len(lo_rep_epochs)
