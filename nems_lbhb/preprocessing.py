@@ -1524,7 +1524,7 @@ if __name__ == '__main__':
 
     pass
 
-def impute_multi(rec=None, sig='dlc', new_sig=None,
+def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
                  empty_values=None, keep_dims=None, **ctx):
     """
     Fill in nan values using signals in other channels. Currently for inferring
@@ -1552,8 +1552,9 @@ def impute_multi(rec=None, sig='dlc', new_sig=None,
         new_chans = newrec[sig].chans
 
     # normalize 0 to 1 - same scale for all channels
-    data_imp -= np.nanmin(data_imp)
-    data_imp /= np.nanmax(data_imp)
+    if norm:
+        data_imp -= np.nanmin(data_imp)
+        data_imp /= np.nanmax(data_imp)
 
     newrec[new_sig] = newrec[sig]._modified_copy(data=data_imp, chans=new_chans)
 

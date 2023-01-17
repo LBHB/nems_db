@@ -4153,6 +4153,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     :param rawid:
     :return:
     """
+    print(f"Compiling site info for {siteid}")
     df_cell = get_depth_info(cellid=cellid, siteid=siteid, rawid=rawid)
 
     df_cell[['sw','ptr','fwhm','mwf']] = np.nan
@@ -4160,7 +4161,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     #df_cell = df_cell.reset_index()
     #df_cell = df_cell.set_index('cellid')
     for c in df_cell.index:
-        print(c)
+        #print(c)
         mwf = get_mean_spike_waveform(c, save_to_db=save_to_db)[:-1]
         mwf_len = len(mwf)
         fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
@@ -4169,15 +4170,19 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
 
         mwf /= abs(mwf).max()
         df_cell.at[c, 'mwf'] = mwf
-        if mwf[np.argmax(np.abs(mwf))]>0:
-            mwf=-mwf
+        if mwf[np.argmax(np.abs(mwf))] > 0:
+            mwf = -mwf
         if mwf[np.argmax(np.abs(mwf))]<0:
             trough = np.argmin(mwf[5:-5]) + 5
             peak = np.argmax(mwf[trough:-5]) + trough
 
             # force 0 to be the mean of the positive waveform preceding the valley
             mi = np.argmax(mwf[:trough])
-            baseline = np.mean(mwf[:mi])
+            if len(mwf[:mi]) == 0:
+                print('zero mwf mi')
+                baseline = 0
+            else:
+                baseline = np.mean(mwf[:mi])
             mwf -= baseline
 
             df_cell.loc[c,'sw'] = (peak - trough) / fs * 1000 # ms

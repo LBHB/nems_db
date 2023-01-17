@@ -798,6 +798,8 @@ class Recording:
         if selection is not None:
             mono_epochs = [e for e in lo_rep_epochs if 'NULL' in e]
             bin_epochs = [e for e in lo_rep_epochs if 'NULL' not in e]
+            #hi_mono_epochs = [e for e in hi_rep_epochs if 'NULL' in e]
+            #hi_bin_epochs = [e for e in hi_rep_epochs if 'NULL' not in e]
             if selection == 'mono':
                 if len(mono_epochs) > len(bin_epochs):
                     mono_epochs = mono_epochs[slice(0, -1, 2)]
@@ -808,6 +810,9 @@ class Recording:
             elif selection == 'bin':
                 log.info(f"Binaural stim only in fit set")
                 lo_rep_epochs = bin_epochs
+            elif selection == 'match':
+                log.info('Macthing fit set size to mono- or bin-only fits')
+                raise ValueError('matched not supported yet')
             else:
                 raise ValueError(f"selection={selection} unknown")
         lo_count=len(lo_rep_epochs)

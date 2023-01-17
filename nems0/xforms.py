@@ -845,7 +845,6 @@ def sev(kw):
             parms['selection'] = 'mono'
         elif op == 'bin':
             parms['selection'] = 'bin'
-            continuous = True
         elif op.startswith("k"):
             parms['keepfrac']=int(op[1:]) / 100
         elif op.startswith("f"):
