@@ -1181,7 +1181,7 @@ class Recording:
 
         return Recording(newsigs)
 
-    def create_mask(self, epoch=None, base_signal=None):
+    def create_mask(self, epoch=None, base_signal=None, mask_name='mask'):
         '''
         inputs:
             epoch: {None, boolean, ndarray, string, list}
@@ -1209,7 +1209,7 @@ class Recording:
         except AttributeError:
             # Only rasterized signals support _modified_copy
             mask_sig = base_signal.rasterize()._modified_copy(mask)
-        mask_sig.name = 'mask'
+        mask_sig.name = mask_name
 
         rec.add_signal(mask_sig)
 
@@ -1276,9 +1276,13 @@ class Recording:
         Used to excise data based on boolean called mask. Returns new recording
         with only data specified mask. To make mask, see "create_mask"
         '''
-        if mask_name not in self.signals.keys():
-            log.info("No mask exists, apply_mask() simply copying recording.")
-            return self.copy()
+        if (type(mask_name) is str):
+            if (mask_name not in self.signals.keys()):
+                log.info("No mask exists, apply_mask() simply copying recording.")
+                return self.copy()
+            log.info(f'mask_name={mask_name}')
+        else:
+            mask_name = 'mask'
 
         rec = self.copy()
         sig = rec[mask_name]

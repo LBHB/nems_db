@@ -876,10 +876,14 @@ def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, keepfra
         val_list.append(val)
 
     if return_reclist:
-        return {'est': est_list[0], 'val': val_list[0], 'est_list': est_list, 'val_list': val_list}
+        c = {'est': est_list[0], 'val': val_list[0], 'est_list': est_list, 'val_list': val_list}
     else:
-        return {'est': est, 'val': val}
+        c = {'est': est, 'val': val}
 
+    if context.get('selection', '') in ['mono','bin','match']:
+        c['eval_binaural'] = True
+
+    return c
 
 @xform()
 def tev(kw):
@@ -1465,7 +1469,7 @@ def predict(modelspec, est, val, est_list=None, val_list=None, jackknifed_fit=Fa
 
 
 def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, rec_list=None, fn='standard_correlation',
-                           rec=None, use_mask=True, IsReload=False, **context):
+                           rec=None, use_mask=True, eval_binaural=False, IsReload=False, **context):
     '''
     standard_correlation: average all correlation metrics and add
                           to first modelspec only.
@@ -1487,6 +1491,20 @@ def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, re
             modelspec.set_cell(cellidx)
             log.info(f'cell_index: {cellidx}')
         modelspec = corr_fn(est, val, modelspec=modelspec, rec=rec, use_mask=use_mask)
+
+        if eval_binaural:
+            val_epochs = ep.epoch_names_matching(val['resp'].epochs, "^STIM_")
+            mono_epochs = [e for e in val_epochs if 'NULL' in e]
+            bin_epochs = [e for e in val_epochs if 'NULL' not in e]
+            val = val.create_mask(mono_epochs, mask_name='mono_mask')
+            val = val.create_mask(bin_epochs, mask_name='bin_mask')
+            modelspec_mono = modelspec.copy()
+            # don't pass rec so set to None and skip r_ceiling calc for subset evals
+            modelspec_mono = corr_fn(est, val, modelspec=modelspec_mono, use_mask='mono_mask')
+            modelspec_bin = modelspec.copy()
+            modelspec_bin = corr_fn(est, val, modelspec=modelspec_bin, use_mask='bin_mask')
+            modelspec.meta['r_test_mono'] = modelspec_mono.meta['r_test']
+            modelspec.meta['r_test_bin'] = modelspec_bin.meta['r_test']
 
         if model_engine == 'nems-lite':
             pass

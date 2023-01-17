@@ -66,8 +66,10 @@ modelnames=[
 ]
 
 model_base = "wc.Nx40-fir.1x15x40-relu.40.f-wc.40x40-fir.1x10x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
-model_base = "wc.Nx40-fir.1x25x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
+
 model_base = "wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R"
+model_base = "wc.Nx40-fir.1x25x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
+
 modelnames = [
     f"gtgram.fs100.ch18.mono-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
     f"gtgram.fs100.ch18-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
