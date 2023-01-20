@@ -317,7 +317,6 @@ def do_decoding_analysis(lv_model=True, **ctx):
         # print every 500th pair. Don't want to overwhelm log
         if (stim_pair_idx % 500) == 0:
             log.info("Analyzing stimulus pair {0} / {1}".format(stim_pair_idx, len(all_combos)))
-        import pdb;pdb.set_trace()
         if combo in spont_combos:
             category = 'spont_spont'
         elif combo in spont_ev_combos:
@@ -464,7 +463,6 @@ def do_decoding_analysis(lv_model=True, **ctx):
                 tdr_results.loc[tdr_idx, temp_tdr_results.keys()] = temp_tdr_results.iloc[0].values
                 temp_tdr_results = pd.DataFrame()
             tdr_idx += 1
-            import pdb; pdb.set_trace()
 
             # ============================== PCA ANALYSIS ===============================
             if do_PCA:
@@ -548,7 +546,6 @@ def do_decoding_analysis(lv_model=True, **ctx):
     get_mean = lambda x: (pr[pr.stim==x[0]]['range'] + pr[pr.stim==x[1]]['range']) / 2
     pr_range = combos.apply(get_mean)
     tdr_results['mean_pupil_range'] = pr_range.values
-
     # convert to correct dtypes
     tdr_results = decoding.cast_dtypes(tdr_results)
     if do_PCA:
@@ -558,6 +555,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     # collapse over results to save disk space by packing into "DecodingResults object"
     log.info("Compressing results into DecodingResults object... ")
+    tdr_copy = tdr_results.copy()
     tdr_results = decoding.DecodingResults(tdr_results, pupil_range=pupil_range)
     if do_PCA:
         pca_results = decoding.DecodingResults(pca_results, pupil_range=pupil_range)
@@ -573,16 +571,18 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     results_path = ctx['modelspec'][0]['meta']['modelpath']
     log.info(f"Saving results to {results_path}")
-
-    tdr_results.save_pickle(os.path.join(results_path, modelname+'_TDR.pickle'))
-
+    if lv_model:
+        tdr_results.save_pickle(os.path.join(results_path, modelname+'_TDR.pickle'))
+    else:
+        tdr_results.save_pickle(os.path.join(results_path, 'resp'+'_TDR.pickle'))
+        
     if do_PCA:
         pca_results.save_pickle(os.path.join(results_path, modelname+'_PCA.pickle'))
 
     if do_pls:
         pls_results.save_pickle(os.path.join(results_path, modelname+'_PLS.pickle'))
 
-    return 0
+    return tdr_results
 
     # log.info("Saving results to {}".format(os.path.join(path, str(batch))))
     # if not os.path.isdir(os.path.join(path, str(batch))):
