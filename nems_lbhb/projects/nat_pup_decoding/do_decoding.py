@@ -31,7 +31,7 @@ import nems_lbhb.projects.nat_pup_decoding.preprocessing as nat_preproc
 import nems_lbhb.projects.nat_pup_decoding.decoding as decoding
 import nems_lbhb.projects.nat_pup_decoding.dim_reduction as dr
 
-import nems
+import nems0
 import nems_lbhb.baphy as nb
 import nems0.db as nd
 import logging
@@ -317,6 +317,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
         # print every 500th pair. Don't want to overwhelm log
         if (stim_pair_idx % 500) == 0:
             log.info("Analyzing stimulus pair {0} / {1}".format(stim_pair_idx, len(all_combos)))
+        import pdb;pdb.set_trace()
         if combo in spont_combos:
             category = 'spont_spont'
         elif combo in spont_ev_combos:
@@ -456,7 +457,6 @@ def do_decoding_analysis(lv_model=True, **ctx):
                 tdr_results = pd.DataFrame(index=tdr_index, columns=temp_tdr_results.columns)
                 tdr_results.loc[tdr_idx] = temp_tdr_results.iloc[0].values
                 temp_tdr_results = pd.DataFrame()
-
             else:
                 temp_tdr_results = temp_tdr_results.append([_tdr_results])
                 #t = {k: [v] for k,v in _tdr_results.items()}
@@ -464,6 +464,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
                 tdr_results.loc[tdr_idx, temp_tdr_results.keys()] = temp_tdr_results.iloc[0].values
                 temp_tdr_results = pd.DataFrame()
             tdr_idx += 1
+            import pdb; pdb.set_trace()
 
             # ============================== PCA ANALYSIS ===============================
             if do_PCA:

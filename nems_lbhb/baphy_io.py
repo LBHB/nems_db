@@ -2395,7 +2395,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
                 if chancount <= 8:
                     unit_names.append("{0}{1}".format(chan_names[c], u + 1))
                 else:
-                    unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                    unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                 spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
@@ -2539,7 +2539,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                         # unit_names.append("{0}{1}".format(chan_names[c], u+1))
                         unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
-                        unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                        unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                     spiketimes.append(unit_spike_events / spikefs)
 
                 # else:

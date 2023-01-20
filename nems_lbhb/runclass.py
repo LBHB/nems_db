@@ -439,6 +439,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
 
+    if len(stim_epochs) == 0:
+        return {}, [], {}
+
     max_chans = np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
     max_chans_was = max_chans
     if mono:
