@@ -1102,7 +1102,7 @@ class indep_noise(NemsModule):
         mean_g = np.zeros([n_chans, n_states])
         sd_g = np.ones([n_chans, n_states])/10
         if poisson:
-            mean_g[:,0]=0.1
+            mean_g[:,0]=0.2
         elif additive:
             mean_g[:,0]=0.5
         else:
@@ -1155,7 +1155,7 @@ class indep_noise(NemsModule):
             if poisson:
                 x[x<0]=0
                 rng = np.random.default_rng(2021)
-                x = rng.poisson(x).astype(float) * 0.75 + x * 0.25
+                x = rng.poisson(x).astype(float) * 0.5 + x * 0.5
             return x
 
         def fn_additive(x):
@@ -1163,7 +1163,7 @@ class indep_noise(NemsModule):
             if poisson:
                 x[x<0]=0
                 rng = np.random.default_rng(2021)
-                x = rng.poisson(x).astype(float) * 0.75 + x * 0.25
+                x = rng.poisson(x).astype(float) * 0.5 + x * 0.5
             return x
         
         if additive:
