@@ -1155,7 +1155,7 @@ class indep_noise(NemsModule):
             if poisson:
                 x[x<0]=0
                 rng = np.random.default_rng(2021)
-                x = rng.poisson(x).astype(float) * 0.25 + x * 0.75
+                x = rng.poisson(x).astype(float) * 0.1 + x * 0.9
             return x
 
         def fn_additive(x):
@@ -1163,7 +1163,7 @@ class indep_noise(NemsModule):
             if poisson:
                 x[x<0]=0
                 rng = np.random.default_rng(2021)
-                x = rng.poisson(x).astype(float) * 0.25 + x * 0.75
+                x = rng.poisson(x).astype(float) * 0.1 + x * 0.9
             return x
         
         if additive:
