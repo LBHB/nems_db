@@ -394,17 +394,20 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
         for i, r in enumerate(rec_list):
             newrec = r.copy()
             s = newrec[sig].rasterize()
-
-            if log_compress != 'None':
-               from nems0.modules.nonlinearity import _dlog
-               fn = lambda x: _dlog(x, -log_compress)
-               s=s.transform(fn, sig)
-            newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
-            new_rec_list.append(newrec)
-            if (sig=='stim') and (i==0):
-                b=newrec[sig].norm_baseline
-                g=newrec[sig].norm_gain
-            log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+            if norm_method=='sqrt':
+                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
+            else:
+                if log_compress != 'None':
+                   from nems0.modules.nonlinearity import _dlog
+                   fn = lambda x: _dlog(x, -log_compress)
+                   s=s.transform(fn, sig)
+                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
+                new_rec_list.append(newrec)
+                if (sig=='stim') and (i==0):
+                    b=newrec[sig].norm_baseline
+                    g=newrec[sig].norm_gain
+                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
             
         if return_reclist:
             return {'rec': rec_list[0], 'rec_list': new_rec_list}

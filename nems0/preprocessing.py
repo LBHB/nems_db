@@ -949,6 +949,7 @@ def generate_psth_from_resp(rec, resp_sig='resp', epoch_regex='^(STIM_|TAR_|CAT_
         total += v.mean(axis=2, keepdims=True).sum(axis=0)
         total_n += v.shape[0]
 
+
     #import pdb; pdb.set_trace()
     if mean_zero:
         total=total/total_n
@@ -960,11 +961,12 @@ def generate_psth_from_resp(rec, resp_sig='resp', epoch_regex='^(STIM_|TAR_|CAT_
     if channel_per_stim:
         raise ValueError('channel_per_stim not yet supported')
 
-    respavg = resp.replace_epochs(per_stim_psth, zero_outside=True)
+    #respavg = resp.replace_epochs(per_stim_psth, zero_outside=True)
+    respavg = resp.replace_epochs(per_stim_psth)
     respavg_with_spont = resp.replace_epochs(per_stim_psth_spont)
     respavg.name = 'psth'
     respavg_with_spont.name = 'psth_sp'
-
+    
     # Fill in a all non-masked periods with 0 (presumably, these are spont
     # periods not contained within stimulus epochs), or spont rate (for the signal
     # containing spont rate)
@@ -975,9 +977,7 @@ def generate_psth_from_resp(rec, resp_sig='resp', epoch_regex='^(STIM_|TAR_|CAT_
         mask_data = newrec['mask']._data
     else:
         mask_data = np.ones(respavg_data.shape).astype(np.bool)
-
     spont_periods = ((np.isnan(respavg_data)) & (mask_data==True))
-
     respavg_data[:, spont_periods[0,:]] = 0
     # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
 

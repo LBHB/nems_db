@@ -598,3 +598,24 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     # if do_pls:
     #     pls_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PLS.pickle'))
+
+def load_decoding_set(cellid, batch, modelnames):
+    ctx=[{}]*len(modelnames)
+    tdr_pred=[]
+    for i,m in enumerate(modelnames):
+        xfspec,ctx[i]=nems0.xform_helper.load_model_xform(cellid, batch, m, eval_model=False)
+        modelpath = ctx[i]['modelspec'].meta['modelpath']
+        decode_file = modelpath + '/decoding_TDR.pickle'
+        resp_file = modelpath + '/resp_TDR.pickle'
+        if os.path.exists(decode_file):
+            with open(decode_file, 'rb') as handle:
+                tdr_pred.append(pickle.load(handle))
+            if i==0:
+                with open(resp_file, 'rb') as handle:
+                    tdr_resp = pickle.load(handle)
+        else:
+            xfspec,ctx[i]=nems0.xform_helper.load_model_xform(cellid, batch, m)
+            tdr_pred.append(do_decoding_analysis(lv_model=True, **ctx[i]))
+            if i==0:
+                tdr_resp = do_decoding_analysis(lv_model=False, **ctx[i])
+    return ctx, tdr_pred, tdr_resp
