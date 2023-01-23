@@ -1102,7 +1102,7 @@ class indep_noise(NemsModule):
         mean_g = np.zeros([n_chans, n_states])
         sd_g = np.ones([n_chans, n_states])/10
         if poisson:
-            mean_g[:,0]=0.05
+            mean_g[:,0]=0.1
         elif additive:
             mean_g[:,0]=0.5
         else:
