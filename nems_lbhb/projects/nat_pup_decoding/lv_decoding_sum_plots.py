@@ -35,9 +35,9 @@ CPN_SITES = ['AMT020a', 'AMT026a', 'ARM029a', 'ARM031a',
        'ARM032a', 'ARM033a', 'CRD018d',
        'TNC006a', 'TNC008a', 'TNC009a', 'TNC010a', 'TNC012a',
        'TNC013a', 'TNC014a', 'TNC015a', 'TNC016a', 'TNC017a', 'TNC018a',
-       'TNC019a', 'TNC020a', 'TNC021a', 'TNC043a', 'TNC044a', 'TNC045a']
+       'TNC020a', 'TNC021a', 'TNC043a', 'TNC044a', 'TNC045a'] # 'TNC019a',
 
-figpath = '/auto/users/svd/docs/current/pupil_pop/2023_02_03/'
+figpath = '/auto/users/svd/docs/current/pupil_pop/2023_02_08/'
 
 #batch = 322
 batch = 331
@@ -59,11 +59,18 @@ elif batch == 331:
 
     states = ['st.pup+r3+s0,1,2,3','st.pup+r3+s1,2,3','st.pup+r3+s2,3','st.pup+r3+s3','st.pup+r3']
     if use_sqrt:
+
+        # V2 -- dc offset in state before multiply by LV -- avoid double-negative.
+        modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
+                      "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
+                      "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0.V2"
+                      for s in states]
         # lvnorm without so
         modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
                       "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
                       "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
                       for s in states]
+
     else:
         # lvnorm without so, no sqrt norm
         modelnames = [f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
@@ -241,7 +248,11 @@ for s in range(0,4):
     a = dfsum.loc[dfsum.stateid==s,'cc']
     b = dfsum.loc[dfsum.stateid==(s+1),'cc']
     T, p = ttest_rel(a,b)
-    print(state_labels[s], state_labels[s+1],T,p)
+    print("CC:", state_labels[s], state_labels[s+1],T,p)
+    a = dfsum.loc[dfsum.stateid==s,'ccnorm']
+    b = dfsum.loc[dfsum.stateid==(s+1),'ccnorm']
+    T, p = ttest_rel(a,b)
+    print("CC norm:", state_labels[s], state_labels[s+1],T,p)
 
 #mean_dp = tdr_pred.groupby(['stateid','siteid']).median()
 #mean_dp = mean_dp.reset_index()
@@ -404,7 +415,7 @@ c1,c2,highlight_bin = 11,26,0
 f,ax=plt.subplots(figsize=(3,3))
 cc=0
 for k,v_ in r.items():
-    for i in range(v.shape[2]):
+    for i in range(v_.shape[2]):
         v=v_  #**2
         j = np.random.randn(v.shape[0],2)/40+1
         e1 = compute_ellipse(v[:, c1, i], v[:, c2, i])
