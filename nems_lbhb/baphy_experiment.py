@@ -397,9 +397,13 @@ class BAPHYExperiment:
             return [io.baphy_align_time_openephys(ev, ts, rfs, rasterfs) 
                     for ev, ts, rfs in zip(baphy_events,trial_starts, raw_rasterfs)]
         elif correction_method in ['spikes','psi']:
-            spikedata = self._get_spikes()
-            exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], rasterfs)[0] for (ev, spd)
-                                in zip(baphy_events, spikedata)]
+            try:
+                spikedata = self._get_spikes()
+                exptevents = [io.baphy_align_time(ev, spd['sortinfo'], spd['spikefs'], rasterfs)[0] for (ev, spd)
+                                    in zip(baphy_events, spikedata)]
+            except:
+                print(f"Sorted data doesn't exist. Just align video and psi events?")
+                exptevents = [io.baphy_align_time_psi(ev, None, 30000, rasterfs)[0] for ev in baphy_events]
             return exptevents
         mesg = 'Unsupported correction method "{correction_method}"'
         raise ValueError(mesg)
@@ -622,6 +626,7 @@ class BAPHYExperiment:
                         _goodtrials[(int(b1[0])-1):int(b1[1])] = True
 
                     goodtrials[i] = list(_goodtrials)
+                    log.info(f"Good trials: {np.sum(goodtrials[i])}/{len(goodtrials[i])}")
         
         baphy_events = [baphy_events_to_epochs(bev, parm, gparm, i, goodtrials=gtrials, **kwargs) for i, (bev, parm, gparm, gtrials) in enumerate(zip(exptevents, exptparams, globalparams, goodtrials))]
 
@@ -1271,7 +1276,7 @@ class BAPHYExperiment:
                     for i in range(len(self.cells_to_load)):
                         if self.channels_to_load is not None:
                             # Use channel_to_load and units_to_load
-                            chan_unit_str = '{:02d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                            chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]

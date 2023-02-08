@@ -33,8 +33,9 @@ def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
         SD of Gaussian smoothing prior to velocity computation
     :param fs: int
         sampling rate so vel values are in sec^-1 units (default 1)
-    :return:  d, theta, dvel, thetavel: 1XT np.arrays of distance and angle (CW) from
+    :return:  d, theta, dvel,  theta_vel, d_fwd, d_lat: 1XT np.arrays of distance and angle (CW) from
         sound source and their derivatives
+        d_fwd, d_lat = (nose-ward, right-ward) linear velocity
     """
     if ref_x0y0 is None:
         # spout position
@@ -69,41 +70,47 @@ def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
     theta[theta > np.pi] = (theta[theta > np.pi] - 2 * np.pi)
     theta *= 180 / np.pi
 
-    if egocentric_velocity:
-        v = np.concatenate([np.diff(smooth(dlc_data[0:2, :], smooth_win), axis=1),
-                            np.zeros((2, 1))], axis=1) * fs
-        #v = np.concatenate([np.diff(dlc_data[0:2, :], axis=1),
-        #                    np.zeros((2, 1))], axis=1)
-
-        # (deltax,deltay) nose-headpost
-        dhead = dlc_data[0:2, :] - dlc_data[2:4, :]
-        lenhead = np.sqrt(np.sum(dhead**2,axis=0,keepdims=True))
-        u_head = dhead/lenhead
-        d_vel = np.sum(v * u_head, axis=0, keepdims=True)
-        d_vec = d_vel * (dhead/lenhead)
-    else:
-        d_vel = np.concatenate([np.diff(smooth(d,smooth_win), axis=1),np.array([[0]])], axis=1)*fs
+    #v = np.concatenate([np.diff(dlc_data[0:2, :], axis=1),
+    #                    np.zeros((2, 1))], axis=1)
+    d_vel = np.concatenate([np.diff(smooth(d, smooth_win), axis=1), np.array([[0]])], axis=1) * fs
     theta_vel = np.concatenate([np.diff(smooth(theta,smooth_win), axis=1),np.array([[0]])], axis=1)*fs
+
+    # egocentric velocity -- (fwd, lateral)
+    # (deltax,deltay) nose-headpost
+    v = np.concatenate([np.diff(smooth(dlc_data[0:2, :], smooth_win), axis=1),
+                        np.zeros((2, 1))], axis=1) * fs
+
+    dhead = dlc_data[0:2, :] - dlc_data[2:4, :]
+    lenhead = np.sqrt(np.sum(dhead**2,axis=0,keepdims=True))
+    u_head = dhead/lenhead
+    d_fwd = np.sum(v * u_head, axis=0, keepdims=True)
+    d_vec = d_fwd * u_head
+    l_vec = v - d_vec
+    u_lat = np.concatenate([u_head[[1],:], -u_head[[0],:]], axis=0)
+    d_lat = np.sum(v * u_lat, axis=0, keepdims=True)
 
     if verbose:
         plt.close('all')
         plt.figure()
-        t=0
-        for t in range(1000,2000,1):
-            plt.plot(dlc_data[[2,0],t],dlc_data[[3,1],t], color='lightgray',lw=0.5)
-            plt.plot(dlc_data[0,t],dlc_data[1,t],'ko', markersize=2)
-            plt.arrow(dlc_data[0,t],dlc_data[1,t], v[0,t], v[1,t],
+        t = 0
+        for t in range(1000, 1100, 1):
+            plt.plot(dlc_data[[2, 0], t], dlc_data[[3, 1], t], color='lightgray', lw=0.5)
+            plt.plot(dlc_data[0, t], dlc_data[1, t], 'ko', markersize=2)
+            plt.arrow(dlc_data[0, t], dlc_data[1, t], v[0, t], v[1, t],
                       color='r', width=0.005,
-                      length_includes_head=True, head_width=3)
-            plt.arrow(dlc_data[0,t],dlc_data[1,t], d_vec[0,t], d_vec[1,t],
+                      length_includes_head=True, head_width=0.01)
+            plt.arrow(dlc_data[0, t], dlc_data[1, t], d_vec[0, t], d_vec[1, t],
                       color='g', width=0.005,
-                      length_includes_head=True, head_width=3)
-            #plt.plot([dlc_data[0,t],dlc_data[0,t]+d_vec[0,t]],[dlc_data[1,t],dlc_data[1,t]+d_vec[1,t]],'g-',lw=1)
+                      length_includes_head=True, head_width=0.01)
+            plt.arrow(dlc_data[0, t], dlc_data[1, t], l_vec[0, t], l_vec[1, t],
+                      color='b', width=0.005,
+                      length_includes_head=True, head_width=0.01)
+            # plt.plot([dlc_data[0,t],dlc_data[0,t]+d_vec[0,t]],[dlc_data[1,t],dlc_data[1,t]+d_vec[1,t]],'g-',lw=1)
 
         plt.gca().set_aspect('equal')
-        #plt.plot(d[0,::20],theta[0,::20],'.')
+        # plt.plot(d[0,::20],theta[0,::20],'.')
 
-    return d, theta, d_vel, theta_vel
+    return d, theta, d_vel, theta_vel, d_fwd, d_lat
 
 def dlc2dist(rec, rasterfs=1, **d_theta_opts):
     """
@@ -120,7 +127,7 @@ def dlc2dist(rec, rasterfs=1, **d_theta_opts):
     dlc_data_imp = newrec['dlc'][:, :]
     rasterfs = newrec['dlc'].fs
 
-    if False:
+    if d_theta_opts.get('verbose', False):
         f, ax = plt.subplots(4,1)
 
         for i, a in enumerate(ax):
@@ -134,10 +141,11 @@ def dlc2dist(rec, rasterfs=1, **d_theta_opts):
     # spout position
     spout_x0y0 = (470, 90)
 
-    d, theta, vel, rvel = compute_d_theta(dlc_data_imp, fs=rasterfs, **d_theta_opts)
+    d, theta, vel, rvel, d_fwd, d_lat = compute_d_theta(dlc_data_imp, fs=rasterfs, **d_theta_opts)
 
-    dist = np.concatenate((d, theta, vel, rvel), axis=0)
-    newrec['dist'] = newrec['dlc']._modified_copy(data=dist)
+    dist = np.concatenate((d, theta, vel, rvel, d_fwd, d_lat), axis=0)
+    newrec['dist'] = newrec['dlc']._modified_copy(
+        data=dist, chans=['d', 'theta', 'v', 'v_theta', 'v_fwd', 'v_lat'])
 
     return newrec
 
@@ -147,7 +155,7 @@ def free_scatter_sum(rec):
     :param rec: recording with dist signal added
     :return: f: handle to new figure
     """
-    f,ax = plt.subplots(1,3,figsize=(12,4))
+    f,ax = plt.subplots(1,4,figsize=(12,3))
     ax[0].plot(rec['dlc'][0,::20],500+rec['dlc'][1,::20],'.',markersize=2)
     ax[0].plot(rec['dlc'][2,::20],500+rec['dlc'][3,::20],'.',markersize=2)
     ax[0].invert_yaxis()
@@ -166,6 +174,13 @@ def free_scatter_sum(rec):
     ax[2].set_xlim([-100,100])
     ax[2].set_ylim([-100,100])
     ax[2].invert_yaxis()
+
+    ax[3].plot(rec['dist'][5,::20],rec['dist'][4,::20],'.',markersize=2)
+    ax[3].set_xlabel('Fwd velocity (pix/sec)', fontsize=10)
+    ax[3].set_ylabel('Rightward velocity (pix/sec)', fontsize=10)
+    ax[3].set_xlim([-150,150])
+    ax[3].set_ylim([-150,150])
     plt.tight_layout()
 
     return f
+

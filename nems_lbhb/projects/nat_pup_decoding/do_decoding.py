@@ -23,7 +23,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 print("suppressing FutureWarnings")
 
-import pandas as pd 
+import pandas as pd
 import pickle
 import sys
 
@@ -34,11 +34,34 @@ import nems_lbhb.projects.nat_pup_decoding.dim_reduction as dr
 import nems0
 import nems_lbhb.baphy as nb
 import nems0.db as nd
+from nems0 import xform_helper
 import logging
 
 log = logging.getLogger(__name__)
 
-def do_decoding_analysis(lv_model=True, **ctx):
+def histeq(X_, X_raw_):
+    """
+    Rescale amplitudes of vector X_ so that its histogram matches
+    that of X_raw_
+    :param X_:
+    :param X_raw_:
+    :return:
+    """
+    ref_bins = np.unique(X_raw_)
+    xhist,bins = np.histogram(X_raw_.flatten(), ref_bins)
+
+    X_sorted = np.sort(X_.flatten())
+    X_new = X_.copy()
+    offsets=np.concatenate([[0],np.cumsum(xhist)])
+    for i in range(len(offsets)-1):
+        xmin = X_sorted[offsets[i]]
+        xmax = X_sorted[offsets[i+1]-1]
+        X_new[(X_>=xmin) & (X_<=xmax)] = bins[i]
+
+    return X_new
+
+def do_decoding_analysis(lv_model=True, hist_norm=False, max_pair_combos = 1000,
+                         **ctx):
     """
     Meant to replace CRH's personal code for doing decoding analysis.
     Basically the only this that needed to change is to allow the decoding.load_site 
@@ -161,14 +184,23 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     # =========================== generate a list of stim pairs ==========================
     all_combos = list(combinations(range(nstim), 2))
-    spont_bins = np.argwhere(sp_bins[0, 0, :])
-    spont_combos = [c for c in all_combos if (c[0] in spont_bins) & (c[1] in spont_bins)]
-    ev_ev_combos = [c for c in all_combos if (c[0] not in spont_bins) & (c[1] not in spont_bins)]
-    spont_ev_combos = [c for c in all_combos if (c not in ev_ev_combos) & (c not in spont_combos)]
 
     # get list of epoch combos as a tuple (in the same fashion as above)
     epochs_bins = np.concatenate([[e+'_'+str(k) for k in range(nbins)] for e in epochs])
     epochs_str_combos = list(combinations(epochs_bins, 2))
+
+    if (max_pair_combos > 0) & (len(all_combos) > max_pair_combos):
+        ii = np.round(np.linspace(0,len(all_combos)-1, max_pair_combos)).astype(int)
+        all_combos = [all_combos[i] for i in ii]
+        epochs_str_combos = [epochs_str_combos[i] for i in ii]
+
+    spont_bins = np.argwhere(sp_bins[0, 0, :])
+    spont_combos = [c for c in all_combos if (c[0] in spont_bins) & (c[1] in spont_bins)]
+    ev_ev_combos = [c for c in all_combos if (c[0] not in spont_bins) & (c[1] not in spont_bins)]
+    spont_ev_combos = [c for c in all_combos
+                       if ((c[0] in spont_bins) & (c[1] not in spont_bins)) |
+                          ((c[0] not in spont_bins) & (c[1]  in spont_bins))]
+    #spont_ev_combos = [c for c in all_combos if (c not in ev_ev_combos) & (c not in spont_combos)]
 
     # =================================== simulate =======================================
     # update X to simulated data if specified. Else X = X_raw.
@@ -228,6 +260,11 @@ def do_decoding_analysis(lv_model=True, **ctx):
     X_raw = X_raw.reshape(ncells, nreps_raw, nstim)
     # reshape X_pup
     X_pup = X_pup.reshape(1, nreps_raw, nstim)
+
+    if lv_model & hist_norm:
+        log.info('Histogram normalizing pred')
+        for cid in range(X.shape[0]):
+            X[cid,:,:] = histeq(X[cid,:,:], X_raw[cid,:,:])
 
     # ===================== decide if / how we should shuffle data ===================
     if shuffle_trials:
@@ -312,6 +349,7 @@ def do_decoding_analysis(lv_model=True, **ctx):
     pca_idx = 0
     pls_idx = 0
     tdr_idx = 0
+
     # ============================== Loop over stim pairs ================================
     for stim_pair_idx, (ecombo, combo) in enumerate(zip(epochs_str_combos, all_combos)):
         # print every 500th pair. Don't want to overwhelm log
@@ -571,10 +609,15 @@ def do_decoding_analysis(lv_model=True, **ctx):
 
     results_path = ctx['modelspec'][0]['meta']['modelpath']
     log.info(f"Saving results to {results_path}")
-    if lv_model:
-        tdr_results.save_pickle(os.path.join(results_path, modelname+'_TDR.pickle'))
+    if hist_norm:
+        sh="_histnorm"
     else:
-        tdr_results.save_pickle(os.path.join(results_path, 'resp'+'_TDR.pickle'))
+        sh=""
+
+    if lv_model:
+        tdr_results.save_pickle(os.path.join(results_path, f'{modelname}{sh}_TDR.pickle'))
+    else:
+        tdr_results.save_pickle(os.path.join(results_path, f'resp_TDR.pickle'))
         
     if do_PCA:
         pca_results.save_pickle(os.path.join(results_path, modelname+'_PCA.pickle'))
@@ -599,23 +642,31 @@ def do_decoding_analysis(lv_model=True, **ctx):
     # if do_pls:
     #     pls_results.save_pickle(os.path.join(path, str(batch), site, modelname+'_PLS.pickle'))
 
-def load_decoding_set(cellid, batch, modelnames):
+def load_decoding_set(cellid, batch, modelnames,
+                      hist_norm=True, force_recompute=False):
+    """
+    load results of do_decoding, which get stashed in the
+    model save folder
+    """
     ctx=[{}]*len(modelnames)
     tdr_pred=[]
-    for i,m in enumerate(modelnames):
-        xfspec,ctx[i]=nems0.xform_helper.load_model_xform(cellid, batch, m, eval_model=False)
+    for i, m in enumerate(modelnames):
+        xfspec, ctx[i] = xform_helper.load_model_xform(cellid, batch, m, eval_model=False)
         modelpath = ctx[i]['modelspec'].meta['modelpath']
-        decode_file = modelpath + '/decoding_TDR.pickle'
+        if hist_norm:
+            decode_file = modelpath + '/decoding_histnorm_TDR.pickle'
+        else:
+            decode_file = modelpath + '/decoding_TDR.pickle'
         resp_file = modelpath + '/resp_TDR.pickle'
-        if os.path.exists(decode_file):
+        if not(force_recompute) and os.path.exists(decode_file):
             with open(decode_file, 'rb') as handle:
                 tdr_pred.append(pickle.load(handle))
-            if i==0:
+            if i == 0:
                 with open(resp_file, 'rb') as handle:
                     tdr_resp = pickle.load(handle)
         else:
-            xfspec,ctx[i]=nems0.xform_helper.load_model_xform(cellid, batch, m)
-            tdr_pred.append(do_decoding_analysis(lv_model=True, **ctx[i]))
-            if i==0:
+            xfspec, ctx[i] = xform_helper.load_model_xform(cellid, batch, m)
+            tdr_pred.append(do_decoding_analysis(lv_model=True, hist_norm=hist_norm, **ctx[i]))
+            if i == 0:
                 tdr_resp = do_decoding_analysis(lv_model=False, **ctx[i])
     return ctx, tdr_pred, tdr_resp

@@ -989,8 +989,9 @@ class lv_norm(NemsModule):
             # faster(?): compute all scaling terms then apply at once (outside of loop)
             sf = np.zeros_like(x)
             for l in range(d.shape[1]):
-                sf += (d[:,[l]] + g[:,[l]]*state[[l],:]) * lv[[l],:]
-            
+                #sf += (d[:,[l]] + g[:,[l]]*state[[l],:]) * lv[[l],:]
+                sf += g[:,[l]] * (d[:,[l]] + state[[l],:]) * lv[[l],:]
+
             x *= np.exp(sf)
             return x
 

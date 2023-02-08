@@ -22,11 +22,11 @@ from nems_lbhb.motor.free_tools import compute_d_theta, \
 USE_DB = True
 
 if USE_DB:
-    siteid = "PRN022a"
     siteid = "PRN034a"
     siteid = "PRN010a"
     siteid = "PRN009a"
     siteid = "PRN011a"
+    siteid = "PRN022a"
     siteid = "PRN015a"
     runclassid = 132
 
@@ -205,15 +205,21 @@ pgoodidx = np.isfinite(d0) & (d0 > 550) & (d0 < 1000) & np.isfinite(t0) & (np.ab
 
 dv = np.concatenate([d_[:, 2, :] for k_, d_ in ddict.items()], axis=1)
 tv = np.concatenate([d_[:, 3, :] for k_, d_ in ddict.items()], axis=1)
-vgoodidx = np.isfinite(dv) & (np.abs(dv) < 20*rasterfs) & np.isfinite(tv) & (np.abs(tv) < 25*rasterfs)
+vgoodidx = np.isfinite(dv) & (np.abs(dv) < 10*rasterfs) & np.isfinite(tv) & (np.abs(tv) < 10*rasterfs)
+
+fv = np.concatenate([d_[:, 4, :] for k_, d_ in ddict.items()], axis=1)
+lv = np.concatenate([d_[:, 5, :] for k_, d_ in ddict.items()], axis=1)
+lgoodidx = np.isfinite(fv) & (np.abs(fv) < 8*rasterfs) & np.isfinite(lv) & (np.abs(lv) < 8*rasterfs)
 
 d0 = d0[pgoodidx]
 t0 = t0[pgoodidx]
 dv = dv[vgoodidx]
 tv = tv[vgoodidx]
+fv = fv[lgoodidx]
+lv = lv[lgoodidx]
 
 dall = np.concatenate([d_[:, :, :] for k_, d_ in ddict.items()], axis=2)
-dallgoodidx = (np.sum(np.isfinite(dall),axis=1) == 4) & pgoodidx & vgoodidx
+dallgoodidx = (np.sum(np.isfinite(dall),axis=1) == 6) & pgoodidx & vgoodidx & lgoodidx
 dall = np.transpose(dall,[1,0,2])[:,dallgoodidx]
 
 rdict = resp.extract_epochs(epochs_to_extract)
@@ -263,14 +269,29 @@ for i_,l_ in enumerate(llv[:-1]):
 nnv[nnv<20]=np.nan
 nnv[nnv>500]=500
 
+lll = np.linspace(fv.min(),fv.max(),15)
+ttl = np.linspace(lv.min(),lv.max(),15)
+nnl = np.zeros((len(lll)-1,len(ttl)-1)) * np.nan
+for i_,l_ in enumerate(lll[:-1]):
+    for j_,t_ in enumerate(ttl[:-1]):
+        v_ = (fv>=l_)&(fv<lll[i_+1]) & (lv>=t_) &(lv<ttl[j_+1])
+        nnl[i_,j_] = v_.sum()
+nnl[nnl<20]=np.nan
+nnl[nnl>500]=500
+
 # plot a bunch of heatmaps of E as a function of Pos or Vel
 # depending on the value of USE_VEL
 a1idx = np.where(df_sitedata['area'] == 'A1')[0]
 cells = a1idx[np.linspace(0,len(a1idx)-1,24).astype(int)]
 
-USE_VEL = True
+USE_VEL = 'linear'
 
-if USE_VEL:
+if USE_VEL == 'linear':
+    ll, tt, nn = lll, ttl, nnl
+    d, t = fv, lv
+    goodidx = lgoodidx
+
+elif USE_VEL == 'rotation':
     ll, tt, nn = llv, ttv, nnv
     d, t = dv, tv
     goodidx = vgoodidx
@@ -383,6 +404,7 @@ for i,c in enumerate(cells):
     #goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
     eall = e[dallgoodidx]
     ev = e[vgoodidx]
+    el = e[lgoodidx]
     e = e[pgoodidx]
 
     mm = np.zeros((len(ll0)-1,len(tt0)-1)) * np.nan
@@ -419,10 +441,21 @@ for i,c in enumerate(cells):
                     mmv[i_,j_] = np.nanmean(ev[v_])
     mmv[np.isnan(nnv)]=0
 
+    mml = np.zeros((len(lll)-1,len(ttl)-1)) * np.nan
+    for i_,l_ in enumerate(lll[:-1]):
+        for j_,t_ in enumerate(ttl[:-1]):
+            v_ = (fv>=l_)&(fv<lll[i_+1]) & (lv>=t_) &(lv<ttl[j_+1])
+            if (v_.sum()>0):
+                if (np.nanstd(el[v_])>0):
+                    mml[i_,j_] = np.nanmean(el[v_]) / np.nanstd(el[v_])
+                else:
+                    mml[i_,j_] = np.nanmean(el[v_])
+    mml[np.isnan(nnl)]=0
+
     vmin,vmax = -np.abs(mm).max(),np.abs(mm).max()
     vmin,vmax = -0.75, 0.75
 
-    ax = f.add_subplot(rows,2,2*(i+1)+1)
+    ax = f.add_subplot(rows,4,4*(i+1)+1)
     tpsth=np.arange(SHOW_BINS)/resp.fs
     ax.plot(tpsth, smooth(psth[c,:SHOW_BINS], 3), 'k', lw=0.5)
     ax.set_xlim([tpsth[0], tpsth[-1]])
@@ -430,7 +463,7 @@ for i,c in enumerate(cells):
     if i<len(cells)-1:
         ax.set_xticklabels([])
 
-    ax = f.add_subplot(rows,4,cols*(i+1)+3)
+    ax = f.add_subplot(rows,4,cols*(i+1)+2)
     ax.imshow(Z, extent=[tt[0],tt[-1],ll[-1],ll[0]],
                  aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
 
@@ -440,7 +473,7 @@ for i,c in enumerate(cells):
     if i<len(cells)-1:
         ax.set_xticklabels([])
 
-    ax = f.add_subplot(rows,4,cols*(i+1)+4)
+    ax = f.add_subplot(rows,4,cols*(i+1)+3)
     vmin,vmax = -np.abs(mmv).max(),np.abs(mmv).max()
     vmin,vmax = -0.75, 0.75
     ax.imshow(mmv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]],
@@ -454,21 +487,36 @@ for i,c in enumerate(cells):
     if i<len(cells)-1:
         ax.set_xticklabels([])
 
+    ax = f.add_subplot(rows,4,cols*(i+1)+4)
+    vmin,vmax = -np.abs(mml).max(),np.abs(mml).max()
+    vmin,vmax = -0.75, 0.75
+    ax.imshow(mml, extent=[ttl[0],ttl[-1],lll[-1],lll[0]],
+                 aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+    ax.set_title(f'{cstr} ({mml.min():.2f},{mml.max():.2f})')
+    if i<len(cells)-1:
+        ax.set_xticklabels([])
 
-ax = f.add_subplot(rows,2,1)
+
+ax = f.add_subplot(rows,4,1)
 nplt.plot_spectrogram(spec[:,:SHOW_BINS], fs=resp.fs, ax=ax, title=epoch, cmap='gray_r')
 ax.set_xlabel('')
 ax.set_xticklabels([])
 
 # counts of position bins
-ax = f.add_subplot(rows,4,3)
+ax = f.add_subplot(rows,4,2)
 ax.imshow(nn0, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], aspect='auto')
 ax.set_title(f'n pos')
 ax.set_xticklabels([])
 
-# counts of velocity bins
-ax = f.add_subplot(rows,4,4)
+# counts of dist/velocity bins
+ax = f.add_subplot(rows,4,3)
 ax.imshow(nnv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], aspect='auto')
+ax.set_title(f'n vel')
+ax.set_xticklabels([])
+
+# counts of lateral velocity bins
+ax = f.add_subplot(rows,4,4)
+ax.imshow(nnl, extent=[ttl[0],ttl[-1],lll[-1],lll[0]], aspect='auto')
 ax.set_title(f'n vel')
 ax.set_xticklabels([])
 

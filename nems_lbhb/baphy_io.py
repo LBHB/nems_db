@@ -1623,8 +1623,9 @@ def psi_parm_read(filepath):
     poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
 
     trial_number = T['trial_number']
+    trialstarts = exptevents.loc[exptevents['name']=='target_start', 'start'].values
     videostart = T['psivideo_frame_ts']
-    videostart -= videostart[0]
+    videostart = videostart - videostart[0] + trialstarts[0]
     videoframes = T['psivideo_frames_written']
     videoname = videoframes.apply(lambda x: f"PSIVIDEO,{x:.0f}")
     d_ = {'start': videostart, 'end': videostart, 'name': videoname,
@@ -2401,11 +2402,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
     return exptevents, spiketimes, unit_names
 
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
-    # number of channels in recording (not all necessarily contain spikes)
-    chancount = len(sortinfo)
-    while chancount > 1 and sortinfo[chancount - 1].size == 0:
-        chancount -= 1
+def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortidx=0):
     # figure out how long each trial is by the time of the last spike count.
     # this method is a hack!
     # but since recordings are longer than the "official"
@@ -2436,7 +2433,12 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
         (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
     )
 
+    # number of channels in recording (not all necessarily contain spikes)
+    chancount = len(sortinfo)
+    while chancount > 1 and sortinfo[chancount - 1].size == 0:
+        chancount -= 1
     if not offset_exists:
+
         # figure out offsets based on max spike time in each trial. Kind of backwards...
         for ch in range(0, chancount):
             if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
@@ -2555,6 +2557,48 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                 #    spiketimes.append([])
                 
     return exptevents, spiketimes, unit_names
+
+
+def baphy_align_time_psi(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortidx=0):
+    # figure out how long each trial is by the time of the last spike count.
+    # this method is a hack!
+    # but since recordings are longer than the "official"
+    # trial end time reported by baphy, this method preserves extra spikes
+    TrialCount = int(np.max(exptevents['Trial']))
+    max_event_times = exptevents.groupby('Trial')['end'].max().values
+
+    # check to see if Trial starts are already non-zero (ie, psi-style, in abs trial time.
+    # unlike baphy where trialstart is 0 for each trial)
+    TrialStart_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
+    )
+    TrialLen_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
+    )
+    if TrialStart_sec.sum() > 0:
+        TrialLen_sec -= TrialStart_sec
+        offset_exists = True
+    else:
+        offset_exists = False
+
+    TrialLen_spikefs = np.concatenate(
+        (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
+    )
+
+    # offset_exists
+    ss = exptevents['start']
+    dd = exptevents['end'] - exptevents['start']
+    ss = np.ceil(ss * finalfs) / finalfs
+    dd = np.ceil(dd * finalfs) / finalfs
+    exptevents['start'] = ss
+    exptevents['end'] = ss + dd
+
+    Offset_sec = np.array(exptevents.loc[exptevents['name'] == "TRIALSTART"]['start'])
+    Offset_spikefs = Offset_sec * spikefs
+
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+
+    return exptevents, [], []
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):

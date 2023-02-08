@@ -1280,7 +1280,7 @@ class Recording:
             if (mask_name not in self.signals.keys()):
                 log.info("No mask exists, apply_mask() simply copying recording.")
                 return self.copy()
-            log.info(f'mask_name={mask_name}')
+            log.debug(f'mask_name={mask_name}')
         else:
             mask_name = 'mask'
 
