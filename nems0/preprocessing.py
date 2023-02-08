@@ -1383,13 +1383,18 @@ def make_state_signal(rec, state_signals=['pupil'], permute_signals=[], generate
 
         if 'pupiln' in state_signals:
             log.info('norm pupil min/max = 0/1')
-            p = p - np.nanmin(p)
+            p_raw = newrec["pupil_raw"].as_continuous().copy()
+            p = p_raw - np.nanmin(p_raw)
             p /= np.nanmax(p)
             newrec["pupiln"] = newrec["pupil"]._modified_copy(p)
 
         for state_signal in [s for s in state_signals if s.startswith('pupil_r')]:
             # copy repetitions of pupil
             newrec[state_signal] = newrec["pupil"]._modified_copy(newrec['pupil']._data)
+            newrec[state_signal].chans = [state_signal]
+        for state_signal in [s for s in state_signals if s.startswith('pupiln_r')]:
+            # copy repetitions of pupil
+            newrec[state_signal] = newrec["pupiln"]._modified_copy(newrec['pupiln']._data)
             newrec[state_signal].chans = [state_signal]
         if ('pupil2') in state_signals:
             newrec["pupil2"] = newrec["pupil"]._modified_copy(p ** 2)
