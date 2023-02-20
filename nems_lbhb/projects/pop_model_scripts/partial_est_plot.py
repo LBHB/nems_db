@@ -108,7 +108,13 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     ax[0].set_ylim([-0.05,1.05])
     ax[0].set_aspect('equal')
 
-    dpm = dpred.groupby(['midx','fit']).median().reset_index()
+    dpmax = dpred.groupby(['cellid', 'fit']).max().reset_index()[['cellid','fit','r_ceiling']]
+    dpmax.columns = [['cellid', 'fit', 'r_ceiling_max']]
+    dpred=dpred.reset_index()
+    for i,r in dpmax.iterrows():
+        dpred.loc[(dpred['cellid']==r.cellid) & (dpred['fit']==r['fit']), 'r_ceiling_max'] = r['r_ceiling_max']
+    dpred['r_ceiling'] = dpred['r_ceiling'] / dpred['r_ceiling_max']
+    dpm = dpred.groupby(['midx', 'fit']).median().reset_index()
     dpm.midx = dpm.midx.astype(int)
     dpm = dpm.pivot(index='midx', columns='fit', values='r_ceiling')
 

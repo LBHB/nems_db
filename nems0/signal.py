@@ -1359,6 +1359,15 @@ class RasterizedSignal(SignalBase):
 
         return sig
 
+    def normalize_sqrt(self, **opts):
+        '''
+        Take sqrt() of signal
+        '''
+        m = self._data / np.sqrt(np.abs(self._data) + (self._data==0))
+        sig = self._modified_copy(m)
+
+        return sig
+
     def normalized_by_mean(self):
         '''
         Returns a copy of this signal with each channel normalized to have a
@@ -2333,7 +2342,7 @@ class PointProcess(SignalBase):
             meta=base.meta,
             data=data,
             epochs=epochs,
-            safety_checks=False
+            safety_checks=False,
         )
 
     def append_time(self, new_signal):

@@ -22,13 +22,13 @@ script_path_exa = '/home/users/davids/nems_db/scripts/nems0_scripts/fit_single.p
 ssh_key = '/home/svd/.ssh/id_rsa'
 user = "davids"
 
-time_limit_gpu=14
-time_limit_cpu=2
-reserve_gb=0
+time_limit_gpu = 14
+time_limit_cpu = 2
+reserve_gb = 0
 
 modelname_filter = POP_MODELS[1]
 mfb = {322: modelname_filter,
-       323: modelname_filter.replace('.ver2','')}
+       323: modelname_filter.replace('.ver2', '')}
 
 # ROUND 1, all families pop
 if 0:
@@ -37,7 +37,7 @@ if 0:
     useGPU = True
 
     for batch in batches:
-        if useGPU and (batch==322):
+        if useGPU and (batch == 322):
             c = ['NAT4v2']
         elif useGPU:
             c = ['NAT4']

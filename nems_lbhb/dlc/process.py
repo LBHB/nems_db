@@ -39,7 +39,7 @@ def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
         # STEP 1. Train DNN
         # before running, update pose_cfg.yaml to use last snapshot from previous iteration as initial condition
         # (rather than starting over from visnet)
-        dlc.train_network(path_config, shuffle=1, displayiters=500)
+        dlc.train_network(path_config, shuffle=1, displayiters=500, maxiters=50000)
 
     if 1:
         # STEP 2. extract feature values from video
@@ -71,3 +71,4 @@ def dlc2nems(siteid=None, vids=None, suffix=".lick.avi",
         dlc.merge_datasets(path_config)
         dlc.create_training_dataset(path_config, net_type='resnet_50', augmenter_type='imgaug')
 
+        # next: edit <dlc>/<model>/dlc-models/iteration-<N>/<name>/train/pose_cfg.yaml

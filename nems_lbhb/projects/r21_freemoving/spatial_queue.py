@@ -6,10 +6,10 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 
 from nems0.analysis.gammatone.gtgram import gtgram
 import nems0.epoch as ep
-from nems import db
+from nems0 import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
-batch=338
+batch = 338
 siteids, cellids = db.get_batch_sites(batch)
 
 #enqueue_models(celllist, batch, modellist, force_rerun=False,
@@ -62,9 +62,24 @@ modelnames=[
 modelnames=[
     "gtgram.fs100.ch18.mono-ld.pop-norm.l1-sev_wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
     "gtgram.fs100.ch18-ld.pop-norm.l1-sev_wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
-    "gtgram.fs100.ch18.bin-ld.pop-norm.l1-sev_wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4"
+    "gtgram.fs100.ch18.bin10-ld.pop-norm.l1-sev_wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4"
 ]
 
+model_base = "wc.Nx40-fir.1x15x40-relu.40.f-wc.40x40-fir.1x10x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
+
+model_base = "wc.Nx50-fir.1x25x50-wc.50xR-lvl.R-dexp.R"
+model_base = "wc.Nx40-fir.1x25x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
+model_base = "wc.Nx40-fir.1x20x40-relu.40.f-wc.40x50-relu.50.f-wc.50xR-lvl.R-dexp.R"
+
+modelnames = [
+    f"gtgram.fs100.ch18.mono-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18.bin10-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18.bin6-ld.pop-norm.l1-sev_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18.bin10-ld.pop-norm.l1-sev.mono_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18.bin10-ld.pop-norm.l1-sev.bin_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+    f"gtgram.fs100.ch18.bin10-ld.pop-norm.l1-sev.match_{model_base}_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4.l2:4",
+]
 force_rerun = False
 run_in_lbhb = False
 
@@ -77,10 +92,9 @@ if run_in_lbhb:
 else:
     # exacloud
 
-
     # exacloud queue settings:
     exa_executable_path = '/home/users/davids/anaconda3/envs/nems/bin/python'
-    exa_script_path = '/home/users/davids/nems/scripts/fit_single.py'
+    exa_script_path = '/home/users/davids/nems_db/scripts/nems0_scripts/fit_single.py'
     ssh_key = '/home/svd/.ssh/id_rsa'
     user = "davids"
     lbhb_user = "svd"
