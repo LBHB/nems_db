@@ -31,7 +31,7 @@ import logging
 log = logging.getLogger(__name__)
 
 try:
-    import nems0.db as nd
+    import nems0.db as n
     db_exists = True
 except Exception as e:
     # If there's an error import nems0.db, probably missing database
