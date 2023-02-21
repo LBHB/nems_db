@@ -35,13 +35,17 @@ CPN_SITES = ['AMT020a', 'AMT026a', 'ARM029a', 'ARM031a',
        'ARM032a', 'ARM033a', 'CRD018d',
        'TNC006a', 'TNC008a', 'TNC009a', 'TNC010a', 'TNC012a',
        'TNC013a', 'TNC014a', 'TNC015a', 'TNC016a', 'TNC017a', 'TNC018a',
-       'TNC020a', 'TNC021a', 'TNC043a', 'TNC044a', 'TNC045a'] # 'TNC019a',
+       'TNC019a', 'TNC020a', 'TNC021a', 'TNC043a', 'TNC044a', 'TNC045a'] # 'TNC019a',
 
-figpath = '/auto/users/svd/docs/current/pupil_pop/2023_02_08/'
+figpath = '/auto/users/svd/docs/current/pupil_pop/2023_02_09/'
 
 #batch = 322
 batch = 331
 use_sqrt = True
+use_ppp = False  # norm pupil 0-1
+use_so = True  # signle offset dimension for applying state to the LV
+use_additive = False  # LV is additive instead of multiplicative.
+
 siteids_, cellids = db.get_batch_sites(batch=batch)
 
 if batch == 322:
@@ -56,23 +60,35 @@ if batch == 322:
 elif batch == 331:
     siteids = [s for s, c in zip(siteids_, cellids) if s in CPN_SITES]
     cellids = [c for s, c in zip(siteids_, cellids) if s in CPN_SITES]
-
-    states = ['st.pup+r3+s0,1,2,3','st.pup+r3+s1,2,3','st.pup+r3+s2,3','st.pup+r3+s3','st.pup+r3']
+    if use_ppp:
+        # pupil normed 0 to 1
+        states = ['st.ppp+r3+s0,1,2,3', 'st.ppp+r3+s1,2,3', 'st.ppp+r3+s2,3', 'st.ppp+r3+s3', 'st.ppp+r3']
+    else:
+        # pupil normed mean 0, std 1
+        states = ['st.pup+r3+s0,1,2,3', 'st.pup+r3+s1,2,3', 'st.pup+r3+s2,3', 'st.pup+r3+s3', 'st.pup+r3']
     if use_sqrt:
-
-        # V2 -- dc offset in state before multiply by LV -- avoid double-negative.
-        modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
-                      "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
-                      "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0.V2"
-                      for s in states]
-        # lvnorm without so
-        modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
-                      "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
-                      "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
-                      for s in states]
+        if use_so:
+            if use_additive:
+                # lvnorm with so, LV is additive
+                modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
+                              "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.d.x1,2-inoise.5xR.x1,3,4" + \
+                              "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
+                              for s in states]
+            else:
+                # lvnorm with so, LV is multiplicative
+                modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
+                              "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
+                              "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
+                              for s in states]
+        else:
+            # multiplicative lvnorm without so (separate offset for applying LV to each channel)
+            modelnames = [f"psth.fs4.pup-ld-norm.sqrt-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
+                          "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.x1,2-inoise.5xR.x1,3,4" + \
+                          "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
+                          for s in states]
 
     else:
-        # lvnorm without so, no sqrt norm
+        # no sqrt norm
         modelnames = [f"psth.fs4.pup-ld-epcpn-hrc-psthfr.z-pca.cc1.no.p-{s}-plgsm.p2-aev" + \
                       "_stategain.2xR.x2,3,4-spred-lvnorm.5xR.so.x1,2-inoise.5xR.x1,3,4" + \
                       "_tfinit.xx0.n.lr1e4.cont.et4.i20000-lvnoise.r2-aev-ccnorm.t4.f0"
@@ -80,8 +96,9 @@ elif batch == 331:
 
 print("siteids:", siteids)
 print("cellids:", cellids)
-
+print("modelnames[3]", modelnames[3])
 #importlib.reload(decoding)
+
 PLOT_EACH_SITE=False
 if PLOT_EACH_SITE:
     for cellid in cellids:
@@ -266,7 +283,8 @@ sp_dp_act_mean = dfsum.pivot_table('sp_dp_act',index='siteid', columns='stateid'
 bp_dp_act_mean = dfsum.pivot_table('bp_dp_act',index='siteid', columns='stateid').mean()
 act_offset = np.mean(bp_dp_mean+sp_dp_mean)/2 - (bp_dp_act_mean+sp_dp_act_mean)/2
 
-d = dfsum.pivot_table('ccnorm',index='siteid', columns='stateid')
+show_value='cc'
+d = dfsum.pivot_table(show_value, index='siteid', columns='stateid')
 cc_mean = d.median().values
 cc_sem = d.std().values / np.sqrt(d.shape[0]-1)
 
@@ -284,7 +302,7 @@ for i in range(len(state_labels)):
     ax[1].plot(i, cc_mean[i], 'o', color=state_colors[i])
     ax[1].errorbar(i, cc_mean[i], cc_sem[i], color=state_colors[i], lw=2)
 
-ax[1].set_ylabel("CC(predicted, actual)")
+ax[1].set_ylabel(f"{show_value}(predicted, actual)")
 plt.tight_layout()
 
 figfile = (f"{figpath}dp_sum_{modelspec}_sqrt{use_sqrt}.pdf").replace(",","")

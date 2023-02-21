@@ -990,9 +990,8 @@ class lv_norm(NemsModule):
             sf = np.zeros_like(x)
             for l in range(d.shape[1]):
                 # old way
-                sf += (d[:,[l]] + g[:,[l]]*state[[l],:]) * lv[[l],:]
-                # new way, doesn't help?
-                #sf += g[:,[l]] * (d[:,[l]] + state[[l],:]) * lv[[l],:]
+                sf += (d[:,[l]] + g[:,[l]] * state[[l], :]) * lv[[l], :]
+
 
             x *= np.exp(sf)
             return x
