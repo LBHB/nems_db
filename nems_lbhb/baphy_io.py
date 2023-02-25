@@ -1459,6 +1459,12 @@ def psi_parm_read(filepath):
     T = pd.read_csv(trialfile)
     E = pd.read_csv(eventfile)
     rparms = T.loc[0]
+
+    FitBinaural, TestBinaural = 'None', 'None'
+    if ('background_1_wav_sequence_level' in rparms.index):
+        if rparms.background_1_wav_sequence_level > 0:
+            FitBinaural, TestBinaural = 'Random', 'Random'
+
     TrialObject = {1: {
         'ReferenceClass': 'BigNat',
         'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
@@ -1467,6 +1473,8 @@ def psi_parm_read(filepath):
                                 'Duration': rparms.background_wav_sequence_duration,
                                 'Normalization': rparms.background_wav_sequence_normalization ,
                                 'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                'FitBinaural': FitBinaural,
+                                'TestBinaural': TestBinaural,
                                 'fit_range': rparms.background_wav_sequence_fit_range,
                                 'fit_reps': rparms.background_wav_sequence_fit_reps,
                                 'test_range': rparms.background_wav_sequence_test_range,
@@ -1584,11 +1592,22 @@ def psi_parm_read(filepath):
     tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
 
     bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+    bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
+
     Names = []
     for ee, r in bg_events.iterrows():
         info = json.loads(r['Info'])
-        Names.append(f'{info["metadata"]["filename"]}.wav')
-        bg_events.loc[ee, 'name'] = f'Stim , {info["metadata"]["filename"]}.wav , Reference'
+        bin_match = bg_events1['start']==r['start']
+        if bin_match.sum() > 0:
+            # code as a binaural signal
+            r2 = bg_events1.loc[bin_match].iloc[0]
+            info2 = json.loads(r2['Info'])
+            name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
+        else:
+            # single (monaural) signal
+            name = f'{info["metadata"]["filename"]}.wav'
+        Names.append(name)
+        bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
         bg_events.loc[ee, 'Info'] = ''
     Names = list(set(Names))
     Names.sort()

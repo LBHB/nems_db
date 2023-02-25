@@ -112,7 +112,7 @@ def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
 
     return d, theta, d_vel, theta_vel, d_fwd, d_lat
 
-def dlc2dist(rec, rasterfs=1, **d_theta_opts):
+def dlc2dist(rec, rasterfs=1, norm=False, **d_theta_opts):
     """
     transform dlc signal into a new dist signal and add to recording
     :param rec:
@@ -123,7 +123,7 @@ def dlc2dist(rec, rasterfs=1, **d_theta_opts):
     newrec = rec.copy()
 
     # fill in missing values where possible (when other values exist at that time)
-    newrec = impute_multi(newrec, sig='dlc', empty_values=np.nan, norm=False)['rec']
+    newrec = impute_multi(newrec, sig='dlc', empty_values=np.nan, norm=norm)['rec']
     dlc_data_imp = newrec['dlc'][:, :]
     rasterfs = newrec['dlc'].fs
 
@@ -137,9 +137,6 @@ def dlc2dist(rec, rasterfs=1, **d_theta_opts):
             a.set_ylabel(l)
         ax[-1].set_xlabel('sample number')
         f.suptitle('Results of imputation (gray is imputed data)')
-
-    # spout position
-    spout_x0y0 = (470, 90)
 
     d, theta, vel, rvel, d_fwd, d_lat = compute_d_theta(dlc_data_imp, fs=rasterfs, **d_theta_opts)
 

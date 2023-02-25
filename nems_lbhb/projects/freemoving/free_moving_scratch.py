@@ -28,6 +28,7 @@ if USE_DB:
     siteid = "PRN011a"
     siteid = "PRN022a"
     siteid = "PRN015a"
+    siteid = "PRN047a"
     runclassid = 132
 
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"

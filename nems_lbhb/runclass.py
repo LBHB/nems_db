@@ -318,7 +318,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     if (ReferenceClass=='BigNat') & \
             (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
         # Binaural natural sounds
-        sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
+        sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
+        sound_root = sound_root.replace("H:/", "/auto/data/")
+        sound_root = Path(sound_root)
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
         #print(exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()[:10])
@@ -326,6 +328,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         #wav2=[e.split(' , ')[1].split("+")[0].split(":")[0].replace("STIM_","") for e in stim_epochs]
 
         stim_epochs = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']
+        #stim_epochs=[f.replace('.wav','') for f in stim_epochs]
         #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
         wav1=[e.split("+")[0].split(":")[0] for e in stim_epochs]
         chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
@@ -432,7 +435,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         file_unique = wav1.copy()
         file_unique.extend(wav2)
         file_unique = list(set(file_unique))
-        file_unique = [f for f in file_unique if f != 'null']
+        file_unique = [f.replace('wav','') for f in file_unique if f != 'null']
 
         log.info('NOTE: Stripping spaces from epoch names in OverlappingPairs files')
         stim_epochs = [s.replace(" ", "") for s in stim_epochs]
@@ -458,13 +461,15 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     wav_unique = {}
     fs0 = None
     for filename in file_unique:
+        filename_ = filename.replace('.wav','')
+
         if ReferenceClass == "OverlappingPairs":
             try:
-                fs, w = wavfile.read(Path(bg_root) / (filename + '.wav'))
+                fs, w = wavfile.read(Path(bg_root) / (filename_ + '.wav'))
             except:
-                fs, w = wavfile.read(Path(fg_root) / (filename + '.wav'))
+                fs, w = wavfile.read(Path(fg_root) / (filename_ + '.wav'))
         else:
-            fs, w = wavfile.read(sound_root / (filename+'.wav'))
+            fs, w = wavfile.read(sound_root / (filename_ + '.wav'))
         if w.dtype.name == 'int16':
             w = w / 32767
         elif w.dtype.name == 'int32':
