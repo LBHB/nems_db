@@ -108,8 +108,8 @@ val = val.apply_mask()
 input = val['diff']._data.T
 
 # subset of cells:
-input = input[:,50:]
-targetchan=4
+input = input[:,55:]
+targetchan=0
 
 target = val['dist']._data.T
 
