@@ -1,7 +1,7 @@
 """
 Cache target frequency for each active file for each cell
 """
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import numpy as np
 import os

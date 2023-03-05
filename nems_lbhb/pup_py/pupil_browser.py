@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib.patches import Ellipse
 import matplotlib.image as mpimg
 import getpass
-import nems.db as nd
+import nems0.db as nd
 import scipy.io
 import sys
 from tkinter import filedialog, simpledialog, messagebox

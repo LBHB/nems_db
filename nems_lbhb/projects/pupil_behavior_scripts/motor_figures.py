@@ -6,7 +6,7 @@ Created on Wed Aug 22 17:59:33 2018
 @author: daniela
 """
 #import nems_lbhb.xform_wrappers as nw
-import nems.xform_helper as xhelp
+import nems0.xform_helper as xhelp
 
 cellid="BRT036b-06-1"
 modelname="psth.fs20.pup-ld-st.pup.beh-evs.tar.lic0_fir.Nx40-lvl.1-stategain.3_jk.nf10-init.st-basic"

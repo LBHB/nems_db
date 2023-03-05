@@ -10,19 +10,19 @@ import sys, importlib
 import copy
 import pandas as pd
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-from nems.uri import json_numpy_obj_hook
-from nems.xform_helper import fit_model_xform, load_model_xform, _xform_exists
-from nems.utils import escaped_split, escaped_join, get_setting, find_module
-import nems.db as nd
-from nems import get_setting
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders,
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+from nems0.uri import json_numpy_obj_hook
+from nems0.xform_helper import fit_model_xform, load_model_xform, _xform_exists
+from nems0.utils import escaped_split, escaped_join, get_setting, find_module
+import nems0.db as nd
+from nems0 import get_setting
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems_lbhb.analysis import pop_models
-import nems.db as nd
-from nems.plots.heatmap import plot_heatmap
+import nems0.db as nd
+from nems0.plots.heatmap import plot_heatmap
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 log = logging.getLogger(__name__)
@@ -108,7 +108,13 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
     ax[0].set_ylim([-0.05,1.05])
     ax[0].set_aspect('equal')
 
-    dpm = dpred.groupby(['midx','fit']).median().reset_index()
+    dpmax = dpred.groupby(['cellid', 'fit']).max().reset_index()[['cellid','fit','r_ceiling']]
+    dpmax.columns = [['cellid', 'fit', 'r_ceiling_max']]
+    dpred=dpred.reset_index()
+    for i,r in dpmax.iterrows():
+        dpred.loc[(dpred['cellid']==r.cellid) & (dpred['fit']==r['fit']), 'r_ceiling_max'] = r['r_ceiling_max']
+    dpred['r_ceiling'] = dpred['r_ceiling'] / dpred['r_ceiling_max']
+    dpm = dpred.groupby(['midx', 'fit']).median().reset_index()
     dpm.midx = dpm.midx.astype(int)
     dpm = dpm.pivot(index='midx', columns='fit', values='r_ceiling')
 
@@ -124,11 +130,12 @@ def partial_est_plot(batch=322, PLOT_STAT='r_ceiling', figsize=None):
 
         dpm.loc[int(midx), 'p'] = p
 
-    ax[1].plot(dpm.index, dpm['std'], '-s', color='gray', label=xlabel, markersize=4.5)
-    ax[1].plot(dpm.index, dpm['prefit'], '-o', color='k', label=ylabel, markersize=4.5)
+    max_pred = dpm['std'].max()
+    ax[1].plot(dpm.index, dpm['std']/max_pred, '-s', color='gray', label=xlabel, markersize=4.5)
+    ax[1].plot(dpm.index, dpm['prefit']/max_pred, '-o', color='k', label=ylabel, markersize=4.5)
     ax[1].legend(frameon=False)
     ax[1].set_xlabel('Fraction estimation data')
-    ax[1].set_ylim(0.5, 0.7)
+    #ax[1].set_ylim(0.5, 0.7)
     ax[1].set_box_aspect(1)
 
     return f, dpm

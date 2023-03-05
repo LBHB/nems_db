@@ -3,15 +3,15 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-import nems.modelspec as ms
-from nems.plots.heatmap import plot_heatmap
-from nems.plots.timeseries import timeseries_from_signals
-from nems.plots.specgram import plot_spectrogram
+import nems0.modelspec as ms
+from nems0.plots.heatmap import plot_heatmap
+from nems0.plots.timeseries import timeseries_from_signals
+from nems0.plots.specgram import plot_spectrogram
 from nems_lbhb.gcmodel.modules import _get_ctk_coefficients
-from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
-from nems.modules.weight_channels import gaussian_coefficients
-import nems.utils as nu
-from nems.gui.decorators import scrollable
+from nems0.modules.fir import fir_exp_coefficients, _offset_coefficients
+from nems0.modules.weight_channels import gaussian_coefficients
+import nems0.utils as nu
+from nems0.gui.decorators import scrollable
 
 @scrollable
 def contrast_kernel_output(rec, modelspec, ax=None, title=None,

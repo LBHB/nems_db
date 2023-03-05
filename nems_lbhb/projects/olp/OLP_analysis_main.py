@@ -1,5 +1,5 @@
 import nems_lbhb.projects.olp.OLP_plot_helpers as opl
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -10,6 +10,7 @@ import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.projects.olp.OLP_fit as ofit
 import nems_lbhb.projects.olp.OLP_Binaural_plot as obip
 
+from scipy import stats
 
 
 sb.color_palette
@@ -120,36 +121,14 @@ else:
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 import copy
-import nems.epoch as ep
-import nems.preprocessing as preproc
-import SPO_helpers as sp
+import nems0.epoch as ep
+import nems0.preprocessing as preproc
+import nems_lbhb.SPO_helpers as sp
 import glob
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import re
 import itertools
-
-
-##zippy greg stuff before vacation to get rid of quiet FGs
-# weight_dff = weight_df.loc[weight_df.kind=='11']
-# print(len(weight_dff))
-weight_dff = weight_df.loc[weight_df.FG != 'Heels']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'KitWhine']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'Typing']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'Dice']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'CashRegister']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'KitGroan']
-print(len(weight_dff))
-weight_dff = weight_dff.loc[weight_dff.FG != 'Keys']
-print(len(weight_dff))
-quad, threshold = ohel.quadrants_by_FR(weight_dff, threshold=0.03, quad_return=3)
-obip.binaural_weight_hist(weight_dff)
-
 def get_sep_stim_names(stim_name):
     seps = [m.start() for m in re.finditer('_(\d|n)', stim_name)]
     if len(seps) < 2 or len(seps) > 2:
@@ -359,65 +338,6 @@ else:
     weight_df0=store['df']
     store.close()
 
-
-
-
-def calc_psth_weights_of_model_responses_list(val, names, signame='resp',
-                                              get_nrmse_fn=False, cuts=None):
-
-    sig1 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[0]])
-    sig2 = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[1]])
-    # sig_SR=np.ones(sig1.shape)
-    sigO = np.concatenate([val[signame].extract_epoch(n).squeeze()[cuts] for n in names[2]])
-
-    # fsigs=np.vstack((sig1,sig2,sig_SR)).T
-    fsigs = np.vstack((sig1, sig2)).T
-    ff = np.all(np.isfinite(fsigs), axis=1) & np.isfinite(sigO)
-    close_to_zero = np.array([np.allclose(fsigs[ff, i], 0, atol=1e-17) for i in (0, 1)])
-    if all(close_to_zero):
-        # Both input signals have all their values close to 0. Set weights to 0.
-        weights = np.zeros(2)
-        rank = 1
-    elif any(close_to_zero):
-        weights_, residual_sum, rank, singular_values = np.linalg.lstsq(np.expand_dims(fsigs[ff, ~close_to_zero], 1),
-                                                                        sigO[ff], rcond=None)
-        weights = np.zeros(2)
-        weights[~close_to_zero] = weights_
-    else:
-        weights, residual_sum, rank, singular_values = np.linalg.lstsq(fsigs[ff, :], sigO[ff], rcond=None)
-        # residuals = ((sigO[ff]-(fsigs[ff,:]*weights).sum(axis=1))**2).sum()
-
-    # calc CC between weight model and actual response
-    pred = np.dot(weights, fsigs[ff, :].T)
-    cc = np.corrcoef(pred, sigO[ff])
-    r_weight_model = cc[0, 1]
-
-    # norm_factor = np.std(sigO[ff])
-    norm_factor = np.mean(sigO[ff] ** 2)
-
-    if rank == 1:
-        min_nMSE = 1
-        min_nRMSE = 1
-    else:
-        # min_nrmse = np.sqrt(residual_sum[0]/ff.sum())/norm_factor
-        pred = np.dot(weights, fsigs[ff, :].T)
-        min_nRMSE = np.sqrt(((sigO[ff] - pred) ** 2).mean()) / np.sqrt(
-            norm_factor)  # minimim normalized root mean squared error
-        min_nMSE = ((sigO[ff] - pred) ** 2).mean() / norm_factor  # minimim normalized mean squared error
-
-    # create NMSE caclulator for later
-    if get_nrmse_fn:
-        def get_nrmse(weights=weights):
-            pred = np.dot(weights, fsigs[ff, :].T)
-            nrmse = np.sqrt(((pred - sigO[ff]) ** 2).mean(axis=-1)) / norm_factor
-            return nrmse
-    else:
-        get_nrmse = np.nan
-
-    weights[close_to_zero] = np.nan
-    return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, get_error
-
-
 ##################FINISHED FRIDAY, WANT TO PLOT THE FOUR CONDITIONS NOW
 env_threshold = '75'
 quad_threshold= 0.05
@@ -492,314 +412,6 @@ f.suptitle(f"{area}", fontweight='bold', fontsize=12)
 
 
 
-
-##reproduce the jittered scatters with mod spec stuff
-BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
-BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
-BGmerge['BG'] = [aa.replace(' ', '') for aa in BGdf.name]
-BGmerge['BG_wt'] = BGdf.t50.tolist()
-BGmerge['BG_wf'] = BGdf.f50.tolist()
-
-FGmerge['FG'] = [aa.replace(' ', '') for aa in FGdf.name]
-FGmerge['FG_wt'] = FGdf.t50.values.tolist()
-FGmerge['FG_wf'] = FGdf.f50.tolist()
-
-weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG'], validate='m:1')
-weight_df = pd.merge(right=FGmerge, left=weight_df, on=['FG'], validate='m:1')
-
-
-
-
-quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-
-quad = quad.copy()
-
-
-quad['jitter_BG_wt'] = quad['BG_wt'] + np.random.normal(0, 0.075, len(quad))
-quad['jitter_FG_wt'] = quad['FG_wt'] + np.random.normal(0, 0.075, len(quad))
-
-quad['jitter_BG_wf'] = quad['BG_wf'] + np.random.normal(0, 0.0075, len(quad))
-quad['jitter_FG_wf'] = quad['FG_wf'] + np.random.normal(0, 0.0075, len(quad))
-
-##
-from scipy import stats
-
-f, ax = plt.subplots(1, 2, figsize=(10,5))
-sb.scatterplot(x='jitter_BG_wt', y='weightsB', data=quad, ax=ax[0], s=3)
-sb.scatterplot(x='jitter_FG_wt', y='weightsA', data=quad, ax=ax[0], s=3)
-ax[0].set_xlabel('wt (Hz)', fontweight='bold', fontsize=8)
-ax[0].set_ylabel('Weight', fontweight='bold', fontsize=8)
-
-sb.scatterplot(x='jitter_BG_wf', y='weightsB', data=quad, ax=ax[1], s=3)
-sb.scatterplot(x='jitter_FG_wf', y='weightsA', data=quad, ax=ax[1], s=3)
-ax[1].set_xlabel('wf (cycles/s)', fontweight='bold', fontsize=8)
-ax[1].set_ylabel('')
-f.suptitle("how that sound effects the weight of others")
-
-Y = np.concatenate((quad['weightsB'].values, quad['weightsA'].values))
-X = np.concatenate((quad['BG_wt'].values, quad['FG_wt'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[0].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[0].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[0].legend()
-
-X = np.concatenate((quad['BG_wf'].values, quad['FG_wf'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[1].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[1].legend()
-
-##
-f, ax = plt.subplots(1, 2, figsize=(10,5))
-sb.scatterplot(x='jitter_BG_wt', y='weightsA', data=quad, ax=ax[0], s=3)
-sb.scatterplot(x='jitter_FG_wt', y='weightsB', data=quad, ax=ax[0], s=3)
-ax[0].set_xlabel('wt (Hz)', fontweight='bold', fontsize=8)
-ax[0].set_ylabel('Weight', fontweight='bold', fontsize=8)
-
-sb.scatterplot(x='jitter_BG_wf', y='weightsA', data=quad, ax=ax[1], s=3)
-sb.scatterplot(x='jitter_FG_wf', y='weightsB', data=quad, ax=ax[1], s=3)
-ax[1].set_xlabel('wf (cycles/s)', fontweight='bold', fontsize=8)
-ax[1].set_ylabel('')
-f.suptitle("how that sound is weighted")
-
-Y = np.concatenate((quad['weightsA'].values, quad['weightsB'].values))
-X = np.concatenate((quad['BG_wt'].values, quad['FG_wt'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[0].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[0].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[0].legend()
-
-X = np.concatenate((quad['BG_wf'].values, quad['FG_wf'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[1].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[1].legend()
-
-
-
-def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
-                         jitter=[0.2,0.03,0.25],
-                         quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11'):
-    '''Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
-    a usual situation it would be Tstationariness, bandwidth, and Fstationariness compared to relative
-    gain. Can also be compared to weights.
-    y_metric refers to the FIRST one it will input, for relative_gain this is not an issue. If you want
-    to differentiate between weights the sound affects in others vs how that sound is weighted itself,
-    input the one as it relates to BG, so 'weightsB' will be 'how that sound effects others' and will
-    know to make the metric 'weightsA' for the FGs, for example.
-    When inputting x_metric names, always make it a list. All entries should be found in the df being
-    passed, but you should remove the BG_ or FG_ prefix.
-    Made into a function from OLP_analysis_main on 2022_09_07'''
-    quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
-    quad = quad.loc[(quad.area==area) & (quad.synth_kind==synth_kind) & (quad.kind==bin_kind)]
-    quad = quad.copy()
-
-    # I use 2.5 for relative gain, I'm sure weights have one too...
-    if metric_filter:
-        quad = quad.loc[quad[y_metric] <= metric_filter]
-        quad = quad.loc[quad[y_metric] >= -metric_filter]
-
-    if y_metric=='BG_rel_gain':
-        y_metric2, title, ylabel = 'FG_rel_gain', 'Relative Gain', 'Relative Gain'
-    elif y_metric=='weightsB':
-        y_metric2, title, ylabel = 'weightsA', 'How this sound effects a concurrent sound', 'Weight'
-    elif y_metric=='weightsA':
-        y_metric2, title, ylabel = 'weightsB', 'How this sound itself is weighted', 'Weight'
-    else:
-        y_metric2, title, ylabel = y_metric, y_metric, y_metric
-
-    fig, axes = plt.subplots(1, len(x_metrics), figsize=(len(x_metrics)*4, 5))
-
-    for cnt, (ax, met) in enumerate(zip(axes, x_metrics)):
-        # Add a column that is the data for that metric, but jittered, for viewability
-        quad[f'jitter_BG_{met}'] = quad[f'BG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
-        quad[f'jitter_FG_{met}'] = quad[f'FG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
-        # Do the plotting
-        sb.scatterplot(x=f'jitter_BG_{met}', y=y_metric, data=quad, ax=ax, s=3, color='deepskyblue')
-        sb.scatterplot(x=f'jitter_FG_{met}', y=y_metric2, data=quad, ax=ax, s=3, color='yellowgreen')
-        ax.set_xlabel(x_labels[cnt], fontweight='bold', fontsize=10)
-        if cnt==0:
-            ax.set_ylabel(ylabel, fontweight='bold', fontsize=10)
-        else:
-            ax.set_ylabel('')
-
-        # Run a regression
-        Y = np.concatenate((quad[y_metric].values, quad[y_metric2].values))
-        X = np.concatenate((quad[f'BG_{met}'].values, quad[f'FG_{met}'].values))
-        reg = stats.linregress(X, Y)
-        x = np.asarray(ax.get_xlim())
-        y = reg.slope * x + reg.intercept
-        ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                                                 f"coef: {reg.rvalue:.3f}\n"
-                                                 f"p = {reg.pvalue:.3f}")
-        ax.legend()
-
-
-    fig.suptitle(f"{title} - RMS Nat", fontweight='bold', fontsize=10)
-
-
-
-
-
-
-
-    Y = np.concatenate((quad['weightsB'].values, quad['weightsA'].values))
-    X = np.concatenate((quad['BG_Tstationary'].values, quad['FG_Tstationary'].values))
-    reg = stats.linregress(X, Y)
-    x = np.asarray(ax.get_xlim())
-    y = reg.slope * x + reg.intercept
-v
-    ax[0].legend()
-
-    X = np.concatenate((quad['BG_bandwidth'].values, quad['FG_bandwidth'].values))
-    reg = stats.linregress(X, Y)
-    x = np.asarray(ax[1].get_xlim())
-    y = reg.slope * x + reg.intercept
-    ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                                             f"coef: {reg.rvalue:.3f}\n"
-                                             f"p = {reg.pvalue:.3f}")
-    ax[1].legend()
-
-    X = np.concatenate((quad['BG_Fstationary'].values, quad['FG_Fstationary'].values))
-    reg = stats.linregress(X, Y)
-    x = np.asarray(ax[2].get_xlim())
-    y = reg.slope * x + reg.intercept
-    ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                                             f"coef: {reg.rvalue:.3f}\n"
-                                             f"p = {reg.pvalue:.3f}")
-    ax[2].legend()
-
-
-
-
-
-
-
-
-
-
-
-quad, threshold = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
-
-quad = quad.copy()
-
-
-quad['jitter_BG_Tstationary'] = quad['BG_Tstationary'] + np.random.normal(0, 0.2, len(quad))
-quad['jitter_FG_Tstationary'] = quad['FG_Tstationary'] + np.random.normal(0, 0.2, len(quad))
-
-quad['jitter_BG_bandwidth'] = quad['BG_bandwidth'] + np.random.normal(0, 0.02, len(quad))
-quad['jitter_FG_bandwidth'] = quad['FG_bandwidth'] + np.random.normal(0, 0.02, len(quad))
-
-quad['jitter_BG_Fstationary'] = quad['BG_Fstationary'] + np.random.normal(0, 0.2, len(quad))
-quad['jitter_FG_Fstationary'] = quad['FG_Fstationary'] + np.random.normal(0, 0.2, len(quad))
-
-from scipy import stats
-
-f, ax = plt.subplots(1, 3, figsize=(12,5))
-sb.scatterplot(x='jitter_BG_Tstationary', y='weightsB', data=quad, ax=ax[0], s=3)
-sb.scatterplot(x='jitter_FG_Tstationary', y='weightsA', data=quad, ax=ax[0], s=3)
-ax[0].set_xlabel('Non-stationariness', fontweight='bold', fontsize=8)
-ax[0].set_ylabel('Weight', fontweight='bold', fontsize=8)
-
-sb.scatterplot(x='jitter_BG_bandwidth', y='weightsB', data=quad, ax=ax[1], s=3)
-sb.scatterplot(x='jitter_FG_bandwidth', y='weightsA', data=quad, ax=ax[1], s=3)
-ax[1].set_xlabel('Bandwidth', fontweight='bold', fontsize=8)
-ax[1].set_ylabel('')
-
-sb.scatterplot(x='jitter_BG_Fstationary', y='weightsB', data=quad, ax=ax[2], s=3)
-sb.scatterplot(x='jitter_FG_Fstationary', y='weightsA', data=quad, ax=ax[2], s=3)
-ax[2].set_xlabel('Frequency Non-stationariness', fontweight='bold', fontsize=8)
-ax[2].set_ylabel('')
-f.suptitle("how that sound effects the weight of others")
-
-Y = np.concatenate((quad['weightsB'].values, quad['weightsA'].values))
-X = np.concatenate((quad['BG_Tstationary'].values, quad['FG_Tstationary'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[0].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[0].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[0].legend()
-
-X = np.concatenate((quad['BG_bandwidth'].values, quad['FG_bandwidth'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[1].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[1].legend()
-
-X = np.concatenate((quad['BG_Fstationary'].values, quad['FG_Fstationary'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[2].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[2].legend()
-
-
-
-
-#
-f, ax = plt.subplots(1, 3, figsize=(12,5))
-sb.scatterplot(x='jitter_BG_Tstationary', y='weightsA', data=quad, ax=ax[0], s=3)
-sb.scatterplot(x='jitter_FG_Tstationary', y='weightsB', data=quad, ax=ax[0], s=3)
-ax[0].set_xlabel('Non-stationariness', fontweight='bold', fontsize=8)
-ax[0].set_ylabel('Weight', fontweight='bold', fontsize=8)
-
-sb.scatterplot(x='jitter_BG_bandwidth', y='weightsA', data=quad, ax=ax[1], s=3)
-sb.scatterplot(x='jitter_FG_bandwidth', y='weightsB', data=quad, ax=ax[1], s=3)
-ax[1].set_xlabel('Bandwidth', fontweight='bold', fontsize=8)
-ax[1].set_ylabel('')
-
-sb.scatterplot(x='jitter_BG_Fstationary', y='weightsA', data=quad, ax=ax[2], s=3)
-sb.scatterplot(x='jitter_FG_Fstationary', y='weightsB', data=quad, ax=ax[2], s=3)
-ax[2].set_xlabel('Frequency Non-stationariness', fontweight='bold', fontsize=8)
-ax[2].set_ylabel('')
-f.suptitle("how that sound is weighted")
-
-Y = np.concatenate((quad['weightsA'].values, quad['weightsB'].values))
-X = np.concatenate((quad['BG_Tstationary'].values, quad['FG_Tstationary'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[0].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[0].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[0].legend()
-
-X = np.concatenate((quad['BG_bandwidth'].values, quad['FG_bandwidth'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[1].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[1].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[1].legend()
-
-X = np.concatenate((quad['BG_Fstationary'].values, quad['FG_Fstationary'].values))
-reg = stats.linregress(X, Y)
-x = np.asarray(ax[2].get_xlim())
-y = reg.slope*x + reg.intercept
-ax[2].plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-                        f"coef: {reg.rvalue:.3f}\n"
-                        f"p = {reg.pvalue:.3f}")
-ax[2].legend()
 
 ### SOME SCATTERS THAT ARE NICE
 #plot, with regression, FR v weighted FR
@@ -876,8 +488,7 @@ ax[1].legend()
 
 
 
-#plot all the sound stats for all the sounds
-sound_df = ohel.get_sound_statistics(weight_df, plot=True)
+
 
 ##plot the quad of spectrogram examples for by sound stats
 lfreq, hfreq, bins = 100, 24000, 48

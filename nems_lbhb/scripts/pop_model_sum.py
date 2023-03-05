@@ -1,20 +1,20 @@
-import nems.db as nd
+import nems0.db as nd
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 import re
 import scipy.signal as signal
 
 from nems_lbhb.xform_wrappers import baphy_load_wrapper
-from nems.recording import load_recording
-from nems.metrics.stp import stp_magnitude
-from nems.xform_helper import load_model_xform
-import nems.plots.api as nplt
-import nems.gui.editors as gui
+from nems0.recording import load_recording
+from nems0.metrics.stp import stp_magnitude
+from nems0.xform_helper import load_model_xform
+import nems0.plots.api as nplt
+import nems0.gui.editors as gui
 
 from nems_db.params import fitted_params_per_batch
 
-from nems.xform_helper import load_model_xform
-import nems.xforms as xforms
-from nems.gui.recording_browser import browse_context
+from nems0.xform_helper import load_model_xform
+import nems0.xforms as xforms
+from nems0.gui.recording_browser import browse_context
 
 import matplotlib.pyplot as plt
 import numpy as np

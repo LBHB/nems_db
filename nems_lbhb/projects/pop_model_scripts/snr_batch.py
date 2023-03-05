@@ -7,14 +7,14 @@ import pandas as pd
 import scipy.stats as st
 
 import nems
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
+import nems0.epoch as ep
 from pathlib import Path
 
-from nems.xform_helper import load_model_xform
+from nems0.xform_helper import load_model_xform
 from nems_lbhb.xform_wrappers import generate_recording_uri, split_pop_rec_by_mask
-from nems.recording import load_recording
+from nems0.recording import load_recording
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import (
     MODELGROUPS, POP_MODELGROUPS, HELDOUT, MATCHED, EQUIVALENCE_MODELS_SINGLE, EQUIVALENCE_MODELS_POP,
@@ -104,7 +104,7 @@ def sparseness_by_batch(batch, modelnames=None,
         modelnames=[ALL_FAMILY_MODELS[0],ALL_FAMILY_MODELS[2],ALL_FAMILY_MODELS[3] ]
         #modelnames=[ALL_FAMILY_MODELS[2],ALL_FAMILY_MODELS[3] ]
 
-    d = nd.batch_comp(batch, modelnames)
+    d = nd.batch_comp(batch, modelnames, stat='r_ceiling')
     #cellids = d.index
     cellids = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
 
@@ -138,7 +138,7 @@ def sparseness_by_batch(batch, modelnames=None,
                 print(f"{j} {cellid} r_test={c:.3f} orig r_test={d.loc[cellid].values[i]:.3f} S_r={S_r:.3f} S_p={S_p:.3f}")
 
                 sparseness_data = sparseness_data.append({'cellid': cellid, 'S_r': S_r, 'S_p': S_p, 'r_test': c,
-                                                          'r_test_all': r_test_all, 'model': i},
+                                                          'r_test_all': r_test_all, 'r_test': d.loc[cellid].values[i], 'model': i},
                                                          ignore_index=True)
 
     if save_path is not None:
@@ -225,7 +225,7 @@ def sparseness_figs():
     sd.loc[sd['model']=='2','model']='pop LN'
     sd['label'] = sd['area'] + " " +sd['model']
     #tres=results.loc[(results[PLOT_STAT]<1) & results[PLOT_STAT]>-0.05]
-
+    sd.loc[sd.r_test>1,'r_test']=1
     r_test_min=0.0
     print(f"r_test_min={r_test_min}")
     sd_thr = sd.loc[sd['r_test']>r_test_min]
@@ -262,9 +262,15 @@ def sparseness_figs():
     f2,ax=plt.subplots(1,2,figsize=column_and_half_short,sharex=True,sharey=True)
     palette = ['gray', DOT_COLORS['1D CNNx2'], DOT_COLORS['pop LN']]
     for c,p in zip(['A1 act','A1 pop LN','A1 1D CNN'],palette):
-        ax[0].errorbar(mp.index,mp[c].values,ep[c].values, color=p, label=c)
+        m=mp[c].values
+        e=ep[c].values
+        i=np.isfinite(m+e)
+        ax[0].errorbar(mp.index[i],m[i],e[i], color=p, label=c)
     for c,p in zip(['PEG act','PEG pop LN','PEG 1D CNN'],palette):
-        ax[1].errorbar(mp.index,mp[c].values,ep[c].values, color=p, label=c)
+        m=mp[c].values
+        e=ep[c].values
+        i=np.isfinite(m+e)
+        ax[1].errorbar(mp.index[i],m[i],e[i], color=p, label=c)
     ax[0].legend()
     ax[1].legend()
     ax[0].set_xlabel('r_test')

@@ -1,4 +1,4 @@
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,6 +43,70 @@ def intro_figure_spectrograms():
     ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
     ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
     ax[4].set_yticks([]), ax[4].set_xticks([])
+    ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
+    ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
+
+
+def intro_figure_spectrograms_wip():
+    '''Updated the figure I like to use as an intro to make it relateable to the people at a WIP.
+    Plots the spectrograms in a format I use for my intro slides (first panel of APAN/SFN
+    poster where a few spectrograms(piano, violin, bass) are shown separately and then
+    over top of each other. Moved from scratch file 2022_08_25'''
+    path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@NaturalSounds/'
+    chips_path = path + 'sounds_set3/cat102_rec1_crumpling_paper_excerpt1.wav'
+    can_path = path + 'sounds_set4/cat588_rec1_can_opener_excerpt1.wav'
+    voice_path = path + 'sounds_set3/00cat232_rec1_man_speaking_excerpt1.wav'
+    paths = [chips_path, can_path, voice_path]
+
+    fig, ax = plt.subplots(5, 1, figsize=(7.5, 10))
+    specs = []
+    for nn, pth in enumerate(paths):
+        sfs, W = wavfile.read(pth)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 0, 12000)
+        ax[nn].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                      cmap='gray_r')
+        ax[nn].set_yticks([]), ax[nn].set_xticks([])
+        specs.append(spec)
+
+    comb = specs[0] + specs[1] + specs[2]
+    ax[4].imshow(comb, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                 cmap='gray_r')
+    ax[3].set_yticks([]), ax[3].set_xticks([])
+    ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
+    ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
+    ax[4].set_yticks([]), ax[4].set_xticks([])
+    ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
+    ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
+
+
+def intro_figure_spectrograms_two():
+    '''2022_11_24. Plots two spectrograms and then the overlapping, useful for my experiment schematic.'''
+    path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+    piano_path = path + 'Background2/03Insect Buzz.wav'
+    bass_path = path + 'Foreground3/01Fight Squeak.wav'
+    paths = [piano_path, bass_path]
+
+    fig, ax = plt.subplots(5, 1, figsize=(7.5, 10))
+    specs = []
+    for nn, pth in enumerate(paths):
+        sfs, W = wavfile.read(pth)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 0, 12000)
+        ax[nn].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                      cmap='gray_r')
+        ax[nn].set_yticks([]), ax[nn].set_xticks([])
+        specs.append(spec)
+        ax[nn].spines['top'].set_visible(True), ax[nn].spines['bottom'].set_visible(True)
+        ax[nn].spines['left'].set_visible(True), ax[nn].spines['right'].set_visible(True)
+
+    comb = specs[0] + specs[1]
+    ax[4].imshow(comb, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                 cmap='gray_r')
+    ax[3].set_yticks([]), ax[3].set_xticks([])
+    ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
+    ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
+    ax[4].set_yticks([]), ax[4].set_xticks([])
+    ax[4].spines['top'].set_visible(True), ax[4].spines['bottom'].set_visible(True)
+    ax[4].spines['left'].set_visible(True), ax[4].spines['right'].set_visible(True)
     ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
     ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
 
@@ -604,7 +668,8 @@ def resp_weight_scatter(weight_df, xcol='bg_FR', ycol='weightsB', threshold=0.03
     ax.legend()
 
 
-def resp_weight_multi_scatter(weight_df, synth_kind='N', threshold=0.03, quads=3):
+def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB', 'weightsB'],
+                              synth_kind='N', threshold=0.03, quads=3):
     '''Updated resp_weight_scatter to just plot all four combinations of FR/wt on one plot to avoid
     the silliness of four individual plots. Works the same, basically just give it a df.'''
     quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=quads)
@@ -614,7 +679,7 @@ def resp_weight_multi_scatter(weight_df, synth_kind='N', threshold=0.03, quads=3
     axes = axes.ravel()
 
     xcol = ['bg_FR', 'fg_FR', 'bg_FR', 'fg_FR']
-    ycol = ['weightsA', 'weightsA', 'weightsB', 'weightsB']
+    # ycol = ['weightsA', 'weightsA', 'weightsB', 'weightsB']
     cols = ['deepskyblue', 'deepskyblue', 'yellowgreen', 'yellowgreen']
 
     for ax, xc, yc, col in zip(axes, xcol, ycol, cols):
@@ -629,18 +694,21 @@ def resp_weight_multi_scatter(weight_df, synth_kind='N', threshold=0.03, quads=3
                                                  f"p = {reg.pvalue:.3f}")
         ax.legend()
 
-    axes[0].set_ylabel("BG Weight", fontsize=12, fontweight='bold')
-    axes[2].set_ylabel("FG Weight", fontsize=12, fontweight='bold')
-    axes[2].set_xlabel("BG FR", fontsize=12, fontweight='bold')
-    axes[3].set_xlabel("FG FR", fontsize=12, fontweight='bold')
+    axes[0].set_ylabel(f"{ycol[0]}", fontsize=12, fontweight='bold')
+    axes[2].set_ylabel(f"{ycol[2]}", fontsize=12, fontweight='bold')
+    axes[2].set_xlabel(f"{xcol[0]}", fontsize=12, fontweight='bold')
+    axes[3].set_xlabel(f"{xcol[1]}", fontsize=12, fontweight='bold')
 
 
-def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None):
+def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None, r_cut=None):
     '''2022_09_06. Takes a DF (you filter it by types of sounds and area beforehand) and will plot
     a histogram showing the relative weights for a certain quadrant. It said distplot is deprecated
     so I'll have to figure something else out with histplot or displot, but coloring the histogram
     was a big task I couldn't figure out. Can kicked down the road.'''
     quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
     if synth_kind:
         quad = quad.loc[quad.synth_kind == synth_kind]
     # Calculate relative gain and percent suppressed
@@ -666,14 +734,17 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
     ax.set_xlabel('Relative Gain', fontweight='bold', fontsize=12)
     ax.set_ylabel('Density', fontweight='bold', fontsize=12)
     ax.set_title(f'{synth_kind} - Percent\nSuppression:\n{a1_percent_supp}', fontsize=8)
+    if r_cut:
+        fig.suptitle(f"r >= {r_cut}")
     fig.tight_layout()
 
 
 def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
                          jitter=[0.25,0.2,0.03],
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
-                         title_text=''):
-    '''Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
+                         title_text='', r_cut=None):
+    '''Updated 2022_09_21 to add the ability to filter the dataframe by model fit accuracy.
+    Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
     a usual situation it would be Tstationariness, bandwidth, and Fstationariness compared to relative
     gain. Can also be compared to weights.
     y_metric refers to the FIRST one it will input, for relative_gain this is not an issue. If you want
@@ -685,6 +756,9 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
     Made into a function from OLP_analysis_main on 2022_09_07'''
     quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
     quad = quad.loc[(quad.area==area) & (quad.synth_kind==synth_kind) & (quad.kind==bin_kind)]
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
     quad = quad.copy()
 
     # I use 2.5 for relative gain, I'm sure weights have one too...
@@ -730,4 +804,841 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
         ax.legend()
 
 
-    fig.suptitle(f"{title} - {synth_kind} - {title_text}", fontweight='bold', fontsize=10)
+    fig.suptitle(f"{title} - {synth_kind} - {title_text} - r >= {r_cut}", fontweight='bold', fontsize=10)
+
+
+def scatter_model_accuracy(df, stat='FG_rel_gain', bin_kind='11', synth_kind='N', threshold=0.03):
+    '''2022_09_16. Takes a dataframe and filters it according to your inputs, then plots the three quadrants
+    of positive firing rate as a scatter comparing model accuracy with relative_gain.'''
+    df = df.dropna(axis=0, subset='r')
+    df = df.loc[df.synth_kind==synth_kind]
+    df = df.loc[df.kind==bin_kind]
+
+    labels = ['BG and FG alone\nevoke response', 'Only BG alone\nevokes response', 'Only FG alone\nevokes response']
+    quads = [3, 6, 2]
+    fig, axes = plt.subplots(1, 3, figsize=(12,4))
+    for cnt, (ax, qd) in enumerate(zip(axes, quads)):
+        quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=qd)
+        sb.scatterplot(data=quad, x=quad.r, y=quad[stat], s=3, ax=ax)
+
+        X, Y = quad.r.values, quad[stat].values
+        reg = stats.linregress(X, Y)
+        x = np.asarray(ax.get_xlim())
+        y = reg.slope * x + reg.intercept
+        ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+                                              f"coef: {reg.rvalue:.3f}\n"
+                                              f"p = {reg.pvalue:.3f}")
+        ax.legend()
+        ax.set_xlabel("Model Fit (r)", fontweight='bold', fontsize=8)
+        ax.set_title(f"{labels[cnt]}", fontsize=10, fontweight='bold')
+        ax.set_ylabel(f"{stat}", fontweight='bold', fontsize=8)
+
+
+def r_filtered_weight_histogram_summary(df, synth_kind='N', bin_kind='11', manual=None, cut=2, threshold=0.03):
+    '''2022_09_16. Takes a dataframe, removes NaNs from model fit, then filters based on criteria,
+    then splits into two dataframes for above and below the median r value. If you include manual,
+    it'll add an extra plot for the manually definied lower r cutoff. It'll then pop up three
+    separate plots.'''
+    r_df = df.dropna(axis=0, subset='r')
+    r_df = r_df.loc[r_df.synth_kind==synth_kind]
+    r_df = r_df.loc[r_df.kind==bin_kind]
+    r_df = r_df.loc[(r_df.weightsA > -cut) & (r_df.weightsA < cut) &
+                    (r_df.weightsB > -cut) & (r_df.weightsB < cut)]
+    mid_r = np.median(r_df.r)
+    goods = r_df.loc[r_df.r >= mid_r]
+    bads = r_df.loc[r_df.r <=mid_r]
+    to_plot = [goods, bads]
+    labels = [f'r >= {mid_r}, {synth_kind}, {bin_kind}', f'r < {mid_r}, {synth_kind}, {bin_kind}']
+    if manual:
+        extra = r_df.loc[r_df.r >= manual]
+        to_plot.append(extra)
+        labels.append(f'r >= {manual}, {synth_kind}, {bin_kind}')
+
+    for dff, lbl in zip(to_plot, labels):
+        oph.histogram_summary_plot(dff, 0.03, title_text=lbl)
+
+
+
+def weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=None):
+    '''2022_09_30. Uses the usual stuff to calculate the old way of calculating suppression:
+    ((rAB-sp) - (rA-sp) + (rB-sp)) / (rA-sp) + (rB-sp), and compares it with average weight:
+    (wFG+wBG) / 2. Then scatters them.'''
+    weight_df['avg_weight'] = (weight_df.weightsA + weight_df.weightsB) / 2
+    weight_df['avg_supp'] = (-weight_df['supp']) / (weight_df['bg_FR'] + weight_df['fg_FR'])
+    quad, _ = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if r_cut:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_cut]
+    fig, ax = plt.subplots(1,1,figsize=(8,8))
+    ax.scatter(x=quad.avg_supp, y=quad.avg_weight, s=1)
+    ax.set_xlabel('(LS - rAB) / rA+rB', fontweight='bold', fontsize=10)
+    ax.set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
+    ax.set_ylim(0, 1.25), ax.set_xlim(-1.5, 1.5)
+    ax.set_title(f'r >= {r_cut} - n={quad.shape[0]}', fontsize=10, fontweight='bold')
+    fig.tight_layout()
+
+def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True):
+    '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
+    with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
+    stay True at this point'''
+    areas = list(df.area.unique())
+
+    # This can be mushed into one liners using list comprehension and show_suffixes
+    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+
+    quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                   & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+
+    quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
+                   & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
+
+    fig, ax = plt.subplots(1, 4, figsize=(13, 6), sharey=True)
+    ax = np.ravel(ax)
+
+    colors = ['mediumorchid', 'darkorange', 'orangered', 'green']
+
+    stat_list, filt_list = [], []
+    for num, aa in enumerate(areas):
+        area_df = quad3.loc[quad3.area==aa]
+        if strict_r == True:
+            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+        else:
+            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
+
+        if summary == True:
+            alph = 0.35
+        else:
+            alph = 1
+
+        for ee, an in enumerate(list(filt.animal.unique())):
+            animal_df = filt.loc[filt.animal == an]
+            ax[num].scatter(x=['BG_start', 'BG_end'],
+                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                               label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)#, marker=symbols[cnt])
+            ax[num].scatter(x=['FG_start', 'FG_end'],
+                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                               color=colors[ee], alpha=alph) #, marker=symbols[cnt])
+            ax[num].errorbar(x=['BG_start', 'BG_end'],
+                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                           yerr=[stats.sem(animal_df[f'weightsA_start']), stats.sem(animal_df[f'weightsA_end'])], xerr=None,
+                           color=colors[ee], alpha=alph)
+            ax[num].errorbar(x=['FG_start', 'FG_end'],
+                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                           yerr=[stats.sem(animal_df[f'weightsB_start']), stats.sem(animal_df[f'weightsB_end'])], xerr=None,
+                           color=colors[ee], alpha=alph)
+
+            ax[num].legend(fontsize=8, loc='upper right')
+
+        BGsBGe = stats.ttest_ind(filt['weightsA_start'], filt['weightsA_end'])
+        FGsFGe = stats.ttest_ind(filt['weightsB_start'], filt['weightsB_end'])
+        BGsFGs = stats.ttest_ind(filt['weightsA_start'], filt['weightsB_start'])
+        BGeFGe = stats.ttest_ind(filt['weightsA_end'], filt['weightsB_end'])
+
+        tts = {f"BGsBGe_{aa}": BGsBGe.pvalue, f"FGsFGe_{aa}": FGsFGe.pvalue,
+               f"BGsFGs_{aa}": BGsFGs.pvalue, f"BGeFGe_{aa}": BGeFGe.pvalue}
+        print(tts)
+        stat_list.append(tts), filt_list.append(filt)
+
+        ax[0].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+        ax[num].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
+        ax[num].tick_params(axis='both', which='major', labelsize=10)
+        ax[num].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
+
+        if summary == True:
+            ax[num].scatter(x=['BG_start', 'BG_end'],
+                            y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                            label=f'Total (n={len(filt)})', color='black')  # , marker=symbols[cnt])
+            ax[num].scatter(x=['FG_start', 'FG_end'],
+                            y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                            color='black')  # , marker=symbols[cnt])
+            ax[num].errorbar(x=['BG_start', 'BG_end'],
+                             y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                             yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
+                             xerr=None, color='black')
+            ax[num].errorbar(x=['FG_start', 'FG_end'],
+                             y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                             yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
+                             xerr=None, color='black')
+
+            ax[num].legend(fontsize=8, loc='upper right')
+
+    for num, aa in enumerate(areas):
+        area_FG, area_BG = quad2.loc[quad2.area == aa], quad6.loc[quad6.area == aa]
+
+        # for cnt, ss in enumerate(show_suffixes):
+        filt_BG = area_BG.loc[(area_BG['r_start'] >= r_thresh) & (area_BG['r_end'] >= r_thresh)]
+        filt_FG = area_FG.loc[(area_FG['r_start'] >= r_thresh) & (area_FG['r_end'] >= r_thresh)]
+        animal_BG, animal_FG = filt_BG.loc[filt_BG.animal == an], filt_FG.loc[filt_FG.animal == an]
+        ax[num+len(areas)].scatter(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
+                           label=f'BG+/FGo or\nBGo/FG+ (n={len(filt_BG)}, {len(filt_FG)})', color="dimgrey") #, marker=symbols[cnt])
+        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],color='dimgrey')
+                           # label=f'{an} (n={len(animal_BG)}, {len(animal_FG)})', color='dimgrey') #, marker=symbols[cnt])
+        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
+                       yerr=[stats.sem(filt_BG[f'weightsA_start']), stats.sem(filt_BG[f'weightsA_end'])], xerr=None,
+                       color='dimgrey')
+        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],
+                       yerr=[stats.sem(filt_FG[f'weightsB_start']), stats.sem(filt_FG[f'weightsB_end'])], xerr=None,
+                       color='dimgrey')
+
+        area_df = quad3.loc[quad3.area==aa]
+        if strict_r == True:
+            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+        else:
+            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
+
+        ax[num + len(areas)].scatter(x=['BG_start', 'BG_end'],
+                        y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                        label=f'BG+/FG+ (n={len(filt)})', color='black')  # , marker=symbols[cnt])
+        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
+                        y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                        color='black')  # , marker=symbols[cnt])
+        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
+                         y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                         yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
+                         xerr=None,
+                         color='black')
+        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
+                         y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                         yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
+                         xerr=None,
+                         color='black')
+
+        BGsBGe = stats.ttest_ind(filt_BG['weightsA_start'], filt_BG['weightsA_end'])
+        FGsFGe = stats.ttest_ind(filt_FG['weightsB_start'], filt_FG['weightsB_end'])
+
+        ttt = {f'BGsBGe_null_{aa}': BGsBGe.pvalue, f'FGsFGe_null_{aa}': FGsFGe.pvalue}
+        stat_list.append(ttt)
+
+        ax[num+len(areas)].legend(fontsize=8, loc='upper right')
+        ax[2].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+        ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
+        ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
+        ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
+
+    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}", fontweight='bold', fontsize=10)
+    fig.tight_layout()
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 6), sharey=True)
+    ax = np.ravel(axes, 'F')
+
+    edges = np.arange(-1, 2, .05)
+    axn = 0
+    for num, aaa in enumerate(areas):
+        to_plot = filt_list[num]
+
+        na, xa = np.histogram(to_plot['weightsA_start'], bins=edges)
+        na = na / na.sum() * 100
+        nb, xb = np.histogram(to_plot['weightsB_start'], bins=edges)
+        nb = nb / nb.sum() * 100
+
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+        ax[axn].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[axn].set_title(f"{aaa} - 0-0.5s", fontweight='bold', fontsize=14)
+        ax[axn].tick_params(axis='both', which='major', labelsize=10)
+        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+
+        axn += 1
+
+        na, xa = np.histogram(to_plot['weightsA_end'], bins=edges)
+        na = na / na.sum() * 100
+        nb, xb = np.histogram(to_plot['weightsB_end'], bins=edges)
+        nb = nb / nb.sum() * 100
+
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+        ax[axn].legend(('Background', 'Foreground'), fontsize=12)
+        ax[0].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[2].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
+        ax[axn].set_title(f"{aaa} - 0.5-1s", fontweight='bold', fontsize=14)
+        ax[axn].tick_params(axis='both', which='major', labelsize=10)
+        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+
+        axn += 1
+    fig.tight_layout()
+
+    return stat_list
+
+
+def plot_partial_fit_bar(df, fr_thresh=0.03, r_thresh=0.6, suffixes=['_nopost', '_start', '_end'],
+                         syn='A', bin='11', animal=None):
+    '''2022_11_08. Takes your dataframe (could be single animal or multi animal, you specify, and plots the different fits
+    based on what you input for suffixes. It'll put A1 on the top and PEG on bottom.'''
+    areas = list(df.area.unique())
+    if animal:
+        df = df.loc[df.animal==animal]
+
+    quad3 = df.loc[(df.bg_FR_nopost >= fr_thresh) & (df.fg_FR_nopost >= fr_thresh)
+                           & (df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+    plot_df = quad3.loc[quad3.kind==bin]
+    plot_df = plot_df.loc[plot_df.synth_kind==syn]
+
+    plot_df = plot_df.loc[(plot_df['r_nopost'] >= r_thresh) & (plot_df['r_start'] >= r_thresh) & (plot_df['r_end'] >= r_thresh)]
+
+    fig, axes = plt.subplots(len(areas), len(suffixes), figsize=(3 * len(suffixes), 3 * len(areas)))
+    ax = np.ravel(axes)
+
+    dd = 0
+    for aa in areas:
+        area_df = plot_df.loc[plot_df.area==aa]
+        ax[dd].set_ylabel(f"{aa}\n\nMean Weights", fontsize=8, fontweight='bold')
+        for ss in suffixes:
+            to_plot = area_df.loc[(area_df[f'weightsA{ss}'] < 2) & (area_df[f'weightsA{ss}'] > -1) &
+                            (area_df[f'weightsB{ss}'] < 2) & (area_df[f'weightsB{ss}'] > -1)]
+
+            BG, FG = np.nanmean(to_plot[f'weightsA{ss}']), np.nanmean(to_plot[f'weightsB{ss}'])
+            BGsem, FGsem = stats.sem(to_plot[f'weightsA{ss}']), stats.sem(to_plot[f'weightsB{ss}'])
+            ttest1 = stats.ttest_ind(to_plot[f'weightsA{ss}'], to_plot[f'weightsB{ss}'])
+            ax[dd].bar("BG", BG, yerr=BGsem, color='deepskyblue')
+            ax[dd].bar("FG", FG, yerr=FGsem, color='yellowgreen')
+            if ttest1.pvalue < 0.001:
+                title = f'{ss} - p<0.001'
+            else:
+                title = f"{ss} - {ttest1.pvalue:.3f}"
+            ax[dd].set_title(f"{title}\nBG: {BG:.2f}, FG: {FG:.2f}\nn={len(to_plot)}", fontsize=8)
+            dd += 1
+    fig.suptitle(f"Bin: {bin} - r>={r_thresh} - FR>={fr_thresh} - synth: {syn}", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+
+
+def plot_PSTH_example_progression(batch, cellid, bg, fg, bin_kind='11', synth_kind='A', sigma=None, error=False, specs=False):
+    '''2022_11_28. Added option to toggle a second figure that makes spectrograms to paste on top.
+    Added 2022_11_18 for WIP or talks. Takes any cell and outputs three identical psths, with the sounds in isolation,
+    adding linear sum, then adding the combo response, for visuals on powerpoints.'''
+    weight_df = ofit.OLP_fit_weights(batch=333, cells=[cellid])
+    row = weight_df.loc[(weight_df.BG==bg) & (weight_df.FG==fg) &
+                        (weight_df.kind==bin_kind) & (weight_df.synth_kind==synth_kind)]
+
+    # Load response
+    manager = BAPHYExperiment(cellid=cellid, batch=batch)
+    options = ohel.get_load_options(batch) #gets options that will include gtgram if batch=339
+    rec = manager.get_recording(**options)
+
+    epo = row.epoch
+    epochs = [f"STIM_{epo[0].split('_')[1]}_null", f"STIM_null_{epo[0].split('_')[2]}", epo[0]]
+
+    rec['resp'] = rec['resp'].extract_channels([cellid])
+    resp = copy.copy(rec['resp'].rasterize())
+    rec['resp'].fs = 100
+    fs = 100
+    norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
+    r = norm_spont.extract_epochs(epochs)
+    ls = np.squeeze(np.nanmean(r[epochs[0]] + r[epochs[1]],axis=0))
+
+    # Some plotting calculations
+    prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
+    time = (np.arange(0, r[epochs[0]].shape[-1]) / fs ) - prestim
+    dur = manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+
+    r['ls'] = ls
+    ax_list = [[0,1,2], [0,1,2], [2], [1,2]]
+
+    fig, axes = plt.subplots(figsize=(10, 10))
+    iso = plt.subplot2grid((14, 10), (0, 0), rowspan=4, colspan=10)
+    lin = plt.subplot2grid((14, 10), (5, 0), rowspan=4, colspan=10, sharey=iso)
+    com = plt.subplot2grid((14, 10), (10, 0), rowspan=4, colspan=10, sharey=iso)
+    ax = [iso, lin, com]
+
+    tags = ['Background (BG)', 'Foreground (FG)', 'BG+FG Combo', 'Linear Sum']
+    colors = ['deepskyblue','yellowgreen','dimgray', 'dimgray']
+    styles = ['solid', 'solid', 'solid', '--']
+
+    # Plot the three response lines
+    for (cnt, kk) in enumerate(r.keys()):
+        lst = ax_list[cnt]
+        plot_resp = r[kk]
+        mean_resp = np.squeeze(np.nanmean(plot_resp, axis=0))
+        for axn in lst:
+            if kk != 'ls':
+                if sigma:
+                    ax[axn].plot(time, sf.gaussian_filter1d(mean_resp, sigma) * rec['resp'].fs,
+                                                       color=colors[cnt], label=f"{tags[cnt]}", ls=styles[cnt])
+                if not sigma:
+                    ax[axn].plot(time, mean_resp * rec['resp'].fs, color=colors[cnt], label=f"{tags[cnt]}", ls=styles[cnt])
+                if error:
+                    sem = np.squeeze(stats.sem(plot_resp, axis=0, nan_policy='omit'))
+                    ax[axn].fill_between(time, sf.gaussian_filter1d((mean_resp - sem) * rec['resp'].fs, sigma),
+                                    sf.gaussian_filter1d((mean_resp + sem) * rec['resp'].fs, sigma),
+                                       alpha=0.4, color=colors[cnt])
+            else:
+            # Plot the linear sum line
+                if sigma:
+                    ax[axn].plot(time, sf.gaussian_filter1d(ls * rec['resp'].fs, sigma), color=colors[cnt],
+                            ls=styles[cnt], label=tags[cnt], lw=1)
+                if not sigma:
+                    ax[axn].plot(time, ls * rec['resp'].fs, color=colors[cnt], ls=styles[cnt], label=tags[cnt], lw=1)
+
+    for axn in range(len(ax)):
+        ax[axn].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
+        ymin, ymax = ax[axn].get_ylim()
+        ax[axn].set_ylabel('spk/s', fontweight='bold', size=10)
+        ax[axn].legend(loc='upper right', fontsize=6)
+        ax[axn].vlines([0, dur], ymin, ymax, colors='black', linestyles=':', lw=1)
+        ax[axn].set_ylim(ymin, ymax)
+        ax[axn].set_xlabel('Time (s)', fontweight='bold', size=10)
+        ax[axn].spines['top'].set_visible(True), ax[axn].spines['right'].set_visible(True)
+        ax[axn].set_xticks([0.0, 0.5, 1.0])
+    # fig.tight_layout()
+
+    if specs == True:
+        fig, axes = plt.subplots(figsize=(10, 10))
+        specA = plt.subplot2grid((14, 10), (7, 0), rowspan=1, colspan=10)
+        specB = plt.subplot2grid((14, 10), (8, 0), rowspan=1, colspan=10)
+        com = plt.subplot2grid((14, 10), (10, 0), rowspan=4, colspan=10)
+        ax = [com, specA, specB]
+        r = norm_spont.extract_epochs(epochs)
+
+        for (cnt, kk) in enumerate(r.keys()):
+
+            plot_resp = r[kk]
+            mean_resp = np.squeeze(np.nanmean(plot_resp, axis=0))
+            if sigma:
+                ax[0].plot(time, sf.gaussian_filter1d(mean_resp, sigma) * rec['resp'].fs,
+                                                   color=colors[cnt], label=f"{tags[cnt]}", ls=styles[cnt])
+            if not sigma:
+                ax[0].plot(time, mean_resp * rec['resp'].fs, color=colors[cnt], label=f"{tags[cnt]}", ls=styles[cnt])
+
+        ax[0].set_xlim(-0.2, (dur + 0.3))        # arbitrary window I think is nice
+        ymin, ymax = ax[0].get_ylim()
+
+        ax[0].set_ylabel('spk/s', fontweight='bold', size=12)
+        ax[0].legend(loc='upper right', fontsize=18, prop=dict(weight='bold'), labelspacing=0.4)
+        ax[0].vlines([0, dur], ymin, ymax, colors='black', linestyles=':')
+        ax[0].set_ylim(ymin, ymax)
+        ax[0].set_xlabel('Time (s)', fontweight='bold', size=12)
+        ax[0].set_xticks([0.0, 0.5, 1.0])
+        ax[0].set_xticklabels([0.0, 0.5, 1.0], fontsize=10)
+        ax[0].spines['top'].set_visible(True), ax[0].spines['right'].set_visible(True)
+        # ax[2].vlines(params['SilenceOnset'], ymax * .9, ymax, colors='black', linestyles='-', lw=0.25)
+
+        xmin, xmax = ax[0].get_xlim()
+
+        # specs
+        folder_ids = [int(manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['BG_Folder'][-1]),
+                int(manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['FG_Folder'][-1])]
+
+        bg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'Background{folder_ids[0]}/*.wav'))
+        fg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'Foreground{folder_ids[1]}/*.wav'))
+        bg_path = [bb for bb in bg_dir if bg in bb][0]
+        fg_path = [ff for ff in fg_dir if fg in ff][0]
+
+        xf = 100
+        low, high = xmin * xf, xmax * xf
+
+        sfs, W = wavfile.read(bg_path)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+        ax[1].imshow(spec, aspect='auto', origin='lower', extent=[0,spec.shape[1], 0, spec.shape[0]],
+                     cmap='gray_r')
+        ax[1].set_xlim(low, high)
+        ax[1].set_xticks([]), ax[1].set_yticks([])
+        ax[1].set_xticklabels([]), ax[1].set_yticklabels([])
+        ax[1].spines['top'].set_visible(False), ax[1].spines['bottom'].set_visible(False)
+        ax[1].spines['left'].set_visible(False), ax[1].spines['right'].set_visible(False)
+        ax[1].set_ylabel(f"BG: {bg}", rotation=0, fontweight='bold', verticalalignment='center',
+                         size=14, labelpad=-10)
+
+        sfs, W = wavfile.read(fg_path)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+        ax[2].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                     cmap='gray_r')
+        ax[2].set_xlim(low, high)
+        ax[2].set_xticks([]), ax[2].set_yticks([])
+        ax[2].set_xticklabels([]), ax[2].set_yticklabels([])
+        ax[2].spines['top'].set_visible(False), ax[2].spines['bottom'].set_visible(False)
+        ax[2].spines['left'].set_visible(False), ax[2].spines['right'].set_visible(False)
+        ax[2].set_ylabel(f"FG: {fg}", rotation=0, fontweight='bold', verticalalignment='center',
+                         size=14, labelpad=-10)
+
+        # This just makes boxes around only the important part of the spec axis. So it all lines up.
+        ymin, ymax = ax[2].get_ylim()
+        ax[1].vlines([0, 1*rec['resp'].fs], ymin, ymax, color='black', lw=0.5)
+        ax[1].hlines([ymin+2,ymax], 0, 1*rec['resp'].fs, color='black', lw=0.5)
+        ax[2].vlines([0, 1*rec['resp'].fs], ymin, ymax, color='black', lw=0.5)
+        ax[2].hlines([ymin+1,ymax], 0, 1*rec['resp'].fs, color='black', lw=0.5)
+
+
+def psths_with_specs_partial_fit(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N',
+                     sigma=None, error=True):
+    '''Makes panel three of APAN 2021 poster and NGP 2022 poster, this is a better way than the way
+    normalized_linear_error_figure in this file does it, which relies on an old way of loading and
+    saving the data that doesn't use DFs and is stupid. The other way also only works with marmoset
+    and maybe early ferret data, but definitely not binaural and synthetics. Use this, it's better.
+    It does lack the linear error stat though, but that's not important anymore 2022_09_01.'''
+
+    # Make figure bones. Could add another spectrogram below, there's space.
+    f = plt.figure(figsize=(8, 6))
+    psth = plt.subplot2grid((18, 3), (4, 0), rowspan=5, colspan=6)
+    specA = plt.subplot2grid((18, 3), (0, 0), rowspan=2, colspan=6)
+    specB = plt.subplot2grid((18, 3), (2, 0), rowspan=2, colspan=6)
+    ax = [specA, specB, psth]
+
+    tags = ['BG', 'FG', 'BG+FG']
+    colors = ['deepskyblue','yellowgreen','dimgray']
+
+    #Get this particular row out for some stuff down the road
+    row = df.loc[(df.cellid==cellid) & (df.BG==bg) & (df.FG==fg) & (df.kind==bin_kind)
+                 & (df.synth_kind==synth_kind)].squeeze()
+
+    # Load response
+    manager = BAPHYExperiment(cellid=cellid, batch=batch)
+    options = ohel.get_load_options(batch) #gets options that will include gtgram if batch=339
+    rec = manager.get_recording(**options)
+
+    epo = row.epoch
+    epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
+
+    rec['resp'] = rec['resp'].extract_channels([cellid])
+    resp = copy.copy(rec['resp'].rasterize())
+    rec['resp'].fs = 100
+    fs = 100
+    norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
+    r = norm_spont.extract_epochs(epochs)
+    ls = np.squeeze(np.nanmean(r[epochs[0]] + r[epochs[1]],axis=0))
+
+    # Some plotting calculations
+    prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
+    time = (np.arange(0, r[epochs[0]].shape[-1]) / fs ) - prestim
+    dur = manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+
+    # Plot the three response lines
+    for (cnt, kk) in enumerate(r.keys()):
+        plot_resp = r[kk]
+        mean_resp = np.squeeze(np.nanmean(plot_resp, axis=0))
+        if sigma:
+            ax[2].plot(time, sf.gaussian_filter1d(mean_resp, sigma) * rec['resp'].fs,
+                                               color=colors[cnt], label=f"{tags[cnt]}")
+        if not sigma:
+            ax[2].plot(time, mean_resp * rec['resp'].fs, color=colors[cnt], label=f"{tags[cnt]}")
+        if error:
+            sem = np.squeeze(stats.sem(plot_resp, axis=0, nan_policy='omit'))
+            ax[2].fill_between(time, sf.gaussian_filter1d((mean_resp - sem) * rec['resp'].fs, sigma),
+                            sf.gaussian_filter1d((mean_resp + sem) * rec['resp'].fs, sigma),
+                               alpha=0.4, color=colors[cnt])
+    # Plot the linear sum line
+    if sigma:
+        ax[2].plot(time, sf.gaussian_filter1d(ls * rec['resp'].fs, sigma), color='dimgray',
+                ls='--', label='Linear Sum')
+    if not sigma:
+        ax[2].plot(time, ls * rec['resp'].fs, color='dimgray', ls='--', label='Linear Sum')
+    ax[2].set_xlim(-0.2, (dur + 0.3))        # arbitrary window I think is nice
+    ymin, ymax = ax[2].get_ylim()
+
+    ax[2].set_ylabel('spk/s', fontweight='bold', size=12)
+    ax[2].legend(loc='upper right', fontsize=18, prop=dict(weight='bold'), labelspacing=0.4)
+    ax[2].vlines([0, dur], ymin, ymax, colors='black', linestyles=':')
+    ax[2].set_ylim(ymin, ymax)
+    ax[2].set_xlabel('Time (s)', fontweight='bold', size=12)
+    ax[2].set_xticks([0.0, 0.5, 1.0])
+    ax[2].set_xticklabels([0.0, 0.5, 1.0], fontsize=10)
+    ax[2].spines['top'].set_visible(True), ax[2].spines['right'].set_visible(True)
+    # ax[2].vlines(params['SilenceOnset'], ymax * .9, ymax, colors='black', linestyles='-', lw=0.25)
+
+    ax[0].set_title(f"{cellid}\nwBG_full: {row.weightsA:.2f} - wFG_full: {row.weightsB:.2f} - r: {row.r:.2f}\nwBG_start: {row.weightsA_start:.2f} -"
+                    f" wFG_start: {row.weightsB_start:.2f} - r: {row.r_start:.2f}\nwBG_end: {row.weightsA_end:.2f} - "
+                    f"wFG_end: {row.weightsB_end:.2f} - r: {row.r_end:.2f}",
+                    fontweight='bold', size=10)
+    xmin, xmax = ax[2].get_xlim()
+
+    # Spectrogram part
+    folder_ids = [int(manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['BG_Folder'][-1]),
+            int(manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['FG_Folder'][-1])]
+
+    bg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                        f'Background{folder_ids[0]}/*.wav'))
+    fg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                        f'Foreground{folder_ids[1]}/*.wav'))
+    bg_path = [bb for bb in bg_dir if epo.split('_')[1].split('-')[0][:2] in bb][0]
+    fg_path = [ff for ff in fg_dir if epo.split('_')[2].split('-')[0][:2] in ff][0]
+
+    xf = 100
+    low, high = xmin * xf, xmax * xf
+
+    sfs, W = wavfile.read(bg_path)
+    spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+    ax[0].imshow(spec, aspect='auto', origin='lower', extent=[0,spec.shape[1], 0, spec.shape[0]],
+                 cmap='gray_r')
+    ax[0].set_xlim(low, high)
+    ax[0].set_xticks([]), ax[0].set_yticks([])
+    ax[0].set_xticklabels([]), ax[0].set_yticklabels([])
+    ax[0].spines['top'].set_visible(False), ax[0].spines['bottom'].set_visible(False)
+    ax[0].spines['left'].set_visible(False), ax[0].spines['right'].set_visible(False)
+    ax[0].set_ylabel(f"BG: {row.BG}", rotation=0, fontweight='bold', verticalalignment='center',
+                     size=14, labelpad=-10)
+
+    sfs, W = wavfile.read(fg_path)
+    spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+    ax[1].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                 cmap='gray_r')
+    ax[1].set_xlim(low, high)
+    ax[1].set_xticks([]), ax[1].set_yticks([])
+    ax[1].set_xticklabels([]), ax[1].set_yticklabels([])
+    ax[1].spines['top'].set_visible(False), ax[1].spines['bottom'].set_visible(False)
+    ax[1].spines['left'].set_visible(False), ax[1].spines['right'].set_visible(False)
+    ax[1].set_ylabel(f"FG: {row.FG}", rotation=0, fontweight='bold', verticalalignment='center',
+                     size=14, labelpad=-10)
+
+    # This just makes boxes around only the important part of the spec axis. So it all lines up.
+    ymin, ymax = ax[1].get_ylim()
+    ax[0].vlines([0, 1*rec['resp'].fs], ymin, ymax, color='black', lw=0.5)
+    ax[0].hlines([ymin+2,ymax], 0, 1*rec['resp'].fs, color='black', lw=0.5)
+    ax[1].vlines([0, 1*rec['resp'].fs], ymin, ymax, color='black', lw=0.5)
+    ax[1].hlines([ymin+1,ymax], 0, 1*rec['resp'].fs, color='black', lw=0.5)
+
+
+def display_sound_envelopes(sound_df, type='FG', envs=True):
+    '''2022_11_09. Give it a sound df generated from a cell and then choose whether you want to look at all of the FGs or
+    BGs. Toggling envs will either plot the envelope of the sound, if True, or the spectrogram, if False'''
+    if type == 'FG':
+        fg_list = list(sound_df.loc[(sound_df.type == 'FG') & (sound_df.synth_kind == 'A')].name)
+        fg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'Foreground3/*.wav'))
+        paths = [aa for aa in fg_dir if aa.split('/')[-1].split('.')[0] in fg_list]
+    elif type == 'BG':
+        bg_list = list(sound_df.loc[(sound_df.type == 'BG') & (sound_df.synth_kind == 'A')].name)
+        bg_dir = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'Background2/*.wav'))
+        paths = [aa for aa in bg_dir if aa.split('/')[-1].split('.')[0] in bg_list]
+    else:
+        raise ValueErorr(f"You inputted {type} for type, it only takes 'BG' or 'FG'.")
+
+    fig, axes = plt.subplots(4, 5, figsize=(18, 7))
+    axes = np.ravel(axes)
+
+    for cnt, (ax, pp) in enumerate(zip(axes, paths)):
+        sfs, W = wavfile.read(pp)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
+        if envs == True:
+            env = np.sum(spec, axis=0)
+            ax.plot(env, color='black')
+            half = int(np.floor(env.shape[0] / 2))
+            _, ymax = ax.get_ylim()
+            ax.vlines(half, 0, ymax, ls=':', colors='black')
+        else:
+            ax.imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                      cmap='gray_r')
+            half = int(np.floor(spec.shape[1] / 2))
+            ax.vlines(half, 0, spec.shape[0], ls=':', colors='black')
+
+        ax.spines['top'].set_visible(True), ax.spines['right'].set_visible(True)
+        ax.set_title(f"{pp.split('/')[-1].split('.')[0][2:]}", fontweight='bold')
+
+    if len(axes) != len(paths):
+        diff = len(axes) - len(paths)
+        for ii in range(diff):
+            axes[-(ii + 1)].set_xticks([]), axes[-(ii + 1)].set_yticks([])
+            axes[-(ii + 1)].set_xticklabels([]), axes[-(ii + 1)].set_yticklabels([])
+            axes[-(ii + 1)].spines['top'].set_visible(False), axes[-(ii + 1)].spines['bottom'].set_visible(False)
+            axes[-(ii + 1)].spines['left'].set_visible(False), axes[-(ii + 1)].spines['right'].set_visible(False)
+
+
+def plot_some_sound_stats(sound_df):
+    stat = ['Fstationary', 'Tstationary', 'bandwidth']
+    bgs, fgs = sound_df[sound_df['type'] == 'BG'], sound_df[sound_df['type'] == 'FG']
+    fig, axes = plt.subplots(1, 3, figsize=(10, 3))
+    for ax, ss in zip(axes, stat):
+        print(ss)
+        tt = stats.ttest_ind(bgs[ss], fgs[ss])
+        print(f"BG: {np.nanmean(bgs[ss])} - FG: {np.nanmean(fgs[ss])}")
+        print(f"BG: {stats.sem(bgs[ss])} - FG: {stats.sem(fgs[ss])}")
+        ax.bar("BG", bgs[ss], yerr=stats.sem(bgs[ss]), color='deepskyblue')
+        ax.bar("FG", fgs[ss], yerr=stats.sem(fgs[ss]), color='yellowgreen')
+        if tt.pvalue < 0.001:
+            ax.set_title(f"{ss}\np<0.001)", fontsize=8, fontweight='bold')
+        else:
+            ax.set_title(f"{ss}\n{tt.pvalue:.3f})", fontsize=8, fontweight='bold')
+        print(tt)
+
+
+def speaker_test_plot(weight_df_11, weight_df_22, weight_df_synth, threshs=[0.03, 0.02, 0.01]):
+    '''2022_11_09. This is a half baked figure I used when I was trying to decide if the speaker setup was right on the
+    second hemisphere of clathrus. It's not elegant, and you have to make the DFs from the binaural fit df and synth
+    one on your own to put them in here.'''
+    fig, axes = plt.subplots(1, len(threshs), figsize=(18, 12))
+    axes = np.ravel(axes)
+
+    for tt, ax in zip(threshs, axes):
+        quad_11, _ = ohel.quadrants_by_FR(weight_df_11, threshold=tt, quad_return=[1, 2, 3, 4, 5, 6, 7, 8, 9])
+        quad_22, _ = ohel.quadrants_by_FR(weight_df_22, threshold=tt, quad_return=[1, 2, 3, 4, 5, 6, 7, 8, 9])
+        quad_synth, _ = ohel.quadrants_by_FR(weight_df_synth, threshold=tt, quad_return=[1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        quads = [quad_synth, quad_11, quad_22]
+        for qq in quads:
+            for k, v in qq.items():
+                qq[k] = v.shape[0]
+
+        for qq in quads:
+            total = sum(qq.values())
+            for k, v in qq.items():
+                qq[k] = np.around((v / total) * 100, 2)
+
+        quad_df = pd.DataFrame(quads)
+        quad_df = quad_df.rename(index={0: 'synth', 1: 'contra', 2: 'ipsi'})
+
+        quad_df['+'] = quad_df[2] + quad_df[3] + quad_df[6]
+        quad_df['-'] = quad_df[1] + quad_df[4] + quad_df[7] + quad_df[8] + quad_df[9] + quad_df[5]
+
+        quad_array = quad_df.to_numpy()
+        ax.plot(quad_array.T)
+        ax.set_xticks(list(range(quad_array.shape[1])))
+        ax.set_xticklabels(list(quad_df.columns))
+        ax.set_title(f"threshold = {tt}")
+    axes[0].set_ylabel("percent units")
+
+
+def all_animal_scatter(df, fr_thresh=0.03, r_thresh=0.6):
+    '''Uses a dataframe potentially with multiple areas and animals and plots the quadrants divided by your FR threshold
+    as lines. Useful for talks and stuff. It returns a dictionary that gives you the % breakdown of the quads.'''
+    colors = ['mediumorchid', 'darkorange', 'orangered', 'green']
+    areas = list(df.area.unique())
+    fig, ax = plt.subplots(1, len(areas), figsize=(len(areas) * 8, 8))
+
+    animals = list(df.animal.unique())
+    animals.reverse()
+    counts = {}
+
+    for num, aa in enumerate(areas):
+        area_df = df.loc[df.area == aa]
+        filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+
+        for ee, an in enumerate(animals):
+            animal_df = filt.loc[filt.animal == an]
+            ax[num].scatter(x=animal_df.bg_FR, y=animal_df.fg_FR,
+                            label=f'{an} (n={len(animal_df)})', color=colors[ee], s=1)
+            ax[num].legend(loc='upper left')
+
+        xmin, xmax = ax[num].get_xlim()
+        ymin, ymax = ax[num].get_ylim()
+        ax[num].vlines([fr_thresh, -fr_thresh], ymin, ymax, color='black', lw=0.5)
+        ax[num].hlines([fr_thresh, -fr_thresh], xmin, xmax, color='black', lw=0.5)
+        ax[num].spines['top'].set_visible(True), ax[num].spines['right'].set_visible(True)
+
+        ax[num].set_xlabel('BG Firing Rate', fontsize=12, fontweight='bold')
+        ax[num].set_ylabel('FG Firing Rate', fontsize=12, fontweight='bold')
+        ax[num].set_ylim([-0.2, 0.4]), ax[num].set_xlim([-0.2, 0.4])
+        ax[num].set_title(f"{aa}", fontsize=12, fontweight='bold')
+
+        quad, _ = ohel.quadrants_by_FR(filt, threshold=0.03, quad_return=[1,2,3,4,5,6,7,8,9])
+
+        total = len(filt)
+        for qq, val in quad.items():
+            counts[f"{qq}_{aa}"] = int(np.around(((len(val) / total) * 100), 0))
+
+    return counts
+
+
+def spectrogram_stats_diagram(name, type, bg_fold=2, fg_fold=3, synth_kind='A'):
+    '''2022_11_24. Takes any sound and corresponding type and will plot the spectrogram. From there it will take the
+    most interesting of each time and frequency bin and collect the adjacent bins, which it will plot below for time
+    and to the right for the spectral examples.'''
+    if type == 'BG':
+        kind_fold = f'Background{bg_fold}'
+        colors = 'deepskyblue'
+    elif type == 'FG':
+        kind_fold = f'Foreground{fg_fold}'
+        colors = 'yellowgreen'
+
+    colors = ['black', 'dimgray', 'gray', 'darkgray', 'lightgray']
+    colors.reverse()
+
+    if synth_kind == 'A' or synth_kind == 'N':
+        direct = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'{kind_fold}/*.wav'))
+    else:
+        kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                     'S': 'Spectral', 'C': 'Cochlear'}
+        direct = glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                            f'{kind_fold}/{kind_dict[synth_kind]}/*.wav'))
+
+    path = [bb for bb in direct if name in bb]
+    if len(path) == 0:
+        raise ValueError(f"Your sound name {name} isn't in there. Maybe add a space if it needs.")
+
+    # define figure
+    fig, axes = plt.subplots(figsize=(12, 6))
+    spec = plt.subplot2grid((8, 12), (0, 0), rowspan=3, colspan=8)
+    time = plt.subplot2grid((8, 12), (4, 0), rowspan=2, colspan=8)
+    freq = plt.subplot2grid((8, 12), (0, 9), rowspan=3, colspan=2)
+    ax = [spec, time, freq]
+
+    sfs, W = wavfile.read(path[0])
+    spec = gtgram(W, sfs, 0.02, 0.01, 96, 100, 16000)
+
+    ax[0].imshow(spec, aspect='auto', origin='lower', extent=[0,spec.shape[1], 0, spec.shape[0]],
+             cmap='gray_r')
+    ax[0].set_xticks([]), ax[0].set_yticks([])
+    ax[0].set_xticklabels([]), ax[0].set_yticklabels([])
+    ax[0].spines['top'].set_visible(True), ax[0].spines['bottom'].set_visible(True)
+    ax[0].spines['left'].set_visible(True), ax[0].spines['right'].set_visible(True)
+    ax[0].set_title(f"{type}: {name}", fontweight='bold', fontsize=18)
+    ax[0].set_ylabel('Frequency (Hz)', fontsize=14, fontweight='bold')
+    ax[0].set_xlabel('Time (s)', fontsize=14, fontweight='bold')
+
+    # Now for the time stats
+    time_mean = np.nanmean(spec, axis=0)
+    freq_mean = np.nanmean(spec, axis=1)
+    tmax, fmax = spec.shape[1], spec.shape[0]
+    max = freq_mean.max()
+    idx = list(freq_mean).index(max)
+    if idx >= 4 and idx <= fmax - 4:
+        idx_list = [idx - 4, idx - 2, idx, idx + 2, idx + 4]
+    elif idx < 4:
+        idx_list = [idx, idx + 2, idx + 4, idx + 6, idx + 8]
+    elif idx > fmax-4:
+        idx_list = [idx - 8, idx - 6, idx - 4, idx - 2, idx]
+    offset = spec[idx_list, :].max() * 0.15
+    start = offset * len(idx_list)
+    cut_min = int(np.around(spec[idx_list, :].min(), 0))
+    cut_max = int(np.around(spec[idx_list, :].max(), 0))
+
+    i = start
+    for cnt, ii in enumerate(idx_list):
+        ax[1].plot(spec[ii, :] + i, color=colors[cnt], lw=2)
+
+        i -= offset
+
+    ymin, ymax = ax[1].get_ylim()
+    ax[1].set_yticks([ymin, ymax])
+    ax[1].set_yticklabels([cut_min, cut_max])
+
+    ax[1].set_xticks([])
+    ax[1].set_xticklabels([])
+    ax[1].spines['top'].set_visible(True), ax[1].spines['bottom'].set_visible(True)
+    ax[1].spines['left'].set_visible(True), ax[1].spines['right'].set_visible(True)
+    ax[1].set_title(f"Average Standard Deviation: {np.around(np.std(spec, axis=1).mean(), 1)}", fontweight='bold', fontsize=12)
+
+    # now Freq
+    max = time_mean.max()
+    idx = list(time_mean).index(max)
+    if idx >= 4 and idx <= fmax - 4:
+        idx_list = [idx - 4, idx - 2, idx, idx + 2, idx + 4]
+    elif idx < 4:
+        idx_list = [idx, idx + 2, idx + 4, idx + 6, idx + 8]
+    elif idx > fmax-4:
+        idx_list = [idx - 8, idx - 6, idx - 4, idx - 2, idx]
+    offset = spec[:, idx_list].max() * 0.15
+    start = offset * len(idx_list)
+    cut_min = int(np.around(spec[:, idx_list].min(), 0))
+    cut_max = int(np.around(spec[:, idx_list].max(), 0))
+
+    i = start
+    for cnt, ii in enumerate(idx_list):
+        ax[2].plot((spec[:, ii] + i), range(96), color=colors[cnt], lw=2)
+        i -= offset
+
+    xmin, xmax = ax[2].get_xlim()
+    ax[2].set_xticks([xmin, xmax])
+    ax[2].set_xticklabels([cut_min, cut_max])
+
+    ax[2].set_yticks([])
+    ax[2].set_yticklabels([])
+    ax[2].spines['top'].set_visible(True), ax[2].spines['bottom'].set_visible(True)
+    ax[2].spines['left'].set_visible(True), ax[2].spines['right'].set_visible(True)
+    ax[2].set_title(f"Average Standard\nDeviation: {np.around(np.std(spec, axis=0).mean(), 1)}", fontweight='bold', fontsize=12)

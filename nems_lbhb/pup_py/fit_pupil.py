@@ -5,7 +5,7 @@ try:
     import tkinter as tk
 except:
     import Tkinter as tk
-import nems.db as nd
+import nems0.db as nd
 import getpass
 from tkinter import filedialog, messagebox
 

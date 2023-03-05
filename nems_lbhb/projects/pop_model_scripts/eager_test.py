@@ -2,7 +2,7 @@ import numpy as np
 
 import tensorflow as tf # Our main TensorFlow import
 import tensorflow_probability as tfp
-from nems.tf.loss_functions import loss_tf_nmse_shrinkage
+from nems0.tf.loss_functions import loss_tf_nmse_shrinkage
 
 def eager_function(x):
   result = x ** 2

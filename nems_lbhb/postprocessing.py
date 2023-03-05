@@ -2,8 +2,8 @@
 # WARNING: Changes to ctx made by functions in this file won't get saved whenthe model is run by fit_model_xform
 import logging
 
-import nems.db as nd
-import nems.xforms
+import nems0.db as nd
+import nems0.xforms
 
 import nems_lbhb.projects.nat_pup_decoding.do_decoding as decoding
 
@@ -12,9 +12,9 @@ log = logging.getLogger(__name__)
 
 
 def add_summary_statistics_by_condition(**context):
-    return nems.xforms.add_summary_statistics_by_condition(**context)
+    return nems0.xforms.add_summary_statistics_by_condition(**context)
     #LAS: This is here for backwards compatibility for old models.
-    # For new models the keyword 'ebc' (evaluate by condition) adds nems.xforms.add_summary_statistics_by_condition
+    # For new models the keyword 'ebc' (evaluate by condition) adds nems0.xforms.add_summary_statistics_by_condition
 
 
 def run_decoding(use_pred, **ctx):

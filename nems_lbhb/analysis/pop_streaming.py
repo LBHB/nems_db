@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from numpy.linalg import det
 
-import nems.epoch as ep
+import nems0.epoch as ep
 from nems import xforms
-from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
-from nems.uri import NumpyEncoder
+from nems0.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems0.uri import NumpyEncoder
 from nems_lbhb.analysis.pop_models import subspace_overlap, compute_dstrf, dstrf_pca
 
 log = logging.getLogger(__name__)

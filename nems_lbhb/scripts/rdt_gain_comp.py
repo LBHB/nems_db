@@ -4,15 +4,15 @@ from nems_lbhb.stateplots import beta_comp
 import matplotlib.pyplot as plt
 from nems import xforms
 import nems_lbhb.xform_wrappers as nw
-from nems.gui.recording_browser import browse_recording, browse_context
-import nems.db as nd
-import nems.modelspec as ms
-import nems.xform_helper as xhelp
+from nems0.gui.recording_browser import browse_recording, browse_context
+import nems0.db as nd
+import nems0.modelspec as ms
+import nems0.xform_helper as xhelp
 from nems_db.params import fitted_params_per_batch, fitted_params_per_cell, get_batch_modelspecs
 import pandas as pd
 import numpy as np
 from scipy.stats import wilcoxon, ttest_ind, pearsonr
-from nems.plots.utils import ax_remove_box
+from nems0.plots.utils import ax_remove_box
 import seaborn as sns
 
 outpath='/auto/users/svd/docs/current/RDT/nems/'

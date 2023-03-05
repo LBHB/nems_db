@@ -9,26 +9,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-import nems
-import nems.initializers
-import nems.epoch as ep
-import nems.priors
-import nems.modelspec as ms
-import nems.plots.api as nplt
-import nems.metrics.api
-import nems.analysis.api
-import nems.utils
+import nems0
+import nems0.initializers
+import nems0.epoch as ep
+import nems0.priors
+import nems0.modelspec as ms
+import nems0.plots.api as nplt
+import nems0.metrics.api
+import nems0.analysis.api
+import nems0.utils
 import nems_lbhb.baphy as nb
-import nems.db as nd
-from nems.recording import Recording, load_recording
-from nems.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
+import nems0.db as nd
+from nems0.recording import Recording, load_recording
+from nems0.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
 import nems_lbhb.baphy_io as io
-from nems import get_setting
+from nems0 import get_setting
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb import baphy_io
 
@@ -369,7 +369,7 @@ def switch_to_heldout_data(meta, modelspec, freeze_layers=None, use_matched_reco
         log.info('Skipping reinitialization of modelspec on reload')
     else:
         # Reinitialize trainable layers so that .R options are adjusted to new cell count
-        temp_ms = nems.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
+        temp_ms = nems0.initializers.from_keywords(meta['modelspecname'], rec=new_rec, input_name=context['input_name'],
                                                   output_name=context['output_name'])
         temp_ms[0].pop('meta')  # don't overwrite metadata in first module
         all_idx = list(range(len(temp_ms)))
@@ -475,11 +475,11 @@ def generate_recording_uri(cellid=None, batch=None, loadkey="",
     NEMS-format recording for a given cell/batch/loader string
 
     very baphy-specific. Needs to be coordinated with loader processing
-    in nems.xform_helper
+    in nems0.xform_helper
     """
     # remove any preprocessing keywords in the loader string.
     if '-' in loadkey:
-        loader = nems.utils.escaped_split(loadkey, '-')[0]
+        loader = nems0.utils.escaped_split(loadkey, '-')[0]
     else:
         loader = loadkey
     if loader != '':
@@ -608,7 +608,7 @@ def load_existing_pred(cellid=None, siteid=None, batch=None, modelname_existing=
     default modelname_existing = "psth.fs4.pup-ld-st.pup-hrc-psthfr-aev_sdexp2.SxR_newtf.n.lr1e4.cont.et5.i50000"
     
     makes new signal 'pred0' from evaluated 'pred', returns in updated rec
-    returns ctx-compatible dict {'rec': nems.Recording, 'input_name': 'pred0'}
+    returns ctx-compatible dict {'rec': nems0.Recording, 'input_name': 'pred0'}
     """
     if (batch is None):
         raise ValueError("must specify cellid/siteid and batch")
@@ -673,7 +673,7 @@ def model_pred_comp(cellid, batch, modelnames, occurrence=None,
                 r_vector = val['resp'].as_continuous()[0, :]
 
             validbins = np.isfinite(r_vector)
-            r_vector = nems.utils.smooth(r_vector[validbins], 7)
+            r_vector = nems0.utils.smooth(r_vector[validbins], 7)
             r_vector = r_vector[3:-3]
 
             # Convert bins to time (relative to start of epoch)

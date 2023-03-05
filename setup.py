@@ -4,16 +4,21 @@ from setuptools import find_packages, setup
 
 NAME = 'nems_db'
 
-VERSION = 'pre-alpha'
+VERSION = '0.2'
 
 with codecs.open('README.md', encoding='utf-8') as f:
     long_description = f.read()
 
 GENERAL_REQUIRES = [
-        'pandas','pymysql', 'sqlalchemy',
+        'pandas', 'pymysql', 'sqlalchemy',
         'numpy', 'scipy', 'matplotlib', 'mpld3', 'boto3',
-        'bcrypt', 'pillow'
+        'bcrypt', 'pillow', 'numpy', 'scipy', 'requests',
+        'h5py', 'configparser', 'tables', 'open-ephys-python-tools'
         ]
+# pycharm also requires: tornado
+# TF modules require tensorflow
+# GUI requires pyqt, pyqtgraph
+
 # needed for web server:
 OTHER_REQUIRES = [
         'flask', 'flask_restful', 'pandas','pymysql', 'sqlalchemy',

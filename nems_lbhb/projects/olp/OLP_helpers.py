@@ -5,10 +5,11 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import glob
 import seaborn as sb
+import re
 
 def manual_fix_units(cell_list):
     '''I don't know why these units are incorrectly saved. But it was just these two, add
@@ -43,6 +44,7 @@ def get_load_options(batch):
 def remove_olp_test(rec):
     '''In some cases the olp test and real olp are sorted together and will both come up. The real one
     is always last of OLPs run. So take that one.'''
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
     if passive.shape[0] >= 2:
         # if OLP test was sorted in here as well, slice it out of the epochs and data
         print(f"Multiple ({passive.shape[0]}) OLPs found in {cellid}")
@@ -116,7 +118,8 @@ def get_expt_params(resp, manager, cellid):
                                     for s in range(len(soundies))]
     params['units'], params['response'] = resp.chans, resp
     params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
-    params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+    ## Took this out for fitting ARM data, not sure why ref_handle for that experiment doesn't have BG_Folder ONLY
+    # params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
     if 'Binaural' in ref_handle.keys():
         params['Binaural'] = ref_handle['Binaural']
     else:
@@ -263,8 +266,10 @@ def label_synth_type(ep_name):
         modulation, A = Non-RMS normalized unsynethic'''
         if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
             synth_type = None
-        elif len(ep_name.split('_')) == 3:
-            seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        # elif len(ep_name.split('_')) == 3:
+        #     seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+            seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
             if len(seps[0].split('-')) >= 5 or len(seps[1].split('-')) >= 5:
                 if seps[0] != 'null':
                     synth_type = seps[0].split('-')[4]
@@ -293,9 +298,9 @@ def add_stimtype_epochs(sig):
 
 def r_noise_corrected(X,Y,N_ac=200):
     '''This one is directly from Luke's'''
-    import nems.metrics.corrcoef
-    Xac = nems.metrics.corrcoef._r_single(X, N_ac,0)
-    Yac = nems.metrics.corrcoef._r_single(Y, N_ac,0)
+    import nems0.metrics.corrcoef
+    Xac = nems0.metrics.corrcoef._r_single(X, N_ac,0)
+    Yac = nems0.metrics.corrcoef._r_single(Y, N_ac,0)
     repcount = X.shape[0]
     rs = np.zeros((repcount,repcount))
     for nn in range(repcount):
@@ -501,19 +506,30 @@ def get_sound_statistics_full(weight_df):
 
             means[:, cnt] = freq_mean
 
+            # 2022_09_23 Adding power spectrum stats
+            temp = np.abs(np.fft.fft(spec, axis=1))
+            freq = np.abs(np.fft.fft(spec, axis=0))
+
+            temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)[1:].std()
+            freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)[1:].std()
+
             sounds.append({'name': sn.split('_')[0],
                            'type': ll,
                            'synth_kind': syn,
-                           'std': dev,
+                           'Tstationary': np.nanmean(dev),
                            'bandwidth': bandw,
                            '75th': freq75,
                            '25th': freq25,
                            'center': freq50,
                            'spec': spec,
                            'mean_freq': freq_mean,
-                           'freq_stationary': np.std(freq_mean),
+                           'Fstationary': np.std(freq_mean),
                            'RMS_norm_power': rms_normed,
                            'max_norm_power': max_normed,
+                           'temp_ps': temp,
+                           'freq_ps': freq,
+                           'temp_ps_std': temp_ps,
+                           'freq_ps_std': freq_ps,
                            'short_name': sn[2:].split('_')[0].replace(' ', '')})
 
         sound_df = pd.DataFrame(sounds)
@@ -782,25 +798,46 @@ def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
 
 
 def add_sound_stats(weight_df, sound_df):
-    '''Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
+    '''Updated 2022_09_23. Added t50 and f50 and modspec stuff to weight_df
+    Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
     I updated it so that it takes synth kind into account when adding the statistics, and
     also adds RMS and max power for the sounds.'''
     BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
     BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
     BGmerge['BG'] = [aa[2:].replace(' ', '') for aa in BGdf.name]
-    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['std']]
+    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['Tstationary']]
     BGmerge['BG_bandwidth'] = BGdf.bandwidth.tolist()
-    BGmerge['BG_Fstationary'] = BGdf.freq_stationary.tolist()
+    BGmerge['BG_Fstationary'] = BGdf.Fstationary.tolist()
     BGmerge['BG_RMS_power'] = BGdf.RMS_norm_power.tolist()
     BGmerge['BG_max_power'] = BGdf.max_norm_power.tolist()
+    BGmerge['BG_temp_ps'] = BGdf.temp_ps.tolist()
+    BGmerge['BG_temp_ps_std'] = BGdf.temp_ps_std.tolist()
+    BGmerge['BG_freq_ps'] = BGdf.freq_ps.tolist()
+    BGmerge['BG_freq_ps_std'] = BGdf.freq_ps_std.tolist()
+    # BGmerge['BG_avgwt'] = BGdf.avgwt.tolist()
+    # BGmerge['BG_avgft'] = BGdf.avgft.tolist()
+    # BGmerge['BG_cumwt'] = BGdf.cumwt.tolist()
+    # BGmerge['BG_cumft'] = BGdf.cumft.tolist()
+    BGmerge['BG_t50'] = BGdf.t50.tolist()
+    BGmerge['BG_f50'] = BGdf.f50.tolist()
     BGmerge['synth_kind'] = BGdf.synth_kind.tolist()
 
     FGmerge['FG'] = [aa[2:].replace(' ', '') for aa in FGdf.name]
-    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['std']]
+    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['Tstationary']]
     FGmerge['FG_bandwidth'] = FGdf.bandwidth.tolist()
-    FGmerge['FG_Fstationary'] = FGdf.freq_stationary.tolist()
+    FGmerge['FG_Fstationary'] = FGdf.Fstationary.tolist()
     FGmerge['FG_RMS_power'] = FGdf.RMS_norm_power.tolist()
     FGmerge['FG_max_power'] = FGdf.max_norm_power.tolist()
+    FGmerge['FG_temp_ps'] = FGdf.temp_ps.tolist()
+    FGmerge['FG_temp_ps_std'] = FGdf.temp_ps_std.tolist()
+    FGmerge['FG_freq_ps'] = FGdf.freq_ps.tolist()
+    FGmerge['FG_freq_ps_std'] = FGdf.freq_ps_std.tolist()
+    # FGmerge['FG_avgwt'] = FGdf.avgwt.tolist()
+    # FGmerge['FG_avgft'] = FGdf.avgft.tolist()
+    # FGmerge['FG_cumwt'] = FGdf.cumwt.tolist()
+    # FGmerge['FG_cumft'] = FGdf.cumft.tolist()
+    FGmerge['FG_t50'] = FGdf.t50.tolist()
+    FGmerge['FG_f50'] = FGdf.f50.tolist()
     FGmerge['synth_kind'] = FGdf.synth_kind.tolist()
 
     weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG', 'synth_kind'], validate='m:1')
@@ -826,3 +863,58 @@ def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
         AX.set_ylabel("Frequency (Hz)", fontweight='bold', fontsize=8)
         AX.set_xlabel("Time (s)", fontweight='bold', fontsize=8)
         AX.set_title(f"{row.type}: {row['name'][2:]}", fontweight='bold', fontsize=10)
+
+
+def filter_weight_df(df, suffixes=['_end', '_start'], fr_thresh=0.03, r_thresh=0.6, quad_return=3, bin_kind='11', area=None,
+                     synth_kind='A', weight_lims=[-1, 2], bads=True, bad_filt={'RMS_power': 0.95, 'max_power': 0.3}):
+    '''2022_11_09. Takes a df of weights and you can specify a bunch of filters I commonly use and will apply them all
+    separately, which is nice because I've always done this as a clusterfuck.'''
+    if area:
+        df = df.loc[df.area==area]
+    if fr_thresh:
+        filt_labels = [[f"bg_FR{fl}", f"fg_FR{fl}"] for fl in suffixes]
+        for ff in filt_labels:
+            if quad_return == 3:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 2:
+                df = df.loc[(np.abs(df[ff[0]]) <= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 6:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (np.abs(df[ff[1]]) <= fr_thresh)]
+            else:
+                raise ValueError(f"quad_return parameter must be 3, 2, or 6, you gave {quat_return}.")
+    if r_thresh:
+        r_filt_labels = [[f"r{fl}", f"r{fl}"] for fl in suffixes]
+        for rf in r_filt_labels:
+            df = df.loc[(df[rf[0]] >= r_thresh) & (df[rf[1]] >= r_thresh)]
+    if bin_kind:
+        df = df.loc[df.kind==bin_kind]
+    if synth_kind:
+        df = df.loc[df.synth_kind==synth_kind]
+    if weight_lims:
+        if isinstance(weight_lims, int):
+            weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+        if len(weight_lims) == 2:
+            w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in suffixes]
+            for wf in w_filt_labels:
+                df = df.loc[(df[wf[0]] < weight_lims[1]) & (df[wf[0]] > weight_lims[0]) &
+                            (df[wf[1]] < weight_lims[1]) & (df[wf[1]] > weight_lims[0])]
+        else:
+            raise ValueError(f"You put '{weight_lims}' as your weight cuts, make it two values or a single int.")
+    if bads == True:
+        sound_df = get_sound_statistics_full(df)
+        if synth_kind == 'A':
+            stat = 'max_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['Max Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind=synth_kind)
+            bads = list(bad_dict[stat])
+        else:
+            stat = 'RMS_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['RMS Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind='N')
+            bads = list(bad_dict[stat])
+        df = df.loc[df['BG'].apply(lambda x: x not in bads)]
+        df = df.loc[df['FG'].apply(lambda x: x not in bads)]
+
+    return df
+
+

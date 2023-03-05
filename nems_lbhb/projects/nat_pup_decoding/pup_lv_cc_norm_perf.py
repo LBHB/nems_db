@@ -7,23 +7,23 @@ import matplotlib.pyplot as plt
 import sys, importlib
 import statsmodels.api as sm
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join, smooth
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join, smooth
 from nems import get_setting
-from nems.xform_helper import _xform_exists, load_model_xform, fit_model_xform
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.xform_helper import _xform_exists, load_model_xform, fit_model_xform
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import POP_MODELS, SIG_TEST_MODELS
 from nems import db
-from nems.recording import load_recording
+from nems0.recording import load_recording
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems import epoch as ep
 from charlieTools.nat_sounds_ms.decoding import plot_stimulus_pair
 from nems_lbhb import stateplots
-from nems.analysis import fit_ccnorm
+from nems0.analysis import fit_ccnorm
 
 log = logging.getLogger(__name__)
 

@@ -14,13 +14,13 @@ import nems_db.params
 import numpy as np
 import matplotlib.pyplot as plt
 
-import nems.recording as recording
-import nems.epoch as ep
-import nems.plots.api as nplt
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.plots.api as nplt
 
 import nems_lbhb.stateplots as stateplots
 import nems_lbhb.xform_wrappers as nw
-import nems.db as nd
+import nems0.db as nd
 
 
 #sys.path.append(os.path.abspath('/auto/users/svd/python/scripts/'))

@@ -7,23 +7,23 @@ log = logging.getLogger(__name__)
 log.disabled = True
 
 #sys.path.append(os.path.abspath('/auto/users/svd/python/scripts/'))
-import nems.db as nd
+import nems0.db as nd
 import nems_db.params
 import numpy as np
 import scipy.stats as ss
 
 import nems_lbhb.stateplots as stateplots
 import nems_lbhb.plots as lplt
-import nems.recording as recording
-import nems.epoch as ep
-import nems.xforms as xforms
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.xforms as xforms
 #import nems_lbhb.xform_wrappers as nw
-import nems.db as nd
-import nems.plots.api as nplt
-from nems.utils import find_module, ax_remove_box
-from nems.metrics.stp import stp_magnitude
-from nems.modules.weight_channels import gaussian_coefficients
-from nems.modules.fir import da_coefficients
+import nems0.db as nd
+import nems0.plots.api as nplt
+from nems0.utils import find_module, ax_remove_box
+from nems0.metrics.stp import stp_magnitude
+from nems0.modules.weight_channels import gaussian_coefficients
+from nems0.modules.fir import da_coefficients
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),

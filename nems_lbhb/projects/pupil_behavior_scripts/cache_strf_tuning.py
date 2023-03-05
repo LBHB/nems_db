@@ -14,8 +14,8 @@ import os
 import nems_lbhb.strf.strf as strf
 from nems_lbhb.strf.torc_subfunctions import strfplot
 import nems_lbhb.baphy as nb
-from nems.recording import Recording
-import nems.db as nd
+from nems0.recording import Recording
+import nems0.db as nd
 from nems import get_setting
 
 fs = 1000

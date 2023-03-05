@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.io import wavfile
 from scipy.signal import resample
 
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from nems import recording, signal
 from nems import xforms, get_setting
 import random

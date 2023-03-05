@@ -23,7 +23,7 @@ else:
     r = manager.get_recording(**options)
 
 import nems_lbhb.baphy as nb
-from nems.recording import Recording
+from nems0.recording import Recording
 uri = nb.baphy_load_recording_uri(recache=False, **options)
 r2 = Recording.load(uri)
 

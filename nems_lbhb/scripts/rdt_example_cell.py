@@ -14,18 +14,18 @@ params = {'legend.fontsize': 6,
           'ps.fonttype': 42}
 plt.rcParams.update(params)
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join
-import nems.db as nd
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join
+import nems0.db as nd
 from nems import get_setting
-from nems.xform_helper import _xform_exists
-from nems.registry import KeywordRegistry
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.xform_helper import _xform_exists
+from nems0.registry import KeywordRegistry
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
-from nems.gui.recording_browser import browse_recording, browse_context
-import nems.gui.editors as gui
+from nems0.gui.recording_browser import browse_recording, browse_context
+import nems0.gui.editors as gui
 
 log = logging.getLogger(__name__)
 

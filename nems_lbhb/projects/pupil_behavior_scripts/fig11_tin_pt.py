@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as ss
-import nems.db as nd
+import nems0.db as nd
 from nems import get_setting
 dump_path = get_setting('NEMS_RESULTS_DIR')
 

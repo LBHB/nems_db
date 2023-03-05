@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import nems.db as nd
+import nems0.db as nd
 from nems import xforms
-from nems.recording import load_recording
+from nems0.recording import load_recording
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.xform_wrappers import split_pop_rec_by_mask
-from nems.utils import smooth
+from nems0.utils import smooth
 from nems_lbhb import plots as nplt
-from nems.xform_helper import load_model_xform
+from nems0.xform_helper import load_model_xform
 from nems_lbhb import baphy_experiment
 import pathlib as pl
 import joblib as jl

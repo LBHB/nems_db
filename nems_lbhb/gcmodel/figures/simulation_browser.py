@@ -1,6 +1,6 @@
-from nems.gui.editors import browse_xform_fit
-import nems.xform_helper as xhelp
-from nems.xforms import normalize_sig
+from nems0.gui.editors import browse_xform_fit
+import nems0.xform_helper as xhelp
+from nems0.xforms import normalize_sig
 from nems_lbhb.gcmodel.figures.simulation import (build_toy_stp_cell,
                                                   build_toy_gc_cell,
                                                   build_toy_LN_cell)

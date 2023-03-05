@@ -13,7 +13,7 @@ import scipy.stats as st
 from itertools import product
 
 import nems_lbhb.stateplots as stateplots
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 import nems_lbhb.pupil_behavior_scripts.common as common
 from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 

@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 log.disabled = True
 
 #sys.path.append(os.path.abspath('/auto/users/svd/python/scripts/'))
-import nems.db as nd
+import nems0.db as nd
 import nems_db.params
 import numpy as np
 import pandas as pd
@@ -15,14 +15,14 @@ import scipy.stats as ss
 
 import nems_lbhb.stateplots as stateplots
 import nems_lbhb.plots as lplt
-import nems.recording as recording
-import nems.epoch as ep
-import nems.modelspec as ms
-import nems.xforms as xforms
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.modelspec as ms
+import nems0.xforms as xforms
 #import nems_lbhb.xform_wrappers as nw
-import nems.db as nd
-import nems.plots.api as nplt
-from nems.utils import find_module
+import nems0.db as nd
+import nems0.plots.api as nplt
+from nems0.utils import find_module
 
 
 outpath = "/auto/users/svd/docs/current/two_band_spn/eps_rev2/"

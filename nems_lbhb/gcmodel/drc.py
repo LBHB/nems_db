@@ -162,7 +162,7 @@ def rec_from_DRC(fs=100, n_segments=120, rec_name='DRC Test',
     '''
     s, c, f = sample_DRC(fs=fs, n_segments=n_segments)
     freq_names = ['%.1f kHz' % khz for khz in reversed(f)]
-    drc_rec = nems.recording.load_recording_from_arrays(
+    drc_rec = nems0.recording.load_recording_from_arrays(
             [s, c], rec_name, fs, sig_names,
             signal_kwargs=[{'chans': freq_names}, {'chans': freq_names}],
             )

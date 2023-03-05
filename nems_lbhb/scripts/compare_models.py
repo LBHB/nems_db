@@ -1,4 +1,4 @@
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.plots as lp
 import nems_lbhb.SPO_helpers as sp
 import scipy

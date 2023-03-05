@@ -1,6 +1,6 @@
 import numpy as np
 
-from nems.registry import xform, xmodule
+from nems0.registry import xform, xmodule
 
 def _global_gain_spec(n_targets):
     gain_mean = np.zeros(n_targets)
@@ -8,10 +8,10 @@ def _global_gain_spec(n_targets):
     template = {
         'fn': 'nems_lbhb.rdt.modules.global_gain',
         'fn_kwargs': {},
-        'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram',
-                     'nems.plots.api.spectrogram_output',
-                     'nems.plots.api.mod_output'
+        'plot_fns': ['nems0.plots.api.pred_resp',
+                     'nems0.plots.api.spectrogram',
+                     'nems0.plots.api.spectrogram_output',
+                     'nems0.plots.api.mod_output'
                     ],
         'prior': {
             'gain': ('Normal', {'mean': gain_mean, 'sd': gain_sd}),
@@ -26,10 +26,10 @@ def _relative_gain_spec(n_targets):
     template = {
         'fn': 'nems_lbhb.rdt.modules.relative_gain',
         'fn_kwargs': {},
-        'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram',
-                     'nems.plots.api.spectrogram_output',
-                     'nems.plots.api.mod_output'
+        'plot_fns': ['nems0.plots.api.pred_resp',
+                     'nems0.plots.api.spectrogram',
+                     'nems0.plots.api.spectrogram_output',
+                     'nems0.plots.api.mod_output'
                     ],
         'plot_fn_idx': 0,
         'prior': {
@@ -47,10 +47,10 @@ def _relative_gain_spec_generic(n_targets):
     template = {
         'fn': 'nems_lbhb.rdt.modules.rdt_gain',
         'fn_kwargs': {},
-        'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram',
-                     'nems.plots.api.spectrogram_output',
-                     'nems.plots.api.mod_output'
+        'plot_fns': ['nems0.plots.api.pred_resp',
+                     'nems0.plots.api.spectrogram',
+                     'nems0.plots.api.spectrogram_output',
+                     'nems0.plots.api.mod_output'
                     ],
         'plot_fn_idx': 1,
         'prior': {
@@ -91,10 +91,10 @@ def rdtmerge(kw):
     template = {
         'fn': 'nems_lbhb.rdt.modules.apply_gain',
         'fn_kwargs': {'i': i, 'o': 'pred'},
-        'plot_fns': ['nems.plots.api.pred_resp',
-                     'nems.plots.api.spectrogram',
-                     'nems.plots.api.spectrogram_output',
-                     'nems.plots.api.mod_output'
+        'plot_fns': ['nems0.plots.api.pred_resp',
+                     'nems0.plots.api.spectrogram',
+                     'nems0.plots.api.spectrogram_output',
+                     'nems0.plots.api.mod_output'
                     ],
         'plot_fn_idx': 1,
         'prior': {'offset': ('Normal', {
@@ -106,7 +106,7 @@ def rdtmerge(kw):
 
 @xmodule()
 def rdtwc(kw):
-    from nems.plugins import default_keywords
+    from nems0.plugins import default_keywords
     kw = kw[3:]
     ms = default_keywords.wc(kw)
     del ms['fn_kwargs']['i']
@@ -117,7 +117,7 @@ def rdtwc(kw):
 
 @xmodule()
 def rdtfir(kw):
-    from nems.plugins import default_keywords
+    from nems0.plugins import default_keywords
     kw = kw[3:]
     ms = default_keywords.fir(kw)
     del ms['fn_kwargs']['i']

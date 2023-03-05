@@ -13,18 +13,18 @@ import scipy.ndimage.filters as sf
 import seaborn as sns
 import scipy.stats as st
 
-import nems.plots.api as nplt
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-import nems.epoch as ep
-import nems.modelspec as ms
-from nems.utils import find_module, get_setting, find_common
-import nems.db as nd
+import nems0.plots.api as nplt
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+import nems0.epoch as ep
+import nems0.modelspec as ms
+from nems0.utils import find_module, get_setting, find_common
+import nems0.db as nd
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
-from nems.modules.weight_channels import gaussian_coefficients
-from nems.modules.fir import da_coefficients
-from nems.gui.decorators import scrollable
+from nems0.modules.weight_channels import gaussian_coefficients
+from nems0.modules.fir import da_coefficients
+from nems0.gui.decorators import scrollable
 
 font_size=8
 params = {'legend.fontsize': font_size-2,

@@ -4,8 +4,8 @@ import numpy as np
 from scipy import integrate
 
 import nems
-from nems.analysis.api import fit_basic
-from nems.fitters.api import scipy_minimize
+from nems0.analysis.api import fit_basic
+from nems0.fitters.api import scipy_minimize
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def lnp_basic(modelspec, est, max_iter=1000, tolerance=1e-7,
 
     if not IsReload:
 
-        fitter_fn = getattr(nems.fitters.api, fitter)
+        fitter_fn = getattr(nems0.fitters.api, fitter)
         fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
 
         #modelspec = some_initial_conditions_function()
@@ -37,7 +37,7 @@ def lnp_basic(modelspec, est, max_iter=1000, tolerance=1e-7,
         # Note for Noah:
         # If you want to make a separate metric function at some point,
         # just change the 'metric=...' argument below to match.
-        modelspec = nems.analysis.api.fit_basic(est, modelspec,
+        modelspec = nems0.analysis.api.fit_basic(est, modelspec,
                                                 fit_kwargs=fit_kwargs,
                                                 metric=_lnp_metric,
                                                 fitter=fitter_fn)
@@ -89,7 +89,7 @@ def init_lnp_model(est, modelspec, analysis_function=fit_basic,
     if IsReload:
         return {}
     else:
-        modelspec = nems.initializers.prefit_LN(
+        modelspec = nems0.initializers.prefit_LN(
                 est, modelspec, analysis_function, fitter, metric, norm_fir,
                 tolerance, max_iter, nl_kw
                 )

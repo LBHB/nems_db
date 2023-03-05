@@ -15,7 +15,7 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
 from nems_lbhb.analysis.statistics import get_bootstrapped_sample, get_direct_prob
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),

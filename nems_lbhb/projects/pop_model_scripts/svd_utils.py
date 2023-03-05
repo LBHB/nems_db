@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 
 import nems
-import nems.epoch as ep
-import nems.db as nd
+import nems0.epoch as ep
+import nems0.db as nd
 import nems_lbhb.xform_wrappers as xwrap
 
 log = logging.getLogger(__name__)
@@ -259,7 +259,7 @@ def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True
 
             for site in siteids:
                 rec_path = xwrap.generate_recording_uri(site, batch, loadkey=loadkey)
-                rec = nems.recording.load_recording(rec_path)
+                rec = nems0.recording.load_recording(rec_path)
                 est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
                 for cellid in rec['resp'].chans:
                     resp = val.apply_mask()['resp'].extract_channels([cellid])
@@ -269,7 +269,7 @@ def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True
 
         else:
             if isinstance(rec, str):
-                rec = nems.recording.load_recording(rec)
+                rec = nems0.recording.load_recording(rec)
             cellids = rec['resp'].chans
             est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
             for cellid in cellids:

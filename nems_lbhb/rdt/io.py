@@ -5,10 +5,10 @@ import numpy as np
 import os.path
 import logging
 
-import nems.recording
-from nems.recording import Recording, load_recording
-from nems.epoch import merge_epoch, group_epochs_by_parent, add_epoch
-from nems.preprocessing import average_away_epoch_occurrences
+import nems0.recording
+from nems0.recording import Recording, load_recording
+from nems0.epoch import merge_epoch, group_epochs_by_parent, add_epoch
+from nems0.preprocessing import average_away_epoch_occurrences
 from nems_lbhb.baphy import baphy_data_path
 
 log = logging.getLogger(__name__)
@@ -250,7 +250,7 @@ def load_recording(batch=None, cellid=None, reformat=True, by_sequence=True, rec
         recording_uri = baphy_data_path(**options)
 
     log.info('Loading recording from %s', recording_uri)
-    rec = nems.recording.load_recording(recording_uri)
+    rec = nems0.recording.load_recording(recording_uri)
 
     if reformat:
         rec = reformat_RDT_recording(rec)

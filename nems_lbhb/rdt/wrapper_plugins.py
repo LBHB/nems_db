@@ -1,6 +1,6 @@
 import numpy as np
 
-from nems.registry import xform, xmodule
+from nems0.registry import xform, xmodule
 
 
 @xform()

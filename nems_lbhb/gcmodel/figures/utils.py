@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from nems_db.params import fitted_params_per_batch
-import nems.db as nd
+import nems0.db as nd
 
 
 def improved_cells_to_list(batch, gc, stp, LN, combined, se_filter=True,

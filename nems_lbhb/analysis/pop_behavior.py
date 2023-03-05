@@ -5,19 +5,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nems
-import nems.initializers
-import nems.priors
-import nems.utils
-import nems.xforms as xforms
-import nems.db as nd
-import nems.recording as recording
-from nems.xform_helper import fit_model_xform, load_model_xform
+import nems0.initializers
+import nems0.priors
+import nems0.utils
+import nems0.xforms as xforms
+import nems0.db as nd
+import nems0.recording as recording
+from nems0.xform_helper import fit_model_xform, load_model_xform
 
 log = logging.getLogger(__name__)
 
 from nems_lbhb.preprocessing import pupil_mask
 from nems_lbhb.analysis.pop_models import dstrf_pca, subspace_overlap
-from nems.plots.api import ax_remove_box
+from nems0.plots.api import ax_remove_box
 
 
 

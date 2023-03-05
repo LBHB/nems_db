@@ -169,6 +169,9 @@ def summary_plot(vid_paths):
     print(dlc.shape)
     scaler = StandardScaler() #normalize to mean
     X = scaler.fit_transform(dlc.T)
+    imp = SimpleImputer(missing_values=np.nan, strategy='mean') #replace NaN values with mean
+    X = imp.fit_transform(X)
+
     pca = PCA() #create PC object
     Xpca = pca.fit_transform(X) #fit model + apply dimensionality reduction
     cov = pca.get_covariance() #compute covariance matrix

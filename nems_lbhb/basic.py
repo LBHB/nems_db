@@ -7,12 +7,12 @@ TODO port from baphy functions in matlab - strf_offline, cell_rasters
 import numpy as np
 import matplotlib.pyplot as plt
 import nems_lbhb.baphy as baphy
-import nems.db as nd
+import nems0.db as nd
 import pandas as pd
 from matplotlib import cm
 from nems_lbhb.baphy import baphy_load_recording_file, baphy_load_recording
 from nems_lbhb.baphy_io import baphy_parm_read
-import nems.epoch as ep
+import nems0.epoch as ep
 import matplotlib
 
 def raster_plot(mfilename, ax=None, epoch_regex="REFERENCE", signal="resp",

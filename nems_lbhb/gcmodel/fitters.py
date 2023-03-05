@@ -8,16 +8,16 @@ import numpy as np
 from scipy.optimize import minimize
 
 import nems
-import nems.utils
-import nems.metrics.api as metrics
-from nems.analysis.api import fit_basic, basic_with_copy, pick_best_phi
+import nems0.utils
+import nems0.metrics.api as metrics
+from nems0.analysis.api import fit_basic, basic_with_copy, pick_best_phi
 from nems_lbhb.gcmodel.initializers import init_dsig, dsig_phi_to_prior
-from nems.initializers import prefit_mod_subset, prefit_LN
-from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
-import nems.modelspec as ms
-from nems.modules.weight_channels import gaussian_coefficients
-from nems.modules.fir import fir_exp_coefficients, _offset_coefficients
-import nems.priors as priors
+from nems0.initializers import prefit_mod_subset, prefit_LN
+from nems0.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
+import nems0.modelspec as ms
+from nems0.modules.weight_channels import gaussian_coefficients
+from nems0.modules.fir import fir_exp_coefficients, _offset_coefficients
+import nems0.priors as priors
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         Name of the optimization function to use
     cost_function : function object or None
         Function that will be passed to the optimizer for determining error.
-        If None, lets nems.analysis.fit_basic decide what to use.
+        If None, lets nems0.analysis.fit_basic decide what to use.
     IsReload : boolean
         Indicates to xforms evaluation if the model is being fit for the first
         time or being loaded from a saved analysis.
@@ -70,7 +70,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
             if False: Skip the fit and just return modelspec as-is
     **context : dict
         Running record of the return values of each step in the xforms spec
-        that has been evaluated so far. See nems.xforms.
+        that has been evaluated so far. See nems0.xforms.
 
     Returns:
     {'modelspec': modelspec} : dict
@@ -85,10 +85,10 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # dynamic_sigmoid is.
     modelspec = copy.deepcopy(modelspec)
     est = copy.deepcopy(est)
-    wc_idx = nems.utils.find_module('weight_channels', modelspec)
-    fir_idx = nems.utils.find_module('fir', modelspec)
-    lvl_idx = nems.utils.find_module('levelshift', modelspec)
-    dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    wc_idx = nems0.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems0.utils.find_module('fir', modelspec)
+    lvl_idx = nems0.utils.find_module('levelshift', modelspec)
+    dsig_idx = nems0.utils.find_module('dynamic_sigmoid', modelspec)
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
@@ -96,7 +96,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:
@@ -126,7 +126,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
 
     log.info('Initializing linear model and performing rough fit ...\n')
     # fit without STP module first (if there is one)
-    modelspec = nems.initializers.prefit_to_target(
+    modelspec = nems0.initializers.prefit_to_target(
             est, modelspec, fit_basic, target_module='levelshift',
             extra_exclude=['stp'], fitter=fitter_fn, metric=metric_fn,
             fit_kwargs=prefit_kwargs)
@@ -136,7 +136,7 @@ def fit_gc(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
         if 'stp' in m['fn']:
             if not m.get('phi'):
                 log.info('Initializing STP module ...')
-                m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                m = nems0.priors.set_mean_phi([m])[0]  # Init phi for module
                 modelspec[i] = m
             break
 
@@ -259,7 +259,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         Name of the optimization function to use
     cost_function : function object or None
         Function that will be passed to the optimizer for determining error.
-        If None, lets nems.analysis.fit_basic decide what to use.
+        If None, lets nems0.analysis.fit_basic decide what to use.
     IsReload : boolean
         Indicates to xforms evaluation if the model is being fit for the first
         time or being loaded from a saved analysis.
@@ -267,7 +267,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
             if False: Skip the fit and just return modelspec as-is
     **context : dict
         Running record of the return values of each step in the xforms spec
-        that has been evaluated so far. See nems.xforms.
+        that has been evaluated so far. See nems0.xforms.
 
     Returns:
     {'modelspec': modelspec} : dict
@@ -278,11 +278,11 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         _store_gain_info(modelspec, est, val)
         return {'modelspec': modelspec}
 
-    wc_idx = nems.utils.find_module('weight_channels', modelspec)
-    fir_idx = nems.utils.find_module('fir', modelspec)
-    lvl_idx = nems.utils.find_module('levelshift', modelspec)
-    ctk_idx = nems.utils.find_module('contrast_kernel', modelspec)
-    dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    wc_idx = nems0.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems0.utils.find_module('fir', modelspec)
+    lvl_idx = nems0.utils.find_module('levelshift', modelspec)
+    ctk_idx = nems0.utils.find_module('contrast_kernel', modelspec)
+    dsig_idx = nems0.utils.find_module('dynamic_sigmoid', modelspec)
     fs = val['stim'].fs
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
@@ -296,7 +296,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:
@@ -328,7 +328,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         ##################################################################
         log.info('Initializing linear model and performing rough fit ...\n')
         # fit without STP module first (if there is one)
-        modelspec = nems.initializers.prefit_to_target(
+        modelspec = nems0.initializers.prefit_to_target(
                 est, modelspec, fit_basic, target_module='levelshift',
                 extra_exclude=['stp'], fitter=fitter_fn,
                 metric=metric_fn, fit_kwargs=prefit_kwargs)
@@ -338,7 +338,7 @@ def fit_gc2(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
             if 'stp' in m['fn']:
                 if not m.get('phi'):
                     log.info('Initializing STP module ...')
-                    m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                    m = nems0.priors.set_mean_phi([m])[0]  # Init phi for module
                     modelspec[i] = m
                 break
 
@@ -544,14 +544,14 @@ def test_LN(modelspec, est, max_iter=1000, prefit_max_iter=700, tolerance=1e-7,
     if IsReload:
         return {}
 
-    wc_idx = nems.utils.find_module('weight_channels', modelspec)
-    fir_idx = nems.utils.find_module('fir', modelspec)
-    lvl_idx = nems.utils.find_module('levelshift', modelspec)
+    wc_idx = nems0.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems0.utils.find_module('fir', modelspec)
+    lvl_idx = nems0.utils.find_module('levelshift', modelspec)
 
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:
@@ -667,7 +667,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         Name of the optimization function to use
     cost_function : function object or None
         Function that will be passed to the optimizer for determining error.
-        If None, lets nems.analysis.fit_basic decide what to use.
+        If None, lets nems0.analysis.fit_basic decide what to use.
     IsReload : boolean
         Indicates to xforms evaluation if the model is being fit for the first
         time or being loaded from a saved analysis.
@@ -675,7 +675,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             if False: Skip the fit and just return modelspec as-is
     **context : dict
         Running record of the return values of each step in the xforms spec
-        that has been evaluated so far. See nems.xforms.
+        that has been evaluated so far. See nems0.xforms.
 
     Returns:
     {'modelspec': modelspec} : dict
@@ -686,11 +686,11 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         _store_gain_info(modelspec, est, val)
         return {'modelspec': modelspec}
 
-    wc_idx = nems.utils.find_module('weight_channels', modelspec)
-    fir_idx = nems.utils.find_module('fir', modelspec)
-    #lvl_idx = nems.utils.find_module('levelshift', modelspec)
-    ct_idx = nems.utils.find_module('contrast', modelspec)
-    dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    wc_idx = nems0.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems0.utils.find_module('fir', modelspec)
+    #lvl_idx = nems0.utils.find_module('levelshift', modelspec)
+    ct_idx = nems0.utils.find_module('contrast', modelspec)
+    dsig_idx = nems0.utils.find_module('dynamic_sigmoid', modelspec)
     fs = est['stim'].fs
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
@@ -704,7 +704,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:
@@ -740,7 +740,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
         ##################################################################
         log.info('Initializing linear model and performing rough fit ...\n')
         # fit without STP module first (if there is one)
-        modelspec = nems.initializers.prefit_to_target(
+        modelspec = nems0.initializers.prefit_to_target(
                 est, modelspec, fit_basic, target_module='fir',
                 extra_exclude=['stp'], fitter=fitter_fn,
                 metric=metric_fn, fit_kwargs=prefit_kwargs)
@@ -750,7 +750,7 @@ def fit_gc3(modelspec, est, val, max_iter=1000, prefit_max_iter=700,
             if 'stp' in m['fn']:
                 if not m.get('phi'):
                     log.info('Initializing STP module ...')
-                    m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                    m = nems0.priors.set_mean_phi([m])[0]  # Init phi for module
                     modelspec[i] = m
                 break
 
@@ -1012,7 +1012,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         Name of the optimization function to use
     cost_function : function object or None
         Function that will be passed to the optimizer for determining error.
-        If None, lets nems.analysis.fit_basic decide what to use.
+        If None, lets nems0.analysis.fit_basic decide what to use.
     IsReload : boolean
         Indicates to xforms evaluation if the model is being fit for the first
         time or being loaded from a saved analysis.
@@ -1020,7 +1020,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
             if False: Skip the fit and just return modelspec as-is
     **context : dict
         Running record of the return values of each step in the xforms spec
-        that has been evaluated so far. See nems.xforms.
+        that has been evaluated so far. See nems0.xforms.
 
     Returns:
     {'modelspec': modelspec} : dict
@@ -1036,10 +1036,10 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     #       LN or GC model (e.g. require that they be fit already)
 
 
-    wc_idx = nems.utils.find_module('weight_channels', modelspec)
-    fir_idx = nems.utils.find_module('fir', modelspec)
-    lvl_idx = nems.utils.find_module('levelshift', modelspec)
-    dsig_idx = nems.utils.find_module('dynamic_sigmoid', modelspec)
+    wc_idx = nems0.utils.find_module('weight_channels', modelspec)
+    fir_idx = nems0.utils.find_module('fir', modelspec)
+    lvl_idx = nems0.utils.find_module('levelshift', modelspec)
+    dsig_idx = nems0.utils.find_module('dynamic_sigmoid', modelspec)
     if dsig_idx is None:
         raise ValueError("fit_gc should only be used with modelspecs"
                          "containing dynamic_sigmoid")
@@ -1053,7 +1053,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     # Set up kwargs, fitter_fn and metric_fn arguments for fitting functions
     prefit_kwargs = {'tolerance': prefit_tolerance, 'max_iter': prefit_max_iter}
     fit_kwargs = {'tolerance': tolerance, 'max_iter': max_iter}
-    fitter_fn = getattr(nems.fitters.api, fitter)
+    fitter_fn = getattr(nems0.fitters.api, fitter)
     if metric is not None:
         metric_fn = lambda d: getattr(metrics, metric)(d, 'pred', 'resp')
     else:
@@ -1078,7 +1078,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
     ##################################################################
     log.info('Initializing linear model and performing rough fit ...\n')
     # fit without STP module first (if there is one)
-    modelspec = nems.initializers.prefit_to_target(
+    modelspec = nems0.initializers.prefit_to_target(
             est, modelspec, fit_basic, target_module='levelshift',
             extra_exclude=['stp'], fitter=fitter_fn,
             metric=metric_fn, fit_kwargs=prefit_kwargs)
@@ -1088,7 +1088,7 @@ def fit_gc4(modelspec, est, val, max_iter=1000, prefit_max_iter=700, tolerance=1
         if 'stp' in m['fn']:
             if not m.get('phi'):
                 log.info('Initializing STP module ...')
-                m = nems.priors.set_mean_phi([m])[0]  # Init phi for module
+                m = nems0.priors.set_mean_phi([m])[0]  # Init phi for module
                 modelspec[i] = m
             break
 

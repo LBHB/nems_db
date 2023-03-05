@@ -1,16 +1,16 @@
-import nems.db as nd  # NEMS database functions -- NOT celldb
+import nems0.db as nd  # NEMS database functions -- NOT celldb
 import nems_lbhb.baphy as nb   # baphy-specific functions
 import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with database stuff
 import numpy as np
 import matplotlib.pyplot as plt
-import nems.recording as recording
-from nems.recording import load_recording
-from nems.gui.recording_browser import browse_recording, browse_context
-import nems.epoch as ep
-import nems.plots.api as nplt
-from nems.preprocessing import average_away_epoch_occurrences
-from nems.xform_helper import load_model_xform, fit_model_xform
-import nems.gui.editors as gui
+import nems0.recording as recording
+from nems0.recording import load_recording
+from nems0.gui.recording_browser import browse_recording, browse_context
+import nems0.epoch as ep
+import nems0.plots.api as nplt
+from nems0.preprocessing import average_away_epoch_occurrences
+from nems0.xform_helper import load_model_xform, fit_model_xform
+import nems0.gui.editors as gui
 
 
 # If using database:
@@ -119,8 +119,8 @@ results = nd.pd_query(sql=query,params=params)
 
 
 ####
-import nems.gui.editors as gui
-import nems.xform_helper as xhelp
+import nems0.gui.editors as gui
+import nems0.xform_helper as xhelp
 
 cellid="BRT033b-03-3"
 cellid="AMT003c-33-1"

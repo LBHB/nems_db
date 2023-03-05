@@ -3,7 +3,7 @@ import itertools
 import logging
 from contextlib import contextmanager
 
-from nems import db
+from nems0 import db
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def db_session():
 
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path, script_path, priority=1,
                             time_limit=14, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
-    """Enqueues models similarly to nems.db.enqueue_models, except on the Exacloud cluster at ACC.
+    """Enqueues models similarly to nems0.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param celllist: List of cells to include in analysis.
     :param batch: Batch number cells originate from.
@@ -70,7 +70,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
 
         sql = f"SELECT * FROM Results WHERE batch={b} and cellid='{cell}' and modelname='{model}'"
         rres = conn.execute(sql)
-        
+        add_counter=0
         if (rres.rowcount==0) | force_rerun:
             sql = 'SELECT * FROM tQueue WHERE allowqueuemaster=18 AND note="' + note +'"'
             r = conn.execute(sql)
@@ -126,7 +126,7 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
 
     with db_session() as session:
         session.add_all(queue_items)
-
+    log.info(f"Added {len(queue_items)} jobs.")
 
 def enqueue_single_exacloud_model(cell, batch, model, user, linux_user, executable_path,
                                   script_path, time_limit=10, useGPU=False, high_mem=False, force_rerun=False):

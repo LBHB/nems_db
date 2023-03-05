@@ -4,10 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-import nems.recording
-from nems.utils import ax_remove_box
-import nems.db as nd
-import nems.epoch as ep
+import nems0.recording
+from nems0.utils import ax_remove_box
+import nems0.db as nd
+import nems0.epoch as ep
 import nems_lbhb.xform_wrappers as xwrap
 from nems_lbhb.gcmodel.figures.definitions import *
 
@@ -29,7 +29,7 @@ def mean_sd_per_stim_by_cellid(cellid, batch, loadkey='ozgf.fs100.ch18',
                                max_db_scale=65, pre_log_floor=1,
                                stims_to_skip=[]):
     rec_path = xwrap.generate_recording_uri(cellid, batch, loadkey=loadkey)
-    rec = nems.recording.load_recording(rec_path)
+    rec = nems0.recording.load_recording(rec_path)
     stim = copy.deepcopy(rec['stim'].as_continuous())
     fs = rec['stim'].fs
     epochs = rec.epochs
@@ -147,7 +147,7 @@ def relative_gain_by_batch(batch, loadkey='ozgf.fs100.ch18'):
     cellids = nd.get_batch_cells(batch)
 
     # load stim/resp for full batch
-    recs = {c: nems.recording.load_recording(
+    recs = {c: nems0.recording.load_recording(
                        xwrap.generate_recording_uri(c, batch, loadkey))
             for c in cellids}
 

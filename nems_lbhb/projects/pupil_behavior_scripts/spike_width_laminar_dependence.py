@@ -5,7 +5,7 @@ Created on Thu Jun 21 15:18:27 2018
 
 @author: hellerc
 """
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.plots as pl
 import nems_lbhb.stateplots as stateplots
 

@@ -12,16 +12,16 @@ import numpy as np
 
 import nems_lbhb.stateplots as stateplots
 import nems_lbhb.plots as lplt
-import nems.recording as recording
-import nems.epoch as ep
-import nems.xforms as xforms
-#import nems.xform_helper as xhelp
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.xforms as xforms
+#import nems0.xform_helper as xhelp
 #import nems_lbhb.xform_wrappers as nw
-import nems.db as nd
-import nems.plots.api as nplt
-from nems.utils import find_module
-from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
-from nems.plots.utils import ax_remove_box
+import nems0.db as nd
+import nems0.plots.api as nplt
+from nems0.utils import find_module
+from nems0.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
+from nems0.plots.utils import ax_remove_box
 
 params = {'legend.fontsize': 6,
           'figure.figsize': (8, 6),
@@ -100,10 +100,10 @@ for cellid, c in df[m].iterrows():
     stp2 = find_module('stp', ctx2['modelspec'])
     fir2 = find_module('fir', ctx2['modelspec'])
 
-    ctx1['modelspec'][fir1]['plot_fns'] = ['nems.plots.api.strf_timeseries']
-    ctx2['modelspec'][wc2]['plot_fns'] = ['nems.plots.api.weight_channels_heatmap']
-    ctx2['modelspec'][stp2]['plot_fns'] = ['nems.plots.api.before_and_after_stp']
-    ctx2['modelspec'][fir2]['plot_fns'] = ['nems.plots.api.strf_timeseries']
+    ctx1['modelspec'][fir1]['plot_fns'] = ['nems0.plots.api.strf_timeseries']
+    ctx2['modelspec'][wc2]['plot_fns'] = ['nems0.plots.api.weight_channels_heatmap']
+    ctx2['modelspec'][stp2]['plot_fns'] = ['nems0.plots.api.before_and_after_stp']
+    ctx2['modelspec'][fir2]['plot_fns'] = ['nems0.plots.api.strf_timeseries']
 
     t_wc1 = _get_wc_coefficients(ctx1['modelspec']).copy()
     t_fir1 = _get_fir_coefficients(ctx1['modelspec']).copy()

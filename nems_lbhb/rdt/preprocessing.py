@@ -2,8 +2,8 @@ import re
 import logging
 import numpy as np
 import pandas as pd
-from nems.epoch import epoch_difference, epoch_union
-from nems.epoch import epoch_difference, epoch_intersection
+from nems0.epoch import epoch_difference, epoch_union
+from nems0.epoch import epoch_difference, epoch_intersection
 
 log = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ def select_times(rec, subset, random_only=True, rep_only=False, dual_only=True):
     '''
     Parameters
     ----------
-    rec : nems.recording.Recording
+    rec : nems0.recording.Recording
         The recording object.
     subset : Nx2 array
         Epochs representing the selected subset (e.g., from an est/val split).

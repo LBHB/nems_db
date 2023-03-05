@@ -553,6 +553,11 @@ def _compute_metrics(exptparams, exptevents, **options):
     # if multiple targets exist, compute the discriminability between targets too
     if len(R['dprime'].keys()) > 1:
         R['LI'] = _compute_LI(exptparams, exptevents, resp_window, early_window)
+        # compute pairwise target dprimes
+        tar_groups = list(permutations(R['dprime'].keys(), 2))
+        for tg in tar_groups:
+            kk = tg[0]+'_'+tg[1]
+            R["dprime"][kk] = _compute_dprime(R["RR"][tg[0]], R["RR"][tg[1]])
 
     return R
 

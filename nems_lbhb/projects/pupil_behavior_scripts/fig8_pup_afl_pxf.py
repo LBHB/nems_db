@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import scipy.stats as ss
-import nems.db as nd
-import nems.plots.api as nplt
+import nems0.db as nd
+import nems0.plots.api as nplt
 
 save_path = os.path.join(os.path.expanduser('~'),'docs/current/pupil_behavior/eps')
 save_fig = True

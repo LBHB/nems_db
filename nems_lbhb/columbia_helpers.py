@@ -14,14 +14,14 @@ from pathlib import Path
 from hdf5storage import loadmat, savemat
 import matplotlib.pyplot as plt
 
-import nems.analysis.api
-import nems.initializers
-import nems.preprocessing as preproc
-import nems.recording as recording
-import nems.uri
-from nems.fitters.api import scipy_minimize
-from nems.signal import RasterizedSignal
-from nems.registry import xform, xmodule
+import nems0.analysis.api
+import nems0.initializers
+import nems0.preprocessing as preproc
+import nems0.recording as recording
+import nems0.uri
+from nems0.fitters.api import scipy_minimize
+from nems0.signal import RasterizedSignal
+from nems0.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
@@ -54,10 +54,10 @@ def to_recording(X, Y, trials, fs, labels, locs=None, before=1.0, after=1.0, rec
     Y = Y.mean(-1) if Y.ndim == 3 else Y
 
     # Create NEMS-format recording
-    return nems.recording.Recording({
-        "stim": nems.signal.RasterizedSignal(
+    return nems0.recording.Recording({
+        "stim": nems0.signal.RasterizedSignal(
             fs, X, "stim", recname, epochs=epoch, segments=None),
-        "resp": nems.signal.RasterizedSignal(
+        "resp": nems0.signal.RasterizedSignal(
             fs, Y, "resp", recname, chans=labels, meta={"type": "ECoG", "locs": locs})},
         name=recname)
 
@@ -163,9 +163,9 @@ def load_columbia_data(recording_uri_list=None, cellid=None, downsample=4, **opt
     print(f"Selecting channel {cellid}")
 
     # Pick out specified electrode
-    est = nems.recording.Recording({"stim": est.signals["stim"],
+    est = nems0.recording.Recording({"stim": est.signals["stim"],
                                     "resp": est.signals["resp"].extract_channels([cellid])})
-    val = nems.recording.Recording({"stim": val.signals["stim"],
+    val = nems0.recording.Recording({"stim": val.signals["stim"],
                                     "resp": val.signals["resp"].extract_channels([cellid])})
 
     return {'est': est, 'val': val}

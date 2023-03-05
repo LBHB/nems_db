@@ -49,7 +49,7 @@ regression_results = olp.multisite_reg_results(parmfiles)
 #### 2022_08_25 #################################################################
 #### Can't tell what this is specifically for, loads some BGs and FGs and then
 #### separately plots just some random FGs as bad looking specs or waveforms
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 import glob

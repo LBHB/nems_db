@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf
 
 import nems
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
+import nems0.epoch as ep
 
 
 batch = 323
@@ -29,7 +29,7 @@ def snr_by_batch(batch, loadkey, save_path=None, load_path=None, frac_total=True
     if load_path is None:
         for site in siteids:
             rec_path = xwrap.generate_recording_uri(site, batch, loadkey=loadkey)
-            rec = nems.recording.load_recording(rec_path)
+            rec = nems0.recording.load_recording(rec_path)
             est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
             for cellid in rec['resp'].chans:
                 if cellid in cellids:
@@ -117,7 +117,7 @@ for category, name in zip([high_snr_low_r_test, high_snr_high_r_test], ['high_sn
     for cellid in category:
         # load recording ( don't need evaluated model )
         rec_path = xwrap.generate_recording_uri(cellid, batch, loadkey=loadkey)
-        rec = nems.recording.load_recording(rec_path)
+        rec = nems0.recording.load_recording(rec_path)
         est, val = rec.split_using_epoch_occurrence_counts('^STIM_')
         resp = val['resp'].extract_channels([cellid])
         epochs = resp.epochs

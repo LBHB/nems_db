@@ -7,7 +7,7 @@ Hardcoded for KS2 right now. Also, won't work if you've run multiple sorting job
 run_nums each w/ diff KS2 params.
 """
 
-import nems.db as nd
+import nems0.db as nd
 import os
 import pandas as pd
 import numpy as np

@@ -18,17 +18,18 @@ params = {'axes.spines.right': False,
 mpl.rcParams.update(params)
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.epoch as ep
-from nems.xforms import evaluate_step
+import nems0.epoch as ep
+from nems0.xforms import evaluate_step
 import nems_lbhb.baphy_io as io
 from nems_lbhb import baphy_experiment
-from nems.xform_helper import load_model_xform
-from nems import xforms
+from nems0.xform_helper import load_model_xform
+from nems0 import xforms
 from nems_lbhb.plots import scatter_bin_lin
 from nems_lbhb.analysis import pop_models
+from nems0.metrics.mi import mutual_information
 
 from nems_lbhb.projects.pop_model_scripts.pop_model_utils import load_string_pop, fit_string_pop, load_string_single, fit_string_single,\
     POP_MODELS, SIG_TEST_MODELS, shortnames, shortnamesp, MODELGROUPS, ALL_FAMILY_MODELS, ALL_FAMILY_POP, \
@@ -49,8 +50,8 @@ def load_high_res_stim():
 
         b = baphy_experiment.BAPHYExperiment(batch=batch, cellid=cellid)
         tctx = {'rec': b.get_recording(loadkey="ozgf.fs100.ch64")}
-        tctx = xforms.evaluate_step(['nems.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM', 'keepfrac': 1.0}], tctx)
-        tctx = xforms.evaluate_step(['nems.xforms.average_away_stim_occurrences', {'epoch_regex': '^STIM'}], tctx)
+        tctx = xforms.evaluate_step(['nems0.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM', 'keepfrac': 1.0}], tctx)
+        tctx = xforms.evaluate_step(['nems0.xforms.average_away_stim_occurrences', {'epoch_regex': '^STIM'}], tctx)
         high_res_ctx = tctx
         
     return high_res_ctx
@@ -91,6 +92,53 @@ def aciknos_examples():
 
     return fig
 
+def load_examples(batch=322, cellids=None):
+
+    global double_column_medium
+
+    example_models=[ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]+'.l2:4-dstrf']
+    example_shortnames=['ln_pop','conv1dx2+d','conv2dx3']
+    if cellids is None:
+        cellids = ["DRX006b-128-2", "ARM030a-40-2"]   # , "ARM030a-23-2"
+    fig, ax = plt.subplots(len(cellids)+1, 1, figsize=double_column_medium, sharex=True)
+    pred_data = []
+    for i, cellid in enumerate(cellids):
+        # LN
+        xf0,ctx0=load_model_xform(cellid=cellid,batch=batch,modelname=example_models[0])
+        xf1,ctx1=load_model_xform(cellid=cellid,batch=batch,modelname=example_models[1],
+                                  eval_model=False)
+        ctx1['val'] = ctx1['modelspec'].evaluate(rec=ctx0['val'].copy())
+
+        xf2,ctx2=load_model_xform(cellid=cellid,batch=batch,modelname=example_models[2],
+                                  eval_model=False)
+        ctx2['val'] = ctx2['modelspec'].evaluate(rec=ctx0['val'].copy())
+
+        pred_data.append({})
+        pred_data[i]['cellid'] = cellid
+        pred_data[i]['pred0'] = ctx0['val']['pred'].as_continuous()
+        pred_data[i]['pred1'] = ctx1['val']['pred'].as_continuous()
+        pred_data[i]['pred2'] = ctx2['val']['pred'].as_continuous()
+        pred_data[i]['resp'] = ctx0['val']['resp'].as_continuous()
+
+    return pred_data
+
+def q_comp(pred0,pred1,resp, verbose=False):
+
+    mi0, n0 = mutual_information(pred0.flatten(), resp.flatten(), L=10)
+    mi1, n1 = mutual_information(pred1.flatten(), resp.flatten(), L=10)
+    xc0 = np.corrcoef(pred0.flatten(),resp.flatten())[0,1]
+    xc1 = np.corrcoef(pred1.flatten(),resp.flatten())[0,1]
+
+    if verbose:
+        f,ax = plt.subplots(1,2)
+        ax[0].imshow(n0)
+        ax[0].set_title(f'0: xc={xc0:.3f} mi={mi0:.3f}')
+        ax[1].imshow(n1)
+        ax[1].set_title(f'1: xc={xc1:.3f} mi={mi1:.3f}')
+
+    return mi0, xc0, mi1, xc1
+
+
 def pop_model_example(figsize=None):
     
     tctx = load_high_res_stim()
@@ -125,8 +173,9 @@ def pop_model_example(figsize=None):
     return f
     
 if __name__ == '__main__':
-    
-    fig = aciknos_examples()
+    pass
+    #fig = aciknos_examples()
+    #fig = pop_model_example(figsize=None)
     #filename=base_path / 'fig5_pred_example.pdf'
     #fig.savefig(filename, format='pdf', dpi='figure')
 

@@ -1,10 +1,10 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.decomposition import PCA
-import nems.xforms as xforms
-import nems.db as nd
+import nems0.xforms as xforms
+import nems0.db as nd
 import logging
-from nems.recording import Recording
+from nems0.recording import Recording
 from nems_lbhb.preprocessing import create_pupil_mask
 import sys
 import os

@@ -6,7 +6,7 @@ import pandas as pd
 # from projects.olp.OLP_analysis_main import sound_df
 from scipy import stats
 import scipy.ndimage.filters as sf
-from nems.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 from pathlib import Path
 import glob

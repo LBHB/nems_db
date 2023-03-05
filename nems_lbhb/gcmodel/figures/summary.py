@@ -7,8 +7,8 @@ import numpy as np
 import scipy.stats as st
 import pandas as pd
 
-import nems.db as nd
-from nems.utils import ax_remove_box
+import nems0.db as nd
+from nems0.utils import ax_remove_box
 from nems_lbhb.gcmodel.figures.utils import (get_filtered_cellids,
                                              get_dataframes,
                                              get_valid_improvements,

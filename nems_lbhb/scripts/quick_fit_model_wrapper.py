@@ -6,26 +6,26 @@ Created on Wed Mar  7 15:30:15 2018
 @author: svd
 """
 
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-from nems.utils import escaped_split, escaped_join
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+from nems0.utils import escaped_split, escaped_join
 
 #import nems_lbhb.baphy as nb
-import nems.db as nd
+import nems0.db as nd
 #import nems_lbhb.xform_wrappers as nw
 
 import logging
 
 log = logging.getLogger(__name__)
 
-import nems.xforms as xforms
+import nems0.xforms as xforms
 from nems import get_setting
-from nems.registry import KeywordRegistry
-from nems.plugins import (default_keywords, default_loaders,
+from nems0.registry import KeywordRegistry
+from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
-#from nems.gui.recording_browser import browse_recording, browse_context
-#from nems.gui.editors import browse_xform_fit, EditorWidget
+#from nems0.gui.recording_browser import browse_recording, browse_context
+#from nems0.gui.editors import browse_xform_fit, EditorWidget
 
 
 cellid = 'TAR010c-18-1'
@@ -96,11 +96,11 @@ if old:
     xfspec.append(['nems_lbhb.old_xforms.xforms.init_from_keywords',
                    {'keywordstring': modelspecname, 'meta': meta}])
     xfspec.extend(oxfh.generate_fitter_xfspec(fitkey))
-    xfspec.append(['nems.analysis.api.standard_correlation', {},
+    xfspec.append(['nems0.analysis.api.standard_correlation', {},
                    ['est', 'val', 'modelspecs', 'rec'], ['modelspecs']])
     if autoPlot:
         log.info('Generating summary plot ...')
-        xfspec.append(['nems.xforms.plot_summary', {}])
+        xfspec.append(['nems0.xforms.plot_summary', {}])
 else:
     #recording_uri = nw.generate_recording_uri(cellid, batch, loadkey)
     # code from
@@ -144,25 +144,25 @@ else:
          xforms_init_context['kw_kwargs'] = kw_kwargs
     xforms_init_context['keywordstring'] = model_keywords
     xforms_init_context['meta'] = meta
-    xfspec.append(['nems.xforms.init_context', xforms_init_context])
+    xfspec.append(['nems0.xforms.init_context', xforms_init_context])
 
     # 1) Load the data
     xfspec.extend(xhelp._parse_kw_string(load_keywords, xforms_lib))
 
     # 2) generate a modelspec
-    xfspec.append(['nems.xforms.init_from_keywords', {'registry': keyword_lib}])
-    #xfspec.append(['nems.xforms.init_from_keywords', {}])
+    xfspec.append(['nems0.xforms.init_from_keywords', {'registry': keyword_lib}])
+    #xfspec.append(['nems0.xforms.init_from_keywords', {}])
 
     # 3) fit the data
     xfspec.extend(xhelp._parse_kw_string(fit_keywords, xforms_lib))
 
     # 4) add some performance statistics
-    xfspec.append(['nems.xforms.predict', {}])
-    xfspec.append(['nems.xforms.add_summary_statistics', {}])
+    xfspec.append(['nems0.xforms.predict', {}])
+    xfspec.append(['nems0.xforms.add_summary_statistics', {}])
 
     # 5) generate plots
     if autoPlot:
-        xfspec.append(['nems.xforms.plot_summary', {}])
+        xfspec.append(['nems0.xforms.plot_summary', {}])
 
 # equivalent of xforms.evaluate():
 
@@ -190,7 +190,7 @@ log_xf = log_stream.getvalue()
 # save some extra metadata
 modelspec = ctx['modelspec']
 
-#results_dir = nems.get_setting('NEMS_RESULTS_DIR')
+#results_dir = nems0.get_setting('NEMS_RESULTS_DIR')
 #destination = '{0}/{1}/{2}/{3}/'.format(
 #        results_dir, batch, cellid, ms.get_modelspec_longname(modelspec))
 #modelspec.meta['modelpath'] = destination
@@ -205,7 +205,7 @@ modelspec = ctx['modelspec']
 #                      figures=ctx['figures'],
 #                      log=log_xf)
 """"
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 
 cellid='bbl086b-03-1'
 batch=289

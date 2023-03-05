@@ -12,8 +12,8 @@ import logging
 import re
 import numpy as np
 import copy
-import nems.epoch as ep
-import nems.signal as signal
+import nems0.epoch as ep
+import nems0.signal as signal
 import scipy.fftpack as fp
 import scipy.signal as ss
 
@@ -21,10 +21,10 @@ from scipy.ndimage import gaussian_filter1d, convolve1d
 import pickle
 import pandas as pd
 
-from nems.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
+from nems0.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
     concatenate_state_channel
-from nems.epoch import epoch_names_matching
-import nems.db as nd
+from nems0.epoch import epoch_names_matching
+import nems0.db as nd
 
 
 log = logging.getLogger(__name__)
@@ -394,7 +394,7 @@ def hi_lo_psth(rec=None, resp_signal='resp', state_signal='state',
                state_channel='pupil', psth_signal='psth',
                epoch_regex="^STIM_", smooth_resp=False, **kwargs):
     '''
-    Like nems.preprocessing.generate_psth_from_resp() but generates two PSTHs,
+    Like nems0.preprocessing.generate_psth_from_resp() but generates two PSTHs,
     one each for periods when state_channel is higher or lower than its
     median.
 
@@ -1259,7 +1259,7 @@ def add_epoch_signal(rec):
 
 
 def add_meta(rec):
-    from nems.signal import RasterizedSignal
+    from nems0.signal import RasterizedSignal
     if type(rec['resp']) is not RasterizedSignal:
         rec['resp'] = rec['resp'].rasterize()
 
@@ -1504,7 +1504,7 @@ def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', 
 
 if __name__ == '__main__':
 
-    from nems import recording, signal
+    from nems0 import recording, signal
 
     # # pop state delayed lines
     # data = np.zeros((2,30))
@@ -1523,6 +1523,42 @@ if __name__ == '__main__':
     # print(ccc)
 
     pass
+
+def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
+                 empty_values=None, keep_dims=None, **ctx):
+    """
+    Fill in nan values using signals in other channels. Currently for inferring
+    missing values in DLC data
+    """
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer
+
+    if new_sig is None:
+        new_sig = sig
+
+    newrec = rec.copy()
+    data0 = rec[sig].rasterize().as_continuous()
+
+    imp = IterativeImputer(max_iter=10, random_state=0)
+    imp.fit(data0.T)
+    data_imp = imp.transform(data0.T).T
+    if empty_values is not None:
+        bad_values = np.isfinite(data0).sum(axis=0)==0
+        data_imp[:,bad_values] = empty_values
+    if keep_dims is not None:
+        data_imp = data_imp[:keep_dims,:]
+        new_chans = newrec[sig].chans[:keep_dims]
+    else:
+        new_chans = newrec[sig].chans
+
+    # normalize 0 to 1 - same scale for all channels
+    if norm:
+        data_imp -= np.nanmin(data_imp)
+        data_imp /= np.nanmax(data_imp)
+
+    newrec[new_sig] = newrec[sig]._modified_copy(data=data_imp, chans=new_chans)
+
+    return {'rec': newrec}
 
 
 

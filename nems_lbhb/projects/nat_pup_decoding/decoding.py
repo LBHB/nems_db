@@ -11,11 +11,11 @@ import pickle
 import os
 import copy
 
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.baphy as nb
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems.xform_helper import load_model_xform
-from nems.preprocessing import resp_to_pc
+from nems0.xform_helper import load_model_xform
+from nems0.preprocessing import resp_to_pc
 import nems_lbhb.preprocessing as nems_preproc
 import nems_lbhb.baphy_io as io
 

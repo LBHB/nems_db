@@ -90,13 +90,13 @@ import scipy.stats as st
 import numpy as np
 import matplotlib.pyplot as plt
 import nems_lbhb.stateplots as stateplots
-import nems.db as nd
+import nems0.db as nd
 import nems_db.params
 
-import nems.recording as recording
-import nems.epoch as ep
-import nems.plots.api as nplt
-import nems.modelspec as ms
+import nems0.recording as recording
+import nems0.epoch as ep
+import nems0.plots.api as nplt
+import nems0.modelspec as ms
 
 
 def get_model_results_per_state_model(batch=307, state_list=None,

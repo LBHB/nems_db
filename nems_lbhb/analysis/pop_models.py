@@ -21,13 +21,13 @@ import numpy as np
 from numpy.linalg import det
 from scipy.ndimage import zoom, gaussian_filter1d
 
-from nems import xforms
-import nems.plots.api as nplt
-from nems.plots.api import ax_remove_box, spectrogram, fig2BytesIO
-from nems.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
-from nems.uri import NumpyEncoder
-from nems.utils import get_setting, smooth
-from nems.modules.fir import per_channel
+from nems0 import xforms
+import nems0.plots.api as nplt
+from nems0.plots.api import ax_remove_box, spectrogram, fig2BytesIO
+from nems0.plots.heatmap import _get_wc_coefficients, _get_fir_coefficients
+from nems0.uri import NumpyEncoder
+from nems0.utils import get_setting, smooth
+from nems0.modules.fir import per_channel
 
 
 log = logging.getLogger(__name__)
@@ -229,10 +229,10 @@ def plot_layer_outputs(modelspec, rec, index_range=None, sample_count=100,
     if modelspec_ref is not None:
         r_test0 = modelspec_ref.meta[performance_metric]
         ax_perf.plot(r_test0, color='lightgray')
-    r_test = modelspec.meta[performance_metric]
-    ax_perf.plot(r_test, color='black')
-    ax_perf.plot([0, len(r_test)],[0, 0], '--', color='gray')
-    ax_perf.set_xlabel('unit #')
+    r_test = modelspec.meta[performance_metric].flatten()
+    ax_perf.bar(np.arange(len(r_test)), r_test, color='black')
+    ax_perf.plot([0, len(r_test)],[0, 0], '--', color='gray', lw=0.5)
+    ax_perf.set_xlabel('Unit #')
     ax_perf.set_ylim([-0.05, 1])
     ax_perf.set_yticks([0,0.5,1])
     ax_perf.set_title(performance_metric)
@@ -402,7 +402,7 @@ def model_pred_sum(ctx, cellid, rr=None, respcolor='lightgray', predcolor='purpl
     ax[1].set_ylabel('Spikes/sec', fontsize=8)
     return ax[0].figure
     
-from nems.utils import get_setting
+from nems0.utils import get_setting
 from scipy.ndimage import zoom
 
 
@@ -1219,7 +1219,7 @@ def stp_pca():
 
 def db_test(out_channel=[6,7,8]):
     #get_results_file(batch, modelnames=None, cellids=None)
-    from nems.db import get_results_file
+    from nems0.db import get_results_file
     batch = 289
     #modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.q-fir.2x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
     modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-fir.4x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
@@ -1248,7 +1248,7 @@ def db_test(out_channel=[6,7,8]):
 
 
 def db_load():
-    from nems.xform_helper import load_model_xform
+    from nems0.xform_helper import load_model_xform
     batch = 289
     #modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x2.g-stp.2.q-fir.2x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
     modelname = 'ozgf.fs100.ch18-ld-sev_dlog-wc.18x4.g-fir.4x15-lvl.1-dexp.1_tfinit.n.lr1e3-newtf.n.lr1e4'
@@ -1305,7 +1305,7 @@ def db_pca():
 def simulate_pop(n=10, modelstring=None):
 
     from nems_lbhb.baphy_experiment import BAPHYExperiment
-    from nems.initializers import from_keywords, rand_phi
+    from nems0.initializers import from_keywords, rand_phi
     from nems_lbhb.baphy_io import fill_default_options
 
     parmfile = '/auto/data/daq/Amanita/AMT004/AMT004b13_p_NAT.m'

@@ -1,4 +1,4 @@
-from nems.modules import weight_channels as wc
+from nems0.modules import weight_channels as wc
 
 
 def gaussian(rec, mean, sd, n_chan_in, **kwargs):

@@ -19,8 +19,8 @@ from scipy.signal import convolve2d
 
 import nems
 from nems import signal
-from nems.modules.nonlinearity import _dlog
-from nems.modules.fir import _offset_coefficients
+from nems0.modules.nonlinearity import _dlog
+from nems0.modules.fir import _offset_coefficients
 
 log = logging.getLogger(__name__)
 
@@ -304,9 +304,9 @@ def add_onoff(rec, name='contrast', source='stim', isReload=False, **context):
                             " and could not be converted to one."
                             .format(source))
 
-    st_eps = nems.epoch.epoch_names_matching(s.epochs, '^STIM_')
-    pre_eps = nems.epoch.epoch_names_matching(s.epochs, 'PreStimSilence')
-    post_eps = nems.epoch.epoch_names_matching(s.epochs, 'PostStimSilence')
+    st_eps = nems0.epoch.epoch_names_matching(s.epochs, '^STIM_')
+    pre_eps = nems0.epoch.epoch_names_matching(s.epochs, 'PreStimSilence')
+    post_eps = nems0.epoch.epoch_names_matching(s.epochs, 'PostStimSilence')
 
     st_indices = [s.get_epoch_indices(ep) for ep in st_eps]
     pre_indices = [s.get_epoch_indices(ep) for ep in pre_eps]

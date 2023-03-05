@@ -15,7 +15,7 @@ from nems_lbhb.pupil_behavior_scripts.mod_per_state import aud_vs_state
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import hlf_analysis
 from nems_lbhb.pupil_behavior_scripts.mod_per_state import beh_only_plot
 from nems_lbhb.stateplots import model_per_time_wrapper, beta_comp
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 import common
 
 

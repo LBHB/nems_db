@@ -22,8 +22,7 @@ import sys
 import deeplabcut as dlc
 import numpy as np
 
-import nems.db as nd
-import nems
+import nems0.db as nd
 
 import nems_lbhb.motor.nems_dlc_settings as ds
 from nems_lbhb.motor import face_tools
@@ -32,20 +31,21 @@ import logging
 log = logging.getLogger(__name__)
 
 try:
-    import nems.db as nd
+    import nems0.db as nd
     db_exists = True
 except Exception as e:
-    # If there's an error import nems.db, probably missing database
+    # If there's an error import nems0.db, probably missing database
     # dependencies. So keep going but don't do any database stuff.
-    print("Problem importing nems.db, can't update tQueue")
+    print("Problem importing nems0.db, can't update tQueue")
     print(e)
     db_exists = False
 
 if __name__ == '__main__':
 
     if 'QUEUEID' in os.environ:
+        import nems0.utils
         queueid = int(os.environ['QUEUEID'])
-        nems.utils.progress_fun = nd.update_job_tick
+        nems0.utils.progress_fun = nd.update_job_tick
     else:
         queueid = 0
 
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     log.info("face_fit_script complete")
 
-    if db_exists & queueid > 0:
+    if db_exists & (queueid > 0):
         nd.update_job_complete(queueid)
 
 

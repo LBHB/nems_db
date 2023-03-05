@@ -8,10 +8,10 @@ import matplotlib.backends.backend_pdf
 import numpy as np
 from scipy.signal import convolve
 
-import nems.xform_helper as xhelp
-import nems.epoch as ep
-from nems.utils import ax_remove_box
-import nems.plots.api as nplt
+import nems0.xform_helper as xhelp
+import nems0.epoch as ep
+from nems0.utils import ax_remove_box
+import nems0.plots.api as nplt
 from nems_lbhb.gcmodel.figures.utils import improved_cells_to_list
 
 from nems_lbhb.gcmodel.figures.definitions import *

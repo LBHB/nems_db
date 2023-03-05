@@ -15,7 +15,7 @@ def generate_recording_uri(cellid, batch, loader):
     figure out filename (or eventually URI) of pre-generated
     NEMS-format recording for a given cell/batch/loader string
     very baphy-specific. Needs to be coordinated with loader processing
-    in nems.xform_helper
+    in nems0.xform_helper
     """
 
     options = {}

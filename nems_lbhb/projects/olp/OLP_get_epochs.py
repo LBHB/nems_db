@@ -1,13 +1,14 @@
 import os
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-import nems.epoch as ep
+import nems0.epoch as ep
 
-font_size=8
+font_size = 8
 params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
           'axes.labelsize': font_size,
@@ -51,8 +52,9 @@ def get_stim_type(ep_name):
     binaural_dict = {'11': 'BG Contra, FG Contra', '12': 'BG Contra, FG Ipsi',
                      '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Contra'}
 
-    if len(ep_name.split('_')) == 3 and ep_name[:5] == 'STIM_':
+    if len(ep_name.split('_')) >= 3 and ep_name[:5] == 'STIM_':
         seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        seps = re.findall('_(null|\d{2}.*)_(null|\d{2}.*)', ep_name)[0]
         bg_ep, fg_ep = f"STIM_{seps[0]}_null", f"STIM_null_{seps[1]}"
 
         #get synth type
@@ -126,14 +128,14 @@ def r_ceiling(ra,rb):
     else:
         return rceil
 
-def generate_cc_dataframe(rec, force_mua_only=False):
+def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
 
     epoch_df = get_rec_epochs(rec=rec)
+    resp = rec[rsignal].rasterize()
+    
     if force_mua_only:
         # look at MUA averaged across all units.
         resp = resp._modified_copy(data=resp._data.mean(axis=0,keepdims=True), chans=["MUA"])
-    else:
-        resp = rec['resp'].rasterize()
 
     stim = rec['stim'].rasterize()
 
@@ -233,39 +235,42 @@ def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
     plt.tight_layout()
     return f
 
-##############################################
-###Little Greg add try to make big dataframe
-import os
-import copy
-OLP_cc_df_path = '/auto/users/hamersky/olp_analysis/cc_synthetic.h5'
-files = ['27c12', '28c22', '29c16', '30d19', '31c09', '32c12', '33c12', '34c10', '35c10', '36c11',
-         '37c09', '38a08', '39c11', '40c07', '41c11', '42a06', '43b07', '44d05', '45d07', '46d06',
-         '47c08', '48c07', '49c07', '50c07', '51c07', '52d05', '53a06']
-parmfiles = [f'/auto/data/daq/Clathrus/CLT0{pp[:2]}/CLT0{pp}_p_OLP.m' for pp in files]
+def big_dataframe():
+    ##############################################
+    ###Little Greg add try to make big dataframe
+    import os
+    import copy
+    OLP_cc_df_path = '/auto/users/hamersky/olp_analysis/cc_synthetic.h5'
+    files = ['27c12', '28c22', '29c16', '30d19', '31c09', '32c12', '33c12', '34c10', '35c10', '36c11',
+             '37c09', '38a08', '39c11', '40c07', '41c11', '42a06', '43b07', '44d05', '45d07', '46d06',
+             '47c08', '48c07', '49c07', '50c07', '51c07', '52d05', '53a06']
+    parmfiles = [f'/auto/data/daq/Clathrus/CLT0{pp[:2]}/CLT0{pp}_p_OLP.m' for pp in files]
 
-all_dfs = []
-for parmfile in parmfiles:
-    basename = os.path.basename(parmfile)
+    all_dfs = []
+    for parmfile in parmfiles:
+        basename = os.path.basename(parmfile)
 
-    manager = BAPHYExperiment(parmfile)
-    fs = 50
-    options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
-    rec = manager.get_recording(**options)
+        manager = BAPHYExperiment(parmfile)
+        fs = 50
+        options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+        rec = manager.get_recording(**options)
 
-    force_mua_only=False
-    epoch_df_all = generate_cc_dataframe(rec, force_mua_only=force_mua_only)
-    all_dfs.append(epoch_df_all)
-df = pd.concat(all_dfs)
+        force_mua_only=False
+        epoch_df_all = generate_cc_dataframe(rec, force_mua_only=force_mua_only)
+        all_dfs.append(epoch_df_all)
+    df = pd.concat(all_dfs)
 
-os.makedirs(os.path.dirname(OLP_cc_df_path), exist_ok=True)
-store = pd.HDFStore(OLP_cc_df_path)
-df_store = copy.deepcopy(df)
-store['df'] = df_store.copy()
-store.close()
+    os.makedirs(os.path.dirname(OLP_cc_df_path), exist_ok=True)
+    store = pd.HDFStore(OLP_cc_df_path)
+    df_store = copy.deepcopy(df)
+    store['df'] = df_store.copy()
+    store.close()
 
-store = pd.HDFStore(OLP_cc_df_path)
-df = store['df']
-store.close()
+    store = pd.HDFStore(OLP_cc_df_path)
+    df = store['df']
+    store.close()
+    
+    return df
 
 if __name__ == '__main__':
     parmfile = '/auto/data/daq/Clathrus/CLT039/CLT039c11_p_OLP.m'

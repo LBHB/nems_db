@@ -4,9 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nems
-import nems.db as nd
+import nems0.db as nd
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 import nems_lbhb.stateplots as sp
 from nems_lbhb.baphy import baphy_load_recording_file
 from nems_lbhb.baphy_experiment import BAPHYExperiment
@@ -107,7 +107,7 @@ def fit_LN_models(batch):
 
 def fit_dnn_single(batch, sites):
     modelnames = MODELGROUPS['dnn1_single']
-    rec = nems.recording.load_recording('/auto/data/nems_db/recordings/%s/NAT4_ozgf.fs100.ch18.tgz' % batch)
+    rec = nems0.recording.load_recording('/auto/data/nems_db/recordings/%s/NAT4_ozgf.fs100.ch18.tgz' % batch)
     cellids = rec['resp'].chans
     iterator = cellids
     _queue_fits(batch, modelnames, iterator)

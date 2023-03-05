@@ -9,7 +9,7 @@ import re
 
 import numpy as np
 
-from nems.registry import xform, xmodule
+from nems0.registry import xform, xmodule
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ def pas(loadkey):
     mask out everything that doesn't fall in a "PASSIVE_EXPERIMENT" epoch
     """
 
-    xfspec = [['nems.preprocessing.mask_keep_passive',
+    xfspec = [['nems0.preprocessing.mask_keep_passive',
                {}, ['rec'], ['rec']]]
 
     return xfspec
@@ -33,7 +33,7 @@ def ap1(loadkey):
     mask out everything that doesn't fall in an active for first passive FILE_ epoch
     """
 
-    xfspec = [['nems.preprocessing.mask_late_passives',
+    xfspec = [['nems0.preprocessing.mask_late_passives',
                {}, ['rec'], ['rec']]]
 
     return xfspec
@@ -53,7 +53,7 @@ def cor(kw):
             s = op[1:].replace('d', '.')
             parms['ITI_sec_to_include'] = float(s)
 
-    return [['nems.xforms.mask_incorrect', parms]]
+    return [['nems0.xforms.mask_incorrect', parms]]
 
 
 @xform()
@@ -71,7 +71,7 @@ def ref(kw):
         if op.startswith('e'):
             generate_evoked_mask = True
 
-    return [['nems.xforms.mask_all_but_correct_references',
+    return [['nems0.xforms.mask_all_but_correct_references',
              {'balance_rep_count': balance_rep_count,
               'include_incorrect': include_incorrect,
               'generate_evoked_mask': generate_evoked_mask}]]
@@ -91,7 +91,7 @@ def tar(kw):
         if op.startswith('e'):
             generate_evoked_mask = True
 
-    return [['nems.xforms.mask_all_but_targets',
+    return [['nems0.xforms.mask_all_but_targets',
              {'include_incorrect': include_incorrect}]]
 
 
@@ -164,21 +164,52 @@ def evs(loadkey):
         else:
             raise ValueError('evs option 2 not known')
     if lick:
-        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+        xfspec = [['nems0.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
                     'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'epoch2_regex': 'LICK', 'epoch2_shift': epoch2_shift,
                     'epoch2_shuffle': epoch2_shuffle, 'onsets_only': True},
                    ['rec'], ['rec']]]
     else:
-        xfspec = [['nems.preprocessing.generate_stim_from_epochs',
+        xfspec = [['nems0.preprocessing.generate_stim_from_epochs',
                    {'new_signal_name': 'stim',
                     'epoch_regex': epoch_regex, 'epoch_shift': epoch_shift,
                     'onsets_only': True},
                    ['rec'], ['rec']]]
 
     if loadset[0]=='tar':
-        xfspec.append(['nems.xforms.mask_all_but_targets', {}])
+        xfspec.append(['nems0.xforms.mask_all_but_targets', {}])
+
+    return xfspec
+
+@xform()
+def ststim(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+    xfspec = [['nems0.preprocessing.concatenate_input_channels',
+               {'input_signals': ['state'],
+                'input_name': 'stim'}, ['rec'], ['rec']]]
+    return xfspec
+
+@xform()
+def dlc(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+
+    options = {'sig': 'dlc'}
+
+    ops = loadkey.split(".")
+    for op in ops:
+        if op.isnumeric():
+            options['keep_dims'] = int(op)
+        elif op == 'nan':
+            options['empty_values'] = np.nan
+
+    xfspec = [['nems_lbhb.preprocessing.impute_multi', options]]
 
     return xfspec
 
@@ -219,12 +250,20 @@ def st(loadkey):
             this_sig = ["pupil"]
         elif l.startswith("ppp"):
             this_sig = ["pupiln"]
+        elif l.startswith("dlc"):
+            this_sig = ["dlc"]
         elif l.startswith("dlp"):
             this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
             this_sig = ["pupil_dup2"]
+        elif l.startswith("dm"):
+            if len(l) == 2:
+                dummy_count = 1
+            else:
+                dummy_count = int(l[2])
+            this_sig = [f"dummy{i}" for i in range(dummy_count)]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
@@ -325,7 +364,7 @@ def st(loadkey):
             if l.endswith("GP"):
                 generate_signals.extend(this_sig)
 
-    xfspec = [['nems.xforms.make_state_signal',
+    xfspec = [['nems0.xforms.make_state_signal',
                {'state_signals': state_signals,
                 'permute_signals': permute_signals,
                 'generate_signals': generate_signals,
@@ -342,7 +381,7 @@ def sml(kw):
     sm_win_len = 180
     for op in ops:
         sm_win_len = float(op)
-    xfspec = [['nems.xforms.init_context', {'sm_win_len': sm_win_len}]]
+    xfspec = [['nems0.xforms.init_context', {'sm_win_len': sm_win_len}]]
 
     return xfspec
 
@@ -404,7 +443,7 @@ def inp(loadkey):
         elif l.startswith("pbs"):
             this_sig = ["pupil_bs"]
         input_signals.extend(this_sig)
-    xfspec = [['nems.xforms.concatenate_input_channels',
+    xfspec = [['nems0.xforms.concatenate_input_channels',
                {'input_signals': input_signals}]]
 
     return xfspec
@@ -426,7 +465,7 @@ def mod(loadkey):
     elif op == 'p':
         sig = 'pred'
 
-    xfspec = [['nems.xforms.make_mod_signal',
+    xfspec = [['nems0.xforms.make_mod_signal',
                {'signal': sig}, ['rec'], ['rec']]]
 
     return xfspec
@@ -474,7 +513,7 @@ def pca(loadkey):
         elif op.startswith("p"):
             options['compute_power'] = "single_trial"
 
-    xfspec = [['nems.preprocessing.resp_to_pc', options]]
+    xfspec = [['nems0.preprocessing.resp_to_pc', options]]
 
     return xfspec
 
@@ -697,7 +736,7 @@ def pm(load_key):
     pm.b = mask only big pupil trials
     pm.s = mask only small pupil trials
     pm.s.bv = mask small pupil and balance big/small ref epochs for val set
-            (bv is important for the nems.metrics that get calculated at the end)
+            (bv is important for the nems0.metrics that get calculated at the end)
     performs an AND mask (so will only create mask inside the existing current
         mask. If mask is None, creates mask with: rec = rec.create_mask(True))
     """
@@ -811,10 +850,10 @@ def psthfr(load_key):
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex}]]
     else:
         if jackknife:
-            xfspec=[['nems.xforms.generate_psth_from_est_for_both_est_and_val_nfold',
+            xfspec=[['nems0.xforms.generate_psth_from_est_for_both_est_and_val_nfold',
                      {'smooth_resp': smooth, 'epoch_regex': epoch_regex, 'mean_zero': mean_zero}]]
         else:
-            xfspec=[['nems.xforms.generate_psth_from_resp',
+            xfspec=[['nems0.xforms.generate_psth_from_resp',
                      {'smooth_resp': smooth, 'use_as_input': use_as_input,
                       'epoch_regex': epoch_regex, 'channel_per_stim': channel_per_stim, 'mean_zero': mean_zero}]]
     return xfspec
@@ -839,10 +878,25 @@ def sm(load_key):
     else:
         epoch_regex = ['^STIM_', '^TAR_']
 
-    xfspec=[['nems.preprocessing.smooth_signal_epochs',
+    xfspec=[['nems0.preprocessing.smooth_signal_epochs',
             {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
+
+@xform()
+def dec(kw):
+    options = kw.split('.')[1:]
+    strides = 1
+    signal = 'resp'
+    for op in options:
+        if op.startswith('s'):
+            strides = int(op[1:])
+        elif op.startswith('t'):
+            signal = op[1:]
+
+    xfspec=[['nems0.preprocessing.decimate_signal',
+            {'signal': signal, 'strides': strides}]]
+    return xfspec
 
 @xform()
 def rscsw(load_key, cellid, batch):

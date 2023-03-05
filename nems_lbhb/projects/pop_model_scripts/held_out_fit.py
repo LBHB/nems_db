@@ -8,19 +8,19 @@ import matplotlib.pyplot as plt
 import scipy.stats as st
 
 import nems
-import nems.db as nd
-import nems.xform_helper as xhelp
+import nems0.db as nd
+import nems0.xform_helper as xhelp
 import nems_lbhb.xform_wrappers as xwrap
-import nems.xforms
-import nems.epoch as ep
-from nems.xforms import evaluate_step
+import nems0.xforms
+import nems0.epoch as ep
+from nems0.xforms import evaluate_step
 
 from nems import get_setting
-from nems.utils import escaped_split, escaped_join
-from nems.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems.plugins import (default_keywords, default_loaders, default_fitters,
+from nems0.utils import escaped_split, escaped_join
+from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
+from nems0.plugins import (default_keywords, default_loaders, default_fitters,
                           default_initializers)
-from nems.xform_helper import generate_xforms_spec
+from nems0.xform_helper import generate_xforms_spec
 
 log = logging.getLogger(__name__)
 
@@ -181,8 +181,8 @@ for xfa in xfspec2[:-5]:
     context2 = evaluate_step(xfa, context2)
 
 context3 = copy.deepcopy(context2)
-context2.update(nems.xforms.predict(**context2))
-context2.update(nems.xforms.add_summary_statistics(**context2))
+context2.update(nems0.xforms.predict(**context2))
+context2.update(nems0.xforms.add_summary_statistics(**context2))
 rt2 = context2['modelspec'].meta['r_test']
 
 for xfa in xfspec2[-5:]:

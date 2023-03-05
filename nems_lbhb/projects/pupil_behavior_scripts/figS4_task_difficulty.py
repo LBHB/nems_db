@@ -8,7 +8,7 @@ import scipy.stats as ss
 import helpers as helper
 
 from nems import get_setting
-import nems.plots.api as nplt
+import nems0.plots.api as nplt
 from nems_lbhb.analysis.statistics import get_direct_prob, get_bootstrapped_sample
 np.random.seed(123)
 dump_path = get_setting('NEMS_RESULTS_DIR')

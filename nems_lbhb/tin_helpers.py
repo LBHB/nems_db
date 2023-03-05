@@ -10,7 +10,7 @@ from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 
 from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems.preprocessing import make_state_signal
+from nems0.preprocessing import make_state_signal
 
 
 
@@ -139,7 +139,7 @@ def load_tbp_recording(siteid, batch, **options):
     options['pupil']=options.get('pupil', True)
     options['rasterfs']=options.get('rasterfs', 50)
     
-    manager = BAPHYExperiment(siteid=siteid, batch=batch)
+    manager = BAPHYExperiment(cellid=siteid, batch=batch)
     rec = manager.get_recording(**options)
     rec['resp'] = rec['resp'].rasterize()
 
@@ -236,7 +236,7 @@ def pb_regress(rec):
         else:
             #state[:,1]= 0
             for c in range(cellcount):
-                beta_hat = np.linalg.lstsq(state,resp[:,c])[0]
+                beta_hat = np.linalg.lstsq(state, resp[:,c], rcond=None)[0]
                 betas[c,:,i]=beta_hat
 
     return betas, cellids, states, all_stims

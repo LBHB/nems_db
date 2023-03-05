@@ -1,6 +1,6 @@
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.baphy as nb
-from nems.recording import Recording
+from nems0.recording import Recording
 import numpy as np
 import matplotlib
 matplotlib.use('TKAgg')

@@ -1,12 +1,12 @@
 import keras
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.pup_py.utils as ut
 import numpy as np
 import av
 import pickle
 import sys
 import os
-import nems
+import nems0
 
 import tensorflow as tf
 config = tf.ConfigProto()
@@ -20,17 +20,18 @@ nems_db_path = nems_db.__path__[0]
 sys.path.append(os.path.join(nems_db_path, 'nems_lbhb/pup_py/'))
 import pupil_settings as ps
 from batch_norm import get_batch_norm_params
+from nems0 import utils
 
 import logging
 log = logging.getLogger(__name__)
 
 try:
-    import nems.db as nd
+    import nems0.db as nd
     db_exists = True
 except Exception as e:
-    # If there's an error import nems.db, probably missing database
+    # If there's an error import nems0.db, probably missing database
     # dependencies. So keep going but don't do any database stuff.
-    print("Problem importing nems.db, can't update tQueue")
+    print("Problem importing nems0.db, can't update tQueue")
     print(e)
     db_exists = False
 
@@ -38,7 +39,7 @@ if __name__ == '__main__':
 
     if 'QUEUEID' in os.environ:
         queueid = os.environ['QUEUEID']
-        nems.utils.progress_fun = nd.update_job_tick
+        utils.progress_fun = nd.update_job_tick
 
     else:
         queueid = 0

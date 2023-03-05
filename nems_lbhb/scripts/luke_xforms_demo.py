@@ -8,18 +8,18 @@ Created on Wed Mar  7 15:30:15 2018
 import os
 os.environ['OPENBLAS_CORETYPE'] = 'sandybridge'
 os.environ['OPENBLAS_VERBOSE'] = '2'
-#import nems.recording
-import nems.modelspec as ms
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
-import nems.utils
+#import nems0.recording
+import nems0.modelspec as ms
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
+import nems0.utils
 
 import matplotlib.pyplot as plt
 import numpy as np
 import io
 
 #import nems_lbhb.baphy as nb
-import nems.db as nd
+import nems0.db as nd
 import nems_lbhb.xform_wrappers as nw
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -29,14 +29,14 @@ logging.basicConfig(level='DEBUG')
 log = logging.getLogger(__name__)
 
 
-import nems.xforms as xforms
+import nems0.xforms as xforms
 from nems import get_setting
-from nems.registry import KeywordRegistry
-from nems.plugins import default_keywords
-from nems.plugins import default_loaders
-from nems.plugins import default_initializers
-from nems.plugins import default_fitters
-from nems.gui.recording_browser import browse_recording, browse_context
+from nems0.registry import KeywordRegistry
+from nems0.plugins import default_keywords
+from nems0.plugins import default_loaders
+from nems0.plugins import default_initializers
+from nems0.plugins import default_fitters
+from nems0.gui.recording_browser import browse_recording, browse_context
 
 def _xform_exists(xfspec, xform_fn):
     for xf in xfspec:
@@ -121,33 +121,33 @@ keyword_lib.register_plugins(get_setting('KEYWORD_PLUGINS'))
 xfspec = []
 
 # 0) set up initial context
-xfspec.append(['nems.xforms.init_context', xforms_init_context])
+xfspec.append(['nems0.xforms.init_context', xforms_init_context])
 
 # 1) Load the data
 xfspec.extend(xhelp._parse_kw_string(load_keywords, xforms_lib))
 
 # 2) generate a modelspec
-xfspec.append(['nems.xforms.init_from_keywords', {'registry': keyword_lib}])
-#xfspec.append(['nems.xforms.init_from_keywords', {}])
+xfspec.append(['nems0.xforms.init_from_keywords', {'registry': keyword_lib}])
+#xfspec.append(['nems0.xforms.init_from_keywords', {}])
 
 # 3) fit the data
 xfspec.extend(xhelp._parse_kw_string(fit_keywords, xforms_lib))
 
 # 4) generate a prediction (optional)
 if autoPred:
-    if not _xform_exists(xfspec, 'nems.xforms.predict'):
-        xfspec.append(['nems.xforms.predict', {}])
+    if not _xform_exists(xfspec, 'nems0.xforms.predict'):
+        xfspec.append(['nems0.xforms.predict', {}])
 
 # 5) add some performance statistics (optional)
 if autoStats:
-    if not _xform_exists(xfspec, 'nems.xforms.add_summary_statistics'):
-        xfspec.append(['nems.xforms.add_summary_statistics', {}])
+    if not _xform_exists(xfspec, 'nems0.xforms.add_summary_statistics'):
+        xfspec.append(['nems0.xforms.add_summary_statistics', {}])
 
 # 5) generate plots
 if autoPlot:
-    if not _xform_exists(xfspec, 'nems.xforms.plot_summary'):
+    if not _xform_exists(xfspec, 'nems0.xforms.plot_summary'):
         log.info('Generating summary plot...')
-        xfspec.append(['nems.xforms.plot_summary', {}])
+        xfspec.append(['nems0.xforms.plot_summary', {}])
 
 # Create a log stream set to the debug level; add it as a root log handler
 log_stream = io.StringIO()
@@ -165,9 +165,9 @@ for xfa in xfspec:
 
 
 if False:
-    Ipred = np.where([xf[0]=='nems.xforms.predict' for xf in xfspec])[0][0]
-    Ifit_init = np.where([xf[0]=='nems.xforms.fit_basic_init' for xf in xfspec])[0][0]
-    Ifit = np.where([xf[0]=='nems.xforms.fit_basic' for xf in xfspec])[0][0]
+    Ipred = np.where([xf[0]=='nems0.xforms.predict' for xf in xfspec])[0][0]
+    Ifit_init = np.where([xf[0]=='nems0.xforms.fit_basic_init' for xf in xfspec])[0][0]
+    Ifit = np.where([xf[0]=='nems0.xforms.fit_basic' for xf in xfspec])[0][0]
     Isbc = np.where([xf[0]=='nems_lbhb.postprocessing.add_summary_statistics_by_condition' for xf in xfspec])[0][0]
     Ipav = np.where([xf[0]=='nems_lbhb.SPO_helpers.plot_all_vals_' for xf in xfspec])[0][0]
     ctx = {}

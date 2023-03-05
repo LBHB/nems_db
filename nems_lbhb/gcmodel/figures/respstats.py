@@ -8,19 +8,19 @@ from scipy.optimize import curve_fit
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import nems.xform_helper as xhelp
-import nems.db as nd
-import nems.epoch as ep
-from nems.utils import ax_remove_box
-from nems.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
+import nems0.xform_helper as xhelp
+import nems0.db as nd
+import nems0.epoch as ep
+from nems0.utils import ax_remove_box
+from nems0.plots.heatmap import _get_fir_coefficients, _get_wc_coefficients
 from nems_lbhb.gcmodel.figures.utils import (improved_cells_to_list,
                                              get_filtered_cellids,
                                              get_dataframes,
                                              adjustFigAspect)
 from nems_lbhb.gcmodel.figures.soundstats import silence_duration
 from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems.recording import load_recording
-from nems.preprocessing import average_away_epoch_occurrences
+from nems0.recording import load_recording
+from nems0.preprocessing import average_away_epoch_occurrences
 from nems_lbhb.gcmodel.figures.definitions import *
 
 log = logging.getLogger(__name__)
