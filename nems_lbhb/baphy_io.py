@@ -3242,7 +3242,8 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
             ti = np.arange(
                 (1 / rasterfs) / 2, duration[ii] + (1 / rasterfs) / 2, 1 / rasterfs
             )
-            print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
+            if (fs>35) | (fs<25):
+                print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
             _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
