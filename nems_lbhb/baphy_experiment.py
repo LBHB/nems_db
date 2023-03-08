@@ -662,7 +662,7 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             rawhp = kwargs['rawhp']
             rawlp = kwargs['rawlp']
-            d, t0, channel_xy, selected_chs = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy, selected_chs, probe = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
             #import pdb;pdb.set_trace()
@@ -680,7 +680,7 @@ class BAPHYExperiment:
             raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='raw', recording=rec_name, chans=selected_chs,
-                        epochs=e, meta={'channel_xy': channel_xy})
+                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe})
                         for e, r in zip(raw_baphy_events, d)]
             signals['raw'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 
@@ -690,7 +690,7 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             muabp = kwargs['muabp']
             # get mua data
-            d, t0, channel_xy = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy, selected_chs, probe = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                  mua = True, chans=rawchans, rasterfs=fs, muabp=muabp)
             # create rasterized signal object
@@ -707,8 +707,8 @@ class BAPHYExperiment:
                     raise ValueError("Length of mua trace is shorter than max event in file {i}.")
             raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
-                        name='mua', recording=rec_name, chans=[str(c+1) for c in rawchans],
-                        epochs=e, meta={'channel_xy': channel_xy})
+                        name='mua', recording=rec_name, chans=selected_chs,
+                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe})
                         for e, r in zip(mua_baphy_events, d)]
             signals['mua'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 
