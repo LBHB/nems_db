@@ -21,14 +21,17 @@ from nems_lbhb.motor.free_tools import compute_d_theta, \
 
 USE_DB = True
 
+figpath = '/auto/users/svd/docs/current/grant/r21_free_moving/eps/'
+
 if USE_DB:
     siteid = "PRN034a"
     siteid = "PRN010a"
     siteid = "PRN009a"
     siteid = "PRN011a"
+    siteid = "PRN047a"
+    siteid = "PRN044a"
     siteid = "PRN022a"
     siteid = "PRN015a"
-    siteid = "PRN047a"
     runclassid = 132
 
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
@@ -43,11 +46,12 @@ else:
 ## load the recording
 
 rasterfs = 50
+#rasterfs = 25
 
 ex = BAPHYExperiment(parmfile=parmfile, cellid=cellids)
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-recache = True
+recache = False
 extops = {'mono': True}
 rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
                        dlc=True, recache=recache, rasterfs=rasterfs,
@@ -55,7 +59,7 @@ rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
                        **extops)
 
 # generate 'dist' signal from dlc signal
-rec = dlc2dist(rec, ref_x0y0=None, smooth_win=1,
+rec = dlc2dist(rec, ref_x0y0=None, smooth_win=2,
                egocentric_velocity=False, verbose=False)
 
 # pull out relevant signals
@@ -124,43 +128,44 @@ max_time = SHOW_BINS/resp.fs
 
 imopts = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'none'}
 
-f, ax = plt.subplots(6,1, figsize=(6, 8), sharex=True)
-ax[0].imshow(spec[:,:SHOW_BINS], extent=[0,max_time,0,spec.shape[0]],
-             cmap='gray_r', **imopts)
-ax[0].set_title(f"Spectrogram ({epoch})")
+if False:
+    f, ax = plt.subplots(6,1, figsize=(6, 8), sharex=True)
+    ax[0].imshow(spec[:,:SHOW_BINS], extent=[0,max_time,0,spec.shape[0]],
+                 cmap='gray_r', **imopts)
+    ax[0].set_title(f"Spectrogram ({epoch})")
 
-ax[1].imshow(norm_psth[:,:SHOW_BINS], extent=[0,max_time,0,norm_psth.shape[0]],
-             cmap='gray_r', **imopts)
-ax[1].set_title(f"Population PSTH (averaged over {raster.shape[0]} reps)")
+    ax[1].imshow(norm_psth[:,:SHOW_BINS], extent=[0,max_time,0,norm_psth.shape[0]],
+                 cmap='gray_r', **imopts)
+    ax[1].set_title(f"Population PSTH (averaged over {raster.shape[0]} reps)")
 
-ax[2].imshow(r[:,:SHOW_BINS], extent=[0,max_time,0,r.shape[0]],
-             cmap='gray_r', **imopts)
-ax[2].set_title(f"Raster (cell {c1}, {raster.shape[0]} reps)")
+    ax[2].imshow(r[:,:SHOW_BINS], extent=[0,max_time,0,r.shape[0]],
+                 cmap='gray_r', **imopts)
+    ax[2].set_title(f"Raster (cell {c1}, {raster.shape[0]} reps)")
 
-tt=np.arange(psth.shape[1])/resp.fs
-ax[3].plot(tt[:SHOW_BINS],psth[c1,:SHOW_BINS], color='black', lw=1)
-ax[3].set_xlabel('repetition')
+    tt=np.arange(psth.shape[1])/resp.fs
+    ax[3].plot(tt[:SHOW_BINS],psth[c1,:SHOW_BINS], color='black', lw=1)
+    ax[3].set_xlabel('repetition')
 
-#dist[np.isnan(dist)]=2000
-vel[np.isnan(vel)]=1
-vel[vel<-5]=-5
-vel[vel>5]=5
-ax[4].imshow(dist[:,:SHOW_BINS], extent=[0,max_time,0,dist.shape[0]],
-             cmap='gray_r', **imopts)
-ax[4].set_title(f"Dist from speaker")
-ax[4].set_ylabel('repetition')
+    #dist[np.isnan(dist)]=2000
+    vel[np.isnan(vel)]=1
+    vel[vel<-5]=-5
+    vel[vel>5]=5
+    ax[4].imshow(dist[:,:SHOW_BINS], extent=[0,max_time,0,dist.shape[0]],
+                 cmap='gray_r', **imopts)
+    ax[4].set_title(f"Dist from speaker")
+    ax[4].set_ylabel('repetition')
 
-rvel[rvel<-180]+=360
-rvel[rvel>180]-=360
-rvel[rvel<-10]=-10
-rvel[rvel>10]=10
-ax[5].imshow(theta[:,:SHOW_BINS], extent=[0,max_time,0,theta.shape[0]],
-             cmap='bwr', **imopts)
-ax[5].set_title(f"Angle (CW) from speaker")
-ax[5].set_ylabel('repetition')
-plt.tight_layout()
+    rvel[rvel<-180]+=360
+    rvel[rvel>180]-=360
+    rvel[rvel<-10]=-10
+    rvel[rvel>10]=10
+    ax[5].imshow(theta[:,:SHOW_BINS], extent=[0,max_time,0,theta.shape[0]],
+                 cmap='bwr', **imopts)
+    ax[5].set_title(f"Angle (CW) from speaker")
+    ax[5].set_ylabel('repetition')
+    plt.tight_layout()
 
-if True:
+if False:
     # Validate spatio-temporal alignment with target hit events
     e=resp.get_epoch_indices('LICK , FA')
     e=resp.get_epoch_indices('TARGET')
@@ -176,7 +181,7 @@ if True:
     plt.ylabel('distance from speaker (pixels)')
     plt.title(basename(parmfile[0]))
 
-if True:
+if False:
     # Validate spatio-temporal alignment with target hit events
     tar_epochs = ep.epoch_names_matching(resp.epochs,"^TAR_")
     tar=resp.extract_epoch(tar_epochs[-1]).mean(axis=0)
@@ -196,7 +201,8 @@ if True:
     ax[0].set_title(basename(parmfile[0]))
 
 # summarize spatial and velocity distributions with scatter
-free_scatter_sum(rec)
+if False:
+    free_scatter_sum(rec)
 
 ## regression analysis do (d, theta, v_d, v_theta)
 ##
@@ -216,63 +222,78 @@ df_sitedata = df_sitedata.loc[cellids]
 df_sitedata['chanstr']=chans
 df_sitedata = df_sitedata.sort_values(by='chanstr')
 
+minreps = 3
+
 # extract relevant spatial/motor info from processed "dist" signal
-ddict = rec['dist'].extract_epochs(epochs_to_extract)
-reps = np.max([r_.shape[0] for k_, r_ in ddict.items() if r_.shape[0]>2])
-ddict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constant', constant_values=np.nan) for k_, r_ in ddict.items() if r_.shape[0]>1}
+tsig = rec['dist'].concatenate_channels((rec['dist'],rec['dlc']))
+ddict = tsig.extract_epochs(epochs_to_extract)
+reps = np.max([r_.shape[0] for k_, r_ in ddict.items() if r_.shape[0]])
+ddict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constant', constant_values=np.nan) for k_, r_ in ddict.items() if r_.shape[0]>=minreps}
 
-d0 = np.concatenate([d_[:, 0, :] for k_, d_ in ddict.items()], axis=1)
+d0 = np.concatenate([d_[:, 0, :] for k_, d_ in ddict.items()], axis=1)/800
 t0 = np.concatenate([d_[:, 1, :] for k_, d_ in ddict.items()], axis=1)
-pgoodidx = np.isfinite(d0) & (d0 > 550) & (d0 < 1000) & np.isfinite(t0) & (np.abs(t0) < 150)
+pgoodidx = np.isfinite(d0) & (d0 > 550/800) & (d0 < 1100/800) & np.isfinite(t0) & (np.abs(t0) < 150)
 
-dv = np.concatenate([d_[:, 2, :] for k_, d_ in ddict.items()], axis=1)
+dv = np.concatenate([d_[:, 2, :] for k_, d_ in ddict.items()], axis=1)/800
 tv = np.concatenate([d_[:, 3, :] for k_, d_ in ddict.items()], axis=1)
-vgoodidx = np.isfinite(dv) & (np.abs(dv) < 10*rasterfs) & np.isfinite(tv) & (np.abs(tv) < 10*rasterfs)
+vgoodidx = np.isfinite(dv) & (np.abs(dv) < 10*rasterfs/800) & np.isfinite(tv) & (np.abs(tv) < 10*rasterfs)
 
 fv = np.concatenate([d_[:, 4, :] for k_, d_ in ddict.items()], axis=1)
 lv = np.concatenate([d_[:, 5, :] for k_, d_ in ddict.items()], axis=1)
 lgoodidx = np.isfinite(fv) & (np.abs(fv) < 8*rasterfs) & np.isfinite(lv) & (np.abs(lv) < 8*rasterfs)
 
+x0 = np.concatenate([d_[:, 6, :] for k_, d_ in ddict.items()], axis=1)
+y0 = np.concatenate([d_[:, 7, :] for k_, d_ in ddict.items()], axis=1)
+xgoodidx = np.isfinite(x0) & (x0 < 2000) & np.isfinite(y0) & (y0 < 400) & (y0 > 0)
+
 d0 = d0[pgoodidx]
 t0 = t0[pgoodidx]
-dv = dv[vgoodidx]
-tv = tv[vgoodidx]
-fv = fv[lgoodidx]
-lv = lv[lgoodidx]
+
+dv = dv[vgoodidx] # / np.sqrt(np.abs(dv[vgoodidx]+(dv[vgoodidx]==0)))
+tv = tv[vgoodidx] # / np.sqrt(np.abs(tv[vgoodidx]+(tv[vgoodidx]==0)))
+fv = fv[lgoodidx] # / np.sqrt(np.abs(fv[lgoodidx]+(fv[lgoodidx]==0)))
+lv = lv[lgoodidx] # / np.sqrt(np.abs(lv[lgoodidx]+(lv[lgoodidx]==0)))
+x0 = x0[xgoodidx]
+y0 = y0[xgoodidx]
 
 dall = np.concatenate([d_[:, :, :] for k_, d_ in ddict.items()], axis=2)
-dallgoodidx = (np.sum(np.isfinite(dall),axis=1) == 6) & pgoodidx & vgoodidx & lgoodidx
+dallgoodidx = (np.sum(np.isfinite(dall[:, :6, :]), axis=1) == 6) & \
+              pgoodidx & vgoodidx & lgoodidx & xgoodidx
 dall = np.transpose(dall,[1,0,2])[:,dallgoodidx]
 
 rdict = resp.extract_epochs(epochs_to_extract)
-reps = np.max([r_.shape[0] for k_, r_ in rdict.items() if r_.shape[0] > 2])
+reps = np.max([r_.shape[0] for k_, r_ in rdict.items()])
 rdict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constant', constant_values=np.nan) for
-         k_, r_ in rdict.items() if r_.shape[0] > 1}
+         k_, r_ in rdict.items() if r_.shape[0] >= minreps}
 
-for c in range(resp.shape[0]):
-    cellid = cellids[c]
+if 0:
+    for c in range(resp.shape[0]):
+        cellid = cellids[c]
 
-    print(f"Regressing spike rate error against pos,vel for {cellid} ")
+        print(f"Regressing spike rate error against pos,vel for {cellid} ")
 
-    r = np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1)
-    p = np.nanmean(r, axis=0, keepdims=True)
-    e = r - p
-    # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
-    eall = e[dallgoodidx]
+        r = np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1)
+        p = np.nanmean(r, axis=0, keepdims=True)
+        e = r - p
+        # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
+        eall = e[dallgoodidx]
 
-    df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
-                       'dv': dall[2, :], 'dt': dall[3, :],
-                       'const': 1})
-    s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
-    res = s.fit()
-    coefs = res.params[1:]
-    pvalues = res.pvalues[1:]
-    df_sitedata.loc[cellid, ['d', 't', 'dv', 'tv']] = coefs.values
-    df_sitedata.loc[cellid, ['pd', 'pt', 'pdv', 'ptv']] = pvalues.values
+        df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
+                           'dv': dall[2, :], 'dt': dall[3, :],
+                           'const': 1})
+        s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
+        res = s.fit()
+        coefs = res.params[1:]
+        pvalues = res.pvalues[1:]
+        df_sitedata.loc[cellid, ['d', 't', 'dv', 'tv']] = coefs.values
+        df_sitedata.loc[cellid, ['pd', 'pt', 'pdv', 'ptv']] = pvalues.values
+
+nbins = 19
+shf = 0.6
 
 # histogram position and velocity traces
-ll0 = np.linspace(d0.min(),d0.max(),15)
-tt0 = np.linspace(t0.min(),t0.max(),15)
+ll0 = np.linspace(d0.min(),d0.max(),nbins)
+tt0 = np.linspace(t0.min(),t0.max(),nbins)
 nn0 = np.zeros((len(ll0)-1,len(tt0)-1)) * np.nan
 for i_,l_ in enumerate(ll0[:-1]):
     for j_,t_ in enumerate(tt0[:-1]):
@@ -281,8 +302,8 @@ for i_,l_ in enumerate(ll0[:-1]):
 nn0[nn0<20]=np.nan
 nn0[nn0>500]=500
 
-llv = np.linspace(dv.min(),dv.max(),15)
-ttv = np.linspace(tv.min(),tv.max(),15)
+llv = np.linspace(dv.min()*shf,dv.max()*shf,nbins)
+ttv = np.linspace(tv.min()*shf,tv.max()*shf,nbins)
 nnv = np.zeros((len(llv)-1,len(ttv)-1)) * np.nan
 for i_,l_ in enumerate(llv[:-1]):
     for j_,t_ in enumerate(ttv[:-1]):
@@ -291,260 +312,296 @@ for i_,l_ in enumerate(llv[:-1]):
 nnv[nnv<20]=np.nan
 nnv[nnv>500]=500
 
-lll = np.linspace(fv.min(),fv.max(),15)
-ttl = np.linspace(lv.min(),lv.max(),15)
+lll = np.linspace(fv.min()*shf,fv.max()*shf,nbins)
+ttl = np.linspace(lv.min()*shf,lv.max()*shf,nbins)
 nnl = np.zeros((len(lll)-1,len(ttl)-1)) * np.nan
 for i_,l_ in enumerate(lll[:-1]):
     for j_,t_ in enumerate(ttl[:-1]):
         v_ = (fv>=l_)&(fv<lll[i_+1]) & (lv>=t_) &(lv<ttl[j_+1])
         nnl[i_,j_] = v_.sum()
-nnl[nnl<20]=np.nan
-nnl[nnl>500]=500
+nnl[nnl < 20] = np.nan
+nnl[nnl > 500] = 500
+
+# histogram position and velocity traces
+lly = np.linspace(y0.min(),y0.max(),nbins)
+ttx = np.linspace(x0.min(),x0.max(),nbins)
+nnx = np.zeros((len(lly)-1,len(ttx)-1)) * np.nan
+for i_,l_ in enumerate(lly[:-1]):
+    for j_,t_ in enumerate(ttx[:-1]):
+        v_ = (y0>=l_)&(y0<lly[i_+1]) & (x0>=t_) &(x0<ttx[j_+1])
+        nnx[i_,j_] = v_.sum()
+nnx[nnx<20]=np.nan
+nnx[nnx>500]=500
+
 
 # plot a bunch of heatmaps of E as a function of Pos or Vel
 # depending on the value of USE_VEL
 a1idx = np.where(df_sitedata['area'] == 'A1')[0]
-cells = a1idx[np.linspace(0,len(a1idx)-1,24).astype(int)]
+cells = a1idx[np.linspace(0,len(a1idx)-1, 24).astype(int)]
+cells = a1idx[np.linspace(0, 60, 60).astype(int)]
 
-USE_VEL = 'linear'
+USE_VEL = 'space'
+DO_DIV = False
 
-if USE_VEL == 'linear':
-    ll, tt, nn = lll, ttl, nnl
-    d, t = fv, lv
-    goodidx = lgoodidx
+for USE_VEL in ['dist', 'rotation']:
 
-elif USE_VEL == 'rotation':
-    ll, tt, nn = llv, ttv, nnv
-    d, t = dv, tv
-    goodidx = vgoodidx
-else:
-    ll, tt, nn = ll0, tt0, nn0
-    d, t = d0, t0
-    goodidx = pgoodidx
+    if USE_VEL == 'linear':
+        ll, tt, nn = lll, ttl, nnl
+        d, t = fv, lv
+        goodidx = lgoodidx
 
-rows = 5
-cols = int(np.ceil((len(cells) + 1) / rows))
+    elif USE_VEL == 'rotation':
+        ll, tt, nn = llv, ttv, nnv
+        d, t = dv, tv
+        goodidx = vgoodidx
+    elif USE_VEL == 'space':
+        ll, tt, nn = lly, ttx, nnx
+        d, t = y0, x0
+        goodidx = xgoodidx
+    else:
+        ll, tt, nn = ll0, tt0, nn0
+        d, t = d0, t0
+        goodidx = pgoodidx
 
-f, ax = plt.subplots(rows, cols, figsize=(2 * cols, 2 * rows), sharex=True, sharey=True)
-ax = ax.flatten()
-for i, c in enumerate(cells):
-    cellid = resp.chans[c]
-    cstr=cellid.replace(siteid,'')
-    try:
-        area = df_sitedata.loc[cellid, 'area']
-    except:
-        area = '??'
+    rows = 6
+    cols = int(np.ceil((len(cells) + 1) / rows))
 
-    r = np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1)
-    p = np.nanmean(r, axis=0, keepdims=True)
+    f, ax = plt.subplots(rows, cols, figsize=(1 * cols, 1 * rows), sharex=True, sharey=True)
+    ax = ax.flatten()
+    for i, c in enumerate(cells):
+        cellid = resp.chans[c]
+        cstr=cellid.replace(siteid,'')
+        try:
+            area = df_sitedata.loc[cellid, 'area']
+        except:
+            area = '??'
 
-    e = r - p
-    # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
-    eall = e[dallgoodidx]
-    e = e[goodidx]
+        r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
+        p = np.nanmean(r, axis=0, keepdims=True)
 
-    mm = np.zeros((len(ll) - 1, len(tt) - 1)) * np.nan
-    for i_, l_ in enumerate(ll[:-1]):
-        for j_, t_ in enumerate(tt[:-1]):
-            v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & (t < tt[j_ + 1])
-            if (v_.sum() > 0):
-                if (np.nanstd(e[v_]) > 0):
-                    mm[i_, j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
-                else:
-                    mm[i_, j_] = np.nanmean(e[v_])
+        if DO_DIV:
+            e = (r + 0.1) / (p + 0.1) - 1
+        else:
+            e = (r - p) / (p + 0.1)
+        # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
 
-    mm[np.isnan(nn)] = 0
-    x = (ll[:-1] + ll[1:]) / 2
-    y = (tt[:-1] + tt[1:]) / 2
-    X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
+        eall = e[dallgoodidx]
+        e = e[goodidx]
 
-    valididx = np.isfinite(mm)
-    interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
-                                  mm[valididx], fill_value=np.nanmean(mm))
+        mm = np.zeros((len(ll) - 1, len(tt) - 1)) * np.nan
+        for i_, l_ in enumerate(ll[:-1]):
+            for j_, t_ in enumerate(tt[:-1]):
+                v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & (t < tt[j_ + 1])
+                if (v_.sum() > 0):
+                    if (np.nanstd(e[v_]) > 0):
+                        mm[i_, j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
+                    else:
+                        mm[i_, j_] = np.nanmean(e[v_])
 
-    # Z = interp(X, Y)
-    # Z = gaussian_filter(Z, [0.75, 0.75])
-    Z = mm
-    df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
-                       'dv': dall[2, :], 'dt': dall[3, :],
-                       'const': 1})
-    s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
-    res = s.fit()
-    coefs = res.params[1:]
-    pvalues = res.pvalues[1:]
-    df_sitedata.loc[cellid, ['d','t','dv','tv']] = coefs
-    df_sitedata.loc[cellid, ['pd','pt','pdv','ptv']] = pvalues.values
+        mm[np.isnan(nn)] = 0
+        x = (ll[:-1] + ll[1:]) / 2
+        y = (tt[:-1] + tt[1:]) / 2
+        X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
 
-    ax[i].imshow(Z, extent=[tt[0], tt[-1], ll[-1], ll[0]],
-                 aspect='auto', cmap='bwr', vmin=-np.abs(Z).max(), vmax=np.abs(Z).max())
+        valididx = np.isfinite(mm)
+        interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
+                                      mm[valididx], fill_value=np.nanmean(mm))
 
-    # ax[i,0].plot(cc,mm,'k')
-    # ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
-    ax[i].set_title(f'{cstr} {area} ({Z.min():.2f},{Z.max():.2f})')
+        # Z = interp(X, Y)
+        Z = mm
+        Z = gaussian_filter(Z, [0.5, 0.5])
 
-ax[-1].imshow(nn, extent=[tt[0], tt[-1], ll[-1], ll[0]], aspect='auto')
-ax[-1].set_title(f'n')
-plt.suptitle(resp.chans[0].split("-")[0])
+        LFIT=False
+        if LFIT:
+            df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
+                               'dv': dall[2, :], 'dt': dall[3, :],
+                               'const': 1})
+            s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
+            res = s.fit()
+            coefs = res.params[1:]
+            pvalues = res.pvalues[1:]
+            df_sitedata.loc[cellid, ['d','t','dv','tv']] = coefs
+            df_sitedata.loc[cellid, ['pd','pt','pdv','ptv']] = pvalues.values
 
+        if DO_DIV:
+            vmin = -np.abs(Z).max()
+        else:
+            vmin = -np.abs(Z).max()
+            vmax = np.abs(Z).max()
+        vmin, vmax = -0.5, 0.5
+        ax[i].imshow(Z, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
+                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
 
-## summary of a bunch of features for a selection of interesting units
-SHOW_BINS=400
-if siteid=='PRN015aXXX':
-    cells = [44, 43, 42, 36, 35, 28, 27, 26, 5, 1]# PRN015
-else:
-    a1idx = np.where(df_sitedata['area']=='A1')[0]
-    stepsize=int(np.ceil(len(a1idx)/10))
-    cells = a1idx[::stepsize]
-
-
-rows = len(cells)+1
-cols=4
-
-#f,ax = plt.subplots(rows,cols,figsize=(2*cols,2*rows), sharex=True, sharey=True)
-#ax=ax.flatten()
-f = plt.figure(figsize=(1.5*cols,2*rows))
-
-for i,c in enumerate(cells):
-    cellid = resp.chans[c]
-    cstr = cellid.replace(siteid, '')
-    try:
-        area = df_sitedata.loc[cellid, 'area']
-        depth = df_sitedata.loc[cellid, 'depth']
-    except:
-        area = '??'
-        depth = '??'
-
-    rdict = resp.extract_epochs(epochs_to_extract)
-    reps = np.max([r_.shape[0] for k_, r_ in rdict.items() if r_.shape[0] > 2])
-    rdict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constant', constant_values=np.nan) for
-             k_, r_ in rdict.items() if r_.shape[0] > 1}
-
-    r = np.concatenate([r_[:, c, :] for k_,r_ in rdict.items()], axis=1)
-    p = np.nanmean(r,axis=0, keepdims=True)
-
-    e = r-p
-    #goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
-    eall = e[dallgoodidx]
-    ev = e[vgoodidx]
-    el = e[lgoodidx]
-    e = e[pgoodidx]
-
-    mm = np.zeros((len(ll0)-1,len(tt0)-1)) * np.nan
-    for i_,l_ in enumerate(ll0[:-1]):
-        for j_,t_ in enumerate(tt0[:-1]):
-            v_ = (d0>=l_)&(d0<ll0[i_+1]) & (t0>=t_) &(t0<tt0[j_+1])
-            if (v_.sum()>0):
-                if (np.nanstd(e[v_])>0):
-                    mm[i_,j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
-                else:
-                    mm[i_,j_] = np.nanmean(e[v_])
-    mm[np.isnan(nn0)]=0
-
-    x = (ll[:-1]+ll[1:])/2
-    y = (tt[:-1]+tt[1:])/2
-    X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
-
-    valididx = np.isfinite(mm)
-    interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
-                                  mm[valididx], fill_value=np.nanmean(mm))
-
-    #Z = interp(X, Y)
-    #Z = gaussian_filter(Z, [0.75, 0.75])
-    Z = mm
-
-    mmv = np.zeros((len(llv)-1,len(ttv)-1)) * np.nan
-    for i_,l_ in enumerate(llv[:-1]):
-        for j_,t_ in enumerate(ttv[:-1]):
-            v_ = (dv>=l_)&(dv<llv[i_+1]) & (tv>=t_) &(tv<ttv[j_+1])
-            if (v_.sum()>0):
-                if (np.nanstd(ev[v_])>0):
-                    mmv[i_,j_] = np.nanmean(ev[v_]) / np.nanstd(ev[v_])
-                else:
-                    mmv[i_,j_] = np.nanmean(ev[v_])
-    mmv[np.isnan(nnv)]=0
-
-    mml = np.zeros((len(lll)-1,len(ttl)-1)) * np.nan
-    for i_,l_ in enumerate(lll[:-1]):
-        for j_,t_ in enumerate(ttl[:-1]):
-            v_ = (fv>=l_)&(fv<lll[i_+1]) & (lv>=t_) &(lv<ttl[j_+1])
-            if (v_.sum()>0):
-                if (np.nanstd(el[v_])>0):
-                    mml[i_,j_] = np.nanmean(el[v_]) / np.nanstd(el[v_])
-                else:
-                    mml[i_,j_] = np.nanmean(el[v_])
-    mml[np.isnan(nnl)]=0
-
-    vmin,vmax = -np.abs(mm).max(),np.abs(mm).max()
-    vmin,vmax = -0.75, 0.75
-
-    ax = f.add_subplot(rows,4,4*(i+1)+1)
-    tpsth=np.arange(SHOW_BINS)/resp.fs
-    ax.plot(tpsth, smooth(psth[c,:SHOW_BINS], 3), 'k', lw=0.5)
-    ax.set_xlim([tpsth[0], tpsth[-1]])
-    ax.set_title(f"{cstr} {area} {depth}")
-    if i<len(cells)-1:
-        ax.set_xticklabels([])
-
-    ax = f.add_subplot(rows,4,cols*(i+1)+2)
-    ax.imshow(Z, extent=[tt[0],tt[-1],ll[-1],ll[0]],
-                 aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
-
-    #ax[i,0].plot(cc,mm,'k')
-    #ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
-    ax.set_title(f'{cstr} ({Z.min():.2f},{Z.max():.2f})')
-    if i<len(cells)-1:
-        ax.set_xticklabels([])
-
-    ax = f.add_subplot(rows,4,cols*(i+1)+3)
-    vmin,vmax = -np.abs(mmv).max(),np.abs(mmv).max()
-    vmin,vmax = -0.75, 0.75
-    ax.imshow(mmv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]],
-                 aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
-    if i<len(cells)-1:
-        ax.set_xticklabels([])
-
-    #ax[i,0].plot(cc,mm,'k')
-    #ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
-    ax.set_title(f'{cstr} ({mmv.min():.2f},{mmv.max():.2f})')
-    if i<len(cells)-1:
-        ax.set_xticklabels([])
-
-    ax = f.add_subplot(rows,4,cols*(i+1)+4)
-    vmin,vmax = -np.abs(mml).max(),np.abs(mml).max()
-    vmin,vmax = -0.75, 0.75
-    ax.imshow(mml, extent=[ttl[0],ttl[-1],lll[-1],lll[0]],
-                 aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
-    ax.set_title(f'{cstr} ({mml.min():.2f},{mml.max():.2f})')
-    if i<len(cells)-1:
-        ax.set_xticklabels([])
+        # ax[i,0].plot(cc,mm,'k')
+        # ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
+        ax[i].set_title(f'{cstr} {area} ({Z.min():.2f},{Z.max():.2f})',
+                        fontsize=7)
+        ax[i].tick_params(axis='both', which='major', labelsize=7)
+    ax[-1].imshow(nn, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
+                  aspect='auto')
+    ax[-1].set_title(f'n')
+    plt.suptitle(f'{resp.chans[0].split("-")[0]} - {USE_VEL}')
+    plt.tight_layout()
 
 
-ax = f.add_subplot(rows,4,1)
-nplt.plot_spectrogram(spec[:,:SHOW_BINS], fs=resp.fs, ax=ax, title=epoch, cmap='gray_r')
-ax.set_xlabel('')
-ax.set_xticklabels([])
+#
+# Details on a small number of cells ... Select specific examples?
+#
+SHOW_FULL_SUM=True
+if SHOW_FULL_SUM:
+    ## summary of a bunch of features for a selection of interesting units
+    SHOW_BINS = 400
+    if siteid=='PRN015a':
+        use_cellids = [ "PRN015a-315-1",
+                        "PRN015a-282-1",
+                        "PRN015a-225-1","PRN015a-223-1",
+                        ]
+        #               "PRN015a-223-1", "PRN015a-225-1",
+        #                "PRN015a-251-1","PRN015a-282-1" ,
+        #                "PRN015a-274-1", "PRN015a-274-2",
+        #                "PRN015a-275-2" ,
+        #               "PRN015a-274-1", "PRN015a-274-2",
+        #               "PRN015a-275-2", "PRN015a-282-1","PRN015a-294-1" ,
+        #               "PRN015a-315-1", "PRN015a-317-1"]
+        cells = [i for i, c in enumerate(cellids) if c in use_cellids]
+        cells.sort(reverse=True)
+    else:
+        a1idx = np.where(df_sitedata['area']=='A1')[0]
+        stepsize=int(np.ceil(len(a1idx)/10))
+        cells = a1idx[::stepsize]
 
-# counts of position bins
-ax = f.add_subplot(rows,4,2)
-ax.imshow(nn0, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], aspect='auto')
-ax.set_title(f'n pos')
-ax.set_xticklabels([])
+    rows = len(cells)+1
+    cols = 4
 
-# counts of dist/velocity bins
-ax = f.add_subplot(rows,4,3)
-ax.imshow(nnv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], aspect='auto')
-ax.set_title(f'n vel')
-ax.set_xticklabels([])
+    #f,ax = plt.subplots(rows,cols,figsize=(2*cols,2*rows), sharex=True, sharey=True)
+    #ax=ax.flatten()
+    f = plt.figure(figsize=(1.5*cols, 1*rows))
 
-# counts of lateral velocity bins
-ax = f.add_subplot(rows,4,4)
-ax.imshow(nnl, extent=[ttl[0],ttl[-1],lll[-1],lll[0]], aspect='auto')
-ax.set_title(f'n vel')
-ax.set_xticklabels([])
+    for i,c in enumerate(cells):
+        cellid = resp.chans[c]
+        cstr = cellid.replace(siteid, '')
+        try:
+            area = df_sitedata.loc[cellid, 'area']
+            depth = df_sitedata.loc[cellid, 'depth']
+        except:
+            area = '??'
+            depth = '??'
 
-plt.suptitle(resp.chans[0].split("-")[0])
-plt.tight_layout()
+        rdict = resp.extract_epochs(epochs_to_extract)
+        reps = np.max([r_.shape[0] for k_, r_ in rdict.items() if r_.shape[0] > 2])
+        rdict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constant', constant_values=np.nan) for
+                 k_, r_ in rdict.items() if r_.shape[0] >= minreps}
 
+        r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
+        p = np.nanmean(r, axis=0, keepdims=True)
+
+        if DO_DIV:
+            e = (r + 0.1) / (p + 0.1) - 1
+        else:
+            e = (r - p) / (p + 0.1)
+
+        #goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
+        eall = e[dallgoodidx]
+        ev = e[vgoodidx]
+        el = e[lgoodidx]
+        e = e[pgoodidx]
+
+        mm = np.zeros((len(ll0)-1,len(tt0)-1)) * np.nan
+        for i_,l_ in enumerate(ll0[:-1]):
+            for j_,t_ in enumerate(tt0[:-1]):
+                v_ = (d0>=l_)&(d0<ll0[i_+1]) & (t0>=t_) &(t0<tt0[j_+1])
+                if (v_.sum()>0):
+                    if (np.nanstd(e[v_])>0):
+                        mm[i_,j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
+                    else:
+                        mm[i_,j_] = np.nanmean(e[v_])
+        mm[np.isnan(nn0)]=0
+
+        x = (ll[:-1]+ll[1:])/2
+        y = (tt[:-1]+tt[1:])/2
+        X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
+
+        valididx = np.isfinite(mm)
+        interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
+                                      mm[valididx], fill_value=np.nanmean(mm))
+
+        Z = mm
+        #Z = interp(X, Y)
+        zsm = 0.5
+        Z = gaussian_filter(Z, [zsm, zsm])
+
+        mmv = np.zeros((len(llv)-1,len(ttv)-1)) * np.nan
+        for i_,l_ in enumerate(llv[:-1]):
+            for j_,t_ in enumerate(ttv[:-1]):
+                v_ = (dv>=l_)&(dv<llv[i_+1]) & (tv>=t_) &(tv<ttv[j_+1])
+                if (v_.sum()>0):
+                    if (np.nanstd(ev[v_])>0):
+                        mmv[i_,j_] = np.nanmean(ev[v_]) / np.nanstd(ev[v_])
+                    else:
+                        mmv[i_,j_] = np.nanmean(ev[v_])
+        mmv[np.isnan(nnv)]=0
+
+        #vmin,vmax = -np.abs(mm).max(),np.abs(mm).max()
+        vmin,vmax = -0.5, 0.5
+
+        ax = f.add_subplot(rows,2,2*(i+1)+1)
+        tpsth=np.arange(SHOW_BINS)/resp.fs
+        ax.plot(tpsth, smooth(psth[c,:SHOW_BINS], 3), 'k', lw=0.5)
+        ax.set_xlim([tpsth[0], tpsth[-1]])
+        ax.set_title(f"{cstr} {area} {depth}")
+        if i<len(cells)-1:
+            ax.set_xticklabels([])
+
+        ax = f.add_subplot(rows,4,cols*(i+1)+3)
+        im = ax.imshow(Z, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], interpolation='none',
+                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+
+        #ax[i,0].plot(cc,mm,'k')
+        #ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
+        ax.set_title(f'{cstr} ({Z.min():.2f},{Z.max():.2f})', fontsize=7)
+        ax.tick_params(axis='both', which='major', labelsize=7)
+        if i<len(cells)-1:
+            ax.set_xticklabels([])
+        else:
+            plt.colorbar(im, ax=ax)
+
+        Z = mmv
+        Z = gaussian_filter(Z, [zsm, zsm])
+        ax = f.add_subplot(rows,4,cols*(i+1)+4)
+        #vmin,vmax = -np.abs(mmv).max(),np.abs(mmv).max()
+        #vmin,vmax = -0.75, 0.75
+        im = ax.imshow(Z, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], interpolation='none',
+                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+
+        ax.set_title(f'{cstr} ({mmv.min():.2f},{mmv.max():.2f})', fontsize=7)
+        ax.tick_params(axis='both', which='major', labelsize=7)
+        if i<len(cells)-1:
+            ax.set_xticklabels([])
+        else:
+            plt.colorbar(im, ax=ax)
+
+    ax = f.add_subplot(rows,2,1)
+    nplt.plot_spectrogram(spec[:,:SHOW_BINS], fs=resp.fs, ax=ax, title=epoch, cmap='gray_r')
+    ax.set_xlabel('')
+    ax.set_xticklabels([])
+
+    # counts of position bins
+    ax = f.add_subplot(rows,4,3)
+    ax.imshow(nn0, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], aspect='auto')
+    ax.set_title(f'n pos')
+    ax.set_xticklabels([])
+
+    # counts of dist/velocity bins
+    ax = f.add_subplot(rows,4,4)
+    ax.imshow(nnv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], aspect='auto')
+    ax.set_title(f'n vel')
+    ax.set_xticklabels([])
+
+    plt.suptitle(resp.chans[0].split("-")[0])
+    plt.tight_layout()
+
+
+    f.savefig(f'{figpath}example_space_mod.pdf')
 
 
 

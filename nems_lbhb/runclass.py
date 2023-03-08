@@ -320,6 +320,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         # Binaural natural sounds
         sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
         sound_root = sound_root.replace("H:/", "/auto/data/")
+        sound_root = sound_root.replace("E:/sounds/v2", "/auto/data/sounds/BigNat/v2")
+        sound_root = sound_root.replace("E:/", "/auto/data/")
         sound_root = Path(sound_root)
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
@@ -589,11 +591,14 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     sg_unique = {}
     stimparam = {'rasterfs': rasterfs}
 
-    if stimfmt=='wav':
-        for f,w in wav_all.items():
-            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
+    if stimfmt == 'wav':
+        for f, w in wav_all.items():
+            if rasterfs != fs:
+                newlen = int(len(w)/fs *rasterfs)
+                w = resample(w, newlen)
+            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(rasterfs*PreStimSilence)),max_chans)),
                                          w,
-                                         np.zeros((int(np.floor(fs*PostStimSilence)),max_chans))],axis=0).T
+                                         np.zeros((int(np.floor(rasterfs*PostStimSilence)),max_chans))],axis=0).T
 
     elif stimfmt == 'nenv':
 

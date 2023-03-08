@@ -2185,7 +2185,7 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv']:
+    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv', 'wav']:
         # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
         stim, tags, stimparam = runclass.NAT_stim(epochs, exptparams, **options)
@@ -4260,7 +4260,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
             # force 0 to be the mean of the positive waveform preceding the valley
             mi = np.argmax(mwf[:trough])
             if len(mwf[:mi]) == 0:
-                print('zero mwf mi')
+                log.info(f'{c}: zero mwf mi')
                 baseline = 0
             else:
                 baseline = np.mean(mwf[:mi])
