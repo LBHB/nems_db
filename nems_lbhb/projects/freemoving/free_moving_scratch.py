@@ -47,10 +47,12 @@ rasterfs = 50
 ex = BAPHYExperiment(parmfile=parmfile, cellid=cellids)
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-recache = False
+recache = True
+extops = {'mono': True}
 rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
                        dlc=True, recache=recache, rasterfs=rasterfs,
-                       dlc_threshold=0.2, fill_invalid='interpolate')
+                       dlc_threshold=0.2, fill_invalid='interpolate',
+                       **extops)
 
 # generate 'dist' signal from dlc signal
 rec = dlc2dist(rec, ref_x0y0=None, smooth_win=1,
@@ -173,6 +175,25 @@ if True:
     plt.xlabel('time from Hit (s)')
     plt.ylabel('distance from speaker (pixels)')
     plt.title(basename(parmfile[0]))
+
+if True:
+    # Validate spatio-temporal alignment with target hit events
+    tar_epochs = ep.epoch_names_matching(resp.epochs,"^TAR_")
+    tar=resp.extract_epoch(tar_epochs[-1]).mean(axis=0)
+    e=resp.get_epoch_indices(tar_epochs[-1])
+    e=resp.get_epoch_indices('TARGET')
+    tr = np.zeros((resp.shape[0],400,len(e)))
+    for i,(a,b) in enumerate(e):
+        if a>100:
+            tr[:,:,i] = resp._data[:,(a-100):(a+300)]
+    tar=tr.mean(axis=2)
+    t = np.arange(tar.shape[-1])/rasterfs
+    f,ax=plt.subplots(2,1)
+    ax[0].imshow(tar,aspect='auto',interpolation='none',origin='lower')
+    ax[0].set_ylabel('unit')
+    ax[1].plot(t,tar.mean(axis=0))
+    ax[1].set_xlabel('time (s)')
+    ax[0].set_title(basename(parmfile[0]))
 
 # summarize spatial and velocity distributions with scatter
 free_scatter_sum(rec)
