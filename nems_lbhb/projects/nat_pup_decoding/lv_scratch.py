@@ -131,11 +131,3 @@ if 0:
     ax[0,0].set_title(db.get_siteid(cellid));
 
 
-if 0:
-    filepath = '/auto/data/daq/Prince/training2023/Prince_2023_01_23_NTD_1/microphone.zarr'
-    #filepath = '/auto/data/daq/Prince/training2023/Prince_2023_01_23_NTD_3/microphone.zarr'
-    w=zarr.open(filepath, mode='r')
-
-    from scipy.io import wavfile
-    wavfile.write('/tmp/test2.wav', 44000, w[0,:])
-

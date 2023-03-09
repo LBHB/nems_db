@@ -2211,7 +2211,7 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv']:
+    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv', 'wav']:
         # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
         stim, tags, stimparam = runclass.NAT_stim(epochs, exptparams, **options)
@@ -4237,8 +4237,11 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     for c in cellid:
         dcell[c] = {'siteid': siteid}
         chstr = str(int(c.split("-")[1]))
+        if len(d['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
 
-        dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
         if dcell[c]['layer'].isnumeric():
             dcell[c]['area'] = d['site area']
         else:
@@ -4286,7 +4289,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
             # force 0 to be the mean of the positive waveform preceding the valley
             mi = np.argmax(mwf[:trough])
             if len(mwf[:mi]) == 0:
-                print('zero mwf mi')
+                log.info(f'{c}: zero mwf mi')
                 baseline = 0
             else:
                 baseline = np.mean(mwf[:mi])
@@ -4321,7 +4324,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
                 " gPenetration INNER JOIN gCellMaster on gPenetration.id=gCellMaster.penid" +
                 f" WHERE gCellMaster.cellid='{siteid}'")
         dp = db.pd_query(sql)
-        numchans = dp.loc[0,'numchans']
+        numchans = np.max([dp.loc[0,'numchans'], df_cell.channum.max()])
         area_list = [''] * numchans
         area_list[-1]=default_area
         for i, r in df_cell.iterrows():

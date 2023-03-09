@@ -93,7 +93,7 @@ def load_pred(batch, cellids, modelnames):
 
     return pred_data
 
-def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True):
+def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True, L=12):
 
     if labels is None:
         labels = ['Prediction correlation','Mutual information']
@@ -103,7 +103,7 @@ def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True):
     existing_cellids=[]
     if reload:
         try:
-            df = pd.read_csv('xc_mi.csv', index_col=0)
+            df = pd.read_csv(f'xc_mi_L{L}.csv', index_col=0)
             existing_cellids = df.index.to_list()
         except:
             print('initializing df')
@@ -116,23 +116,26 @@ def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True):
 
     for i, p in enumerate(pred_data):
         cellid = p['cellid']
-        df.loc[cellid,'mi0'], n0 = mutual_information(p['pred0'].flatten(), p['resp'].flatten(), L=12)
-        df.loc[cellid,'mi1'], n1 = mutual_information(p['pred1'].flatten(), p['resp'].flatten(), L=12)
+        df.loc[cellid,'mi0'], n0 = mutual_information(p['pred0'].flatten(), p['resp'].flatten(), L=L)
+        df.loc[cellid,'mi1'], n1 = mutual_information(p['pred1'].flatten(), p['resp'].flatten(), L=L)
         df.loc[cellid,'xc0'] = np.corrcoef(p['pred0'].flatten(), p['resp'].flatten())[0,1]
         df.loc[cellid,'xc1'] = np.corrcoef(p['pred1'].flatten(), p['resp'].flatten())[0,1]
 
-    df.to_csv('xc_mi.csv')
+    df.to_csv(f'xc_mi_L{L}.csv')
+    cc0 = df['xc0']**2
+    cc1 = df['xc1']**2
 
     fig, ax = plt.subplots(2,2, sharex='row', sharey='row')
-    ax[0,0].scatter(df['xc0'],df['mi0'], s=3)
-    ax[0,0].set_title(f"LN: r={np.corrcoef(df['xc0'],df['mi0'])[0,1]:.3f}")
-    ax[0,1].scatter(df['xc1'],df['mi1'], s=3)
-    ax[0,1].set_title(f"CNN: r={np.corrcoef(df['xc1'],df['mi1'])[0,1]:.3f}")
+    ax[0,0].scatter(cc0,df['mi0'], s=3)
+    ax[0,0].set_title(f"LN: r={np.corrcoef(cc0,df['mi0'])[0,1]:.3f}")
+    ax[0,1].scatter(cc1,df['mi1'], s=3)
+    ax[0,1].set_title(f"CNN: r={np.corrcoef(cc1,df['mi1'])[0,1]:.3f}")
     ax[1,0].set_visible(False)
-    ax[1,1].scatter(df['xc1']-df['xc0'], df['mi1']-df['mi0'], s=3)
-    ax[1,1].set_title(f"improvement: r={np.corrcoef(df['xc1']-df['xc0'],df['mi1']-df['mi0'])[0,1]:.3f}")
-    ax[1,1].set_xlabel('xc1 - xc0')
+    ax[1,1].scatter(cc1-cc0, df['mi1']-df['mi0'], s=3)
+    ax[1,1].set_title(f"improvement: r={np.corrcoef(cc1-cc0,df['mi1']-df['mi0'])[0,1]:.3f}")
+    ax[1,1].set_xlabel('xc1^2 - xc0^2')
     ax[1,1].set_ylabel('mi1 - mi0')
+    plt.tight_layout()
 
     return fig
 
@@ -235,7 +238,7 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
 
 
 if __name__ == '__main__':
-    plot_xc_v_mi()
+    plot_xc_v_mi(L=10)
 
     if 0:
         f, ax = plt.subplots(2, 2, figsize=column_and_half_tall, sharey='row')
