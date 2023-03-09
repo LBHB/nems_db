@@ -778,12 +778,30 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
             # recorded channels
             channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
-            channel_names =  list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
+            channel_names = list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
             channel_nums = [channel_info[ch]['number'] for ch in channel_names]
             LFP_channel_names = [ch for ch in channel_names if ch[:3] == 'LFP']
             LFP_channel_nums = [channel_info[ch]['number'] for ch in LFP_channel_names]
             channel_state = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL']
-            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if
+                                        channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+            # LFP channel nums continue counting where AP left off..but xy pos only had 384 electrodes...subtract difference?
+            enabled_LFP_channel_names = ['CH' + str(int(ch) - 384) for ch in enabled_LFP_channel_nums]
+            electrode_xpos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            electrode_ypos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            if len(electrode_xpos) < 384:
+                raise ValueError(
+                    "OE GUI METADATA is missing neuropixels channel position data...hardcode the settings.xml")
+            enabled_LFP_xpos = {k: electrode_xpos[k] for k in enabled_LFP_channel_names if k in electrode_xpos}
+            enabled_LFP_ypos = {k: electrode_ypos[k] for k in enabled_LFP_channel_names if k in electrode_ypos}
+            if type(chans) is tuple:
+                chans = list(chans)
+            selected_chans = chans + 1
+            #given that all old probe recordings only used the first bank of electrodes...physical chan pos is selected
+            selected_chans_physical = selected_chans
+            selected_chans_xypos = {str(ch): [enabled_LFP_xpos['CH' + str(ch)], enabled_LFP_ypos['CH' + str(ch)]] for ch
+                                    in chans if 'CH' + str(ch) in electrode_xpos}
+
         elif version[1] >= 6:
             # find settings file for record node with LFP data - jk, they all have the same information. Still need to find where "recorded channel" info is.
             # couple of files where a "subset" of channels was supposedly recorded still appear to have data for every channel...Can not find "record node" relevant parameters.
@@ -803,8 +821,10 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             
             # sort channels and get x/y pos
             channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys())
+            channel_bank = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'][ch_key]) for ch_key in info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys()]
             ch_prefix  = channel_nums[0][:2]
             channel_nums1 = np.sort([int(ch[2:]) for ch in channel_nums])
+            ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(channel_nums1, channel_bank)])
             channel_nums_sorted = [ch_prefix + str(ch) for ch in channel_nums1]
             ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
             ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
@@ -815,10 +835,13 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 chans = list(chans)
             idx = all_chans[chans].tolist()
             recChans1 = channel_nums1 + 1
+            recChans_physical = ch_nums_physical_corrected + 1
             selected_chans = np.take(recChans1, idx)
+            selected_chans_physical = np.take(recChans_physical, idx)
             selected_chans_xpos = np.take(channel_xpos, idx)
             selected_chans_ypos = np.take(channel_ypos, idx)
-            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans, range(len(selected_chans)))}
+            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans_physical, range(len(selected_chans_physical)))}
+            probe = ['NPX']
     else:
         for openephys_folder, tarfile_fullpath, tarfile_relpath in \
                 zip(experiment_openephys_folder, experiment_openephys_tarfile,
@@ -875,10 +898,13 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             selected_data = np.take(data_files, idx)
             recChans1 = [ch.split('CH')[1] for ch in recChans_list]
             selected_chans = np.take(recChans1, idx)
+            # to make things match between neuropixels and UCLA(which already should be in the physical channel nums) remake the selected_chans with different name
+            selected_chans_physical = selected_chans
             selected_probe_chans = np.take(recChan_probe, idx)
             selected_chans_xypos = {ch:all_chans_xy[ch] for ch in selected_probe_chans}
+            probe = ['UCLA']
 
-    selected_chans_str = [str(ch) for ch in selected_chans]
+    selected_chans_physical_str = [str(ch) for ch in selected_chans_physical]
 
     # create list of files found in temporary folder for open-ephys or binary format and check if selected channel files exist and load data. If binary and file exists just load data.
     list_of_tmpfiles = []
@@ -1026,7 +1052,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
     continuous_data_list.append(np.concatenate(continuous_data, axis=0))
     timestamp0_list.append(timestamp0)
 
-    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_str
+    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_physical_str, probe
 
 
 # def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
