@@ -25,6 +25,8 @@ from nems import Model
 from nems.layers.base import Layer, Phi, Parameter
 import nems.visualization.model as nplt
 from nems0.modules.nonlinearity import _dlog
+from nems_lbhb.motor.free_tools import compute_d_theta, \
+    free_scatter_sum, dlc2dist
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +43,6 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
 
     try:
         df_siteinfo = get_spike_info(siteid=siteid, save_to_db=False)
-        df_siteinfo
         a1cellids = df_siteinfo.loc[(df_siteinfo['area']=='A1') | (df_siteinfo['area']=='BS')].index.to_list()
     except:
         df = db.pd_query(f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'")
@@ -58,7 +59,6 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     ex = BAPHYExperiment(parmfile=parmfile)
     # print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-
     if mono:
         extops = {'mono': True}
     else:
@@ -67,10 +67,10 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
                            dlc=True, recache=recache, rasterfs=rasterfs,
                            dlc_threshold=dlc_threshold, fill_invalid='interpolate', **extops)
 
+    rec = impute_multi(rec, sig='dlc', empty_values=None, keep_dims=dlc_chans)['rec']
+    #rec = dlc2dist(rec, smooth_win=2, keep_dims=dlc_chans)
     dlc_data = rec['dlc'][:, :]
     dlc_valid = np.sum(np.isfinite(dlc_data), axis=0, keepdims=True) > 0
-
-    rec = impute_multi(rec, sig='dlc', empty_values=None, keep_dims=dlc_chans)['rec']
 
     rec['dlcsh'] = rec['dlc'].shuffle_time(rand_seed=1000)
     rec['dlc_valid'] = rec['dlc']._modified_copy(data=dlc_valid, chans=['dlc_valid'])
@@ -116,12 +116,12 @@ def free_fit(rec, **options):
 
     est = est.apply_mask()
     val = val.apply_mask()
-    print(est['resp'].shape, est['stim'].shape)
+    print(est['resp'].shape, est['stim'].shape, est['dlc'].shape)
 
-    acount=10
+    acount=8
     dcount=4
     tcount = acount+dcount
-    l2count = 10
+    l2count = 8
     cellcount = len(cellids)
     input_count = rec['stim'].shape[0]
     dlc_count = rec['dlc'].shape[0]
@@ -129,9 +129,9 @@ def free_fit(rec, **options):
     if dcount>0:
         layers = [
             WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
-            FIR(shape=(10, 1, acount), input='prediction', output='prediction'),
+            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             WeightChannels(shape=(dlc_count, 1, dcount), input='dlc', output='space'),
-            FIR(shape=(3, 1, dcount), input='space', output='space'),
+            FIR(shape=(4, 1, dcount), input='space', output='space'),
             ConcatSignals(input=['prediction','space'], output='prediction'),
             RectifiedLinear(shape=(1, tcount), input='prediction', output='prediction',
                             no_offset=False, no_shift=False),
@@ -156,7 +156,7 @@ def free_fit(rec, **options):
         fitter_options = {'cost_function': 'nmse',
                           'early_stopping_delay': 5,
                           'early_stopping_patience': 10,
-                          'early_stopping_tolerance': 1e-4,
+                          'early_stopping_tolerance': 1e-3,
                           'validation_split': 0,
                           'learning_rate': 1e-2, 'epochs': 2000
                           }

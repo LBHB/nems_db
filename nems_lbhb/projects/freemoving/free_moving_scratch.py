@@ -6,6 +6,8 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.interpolate import LinearNDInterpolator
 from scipy.ndimage import gaussian_filter
+import datetime
+import os
 
 from nems0 import db
 import nems0.epoch as ep
@@ -21,7 +23,9 @@ from nems_lbhb.motor.free_tools import compute_d_theta, \
 
 USE_DB = True
 
-figpath = '/auto/users/svd/docs/current/grant/r21_free_moving/eps/'
+dt = datetime.date.today().strftime("%Y-%m-%d")
+figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
+os.makedirs(figpath, exist_ok=True)
 
 if USE_DB:
     siteid = "PRN034a"
@@ -59,7 +63,7 @@ rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
                        **extops)
 
 # generate 'dist' signal from dlc signal
-rec = dlc2dist(rec, ref_x0y0=None, smooth_win=2,
+rec = dlc2dist(rec, ref_x0y0=None, smooth_win=1,
                egocentric_velocity=False, verbose=False)
 
 # pull out relevant signals
@@ -341,7 +345,7 @@ cells = a1idx[np.linspace(0,len(a1idx)-1, 24).astype(int)]
 cells = a1idx[np.linspace(0, 60, 60).astype(int)]
 
 USE_VEL = 'space'
-DO_DIV = False
+DO_DIV = True
 
 for USE_VEL in ['dist', 'rotation']:
 
@@ -378,20 +382,25 @@ for USE_VEL in ['dist', 'rotation']:
 
         r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
         p = np.nanmean(r, axis=0, keepdims=True)
+        nr = np.nansum(np.isfinite(r), axis=0, keepdims=True)
+        psum = np.nansum(r, axis=0, keepdims=True)
+        p = (psum-r)/(nr-1)
 
         if DO_DIV:
             e = (r + 0.1) / (p + 0.1) - 1
         else:
             e = (r - p) / (p + 0.1)
         # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
-
+        #e[:,p[0,:]==0]=np.nan
+        e[:,nr[0,:]<minreps]=np.nan
         eall = e[dallgoodidx]
         e = e[goodidx]
 
         mm = np.zeros((len(ll) - 1, len(tt) - 1)) * np.nan
         for i_, l_ in enumerate(ll[:-1]):
             for j_, t_ in enumerate(tt[:-1]):
-                v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & (t < tt[j_ + 1])
+                v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & \
+                     (t < tt[j_ + 1]) & np.isfinite(e)
                 if (v_.sum() > 0):
                     if (np.nanstd(e[v_]) > 0):
                         mm[i_, j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
@@ -494,11 +503,14 @@ if SHOW_FULL_SUM:
 
         r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
         p = np.nanmean(r, axis=0, keepdims=True)
+        nr = np.nansum(np.isfinite(r), axis=0, keepdims=True)
 
         if DO_DIV:
             e = (r + 0.1) / (p + 0.1) - 1
         else:
             e = (r - p) / (p + 0.1)
+
+        e[:,nr[0,:]<minreps]=np.nan
 
         #goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
         eall = e[dallgoodidx]
@@ -506,10 +518,11 @@ if SHOW_FULL_SUM:
         el = e[lgoodidx]
         e = e[pgoodidx]
 
+        # compute heatmaps
         mm = np.zeros((len(ll0)-1,len(tt0)-1)) * np.nan
         for i_,l_ in enumerate(ll0[:-1]):
             for j_,t_ in enumerate(tt0[:-1]):
-                v_ = (d0>=l_)&(d0<ll0[i_+1]) & (t0>=t_) &(t0<tt0[j_+1])
+                v_ = (d0>=l_)&(d0<ll0[i_+1]) & (t0>=t_) &(t0<tt0[j_+1]) & np.isfinite(e)
                 if (v_.sum()>0):
                     if (np.nanstd(e[v_])>0):
                         mm[i_,j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
@@ -517,6 +530,18 @@ if SHOW_FULL_SUM:
                         mm[i_,j_] = np.nanmean(e[v_])
         mm[np.isnan(nn0)]=0
 
+        mmv = np.zeros((len(llv)-1,len(ttv)-1)) * np.nan
+        for i_,l_ in enumerate(llv[:-1]):
+            for j_,t_ in enumerate(ttv[:-1]):
+                v_ = (dv>=l_)&(dv<llv[i_+1]) & (tv>=t_) &(tv<ttv[j_+1]) & np.isfinite(ev)
+                if (v_.sum()>0):
+                    if (np.nanstd(ev[v_])>0):
+                        mmv[i_,j_] = np.nanmean(ev[v_]) / np.nanstd(ev[v_])
+                    else:
+                        mmv[i_,j_] = np.nanmean(ev[v_])
+        mmv[np.isnan(nnv)]=0
+
+        # option to interpolate (not used)
         x = (ll[:-1]+ll[1:])/2
         y = (tt[:-1]+tt[1:])/2
         X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
@@ -525,21 +550,11 @@ if SHOW_FULL_SUM:
         interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
                                       mm[valididx], fill_value=np.nanmean(mm))
 
+        # plot heatmaps
         Z = mm
         #Z = interp(X, Y)
-        zsm = 0.5
+        zsm = 0.6
         Z = gaussian_filter(Z, [zsm, zsm])
-
-        mmv = np.zeros((len(llv)-1,len(ttv)-1)) * np.nan
-        for i_,l_ in enumerate(llv[:-1]):
-            for j_,t_ in enumerate(ttv[:-1]):
-                v_ = (dv>=l_)&(dv<llv[i_+1]) & (tv>=t_) &(tv<ttv[j_+1])
-                if (v_.sum()>0):
-                    if (np.nanstd(ev[v_])>0):
-                        mmv[i_,j_] = np.nanmean(ev[v_]) / np.nanstd(ev[v_])
-                    else:
-                        mmv[i_,j_] = np.nanmean(ev[v_])
-        mmv[np.isnan(nnv)]=0
 
         #vmin,vmax = -np.abs(mm).max(),np.abs(mm).max()
         vmin,vmax = -0.5, 0.5
@@ -587,19 +602,18 @@ if SHOW_FULL_SUM:
 
     # counts of position bins
     ax = f.add_subplot(rows,4,3)
-    ax.imshow(nn0, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], aspect='auto')
+    ax.imshow(nn0, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], interpolation='none', aspect='auto')
     ax.set_title(f'n pos')
     ax.set_xticklabels([])
 
     # counts of dist/velocity bins
     ax = f.add_subplot(rows,4,4)
-    ax.imshow(nnv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], aspect='auto')
+    ax.imshow(nnv, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], interpolation='none', aspect='auto')
     ax.set_title(f'n vel')
     ax.set_xticklabels([])
 
     plt.suptitle(resp.chans[0].split("-")[0])
     plt.tight_layout()
-
 
     f.savefig(f'{figpath}example_space_mod.pdf')
 

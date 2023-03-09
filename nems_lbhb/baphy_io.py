@@ -4211,8 +4211,11 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     for c in cellid:
         dcell[c] = {'siteid': siteid}
         chstr = str(int(c.split("-")[1]))
+        if len(d['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
 
-        dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
         if dcell[c]['layer'].isnumeric():
             dcell[c]['area'] = d['site area']
         else:
@@ -4295,7 +4298,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
                 " gPenetration INNER JOIN gCellMaster on gPenetration.id=gCellMaster.penid" +
                 f" WHERE gCellMaster.cellid='{siteid}'")
         dp = db.pd_query(sql)
-        numchans = dp.loc[0,'numchans']
+        numchans = np.max([dp.loc[0,'numchans'], df_cell.channum.max()])
         area_list = [''] * numchans
         area_list[-1]=default_area
         for i, r in df_cell.iterrows():

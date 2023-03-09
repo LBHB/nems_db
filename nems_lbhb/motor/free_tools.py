@@ -112,7 +112,7 @@ def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
 
     return d, theta, d_vel, theta_vel, d_fwd, d_lat
 
-def dlc2dist(rec, rasterfs=1, norm=False, **d_theta_opts):
+def dlc2dist(rec, rasterfs=1, norm=False, keep_dims=None, **d_theta_opts):
     """
     transform dlc signal into a new dist signal and add to recording
     :param rec:
@@ -123,7 +123,8 @@ def dlc2dist(rec, rasterfs=1, norm=False, **d_theta_opts):
     newrec = rec.copy()
 
     # fill in missing values where possible (when other values exist at that time)
-    newrec = impute_multi(newrec, sig='dlc', empty_values=np.nan, norm=norm)['rec']
+    newrec = impute_multi(newrec, sig='dlc', empty_values=np.nan,
+                          norm=norm, keep_dims=keep_dims)['rec']
     dlc_data_imp = newrec['dlc'][:, :]
     rasterfs = newrec['dlc'].fs
 
