@@ -803,39 +803,36 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                                     in chans if 'CH' + str(ch) in electrode_xpos}
 
         elif version[1] >= 6:
-            # find settings file for record node with LFP data - jk, they all have the same information. Still need to find where "recorded channel" info is.
-            # couple of files where a "subset" of channels was supposedly recorded still appear to have data for every channel...Can not find "record node" relevant parameters.
-            # Going to move forward under the assumption that every channel is recorded.
 
-            # gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/continuous.dat.gz', recursive=True)
-            # for f in gz_file_paths:
-            #     if os.path.dirname(f).endswith('-LFP'):
-            #         if os.path.basename(f).split('.')[0] == 'continuous':
-            #             gz_LFP_filepath = os.path.dirname(f)
-            #     else:
-            #         continue
-            # # get settings file in record node directory with LFP data
-            # record_node_path = gz_LFP_filepath[:gz_LFP_filepath.find("/exp")+1]
-            # settings_file = glob.glob(record_node_path + '/**/settings.xml', recursive=True)[0]
-            # info = oes.XML2Dict(settings_file)
-            
             # sort channels and get x/y pos
             channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys())
             channel_bank = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'][ch_key]) for ch_key in info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys()]
             ch_prefix  = channel_nums[0][:2]
-            channel_nums1 = np.sort([int(ch[2:]) for ch in channel_nums])
-            ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(channel_nums1, channel_bank)])
-            channel_nums_sorted = [ch_prefix + str(ch) for ch in channel_nums1]
+            # get raw channel numbers in order to be used with bank info for physical channel assignment
+            oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
+            # correct for physical location by using channel bank
+            ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
+            # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
+            # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
+            zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
+            sorted_oe_phys = sorted(zipped_oe_phys)
+            sorted_oe_phys_tupes = zip(*sorted_oe_phys)
+            sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
+            # get keys in sorted order data will be loaded in
+            sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
+            # get channel xy pos in oe number scheme
             ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
             ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
-            channel_xpos = [ELECTRODE_XPOS[ch] for ch in channel_nums_sorted]
-            channel_ypos = [ELECTRODE_YPOS[ch] for ch in channel_nums_sorted]
-            all_chans = channel_nums1
+            # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
+            channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
+            channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
+            # for channel subset selection in baphy_experiment - get recording method (rawchans=)
+            all_chans = sorted_oe
             if type(chans) is tuple:
                 chans = list(chans)
             idx = all_chans[chans].tolist()
-            recChans1 = channel_nums1 + 1
-            recChans_physical = ch_nums_physical_corrected + 1
+            recChans1 = sorted_oe + 1
+            recChans_physical = sorted_physical + 1
             selected_chans = np.take(recChans1, idx)
             selected_chans_physical = np.take(recChans_physical, idx)
             selected_chans_xpos = np.take(channel_xpos, idx)
