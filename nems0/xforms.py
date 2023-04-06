@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import nems0
+import nems0.epoch as ep
 import nems0.db as nd
 import nems0.metrics.api as metrics
 import nems0.plots.api as nplt
@@ -393,17 +394,20 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
         for i, r in enumerate(rec_list):
             newrec = r.copy()
             s = newrec[sig].rasterize()
-
-            if log_compress != 'None':
-               from nems0.modules.nonlinearity import _dlog
-               fn = lambda x: _dlog(x, -log_compress)
-               s=s.transform(fn, sig)
-            newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
-            new_rec_list.append(newrec)
-            if (sig=='stim') and (i==0):
-                b=newrec[sig].norm_baseline
-                g=newrec[sig].norm_gain
-            log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+            if norm_method=='sqrt':
+                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
+            else:
+                if log_compress != 'None':
+                   from nems0.modules.nonlinearity import _dlog
+                   fn = lambda x: _dlog(x, -log_compress)
+                   s=s.transform(fn, sig)
+                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
+                new_rec_list.append(newrec)
+                if (sig=='stim') and (i==0):
+                    b=newrec[sig].norm_baseline
+                    g=newrec[sig].norm_gain
+                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
             
         if return_reclist:
             return {'rec': rec_list[0], 'rec_list': new_rec_list}
@@ -454,16 +458,16 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         raise ValueError("Inputs modelspec and est required")
 
     # convert signal matrices to nems-lite format
-    X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
-    Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
-    if 'state' in est.signals.keys():
-        S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
-    else:
-        S_est = None
     if backend == 'scipy':
 
-        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': max_iter}}
-
+        X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
+        else:
+            S_est = None
+        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
+        log.info(f"{fitter_options}")
         try:
             modelspec.layers[-1].skip_nonlinearity()
             fit_stage_1 = True
@@ -484,16 +488,24 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 
     elif backend=='tf':
         # convert signal matrices to nems-lite format
-        X_est = np.expand_dims(X_est, axis=0)
-        Y_est = np.expand_dims(Y_est, axis=0)
-        if S_est is not None:
-            S_est = np.expand_dims(S_est, axis=0)
+        X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+        
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+        else:
+            S_est = None
+            
+        #X_est = np.expand_dims(X_est, axis=0)
+        #Y_est = np.expand_dims(Y_est, axis=0)
+        #if S_est is not None:
+        #    S_est = np.expand_dims(S_est, axis=0)
 
         fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
                           'early_stopping_patience': early_stopping_patience,
                           'early_stopping_tolerance': tolerance,
                           'validation_split': validation_split,
-                          'learning_rate': learning_rate*2, 'epochs': int(max_iter/2),
+                          'learning_rate': learning_rate*10, 'epochs': int(max_iter/2),
                           }
         
         try:
@@ -601,6 +613,7 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
         save_resource(fig_uri, data=figure)
     save_resource(os.path.join(destination, 'log.txt'), data=log)
     save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
+    return destination
 
 
 def init_from_keywords(keywordstring, meta={}, IsReload=False,
@@ -826,15 +839,21 @@ def sev(kw):
     ops = kw.split('.')[1:]
     parms={'epoch_regex': '^STIM'}
     continuous=False
-    if 'seq' in ops:
-        parms['epoch_regex']='^STIM_se'
-    if 'cont' in ops:
-        continuous=True
     for op in ops:
-        if op.startswith("k"):
-            parms['keepfrac']=int(op[1:]) / 100
+        if op=='seq':
+            parms['epoch_regex'] = '^STIM_se'
+        elif op == 'cont':
+            continuous = True
+        elif op == 'mono':
+            parms['selection'] = 'mono'
+        elif op == 'bin':
+            parms['selection'] = 'bin'
+        elif op == 'match':
+            parms['selection'] = 'match'
+        elif op.startswith("k"):
+            parms['keepfrac'] = int(op[1:]) / 100
         elif op.startswith("f"):
-            parms['filemask']=op[1:]
+            parms['filemask'] = op[1:]
         else:
             parms['epoch_regex'] = op
     
@@ -860,10 +879,14 @@ def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, keepfra
         val_list.append(val)
 
     if return_reclist:
-        return {'est': est_list[0], 'val': val_list[0], 'est_list': est_list, 'val_list': val_list}
+        c = {'est': est_list[0], 'val': val_list[0], 'est_list': est_list, 'val_list': val_list}
     else:
-        return {'est': est, 'val': val}
+        c = {'est': est, 'val': val}
 
+    if context.get('selection', '') in ['mono','bin','match']:
+        c['eval_binaural'] = True
+
+    return c
 
 @xform()
 def tev(kw):
@@ -1449,7 +1472,7 @@ def predict(modelspec, est, val, est_list=None, val_list=None, jackknifed_fit=Fa
 
 
 def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, rec_list=None, fn='standard_correlation',
-                           rec=None, use_mask=True, IsReload=False, **context):
+                           rec=None, use_mask=True, eval_binaural=False, IsReload=False, **context):
     '''
     standard_correlation: average all correlation metrics and add
                           to first modelspec only.
@@ -1471,6 +1494,20 @@ def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, re
             modelspec.set_cell(cellidx)
             log.info(f'cell_index: {cellidx}')
         modelspec = corr_fn(est, val, modelspec=modelspec, rec=rec, use_mask=use_mask)
+
+        if eval_binaural:
+            val_epochs = ep.epoch_names_matching(val['resp'].epochs, "^STIM_")
+            mono_epochs = [e for e in val_epochs if 'NULL' in e]
+            bin_epochs = [e for e in val_epochs if 'NULL' not in e]
+            val = val.create_mask(mono_epochs, mask_name='mono_mask')
+            val = val.create_mask(bin_epochs, mask_name='bin_mask')
+            modelspec_mono = modelspec.copy()
+            # don't pass rec so set to None and skip r_ceiling calc for subset evals
+            modelspec_mono = corr_fn(est, val, modelspec=modelspec_mono, use_mask='mono_mask')
+            modelspec_bin = modelspec.copy()
+            modelspec_bin = corr_fn(est, val, modelspec=modelspec_bin, use_mask='bin_mask')
+            modelspec.meta['r_test_mono'] = modelspec_mono.meta['r_test']
+            modelspec.meta['r_test_bin'] = modelspec_bin.meta['r_test']
 
         if model_engine == 'nems-lite':
             pass
@@ -1539,6 +1576,9 @@ def add_summary_statistics(est, val, modelspec, est_list=None, val_list=None, re
                 spont_rate = np.nanmean(prestimsilence, axis=(0, 2))
             else:
                 spont_rate = np.nanmean(prestimsilence)
+        elif prestimsilence.shape[0]>0:
+            log.info('Zero prestimsilence?')
+            spont_rate=0
         else:
             try:
                 prestimsilence = resp.extract_epoch('TRIALPreStimSilence')
@@ -1576,19 +1616,22 @@ def add_summary_statistics_by_condition(est, val, modelspec, evaluation_conditio
             epochs_list=evaluation_conditions,rec=rec, use_mask=use_mask)
     return {'modelspec': modelspec}
 
-def plot_summary(modelspec, val, figures=None, IsReload=False,
+def plot_summary(modelspec, val, IsReload=False,
                  figures_to_load=None, time_range = None, **context):
     # CANNOT initialize figures=[] in optional args our you will create a bug
 
-    if figures is None:
-        figures = []
-    if not IsReload:
+    figures = context.get('figures', [])
+    if IsReload:
+        if figures_to_load is not None:
+            figures.extend([load_resource(f) for f in figures_to_load])
+
+    elif modelspec.meta.get('fitter', 'basic')=='ccnorm':
+        from nems0.plots.state import cc_comp
+        return cc_comp(modelspec=modelspec, val=val, **context)
+    else:
         fig = modelspec.quickplot(time_range=time_range)
         # Needed to make into a Bytes because you can't deepcopy figures!
         figures.append(nplt.fig2BytesIO(fig))
-    else:
-        if figures_to_load is not None:
-            figures.extend([load_resource(f) for f in figures_to_load])
 
     return {'figures': figures}
 

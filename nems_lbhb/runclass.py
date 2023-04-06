@@ -303,9 +303,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     :param f_max: float
         gtgram max frequency
     :param mono: boolean [False]
-        if True, collapse wavs to single channel (dumb control for binaural)
-    :param binaural:
-        if True, apply model to simulate sound at each ear. Currently, a very dumb HRTF
+        if True, collapse into single channel but create fake shuffled channel to match dimensionality
+    :param binaural: {None, str}
+        if "crude", apply model to simulate sound at each ear. Currently, a very dumb HRTF
     :param options: dict
         extra stuff to pass through
     :return:
@@ -317,7 +317,12 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
 
     if (ReferenceClass=='BigNat') & \
             (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
-        sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
+        # Binaural natural sounds
+        sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
+        sound_root = sound_root.replace("H:/", "/auto/data/")
+        sound_root = sound_root.replace("E:/sounds/v2", "/auto/data/sounds/BigNat/v2")
+        sound_root = sound_root.replace("E:/", "/auto/data/")
+        sound_root = Path(sound_root)
 
         #stim_epochs = exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()
         #print(exptevents.loc[exptevents.name.str.startswith("Stim"),'name'].tolist()[:10])
@@ -325,6 +330,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         #wav2=[e.split(' , ')[1].split("+")[0].split(":")[0].replace("STIM_","") for e in stim_epochs]
 
         stim_epochs = exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names']
+        #stim_epochs=[f.replace('.wav','') for f in stim_epochs]
         #print(exptparams['TrialObject'][1]['ReferenceHandle'][1]['Names'][:10])
         wav1=[e.split("+")[0].split(":")[0] for e in stim_epochs]
         chan1=[int(e.split("+")[0].split(":")[1])-1 for e in stim_epochs]
@@ -349,7 +355,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
 
     elif (ReferenceClass == 'BigNat') | (ReferenceClass == 'NaturalSounds'):
         if ReferenceClass == 'BigNat':
-            sound_root = Path(exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("H:/", "/auto/data/"))
+            sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
+            sound_root = sound_root.replace("H:/", "/auto/data/")
+            sound_root = Path(sound_root)
         else:
             subset = ReferenceHandle['Subsets']
             if subset == 1:
@@ -396,8 +404,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             wav1 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav1,type1)]
             wav2 = [paths[t]+'/'+w+'_'+t if t in types else w for w,t in zip(wav2,type2)]
 
-            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if e.split("_")[0] != 'null' else 0 for e in stim_epochs]
-            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if e.split("_")[1] != 'null' else 0 for e in stim_epochs]
+            chan1 = [int(e.split("_")[0].split("-")[3]) - 1 if (e.split("_")[0] != 'null') and (len(e.split("_")[0].split("-"))>3) else 0 for e in stim_epochs]
+            chan2 = [int(e.split("_")[1].split("-")[3]) - 1 if (e.split("_")[1] != 'null') and (len(e.split("_")[1].split("-"))>3) else 0 for e in stim_epochs]
         else:
             stim_epochs = exptevents.loc[exptevents.name.str.startswith("STIM_"),'name']
             stim_epochs = list(set([s.replace("STIM_","") for s in list(stim_epochs)]))
@@ -429,12 +437,15 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         file_unique = wav1.copy()
         file_unique.extend(wav2)
         file_unique = list(set(file_unique))
-        file_unique = [f for f in file_unique if f != 'null']
+        file_unique = [f.replace('wav','') for f in file_unique if f != 'null']
 
         log.info('NOTE: Stripping spaces from epoch names in OverlappingPairs files')
         stim_epochs = [s.replace(" ", "") for s in stim_epochs]
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
+
+    if len(stim_epochs) == 0:
+        return {}, [], {}
 
     max_chans = np.max(np.concatenate([np.array(chan1),np.array(chan2)]))+1
     max_chans_was = max_chans
@@ -452,13 +463,15 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     wav_unique = {}
     fs0 = None
     for filename in file_unique:
+        filename_ = filename.replace('.wav','')
+
         if ReferenceClass == "OverlappingPairs":
             try:
-                fs, w = wavfile.read(Path(bg_root) / (filename + '.wav'))
+                fs, w = wavfile.read(Path(bg_root) / (filename_ + '.wav'))
             except:
-                fs, w = wavfile.read(Path(fg_root) / (filename + '.wav'))
+                fs, w = wavfile.read(Path(fg_root) / (filename_ + '.wav'))
         else:
-            fs, w = wavfile.read(sound_root / (filename+'.wav'))
+            fs, w = wavfile.read(sound_root / (filename_ + '.wav'))
         if w.dtype.name == 'int16':
             w = w / 32767
         elif w.dtype.name == 'int32':
@@ -551,10 +564,16 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
                 w[:, [c2]] += w2
+            elif type(binaural) is float:
+                db_atten = binaural
+                factor = 10**(-db_atten/20)
+                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+
             else:
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
-                db_atten = 10
+                db_atten = 6
                 factor = 10**(-db_atten/20)
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
@@ -564,16 +583,22 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             w /= sf
 
             wav_all[n] = w
-
+    if (binaural is None) | (binaural == False):
+        log.info('No binaural processing')
+    else:
+        log.info(f'binaural db_atten = {db_atten}')
     # pad with zeros and convert to from wav to output format (or passthrough wav)
     sg_unique = {}
     stimparam = {'rasterfs': rasterfs}
 
-    if stimfmt=='wav':
-        for f,w in wav_all.items():
-            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(fs*PreStimSilence)),max_chans)),
+    if stimfmt == 'wav':
+        for f, w in wav_all.items():
+            if rasterfs != fs:
+                newlen = int(len(w)/fs *rasterfs)
+                w = resample(w, newlen)
+            sg_unique[f] = np.concatenate([np.zeros((int(np.floor(rasterfs*PreStimSilence)),max_chans)),
                                          w,
-                                         np.zeros((int(np.floor(fs*PostStimSilence)),max_chans))],axis=0).T
+                                         np.zeros((int(np.floor(rasterfs*PostStimSilence)),max_chans))],axis=0).T
 
     elif stimfmt == 'nenv':
 

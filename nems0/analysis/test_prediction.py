@@ -120,7 +120,12 @@ def standard_correlation(est, val, modelspec=None, modelspecs=None, rec=None,
     ll_fit = np.zeros((out_chan_count, view_count))
 
     for i in range(view_count):
-        if ('mask' in val.signals.keys()) and use_mask:
+        if type(use_mask) is str:
+            v = val.set_view(i).apply_mask(mask_name=use_mask)
+            e = est.set_view(i*est_mult).apply_mask()
+            log.info(f"val use_mask={use_mask} shape={v['resp'].shape}")
+
+        elif ('mask' in val.signals.keys()):
             v = val.set_view(i).apply_mask()
             e = est.set_view(i*est_mult).apply_mask()
         else:

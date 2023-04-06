@@ -1524,5 +1524,41 @@ if __name__ == '__main__':
 
     pass
 
+def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
+                 empty_values=None, keep_dims=None, **ctx):
+    """
+    Fill in nan values using signals in other channels. Currently for inferring
+    missing values in DLC data
+    """
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer
+
+    if new_sig is None:
+        new_sig = sig
+
+    newrec = rec.copy()
+    data0 = rec[sig].rasterize().as_continuous()
+
+    imp = IterativeImputer(max_iter=10, random_state=0)
+    imp.fit(data0.T)
+    data_imp = imp.transform(data0.T).T
+    if empty_values is not None:
+        bad_values = np.isfinite(data0).sum(axis=0)==0
+        data_imp[:,bad_values] = empty_values
+    if keep_dims is not None:
+        data_imp = data_imp[:keep_dims,:]
+        new_chans = newrec[sig].chans[:keep_dims]
+    else:
+        new_chans = newrec[sig].chans
+
+    # normalize 0 to 1 - same scale for all channels
+    if norm:
+        data_imp -= np.nanmin(data_imp)
+        data_imp /= np.nanmax(data_imp)
+
+    newrec[new_sig] = newrec[sig]._modified_copy(data=data_imp, chans=new_chans)
+
+    return {'rec': newrec}
+
 
 

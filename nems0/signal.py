@@ -1359,6 +1359,15 @@ class RasterizedSignal(SignalBase):
 
         return sig
 
+    def normalize_sqrt(self, **opts):
+        '''
+        Take sqrt() of signal
+        '''
+        m = self._data / np.sqrt(np.abs(self._data) + (self._data==0))
+        sig = self._modified_copy(m)
+
+        return sig
+
     def normalized_by_mean(self):
         '''
         Returns a copy of this signal with each channel normalized to have a
@@ -1686,6 +1695,16 @@ class RasterizedSignal(SignalBase):
                                 epochs=epochs, chans=chans,
                                 safety_checks=False, **attr)
 
+    def decimate(self, stride=2, axis=-1):
+        l=self.shape[1]
+        if l & 0x1:
+            new_data = self._data[..., ::stride].copy()
+            new_data[:, 0:-1] = (new_data[:, 0:-1] + self._data[..., 1::stride])
+        else:
+            new_data = (self._data[..., ::stride] + self._data[..., 1::stride])
+        new_fs = int(self.fs/stride)
+        return self._modified_copy(data=new_data, fs=new_fs)
+
     def extract_channels(self, chans=None, chan_idx=None, name=None):
         '''
         Returns a new signal object containing only the specified
@@ -1704,84 +1723,6 @@ class RasterizedSignal(SignalBase):
             name = self.name
         return self._modified_copy(array[s], chans=chans, name=name)
 
-    # def extract_epochs(self, epoch_names, overlapping_epoch=None, mask=None):
-    #     '''
-    #     Returns a dictionary of the data matching each element in epoch_names.
-    #
-    #     Parameters
-    #     ----------
-    #     epoch_names : list OR string
-    #         if list, list of epoch names to extract. These will be keys in the
-    #         result dictionary.
-    #         if string, will find matches via nems0.epoch.epoch_names_matching
-    #
-    #     chans : {None, iterable of strings}
-    #         Names of channels to return. If None, return the full set of
-    #         channels.  If an iterable of strings, return those channels (in the
-    #         order specified by the iterable).
-    #
-    #     overlapping_epoch: {None, string}
-    #         if not None, only extracts epochs that overlap with occurrences
-    #         of overlapping epoch
-    #
-    #     mask: {None, signal}
-    #         if provided, onlye extract epochs overlapping periods where
-    #         mask.as_continuous()==True in all time bins
-    #
-    #     Returns
-    #     -------
-    #     epoch_datasets : dict
-    #         Keys are the names of the epochs, values are 3D arrays created by
-    #         `extract_epoch`.
-    #     '''
-    #     # TODO: Update this to work with a mapping of key -> Nx2 epoch
-    #     # structure as well.
-    #
-    #     if type(epoch_names) is str:
-    #         epoch_regex = epoch_names
-    #         epoch_names = epoch_names_matching(self.epochs, epoch_regex)
-    #
-    #     epoch_data_lens = self.epochs['name'].value_counts()[epoch_names].values
-    #     # early out to avoid errors
-    #     if not len(epoch_data_lens):
-    #         return {}
-    #
-    #     # need to reorder epochs dataframe to ensure that the indices are returned in the
-    #     # same order as the epochs we pulled from the dict; return to original order when done
-    #     old_index = self.epochs.index.values
-    #     self.epochs = self.epochs.sort_values('name')
-    #
-    #     epoch_mask = self.epochs['name'].isin(epoch_names)
-    #     epoch_indices = self.get_epoch_indices(epoch_mask, mask=mask)
-    #
-    #     # return epochs df to old order
-    #     self.epochs = self.epochs.loc[old_index]
-    #
-    #     signal_data = self.as_continuous()
-    #
-    #     n_chans = signal_data.shape[0]
-    #     n_samples = np.diff(epoch_indices, axis=1).max()
-    #
-    #     data_dict = {}
-    #
-    #     start = 0
-    #     # iterate through the epochs
-    #     for idx, (epoch, epoch_data_len) in enumerate(zip(epoch_names, epoch_data_lens)):
-    #
-    #         # build the array to hold the incoming epoch data
-    #         if signal_data.dtype == bool:
-    #             epoch_data = np.full((epoch_data_len, n_chans, n_samples), False, dtype=bool)
-    #         else:
-    #             epoch_data = np.full((epoch_data_len, n_chans, n_samples), np.nan)
-    #
-    #         # populate the newly built array with the appropriate signal data
-    #         for bound_idx, (lb, ub) in enumerate(epoch_indices[start: start + epoch_data_len]):
-    #             epoch_data[bound_idx, :, :] = signal_data[:, lb:ub]
-    #
-    #         data_dict[epoch] = epoch_data
-    #         start += epoch_data_len
-    #
-    #     return data_dict
 
     def replace_epoch(self, epoch, epoch_data, preserve_nan=True, mask=None):
         '''
@@ -2347,6 +2288,13 @@ class PointProcess(SignalBase):
         return sig.jackknife_by_epoch(njacks, jack_idx, epoch_name,
                                       tiled, invert, excise)
 
+    def decimate(self, stride=2, axis=-1):
+        """
+        for PointProcess, simply change the sampling rate
+        """
+        new_fs = int(self.fs/stride)
+        return self._modified_copy(data=self._data, fs=new_fs)
+
     @classmethod
     def concatenate_time(cls, signals):
         '''
@@ -2394,7 +2342,7 @@ class PointProcess(SignalBase):
             meta=base.meta,
             data=data,
             epochs=epochs,
-            safety_checks=False
+            safety_checks=False,
         )
 
     def append_time(self, new_signal):

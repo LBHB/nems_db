@@ -182,6 +182,37 @@ def evs(loadkey):
 
     return xfspec
 
+@xform()
+def ststim(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+    xfspec = [['nems0.preprocessing.concatenate_input_channels',
+               {'input_signals': ['state'],
+                'input_name': 'stim'}, ['rec'], ['rec']]]
+    return xfspec
+
+@xform()
+def dlc(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+
+    options = {'sig': 'dlc'}
+
+    ops = loadkey.split(".")
+    for op in ops:
+        if op.isnumeric():
+            options['keep_dims'] = int(op)
+        elif op == 'nan':
+            options['empty_values'] = np.nan
+
+    xfspec = [['nems_lbhb.preprocessing.impute_multi', options]]
+
+    return xfspec
+
 
 @xform()
 def st(loadkey):
@@ -219,12 +250,20 @@ def st(loadkey):
             this_sig = ["pupil"]
         elif l.startswith("ppp"):
             this_sig = ["pupiln"]
+        elif l.startswith("dlc"):
+            this_sig = ["dlc"]
         elif l.startswith("dlp"):
             this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
             this_sig = ["pupil_dup2"]
+        elif l.startswith("dm"):
+            if len(l) == 2:
+                dummy_count = 1
+            else:
+                dummy_count = int(l[2])
+            this_sig = [f"dummy{i}" for i in range(dummy_count)]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
@@ -843,6 +882,21 @@ def sm(load_key):
             {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
+
+@xform()
+def dec(kw):
+    options = kw.split('.')[1:]
+    strides = 1
+    signal = 'resp'
+    for op in options:
+        if op.startswith('s'):
+            strides = int(op[1:])
+        elif op.startswith('t'):
+            signal = op[1:]
+
+    xfspec=[['nems0.preprocessing.decimate_signal',
+            {'signal': signal, 'strides': strides}]]
+    return xfspec
 
 @xform()
 def rscsw(load_key, cellid, batch):

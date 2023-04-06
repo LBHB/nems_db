@@ -10,7 +10,7 @@ import shutil
 
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, desc, exc
+from sqlalchemy import create_engine, desc, exc, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.automap import automap_base
 import pandas.io.sql as psql
@@ -174,7 +174,7 @@ def pd_query(sql=None, params=None):
         d = pd.read_sql_query(sql=sql, con=engine)
     else:
         try:
-            d = pd.read_sql_query(sql=sql, con=engine, params=params)
+            d = pd.read_sql_query(sql=text(sql), con=engine.connect(), params=params)
         except exc.SQLAlchemyError as OpErr:
             if OpErr._message().count('Lost connection to MySQL server during query')>0:
                 log.warning('Lost connection to MySQL server during query, trying again.')
@@ -753,9 +753,9 @@ def update_results_table(modelspec, preview=None,
     Batches = db_tables['Batches']
     session = Session()
     results_id = None
-
-    for cellidx in range(modelspec.cell_count):
-        modelspec.cell_index = cellidx
+    cell_count = 1
+    for cellidx in range(cell_count):
+        #modelspec.cell_index = cellidx
         cellids = modelspec.meta.get('cellids', [modelspec.meta.get('cellid','CELL')])
         if ('r_test' in modelspec.meta.keys()) and (len(modelspec.meta['r_test'])<len(cellids)):
             cellids=cellids[:len(modelspec.meta['r_test'])]
@@ -885,8 +885,10 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
                     v = modelspec.meta[k][i[0]]
                 else:
                     v = modelspec.meta[k][0]
+                    
             except BaseException:
                 v = modelspec.meta[k]
+
             finally:
                 try:
                     v = np.asscalar(v)
@@ -900,6 +902,8 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
             v = modelspec.meta[k]
     else:
         v = default
+    if isinstance(v, np.ndarray):
+        v = v.item()
 
     return v
 
@@ -1047,10 +1051,11 @@ def get_batch_cell_data(batch=None, cellid=None, rawid=None, label=None):
     engine = Engine()
     # eg, sql="SELECT * from Data WHERE batch=301 and cellid="
     params = ()
+    #" AND substring(Data.cellid,1,locate('_',Data.cellid)-1)=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
     sql = ("SELECT DISTINCT Data.*,sCellFile.goodtrials" +
            " FROM Data LEFT JOIN sCellFile " +
            " ON (Data.rawid=sCellFile.rawid " +
-           " AND substring(Data.cellid,1,locate('_',Data.cellid)-1)=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
+           " AND Data.cellid=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
            " WHERE 1")
     if batch is not None:
         sql += " AND Data.batch=%s"
@@ -1080,17 +1085,19 @@ def get_batch_cell_data(batch=None, cellid=None, rawid=None, label=None):
     return d
 
 
-def get_batches(name=None):
+def get_batches(name=None, verbose=True):
     # eg, sql="SELECT * from Batches WHERE batch=301"
-    engine = Engine()
     params = ()
     sql = "SELECT *,id as batch FROM sBatch WHERE 1"
     if name is not None:
         sql += " AND name like %s"
         params = params+("%"+name+"%",)
-    d = pd.read_sql(sql=sql, con=engine, params=params)
-
-    return d
+    d = pd_query(sql=sql, params=params)
+    if verbose:
+        for i, r in d.iterrows():
+            print(f"{r['batch']}: {r['name']} runclassid={r.runclassid}")
+    else:
+        return d
 
 
 def get_cell_files(cellid=None, runclass=None, rawid=None):

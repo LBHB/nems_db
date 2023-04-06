@@ -1451,6 +1451,9 @@ def _lookup_fn_at(fn_path, ignore_table=False):
     else:
         api, fn_name = nems0.utils.split_to_api_and_fn(fn_path)
         api = api.replace('nems_db.xform', 'nems_lbhb.xform')
+
+        # backwards compatibility for models fit pre-nems lite
+        api = api.replace('nems.', 'nems0.')
         try:
             api_obj = importlib.import_module(api)
         
@@ -1580,6 +1583,9 @@ def evaluate(rec, modelspec, start=None, stop=None):
     for m in modelspec[start:stop]:
         if type(m) is dict:
             fn = _lookup_fn_at(m['fn'])
+            if fn is None:
+                tfn = m['fn'].replace("nems.", "nems0.")
+                fn = _lookup_fn_at(tfn)
         else:
             fn = m.eval
         fn_kwargs = m.get('fn_kwargs', {})

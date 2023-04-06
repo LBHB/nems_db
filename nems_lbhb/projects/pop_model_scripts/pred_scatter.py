@@ -11,6 +11,7 @@ import nems
 import nems0.db as nd
 import nems0.xform_helper as xhelp
 from nems_lbhb.analysis.statistics import arrays_to_p
+from nems0.metrics.mi import mutual_information
 
 from pop_model_utils import mplparams, get_significant_cells, SIG_TEST_MODELS, \
     ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, DOT_COLORS, shortnames, base_path, a1, peg, \
@@ -72,6 +73,71 @@ def plot_pred_scatter(batch, modelnames, labels=None, colors=None, ax=None):
     ax.set_ylabel(f'{labels[1]}\n(median r={ceiling_scores[modelnames[1]].median():.3f})', color=colors[1])
 
     return fig, n_sig, n_nonsig
+
+def load_pred(batch, cellids, modelnames):
+
+    pred_data = []
+    for i,cellid in enumerate(cellids):
+        # LN
+        xf0,ctx0 = xhelp.load_model_xform(cellid=cellid,batch=batch,modelname=modelnames[0])
+        #CNN
+        xf1,ctx1 = xhelp.load_model_xform(cellid=cellid,batch=batch,modelname=modelnames[1],
+                                          eval_model=False)
+        ctx1['val'] = ctx1['modelspec'].evaluate(rec=ctx0['val'].copy())
+
+        pred_data.append({})
+        pred_data[i]['cellid'] = cellid
+        pred_data[i]['pred0'] = ctx0['val']['pred'].as_continuous()
+        pred_data[i]['pred1'] = ctx1['val']['pred'].as_continuous()
+        pred_data[i]['resp'] = ctx0['val']['resp'].as_continuous()
+
+    return pred_data
+
+def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True, L=12):
+
+    if labels is None:
+        labels = ['Prediction correlation','Mutual information']
+    if colors is None:
+        colors = ['black', 'black']
+    df = pd.DataFrame()
+    existing_cellids=[]
+    if reload:
+        try:
+            df = pd.read_csv(f'xc_mi_L{L}.csv', index_col=0)
+            existing_cellids = df.index.to_list()
+        except:
+            print('initializing df')
+
+    significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+    #significant_cells = significant_cells[:50]
+    significant_cells = [c for c in significant_cells if c not in existing_cellids]
+    modelnames = [SIG_TEST_MODELS[1], SIG_TEST_MODELS[0]]
+    pred_data = load_pred(batch, significant_cells, modelnames)
+
+    for i, p in enumerate(pred_data):
+        cellid = p['cellid']
+        df.loc[cellid,'mi0'], n0 = mutual_information(p['pred0'].flatten(), p['resp'].flatten(), L=L)
+        df.loc[cellid,'mi1'], n1 = mutual_information(p['pred1'].flatten(), p['resp'].flatten(), L=L)
+        df.loc[cellid,'xc0'] = np.corrcoef(p['pred0'].flatten(), p['resp'].flatten())[0,1]
+        df.loc[cellid,'xc1'] = np.corrcoef(p['pred1'].flatten(), p['resp'].flatten())[0,1]
+
+    df.to_csv(f'xc_mi_L{L}.csv')
+    cc0 = df['xc0']**2
+    cc1 = df['xc1']**2
+
+    fig, ax = plt.subplots(2,2, sharex='row', sharey='row')
+    ax[0,0].scatter(cc0,df['mi0'], s=3)
+    ax[0,0].set_title(f"LN: r={np.corrcoef(cc0,df['mi0'])[0,1]:.3f}")
+    ax[0,1].scatter(cc1,df['mi1'], s=3)
+    ax[0,1].set_title(f"CNN: r={np.corrcoef(cc1,df['mi1'])[0,1]:.3f}")
+    ax[1,0].set_visible(False)
+    ax[1,1].scatter(cc1-cc0, df['mi1']-df['mi0'], s=3)
+    ax[1,1].set_title(f"improvement: r={np.corrcoef(cc1-cc0,df['mi1']-df['mi0'])[0,1]:.3f}")
+    ax[1,1].set_xlabel('xc1^2 - xc0^2')
+    ax[1,1].set_ylabel('mi1 - mi0')
+    plt.tight_layout()
+
+    return fig
 
 
 def plot_conv_scatters(batch):
@@ -172,15 +238,17 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
 
 
 if __name__ == '__main__':
+    plot_xc_v_mi(L=10)
 
-    f, ax = plt.subplots(2, 2, figsize=column_and_half_tall, sharey='row')
-    plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['pop LN','1D CNN'],
-                      colors=[DOT_COLORS['LN_pop'],DOT_COLORS['conv1dx2+d']], ax=ax[0,0])
-    plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'],
-                      colors=[DOT_COLORS['conv1dx2+d'],DOT_COLORS['conv2d']], ax=ax[0,1])
-    bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
-    ax[1,0].set_title('A1')
-    bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
-    ax[1,1].set_title('PEG')
-    ax[1,1].set_ylabel('')
-    f.tight_layout()
+    if 0:
+        f, ax = plt.subplots(2, 2, figsize=column_and_half_tall, sharey='row')
+        plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['pop LN','1D CNN'],
+                          colors=[DOT_COLORS['LN_pop'],DOT_COLORS['conv1dx2+d']], ax=ax[0,0])
+        plot_pred_scatter(a1, [ALL_FAMILY_MODELS[2], ALL_FAMILY_MODELS[0]], labels=['1D CNN','2D CNN'],
+                          colors=[DOT_COLORS['conv1dx2+d'],DOT_COLORS['conv2d']], ax=ax[0,1])
+        bar_mean(a1, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,0])
+        ax[1,0].set_title('A1')
+        bar_mean(peg, ALL_FAMILY_MODELS, stest=SIG_TEST_MODELS, ax=ax[1,1])
+        ax[1,1].set_title('PEG')
+        ax[1,1].set_ylabel('')
+        f.tight_layout()

@@ -188,12 +188,12 @@ print('Make sure short_names matches actual modelnames used!')
 print('short_names: %s' % short_names)
 print('HELDOUT: %s' % HELDOUT)
 
-stats_tests.append("\n\nheldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % a1)
+stats_tests.append("\n\nheldout vs matched, Sig. tests (T-statistic, p-value) for batch %d:" % a1)
 stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests1)]))
 stats_tests.append("median diffs:")
 stats_tests.append(str(mds1))
 stats_tests.append("\n")
-stats_tests.append("heldout vs matched, Sig. tests (U-statistic, p-value) for batch %d:" % peg)
+stats_tests.append("heldout vs matched, Sig. tests (T-statistic, p-value) for batch %d:" % peg)
 stats_tests.append(''.join([f'{s}:   {t}|\n' for s, t in zip(short_names, tests2)]))
 stats_tests.append("median diffs:")
 stats_tests.append(str(mds2))
@@ -306,7 +306,7 @@ stats_tests.append(f'{wilcoxon_peg}')
 #################################   SAVE PDFS  #########################################################################
 ########################################################################################################################
 
-DO_SAVE=True
+DO_SAVE=False
 if DO_SAVE:
     figures_to_save = [
         (fig3c, 'fig3_pareto'),

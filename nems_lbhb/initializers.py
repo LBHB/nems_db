@@ -107,8 +107,13 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     elif use_full_model:
         
         # use full pop file - SVD work in progress. current best?
-        load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
-        fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
+        if ('fs50' in modelname_parts[0]) and ('ststim' in modelname_parts[0]):
+            log.info('fs50 + ststimn')
+            load_string_pop = "gtgram.fs50.ch18.pop-loadpop-st.dm4-ststim-norm.l1-popev"
+            fit_string_pop = "tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+        else:
+            load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
+            fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
 
         if prefit_type == 'heldout':
             pre_part = "ozgf.fs100.ch18.pop-loadpop.hs-norm.l1-popev"
@@ -183,6 +188,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         if type(cellid) is list:
             cellid = cellid[0]
         siteid = cellid.split("-")[0]
+        log.info(f"modelname_filter: {model_search}")
         allsiteids, allcellids = nd.get_batch_sites(pre_batch, modelname_filter=model_search)
         allsiteids = [s.split(".")[0] for s in allsiteids]
 
