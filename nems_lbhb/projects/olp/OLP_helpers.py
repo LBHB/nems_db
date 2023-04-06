@@ -10,6 +10,8 @@ from scipy.io import wavfile
 import glob
 import seaborn as sb
 import re
+import nems0.epoch as ep
+
 
 def manual_fix_units(cell_list):
     '''I don't know why these units are incorrectly saved. But it was just these two, add
@@ -47,7 +49,7 @@ def remove_olp_test(rec):
     passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
     if passive.shape[0] >= 2:
         # if OLP test was sorted in here as well, slice it out of the epochs and data
-        print(f"Multiple ({passive.shape[0]}) OLPs found in {cellid}")
+        print(f"Multiple ({passive.shape[0]}) OLPs found in")
         runs = passive.shape[0] - 1
         max_run = (passive['end'] - passive['start']).reset_index(drop=True).idxmax()
         if runs != max_run:
@@ -60,6 +62,47 @@ def remove_olp_test(rec):
         rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start, :].reset_index(drop=True)
         rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
         rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
+
+    return rec
+
+
+def remove_olp_test_nonOLP(rec):
+    '''2023_01_04. For the batch 341 that has the prediction. The signal has multiple files, including non-OLP ones
+    so I changed remove_olp_test to be flexible to pick only OLP and if there are multiple OLPs, only the second one.
+    In some cases the olp test and real olp are sorted together and will both come up. The real one
+    is always last of OLPs run. So take that one.'''
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
+    filenames = ep.epoch_names_matching(rec['resp'].epochs, 'FILE_')
+    file_ends = [aa.split('_')[-1] for aa in filenames]
+
+    if passive.shape[0] >= 2 and len(file_ends) > 1:
+        print(f"Multiple ({passive.shape[0]}) FILEs found in rec['resp'], {file_ends}.")
+        OLPs = [cc for cc, aa in enumerate(file_ends) if aa == 'OLP']
+        print(f"Index of OLP(s) are {OLPs}")
+        if len(OLPs) > 1:
+            print(f"There are {len(OLPs)} OLP files, keeping the second one, index {max(OLPs)}.")
+            OLP_idx = max(OLPs)
+            print(f"Keeping file filenames {filenames[OLP_idx]}")
+        elif len(OLPs) == 1:
+            print(f"There is only 1 OLP file, keeping index {max(OLPs)}")
+            OLP_idx = max(OLPs)
+            print(f"Keeping file filenames {filenames[OLP_idx]}")
+
+        good_start = passive.iloc[OLP_idx, 1]
+        good_end = passive.iloc[OLP_idx, 2]
+
+        rec['resp'].epochs = rec['resp'].epochs.loc[(rec['resp'].epochs['start'] < good_end) &
+                                                    (rec['resp'].epochs['start'] >= good_start)].reset_index(drop=True)
+        rec['resp']._data = {key: val[(val >= good_start) & (val < good_end)] - good_start for key, val in rec['resp']._data.items()}
+        rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
+        rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
+        #
+        #
+        # rec['resp']._data = {key: val[val >= good_start] - good_start for key, val in rec['resp']._data.items()}
+        # rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start, :].reset_index(
+        #     drop=True)
+        # rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
+        # rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
 
     return rec
 
@@ -100,11 +143,19 @@ def get_expt_params(resp, manager, cellid):
     if len(expt_params) == 1:
         ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
     if len(expt_params) > 1:
-        ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+        expt_params = manager.get_baphy_exptparams()
+        whichparams = [aa for aa in range(len(expt_params)) if expt_params[aa]['runclass']=='OLP']
+        # You can ultimately make this so that ref_handle['Combos'] must == 'Manual' to ensure the second is the real one
+        if len(whichparams) == 1:
+            ref_handle = expt_params[whichparams[0]]['TrialObject'][1]['ReferenceHandle'][1]
+        else:
+            print(f"There are {len(whichparams)} OLPs for {cellid}, using the last one.")
+            ref_handle = expt_params[whichparams[-1]]['TrialObject'][1]['ReferenceHandle'][1]
 
     params['experiment'], params['fs'] = cellid.split('-')[0], resp.fs
     params['PreStimSilence'], params['PostStimSilence'] = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']
-    params['Duration'], params['SilenceOnset'] = ref_handle['Duration'], ref_handle['SilenceOnset']
+    params['Duration'] = ref_handle['Duration']
+    params['SilenceOnset'] = ref_handle['SilenceOnset']
     params['max reps'] = e[e.name.str.startswith('STIM')].pivot_table(index=['name'], aggfunc='size').max()
     params['stim length'] = int(e.loc[e.name.str.startswith('REF')].iloc[0]['end']
                 - e.loc[e.name.str.startswith('REF')].iloc[0]['start'])
@@ -237,8 +288,8 @@ def label_ep_type(ep_name):
     to FG. 0 means null, 1 means primary speaker, 2 means secondary speaker'''
     if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
         stim_type = None
-    elif len(ep_name.split('_')) == 3:
-        seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+    elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
         if len(seps[0].split('-')) >= 4 or len(seps[1].split('-')) >= 4:
             if seps[0] != 'null' and seps[1] != 'null':
                 stim_type = seps[0].split('-')[3] + seps[1].split('-')[3]
@@ -284,6 +335,46 @@ def label_synth_type(ep_name):
             synth_type = None
 
         return synth_type
+
+
+def label_dynamic_ep_type(ep_name):
+    '''Labels epochs that have one or two stimuli in it according to its duration (dynamic stimuli.
+    First position refers to BG, second to FG. n means null, f means full length, h means half length'''
+    if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
+        stim_type = None
+    elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
+
+        if len(seps[0].split('-')) >= 2 or len(seps[1].split('-')) >= 2:
+            if seps[0] != 'null' and seps[1] != 'null':
+                if seps[0].split('-')[1] == '0':
+                    btype = 'f'
+                else:
+                    btype = 'h'
+                if seps[1].split('-')[1] == '0':
+                    ftype = 'f'
+                else:
+                    ftype = 'h'
+                stim_type = btype + ftype
+            else:
+                if seps[0] == 'null':
+                    if seps[1].split('-')[1] == '0':
+                        ftype = 'f'
+                    else:
+                        ftype = 'h'
+                    stim_type = 'n' + ftype
+                elif seps[1] == 'null':
+                    if seps[0].split('-')[1] == '0':
+                        btype = 'f'
+                    else:
+                        btype = 'h'
+                    stim_type = btype + 'n'
+    else:
+        stim_type = None
+        print(f"None of your labeling things worked for {ep_name}, you should look into that.")
+
+    return stim_type
+
 
 def add_stimtype_epochs(sig):
     '''Mostly unneeded, just replaces epochs with their type instead of just
@@ -419,7 +510,7 @@ def weight_hist(df, tag=None, y='cells', ax=None):
         ax.legend(('Background', 'Foreground'), fontsize=4)
 
 
-def get_sound_statistics_full(weight_df):
+def get_sound_statistics_full(weight_df, cuts=None, fs=100):
     '''Updated 2022_09_13. Added mean relative gain for each sound. The rel_gain is BG or FG
     respectively.
     Updated 2022_09_12. Now it can take a DF that has multiple synthetic conditions and pull
@@ -494,6 +585,7 @@ def get_sound_statistics_full(weight_df):
 
             dev = np.std(spec, axis=1)
 
+            freq_dev = np.std(spec, axis=0)
             freq_mean = np.nanmean(spec, axis=1)
             x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
             csm = np.cumsum(freq_mean)
@@ -523,7 +615,8 @@ def get_sound_statistics_full(weight_df):
                            'center': freq50,
                            'spec': spec,
                            'mean_freq': freq_mean,
-                           'Fstationary': np.std(freq_mean),
+                           'Fstationary_wrong': np.std(freq_mean),
+                           'Fstationary': np.nanmean(freq_dev),
                            'RMS_norm_power': rms_normed,
                            'max_norm_power': max_normed,
                            'temp_ps': temp,
@@ -531,6 +624,32 @@ def get_sound_statistics_full(weight_df):
                            'temp_ps_std': temp_ps,
                            'freq_ps_std': freq_ps,
                            'short_name': sn[2:].split('_')[0].replace(' ', '')})
+
+            if cuts:
+                one, two = spec[:, cuts[0]:int(cuts[1] * fs)], spec[:, int(cuts[1] * fs):]
+                t_dev_start, t_dev_end = np.std(one, axis=1), np.std(two, axis=1)
+                f_dev_start, f_dev_end = np.std(one, axis=0), np.std(two, axis=0)
+
+
+                freq_mean_start, freq_mean_end = np.nanmean(one, axis=1), np.nanmean(two, axis=1)
+                x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+                csm_start, csm_end = np.cumsum(freq_mean_start), np.cumsum(freq_mean_end)
+                big_start, big_end = np.max(csm_start), np.max(csm_end)
+
+                freq75_start = x_freq[np.abs(csm_start - (big_start * 0.75)).argmin()]
+                freq25_start = x_freq[np.abs(csm_start - (big_start * 0.25)).argmin()]
+                bandw_start = np.log2(freq75_start / freq25_start)
+
+                freq75_end = x_freq[np.abs(csm_end - (big_end * 0.75)).argmin()]
+                freq25_end = x_freq[np.abs(csm_end - (big_end * 0.25)).argmin()]
+                bandw_end = np.log2(freq75_end / freq25_end)
+
+                sounds[cnt]['Tstationary_start'] = np.nanmean(t_dev_start)
+                sounds[cnt]['Tstationary_end'] = np.nanmean(t_dev_end)
+                sounds[cnt]['Fstationary_start'] = np.nanmean(f_dev_start)
+                sounds[cnt]['Fstationary_end'] = np.nanmean(f_dev_end)
+                sounds[cnt]['bandwidth_start'] = bandw_start
+                sounds[cnt]['bandwidth_end'] = bandw_end
 
         sound_df = pd.DataFrame(sounds)
         # Merge the relative gain data into the DF of sounds
@@ -805,9 +924,15 @@ def add_sound_stats(weight_df, sound_df):
     BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
     BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
     BGmerge['BG'] = [aa[2:].replace(' ', '') for aa in BGdf.name]
-    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['Tstationary']]
+    BGmerge['BG_Tstationary'] = BGdf.Tstationary.tolist()
     BGmerge['BG_bandwidth'] = BGdf.bandwidth.tolist()
     BGmerge['BG_Fstationary'] = BGdf.Fstationary.tolist()
+    BGmerge['BG_Tstationary_start'] = BGdf.Tstationary_start.tolist()
+    BGmerge['BG_bandwidth_start'] = BGdf.bandwidth_start.tolist()
+    BGmerge['BG_Fstationary_start'] = BGdf.Fstationary_start.tolist()
+    BGmerge['BG_Tstationary_end'] = BGdf.Tstationary_end.tolist()
+    BGmerge['BG_bandwidth_end'] = BGdf.bandwidth_end.tolist()
+    BGmerge['BG_Fstationary_end'] = BGdf.Fstationary_end.tolist()
     BGmerge['BG_RMS_power'] = BGdf.RMS_norm_power.tolist()
     BGmerge['BG_max_power'] = BGdf.max_norm_power.tolist()
     BGmerge['BG_temp_ps'] = BGdf.temp_ps.tolist()
@@ -823,9 +948,15 @@ def add_sound_stats(weight_df, sound_df):
     BGmerge['synth_kind'] = BGdf.synth_kind.tolist()
 
     FGmerge['FG'] = [aa[2:].replace(' ', '') for aa in FGdf.name]
-    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['Tstationary']]
+    FGmerge['FG_Tstationary'] = FGdf.Tstationary.tolist()
     FGmerge['FG_bandwidth'] = FGdf.bandwidth.tolist()
     FGmerge['FG_Fstationary'] = FGdf.Fstationary.tolist()
+    FGmerge['FG_Tstationary_start'] = FGdf.Tstationary_start.tolist()
+    FGmerge['FG_bandwidth_start'] = FGdf.bandwidth_start.tolist()
+    FGmerge['FG_Fstationary_start'] = FGdf.Fstationary_start.tolist()
+    FGmerge['FG_Tstationary_end'] = FGdf.Tstationary_end.tolist()
+    FGmerge['FG_bandwidth_end'] = FGdf.bandwidth_end.tolist()
+    FGmerge['FG_Fstationary_end'] = FGdf.Fstationary_end.tolist()
     FGmerge['FG_RMS_power'] = FGdf.RMS_norm_power.tolist()
     FGmerge['FG_max_power'] = FGdf.max_norm_power.tolist()
     FGmerge['FG_temp_ps'] = FGdf.temp_ps.tolist()
@@ -918,3 +1049,124 @@ def filter_weight_df(df, suffixes=['_end', '_start'], fr_thresh=0.03, r_thresh=0
     return df
 
 
+def filter_synth_df_by(df_full, use='N', suffixes=['', '_start', '_end'], fr_thresh=0.03, r_thresh=0.6,
+                       quad_return=3, bin_kind='11', weight_lims=[-1.5, 2.5], area=None):
+    '''2022_12_01. You give it a DF with many synthetic conditions, specify the one you want to be the condition
+    that is used as the filter for a variety of metrics and it returns the dataframe. Also can do area or not.'''
+    df_full = df_full.loc[df_full.kind==bin_kind]
+    df_full['filt_id'] = df_full.cellid + '-' + df_full.BG + '-' + df_full.FG
+
+    if area:
+        df_full = df_full.loc[df_full.area==area]
+
+    synths = list(df_full.synth_kind.unique())
+    synth_dfs = {x: df_full.loc[df_full.synth_kind==x].sort_values(by=['filt_id']).reset_index(drop=True) for x in synths}
+
+    df = synth_dfs[use]
+
+    if fr_thresh:
+        filt_labels = [[f"bg_FR{fl}", f"fg_FR{fl}"] for fl in suffixes]
+        for ff in filt_labels:
+            if quad_return == 3:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 2:
+                df = df.loc[(np.abs(df[ff[0]]) <= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 6:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (np.abs(df[ff[1]]) <= fr_thresh)]
+            else:
+                raise ValueError(f"quad_return parameter must be 3, 2, or 6, you gave {quad_return}.")
+    if r_thresh:
+        r_filt_labels = [[f"r{fl}", f"r{fl}"] for fl in suffixes]
+        for rf in r_filt_labels:
+            df = df.loc[(df[rf[0]] >= r_thresh) & (df[rf[1]] >= r_thresh)]
+
+    if weight_lims:
+        if isinstance(weight_lims, int):
+            weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+        if len(weight_lims) == 2:
+            w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in suffixes]
+            for wf in w_filt_labels:
+                df = df.loc[(df[wf[0]] < weight_lims[1]) & (df[wf[0]] > weight_lims[0]) &
+                            (df[wf[1]] < weight_lims[1]) & (df[wf[1]] > weight_lims[0])]
+
+    idxs = df.index.tolist()
+
+    dfs_filtered = [dd.loc[dd.index.isin(idxs)] for dd in synth_dfs.values()]
+
+    full_suffixes = ['', '_start', '_end']
+    bad_idxs = []
+    if weight_lims:
+        for ddf in dfs_filtered:
+            if isinstance(weight_lims, int):
+                weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+            if len(weight_lims) == 2:
+                w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in full_suffixes]
+                for wf in w_filt_labels:
+                    rejects = ddf.loc[(ddf[wf[0]] >= weight_lims[1]) | (ddf[wf[0]] <= weight_lims[0]) |
+                                (ddf[wf[1]] >= weight_lims[1]) | (ddf[wf[1]] <= weight_lims[0])]
+                    if len(rejects) > 0:
+                        reject_idxs = rejects.index.tolist()
+                        bad_idxs.append(reject_idxs)
+
+        flat_bads = list(set([y for x in bad_idxs for y in x]))
+
+        dfs_filtered = [dd.loc[~dd.index.isin(flat_bads)] for dd in dfs_filtered]
+
+
+    cells = [cc.cellid.tolist() for cc in dfs_filtered]
+    check = [True for aa in cells if cells[0] == aa]
+    if False in check:
+        raise ValueError("It's possible the orders of the dataframes are not the same and your indexing will be weird.")
+
+    big_df = pd.concat(dfs_filtered)
+
+    # This is just going to remove a few outlier weights, if you really want to be careful, make it extract that row from
+    # every synthetic type dataframe.
+
+
+    big_df['filt_by'] = use
+
+    return big_df
+
+
+def get_cut_info(df, prebins=50, postbins=50, trialbins=200, fs=100):
+    '''2023_01_03. Made this so that you can take a dataframe with no metrics and calculate the masks
+    for the assorted cut fits that were applied using the fit_segment parameter. I didn't want it to
+    have to load files again to get ref_handle, so the bins are input options. For OLP, they should
+    always be the defaults, so it shouldn't matter for this purpose.'''
+    start, dur = [int(int(aa) / 1000 * fs) for aa in (list(set(df.fit_segment))[0].split('-'))]
+    rs = [aa for aa in list(df.columns) if ('weightsA' in aa) and ('_pred' not in aa)]
+    cut_labels = [f"_{aa.split('_')[1]}" if len(aa.split('_'))==2 else '' for aa in rs]
+
+    antidur = trialbins - prebins - postbins - dur
+
+    full = [False] * prebins + [True] * dur + [True] * antidur + [True] * postbins
+    goods = [False] * prebins + [True] * dur + [False] * antidur + [False] * postbins
+    bads = [False] * prebins + [False] * dur + [True] * antidur + [False] * postbins
+    full_nopost = [False] * prebins + [True] * dur + [True] * antidur + [False] * postbins
+    cut_list = [full, goods, bads, full_nopost]
+
+    cuts_info = {cut_labels[i]: cut_list[i] for i in range(len(cut_list))}
+
+    return cuts_info
+
+
+def add_animal_name_col(df):
+    '''2023_01_12. Just takes a dataframe and decides what the animal ID was, useful for splitting based on animals.
+    You'll have to manually add dividers of _A and _B for different animals if trying to divide by hemispheres, which
+    are typically denoted by experiment number.'''
+    animals = []
+    cellids = df.cellid.tolist()
+    for id in cellids:
+        cell = id.split('-')[0]
+        animal = cell[:3]
+        exp = int(cell[3:6])
+        if animal == 'CLT':
+            if exp > 26:
+                animal = 'CLT_B'
+            else:
+                animal = 'CLT_A'
+        animals.append(animal)
+
+    df['animal'] = animals
+    return df
