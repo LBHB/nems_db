@@ -1019,8 +1019,8 @@ def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
     params = ()
     sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
     if batch is not None:
-        sql += " AND batch=%s"
-        params = params+(batch,)
+        sql += f" AND batch={batch}"
+        #params = params+(batch,)
 
     if cellid is not None:
         if SQL_ENGINE == 'sqlite':

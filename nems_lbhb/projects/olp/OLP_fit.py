@@ -23,6 +23,7 @@ import nems0.analysis.api
 import nems0.modelspec as ms
 import warnings
 import pandas as pd
+from nems_lbhb import baphy_io
 
 import nems_lbhb.projects.olp.binaural_OLP_helpers as bnh
 log = logging.getLogger(__name__)
@@ -1482,7 +1483,11 @@ def get_parm_data(cellid,runclassid=128):
 
 def OLP_fit_cell_pred_individual(cellid, batch, threshold=None, snip=None, pred=False, fit_epos='syn',
                                  fs=100):
-    '''2022_12_29. Added this from the bigger funxtion to make one that works for each cellid and can
+    '''2023_04_06. Added many things. First off the loader that uses get_parm_data and gives you labeled parmfiles
+    that are associated with different kinds of olp runs. The function will fit individually for all the good ones it
+    finds and add one big, labeled df at the end that it'll save for every run associated with that unit. Also,
+    the new area + layer thing is used.
+    2022_12_29. Added this from the bigger funxtion to make one that works for each cellid and can
     divvy it up to the cluster.'''
     if fit_epos == 'bin':
         fit_epochs, lbl_fn = ['10', '01', '20', '02', '11', '12', '21', '22'], ohel.label_ep_type
@@ -1491,12 +1496,18 @@ def OLP_fit_cell_pred_individual(cellid, batch, threshold=None, snip=None, pred=
     elif fit_epos == 'dyn':
         fit_epochs, lbl_fn = ['ff', 'fh', 'fn', 'hf', 'hh', 'hn', 'nf', 'nh'], ohel.label_dynamic_ep_type
 
-    cellid = 'PRN013c-235-1'
+    # cellid = 'PRN013c-235-1'
     parms = get_parm_data(cellid, runclassid=128)
 
     real_olps = parms.loc[parms['run_kind']=='real'].reset_index(drop=True)
     olp_parms = real_olps['parmfile'].to_list()
 
+    area_info = baphy_io.get_depth_info(cellid=cellid)
+    layer, area = area_info['layer'].values[0], area_info['area'].values[0]
+
+    # baphy_io.get_depth_info(siteid='PRN013a')
+
+    weight_df_list = []
     for cc, pf in enumerate(olp_parms):
         manager = BAPHYExperiment(cellid=cellid, parmfile=pf)
         # manager = BAPHYExperiment(cellid=cellid, batch=batch)
@@ -1706,13 +1717,19 @@ def OLP_fit_cell_pred_individual(cellid, batch, threshold=None, snip=None, pred=
         row = real_olps.iloc[cc]
 
         weight_df['olp_type'], weight_df['RMS'], weight_df['ramp'], weight_df['SNR'] = row['olp_type'], row['RMS'], row['ramp'], row['SNR']
+        weight_df['area'], weight_df['layer'] = area, layer
 
-        OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}_{real_olps.iloc[cc]["olp_type"]}'  # weight + corr
-        os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
+        weight_df_list.append(weight_df)
 
-        jl.dump(weight_df, OLP_partialweights_db_path)
+    final_weight_df = pd.concat(weight_df_list)
 
-    return weight_df, OLP_partialweights_db_path
+    OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}}'  # weight + corr
+    # OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}_{real_olps.iloc[cc]["olp_type"]}'  # weight + corr
+    os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
+
+    jl.dump(final_weight_df, OLP_partialweights_db_path)
+
+    return final_weight_df, OLP_partialweights_db_path
 
 
 def OLP_fit_partial_weights(batch, threshold=None, snip=None, pred=False, fit_epos='syn',
