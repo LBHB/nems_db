@@ -357,6 +357,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         if ReferenceClass == 'BigNat':
             sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
             sound_root = sound_root.replace("H:/", "/auto/data/")
+            sound_root = sound_root.replace("E:/sounds/v2", "/auto/data/sounds/BigNat/v2")
+            sound_root = sound_root.replace("E:/", "/auto/data/")
             sound_root = Path(sound_root)
         else:
             subset = ReferenceHandle['Subsets']
@@ -443,7 +445,6 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         stim_epochs = [s.replace(" ", "") for s in stim_epochs]
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
-
     if len(stim_epochs) == 0:
         return {}, [], {}
 

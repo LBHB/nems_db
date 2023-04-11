@@ -1621,7 +1621,7 @@ def psi_parm_read(filepath):
     for ee, r in bg_events.iterrows():
         info = json.loads(r['Info'])
         bin_match = bg_events1['start']==r['start']
-        if bin_match.sum() > 0:
+        if (bin_match.sum() > 0) & (TestBinaural != 'None'):
             # code as a binaural signal
             r2 = bg_events1.loc[bin_match].iloc[0]
             info2 = json.loads(r2['Info'])
@@ -4241,6 +4241,8 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
 
         if dcell[c]['layer'].isnumeric():
             dcell[c]['area'] = d['site area']
+        elif dcell[c]['layer'].endswith('d'):
+            dcell[c]['area'] = d.get('site area deep', 'XX')
         else:
             dcell[c]['area'] = dcell[c]['layer']
 

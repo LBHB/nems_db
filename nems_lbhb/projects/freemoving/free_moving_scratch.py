@@ -1,11 +1,13 @@
 from os.path import basename, join
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, zoom
+
 import datetime
 import os
 
@@ -22,20 +24,25 @@ from nems_lbhb.motor.free_tools import compute_d_theta, \
     free_scatter_sum, dlc2dist
 
 USE_DB = True
+DETAILED_PLOTS = True
 
 dt = datetime.date.today().strftime("%Y-%m-%d")
 figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
 os.makedirs(figpath, exist_ok=True)
 
 if USE_DB:
-    siteid = "PRN034a"
     siteid = "PRN010a"
     siteid = "PRN009a"
     siteid = "PRN011a"
     siteid = "PRN047a"
     siteid = "PRN044a"
-    siteid = "PRN022a"
     siteid = "PRN015a"
+    siteid = "PRN023a"
+    siteid = "PRN034a"
+    siteid = "PRN033a"
+    siteid = "PRN017a"
+    siteid = "PRN069a"
+    siteid = "PRN025a"
     runclassid = 132
 
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
@@ -132,7 +139,7 @@ max_time = SHOW_BINS/resp.fs
 
 imopts = {'origin': 'lower', 'aspect': 'auto', 'interpolation': 'none'}
 
-if False:
+if DETAILED_PLOTS:
     f, ax = plt.subplots(6,1, figsize=(6, 8), sharex=True)
     ax[0].imshow(spec[:,:SHOW_BINS], extent=[0,max_time,0,spec.shape[0]],
                  cmap='gray_r', **imopts)
@@ -169,15 +176,15 @@ if False:
     ax[5].set_ylabel('repetition')
     plt.tight_layout()
 
-if False:
+if DETAILED_PLOTS:
     # Validate spatio-temporal alignment with target hit events
     e=resp.get_epoch_indices('LICK , FA')
     e=resp.get_epoch_indices('TARGET')
     e=resp.get_epoch_indices('LICK , HIT')
     tr = np.zeros((400,len(e)))
     for i,(a,b) in enumerate(e):
-        if a>100:
-            tr[:,i] = rec['dist'][0,(a-100):(a+300)]
+        if (a > 100) & (a < resp.shape[1] - 300):
+            tr[:,i] = rec['dist'][0, (a-100):(a+300)]
     plt.figure()
     t = np.arange(400)/rasterfs-(100/rasterfs)
     plt.plot(t,tr)
@@ -185,17 +192,17 @@ if False:
     plt.ylabel('distance from speaker (pixels)')
     plt.title(basename(parmfile[0]))
 
-if False:
+if DETAILED_PLOTS:
     # Validate spatio-temporal alignment with target hit events
     tar_epochs = ep.epoch_names_matching(resp.epochs,"^TAR_")
     tar=resp.extract_epoch(tar_epochs[-1]).mean(axis=0)
     e=resp.get_epoch_indices(tar_epochs[-1])
     e=resp.get_epoch_indices('TARGET')
-    tr = np.zeros((resp.shape[0],400,len(e)))
+    tr = np.zeros((resp.shape[0],400,len(e))) * np.nan
     for i,(a,b) in enumerate(e):
-        if a>100:
+        if (a>100) & (a<resp.shape[1]-300):
             tr[:,:,i] = resp._data[:,(a-100):(a+300)]
-    tar=tr.mean(axis=2)
+    tar=np.nanmean(tr, axis=2)
     t = np.arange(tar.shape[-1])/rasterfs
     f,ax=plt.subplots(2,1)
     ax[0].imshow(tar,aspect='auto',interpolation='none',origin='lower')
@@ -205,7 +212,7 @@ if False:
     ax[0].set_title(basename(parmfile[0]))
 
 # summarize spatial and velocity distributions with scatter
-if False:
+if DETAILED_PLOTS:
     free_scatter_sum(rec)
 
 ## regression analysis do (d, theta, v_d, v_theta)
@@ -236,7 +243,7 @@ ddict = {k_: np.pad(r_, ((0, reps - r_.shape[0]), (0, 0), (0, 0)), mode='constan
 
 d0 = np.concatenate([d_[:, 0, :] for k_, d_ in ddict.items()], axis=1)/800
 t0 = np.concatenate([d_[:, 1, :] for k_, d_ in ddict.items()], axis=1)
-pgoodidx = np.isfinite(d0) & (d0 > 550/800) & (d0 < 1100/800) & np.isfinite(t0) & (np.abs(t0) < 150)
+pgoodidx = np.isfinite(d0) & (d0 > 550/800) & (d0 < 950/800) & np.isfinite(t0) & (np.abs(t0) < 150)
 
 dv = np.concatenate([d_[:, 2, :] for k_, d_ in ddict.items()], axis=1)/800
 tv = np.concatenate([d_[:, 3, :] for k_, d_ in ddict.items()], axis=1)
@@ -338,17 +345,16 @@ nnx[nnx<20]=np.nan
 nnx[nnx>500]=500
 
 
-# plot a bunch of heatmaps of E as a function of Pos or Vel
-# depending on the value of USE_VEL
-a1idx = np.where(df_sitedata['area'] == 'A1')[0]
-cells = a1idx[np.linspace(0,len(a1idx)-1, 24).astype(int)]
-cells = a1idx[np.linspace(0, 60, 60).astype(int)]
-
+#
+# Details on a small number of cells ... Select specific examples?
+#
+SHOW_FULL_SUM=True
 USE_VEL = 'space'
 DO_DIV = True
 
-for USE_VEL in ['dist', 'rotation']:
 
+if SHOW_FULL_SUM:
+    """
     if USE_VEL == 'linear':
         ll, tt, nn = lll, ttl, nnl
         d, t = fv, lv
@@ -366,98 +372,8 @@ for USE_VEL in ['dist', 'rotation']:
         ll, tt, nn = ll0, tt0, nn0
         d, t = d0, t0
         goodidx = pgoodidx
+    """
 
-    rows = 6
-    cols = int(np.ceil((len(cells) + 1) / rows))
-
-    f, ax = plt.subplots(rows, cols, figsize=(1 * cols, 1 * rows), sharex=True, sharey=True)
-    ax = ax.flatten()
-    for i, c in enumerate(cells):
-        cellid = resp.chans[c]
-        cstr=cellid.replace(siteid,'')
-        try:
-            area = df_sitedata.loc[cellid, 'area']
-        except:
-            area = '??'
-
-        r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
-        p = np.nanmean(r, axis=0, keepdims=True)
-        nr = np.nansum(np.isfinite(r), axis=0, keepdims=True)
-        psum = np.nansum(r, axis=0, keepdims=True)
-        p = (psum-r)/(nr-1)
-
-        if DO_DIV:
-            e = (r + 0.1) / (p + 0.1) - 1
-        else:
-            e = (r - p) / (p + 0.1)
-        # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
-        #e[:,p[0,:]==0]=np.nan
-        e[:,nr[0,:]<minreps]=np.nan
-        eall = e[dallgoodidx]
-        e = e[goodidx]
-
-        mm = np.zeros((len(ll) - 1, len(tt) - 1)) * np.nan
-        for i_, l_ in enumerate(ll[:-1]):
-            for j_, t_ in enumerate(tt[:-1]):
-                v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & \
-                     (t < tt[j_ + 1]) & np.isfinite(e)
-                if (v_.sum() > 0):
-                    if (np.nanstd(e[v_]) > 0):
-                        mm[i_, j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
-                    else:
-                        mm[i_, j_] = np.nanmean(e[v_])
-
-        mm[np.isnan(nn)] = 0
-        x = (ll[:-1] + ll[1:]) / 2
-        y = (tt[:-1] + tt[1:]) / 2
-        X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
-
-        valididx = np.isfinite(mm)
-        interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
-                                      mm[valididx], fill_value=np.nanmean(mm))
-
-        # Z = interp(X, Y)
-        Z = mm
-        Z = gaussian_filter(Z, [0.5, 0.5])
-
-        LFIT=False
-        if LFIT:
-            df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
-                               'dv': dall[2, :], 'dt': dall[3, :],
-                               'const': 1})
-            s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
-            res = s.fit()
-            coefs = res.params[1:]
-            pvalues = res.pvalues[1:]
-            df_sitedata.loc[cellid, ['d','t','dv','tv']] = coefs
-            df_sitedata.loc[cellid, ['pd','pt','pdv','ptv']] = pvalues.values
-
-        if DO_DIV:
-            vmin = -np.abs(Z).max()
-        else:
-            vmin = -np.abs(Z).max()
-            vmax = np.abs(Z).max()
-        vmin, vmax = -0.5, 0.5
-        ax[i].imshow(Z, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
-                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
-
-        # ax[i,0].plot(cc,mm,'k')
-        # ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
-        ax[i].set_title(f'{cstr} {area} ({Z.min():.2f},{Z.max():.2f})',
-                        fontsize=7)
-        ax[i].tick_params(axis='both', which='major', labelsize=7)
-    ax[-1].imshow(nn, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
-                  aspect='auto')
-    ax[-1].set_title(f'n')
-    plt.suptitle(f'{resp.chans[0].split("-")[0]} - {USE_VEL}')
-    plt.tight_layout()
-
-
-#
-# Details on a small number of cells ... Select specific examples?
-#
-SHOW_FULL_SUM=True
-if SHOW_FULL_SUM:
     ## summary of a bunch of features for a selection of interesting units
     SHOW_BINS = 400
     if siteid=='PRN015a':
@@ -542,8 +458,8 @@ if SHOW_FULL_SUM:
         mmv[np.isnan(nnv)]=0
 
         # option to interpolate (not used)
-        x = (ll[:-1]+ll[1:])/2
-        y = (tt[:-1]+tt[1:])/2
+        x = (llv[:-1]+llv[1:])/2
+        y = (ttv[:-1]+ttv[1:])/2
         X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
 
         valididx = np.isfinite(mm)
@@ -553,8 +469,14 @@ if SHOW_FULL_SUM:
         # plot heatmaps
         Z = mm
         #Z = interp(X, Y)
-        zsm = 0.6
+        zsm = 0.5
+        Zz=(Z==0)
         Z = gaussian_filter(Z, [zsm, zsm])
+        Z[Zz]=0
+        cmap = matplotlib.cm.get_cmap('bwr')
+        cmap_ = cmap(np.linspace(0,1,255))
+        cmap_[127] = np.array([0.75, 0.75, 0.75, 1])
+        cmap_ = matplotlib.colors.ListedColormap(cmap_)
 
         #vmin,vmax = -np.abs(mm).max(),np.abs(mm).max()
         vmin,vmax = -0.5, 0.5
@@ -569,7 +491,14 @@ if SHOW_FULL_SUM:
 
         ax = f.add_subplot(rows,4,cols*(i+1)+3)
         im = ax.imshow(Z, extent=[tt0[0],tt0[-1],ll0[-1],ll0[0]], interpolation='none',
-                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+                       aspect='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+
+        M=((np.abs(Z)>0) | (nnv>0)).astype(float)
+        M=zoom(M,4,order=0, mode='nearest')
+        ax.contour(zoom(tt0,4)[2:-2], zoom(ll0,4)[2:-2], M, [0.5], linewidths=0.5)
+
+
+
 
         #ax[i,0].plot(cc,mm,'k')
         #ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
@@ -581,12 +510,19 @@ if SHOW_FULL_SUM:
             plt.colorbar(im, ax=ax)
 
         Z = mmv
+        Zz=(Z==0)
         Z = gaussian_filter(Z, [zsm, zsm])
+        Z[Zz]=0
+
         ax = f.add_subplot(rows,4,cols*(i+1)+4)
         #vmin,vmax = -np.abs(mmv).max(),np.abs(mmv).max()
         #vmin,vmax = -0.75, 0.75
         im = ax.imshow(Z, extent=[ttv[0],ttv[-1],llv[-1],llv[0]], interpolation='none',
-                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+                       aspect='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+
+        M=((np.abs(Z)>0) | (nnv>0)).astype(float)
+        M=zoom(M,4,order=0, mode='nearest')
+        ax.contour(zoom(ttv,4)[2:-2], zoom(llv,4)[2:-2], M, [0.5], linewidths=0.5)
 
         ax.set_title(f'{cstr} ({mmv.min():.2f},{mmv.max():.2f})', fontsize=7)
         ax.tick_params(axis='both', which='major', labelsize=7)
@@ -617,5 +553,123 @@ if SHOW_FULL_SUM:
 
     f.savefig(f'{figpath}example_space_mod.pdf')
 
+
+
+
+
+
+
+
+# plot a bunch of heatmaps of E as a function of Pos or Vel
+# depending on the value of USE_VEL
+a1idx = np.where(df_sitedata['area'] == 'A1')[0]
+cells = a1idx[np.linspace(0,len(a1idx)-1, 24).astype(int)]
+cells = a1idx[np.linspace(0, 60, 60).astype(int)]
+
+
+for USE_VEL in ['dist', 'rotation']:
+
+    if USE_VEL == 'linear':
+        ll, tt, nn = lll, ttl, nnl
+        d, t = fv, lv
+        goodidx = lgoodidx
+
+    elif USE_VEL == 'rotation':
+        ll, tt, nn = llv, ttv, nnv
+        d, t = dv, tv
+        goodidx = vgoodidx
+    elif USE_VEL == 'space':
+        ll, tt, nn = lly, ttx, nnx
+        d, t = y0, x0
+        goodidx = xgoodidx
+    else:
+        ll, tt, nn = ll0, tt0, nn0
+        d, t = d0, t0
+        goodidx = pgoodidx
+
+    rows = 6
+    cols = int(np.ceil((len(cells) + 1) / rows))
+
+    f, ax = plt.subplots(rows, cols, figsize=(1 * cols, 1 * rows), sharex=True, sharey=True)
+    ax = ax.flatten()
+    for i, c in enumerate(cells):
+        cellid = resp.chans[c]
+        cstr=cellid.replace(siteid,'')
+        try:
+            area = df_sitedata.loc[cellid, 'area']
+        except:
+            area = '??'
+
+        r = np.sqrt(np.concatenate([r_[:, c, :] for k_, r_ in rdict.items()], axis=1))
+        p = np.nanmean(r, axis=0, keepdims=True)
+        nr = np.nansum(np.isfinite(r), axis=0, keepdims=True)
+        #psum = np.nansum(r, axis=0, keepdims=True)
+        #p = (psum-r)/(nr-1)
+
+        if DO_DIV:
+            e = (r + 0.1) / (p + 0.1) - 1
+        else:
+            e = (r - p) / (p + 0.1)
+        # goodidx = np.isfinite(e) & np.isfinite(d) & (d>550) & (d<1100) & np.isfinite(t) & (np.abs(t)<135)
+        #e[:,p[0,:]==0]=np.nan
+        e[:,nr[0,:]<minreps]=np.nan
+        eall = e[dallgoodidx]
+        e = e[goodidx]
+
+        mm = np.zeros((len(ll) - 1, len(tt) - 1)) * np.nan
+        for i_, l_ in enumerate(ll[:-1]):
+            for j_, t_ in enumerate(tt[:-1]):
+                v_ = (d >= l_) & (d < ll[i_ + 1]) & (t >= t_) & \
+                     (t < tt[j_ + 1]) & np.isfinite(e)
+                if (v_.sum() > 0):
+                    if (np.nanstd(e[v_]) > 0):
+                        mm[i_, j_] = np.nanmean(e[v_]) / np.nanstd(e[v_])
+                    else:
+                        mm[i_, j_] = np.nanmean(e[v_])
+
+        mm[np.isnan(nn)] = 0
+        x = (ll[:-1] + ll[1:]) / 2
+        y = (tt[:-1] + tt[1:]) / 2
+        X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
+
+        valididx = np.isfinite(mm)
+        interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
+                                      mm[valididx], fill_value=np.nanmean(mm))
+
+        # Z = interp(X, Y)
+        Z = mm
+        Z = gaussian_filter(Z, [0.5, 0.5])
+
+        LFIT=False
+        if LFIT:
+            df = pd.DataFrame({'resp': eall, 'dist': dall[0, :], 'angle': dall[1, :],
+                               'dv': dall[2, :], 'dt': dall[3, :],
+                               'const': 1})
+            s = smf.ols('resp ~ dist + angle + dv + dt', data=df)
+            res = s.fit()
+            coefs = res.params[1:]
+            pvalues = res.pvalues[1:]
+            df_sitedata.loc[cellid, ['d','t','dv','tv']] = coefs
+            df_sitedata.loc[cellid, ['pd','pt','pdv','ptv']] = pvalues.values
+
+        if DO_DIV:
+            vmin = -np.abs(Z).max()
+        else:
+            vmin = -np.abs(Z).max()
+            vmax = np.abs(Z).max()
+        vmin, vmax = -0.5, 0.5
+        ax[i].imshow(Z, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
+                     aspect='auto', cmap='bwr', vmin=vmin, vmax=vmax)
+
+        # ax[i,0].plot(cc,mm,'k')
+        # ax[i].set_title(f'{resp.chans[c]} (d={coefs[0]*600:.2f},t={coefs[1]*180:.2f}) p={pvalues[0]:.2e},{pvalues[1]:.2e}')
+        ax[i].set_title(f'{cstr} {area} ({Z.min():.2f},{Z.max():.2f})',
+                        fontsize=7)
+        ax[i].tick_params(axis='both', which='major', labelsize=7)
+    ax[-1].imshow(nn, extent=[tt[0], tt[-1], ll[-1], ll[0]], interpolation='none',
+                  aspect='auto')
+    ax[-1].set_title(f'n')
+    plt.suptitle(f'{resp.chans[0].split("-")[0]} - {USE_VEL}')
+    plt.tight_layout()
 
 

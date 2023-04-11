@@ -4,16 +4,19 @@ import requests
 import datetime
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 import scipy.stats as st
 
-import nems
-import nems0.db as nd
+import nems0
+from nems0 import db
 import nems0.xform_helper as xhelp
 from nems_lbhb.analysis.statistics import arrays_to_p
 from nems0.metrics.mi import mutual_information
+from nems0.metrics.loglike import likelihood_poisson
 
-from pop_model_utils import mplparams, get_significant_cells, SIG_TEST_MODELS, \
+from nems_lbhb.projects.pop_model_scripts.pop_model_utils import \
+    mplparams, get_significant_cells, SIG_TEST_MODELS, \
     ALL_FAMILY_MODELS, POP_MODELS, PLOT_STAT, DOT_COLORS, shortnames, base_path, a1, peg, \
     single_column_short, single_column_tall, column_and_half_short, column_and_half_tall
 import matplotlib as mpl
@@ -54,9 +57,9 @@ def plot_pred_scatter(batch, modelnames, labels=None, colors=None, ax=None):
 
     significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
 
-    sig_scores = nd.batch_comp(batch, modelnames, cellids=significant_cells, stat='r_test')
-    se_scores = nd.batch_comp(batch, modelnames, cellids=significant_cells, stat='se_test')
-    ceiling_scores = nd.batch_comp(batch, modelnames, cellids=significant_cells, stat=PLOT_STAT)
+    sig_scores = db.batch_comp(batch, modelnames, cellids=significant_cells, stat='r_test')
+    se_scores = db.batch_comp(batch, modelnames, cellids=significant_cells, stat='se_test')
+    ceiling_scores = db.batch_comp(batch, modelnames, cellids=significant_cells, stat=PLOT_STAT)
     nonsig_cells = list(set(sig_scores.index) - set(significant_cells))
 
     # figure out units with significant differences between models
@@ -93,8 +96,19 @@ def load_pred(batch, cellids, modelnames):
 
     return pred_data
 
-def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True, L=12):
-
+def compare_metrics(batch=322, labels=None, colors=None, reload=True, L=10):
+    """
+    Supplemental figure - compare different evaluation metrics on LN and best CNN models
+    Metrics: variance explained (r2  -- square of predxc used in the rest of the paper),
+             mutual information (MI),
+             Poisson log-likelihood (LL)
+    :param batch:
+    :param labels:
+    :param colors:
+    :param reload:
+    :param L:
+    :return:
+    """
     if labels is None:
         labels = ['Prediction correlation','Mutual information']
     if colors is None:
@@ -104,48 +118,113 @@ def plot_xc_v_mi(batch=322, labels=None, colors=None, reload=True, L=12):
     if reload:
         try:
             df = pd.read_csv(f'xc_mi_L{L}.csv', index_col=0)
-            existing_cellids = df.index.to_list()
+            existing_cellids = df.loc[np.isfinite(df['ll0'])].index.to_list()
         except:
             print('initializing df')
 
     significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
     #significant_cells = significant_cells[:50]
+
+    modelnames = [ALL_FAMILY_MODELS[3],ALL_FAMILY_MODELS[2]]
+    rc = db.batch_comp(batch, modelnames, cellids=significant_cells, stat='r_ceiling',
+                       shortnames=['rc0','rc1'])
+    rc.loc[rc['rc0']>1,'rc0']=1
+    rc.loc[rc['rc1']>1,'rc1']=1
     significant_cells = [c for c in significant_cells if c not in existing_cellids]
     modelnames = [SIG_TEST_MODELS[1], SIG_TEST_MODELS[0]]
-    pred_data = load_pred(batch, significant_cells, modelnames)
 
-    for i, p in enumerate(pred_data):
-        cellid = p['cellid']
+    for i, cellid in enumerate(significant_cells):
+        p = load_pred(batch, [cellid], modelnames)[0]
+
         df.loc[cellid,'mi0'], n0 = mutual_information(p['pred0'].flatten(), p['resp'].flatten(), L=L)
         df.loc[cellid,'mi1'], n1 = mutual_information(p['pred1'].flatten(), p['resp'].flatten(), L=L)
         df.loc[cellid,'xc0'] = np.corrcoef(p['pred0'].flatten(), p['resp'].flatten())[0,1]
         df.loc[cellid,'xc1'] = np.corrcoef(p['pred1'].flatten(), p['resp'].flatten())[0,1]
+        df.loc[cellid,'ll0'] = likelihood_poisson(x1=p['pred0'], x2=p['resp'])
+        df.loc[cellid,'ll1'] = likelihood_poisson(x1=p['pred1'], x2=p['resp'])
 
-    df.to_csv(f'xc_mi_L{L}.csv')
-    cc0 = df['xc0']**2
-    cc1 = df['xc1']**2
+        df.to_csv(f'xc_mi_L{L}.csv')
 
-    fig, ax = plt.subplots(2,2, sharex='row', sharey='row')
-    ax[0,0].scatter(cc0,df['mi0'], s=3)
-    ax[0,0].set_title(f"LN: r={np.corrcoef(cc0,df['mi0'])[0,1]:.3f}")
-    ax[0,1].scatter(cc1,df['mi1'], s=3)
-    ax[0,1].set_title(f"CNN: r={np.corrcoef(cc1,df['mi1'])[0,1]:.3f}")
-    ax[1,0].set_visible(False)
-    ax[1,1].scatter(cc1-cc0, df['mi1']-df['mi0'], s=3)
-    ax[1,1].set_title(f"improvement: r={np.corrcoef(cc1-cc0,df['mi1']-df['mi0'])[0,1]:.3f}")
-    ax[1,1].set_xlabel('xc1^2 - xc0^2')
-    ax[1,1].set_ylabel('mi1 - mi0')
+    df = df.dropna()
+    print("df.shape", df.shape)
+    df = df.merge(rc, how='inner', left_index=True, right_index=True)
+    df['cc0'] = df['xc0']**2
+    df['cc1'] = df['xc1']**2
+    df['ccdiff'] = df['cc1']-df['cc0']
+    df['midiff'] = df['mi1']-df['mi0']
+    df['lldiff'] = df['ll1']-df['ll0']
+
+    regopts = {'scatter_kws': {'s': 3, 'color': 'gray'},
+               'line_kws': {'color': 'black', 'linestyle': '--', 'lw': 1},
+               'fit_reg': True}
+    fig, ax = plt.subplots(4,2, sharex='row',  sharey='row', figsize=(4,8))
+    sns.regplot(data=df, x='cc0', y='mi0', ax=ax[0, 0], **regopts)
+    cc, p = st.pearsonr(df['cc0'], df['mi0'])
+    ax[0, 0].set_title(f"LN: r={cc:.3f} p={p:.3e}")
+    ax[0, 0].set_xlabel('predxc**2')
+    ax[0, 0].set_ylabel('MI')
+    sns.regplot(data=df, x='cc1', y='mi1', ax=ax[0,1], **regopts)
+    cc, p = st.pearsonr(df['cc1'], df['mi1'])
+    ax[0, 1].set_title(f"CNN: r={cc:.3f} p={p:.3e}")
+    ax[0, 1].set_xlabel('predxc**2')
+    #ax[1, 0].set_visible(False)
+    sns.regplot(data=df, x='ccdiff', y='midiff', ax=ax[1,1], **regopts)
+    cc, p = st.pearsonr(df['ccdiff'], df['midiff'])
+    ax[1, 1].set_title(f"improvement: r={cc:.3f} p={p:.3e}")
+    ax[1, 1].set_xlabel('xc1^2 - xc0^2')
+    ax[1, 1].set_ylabel('mi1 - mi0')
+
+    sns.regplot(data=df, x='cc0', y='ll0', ax=ax[2, 0], **regopts)
+    cc, p = st.pearsonr(df['cc0'], df['ll0'])
+    print (cc, p, np.corrcoef(df['cc0'], df['ll0'])[0,1])
+    ax[2, 0].set_title(f"LN: r={cc:.3f} p={p:.3e}")
+    ax[2, 0].set_xlabel('predxc**2')
+    ax[2, 0].set_ylabel('LL')
+    sns.regplot(data=df, x='cc1', y='ll1', ax=ax[2, 1], **regopts)
+    cc, p = st.pearsonr(df['cc1'], df['ll1'])
+    ax[2, 1].set_title(f"CNN: r={cc:.3f} p={p:.3e}")
+    ax[2, 1].set_xlabel('predxc**2')
+    #ax[3, 0].set_visible(False)
+    sns.regplot(data=df, x='ccdiff', y='lldiff', ax=ax[3, 1], **regopts)
+    cc, p = st.pearsonr(df['ccdiff'], df['lldiff'])
+    ax[3, 1].set_title(f"improvement: r={cc:.3f} p={p:.3e}")
+    ax[3, 1].set_xlabel('xc1^2 - xc0^2')
+    ax[3, 1].set_ylabel('ll1 - ll0')
     plt.tight_layout()
 
-    return fig
+    fig2,ax=plt.subplots(1,3, figsize=(5,3))
+
+
+    stats = ['Prediction correlation','Mutual information','Log likelihood']
+    col0s = ["rc0","mi0","ll0"]
+    col1s = ["rc1","mi1","ll1"]
+    models = ['pop-LN','1Dx2-CNN']
+    for a, s, c0, c1 in zip(ax, stats, col0s, col1s):
+
+        dfmean = [df.loc[:,[c0]],df.loc[:,[c1]]]
+        dfmean[0].columns=[s]
+        dfmean[1].columns=[s]
+        dfmean[0]['model'] = models[0]
+        dfmean[1]['model'] = models[1]
+        res = st.wilcoxon(dfmean[0][s].values, dfmean[1][s].values)
+
+
+        dfmean=pd.concat(dfmean)
+        sns.boxplot(data=dfmean, x='model', y=s, ax=a)
+        #sns.boxplot(data=dfmean, x='model', y=s, estimator=np.median, ax=a)
+
+        a.set_title(f'p={res.pvalue:.2e}')
+    plt.tight_layout()
+
+    return fig, fig2
 
 
 def plot_conv_scatters(batch):
     significant_cells = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
 
-    sig_scores = nd.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat='r_test')
-    se_scores = nd.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat='se_test')
-    ceiling_scores = nd.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat=PLOT_STAT)
+    sig_scores = db.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat='r_test')
+    se_scores = db.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat='se_test')
+    ceiling_scores = db.batch_comp(batch, ALL_FAMILY_MODELS, cellids=significant_cells, stat=PLOT_STAT)
     nonsig_cells = list(set(sig_scores.index) - set(significant_cells))
 
     fig, ax = plt.subplots(1,3,figsize=(12,4))
@@ -178,9 +257,9 @@ def scatter_titan(batch):
 
     significant_cells = get_significant_cells(batch, MODELS, as_list=True)
 
-    sig_scores = nd.batch_comp(batch, MODELS, cellids=significant_cells, stat='r_test')
-    se_scores = nd.batch_comp(batch, MODELS, cellids=significant_cells, stat='se_test')
-    ceiling_scores = nd.batch_comp(batch, MODELS, cellids=significant_cells, stat=PLOT_STAT)
+    sig_scores = db.batch_comp(batch, MODELS, cellids=significant_cells, stat='r_test')
+    se_scores = db.batch_comp(batch, MODELS, cellids=significant_cells, stat='se_test')
+    ceiling_scores = db.batch_comp(batch, MODELS, cellids=significant_cells, stat=PLOT_STAT)
     nonsig_cells = list(set(sig_scores.index) - set(significant_cells))
 
     fig, ax = plt.subplots(1,1,figsize=(4,4))
@@ -206,7 +285,7 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
         fig = ax.figure
 
     cellids = get_significant_cells(batch, stest, as_list=True)
-    r_values = nd.batch_comp(batch, modelnames, cellids=cellids, stat=PLOT_STAT)
+    r_values = db.batch_comp(batch, modelnames, cellids=cellids, stat=PLOT_STAT)
 
     # Bar Plot -- Median for each model
     # NOTE: ordering of names is assuming ALL_FAMILY_MODELS is being used and has not changed.
@@ -236,10 +315,98 @@ def bar_mean(batch, modelnames, stest=SIG_TEST_MODELS, ax=None):
 
     return ax, medians, stats_results
 
+def plot_other_fitters(area='A1', dropna=False, exstr=None, do_plot=True, use_r_ceiling=True):
+    dataroot = f'/auto/users/lbhb/data/'
+    if area.startswith('PEG'):
+        batch = 323
+    else:
+        batch = 322
+    if (exstr is None):
+        if area=='A1gtgram':
+            exstr='lo5'
+        else:
+            exstr=''
+    files = [f'2filt{exstr}',
+             f'3filt{exstr}',
+             f'lnp']
+    dNIM2 = pd.read_csv(f'{dataroot}{area}/r_table_{files[0]}.csv')
+    dNIM2['siteid'] = dNIM2['Cellid'].apply(db.get_siteid)
+    dNIM2['chan'] = dNIM2['Cellid'].apply(lambda x: int(x.split("-")[1]))
+    dNIM2['unit'] = dNIM2['Cellid'].apply(lambda x: int(x.split("-")[2]))
+    dNIM3 = pd.read_csv(f'{dataroot}{area}/r_table_{files[1]}.csv')
+    dNIM3['siteid'] = dNIM3['Cellid'].apply(db.get_siteid)
+    dNIM3['chan'] = dNIM3['Cellid'].apply(lambda x: int(x.split("-")[1]))
+    dNIM3['unit'] = dNIM3['Cellid'].apply(lambda x: int(x.split("-")[2]))
+    dLNP = pd.read_csv(f'{dataroot}{area}/r_table_{files[2]}.csv')
+    dLNP['siteid'] = dLNP['Cellid'].apply(db.get_siteid)
+    dLNP['chan'] = dLNP['Cellid'].apply(lambda x: int(x.split("-")[1]))
+    dLNP['unit'] = dLNP['Cellid'].apply(lambda x: int(x.split("-")[2]))
+    cellids = get_significant_cells(batch, SIG_TEST_MODELS, as_list=True)
+
+    dNEMS = db.batch_comp(batch, ALL_FAMILY_MODELS, cellids=cellids)
+    dNEMS.columns = shortnames
+    dNEMS = dNEMS.reset_index()
+    dNEMS['siteid'] = dNEMS['cellid'].apply(db.get_siteid)
+    dNEMS['chan'] = dNEMS['cellid'].apply(lambda x: int(x.split("-")[1]))
+    dNEMS['unit'] = dNEMS['cellid'].apply(lambda x: int(x.split("-")[2]))
+
+    d = dNEMS.merge(dNIM2, how='left', on = ['siteid','chan','unit'])
+    d = d.merge(dNIM3, how='left', on = ['siteid','chan','unit'], suffixes=('_2','_3'))
+    d = d.merge(dLNP, how='left', on = ['siteid','chan','unit'])
+    if dropna:
+        d=d.dropna()
+
+    if use_r_ceiling:
+        pop_LN = ALL_FAMILY_MODELS[3]
+        rt = db.batch_comp(batch, [pop_LN], cellids=cellids, stat='r_test')
+        rc = db.batch_comp(batch, [pop_LN], cellids=cellids, stat='r_ceiling')
+
+        cfrac=rc / rt
+        cfrac=cfrac.reset_index()
+        cfrac.columns=['cellid','cfrac']
+
+        d = d.merge(cfrac,how='inner',on='cellid')
+        models = ['1Dx2-CNN', '2D-CNN', '1D-CNN', 'single-CNN', 'pop-LN',
+                  'GLM_2', 'NIM_2', 'NIM_3', 'iSTAC', 'CBF', 'RBF']
+        for c in models:
+            d[c] *= d['cfrac']
+
+        
+    
+    if do_plot:
+        f,ax=plt.subplots(1,2, sharey=True,figsize=(12,5))
+        sns.stripplot(data=d[models], s=2, ax=ax[0])
+        sns.barplot(data=d[models], estimator=np.median, ax=ax[0])
+        ax[0].set_ylabel('median')
+        sns.stripplot(data=d[models], s=2, ax=ax[1])
+        sns.barplot(data=d[models], estimator=np.mean, ax=ax[1])
+        ax[1].set_ylabel('mean')
+
+        for i,m in enumerate(models):
+            y=ax[0].get_ylim()[1]
+            n=np.sum(np.isfinite(d[m]))
+            ax[0].text(i,y,f"{np.nanmedian(d[m]):.3f}/{n}", ha='center', rotation=90)
+            ax[1].text(i, y, f"{np.nanmean(d[m]):.3f}/{n}", ha='center', rotation=90)
+        plt.suptitle(f"{area} ({','.join(files)})")
+        plt.tight_layout()
+        
+    return d
+
+"""
+batch=323
+dNEMS = db.batch_comp(batch, ALL_FAMILY_MODELS)
+dNEMS.columns=shortnames
+
+"""
 
 if __name__ == '__main__':
-    plot_xc_v_mi(L=10)
+    fig,fig2 = compare_metrics(L=10)
+    full_path = (base_path / 'figS_performance_metrics_scatter').with_suffix('.pdf')
+    #fig.savefig(full_path, format='pdf', dpi=300)
+    full_path = (base_path / 'figS_performance_metrics_box').with_suffix('.pdf')
+    #fig2.savefig(full_path, format='pdf', dpi=300)
 
+    #plot_other_fitters()
     if 0:
         f, ax = plt.subplots(2, 2, figsize=column_and_half_tall, sharey='row')
         plot_pred_scatter(a1, [ALL_FAMILY_MODELS[3], ALL_FAMILY_MODELS[2]], labels=['pop LN','1D CNN'],

@@ -105,11 +105,13 @@ def free_fit(rec, **options):
     siteid = rec.meta['siteid']
 
     cellids = rec['resp'].chans
-    epoch_regex="^STIM_"
+    epoch_regex = "^STIM_"
 
-    est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
+    #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
     #est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
     #val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
+    est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
+    val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
 
     est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
     val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
@@ -191,15 +193,23 @@ def free_fit(rec, **options):
     test_input2 = {'stim': val['stim'].as_continuous().T, 'dlc': val['dlcsh'].as_continuous().T[:, :dlc_count]}
     test_target = val['resp'].as_continuous().T
 
+    fit_pred1 = model.predict(input=input1)
+    fit_pred2 = model2.predict(input=input2)
     prediction1 = model.predict(input=test_input1)
     prediction2 = model2.predict(input=test_input2)
     if type(prediction1) is dict:
+        fit_pred1 = fit_pred1['prediction']
+        fit_pred2 = fit_pred2['prediction']
         prediction1 = prediction1['prediction']
         prediction2 = prediction2['prediction']
 
+    fit_cc1 = np.array([np.corrcoef(fit_pred1[:, i], target[:, i])[0, 1] for i in range(cellcount)])
+    fit_cc2 = np.array([np.corrcoef(fit_pred2[:, i], target[:, i])[0, 1] for i in range(cellcount)])
     cc1 = np.array([np.corrcoef(prediction1[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
     cc2 = np.array([np.corrcoef(prediction2[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
 
+    model.meta['fit_predxc'] = fit_cc1
+    model2.meta['fit_predxc'] = fit_cc2
     model.meta['predxc'] = cc1
     model2.meta['predxc'] = cc2
     model.meta['prediction'] = prediction1
