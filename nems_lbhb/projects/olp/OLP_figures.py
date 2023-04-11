@@ -11,6 +11,7 @@ import nems_lbhb.projects.olp.OLP_helpers as ohel
 import copy
 from scipy import stats
 import glob
+import nems_lbhb.projects.olp.OLP_fit as ofit
 import pandas as pd
 
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))
@@ -669,11 +670,17 @@ def resp_weight_scatter(weight_df, xcol='bg_FR', ycol='weightsB', threshold=0.03
 
 
 def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB', 'weightsB'],
-                              synth_kind='N', threshold=0.03, quads=3):
+                              synth_kind='N', threshold=0.03, quads=3, r_thresh=0.6, area='A1'):
     '''Updated resp_weight_scatter to just plot all four combinations of FR/wt on one plot to avoid
     the silliness of four individual plots. Works the same, basically just give it a df.'''
     quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=quads)
     quad = quad.loc[quad.synth_kind == synth_kind].copy()
+
+    if r_thresh:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_thresh]
+    if area:
+        quad = quad.loc[quad.area == area]
 
     fig, axes = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
     axes = axes.ravel()
@@ -698,6 +705,7 @@ def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB
     axes[2].set_ylabel(f"{ycol[2]}", fontsize=12, fontweight='bold')
     axes[2].set_xlabel(f"{xcol[0]}", fontsize=12, fontweight='bold')
     axes[3].set_xlabel(f"{xcol[1]}", fontsize=12, fontweight='bold')
+    fig.suptitle(f"FR Thresh: {threshold} - Area: {area} - r_thresh: {r_thresh}", fontweight='bold', fontsize=12)
 
 
 def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None, r_cut=None):
@@ -739,7 +747,7 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
     fig.tight_layout()
 
 
-def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
+def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1', threshold=0.03,
                          jitter=[0.25,0.2,0.03],
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
                          title_text='', r_cut=None):
@@ -766,8 +774,8 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
         quad = quad.loc[quad[y_metric] <= metric_filter]
         quad = quad.loc[quad[y_metric] >= -metric_filter]
 
-    if y_metric=='BG_rel_gain':
-        y_metric2, title, ylabel = 'FG_rel_gain', 'Relative Gain', 'Relative Gain'
+    if y_metric==f'BG_rel_gain{suffix}':
+        y_metric2, title, ylabel = f'FG_rel_gain{suffix}', f'Relative Gain{suffix}', f'Relative Gain{suffix}'
     elif y_metric=='weightsB':
         y_metric2, title, ylabel = 'weightsA', 'How this sound effects a concurrent sound', 'Weight'
     elif y_metric=='weightsA':
@@ -1642,3 +1650,47 @@ def spectrogram_stats_diagram(name, type, bg_fold=2, fg_fold=3, synth_kind='A'):
     ax[2].spines['top'].set_visible(True), ax[2].spines['bottom'].set_visible(True)
     ax[2].spines['left'].set_visible(True), ax[2].spines['right'].set_visible(True)
     ax[2].set_title(f"Average Standard\nDeviation: {np.around(np.std(spec, axis=0).mean(), 1)}", fontweight='bold', fontsize=12)
+
+
+def sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Tstationary', show='N'):
+    '''2022_12_06. Either going to be very useful for many things or not at all. Will take three different mentrics
+    from the sound_df dataframe and plot the connected points and then throw a bar in the background to summarize.'''
+    fig, ax = plt.subplots(1, 1, figsize=(5, 7))
+
+    to_plot = sound_df.loc[sound_df.synth_kind==show]
+    to_plot_bg, to_plot_fg = to_plot.loc[to_plot.type=='BG'], to_plot.loc[to_plot.type=='FG']
+
+    n = 2
+    xv = np.arange(n)
+    nc = len(suffixes)
+    xvv = np.repeat(xv, nc)
+    if len(suffixes)==3:
+        offsets, width = np.asarray([-0.3, 0, 0.3]), 0.2
+    elif len(suffixes) == 2:
+        offsets, width = np.asarray([-0.2, 0.2]), 0.3
+    else:
+        offsets, width = np.asarray([0]), 0.5
+    offsetsvv = np.tile(offsets, n)
+    X = list(xvv + offsetsvv)
+
+    colors = ['deepskyblue'] * len(suffixes) + ['yellowgreen'] * len(suffixes)
+    plot_list_bg = [np.nanmean(to_plot_bg[f'{metric}{ss}']) for ss in suffixes]
+    plot_list_fg = [np.nanmean(to_plot_fg[f'{metric}{ss}']) for ss in suffixes]
+
+    ax.bar(x=X[:len(suffixes)], height=plot_list_bg, color='deepskyblue', width=width)
+    ax.bar(x=X[len(suffixes):], height=plot_list_fg, color='yellowgreen', width=width)
+
+    plot_bg = [to_plot_bg[f'{metric}{ss}'] for ss in suffixes]
+    plot_fg = [to_plot_fg[f'{metric}{ss}'] for ss in suffixes]
+
+    for cnt in range(to_plot_bg.shape[0]):
+        ax.plot(X[:len(suffixes)], plot_bg, 'ko-', ms=3)
+    for cnt in range(to_plot_fg.shape[0]):
+        ax.plot(X[len(suffixes):], plot_fg, 'ko-', ms=3)
+
+    ax.set_xticks(X)
+    bg_labels, fg_labels = [f'BG\n{ss}' for ss in suffixes], [f'FG\n{ss}' for ss in suffixes]
+    ax.set_xticklabels(bg_labels+fg_labels, fontsize=10, fontweight='bold', rotation=0)
+    ax.set_ylabel(f"{metric}: {show}", fontsize=10, fontweight='bold')
+
+    fig.tight_layout()

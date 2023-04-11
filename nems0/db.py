@@ -1019,8 +1019,8 @@ def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
     params = ()
     sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
     if batch is not None:
-        sql += " AND batch=%s"
-        params = params+(batch,)
+        sql += f" AND batch={batch}"
+        #params = params+(batch,)
 
     if cellid is not None:
         if SQL_ENGINE == 'sqlite':
@@ -1196,6 +1196,11 @@ def get_data_parms(rawid=None, parmfile=None):
         pass
 
     d = pd.read_sql(sql=sql, con=engine)
+
+    # save all values of different datatypes into a single value column
+    d['value'] = d['value'].astype(object)
+    d.loc[d['datatype']==2,'value'] = d.loc[d['datatype']==2,'svalue']
+    d.loc[d['datatype'] == 1, 'value'] = d.loc[d['datatype']==1,'svalue'].apply(lambda x: eval(x.replace(' ',',')))
 
     return d
 

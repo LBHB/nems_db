@@ -1213,7 +1213,7 @@ def synth_scatter_metrics(df, first='temp_ps_std', second='freq_ps_std', metric=
     fig.tight_layout()
 
 
-def synthetic_summary_relative_gain_bar(weight_df0):
+def synthetic_summary_relative_gain_bar(weight_df0, condition=''):
     '''2022_11_23. This generates the summary of the synthetic histograms for FG relative gain and plots them as a
     horizontal bar graph and returns the statistics that are Bonferroni corrected. It is currently not flexible to
     include different synthetic conditions but that's fine for now.'''
@@ -1222,10 +1222,10 @@ def synthetic_summary_relative_gain_bar(weight_df0):
     T = weight_df0.loc[weight_df0.synth_kind == 'T']
     C = weight_df0.loc[weight_df0.synth_kind == 'C']
 
-    MS = stats.ttest_ind(M['FG_rel_gain'], S['FG_rel_gain']).pvalue
-    MT = stats.ttest_ind(M['FG_rel_gain'], T['FG_rel_gain']).pvalue
-    SC = stats.ttest_ind(S['FG_rel_gain'], C['FG_rel_gain']).pvalue
-    TC = stats.ttest_ind(T['FG_rel_gain'], C['FG_rel_gain']).pvalue
+    MS = stats.ttest_ind(M[f'FG_rel_gain{condition}'], S[f'FG_rel_gain{condition}']).pvalue
+    MT = stats.ttest_ind(M[f'FG_rel_gain{condition}'], T[f'FG_rel_gain{condition}']).pvalue
+    SC = stats.ttest_ind(S[f'FG_rel_gain{condition}'], C[f'FG_rel_gain{condition}']).pvalue
+    TC = stats.ttest_ind(T[f'FG_rel_gain{condition}'], C[f'FG_rel_gain{condition}']).pvalue
     stat_dict = {'MS': MS * 4, 'MT': MT * 4, 'SC': SC * 4, 'TC': TC * 4}
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 9))
@@ -1236,10 +1236,10 @@ def synthetic_summary_relative_gain_bar(weight_df0):
             label=f'Total (n=)', color='dimgrey', linestyle='None', height=0.9)  # , marker=symbols[cnt])
 
     ax.errorbar(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
-                x=[np.nanmean(C['FG_rel_gain']), np.nanmean(T['FG_rel_gain']),
-                   np.nanmean(S['FG_rel_gain']), np.nanmean(M['FG_rel_gain'])],
-                xerr=[stats.sem(C['FG_rel_gain']), stats.sem(T['FG_rel_gain']),
-                      stats.sem(S['FG_rel_gain']), stats.sem(M['FG_rel_gain'])],
+                x=[np.nanmean(C[f'FG_rel_gain{condition}']), np.nanmean(T[f'FG_rel_gain{condition}']),
+                   np.nanmean(S[f'FG_rel_gain{condition}']), np.nanmean(M[f'FG_rel_gain{condition}'])],
+                xerr=[stats.sem(C[f'FG_rel_gain{condition}']), stats.sem(T[f'FG_rel_gain{condition}']),
+                      stats.sem(S[f'FG_rel_gain{condition}']), stats.sem(M[f'FG_rel_gain{condition}'])],
                 yerr=None, color='black', linestyle='None')
 
     ax.yaxis.tick_right()
@@ -1260,6 +1260,7 @@ def synthetic_summary_relative_gain_multi_bar(weight_df0, suffixes=['', '_start'
     2022_11_23. This generates the summary of the synthetic histograms for FG relative gain and plots them as a
     horizontal bar graph and returns the statistics that are Bonferroni corrected. It is currently not flexible to
     include different synthetic conditions but that's fine for now.'''
+    N = weight_df0.loc[weight_df0.synth_kind == 'N']
     M = weight_df0.loc[weight_df0.synth_kind == 'M']
     S = weight_df0.loc[weight_df0.synth_kind == 'S']
     T = weight_df0.loc[weight_df0.synth_kind == 'T']
@@ -1273,30 +1274,107 @@ def synthetic_summary_relative_gain_multi_bar(weight_df0, suffixes=['', '_start'
         TC = stats.ttest_ind(T[f'FG_rel_gain{ss}'], C[f'FG_rel_gain{ss}']).pvalue
         stat_dict[f'MS{ss}'], stat_dict[f'MT{ss}'], stat_dict[f'SC{ss}'], stat_dict[f'TC{ss}'] = MS*4, MT*4, SC*4, TC*4
 
-    fig, axes = plt.subplots(1, len(suffixes), figsize=(len(suffixes*7), 9))
+    fig, axes = plt.subplots(1, len(suffixes), figsize=(len(suffixes*4), 5), sharex=True)
 
     for ax, ss in zip(axes, suffixes):
-        ax.barh(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+        ax.barh(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation', 'Natural'],
                 width=[np.nanmean(C[f'FG_rel_gain{ss}']), np.nanmean(T[f'FG_rel_gain{ss}']),
-                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}'])],
+                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}']), np.nanmean(N[f'FG_rel_gain{ss}'])],
                 label=f'Total (n=)', color='dimgrey', linestyle='None', height=0.9)  # , marker=symbols[cnt])
 
-        ax.errorbar(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'],
+        ax.errorbar(y=['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation', 'Natural'],
                     x=[np.nanmean(C[f'FG_rel_gain{ss}']), np.nanmean(T[f'FG_rel_gain{ss}']),
-                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}'])],
+                       np.nanmean(S[f'FG_rel_gain{ss}']), np.nanmean(M[f'FG_rel_gain{ss}']), np.nanmean(N[f'FG_rel_gain{ss}'])],
                     xerr=[stats.sem(C[f'FG_rel_gain{ss}']), stats.sem(T[f'FG_rel_gain{ss}']),
-                          stats.sem(S[f'FG_rel_gain{ss}']), stats.sem(M[f'FG_rel_gain{ss}'])],
+                          stats.sem(S[f'FG_rel_gain{ss}']), stats.sem(M[f'FG_rel_gain{ss}']), stats.sem(N[f'FG_rel_gain{ss}'])],
                     yerr=None, color='black', linestyle='None')
 
         ax.yaxis.tick_right()
         ax.yaxis.set_label_position("right")
         ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
 
-        ax.tick_params(axis='x', labelsize=14)
-        ax.set_xlabel("Relative FG Suppresion", fontsize=18, fontweight='bold')
-        ax.set_yticklabels(['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation'], fontsize=14,
+        ax.tick_params(axis='x', labelsize=10)
+        ax.set_xlabel("Relative FG Suppresion", fontsize=10, fontweight='bold')
+        ax.set_yticklabels(['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation', 'Natural'], fontsize=10,
                            fontweight='bold')
-        ax.set_title(ss, fontsize=12, fontweight='bold')
+        ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]}", fontsize=10, fontweight='bold')
     fig.tight_layout()
+
+    return stat_dict
+
+
+def synthetic_summary_weight_multi_bar(df, suffixes=['', '_start', '_end'], show=['N','M', 'S', 'T', 'C'], figsize=None):
+    '''2022_12_05. Same thing as the other except it is veritcal and plots the weights separately instead of relative gain.
+    Same thing as the original but it takes suffixes and adjusts the size based on that.
+    2022_11_23. This generates the summary of the synthetic histograms for FG relative gain and plots them as a
+    horizontal bar graph and returns the statistics that are Bonferroni corrected. It is currently not flexible to
+    include different synthetic conditions but that's fine for now.'''
+    synth_dict = {ss: df.loc[df.synth_kind == ss] for ss in show}
+    ns = len(synth_dict[show[0]])
+
+    kind_dict = {'A': 'Non-RMS Norm\nNatural', 'N': 'Natural', 'M': 'Spectrotemporal\nModulation',
+                  'U': 'Spectro-\ntemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
+    suff_dict = {'': 'Full Fit', '_start': '0-0.5s Fit', '_end': '0.5-1s Fit'}
+
+    if figsize:
+        fig, axes = plt.subplots(1, len(suffixes), figsize=figsize, sharey=True)
+    else:
+        fig, axes = plt.subplots(1, len(suffixes), figsize=(len(suffixes*4), 5), sharey=True)
+
+    if len(suffixes) == 1:
+        axes = [axes]
+
+    to_plot_x = np.arange(len(show))
+    x_labels = [f"{kind_dict[dd]}" for dd in show]
+    width = 0.2
+
+    for ax, ss in zip(axes, suffixes):
+
+        to_plot_y1 = [np.nanmean(synth_dict[dd][f'weightsA{ss}']) for dd in show]
+        sem1 = [stats.sem(synth_dict[dd][f'weightsA{ss}']) for dd in show]
+        to_plot_y2 = [np.nanmean(synth_dict[dd][f'weightsB{ss}']) for dd in show]
+        sem2 = [stats.sem(synth_dict[dd][f'weightsB{ss}']) for dd in show]
+
+        ax.bar(x=to_plot_x-width, height=to_plot_y1, width=width*2, color='deepskyblue', label='BG', linestyle=None)
+        ax.errorbar(x=to_plot_x-width, y=to_plot_y1, yerr=sem1, xerr=None, color='black', linestyle='None')
+        ax.bar(x=to_plot_x+width, height=to_plot_y2, width=width*2, color='yellowgreen', label='FG', linestyle=None)
+        ax.errorbar(x=to_plot_x+width, y=to_plot_y2, yerr=sem2, xerr=None, color='black', linestyle='None')
+
+        ax.set_ylabel("Weights", fontsize=12, fontweight='bold')
+        ax.set_xticks(range(len(x_labels)))
+        ax.set_xticklabels(x_labels, fontsize=10, fontweight='bold', rotation=60)
+        ax.set_title(f"{suff_dict[ss]}", fontsize=10, fontweight='bold')
+        ax.legend(loc='upper right')
+    fig.suptitle(f"Area: {df.area.unique()[0]} - By: {df.filt_by.unique()[0]} - (n={ns})", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+
+    stat_dict = {}
+    for ss in suffixes:
+        N, M, S, T, C = df.loc[df.synth_kind == 'N'], df.loc[df.synth_kind == 'M'], df.loc[df.synth_kind == 'S'], \
+                        df.loc[df.synth_kind == 'T'], df.loc[df.synth_kind == 'C']
+        NM_A = stats.ttest_ind(N[f'weightsA{ss}'], M[f'weightsA{ss}']).pvalue
+        MS_A = stats.ttest_ind(M[f'weightsA{ss}'], S[f'weightsA{ss}']).pvalue
+        MT_A = stats.ttest_ind(M[f'weightsA{ss}'], T[f'weightsA{ss}']).pvalue
+        SC_A = stats.ttest_ind(S[f'weightsA{ss}'], C[f'weightsA{ss}']).pvalue
+        TC_A = stats.ttest_ind(T[f'weightsA{ss}'], C[f'weightsA{ss}']).pvalue
+
+        NM_B = stats.ttest_ind(N[f'weightsB{ss}'], M[f'weightsB{ss}']).pvalue
+        MS_B = stats.ttest_ind(M[f'weightsB{ss}'], S[f'weightsB{ss}']).pvalue
+        MT_B = stats.ttest_ind(M[f'weightsB{ss}'], T[f'weightsB{ss}']).pvalue
+        SC_B = stats.ttest_ind(S[f'weightsB{ss}'], C[f'weightsB{ss}']).pvalue
+        TC_B = stats.ttest_ind(T[f'weightsB{ss}'], C[f'weightsB{ss}']).pvalue
+
+        N = stats.ttest_ind(N[f'weightsA{ss}'], N[f'weightsB{ss}']).pvalue
+        M = stats.ttest_ind(M[f'weightsA{ss}'], M[f'weightsB{ss}']).pvalue
+        S = stats.ttest_ind(S[f'weightsA{ss}'], S[f'weightsB{ss}']).pvalue
+        T = stats.ttest_ind(T[f'weightsA{ss}'], T[f'weightsB{ss}']).pvalue
+        C = stats.ttest_ind(C[f'weightsA{ss}'], C[f'weightsB{ss}']).pvalue
+
+        stat_dict[f'NM_A{ss}'], stat_dict[f'MS_A{ss}'], stat_dict[f'MT_A{ss}'], stat_dict[f'SC_A{ss}'], \
+            stat_dict[f'TC_A{ss}'] = NM_A * 4, MS_A * 4, MT_A * 4, SC_A * 4, TC_A * 4
+        stat_dict[f'NM_B{ss}'], stat_dict[f'MS_B{ss}'], stat_dict[f'MT_B{ss}'], stat_dict[f'SC_B{ss}'], \
+            stat_dict[f'TC_B{ss}'] = NM_B * 4, MS_B * 4, MT_B * 4, SC_B * 4, TC_B * 4
+        stat_dict[f'N{ss}'], stat_dict[f'M{ss}'], stat_dict[f'S{ss}'], stat_dict[f'T{ss}'], \
+            stat_dict[f'C{ss}'] = N * 4, M * 4, S * 4, T * 4, C * 4
 
     return stat_dict

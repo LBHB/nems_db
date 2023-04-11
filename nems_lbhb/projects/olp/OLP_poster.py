@@ -85,12 +85,12 @@ def poster3_psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth
     poster3_psths_with_specs(weight_df, 'CLT009a-028-2', 'Bulldozer', 'FightSqueak', batch=340, bin_kind='11', synth_kind='A',
                              sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False)
     for 2022_12 WIP
-    poster3_psths_with_specs(weight_df, 'CLT012a-052-1', 'Bees', 'Bugle', batch=340, bin_kind='11', synth_kind='A',
-                         sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=True)
+    poster3_psths_with_specs(weight_df, 'CLT008a-046-2', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=False)
     poster3_psths_with_specs(weight_df, 'CLT009a-028-2', 'Bulldozer', 'FightSqueak', batch=340, bin_kind='11', synth_kind='A',
-                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=True)
+                             sigma=1, error=False, title='A1 - FG Suppression', figsize=(8,15), plot_ls=False, plot_pred=False)
     poster3_psths_with_specs(weight_df, 'CLT052d-018-1', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
-                             sigma=1, error=False, title='PEG - Mixed Suppression', figsize=(8, 15), plot_ls=False, plot_pred=True)
+                             sigma=1, error=False, title='PEG - Mixed Suppression', figsize=(8, 15), plot_ls=False, plot_pred=False)
 
     '''
 
@@ -237,6 +237,10 @@ def poster3_response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=34
     or list of them in and it'll go ahead and only label those on the y axis so you can better see
     it. Turn example to True if you'd like it to be a more generically titled than using the actually
     epoch names, which are not good for posters. Added 2022_09_01
+
+    poster3_response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-46-2',
+                                    batch=340, bin_kind='11',
+                                    synth_kind='A', sigma=2, sort=True, example=True)
 
     Added sorting for the difference panel which will in turn sort all other panels 2022_09_07. Also,
     added mandatory normalization of responses by the max for each unit across the three epochs.'''
