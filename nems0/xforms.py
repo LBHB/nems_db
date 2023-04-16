@@ -581,7 +581,7 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
     else:
         S_val = None
     from nems.visualization import model
-    fig = model.plot_model_with_parameters(
+    fig = model.plot_model(
         modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
 
     # Needed to make into a Bytes because you can't deepcopy figures!

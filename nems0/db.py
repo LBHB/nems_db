@@ -179,6 +179,8 @@ def pd_query(sql=None, params=None):
             if OpErr._message().count('Lost connection to MySQL server during query')>0:
                 log.warning('Lost connection to MySQL server during query, trying again.')
                 d = pd.read_sql_query(sql=sql, con=engine, params=params)
+            else:
+                log.info(f"SQL error: {sql}")
     return d
 
 

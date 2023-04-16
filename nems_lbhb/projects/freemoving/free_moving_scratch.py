@@ -33,7 +33,6 @@ os.makedirs(figpath, exist_ok=True)
 if USE_DB:
     siteid = "PRN010a"
     siteid = "PRN009a"
-    siteid = "PRN011a"
     siteid = "PRN047a"
     siteid = "PRN044a"
     siteid = "PRN015a"
@@ -43,6 +42,8 @@ if USE_DB:
     siteid = "PRN017a"
     siteid = "PRN069a"
     siteid = "PRN025a"
+    siteid = "PRN022a"
+    siteid = "PRN074a"
     runclassid = 132
 
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
@@ -62,7 +63,7 @@ rasterfs = 50
 ex = BAPHYExperiment(parmfile=parmfile, cellid=cellids)
 print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-recache = False
+recache = True
 extops = {'mono': True}
 rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
                        dlc=True, recache=recache, rasterfs=rasterfs,
