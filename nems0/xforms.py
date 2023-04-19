@@ -548,13 +548,12 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             #        log.info(f'Freezing parameters for layer {i}: {l.name}')
             #        modelspec.layers[i].freeze_parameters()
             if rand_count > 1:
-                fitter_options['learning_rate'] = learning_rate * 10
-                fitter_options['epochs'] = max_iter
-                fitter_options['early_stopping_tolerance'] = tolerance * 10
                 modelspec_copies = modelspec.sample_from_priors(rand_count)
                 E = np.zeros(rand_count)
                 E0 = np.zeros(rand_count)
                 for mi, m in enumerate(modelspec_copies):
+                    fitter_options['learning_rate'] = learning_rate * 10
+                    fitter_options['early_stopping_tolerance'] = tolerance * 10
                     log.info(f'** ({backend}) Fitting without NL rand_init {mi}/{rand_count} ...')
 
                     m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
@@ -565,7 +564,6 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                         m.layers[i].freeze_parameters()
 
                     fitter_options['learning_rate'] = learning_rate * 10
-                    fitter_options['epochs'] = max_iter
                     fitter_options['early_stopping_tolerance'] = tolerance
                     log.info(f'** ({backend}) Fitting NL only rand_init {mi}/{rand_count} ...')
                     modelspec_copies[mi] = m.fit(
