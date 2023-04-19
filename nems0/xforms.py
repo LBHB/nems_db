@@ -424,12 +424,14 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
     if not IsReload:
         if meta is None:
             meta = {}
+        keywordstring0 = keywordstring
         keywordstring = init.fill_keyword_string_values(keywordstring, **context)
         log.info(f'modelspec: {keywordstring}')
         modelspec = Model.from_keywords(keywordstring)
         modelspec = modelspec.sample_from_priors()
         modelspec.meta = meta.copy()
         modelspec.meta['engine'] = 'nems-lite'
+        modelspec.meta['keywordstring'] = keywordstring0
         modelspec.name = f"{meta['cellid']}/{meta['batch']}/{meta['modelname']}"
     else:
         modelspec = context['modelspec']
@@ -439,7 +441,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
              cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
-             validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
+             validation_split=0.0, early_stopping_patience=10, early_stopping_delay=20,
              **context):
     """
     Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
@@ -466,7 +468,8 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
         else:
             S_est = None
-        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
+        fitter_options = {'cost_function': 'nmse',
+                          'options': {'ftol': tolerance, 'gtol': tolerance / 10, 'maxiter': max_iter}}
         log.info(f"{fitter_options}")
         try:
             modelspec.layers[-1].skip_nonlinearity()
@@ -486,28 +489,28 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
                                   backend=backend, fitter_options=fitter_options)
 
-    elif backend=='tf':
+    elif backend == 'tf':
         # convert signal matrices to nems-lite format
         X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
         Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
-        
+
         if 'state' in est.signals.keys():
             S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
         else:
             S_est = None
-            
-        #X_est = np.expand_dims(X_est, axis=0)
-        #Y_est = np.expand_dims(Y_est, axis=0)
-        #if S_est is not None:
-        #    S_est = np.expand_dims(S_est, axis=0)
 
+        # X_est = np.expand_dims(X_est, axis=0)
+        # Y_est = np.expand_dims(Y_est, axis=0)
+        # if S_est is not None:
+        #    S_est = np.expand_dims(S_est, axis=0)
+        log.info(f"Dataset size X_est: {X_est.shape} Y_est: {Y_est.shape}")
         fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
                           'early_stopping_patience': early_stopping_patience,
                           'early_stopping_tolerance': tolerance,
                           'validation_split': validation_split,
-                          'learning_rate': learning_rate*10, 'epochs': int(max_iter/2),
+                          'learning_rate': learning_rate, 'epochs': max_iter,
                           }
-        
+
         try:
             modelspec.layers[-1].skip_nonlinearity()
             fit_stage_1 = True
@@ -515,31 +518,146 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             log.info('No NL to exclude from stage 1 fit')
             fit_stage_1 = False
 
+        prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         if fit_stage_1:
-            log.info(f'({backend}) Fitting without NL ...')
-            log.info(f"lr={fitter_options['learning_rate']} epochs={fitter_options['epochs']}")
             from nems.layers import ShortTermPlasticity
-            #for i, l in enumerate(modelspec.layers):
+            # for i, l in enumerate(modelspec.layers):
             #    if isinstance(l, ShortTermPlasticity):
             #        log.info(f'Freezing parameters for layer {i}: {l.name}')
             #        modelspec.layers[i].freeze_parameters()
+            fitter_options['learning_rate'] = learning_rate*10
+            fitter_options['epochs'] = max_iter
+            fitter_options['early_stopping_tolerance'] = tolerance*10
+            log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
             modelspec = modelspec.fit(
                 input=X_est, target=Y_est, state=S_est, backend=backend,
                 fitter_options=fitter_options, batch_size=None)
 
-            log.info(f'({backend}) Now fitting with NL ...')
             modelspec.layers[-1].unskip_nonlinearity()
+            for i in range(len(modelspec.layers)-1):
+                modelspec.layers[i].freeze_parameters()
+            #log.info('forcing shift to zero')
+            #s = modelspec.layers[-1].get_parameter_values('shift')
+            #modelspec.layers[-1]['shift'] = s[0] * 0
 
-        for i, l in enumerate(modelspec.layers):
+            fitter_options['learning_rate'] = learning_rate*10
+            fitter_options['epochs'] = max_iter
+            fitter_options['early_stopping_tolerance'] = tolerance
+            log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
+            modelspec = modelspec.fit(
+                input=X_est, target=Y_est, state=S_est, backend=backend,
+                fitter_options=fitter_options, batch_size=None)
+
+        for i in range(len(modelspec.layers)):
             modelspec.layers[i].unfreeze_parameters()
 
         fitter_options['learning_rate'] = learning_rate
         fitter_options['epochs'] = max_iter
+        fitter_options['early_stopping_tolerance'] = tolerance
+        log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
         modelspec = modelspec.fit(
             input=X_est, target=Y_est, state=S_est, backend=backend,
             fitter_options=fitter_options, batch_size=None)
 
+        postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
+        modelspec.meta['prephi'] = prephi
+        modelspec.meta['postphi'] = postphi
+
         modelspec.backend = None
+
+    return {'modelspec': modelspec}
+
+
+def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
+             validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
+             chop_layers=2,
+             **context):
+    """
+    Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
+       for a modelspec, calling fit_function to fit each.
+    Modified to work with nems-lite
+    :param modelspec:  modelspec to fit
+    :param est:  nems-format Recording with fit data
+    :param IsReload:    [False] if True, skip fit and return without doing anything
+    :param context:  pass-through dictionary into fitter
+    :return: results = xforms context dictionary update
+    """
+    if IsReload:
+        return {}
+
+    if (modelspec is None) or (est is None):
+        raise ValueError("Inputs modelspec and est required")
+
+    from nems import Model
+
+    save_params = [l.get_parameter_values(as_dict=True) for l in modelspec.layers]
+    save_layers = range(len(save_params) - chop_layers, len(save_params))
+
+    cell_count = est['resp'].shape[0]
+
+    modelspecname = modelspec.meta['modelspecname']
+
+    est1 = est.copy()
+    est1['resp'] = est1['resp'].extract_channels([est1['resp'].chans[0]])
+    keywordstring = init.fill_keyword_string_values(modelspecname, rec=est1)
+    log.info(f'sliced modelspec: {keywordstring}')
+    tmodel = Model.from_keywords(keywordstring)
+
+    for i, d in enumerate(save_params):
+        if i < save_layers[0]:
+            tmodel.layers[i].set_parameter_values(d, ignore_bounds=True)
+            tmodel.layers[i].freeze_parameters()
+
+    for cid in range(cell_count):
+        log.info("")
+        log.info(f"Fitting single cell: ({cid}) {est['resp'].chans[cid]}")
+        # initialized with parameter values for this cell
+        for i, s in enumerate(save_layers):
+            d = {}
+            for k in save_params[s].keys():
+                if save_params[s][k].ndim == 1:
+                    d[k] = save_params[s][k][[cid]]
+                else:
+                    d[k] = save_params[s][k][:, [cid]]
+
+            tmodel.layers[s].set_parameter_values(d, ignore_bounds=True)
+
+        est1 = est.copy()
+        est1['resp'] = est1['resp'].extract_channels([est1['resp'].chans[cid]])
+        X_est = np.moveaxis(est1.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y_est = np.moveaxis(est1.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+        else:
+            S_est = None
+
+        fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
+                          'early_stopping_patience': early_stopping_patience,
+                          'early_stopping_tolerance': tolerance,
+                          'validation_split': validation_split,
+                          'learning_rate': learning_rate, 'epochs': max_iter,
+                          }
+        tmodel = tmodel.fit(
+            input=X_est, target=Y_est, state=S_est, backend=backend,
+            fitter_options=fitter_options, batch_size=None)
+
+        # put parameters back into main model
+        for i, s in enumerate(save_layers):
+            d = tmodel.layers[s].get_parameter_values(as_dict=True)
+            for k in save_params[s].keys():
+                #print(f"updating {k}[{cid}] from {save_params[s][k][[cid]]} to {d[k]}")
+                if save_params[s][k].ndim == 1:
+                    save_params[s][k][[cid]] = d[k]
+                else:
+                    save_params[s][k][:, [cid]] = d[k]
+
+    for i, s in enumerate(save_layers):
+        modelspec.layers[s].set_parameter_values(save_params[s], ignore_bounds=True)
+
+    modelspec.backend = None
+
     return {'modelspec': modelspec}
 
 
