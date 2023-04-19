@@ -441,7 +441,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
              cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
-             validation_split=0.0, early_stopping_patience=10, early_stopping_delay=20,
+             validation_split=0.0, early_stopping_patience=10, early_stopping_delay=20, rand_inits=5,
              **context):
     """
     Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
@@ -479,9 +479,22 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             fit_stage_1 = False
 
         if fit_stage_1:
-            log.info(f'({backend}) Fitting without NL ...')
-            modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
-                                      backend=backend, fitter_options=fitter_options)
+            if rand_inits>1:
+                log.info(f'({backend}) Fitting without NL (rand_inits={rand_inits}...')
+                modelspec_copies = modelspec.sample_from_priors(5)
+                modelspec_copies = [m.fit(input=X_est, target=Y_est, state=S_est,
+                                    backend=backend, fitter_options=fitter_options)
+                                    for m in modelspec_copies]
+                E = np.array([m.results.final_error for m in modelspec_copies])
+                E0 = np.array([m.results.initial_error[0] for m in modelspec_copies])
+                best_i = np.argmax(E)
+                print(f'Init E: {E0}')
+                print(f'final E: {E} best={E[best_i]}')
+                modelspec=modelspec_copies[best_i]
+            else:
+                log.info(f'({backend}) Fitting without NL ...')
+                modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
+                                          backend=backend, fitter_options=fitter_options)
 
             log.info(f'({backend}) Now fitting with NL ...')
             modelspec.layers[-1].unskip_nonlinearity()
@@ -528,17 +541,32 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             fitter_options['learning_rate'] = learning_rate*10
             fitter_options['epochs'] = max_iter
             fitter_options['early_stopping_tolerance'] = tolerance*10
-            log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
-            modelspec = modelspec.fit(
-                input=X_est, target=Y_est, state=S_est, backend=backend,
-                fitter_options=fitter_options, batch_size=None)
+            if rand_inits > 1:
+                modelspec_copies = modelspec.sample_from_priors(rand_inits)
+                E = np.zeros(rand_inits)
+                E0 = np.zeros(rand_inits)
+                for mi, m in enumerate(modelspec_copies):
+                    log.info(f'  Fitting without NL rand_init {mi}/{rand_inits} ...')
+
+                    modelspec_copies[mi] = modelspec_copies[mi].fit(
+                        input=X_est, target=Y_est, state=S_est, backend=backend,
+                        fitter_options=fitter_options, batch_size=None)
+                    E[mi] = modelspec_copies[mi].results.final_error
+                    E0[mi] = modelspec_copies[mi].results.initial_error[0]
+                best_i = np.argmin(E)
+                print(f'Init E: {E0}')
+                print(f'final E: {E} best={best_i} ({E[best_i]})')
+
+                modelspec = modelspec_copies[best_i]
+            else:
+                log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
+                modelspec = modelspec.fit(
+                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    fitter_options=fitter_options, batch_size=None)
 
             modelspec.layers[-1].unskip_nonlinearity()
             for i in range(len(modelspec.layers)-1):
                 modelspec.layers[i].freeze_parameters()
-            #log.info('forcing shift to zero')
-            #s = modelspec.layers[-1].get_parameter_values('shift')
-            #modelspec.layers[-1]['shift'] = s[0] * 0
 
             fitter_options['learning_rate'] = learning_rate*10
             fitter_options['epochs'] = max_iter
@@ -554,7 +582,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         fitter_options['learning_rate'] = learning_rate
         fitter_options['epochs'] = max_iter
         fitter_options['early_stopping_tolerance'] = tolerance
-        log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
+        log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
         modelspec = modelspec.fit(
             input=X_est, target=Y_est, state=S_est, backend=backend,
             fitter_options=fitter_options, batch_size=None)

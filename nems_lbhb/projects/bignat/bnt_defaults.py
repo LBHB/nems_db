@@ -89,11 +89,12 @@ fit_string_pop = "lite.tf.mi1000.lr1e3.t6.es20"
 fit_string_single = "lite.tf.mi1000.lr1e3.t6.es20"
 
 # maybe better model? only slightly. fewer L1 units, more L2
-cnn1dx2_alt = "wc.18x1x60.g-fir.15x1x60-relu.60.f-wc.60x1x90-fir.10x1x90-relu.90.f-wc.90x100-relu.100.o-wc.100xR-dexp.R"
-cnn1dx2_alt2 = "wc.18x1x60.g-fir.15x1x60-relu.60.f-wc.60x1x90-fir.10x1x90-relu.90.f-wc.90x80-relu.80.o-wc.80xR-dexp.R"
-cnn1dx2_alt3 = "wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x80-relu.80.o-wc.80xR-dexp.R"
-cnn1dx2 = "wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.o-wc.100xR-dexp.R"
-cnn1d = "wc.18x1x80.g-fir.25x1x80-relu.80.f-wc.80x100-relu.100.o-wc.100xR-dexp.R"
+cnn1dx2_alt = "wc.18x1x60.g-fir.15x1x60-relu.60.f-wc.60x1x90-fir.10x1x90-relu.90.f-wc.90x100-relu.100.s-wc.100xR-dexp.R"
+cnn1dx2_alt2 = "wc.18x1x60.g-fir.15x1x60-relu.60.f-wc.60x1x90-fir.10x1x90-relu.90.f-wc.90x80-relu.80.s-wc.80xR-dexp.R"
+cnn1dx2_alt3 = "wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x80-relu.80.s-wc.80xR-dexp.R"
+cnn1dx2 = "wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-dexp.R"
+cnn1dx2_2 = "wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R"
+cnn1d = "wc.18x1x80.g-fir.25x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-dexp.R"
 lnpop = "wc.18x1x120.g-fir.25x1x120-wc.120xR-dexp.R"
 cnnsingle="wc.18x1x6.g-fir.25x1x6-relu.6.f-wc.6x1-dexp.1"
 
@@ -102,9 +103,7 @@ POP_MODELS = [
     f"{load_string_pop}_{cnn1dx2}_{fit_string_pop}", # c1dx2
     f"{load_string_pop}_{lnpop}_{fit_string_pop}", # LN_pop
     f"{load_string_pop}_{cnn1d}_{fit_string_pop}", # c1d
-    f"{load_string_pop}_{cnn1dx2_alt}_{fit_string_pop}",  # c1dx2 alt
-    f"{load_string_pop}_{cnn1dx2_alt2}_{fit_string_pop}",  # c1dx2 alt
-    f"{load_string_pop}_{cnn1dx2_alt3}_{fit_string_pop}",  # c1dx2 alt
+    f"{load_string_pop}_{cnn1dx2_2}_{fit_string_pop}", # c1dx2
 ]
 # SIG_TEST_MODELS: round 2, fit using real single cellid in LBHB or exacloud. LBHB probably faster
 SIG_TEST_MODELS = [
@@ -141,9 +140,9 @@ def list_pop_models_old():
     # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
     POP_MODELS_OLD = [
         #f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
-        f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
+        f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100.f-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
         f"{load_string_pop}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # LN_pop
-        f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
+        f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100x120-relu.120.f-wc.120xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
         #f"{load_string_pop}_wc.18x4.g-fir.1x25x4-wc.4xR-lvl.R-dexp.R_{fit_string_pop}", # Low_dim
         #f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
     ]
