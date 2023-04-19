@@ -91,7 +91,7 @@ def sqlite_test():
 
     conn = sqlite3.connect(dbfilepath)
     sql = "SELECT name FROM sqlite_master WHERE type='table' and name like 'Results'"
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     d = r.fetchone()
 
     if d is None:
@@ -187,7 +187,7 @@ def pd_query(sql=None, params=None):
 def sql_command(sql):
     engine = Engine()
     conn = engine.connect()
-    conn.execute(sql)
+    conn.execute(text(sql))
 
 ###### Functions that access / manipulate the job queue. #######
 
@@ -283,7 +283,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
     for note, commandPrompt, combo in zip(notes, commandPrompts, combined):
 
         sql = 'SELECT * FROM tQueue WHERE note="' + note +'"'
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
 
         if r.rowcount>0:
             # existing job, figure out what to do with it
@@ -296,12 +296,12 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                     message = "Resetting existing queue entry for: %s\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', GPU_job='{}', user='{}' WHERE id={}".format(
                         commandPrompt, GPU_job, user, queueid)
-                    r = conn.execute(sql)
+                    r = conn.execute(text(sql))
 
                 elif complete == 2:
                     message = "Dead queue entry for: %s exists, resetting.\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(GPU_job, queueid)
-                    r = conn.execute(sql)
+                    r = conn.execute(text(sql))
 
                 else:  # complete in [-1, 0] -- already running or queued
                     message = "Incomplete entry for: %s exists, skipping.\n" % note
@@ -317,7 +317,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
 
         else:
             sql = f"SELECT * FROM Results WHERE batch={combo[1]} and cellid='{combo[0]}' and modelname='{combo[2]}'"
-            rres = conn.execute(sql)
+            rres = conn.execute(text(sql))
             if (rres.rowcount==0) | force_rerun:
                 # new job
                 sql = "INSERT INTO tQueue (rundataid,progname,priority," +\
@@ -329,7 +329,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                 sql = sql.format(rundataid, commandPrompt, priority, GPU_job, reserve_gb,
                                  parmstring, allowqueuemaster, user, linux_user,
                                  note, waitid, codeHash)
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
                 queueid = r.lastrowid
                 message = "Added new entry for: %s.\n"  % note
             else:
@@ -433,7 +433,7 @@ def add_job_to_queue(args, note, force_rerun=False,
 
     sql = 'SELECT * FROM tQueue WHERE note="' + note +'"'
 
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     if r.rowcount>0:
         # existing job, figure out what to do with it
 
@@ -445,15 +445,15 @@ def add_job_to_queue(args, note, force_rerun=False,
                 commandPrompt, user, queueid)
             if complete == 1:
                 message = "Resetting existing queue entry for: %s\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             elif complete == 2:
                 message = "Dead queue entry for: %s exists, resetting.\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             elif complete == 0:
                 message = "Updating unstarted entry for: %s.\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             else:  # complete in [-1] -- already running
                 message = "Incomplete entry for: %s exists, skipping.\n" % note
@@ -478,7 +478,7 @@ def add_job_to_queue(args, note, force_rerun=False,
         sql = sql.format(rundataid, commandPrompt, priority, reserve_gb,
                          parmstring, allowqueuemaster, user, linux_user,
                          note, waitid, codeHash, GPU_job)
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
         queueid = r.lastrowid
         message = "Added new entry for: %s.\n"  % note
 
@@ -553,7 +553,7 @@ def update_job_complete(queueid=None):
     engine = Engine()
     conn = engine.connect()
     sql = f"UPDATE tQueue SET complete=1 WHERE id={queueid}"
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
 
     return r
@@ -593,7 +593,7 @@ def update_job_start(queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET complete=-1,progress=1 WHERE id={}"
            .format(queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -613,7 +613,7 @@ def update_job_pid(pid, queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET pid={} WHERE id={}"
            .format(pid, queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -632,7 +632,7 @@ def update_startdate(queueid=None):
     engine = Engine()
     conn = engine.connect()
     sql = ("UPDATE tQueue SET startdate=CURRENT_TIMESTAMP() WHERE id={}").format(queueid)
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -652,7 +652,7 @@ def update_job_pid(pid, queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET pid={} WHERE id={}"
            .format(pid, queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -687,14 +687,14 @@ def update_job_tick(queueid=None):
         sql = ("UPDATE tComputer set load1={},load5={}+second(now())/6000,"+
                "load15={},pingcount=0 where name='{}'").format(
                        l1, l5, l15, hostname)
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
     except:
         pass
 
     # tick off progress, tell daemon that job is live
     sql = ("UPDATE tQueue SET progress=progress+1 WHERE id={}"
            .format(queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
 
     conn.close()
 
@@ -1615,7 +1615,7 @@ def save_recording_to_db(recfilepath, meta=None, user="nems", labgroup="",
           " ({},'{}','{}','{}','{}','{}','{}',{})"
     sql = sql.format(batch, hsh, meta_string, recfilepath, "recording",
                      user, labgroup, int(public))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     dataid = r.lastrowid
     log.info("Added new entry %d for: %s.", dataid, recfilepath)
 
