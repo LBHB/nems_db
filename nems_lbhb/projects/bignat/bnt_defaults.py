@@ -85,7 +85,7 @@ else:
 load_string_pop = "gtgram.fs100.ch18-ld-norm.l1-sev"
 load_string_single = "gtgram.fs100.ch18-ld-norm.l1-sev"
 
-fit_string_pop = "lite.tf.mi1000.lr1e3.t6.es20"
+fit_string_pop = "lite.tf.mi1000.lr1e3.t6.rb5.es20"
 fit_string_single = "lite.tf.mi1000.lr1e3.t6.es20"
 
 # maybe better model? only slightly. fewer L1 units, more L2

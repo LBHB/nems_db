@@ -115,21 +115,20 @@ def lite(fitkey):
     rand_count = options.get('rand_count', 1)
     choose_best = options.get('choose_best', False)
     per_cell = options.get('per_cell', False)
-    del options['rand_count']
     del options['choose_best']
     del options['fitter']
     if 'per_cell' in options.keys():
         del options['per_cell']
 
     xfspec = []
-    if rand_count>1:
-        xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rand_count}])
+    #if rand_count>1:
+    #    xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rand_count}])
     if per_cell:
         xfspec.append(['nems0.xforms.fit_lite_per_cell', options])
     else:
         xfspec.append(['nems0.xforms.fit_lite', options])
-    if choose_best:
-        xfspec.append(['nems0.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
+    #if choose_best:
+    #    xfspec.append(['nems0.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
 
     return xfspec
 
