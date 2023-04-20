@@ -570,7 +570,11 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                     #for i in range(len(m.layers) - 1):
                     #    m.layers[i].freeze_parameters()
                     #m.layers[-1].freeze_parameters('kappa')
-
+                    if m.layers[-1].name.startswith('relu'):
+                        c=m.layers[-1]['shift'].values
+                        c[:] += 0.1
+                        m.layers[-1]['shift']=c
+                        print(m.layers[-1]['shift'].values)
                     fitter_options['learning_rate'] = learning_rate * 10
                     fitter_options['early_stopping_tolerance'] = tolerance
                     log.info(f'** ({backend}) Fitting NL only rand_init {mi}/{rand_count} ...')

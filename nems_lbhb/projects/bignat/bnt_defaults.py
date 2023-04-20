@@ -85,11 +85,11 @@ else:
 load_string_pop = "gtgram.fs100.ch18-ld-norm.l1-sev"
 load_string_single = "gtgram.fs100.ch18-ld-norm.l1-sev"
 
-fit_string_pop = "lite.tf.mi1000.lr1e3.t6.rb5.es20"
+fit_string_pop = "lite.tf.mi1000.lr1e3.t6.rb10.es20"
 fit_string_single = "lite.tf.mi1000.lr1e3.t6.es20"
 
 # maybe better model? only slightly. fewer L1 units, more L2
-outnl = 'relu.R.s'
+outnl = 'relu.R.s.o.g'
 cnn1dx2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 cnn1dx2_2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-{outnl}"
 cnn1d = f"wc.18x1x80.g-fir.25x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"

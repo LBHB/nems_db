@@ -381,7 +381,8 @@ def find_model_xform_file(cellid, batch=271,
     #    uri = filepath.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     # hack: hard-coded assumption that server will use this data root
-    uri = filepath.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
+    uri = filepath.replace('http://hyrax.ohsu.edu:3003/results/nems-lite', get_setting('NEMS_RESULTS_DIR'))
+    uri = uri.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     return uri, old
 
