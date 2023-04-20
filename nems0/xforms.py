@@ -515,24 +515,31 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         # convert signal matrices to nems-lite format
         X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
         Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+        #X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)[np.newaxis,:,:]
+        #Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)[np.newaxis,:,:]
+        if False:
+            log.info("adding a tiny bit of noise to X_est")
+            X_est = X_est + np.random.randn(*X_est.shape) / 10000
 
         if 'state' in est.signals.keys():
             S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+            #S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)[np.newaxis,:,:]
         else:
             S_est = None
-
         # X_est = np.expand_dims(X_est, axis=0)
         # Y_est = np.expand_dims(Y_est, axis=0)
         # if S_est is not None:
         #    S_est = np.expand_dims(S_est, axis=0)
         log.info(f"Dataset size X_est: {X_est.shape} Y_est: {Y_est.shape}")
+        batch_size = None #  X_est.shape[0]  # or None or bigger?
+        log.info(f"Batch size: {batch_size}")
+
         fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
                           'early_stopping_patience': early_stopping_patience,
                           'early_stopping_tolerance': tolerance,
                           'validation_split': validation_split,
                           'learning_rate': learning_rate, 'epochs': max_iter,
                           }
-
         try:
             modelspec.layers[-1].skip_nonlinearity()
             fit_stage_1 = True
@@ -557,18 +564,19 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                     log.info(f'** ({backend}) Fitting without NL rand_init {mi}/{rand_count} ...')
 
                     m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
-                        fitter_options=fitter_options, batch_size=None)
+                        fitter_options=fitter_options, batch_size=batch_size)
 
                     m.layers[-1].unskip_nonlinearity()
-                    for i in range(len(m.layers) - 1):
-                        m.layers[i].freeze_parameters()
+                    #for i in range(len(m.layers) - 1):
+                    #    m.layers[i].freeze_parameters()
+                    #m.layers[-1].freeze_parameters('kappa')
 
                     fitter_options['learning_rate'] = learning_rate * 10
                     fitter_options['early_stopping_tolerance'] = tolerance
                     log.info(f'** ({backend}) Fitting NL only rand_init {mi}/{rand_count} ...')
                     modelspec_copies[mi] = m.fit(
                         input=X_est, target=Y_est, state=S_est, backend=backend,
-                        fitter_options=fitter_options, batch_size=None)
+                        fitter_options=fitter_options, batch_size=batch_size)
 
                     E[mi] = modelspec_copies[mi].results.final_error
                     E0[mi] = modelspec_copies[mi].results.initial_error[0]
@@ -585,11 +593,12 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                 log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
                 modelspec = modelspec.fit(
                     input=X_est, target=Y_est, state=S_est, backend=backend,
-                    fitter_options=fitter_options, batch_size=None)
+                    fitter_options=fitter_options, batch_size=batch_size)
 
                 modelspec.layers[-1].unskip_nonlinearity()
-                for i in range(len(modelspec.layers)-1):
-                    modelspec.layers[i].freeze_parameters()
+                #for i in range(len(modelspec.layers)-1):
+                #    modelspec.layers[i].freeze_parameters()
+                #modelspec.layers[-1].freeze_parameters('kappa')
 
                 fitter_options['learning_rate'] = learning_rate*10
                 fitter_options['epochs'] = max_iter
@@ -597,10 +606,11 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                 log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
                 modelspec = modelspec.fit(
                     input=X_est, target=Y_est, state=S_est, backend=backend,
-                    fitter_options=fitter_options, batch_size=None)
+                    fitter_options=fitter_options, batch_size=batch_size)
 
         for i in range(len(modelspec.layers)):
             modelspec.layers[i].unfreeze_parameters()
+        #modelspec.layers[-1].freeze_parameters('kappa')
 
         fitter_options['learning_rate'] = learning_rate
         fitter_options['epochs'] = max_iter
@@ -608,7 +618,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
         modelspec = modelspec.fit(
             input=X_est, target=Y_est, state=S_est, backend=backend,
-            fitter_options=fitter_options, batch_size=None)
+            fitter_options=fitter_options, batch_size=batch_size)
 
         postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         modelspec.meta['prephi'] = prephi

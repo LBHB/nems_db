@@ -865,6 +865,18 @@ def _parse_options(fitkey, **default_options):
             options['backend'] = 'tf'
         elif op == 'sci':
             options['backend'] = 'scipy'
+        elif op.startswith('lf'):
+            loss_type = op[2:]
+            if loss_type == 'se':
+                options['cost_function'] = 'squared_error'
+            if loss_type == 'p':
+                options['cost_function'] = 'poisson'
+            if loss_type == 'nmse':
+                options['cost_function'] = 'nmse'
+            if loss_type == 'nmsepc':
+                options['cost_function'] = 'nmse_pc'
+            if loss_type == 'nmses':
+                options['cost_function'] = 'nmse_shrinkage'
         elif op.startswith('t'):
             # Should use \ to escape going forward, but keep d-sub in
             # for backwards compatibility.
