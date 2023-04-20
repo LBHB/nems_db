@@ -80,16 +80,18 @@ else:
 ####
 # set version-specific fit strings
 ####
+#modelname= 'gtgram.fs100.ch18-ld-norm.l1-sev_wc.18x1x5.g-fir.15x1x5-relu.5.s-wc.5xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb4-lite.tf.lr1e4'
+#modelname2='gtgram.fs100.ch18-ld-norm.l1-sev_wc.18x5.g-fir.1x15x5-relu.5-wc.5xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20.rb4-newtf.n.lr1e4'
 
 # load/fit prefix/suffix
 load_string_pop = "gtgram.fs100.ch18-ld-norm.l1-sev"
 load_string_single = "gtgram.fs100.ch18-ld-norm.l1-sev"
 
-fit_string_pop = "lite.tf.mi1000.lr1e3.t6.rb10.es20"
-fit_string_single = "lite.tf.mi1000.lr1e3.t6.es20"
+fit_string_pop = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+fit_string_single = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 
 # maybe better model? only slightly. fewer L1 units, more L2
-outnl = 'relu.R.s.o.g'
+outnl = 'dexp.R'
 cnn1dx2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 cnn1dx2_2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-{outnl}"
 cnn1d = f"wc.18x1x80.g-fir.25x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
@@ -138,8 +140,8 @@ def list_pop_models_old():
     fit_string_single_c2d = f'prefit.f-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4{vsuffixc2d}'
 
     # POP_MODELS: round 1, fit using cellid="NAT4" on exacloud
-    #outnl = 'lvl.R-dexp.R'
-    outnl = 'relu.R'
+    outnl = 'lvl.R-dexp.R'
+    #outnl = 'relu.R'
 
     POP_MODELS_OLD = [
         #f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.90-relu.90-wc.90xR-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d

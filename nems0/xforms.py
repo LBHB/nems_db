@@ -374,7 +374,8 @@ def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
     return {'rec': rec}
 
 
-def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None', **context):
+def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
+                  chop_channels=0, **context):
     """
     Normalize each channel of rec[sig] according to norm_method
     :param rec:  NEMS recording
@@ -407,6 +408,11 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
                 if (sig=='stim') and (i==0):
                     b=newrec[sig].norm_baseline
                     g=newrec[sig].norm_gain
+                if (sig=='resp') and (chop_channels>0):
+                    keepchans = newrec[sig].chans[-chop_channels:]
+                    log.info(f'Keep chans: {keepchans}')
+                    newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
+
                 log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
             
         if return_reclist:
@@ -428,7 +434,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         keywordstring = init.fill_keyword_string_values(keywordstring, **context)
         log.info(f'modelspec: {keywordstring}')
         modelspec = Model.from_keywords(keywordstring)
-        modelspec = modelspec.sample_from_priors()
+        #modelspec = modelspec.sample_from_priors()
         modelspec.meta = meta.copy()
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
@@ -440,9 +446,9 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 
 def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
-             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
-             validation_split=0.0, early_stopping_patience=10, early_stopping_delay=20, rand_count=1,
-             **context):
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=1000, backend='scipy',
+             validation_split=0.0, early_stopping_patience=150, early_stopping_delay=100, rand_count=1,
+             initialize_nl=False, **context):
     """
     fit_wrapper modified to work with nems-lite
     :param modelspec: modelspec to fit (nems-lite format)
@@ -540,14 +546,18 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                           'validation_split': validation_split,
                           'learning_rate': learning_rate, 'epochs': max_iter,
                           }
-        try:
-            modelspec.layers[-1].skip_nonlinearity()
-            fit_stage_1 = True
-        except:
-            log.info('No NL to exclude from stage 1 fit')
-            fit_stage_1 = False
+        log.info(f"Learning rate: {learning_rate:.2e} Tol: {tolerance:.2e} Cost: {cost_function}")
 
         prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
+        if initialize_nl:
+            try:
+                modelspec.layers[-1].skip_nonlinearity()
+                fit_stage_1 = True
+            except:
+                log.info('No NL to exclude from stage 1 fit')
+                fit_stage_1 = False
+        else:
+            fit_stage_1=False
         if fit_stage_1:
             from nems.layers import ShortTermPlasticity
             # for i, l in enumerate(modelspec.layers):
@@ -555,29 +565,46 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             #        log.info(f'Freezing parameters for layer {i}: {l.name}')
             #        modelspec.layers[i].freeze_parameters()
             if rand_count > 1:
-                modelspec_copies = modelspec.sample_from_priors(rand_count)
+                modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
                 E = np.zeros(rand_count)
                 E0 = np.zeros(rand_count)
                 for mi, m in enumerate(modelspec_copies):
-                    fitter_options['learning_rate'] = learning_rate * 10
-                    fitter_options['early_stopping_tolerance'] = tolerance * 10
-                    log.info(f'** ({backend}) Fitting without NL rand_init {mi}/{rand_count} ...')
+                    log.info(f'** ({backend}) Fitting without NL - rand_init {mi}/{rand_count} ...')
 
                     m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
                         fitter_options=fitter_options, batch_size=batch_size)
-
                     m.layers[-1].unskip_nonlinearity()
+
+                    # idea (bad one?) to only fit static NL?
                     #for i in range(len(m.layers) - 1):
                     #    m.layers[i].freeze_parameters()
-                    #m.layers[-1].freeze_parameters('kappa')
+
+                    # special case - set initial conditions for NL layer parameters
                     if m.layers[-1].name.startswith('relu'):
                         c=m.layers[-1]['shift'].values
                         c[:] += 0.1
                         m.layers[-1]['shift']=c
                         print(m.layers[-1]['shift'].values)
-                    fitter_options['learning_rate'] = learning_rate * 10
-                    fitter_options['early_stopping_tolerance'] = tolerance
-                    log.info(f'** ({backend}) Fitting NL only rand_init {mi}/{rand_count} ...')
+                    elif m.layers[-1].name.startswith('dexp'):
+                        pred = m.predict(input=X_est, batch_size=batch_size)
+                        pred = np.reshape(pred, (pred.shape[0]*pred.shape[1],pred.shape[2]))
+                        resp = np.reshape(Y_est, (Y_est.shape[0]*Y_est.shape[1],Y_est.shape[2]))
+
+                        stdr = np.nanstd(resp, axis=0)
+                        base = np.mean(resp, axis=0) - stdr * 1
+                        amp = stdr * 4
+                        #predrange = 2 / (np.std(pred, axis=0)*3)
+                        shift = m.layers[-1]['shift'].values #np.zeros_like(base)  #
+                        #kappa = np.log(predrange)
+                        kappa = np.zeros_like(base)
+
+                        log.info('Initializing static NL dexp values')
+                        #for (c,b,a,s,k) in zip(est['resp'].chans,base,amp,shift,kappa):
+                        #    log.info(f"{c} b={b:.3f} a={a:.3f} s={s:.3f} k={k:.3f}")
+                        m.layers[-1].set_parameter_values(
+                            {'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa})
+
+                    log.info(f'** ({backend}) Fitting with NL - rand_init {mi}/{rand_count} ...')
                     modelspec_copies[mi] = m.fit(
                         input=X_est, target=Y_est, state=S_est, backend=backend,
                         fitter_options=fitter_options, batch_size=batch_size)
@@ -591,9 +618,8 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 
                 modelspec = modelspec_copies[best_i]
             else:
-                fitter_options['learning_rate'] = learning_rate * 10
-                fitter_options['epochs'] = max_iter
-                fitter_options['early_stopping_tolerance'] = tolerance * 10
+                modelspec = modelspec.sample_from_priors()
+                prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
                 log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
                 modelspec = modelspec.fit(
                     input=X_est, target=Y_est, state=S_est, backend=backend,
@@ -612,17 +638,16 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                     input=X_est, target=Y_est, state=S_est, backend=backend,
                     fitter_options=fitter_options, batch_size=batch_size)
 
-        for i in range(len(modelspec.layers)):
-            modelspec.layers[i].unfreeze_parameters()
-        #modelspec.layers[-1].freeze_parameters('kappa')
-
-        fitter_options['learning_rate'] = learning_rate
-        fitter_options['epochs'] = max_iter
-        fitter_options['early_stopping_tolerance'] = tolerance
-        log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
-        modelspec = modelspec.fit(
-            input=X_est, target=Y_est, state=S_est, backend=backend,
-            fitter_options=fitter_options, batch_size=batch_size)
+            for i in range(len(modelspec.layers)):
+                modelspec.layers[i].unfreeze_parameters()
+        else:
+            fitter_options['learning_rate'] = learning_rate
+            fitter_options['epochs'] = max_iter
+            fitter_options['early_stopping_tolerance'] = tolerance
+            log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
+            modelspec = modelspec.fit(
+                input=X_est, target=Y_est, state=S_est, backend=backend,
+                fitter_options=fitter_options, batch_size=batch_size)
 
         postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         modelspec.meta['prephi'] = prephi
@@ -782,7 +807,8 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
         prefix = get_setting('NEMS_RESULTS_DIR')
     batch = modelspec.meta.get('batch', 0)
     cellid = modelspec.meta.get('cellid', 'cell')
-    basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
+    #basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
+    basepath = os.path.join(prefix, str(batch), cellid)
 
     # use nems-lite model path namer
     filepath = json.generate_model_filepath(modelspec, basepath=basepath)

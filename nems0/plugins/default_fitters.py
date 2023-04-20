@@ -865,6 +865,8 @@ def _parse_options(fitkey, **default_options):
             options['backend'] = 'tf'
         elif op == 'sci':
             options['backend'] = 'scipy'
+        elif op == 'init':
+            options['initialize_nl'] = True
         elif op.startswith('lf'):
             loss_type = op[2:]
             if loss_type == 'se':
