@@ -94,6 +94,8 @@ fit_string_single = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 outnl = 'dexp.R'
 cnn1dx2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 cnn1dx2_2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-{outnl}"
+cnn1dx2_L = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-lvl.R"
+cnn1dx2_L2 = f"wc.18x1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-lvl.R"
 cnn1d = f"wc.18x1x80.g-fir.25x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 lnpop = f"wc.18x1x120.g-fir.25x1x120-wc.120xR-{outnl}"
 lpop = "wc.18x1x120.g-fir.25x1x120-wc.120xR-lvl.R"
@@ -106,6 +108,8 @@ POP_MODELS = [
     f"{load_string_pop}_{cnn1d}_{fit_string_pop}", # c1d
     f"{load_string_pop}_{lpop}_{fit_string_pop}", # L_pop
     f"{load_string_pop}_{cnn1dx2_2}_{fit_string_pop}", # c1dx2
+    f"{load_string_pop}_{cnn1dx2_L}_{fit_string_pop}", # c1dx2+no NL
+    f"{load_string_pop}_{cnn1dx2_L2}_{fit_string_pop}", # c1dx2+no NL no g
 ]
 # SIG_TEST_MODELS: round 2, fit using real single cellid in LBHB or exacloud. LBHB probably faster
 SIG_TEST_MODELS = [

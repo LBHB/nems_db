@@ -32,7 +32,8 @@ from nems0.registry import xform, scan_for_kw_defs
 from nems0.signal import RasterizedSignal
 from nems0.uri import save_resource, load_resource
 from nems0.utils import (get_setting, iso8601_datestring, find_module,
-                         recording_filename_hash, get_default_savepath, lookup_fn_at)
+                         recording_filename_hash, get_default_savepath, lookup_fn_at,
+                         progress_fun)
 
 log = logging.getLogger(__name__)
 
@@ -359,73 +360,112 @@ def none(**context):
     return {}
 
 
-def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
-    """
-    Normalize each channel of rec[sig] according to norm_method
-    :param rec:  NEMS recording
-    :param norm_method:  string {'meanstd', 'minmax'}
-    :param context: pass-through for other variables in xforms context dictionary that aren't used.
-    :return: copy(?) of rec with updated signal.
-    """
-    if sig in rec.signals.keys():
-        rec[sig] = rec.copy()[sig].rasterize().normalize(norm_method)
+def init_from_keywords(keywordstring, meta={}, IsReload=False,
+                       registry=None, rec=None, rec_list=None, input_name='stim',
+                       output_name='resp', **context):
+    if not IsReload:
+        modelspec = init.from_keywords(keyword_string=keywordstring,
+                                       meta=meta, registry=registry, rec=rec, rec_list=rec_list,
+                                       input_name=input_name,
+                                       output_name=output_name)
+        modelspec.meta['engine'] = 'nems0'
     else:
-        log.info(f'Signal {sig} not in recording, skipping normalize')
-    return {'rec': rec}
+        modelspec=context['modelspec']
+
+        # backward compatibility? Maybe can delete?
+        if modelspec is not None:
+            if modelspec.meta.get('input_name', None) is None:
+                modelspec.meta['input_name'] = input_name
+                modelspec.meta['output_name'] = output_name
+
+    return {'modelspec': modelspec}
 
 
-def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
-                  chop_channels=0, **context):
-    """
-    Normalize each channel of rec[sig] according to norm_method
-    :param rec:  NEMS recording
-    :param norm_method:  string {'meanstd', 'minmax'}
-    :param context: pass-through for other variables in xforms context dictionary that aren't used.
-    :return: copy(?) of rec with updated signal.
-    """
-    if rec_list is None:
-        rec_list = [rec]
-        return_reclist = False
-    else:
-        rec=rec_list[0]
-        return_reclist = True
-    new_rec_list = []
-    b,g = None, None
-    if sig in rec.signals.keys():
-        for i, r in enumerate(rec_list):
-            newrec = r.copy()
-            s = newrec[sig].rasterize()
-            if norm_method=='sqrt':
-                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
-                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
-            else:
-                if log_compress != 'None':
-                   from nems0.modules.nonlinearity import _dlog
-                   fn = lambda x: _dlog(x, -log_compress)
-                   s=s.transform(fn, sig)
-                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
-                new_rec_list.append(newrec)
-                if (sig=='stim') and (i==0):
-                    b=newrec[sig].norm_baseline
-                    g=newrec[sig].norm_gain
-                if (sig=='resp') and (chop_channels>0):
-                    keepchans = newrec[sig].chans[-chop_channels:]
-                    log.info(f'Keep chans: {keepchans}')
-                    newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
+def load_modelspecs(modelspecs, uris, IsReload=False, **context):
+    '''
+    i.e. Load a modelspec from a specific place. This is not
+    the same as reloading a model for later inspection; it would be more
+    appropriate when doing something complicated with several different
+    models.
+    '''
+    if not IsReload:
+        modelspec = ms.ModelSpec([load_resource(uri) for uri in uris])
+    return {'modelspec': modelspec}
 
-                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
-            
-        if return_reclist:
-            return {'rec': rec_list[0], 'rec_list': new_rec_list}
-        else:
-            return {'rec': newrec}
+
+def set_random_phi(modelspecs, IsReload=False, **context):
+    ''' Starts all modelspecs at random phi sampled from the priors. '''
+    if not IsReload:
+        for fit_idx in modelspec.fit_count:
+            modelspec.fit_index = fit_idx
+            for i, m in enumerate(modelspec):
+                modelspec[i] = priors.set_random_phi(m)
+    return {'modelspec': modelspec}
+
+
+def fill_in_default_metadata(rec, modelspec, IsReload=False, **context):
+    '''
+    Sets any uninitialized metadata to defaults that should help us
+    find it in nems_db again. (fitter, recording, date, etc)
+    '''
+    if not IsReload:
+        # Add metadata to help you reload this state later
+        meta = get_modelspec_metadata(modelspec)
+        if 'fitter' not in meta:
+            set_modelspec_metadata(modelspec, 'fitter', 'None')
+        if 'fit_time' not in meta:
+            set_modelspec_metadata(modelspec, 'fitter', 'None')
+        if 'recording' not in meta:
+            recname = rec.name if rec else 'None'
+            set_modelspec_metadata(modelspec, 'recording', recname)
+        if 'recording_uri' not in meta:
+            uri = rec.uri if rec and rec.uri else 'None'
+            set_modelspec_metadata(modelspec, 'recording_uri', uri)
+        if 'date' not in meta:
+            set_modelspec_metadata(modelspec, 'date', iso8601_datestring())
+        if 'hostname' not in meta:
+            set_modelspec_metadata(modelspec, 'hostname',
+                                   socket.gethostname())
+    return {'modelspec': modelspec}
+
+
+def only_best_modelspec(modelspecs, metakey='r_test', comparison='greatest',
+                        IsReload=False, **context):
+    '''
+    Collapses a list of modelspecs so that it only contains the modelspec
+    with the highest given meta metric.
+    '''
+    if not IsReload:
+        # TODO: Not the fastest way to do this but probably doesn't matter
+        #       since it's only done once per fit.
+
+        # TODO: Make this allow for variable number of top specs by
+        #       updating ms function to sort then pick top n
+        return {'modelspecs': ms.get_best_modelspec(modelspecs, metakey,
+                                                    comparison)}
     else:
-        log.info(f'Signal {sig} not in recording, skipping normalize')
         return {}
+
+
+def sort_modelspecs(modelspecs, metakey='r_test', order='descending',
+                    IsReload=False, **context):
+    '''
+    Sorts modelspecs according to the specified metakey and order.
+    '''
+    if not IsReload:
+        return {'modelspecs': ms.sort_modelspecs(modelspecs, metakey, order)}
+    else:
+        return {}
+
+
+###############################################################################
+#######################     NEMS-LITE SPECIFIC     ############################
+###############################################################################
 
 
 def init_nems_keywords(keywordstring, meta=None, IsReload=False,
                        **context):
+    """NEMS-LITE specific model initialization"""
     from nems import Model
     if not IsReload:
         if meta is None:
@@ -574,6 +614,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                     m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
                         fitter_options=fitter_options, batch_size=batch_size)
                     m.layers[-1].unskip_nonlinearity()
+                    progress_fun()
 
                     # idea (bad one?) to only fit static NL?
                     #for i in range(len(m.layers) - 1):
@@ -608,6 +649,8 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                     modelspec_copies[mi] = m.fit(
                         input=X_est, target=Y_est, state=S_est, backend=backend,
                         fitter_options=fitter_options, batch_size=batch_size)
+
+                    progress_fun()
 
                     E[mi] = modelspec_copies[mi].results.final_error
                     E0[mi] = modelspec_copies[mi].results.initial_error[0]
@@ -648,6 +691,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             modelspec = modelspec.fit(
                 input=X_est, target=Y_est, state=S_est, backend=backend,
                 fitter_options=fitter_options, batch_size=batch_size)
+            progress_fun()
 
         postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         modelspec.meta['prephi'] = prephi
@@ -825,107 +869,127 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
     return destination
 
 
-def init_from_keywords(keywordstring, meta={}, IsReload=False,
-                       registry=None, rec=None, rec_list=None, input_name='stim',
-                       output_name='resp', **context):
-    if not IsReload:
-        modelspec = init.from_keywords(keyword_string=keywordstring,
-                                       meta=meta, registry=registry, rec=rec, rec_list=rec_list,
-                                       input_name=input_name,
-                                       output_name=output_name)
-        modelspec.meta['engine'] = 'nems0'
-    else:
-        modelspec=context['modelspec']
 
-        # backward compatibility? Maybe can delete?
-        if modelspec is not None:
-            if modelspec.meta.get('input_name', None) is None:
-                modelspec.meta['input_name'] = input_name
-                modelspec.meta['output_name'] = output_name
-
-    return {'modelspec': modelspec}
-
-
-def load_modelspecs(modelspecs, uris, IsReload=False, **context):
-    '''
-    i.e. Load a modelspec from a specific place. This is not
-    the same as reloading a model for later inspection; it would be more
-    appropriate when doing something complicated with several different
-    models.
-    '''
-    if not IsReload:
-        modelspec = ms.ModelSpec([load_resource(uri) for uri in uris])
-    return {'modelspec': modelspec}
-
-
-def set_random_phi(modelspecs, IsReload=False, **context):
-    ''' Starts all modelspecs at random phi sampled from the priors. '''
-    if not IsReload:
-        for fit_idx in modelspec.fit_count:
-            modelspec.fit_index = fit_idx
-            for i, m in enumerate(modelspec):
-                modelspec[i] = priors.set_random_phi(m)
-    return {'modelspec': modelspec}
-
-
-def fill_in_default_metadata(rec, modelspec, IsReload=False, **context):
-    '''
-    Sets any uninitialized metadata to defaults that should help us
-    find it in nems_db again. (fitter, recording, date, etc)
-    '''
-    if not IsReload:
-        # Add metadata to help you reload this state later
-        meta = get_modelspec_metadata(modelspec)
-        if 'fitter' not in meta:
-            set_modelspec_metadata(modelspec, 'fitter', 'None')
-        if 'fit_time' not in meta:
-            set_modelspec_metadata(modelspec, 'fitter', 'None')
-        if 'recording' not in meta:
-            recname = rec.name if rec else 'None'
-            set_modelspec_metadata(modelspec, 'recording', recname)
-        if 'recording_uri' not in meta:
-            uri = rec.uri if rec and rec.uri else 'None'
-            set_modelspec_metadata(modelspec, 'recording_uri', uri)
-        if 'date' not in meta:
-            set_modelspec_metadata(modelspec, 'date', iso8601_datestring())
-        if 'hostname' not in meta:
-            set_modelspec_metadata(modelspec, 'hostname',
-                                   socket.gethostname())
-    return {'modelspec': modelspec}
-
-
-def only_best_modelspec(modelspecs, metakey='r_test', comparison='greatest',
-                        IsReload=False, **context):
-    '''
-    Collapses a list of modelspecs so that it only contains the modelspec
-    with the highest given meta metric.
-    '''
-    if not IsReload:
-        # TODO: Not the fastest way to do this but probably doesn't matter
-        #       since it's only done once per fit.
-
-        # TODO: Make this allow for variable number of top specs by
-        #       updating ms function to sort then pick top n
-        return {'modelspecs': ms.get_best_modelspec(modelspecs, metakey,
-                                                    comparison)}
-    else:
-        return {}
-
-
-def sort_modelspecs(modelspecs, metakey='r_test', order='descending',
-                    IsReload=False, **context):
-    '''
-    Sorts modelspecs according to the specified metakey and order.
-    '''
-    if not IsReload:
-        return {'modelspecs': ms.sort_modelspecs(modelspecs, metakey, order)}
-    else:
-        return {}
 
 
 ###############################################################################
 #########################     PREPROCESSORS     ###############################
 ###############################################################################
+
+
+def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
+    """
+    Normalize each channel of rec[sig] according to norm_method
+    :param rec:  NEMS recording
+    :param norm_method:  string {'meanstd', 'minmax'}
+    :param context: pass-through for other variables in xforms context dictionary that aren't used.
+    :return: copy(?) of rec with updated signal.
+    """
+    if sig in rec.signals.keys():
+        rec[sig] = rec.copy()[sig].rasterize().normalize(norm_method)
+    else:
+        log.info(f'Signal {sig} not in recording, skipping normalize')
+    return {'rec': rec}
+
+
+def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
+                  chop_channels=0, **context):
+    """
+    Normalize each channel of rec[sig] according to norm_method
+    :param rec:  NEMS recording
+    :param norm_method:  string {'meanstd', 'minmax'}
+    :param context: pass-through for other variables in xforms context dictionary that aren't used.
+    :return: copy(?) of rec with updated signal.
+    """
+    if rec_list is None:
+        rec_list = [rec]
+        return_reclist = False
+    else:
+        rec=rec_list[0]
+        return_reclist = True
+    new_rec_list = []
+    b,g = None, None
+    if sig in rec.signals.keys():
+        for i, r in enumerate(rec_list):
+            newrec = r.copy()
+            s = newrec[sig].rasterize()
+            if norm_method=='sqrt':
+                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
+            else:
+                if log_compress != 'None':
+                   from nems0.modules.nonlinearity import _dlog
+                   fn = lambda x: _dlog(x, -log_compress)
+                   s=s.transform(fn, sig)
+                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
+                new_rec_list.append(newrec)
+                if (sig=='stim') and (i==0):
+                    b=newrec[sig].norm_baseline
+                    g=newrec[sig].norm_gain
+                if (sig=='resp') and (chop_channels>0):
+                    keepchans = newrec[sig].chans[-chop_channels:]
+                    log.info(f'Keep chans: {keepchans}')
+                    newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
+
+                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+            
+        if return_reclist:
+            return {'rec': rec_list[0], 'rec_list': new_rec_list}
+        else:
+            return {'rec': newrec}
+    else:
+        log.info(f'Signal {sig} not in recording, skipping normalize')
+        return {}
+
+
+@xform()
+def const(kw):
+    ops = kw.split('.')[1:]
+    d = {}
+    for op in ops:
+        d['sig']=op
+
+    xfspec = [['nems0.xforms.concat_constant', d]]
+
+    return xfspec
+
+    
+def concat_constant(rec, rec_list=None, sig='stim', use_mean_val=True, **context):
+    """
+    add a constant channel (all 1s) to rec[stim]
+    """
+    
+    if rec_list is None:
+        rec_list = [rec]
+        return_reclist = False
+    else:
+        rec=rec_list[0]
+        return_reclist = True
+    new_rec_list = []
+    
+    for i, r in enumerate(rec_list):
+        if sig in r.signals.keys():
+            newrec = r.copy()
+            if (i==0) & use_mean_val:
+                m = np.nanmean(newrec[sig].rasterize()._data)
+            else:
+                m = 1
+            s = newrec[sig].rasterize()
+            sh = s.shape
+            ch = s.chans
+            d = np.concatenate([s._data, np.ones((1, sh[1]))*m], axis=0)
+            if s.chans is None:
+                chans = [f"STIM{i}" for i in range(sh[0])] + ['C']
+            else:
+                chans = s.chans + ['C']
+            newrec[sig] = s._modified_copy(data=d, chans=chans)
+            log.info(f"Added const to signal {sig}, shape: {newrec[sig].shape}")
+        new_rec_list.append(newrec)
+    
+    if return_reclist:
+        return {'rec': rec_list[0], 'rec_list': new_rec_list}
+    else:
+        return {'rec': newrec}
 
 
 def add_average_sig(rec, signal_to_average, new_signalname, epoch_regex,
