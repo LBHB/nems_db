@@ -114,17 +114,21 @@ def lite(fitkey):
     #max_iter, tolerance, fitter, choose_best, rand_count = _parse_basic(options)
     rand_count = options.get('rand_count', 1)
     choose_best = options.get('choose_best', False)
-
-    del options['rand_count']
+    per_cell = options.get('per_cell', False)
     del options['choose_best']
     del options['fitter']
+    if 'per_cell' in options.keys():
+        del options['per_cell']
 
     xfspec = []
-    if rand_count>1:
-        xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rand_count}])
-    xfspec.append(['nems0.xforms.fit_lite', options])
-    if choose_best:
-        xfspec.append(['nems0.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
+    #if rand_count>1:
+    #    xfspec.append(['nems0.initializers.rand_phi', {'rand_count': rand_count}])
+    if per_cell:
+        xfspec.append(['nems0.xforms.fit_lite_per_cell', options])
+    else:
+        xfspec.append(['nems0.xforms.fit_lite', options])
+    #if choose_best:
+    #    xfspec.append(['nems0.analysis.test_prediction.pick_best_phi', {'criterion': 'mse_fit'}])
 
     return xfspec
 
@@ -855,10 +859,26 @@ def _parse_options(fitkey, **default_options):
             else:
                 # ex: FL2x6x9  would be freeze_layers = [2, 6, 9]
                 options['freeze_layers'] = [int(i) for i in op[2:].split('x')]
+        elif op == 'pc':
+            options['per_cell'] = True
         elif op == 'tf':
             options['backend'] = 'tf'
         elif op == 'sci':
             options['backend'] = 'scipy'
+        elif op == 'init':
+            options['initialize_nl'] = True
+        elif op.startswith('lf'):
+            loss_type = op[2:]
+            if loss_type == 'se':
+                options['cost_function'] = 'squared_error'
+            if loss_type == 'p':
+                options['cost_function'] = 'poisson'
+            if loss_type == 'nmse':
+                options['cost_function'] = 'nmse'
+            if loss_type == 'nmsepc':
+                options['cost_function'] = 'nmse_pc'
+            if loss_type == 'nmses':
+                options['cost_function'] = 'nmse_shrinkage'
         elif op.startswith('t'):
             # Should use \ to escape going forward, but keep d-sub in
             # for backwards compatibility.

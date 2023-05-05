@@ -4399,7 +4399,7 @@ def parse_cellid(options):
 
     elif cell_list is not None:
         # list of cells was passed
-        siteid = cellid.split('-')[0]
+        siteid = cell_list[0].split('-')[0]
         cell_list_all, rawid = db.get_stable_batch_cells(batch=batch, cellid=cell_list,
                                                          rawid=rawid)
         options['cellid'] = cell_list_all

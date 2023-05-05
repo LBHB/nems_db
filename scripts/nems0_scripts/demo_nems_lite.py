@@ -279,8 +279,8 @@ else:
     model = model.fit(input=X_est, target=Y_est, backend='scipy',
               fitter_options={'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': 100}})
 
-visualization.model.plot_model_with_parameters(model, X_est, target=Y_est)
-visualization.model.plot_model_with_parameters(model, X_val, target=Y_val)
+visualization.model.plot_model(model, X_est, target=Y_est)
+visualization.model.plot_model(model, X_val, target=Y_val)
 
 # Predict the response to the stimulus spectrogram using the fitted model.
 d1=model.evaluate(X_val, n=1)['_last_output']

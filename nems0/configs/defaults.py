@@ -13,6 +13,7 @@ import socket
 import datetime
 import os.path
 import os
+import sys
 
 
 ################################################################################
@@ -142,7 +143,9 @@ def configure_logging(filename=None):
         config['root']['handlers'].append('file')
 
     logging.config.dictConfig(config)
-
+    #logger = logging.getLogger()
+    #sys.stderr.write = logger.error
+    #sys.stdout.write = logger.info
 
 def init_settings():
     log = logging.getLogger(__name__)

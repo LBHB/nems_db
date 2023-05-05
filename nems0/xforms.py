@@ -32,7 +32,8 @@ from nems0.registry import xform, scan_for_kw_defs
 from nems0.signal import RasterizedSignal
 from nems0.uri import save_resource, load_resource
 from nems0.utils import (get_setting, iso8601_datestring, find_module,
-                         recording_filename_hash, get_default_savepath, lookup_fn_at)
+                         recording_filename_hash, get_default_savepath, lookup_fn_at,
+                         progress_fun)
 
 log = logging.getLogger(__name__)
 
@@ -359,263 +360,6 @@ def none(**context):
     return {}
 
 
-def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
-    """
-    Normalize each channel of rec[sig] according to norm_method
-    :param rec:  NEMS recording
-    :param norm_method:  string {'meanstd', 'minmax'}
-    :param context: pass-through for other variables in xforms context dictionary that aren't used.
-    :return: copy(?) of rec with updated signal.
-    """
-    if sig in rec.signals.keys():
-        rec[sig] = rec.copy()[sig].rasterize().normalize(norm_method)
-    else:
-        log.info(f'Signal {sig} not in recording, skipping normalize')
-    return {'rec': rec}
-
-
-def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None', **context):
-    """
-    Normalize each channel of rec[sig] according to norm_method
-    :param rec:  NEMS recording
-    :param norm_method:  string {'meanstd', 'minmax'}
-    :param context: pass-through for other variables in xforms context dictionary that aren't used.
-    :return: copy(?) of rec with updated signal.
-    """
-    if rec_list is None:
-        rec_list = [rec]
-        return_reclist = False
-    else:
-        rec=rec_list[0]
-        return_reclist = True
-    new_rec_list = []
-    b,g = None, None
-    if sig in rec.signals.keys():
-        for i, r in enumerate(rec_list):
-            newrec = r.copy()
-            s = newrec[sig].rasterize()
-            if norm_method=='sqrt':
-                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
-                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
-            else:
-                if log_compress != 'None':
-                   from nems0.modules.nonlinearity import _dlog
-                   fn = lambda x: _dlog(x, -log_compress)
-                   s=s.transform(fn, sig)
-                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
-                new_rec_list.append(newrec)
-                if (sig=='stim') and (i==0):
-                    b=newrec[sig].norm_baseline
-                    g=newrec[sig].norm_gain
-                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
-            
-        if return_reclist:
-            return {'rec': rec_list[0], 'rec_list': new_rec_list}
-        else:
-            return {'rec': newrec}
-    else:
-        log.info(f'Signal {sig} not in recording, skipping normalize')
-        return {}
-
-
-def init_nems_keywords(keywordstring, meta=None, IsReload=False,
-                       **context):
-    from nems import Model
-    if not IsReload:
-        if meta is None:
-            meta = {}
-        keywordstring = init.fill_keyword_string_values(keywordstring, **context)
-        log.info(f'modelspec: {keywordstring}')
-        modelspec = Model.from_keywords(keywordstring)
-        modelspec = modelspec.sample_from_priors()
-        modelspec.meta = meta.copy()
-        modelspec.meta['engine'] = 'nems-lite'
-        modelspec.name = f"{meta['cellid']}/{meta['batch']}/{meta['modelname']}"
-    else:
-        modelspec = context['modelspec']
-
-    return {'modelspec': modelspec}
-
-
-def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
-             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
-             validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
-             **context):
-    """
-    Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
-       for a modelspec, calling fit_function to fit each.
-    Modified to work with nems-lite
-    :param modelspec:  modelspec to fit
-    :param est:  nems-format Recording with fit data
-    :param IsReload:    [False] if True, skip fit and return without doing anything
-    :param context:  pass-through dictionary into fitter
-    :return: results = xforms context dictionary update
-    """
-    if IsReload:
-        return {}
-
-    if (modelspec is None) or (est is None):
-        raise ValueError("Inputs modelspec and est required")
-
-    # convert signal matrices to nems-lite format
-    if backend == 'scipy':
-
-        X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
-        Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
-        if 'state' in est.signals.keys():
-            S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
-        else:
-            S_est = None
-        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
-        log.info(f"{fitter_options}")
-        try:
-            modelspec.layers[-1].skip_nonlinearity()
-            fit_stage_1 = True
-        except:
-            log.info('No NL to exclude from stage 1 fit')
-            fit_stage_1 = False
-
-        if fit_stage_1:
-            log.info(f'({backend}) Fitting without NL ...')
-            modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
-                                      backend=backend, fitter_options=fitter_options)
-
-            log.info(f'({backend}) Now fitting with NL ...')
-            modelspec.layers[-1].unskip_nonlinearity()
-
-        modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
-                                  backend=backend, fitter_options=fitter_options)
-
-    elif backend=='tf':
-        # convert signal matrices to nems-lite format
-        X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
-        Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
-        
-        if 'state' in est.signals.keys():
-            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
-        else:
-            S_est = None
-            
-        #X_est = np.expand_dims(X_est, axis=0)
-        #Y_est = np.expand_dims(Y_est, axis=0)
-        #if S_est is not None:
-        #    S_est = np.expand_dims(S_est, axis=0)
-
-        fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
-                          'early_stopping_patience': early_stopping_patience,
-                          'early_stopping_tolerance': tolerance,
-                          'validation_split': validation_split,
-                          'learning_rate': learning_rate*10, 'epochs': int(max_iter/2),
-                          }
-        
-        try:
-            modelspec.layers[-1].skip_nonlinearity()
-            fit_stage_1 = True
-        except:
-            log.info('No NL to exclude from stage 1 fit')
-            fit_stage_1 = False
-
-        if fit_stage_1:
-            log.info(f'({backend}) Fitting without NL ...')
-            log.info(f"lr={fitter_options['learning_rate']} epochs={fitter_options['epochs']}")
-            from nems.layers import ShortTermPlasticity
-            #for i, l in enumerate(modelspec.layers):
-            #    if isinstance(l, ShortTermPlasticity):
-            #        log.info(f'Freezing parameters for layer {i}: {l.name}')
-            #        modelspec.layers[i].freeze_parameters()
-            modelspec = modelspec.fit(
-                input=X_est, target=Y_est, state=S_est, backend=backend,
-                fitter_options=fitter_options, batch_size=None)
-
-            log.info(f'({backend}) Now fitting with NL ...')
-            modelspec.layers[-1].unskip_nonlinearity()
-
-        for i, l in enumerate(modelspec.layers):
-            modelspec.layers[i].unfreeze_parameters()
-
-        fitter_options['learning_rate'] = learning_rate
-        fitter_options['epochs'] = max_iter
-        modelspec = modelspec.fit(
-            input=X_est, target=Y_est, state=S_est, backend=backend,
-            fitter_options=fitter_options, batch_size=None)
-
-        modelspec.backend = None
-    return {'modelspec': modelspec}
-
-
-def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsReload=False, **context):
-
-    # convert signal matrices to nems-lite format
-    X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
-    X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
-    if 'state' in est.signals.keys():
-        S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
-        S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
-    else:
-        S_est = None
-        S_val = None
-
-    prediction = modelspec.predict(X_est, state=S_est)
-    est['pred']=est[output_name]._modified_copy(data=prediction.T)
-    prediction = modelspec.predict(X_val, state=S_val)
-    val['pred']=val[output_name]._modified_copy(data=prediction.T)
-
-    return {'val': val, 'est': est}
-
-def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=False,
-              figures=None, figures_to_load=None, **context):
-
-    if figures is None:
-        figures = []
-
-    if IsReload:
-        if figures_to_load is not None:
-            figures.extend([load_resource(f) for f in figures_to_load])
-        return {'figures': figures}
-
-    # convert signal matrices to nems-lite format
-    X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
-    Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
-    if 'state' in val.signals.keys():
-        S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
-    else:
-        S_val = None
-    from nems.visualization import model
-    fig = model.plot_model_with_parameters(
-        modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
-
-    # Needed to make into a Bytes because you can't deepcopy figures!
-    figures.append(nplt.fig2BytesIO(fig))
-
-    return {'figures': figures}
-
-
-def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
-    from nems.tools import json
-
-    if get_setting('USE_NEMS_BAPHY_API'):
-        prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
-    else:
-        prefix = get_setting('NEMS_RESULTS_DIR')
-    batch = modelspec.meta.get('batch', 0)
-    cellid = modelspec.meta.get('cellid', 'cell')
-    basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
-
-    # use nems-lite model path namer
-    filepath = json.generate_model_filepath(modelspec, basepath=basepath)
-    destination = os.path.dirname(filepath)
-    # call nems-lite JSON encoder
-    data = json.nems_to_json(modelspec)
-    save_resource(os.path.join(destination, 'modelspec.json'), data=data)
-    for number, figure in enumerate(ctx['figures']):
-        fig_uri = os.path.join(destination, 'figure.{:04d}.png'.format(number))
-        #log.info('saving figure %d to %s', number, fig_uri)
-        save_resource(fig_uri, data=figure)
-    save_resource(os.path.join(destination, 'log.txt'), data=log)
-    save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
-    return destination
-
-
 def init_from_keywords(keywordstring, meta={}, IsReload=False,
                        registry=None, rec=None, rec_list=None, input_name='stim',
                        output_name='resp', **context):
@@ -715,8 +459,537 @@ def sort_modelspecs(modelspecs, metakey='r_test', order='descending',
 
 
 ###############################################################################
+#######################     NEMS-LITE SPECIFIC     ############################
+###############################################################################
+
+
+def init_nems_keywords(keywordstring, meta=None, IsReload=False,
+                       **context):
+    """NEMS-LITE specific model initialization"""
+    from nems import Model
+    if not IsReload:
+        if meta is None:
+            meta = {}
+        keywordstring0 = keywordstring
+        keywordstring = init.fill_keyword_string_values(keywordstring, **context)
+        log.info(f'modelspec: {keywordstring}')
+        modelspec = Model.from_keywords(keywordstring)
+        #modelspec = modelspec.sample_from_priors()
+        modelspec.meta = meta.copy()
+        modelspec.meta['engine'] = 'nems-lite'
+        modelspec.meta['keywordstring'] = keywordstring0
+        modelspec.name = f"{meta['cellid']}/{meta['batch']}/{meta['modelname']}"
+    else:
+        modelspec = context['modelspec']
+
+    return {'modelspec': modelspec}
+
+
+def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=1000, backend='scipy',
+             validation_split=0.0, early_stopping_patience=150, early_stopping_delay=100, rand_count=1,
+             initialize_nl=False, **context):
+    """
+    fit_wrapper modified to work with nems-lite
+    :param modelspec: modelspec to fit (nems-lite format)
+    :param est:  nems-format Recording with fit data
+    :param input_name:
+    :param output_name:
+    :param IsReload:    [False] if True, skip fit and return without doing anything
+    :param cost_function:
+    :param learning_rate:
+    :param tolerance:
+    :param max_iter:
+    :param backend:
+    :param validation_split:
+    :param early_stopping_patience:
+    :param early_stopping_delay:
+    :param rand_count:
+    :param context:  pass-through dictionary into fitter
+    :return: results = xforms context dictionary update
+    """
+    if IsReload:
+        return {}
+
+    if (modelspec is None) or (est is None):
+        raise ValueError("Inputs modelspec and est required")
+
+    # convert signal matrices to nems-lite format
+    if backend == 'scipy':
+
+        X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)
+        else:
+            S_est = None
+        fitter_options = {'cost_function': 'nmse',
+                          'options': {'ftol': tolerance, 'gtol': tolerance / 10, 'maxiter': max_iter}}
+        log.info(f"{fitter_options}")
+        try:
+            modelspec.layers[-1].skip_nonlinearity()
+            fit_stage_1 = True
+        except:
+            log.info('No NL to exclude from stage 1 fit')
+            fit_stage_1 = False
+
+        if fit_stage_1:
+            if rand_count>1:
+                log.info(f'({backend}) Fitting without NL (rand_inits={rand_count}...')
+                modelspec_copies = modelspec.sample_from_priors(5)
+                modelspec_copies = [m.fit(input=X_est, target=Y_est, state=S_est,
+                                    backend=backend, fitter_options=fitter_options)
+                                    for m in modelspec_copies]
+                E = np.array([m.results.final_error for m in modelspec_copies])
+                E0 = np.array([m.results.initial_error[0] for m in modelspec_copies])
+                best_i = np.argmax(E)
+                print(f'Init E: {E0}')
+                print(f'final E: {E} best={E[best_i]}')
+                modelspec=modelspec_copies[best_i]
+            else:
+                log.info(f'({backend}) Fitting without NL ...')
+                modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
+                                          backend=backend, fitter_options=fitter_options)
+
+            log.info(f'({backend}) Now fitting with NL ...')
+            modelspec.layers[-1].unskip_nonlinearity()
+
+        modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
+                                  backend=backend, fitter_options=fitter_options)
+
+    elif backend == 'tf':
+        # convert signal matrices to nems-lite format
+        X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+        #X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)[np.newaxis,:,:]
+        #Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)[np.newaxis,:,:]
+        if False:
+            log.info("adding a tiny bit of noise to X_est")
+            X_est = X_est + np.random.randn(*X_est.shape) / 10000
+
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+            #S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)[np.newaxis,:,:]
+        else:
+            S_est = None
+        # X_est = np.expand_dims(X_est, axis=0)
+        # Y_est = np.expand_dims(Y_est, axis=0)
+        # if S_est is not None:
+        #    S_est = np.expand_dims(S_est, axis=0)
+        log.info(f"Dataset size X_est: {X_est.shape} Y_est: {Y_est.shape}")
+        batch_size = None #  X_est.shape[0]  # or None or bigger?
+        log.info(f"Batch size: {batch_size}")
+
+        fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
+                          'early_stopping_patience': early_stopping_patience,
+                          'early_stopping_tolerance': tolerance,
+                          'validation_split': validation_split,
+                          'learning_rate': learning_rate, 'epochs': max_iter,
+                          }
+        log.info(f"Learning rate: {learning_rate:.2e} Tol: {tolerance:.2e} Cost: {cost_function}")
+
+        prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
+        if initialize_nl:
+            try:
+                modelspec.layers[-1].skip_nonlinearity()
+                fit_stage_1 = True
+            except:
+                log.info('No NL to exclude from stage 1 fit')
+                fit_stage_1 = False
+        else:
+            fit_stage_1=False
+        if fit_stage_1:
+            from nems.layers import ShortTermPlasticity
+            # for i, l in enumerate(modelspec.layers):
+            #    if isinstance(l, ShortTermPlasticity):
+            #        log.info(f'Freezing parameters for layer {i}: {l.name}')
+            #        modelspec.layers[i].freeze_parameters()
+            if rand_count > 1:
+                modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
+                E = np.zeros(rand_count)
+                E0 = np.zeros(rand_count)
+                for mi, m in enumerate(modelspec_copies):
+                    log.info(f'** ({backend}) Fitting without NL - rand_init {mi}/{rand_count} ...')
+
+                    m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
+                        fitter_options=fitter_options, batch_size=batch_size)
+                    m.layers[-1].unskip_nonlinearity()
+                    progress_fun()
+
+                    # idea (bad one?) to only fit static NL?
+                    #for i in range(len(m.layers) - 1):
+                    #    m.layers[i].freeze_parameters()
+
+                    # special case - set initial conditions for NL layer parameters
+                    if m.layers[-1].name.startswith('relu'):
+                        c=m.layers[-1]['shift'].values
+                        c[:] += 0.1
+                        m.layers[-1]['shift']=c
+                        print(m.layers[-1]['shift'].values)
+                    elif m.layers[-1].name.startswith('dexp'):
+                        pred = m.predict(input=X_est, batch_size=batch_size)
+                        pred = np.reshape(pred, (pred.shape[0]*pred.shape[1],pred.shape[2]))
+                        resp = np.reshape(Y_est, (Y_est.shape[0]*Y_est.shape[1],Y_est.shape[2]))
+
+                        stdr = np.nanstd(resp, axis=0)
+                        base = np.mean(resp, axis=0) - stdr * 1
+                        amp = stdr * 4
+                        #predrange = 2 / (np.std(pred, axis=0)*3)
+                        shift = m.layers[-1]['shift'].values #np.zeros_like(base)  #
+                        #kappa = np.log(predrange)
+                        kappa = np.zeros_like(base)
+
+                        log.info('Initializing static NL dexp values')
+                        #for (c,b,a,s,k) in zip(est['resp'].chans,base,amp,shift,kappa):
+                        #    log.info(f"{c} b={b:.3f} a={a:.3f} s={s:.3f} k={k:.3f}")
+                        m.layers[-1].set_parameter_values(
+                            {'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa})
+
+                    log.info(f'** ({backend}) Fitting with NL - rand_init {mi}/{rand_count} ...')
+                    modelspec_copies[mi] = m.fit(
+                        input=X_est, target=Y_est, state=S_est, backend=backend,
+                        fitter_options=fitter_options, batch_size=batch_size)
+
+                    progress_fun()
+
+                    E[mi] = modelspec_copies[mi].results.final_error
+                    E0[mi] = modelspec_copies[mi].results.initial_error[0]
+
+                best_i = np.argmin(E)
+                log.info(f'Init E: {E0}')
+                log.info(f'final E: {E} best={best_i} ({E[best_i]})')
+
+                modelspec = modelspec_copies[best_i]
+            else:
+                modelspec = modelspec.sample_from_priors()
+                prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
+                log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
+                modelspec = modelspec.fit(
+                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    fitter_options=fitter_options, batch_size=batch_size)
+
+                modelspec.layers[-1].unskip_nonlinearity()
+                #for i in range(len(modelspec.layers)-1):
+                #    modelspec.layers[i].freeze_parameters()
+                #modelspec.layers[-1].freeze_parameters('kappa')
+
+                fitter_options['learning_rate'] = learning_rate*10
+                fitter_options['epochs'] = max_iter
+                fitter_options['early_stopping_tolerance'] = tolerance
+                log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
+                modelspec = modelspec.fit(
+                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    fitter_options=fitter_options, batch_size=batch_size)
+
+            for i in range(len(modelspec.layers)):
+                modelspec.layers[i].unfreeze_parameters()
+        else:
+            fitter_options['learning_rate'] = learning_rate
+            fitter_options['epochs'] = max_iter
+            fitter_options['early_stopping_tolerance'] = tolerance
+            log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
+            modelspec = modelspec.fit(
+                input=X_est, target=Y_est, state=S_est, backend=backend,
+                fitter_options=fitter_options, batch_size=batch_size)
+            progress_fun()
+
+        postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
+        modelspec.meta['prephi'] = prephi
+        modelspec.meta['postphi'] = postphi
+
+        modelspec.backend = None
+
+    return {'modelspec': modelspec}
+
+
+def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
+             validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
+             chop_layers=2,
+             **context):
+    """
+    Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
+       for a modelspec, calling fit_function to fit each.
+    Modified to work with nems-lite
+    :param modelspec:  modelspec to fit
+    :param est:  nems-format Recording with fit data
+    :param IsReload:    [False] if True, skip fit and return without doing anything
+    :param context:  pass-through dictionary into fitter
+    :return: results = xforms context dictionary update
+    """
+    if IsReload:
+        return {}
+
+    if (modelspec is None) or (est is None):
+        raise ValueError("Inputs modelspec and est required")
+
+    from nems import Model
+
+    save_params = [l.get_parameter_values(as_dict=True) for l in modelspec.layers]
+    save_layers = range(len(save_params) - chop_layers, len(save_params))
+
+    cell_count = est['resp'].shape[0]
+
+    modelspecname = modelspec.meta['modelspecname']
+
+    est1 = est.copy()
+    est1['resp'] = est1['resp'].extract_channels([est1['resp'].chans[0]])
+    keywordstring = init.fill_keyword_string_values(modelspecname, rec=est1)
+    log.info(f'sliced modelspec: {keywordstring}')
+    tmodel = Model.from_keywords(keywordstring)
+
+    for i, d in enumerate(save_params):
+        if i < save_layers[0]:
+            tmodel.layers[i].set_parameter_values(d, ignore_bounds=True)
+            tmodel.layers[i].freeze_parameters()
+
+    for cid in range(cell_count):
+        log.info("")
+        log.info(f"Fitting single cell: ({cid}) {est['resp'].chans[cid]}")
+        # initialized with parameter values for this cell
+        for i, s in enumerate(save_layers):
+            d = {}
+            for k in save_params[s].keys():
+                if save_params[s][k].ndim == 1:
+                    d[k] = save_params[s][k][[cid]]
+                else:
+                    d[k] = save_params[s][k][:, [cid]]
+
+            tmodel.layers[s].set_parameter_values(d, ignore_bounds=True)
+
+        est1 = est.copy()
+        est1['resp'] = est1['resp'].extract_channels([est1['resp'].chans[cid]])
+        X_est = np.moveaxis(est1.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y_est = np.moveaxis(est1.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+
+        if 'state' in est.signals.keys():
+            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+        else:
+            S_est = None
+
+        fitter_options = {'cost_function': cost_function, 'early_stopping_delay': early_stopping_delay,
+                          'early_stopping_patience': early_stopping_patience,
+                          'early_stopping_tolerance': tolerance,
+                          'validation_split': validation_split,
+                          'learning_rate': learning_rate, 'epochs': max_iter,
+                          }
+        tmodel = tmodel.fit(
+            input=X_est, target=Y_est, state=S_est, backend=backend,
+            fitter_options=fitter_options, batch_size=None)
+
+        # put parameters back into main model
+        for i, s in enumerate(save_layers):
+            d = tmodel.layers[s].get_parameter_values(as_dict=True)
+            for k in save_params[s].keys():
+                #print(f"updating {k}[{cid}] from {save_params[s][k][[cid]]} to {d[k]}")
+                if save_params[s][k].ndim == 1:
+                    save_params[s][k][[cid]] = d[k]
+                else:
+                    save_params[s][k][:, [cid]] = d[k]
+
+    for i, s in enumerate(save_layers):
+        modelspec.layers[s].set_parameter_values(save_params[s], ignore_bounds=True)
+
+    modelspec.backend = None
+
+    return {'modelspec': modelspec}
+
+
+def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsReload=False, **context):
+
+    # convert signal matrices to nems-lite format
+    X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
+    X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
+    if 'state' in est.signals.keys():
+        S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
+        S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
+    else:
+        S_est = None
+        S_val = None
+
+    prediction = modelspec.predict(X_est, state=S_est)
+    est['pred']=est[output_name]._modified_copy(data=prediction.T)
+    prediction = modelspec.predict(X_val, state=S_val)
+    val['pred']=val[output_name]._modified_copy(data=prediction.T)
+
+    return {'val': val, 'est': est}
+
+def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=False,
+              figures=None, figures_to_load=None, **context):
+
+    if figures is None:
+        figures = []
+
+    if IsReload:
+        if figures_to_load is not None:
+            figures.extend([load_resource(f) for f in figures_to_load])
+        return {'figures': figures}
+
+    # convert signal matrices to nems-lite format
+    X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
+    Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
+    if 'state' in val.signals.keys():
+        S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
+    else:
+        S_val = None
+    from nems.visualization import model
+    fig = model.plot_model(
+        modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
+
+    # Needed to make into a Bytes because you can't deepcopy figures!
+    figures.append(nplt.fig2BytesIO(fig))
+
+    return {'figures': figures}
+
+
+def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
+    from nems.tools import json
+
+    if get_setting('USE_NEMS_BAPHY_API'):
+        prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
+    else:
+        prefix = get_setting('NEMS_RESULTS_DIR')
+    batch = modelspec.meta.get('batch', 0)
+    cellid = modelspec.meta.get('cellid', 'cell')
+    #basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
+    basepath = os.path.join(prefix, str(batch), cellid)
+
+    # use nems-lite model path namer
+    filepath = json.generate_model_filepath(modelspec, basepath=basepath)
+    destination = os.path.dirname(filepath)
+    # call nems-lite JSON encoder
+    data = json.nems_to_json(modelspec)
+    save_resource(os.path.join(destination, 'modelspec.json'), data=data)
+    for number, figure in enumerate(ctx['figures']):
+        fig_uri = os.path.join(destination, 'figure.{:04d}.png'.format(number))
+        #log.info('saving figure %d to %s', number, fig_uri)
+        save_resource(fig_uri, data=figure)
+    save_resource(os.path.join(destination, 'log.txt'), data=log)
+    save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
+    return destination
+
+
+
+
+
+###############################################################################
 #########################     PREPROCESSORS     ###############################
 ###############################################################################
+
+
+def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
+    """
+    Normalize each channel of rec[sig] according to norm_method
+    :param rec:  NEMS recording
+    :param norm_method:  string {'meanstd', 'minmax'}
+    :param context: pass-through for other variables in xforms context dictionary that aren't used.
+    :return: copy(?) of rec with updated signal.
+    """
+    if sig in rec.signals.keys():
+        rec[sig] = rec.copy()[sig].rasterize().normalize(norm_method)
+    else:
+        log.info(f'Signal {sig} not in recording, skipping normalize')
+    return {'rec': rec}
+
+
+def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
+                  chop_channels=0, **context):
+    """
+    Normalize each channel of rec[sig] according to norm_method
+    :param rec:  NEMS recording
+    :param norm_method:  string {'meanstd', 'minmax'}
+    :param context: pass-through for other variables in xforms context dictionary that aren't used.
+    :return: copy(?) of rec with updated signal.
+    """
+    if rec_list is None:
+        rec_list = [rec]
+        return_reclist = False
+    else:
+        rec=rec_list[0]
+        return_reclist = True
+    new_rec_list = []
+    b,g = None, None
+    if sig in rec.signals.keys():
+        for i, r in enumerate(rec_list):
+            newrec = r.copy()
+            s = newrec[sig].rasterize()
+            if norm_method=='sqrt':
+                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
+            else:
+                if log_compress != 'None':
+                   from nems0.modules.nonlinearity import _dlog
+                   fn = lambda x: _dlog(x, -log_compress)
+                   s=s.transform(fn, sig)
+                newrec[sig] = s.normalize(norm_method, b=b, g=g, mask=newrec['mask'])
+                new_rec_list.append(newrec)
+                if (sig=='stim') and (i==0):
+                    b=newrec[sig].norm_baseline
+                    g=newrec[sig].norm_gain
+                if (sig=='resp') and (chop_channels>0):
+                    keepchans = newrec[sig].chans[-chop_channels:]
+                    log.info(f'Keep chans: {keepchans}')
+                    newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
+
+                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+            
+        if return_reclist:
+            return {'rec': rec_list[0], 'rec_list': new_rec_list}
+        else:
+            return {'rec': newrec}
+    else:
+        log.info(f'Signal {sig} not in recording, skipping normalize')
+        return {}
+
+
+@xform()
+def const(kw):
+    ops = kw.split('.')[1:]
+    d = {}
+    for op in ops:
+        d['sig']=op
+
+    xfspec = [['nems0.xforms.concat_constant', d]]
+
+    return xfspec
+
+    
+def concat_constant(rec, rec_list=None, sig='stim', use_mean_val=True, **context):
+    """
+    add a constant channel (all 1s) to rec[stim]
+    """
+    
+    if rec_list is None:
+        rec_list = [rec]
+        return_reclist = False
+    else:
+        rec=rec_list[0]
+        return_reclist = True
+    new_rec_list = []
+    
+    for i, r in enumerate(rec_list):
+        if sig in r.signals.keys():
+            newrec = r.copy()
+            if (i==0) & use_mean_val:
+                m = np.nanmean(newrec[sig].rasterize()._data)
+            else:
+                m = 1
+            s = newrec[sig].rasterize()
+            sh = s.shape
+            ch = s.chans
+            d = np.concatenate([s._data, np.ones((1, sh[1]))*m], axis=0)
+            if s.chans is None:
+                chans = [f"STIM{i}" for i in range(sh[0])] + ['C']
+            else:
+                chans = s.chans + ['C']
+            newrec[sig] = s._modified_copy(data=d, chans=chans)
+            log.info(f"Added const to signal {sig}, shape: {newrec[sig].shape}")
+        new_rec_list.append(newrec)
+    
+    if return_reclist:
+        return {'rec': rec_list[0], 'rec_list': new_rec_list}
+    else:
+        return {'rec': newrec}
 
 
 def add_average_sig(rec, signal_to_average, new_signalname, epoch_regex,
