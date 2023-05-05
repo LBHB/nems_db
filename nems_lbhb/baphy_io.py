@@ -4239,7 +4239,7 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         else:
             dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
 
-        if dcell[c]['layer'].isnumeric():
+        if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA'):
             dcell[c]['area'] = d['site area']
         elif dcell[c]['layer'].endswith('d'):
             dcell[c]['area'] = d.get('site area deep', 'XX')

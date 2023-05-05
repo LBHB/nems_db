@@ -17,6 +17,7 @@ siteid='PRN059a'
 siteid='PRN050a'
 siteid='PRN057a'
 siteid='CLT047c'
+siteid='TNC047a'
 
 d_raw = db.pd_query(f"SELECT * FROM gDataRaw where cellid like '{siteid}%%' AND runclass='BNB' AND not(bad) AND not(isnull(depthinfo))")
 
