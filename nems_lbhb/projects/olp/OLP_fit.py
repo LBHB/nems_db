@@ -2510,7 +2510,7 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                                 'fg_FR_end': B_FR_end,
                                 'supp': supp})
             cell_df = pd.DataFrame(cell_df)
-            cell_df['SR'], cell_df['STD'], cell_df['batch'] = SR, STD, batch
+            cell_df['SR'], cell_df['STD'], cell_df['batch'], cell_df['parmfile'] = SR, STD, batch, pf
             cell_df.insert(loc=0, column='layer', value=layer)
             cell_df.insert(loc=0, column='area', value=area)
 
