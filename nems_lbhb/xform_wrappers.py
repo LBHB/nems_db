@@ -433,7 +433,7 @@ def pop_file(stimfmt='ozgf', batch=None, cellid=None,
     
     recording_uri_list = []
     #max_sites = 2;
-    max_sites = 12
+    max_sites = len(sitelist)
     log.info(f"TRUNCATING MULTI-FILE DATA AT {max_sites} RECORDINGS")
     for s in sitelist[:max_sites]:
         recording_uri = generate_recording_uri(batch=batch, cellid=s, stimfmt=stimfmt,

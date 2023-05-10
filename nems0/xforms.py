@@ -478,7 +478,8 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         modelspec.meta = meta.copy()
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
-        modelspec.name = f"{meta['cellid']}/{meta['batch']}/{meta['modelname']}"
+        cellid = meta.get('celld', 'NAT4v2')
+        modelspec.name = f"{cellid}/{meta['batch']}/{meta['modelname']}"
     else:
         modelspec = context['modelspec']
 
@@ -486,9 +487,9 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 
 def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
-             cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=1000, backend='scipy',
+             cost_function='nmse', learning_rate=1e-3, tolerance=1e-4, max_iter=5000, backend='scipy',
              validation_split=0.0, early_stopping_patience=150, early_stopping_delay=100, rand_count=1,
-             initialize_nl=False, **context):
+             initialize_nl=False, freeze_layers=None, shuffle_batches=False, skip_init=False, **context):
     """
     fit_wrapper modified to work with nems-lite
     :param modelspec: modelspec to fit (nems-lite format)
@@ -538,7 +539,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                 log.info(f'({backend}) Fitting without NL (rand_inits={rand_count}...')
                 modelspec_copies = modelspec.sample_from_priors(5)
                 modelspec_copies = [m.fit(input=X_est, target=Y_est, state=S_est,
-                                    backend=backend, fitter_options=fitter_options)
+                                    backend=backend, freeze_layers=freeze_layers, fitter_options=fitter_options)
                                     for m in modelspec_copies]
                 E = np.array([m.results.final_error for m in modelspec_copies])
                 E0 = np.array([m.results.initial_error[0] for m in modelspec_copies])
@@ -549,13 +550,13 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             else:
                 log.info(f'({backend}) Fitting without NL ...')
                 modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
-                                          backend=backend, fitter_options=fitter_options)
+                                          backend=backend, freeze_layers=freeze_layers, fitter_options=fitter_options)
 
             log.info(f'({backend}) Now fitting with NL ...')
             modelspec.layers[-1].unskip_nonlinearity()
 
         modelspec = modelspec.fit(input=X_est, target=Y_est, state=S_est,
-                                  backend=backend, fitter_options=fitter_options)
+                                  backend=backend, freeze_layers=freeze_layers, fitter_options=fitter_options)
 
     elif backend == 'tf':
         # convert signal matrices to nems-lite format
@@ -585,6 +586,7 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                           'early_stopping_tolerance': tolerance,
                           'validation_split': validation_split,
                           'learning_rate': learning_rate, 'epochs': max_iter,
+                          'shuffle': shuffle_batches,
                           }
         log.info(f"Learning rate: {learning_rate:.2e} Tol: {tolerance:.2e} Cost: {cost_function}")
 
@@ -605,98 +607,70 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             #        log.info(f'Freezing parameters for layer {i}: {l.name}')
             #        modelspec.layers[i].freeze_parameters()
             if rand_count > 1:
+                log.info(f'Initializing {rand_count} model instances based on priors')
                 modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
-                E = np.zeros(rand_count)
-                E0 = np.zeros(rand_count)
-                for mi, m in enumerate(modelspec_copies):
-                    log.info(f'** ({backend}) Fitting without NL - rand_init {mi}/{rand_count} ...')
+            elif skip_init:
+                log.info('Using inherited initial conditions for model parameters')
+                modelspec_copies = [modelspec.copy()]
+                rand_count = 1
+            else:
+                log.info('Initializing based on model priors')
+                modelspec_copies = [modelspec.sample_from_priors()]
+                rand_count = 1
 
-                    m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
-                        fitter_options=fitter_options, batch_size=batch_size)
-                    m.layers[-1].unskip_nonlinearity()
-                    progress_fun()
+            E = np.zeros(rand_count)
+            E0 = np.zeros(rand_count)
+            for mi, m in enumerate(modelspec_copies):
+                log.info(f'** ({backend}) Fitting without NL - initialization {mi+1}/{rand_count} ...')
 
-                    # idea (bad one?) to only fit static NL?
-                    #for i in range(len(m.layers) - 1):
-                    #    m.layers[i].freeze_parameters()
+                m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
+                          freeze_layers=freeze_layers, fitter_options=fitter_options,
+                          batch_size=batch_size, verbose=1)
 
-                    # special case - set initial conditions for NL layer parameters
-                    if m.layers[-1].name.startswith('relu'):
-                        c=m.layers[-1]['shift'].values
-                        c[:] += 0.1
-                        m.layers[-1]['shift']=c
-                        print(m.layers[-1]['shift'].values)
-                    elif m.layers[-1].name.startswith('dexp'):
-                        pred = m.predict(input=X_est, batch_size=batch_size)
-                        pred = np.reshape(pred, (pred.shape[0]*pred.shape[1],pred.shape[2]))
-                        resp = np.reshape(Y_est, (Y_est.shape[0]*Y_est.shape[1],Y_est.shape[2]))
+                progress_fun()
+                m.layers[-1].unskip_nonlinearity()
+                # idea (bad one?) to only fit static NL?
+                #for i in range(len(m.layers) - 1):
+                #    m.layers[i].freeze_parameters()
 
-                        stdr = np.nanstd(resp, axis=0)
-                        base = np.mean(resp, axis=0) - stdr * 1
-                        amp = stdr * 4
-                        #predrange = 2 / (np.std(pred, axis=0)*3)
-                        shift = m.layers[-1]['shift'].values #np.zeros_like(base)  #
-                        #kappa = np.log(predrange)
-                        kappa = np.zeros_like(base)
+                # special case - set initial conditions for NL layer parameters
+                m = init.init_nl_lite(m, X_est, Y_est)
 
-                        log.info('Initializing static NL dexp values')
-                        #for (c,b,a,s,k) in zip(est['resp'].chans,base,amp,shift,kappa):
-                        #    log.info(f"{c} b={b:.3f} a={a:.3f} s={s:.3f} k={k:.3f}")
-                        m.layers[-1].set_parameter_values(
-                            {'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa})
+                log.info(f'** ({backend}) Fitting with NL - initialization {mi+1}/{rand_count} ...')
+                modelspec_copies[mi] = m.fit(
+                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    freeze_layers=freeze_layers, fitter_options=fitter_options,
+                    batch_size=batch_size, verbose=0)
 
-                    log.info(f'** ({backend}) Fitting with NL - rand_init {mi}/{rand_count} ...')
-                    modelspec_copies[mi] = m.fit(
-                        input=X_est, target=Y_est, state=S_est, backend=backend,
-                        fitter_options=fitter_options, batch_size=batch_size)
+                progress_fun()
 
-                    progress_fun()
+                E[mi] = modelspec_copies[mi].results.final_error
+                E0[mi] = modelspec_copies[mi].results.initial_error[0]
 
-                    E[mi] = modelspec_copies[mi].results.final_error
-                    E0[mi] = modelspec_copies[mi].results.initial_error[0]
-
+            if rand_count > 1:
                 best_i = np.argmin(E)
-                log.info(f'Init E: {E0}')
-                log.info(f'final E: {E} best={best_i} ({E[best_i]})')
-
+                log.info(f'Init E: {E0}  Final E: {E} best={best_i} ({E[best_i]})')
                 modelspec = modelspec_copies[best_i]
             else:
-                modelspec = modelspec.sample_from_priors()
-                prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
-                log.info(f"({backend}) Fitting without NL (lr={learning_rate*10} tol={tolerance*10:.3e}) ...")
-                modelspec = modelspec.fit(
-                    input=X_est, target=Y_est, state=S_est, backend=backend,
-                    fitter_options=fitter_options, batch_size=batch_size)
+                modelspec = modelspec_copies[0]
 
-                modelspec.layers[-1].unskip_nonlinearity()
-                #for i in range(len(modelspec.layers)-1):
-                #    modelspec.layers[i].freeze_parameters()
-                #modelspec.layers[-1].freeze_parameters('kappa')
-
-                fitter_options['learning_rate'] = learning_rate*10
-                fitter_options['epochs'] = max_iter
-                fitter_options['early_stopping_tolerance'] = tolerance
-                log.info(f'({backend}) Now fitting NL (lr={learning_rate} tol={tolerance:.3e}) ...')
-                modelspec = modelspec.fit(
-                    input=X_est, target=Y_est, state=S_est, backend=backend,
-                    fitter_options=fitter_options, batch_size=batch_size)
-
+            # is this necessary for anything?
             for i in range(len(modelspec.layers)):
                 modelspec.layers[i].unfreeze_parameters()
+
         else:
-            fitter_options['learning_rate'] = learning_rate
-            fitter_options['epochs'] = max_iter
-            fitter_options['early_stopping_tolerance'] = tolerance
-            log.info(f'({backend}) Now fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
+            log.info('Using inherited model parameters')
+            log.info(f'({backend}) Fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
             modelspec = modelspec.fit(
                 input=X_est, target=Y_est, state=S_est, backend=backend,
-                fitter_options=fitter_options, batch_size=batch_size)
+                freeze_layers=freeze_layers, fitter_options=fitter_options, batch_size=batch_size)
             progress_fun()
 
         postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         modelspec.meta['prephi'] = prephi
         modelspec.meta['postphi'] = postphi
-
+        modelspec.meta['n_parms'] = modelspec.results.n_parameters
+        
         modelspec.backend = None
 
     return {'modelspec': modelspec}
@@ -857,6 +831,8 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
     # use nems-lite model path namer
     filepath = json.generate_model_filepath(modelspec, basepath=basepath)
     destination = os.path.dirname(filepath)
+    modelspec.meta['modelpath'] = destination
+    modelspec.meta['figurefile'] = os.path.join(destination, 'figure0000.png')
     # call nems-lite JSON encoder
     data = json.nems_to_json(modelspec)
     save_resource(os.path.join(destination, 'modelspec.json'), data=data)
@@ -864,6 +840,7 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
         fig_uri = os.path.join(destination, 'figure.{:04d}.png'.format(number))
         #log.info('saving figure %d to %s', number, fig_uri)
         save_resource(fig_uri, data=figure)
+
     save_resource(os.path.join(destination, 'log.txt'), data=log)
     save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
     return destination
@@ -2142,6 +2119,9 @@ def load_analysis(filepath, eval_model=True, only=None):
         return path
 
     xfspec = load_xform(_path_join(filepath, 'xfspec.json'))
+
+    is_nems_lite = any(['init_nems_keywords' in x[0] for x in xfspec])
+
     mspaths = []
     figures_to_load = []
     logstring = ''
@@ -2155,7 +2135,12 @@ def load_analysis(filepath, eval_model=True, only=None):
             with open(logpath) as logfile:
                 logstring = logfile.read()
     mspaths.sort()  # make sure we're in alphanumeric order!
-    ctx = load_modelspecs([], uris=mspaths, IsReload=False)
+
+    if is_nems_lite:
+        from nems.tools.json import load_model
+        ctx = {'modelspec': load_model(mspaths[0])}
+    else:
+        ctx = load_modelspecs([], uris=mspaths, IsReload=False)
     ctx['IsReload'] = True
     ctx['figures_to_load'] = figures_to_load
     ctx['log'] = logstring

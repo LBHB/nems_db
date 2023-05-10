@@ -76,22 +76,26 @@ else:
     double_column_medium = (7, 5)
 #inset = (1, 1)  # easier to just resize manually, making it this smaller makes things behave weirdly
 
-
 ####
 # set version-specific fit strings
 ####
 #modelname= 'gtgram.fs100.ch18-ld-norm.l1-sev_wc.18x1x5.g-fir.15x1x5-relu.5.s-wc.5xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb4-lite.tf.lr1e4'
 #modelname2='gtgram.fs100.ch18-ld-norm.l1-sev_wc.18x5.g-fir.1x15x5-relu.5-wc.5xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20.rb4-newtf.n.lr1e4'
 
+old_pop_model = 'ozgf.fs100.ch18.pop-loadpop-norm.l1-popev_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4'
+old_pop_loadstring = 'ozgf.fs100.ch18.pop-loadpop-norm.l1-popev'
+new_pop_loadstring = 'gtgram.fs100.ch18.pop-loadpop-norm.l1-popev'
+
 # load/fit prefix/suffix
-load_string_pop = "gtgram.fs100.ch18-ld-norm.l1-sev"
+load_string_pop = "gtgram.fs100.ch18.pop-loadpop-norm.l1-popev"
 load_string_single = "gtgram.fs100.ch18-ld-norm.l1-sev"
 
 fit_string_pop = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 fit_string_single = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 
 # maybe better model? only slightly. fewer L1 units, more L2
-outnl = 'dexp.R'
+#outnl = 'dexp.R'
+outnl = 'relu.R.o.s.g'
 cnn1dx2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 cnn1dx2_2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-{outnl}"
 cnn1dx2_L = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-lvl.R"

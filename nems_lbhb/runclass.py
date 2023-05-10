@@ -509,8 +509,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     else:
         wav_all = {}
         fs_all = {}
+        log.info(f'{len(wav1)} distinct wavs or wav combinations')
         for (f1,c1,t1,f2,c2,t2,n) in zip(wav1,chan1,type1,wav2,chan2,type2,stim_epochs):
-            #print(f1,f2)
             if f1.upper() != "NULL":
                 w1 = wav_unique[f1].copy()
                 if f2.upper() != "NULL":
@@ -520,7 +520,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
-            log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
+            #log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
 
             if ReferenceClass == "OverlappingPairs":
                 if f1 == 'null':

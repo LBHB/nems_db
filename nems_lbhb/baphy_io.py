@@ -2580,8 +2580,8 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                     totalunits += 1
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
-                        # unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                        unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                        #unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
                         unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                     spiketimes.append(unit_spike_events / spikefs)

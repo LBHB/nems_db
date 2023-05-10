@@ -74,6 +74,8 @@ DEFAULT_SCRIPT_PATH = '/auto/users/nems/nems_db/nems_fit_single.py'
 # (cmd line function called every queue tick--to update queue load in tComputers)
 QUEUE_TICK_EXTERNAL_CMD = '/auto/users/svd/python/nems_db/bin/qsetload'
 
+JOB_LIB_PATH = '/tmp'
+
 ################################################################################
 # Plugins Registries
 ################################################################################

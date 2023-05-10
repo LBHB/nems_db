@@ -27,10 +27,74 @@ from nems0.initializers import load_phi
 import nems0.db as nd
 from nems_lbhb.xform_wrappers import _matching_cells
 from nems0 import xform_helper, xforms
-from nems0.uri import save_resource
+from nems0.uri import save_resource, load_resource
 from nems0.utils import get_default_savepath
+from nems.models.base import Model
+from nems.tools.json import load_model
 
 log = logging.getLogger(__name__)
+
+
+def get_submodel(model_full, site_set, model_sub=None):
+    """
+    todo: add parameter: specific layer count to copy. currently hardcoded at
+    len(model_full.layers)-2
+    """
+    cell_siteids = model_full.meta.get('cell_siteids', [])
+    site_mask = np.array([(s in site_set) for s in cell_siteids])
+
+    if model_sub is None:
+        keywordstring = model_full.meta['keywordstub'].format(site_mask.sum())
+        model_sub = Model.from_keywords(keywordstring)
+        model_sub.meta['site_mask'] = site_mask
+    else:
+        model_sub = model_sub.copy()
+
+    for i, l in enumerate(model_full.layers):
+        _d = l.get_parameter_values(as_dict=True)
+        if i >= len(model_full.layers) - 2:
+            if len(site_mask)>0:
+                d = {}
+                for k, v in _d.items():
+                    if v.ndim == 2:
+                        d[k] = v[:, site_mask]
+                    else:
+                        d[k] = v[site_mask]
+                print(i, k, v.shape, d[k].shape)
+                model_sub.layers[i].set_parameter_values(d, ignore_bounds=True)
+
+        else:
+            model_sub.layers[i].set_parameter_values(_d, ignore_bounds=True)
+
+    return model_sub
+
+
+def save_submodel(model_full, model_sub):
+    """
+    NB this function operates in-place!!
+
+    if copy all layers to model full except last 2. if model_sub.meta['site_mask'] is defined, copy last
+    two layers of model_sub to channel ids [site_mask] in model_full
+    """
+
+    site_mask = model_sub.meta.get('site_mask', None)
+    full_layer_offset = len(model_full.layers) - len(model_sub.layers)
+
+    for i, l in enumerate(model_sub.layers):
+        _d = l.get_parameter_values(as_dict=True)
+        if i >= len(model_sub.layers) - 2:
+            if site_mask is not None:
+                # print(i, i+full_layer_offset)
+                d = model_full.layers[i + full_layer_offset].get_parameter_values(as_dict=True)
+                for k, v in _d.items():
+                    if v.ndim == 2:
+                        d[k][:, site_mask] = v
+                    else:
+                        d[k][site_mask] = v
+                model_full.layers[i + full_layer_offset].set_parameter_values(d, ignore_bounds=True)
+        else:
+            model_full.layers[i + full_layer_offset].set_parameter_values(_d, ignore_bounds=True)
+    return model_full
 
 
 def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, pre_batch=None,
@@ -50,7 +114,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     """
     if IsReload:
         return {}
-
+    engine = modelspec.meta.get('engine','nems0')
     xi = find_module("weight_channels", modelspec, find_all_matches=True)
     if len(xi) == 0:
         xi = find_module("WeightChannelsNew", modelspec, find_all_matches=True)
@@ -111,6 +175,10 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
             log.info('fs50 + ststimn')
             load_string_pop = "gtgram.fs50.ch18.pop-loadpop-st.dm4-ststim-norm.l1-popev"
             fit_string_pop = "tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+        elif engine=='nems-lite':
+            load_string_pop = "gtgram.fs100.ch18.pop-loadpop-norm.l1-popev"
+            fit_string_pop = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+
         else:
             load_string_pop = "ozgf.fs100.ch18.pop-loadpop-norm.l1-popev"
             fit_string_pop = "tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4"
@@ -309,19 +377,27 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
     old_cellid=d['cellid'][0]
     log.info(f"Importing parameters from {old_cellid}/{old_modelname}")
 
-    mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
-    log.info(mspaths)
-    prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
-
-    #_, prefit_ctx = xform_helper.load_model_xform(
-    #    cellid=pre_cellid, batch=pre_batch,
-    #    modelname=d['modelname'][0], eval_model=False)
-    new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
+    if engine=='nems0':
+        mspaths = [f"{old_uri}/modelspec.{i:04d}.json" for i in range(modelspec.cell_count)]
+        log.info(mspaths)
+        prefit_ctx = xforms.load_modelspecs([], uris=mspaths, IsReload=False)
+        # _, prefit_ctx = xform_helper.load_model_xform(
+        #    cellid=pre_cellid, batch=pre_batch,
+        #    modelname=d['modelname'][0], eval_model=False)
+        new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
+    else:
+        mspath = f"{old_uri}/modelspec.json"
+        #j = load_resource(mspath)
+        #old_modelspec = Model.from_json(j)
+        # does this work with web API?
+        old_modelspec = load_model(mspath)
+        old_modelspec.meta['cell_siteids'] = []
+        new_ctx = {'modelspec': get_submodel(old_modelspec, [], modelspec)}
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
         new_ctx['freeze_idx'] = list(np.arange(freeze_layer_count))
-    if prefit_type == 'init':
-        new_ctx['skip_init'] = True
+    new_ctx['skip_init'] = True
+
     return new_ctx
 
 

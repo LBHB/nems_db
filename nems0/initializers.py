@@ -419,6 +419,36 @@ def prefit_LN(rec, modelspec, analysis_function=fit_basic,
 
     return modelspec
 
+def init_nl_lite(modelspec, X_est, Y_est):
+
+    if modelspec.layers[-1].name.startswith('relu'):
+        c = modelspec.layers[-1]['shift'].values
+        c[:] += 0.1
+
+        log.info('Initializing static NL relu values')
+        modelspec.layers[-1]['shift'] = c
+        # print(modelspec.layers[-1]['shift'].values)
+
+    elif modelspec.layers[-1].name.startswith('dexp'):
+        #pred = modelspec.predict(input=X_est, batch_size=batch_size)
+        #pred = np.reshape(pred, (pred.shape[0] * pred.shape[1], pred.shape[2]))
+        resp = np.reshape(Y_est, (Y_est.shape[0] * Y_est.shape[1], Y_est.shape[2]))
+
+        stdr = np.nanstd(resp, axis=0)
+        base = np.mean(resp, axis=0) - stdr * 1
+        amp = stdr * 4
+        # predrange = 2 / (np.std(pred, axis=0)*3)
+        shift = modelspec.layers[-1]['shift'].values  # np.zeros_like(base)  #
+        # kappa = np.log(predrange)
+        kappa = np.zeros_like(base)
+
+        log.info('Initializing static NL dexp values')
+        # for (c,b,a,s,k) in zip(est['resp'].chans,base,amp,shift,kappa):
+        #    log.info(f"{c} b={b:.3f} a={a:.3f} s={s:.3f} k={k:.3f}")
+        modelspec.layers[-1].set_parameter_values(
+            {'base': base, 'amplitude': amp, 'shift': shift, 'kappa': kappa})
+
+    return modelspec
 
 def init_static_nl(est=None, modelspec=None, tolerance=10**-4, **nl_kw):
 
