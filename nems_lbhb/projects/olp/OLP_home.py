@@ -48,13 +48,62 @@ path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500.h5' # The h
 path = '/auto/users/hamersky/olp_analysis/a1_celldat1.h5'
 path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500_with_stats.h5' # The half models, use this now
 
-
 weight_df = ofit.OLP_fit_weights(loadpath=path)
 weight_df['batch'] = 340
 
-# OR
-#Batch 341 prediction fit big boy
-weight_df = jl.load('/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL')
+# The thing I was working on in January with fit
+path = '/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL'
+# 2023_05_02. Starting with Prince data too and new df structure
+path = '/auto/users/hamersky/olp_analysis/2023-05-02_batch344_0-500_metrics'
+path = '/auto/users/hamersky/olp_analysis/2023-05-04_batch344_0-500_metrics'
+path = '/auto/users/hamersky/olp_analysis/2023-05-05_batch344_0-500_metrics' # Full one
+weight_df = jl.load(path)
+
+
+fr_thresh=0.03
+filt = weight_df.loc[(weight_df.bg_FR >= fr_thresh) & (weight_df.fg_FR >= fr_thresh)]
+weight_lim = [-1, 2]
+suffs = ['']
+for ss in suffs:
+    filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
+                            ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
+r_thresh = 0.6
+filt = filt.loc[(filt[f'r_start'] >= r_thresh) & (filt[f'r_end'] >= r_thresh)]
+
+filt = weight_df.loc[weight_df.synth_kind=='N']
+
+filt = weight_df
+filt = filt.loc[(filt.layer=='NA') | (filt.layer=='5') | (filt.layer=='44') | (filt.layer=='13') |
+                (filt.layer=='4') | (filt.layer=='56')]
+
+PRN = filt.loc[filt.animal == 'PRN_A']
+
+PRNB = filt.loc[filt.animal == 'PRN_B']
+
+blank_area = filt.loc[filt.area=='']
+sites = np.unique([aa[:6] for aa in blank_area.cellid])
+
+
+filt = filt.loc[filt.dyn_kind=='ff']
+filt = filt.loc[filt.kind=='11']
+filt = filt.loc[filt.SNR==0]
+
+filt = filt.loc[filt.olp_type=='synthetic']
+filt = filt.loc[filt.synth_kind=='N']
+
+
+filt = filt.loc[filt.olp_type=='dynamic']
+filt = filt.loc[filt.animal!='ARM']
+
+filt = filt.loc[filt.olp_type=='binaural']
+
+
+ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
+
+
+
+
+
 
 fr_thresh=0.03
 filt = weight_df.loc[(weight_df.bg_FR_start >= fr_thresh) & (weight_df.fg_FR_start >= fr_thresh)
@@ -391,7 +440,7 @@ if 'FG_rel_gain_start' not in weight_df.columns:
 
 
 weight_df = weight_df.loc[weight_df.synth_kind=='N']
-ofig.plot_all_weight_comparisons(weight_df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
+ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
 
 def plot_weight_prediction_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, pred=False, weight_lim=[-1,2]):
     areas = list(df.area.unique())
@@ -1407,7 +1456,7 @@ weight_df0['epoch'] = ep_names
 from datetime import date
 today = date.today()
 OLP_partialweights_db_path = \
-    f'/auto/users/hamersky/olp_analysis/{date.today()}_Batch341_{weight_df0.fit_segment.unique()[0]}_nometrics'  # weight + corr
+    f'/auto/users/hamersky/olp_analysis/{date.today()}_batch{weight_df0.batch.unique()[0]}_{weight_df0.fit_segment.unique()[0]}_metrics'  # weight + corr
 
 jl.dump(weight_df0, OLP_partialweights_db_path)
 

@@ -17,6 +17,8 @@ siteid='PRN059a'
 siteid='PRN050a'
 siteid='PRN057a'
 siteid='CLT047c'
+siteid='TNC047a'
+siteid='PRN064a'
 
 d_raw = db.pd_query(f"SELECT * FROM gDataRaw where cellid like '{siteid}%%' AND runclass='BNB' AND not(bad) AND not(isnull(depthinfo))")
 
@@ -52,7 +54,7 @@ df_siteinfo['channel']=df_siteinfo['index'].apply(lambda x: int(x[8:11]))
 d=db.pd_query(f'SELECT * FROM gDataRaw where id={rawid}')
 
 d_labeled_depth = json.loads(d.loc[0,'depthinfo'])
-landmarks = d_labeled_depth['landmarkPosition']
+landmarks = {k:v for (k,v) in d_labeled_depth['landmarkPosition'].items() if d_labeled_depth['landmarkBoolean'][k]==True}
 
 left_csd, power, freqs, windowtime, rasterfs, column_xy_sorted, column_xy, channel_xy, coh_mat, erp, probe = \
     lfp.parmfile_event_lfp(parmfile)
