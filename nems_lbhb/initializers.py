@@ -386,7 +386,7 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
     else:
         mspath = f"{old_uri}/modelspec.json"
-        j = load_resource(mspath)
+        j = str(load_resource(mspath, raw=True))
         old_modelspec = nems_from_json(j)
         old_modelspec.meta['cell_siteids'] = []
         new_ctx = {'modelspec': get_submodel(old_modelspec, [], modelspec)}
