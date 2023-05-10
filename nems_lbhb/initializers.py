@@ -30,7 +30,7 @@ from nems0 import xform_helper, xforms
 from nems0.uri import save_resource, load_resource
 from nems0.utils import get_default_savepath
 from nems.models.base import Model
-from nems.tools.json import load_model
+from nems.tools.json import load_model, nems_from_json
 
 log = logging.getLogger(__name__)
 
@@ -354,7 +354,6 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         #wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R
         #tfinit.n.lr1e3.et3.rb10.es20-newtf.n.lr1e4.ver2
 
-
         # hard-coded to use an A1 model!!!!
         if pre_batch == 322:
             pre_cellid = 'ARM029a-07-6'
@@ -387,10 +386,8 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         new_ctx = load_phi(modelspec, prefit_modelspec=prefit_ctx['modelspec'], copy_layers=copy_layers)
     else:
         mspath = f"{old_uri}/modelspec.json"
-        #j = load_resource(mspath)
-        #old_modelspec = Model.from_json(j)
-        # does this work with web API?
-        old_modelspec = load_model(mspath)
+        j = load_resource(mspath)
+        old_modelspec = nems_from_json(j)
         old_modelspec.meta['cell_siteids'] = []
         new_ctx = {'modelspec': get_submodel(old_modelspec, [], modelspec)}
     if freeze_early:
