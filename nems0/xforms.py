@@ -478,7 +478,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         modelspec.meta = meta.copy()
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
-        cellid = meta.get('celld', 'NAT4v2')
+        cellid = meta.get('cellid', 'NAT4v2')
         modelspec.name = f"{cellid}/{meta['batch']}/{meta['modelname']}"
     else:
         modelspec = context['modelspec']

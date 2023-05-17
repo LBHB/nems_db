@@ -94,8 +94,8 @@ fit_string_pop = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 fit_string_single = "lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 
 # maybe better model? only slightly. fewer L1 units, more L2
-#outnl = 'dexp.R'
-outnl = 'relu.R.o.s.g'
+outnl = 'dexp.R'
+#outnl = 'relu.R.o.s.g'
 cnn1dx2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-{outnl}"
 cnn1dx2_2 = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-{outnl}"
 cnn1dx2_L = f"wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100.s-wc.100xR-lvl.R"

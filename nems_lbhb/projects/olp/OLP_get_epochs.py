@@ -177,7 +177,7 @@ def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
     offset = 1
     dlist = []
     for c, cellid in enumerate(resp.chans):
-        print(cellid)
+        #print(cellid)
         ed = epoch_df.copy()
         ed['cellid']=cellid
         for i, r in ed.iterrows():
@@ -232,7 +232,7 @@ def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
 
     return epoch_df_all
 
-def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
+def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None, stim=None, resp=None):
     """
     cellid='CLT047c-03-1'
     epoch_fg='Gobble'
@@ -248,7 +248,8 @@ def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
         #         }
 
     f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)
-
+    if len(types)==1:
+        ax = np.array([ax]).T
     for i, acol in enumerate(ax.T):
         nat_epoch_df = epoch_df_all.loc[(epoch_df_all.cellid == cellid) &
                                         epoch_df_all['BG + FG'].str.endswith(list(types.keys())[i]) &
@@ -257,7 +258,7 @@ def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
                                         ].reset_index()
         epochs = list(nat_epoch_df.iloc[0][cols])
         for a, e, k in zip(acol, epochs, cols):
-            s = stim.extract_epoch(e)[0,0,:]
+            s = stim.extract_epoch(e)[0,:,:].sum(axis=0)/50
             r = resp.extract_channels([cellid]).extract_epoch(e).mean(axis=0)[0,:]
             a.plot(s)
             a.plot(r)
@@ -365,6 +366,7 @@ if __name__ == '__main__':
         ax[1].plot([0,len(nat_epoch_df)],[0,0],'--', color='gray', lw=0.5)
         ax[1].set_ylim([-0.2, 1.0])
 
+        # both-sum is cc of single stim with simul stim minus cc of single stim with sum of single stims
         nat_epoch_df[['FG cc(both-sum)','BG cc(both-sum)']].plot(lw=0.5,ax=ax[2])
         #nat_epoch_df[['cc(FG,FGBG)','cc(BG,FGBG)']].plot(lw=0.5,ax=ax[2])
         ax[2].plot([0,len(nat_epoch_df)],[0,0],'--', color='gray', lw=0.5)
@@ -388,7 +390,7 @@ if __name__ == '__main__':
     epoch_fg='Gobble'
     epoch_bg='Bees'
     epoch_bg='RockTumble'
-    f = examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types)
+    f = examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types, stim=stim, resp=resp)
 
     """
     f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)

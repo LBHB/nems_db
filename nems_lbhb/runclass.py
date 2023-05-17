@@ -316,7 +316,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
 
     if (ReferenceClass=='BigNat') & \
-            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
+            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('TestBinaural','None').strip() != 'None'):
         # Binaural natural sounds
         sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
         sound_root = sound_root.replace("H:/", "/auto/data/")

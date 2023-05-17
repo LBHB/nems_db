@@ -389,6 +389,9 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         j = str(load_resource(mspath, raw=True))
         old_modelspec = nems_from_json(j)
         old_modelspec.meta['cell_siteids'] = []
+        old_name = old_modelspec.name
+        if len(modelspec.meta.get('cellids',['Cell'])) > 1:
+
         new_ctx = {'modelspec': get_submodel(old_modelspec, [], modelspec)}
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))

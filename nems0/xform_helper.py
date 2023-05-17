@@ -239,7 +239,7 @@ def fit_model_xform(cellid, batch, modelname, autoPlot=True, saveInDB=False,
             prefix = get_setting('NEMS_RESULTS_DIR')
         batch = modelspec.meta.get('batch', 0)
         cellid = modelspec.meta.get('cellid', 'cell')
-        basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
+        basepath = os.path.join(prefix, str(batch), cellid)
 
         # use nems-lite model path namer
         filepath = json.generate_model_filepath(modelspec, basepath=basepath)
@@ -382,7 +382,7 @@ def find_model_xform_file(cellid, batch=271,
     #    uri = filepath.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     # hack: hard-coded assumption that server will use this data root
-    uri = filepath.replace('http://hyrax.ohsu.edu:3003/results/nems-lite', get_setting('NEMS_RESULTS_DIR'))
+    uri = filepath.replace('http://hyrax.ohsu.edu:3003/results', get_setting('NEMS_RESULTS_DIR'))
     uri = uri.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     return uri, old
