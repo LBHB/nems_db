@@ -391,8 +391,12 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
         old_modelspec.meta['cell_siteids'] = []
         old_name = old_modelspec.name
         if len(modelspec.meta.get('cellids',['Cell'])) > 1:
-
-        new_ctx = {'modelspec': get_submodel(old_modelspec, [], modelspec)}
+            new_name = "/".join([siteid]+old_name.split("/")[1:])
+        else:
+            new_name = "/".join([cellid]+old_name.split("/")[1:])
+        new_modelspec = get_submodel(old_modelspec, [], modelspec)
+        new_modelspec.name=new_name
+        new_ctx = {'modelspec': new_modelspec}
     if freeze_early:
         new_ctx['freeze_layers'] = list(np.arange(freeze_layer_count))
         new_ctx['freeze_idx'] = list(np.arange(freeze_layer_count))
