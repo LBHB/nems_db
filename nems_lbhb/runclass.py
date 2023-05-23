@@ -10,11 +10,14 @@ import numpy as np
 import pandas as pd
 import copy
 from pathlib import Path
+import os
 
+from scipy import interpolate
 from scipy.signal import hilbert, resample
 from scipy.io import wavfile
 import matplotlib.pyplot as plt
 from nems0.analysis.gammatone.gtgram import gtgram
+from nems0.analysis.gammatone.filters import centre_freqs
 
 log = logging.getLogger(__name__)
 
@@ -283,6 +286,56 @@ def remove_clicks(w, max_threshold=15, verbose=False):
        print(f'bins compressed down: {ii.sum()} up: {jj.sum()} max {np.abs(w).max():.2f}-->{np.abs(w_clean).max():.2f}')
 
     return w_clean
+
+def load_hrtf(format='az', fmin=200, fmax=20000, num_freqs=18):
+    """
+    load HRFT and map to center frequencies of a gtgram fitlerbank
+    TODO: support for elevation, cleaner HRTF
+    :param format: str - has to be 'az' (default)
+    :param fmin: default 200
+    :param fmax: default 20000
+    :param num_freqs: default 18
+    :return: L0, R0, c, A -- tuple
+            L0: Left ear HRTF,
+            R0: Right ear HRTF,
+            c: frequency corresponding to each row (axis = 0),
+            A: azimuth corresponding to each column (axis =1)
+    """
+
+    c = np.sort(centre_freqs(fmax*2, num_freqs, fmin, fmax))
+
+    if format == 'az':
+        filepath = Path(os.path.dirname(__file__)) / 'projects' / 'freemoving' / 'hrtf_az.csv'
+        arr = np.loadtxt(filepath, delimiter=",", dtype=np.float)
+
+        A = np.unique(arr[:, 0])
+        F = np.unique(arr[:, 1])
+        L = np.reshape(arr[:, 2], [len(A), len(F)]).T
+        R = np.reshape(arr[:, 3], [len(A), len(F)]).T
+
+        f = interpolate.interp1d(F, L, axis=0)
+        g = interpolate.interp1d(F, R, axis=0)
+        L0 = f(c)
+        R0 = g(c)
+        if np.max(np.abs(A))<180:
+            A = np.concatenate([[-180], A, [180]])
+            L180 = np.mean(L0[:,[0, -1]], axis=1, keepdims=True)
+            L0 = np.concatenate([L180, L0, L180], axis=1)
+            R180 = np.mean(R0[:,[0, -1]], axis=1, keepdims=True)
+            R0 = np.concatenate([R180, R0, R180], axis=1)
+
+        #f,ax=plt.subplots(1,2)
+        #ax[0].imshow(L0, origin='lower', extent=[A[0],A[-1],c[0],c[-1]], aspect='auto')
+        #im=ax[1].imshow(R0, origin='lower', extent=[A[0],A[-1],c[0],c[-1]], aspect='auto')
+        #plt.colorbar(im, ax=ax[1])
+        #f,ax=plt.subplots(1,2)
+        #ax[0].imshow(L, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
+        #ax[1].imshow(R, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
+    else:
+        raise ValueError(f'Only az HRTF currently supported')
+
+    return L0, R0, c, A
+
 
 def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
              mono=False, binaural=False, binsplit=True,

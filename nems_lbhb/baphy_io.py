@@ -3123,9 +3123,9 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
             if invalid_onsets[-1] > invalid_offsets[-1]:
                 invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
             for (a, b) in zip(invalid_onsets, invalid_offsets):
-                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap ):
+                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
                     x[a:b] = np.linspace(x[a-1], x[b], b-a)
-                    y[a:b] = np.linspace(y[a - 1], y[b], b - a)
+                    y[a:b] = np.linspace(y[a-1], y[b], b-a)
                 else:
                     x[a:b] = np.nan
                     y[a:b] = np.nan

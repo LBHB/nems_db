@@ -20,18 +20,18 @@ from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_de
 from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
 from nems.layers import WeightChannels, FIR, LevelShift, \
-    DoubleExponential, RectifiedLinear, ConcatSignals
+    DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
 from nems import Model
 from nems.layers.base import Layer, Phi, Parameter
 import nems.visualization.model as nplt
 from nems0.modules.nonlinearity import _dlog
 from nems_lbhb.motor.free_tools import compute_d_theta, \
-    free_scatter_sum, dlc2dist
+    free_scatter_sum, dlc2dist, stim_filt_hrtf
 
 log = logging.getLogger(__name__)
 
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
-                   recache=False, dlc_chans=10, dlc_threshold=0.2, **options):
+                   apply_hrtf=True, recache=False, dlc_chans=10, dlc_threshold=0.2, **options):
 
     sitenum = int(siteid[3:6])
     if sitenum <= 34:
@@ -63,25 +63,23 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         extops = {'mono': True}
     else:
         extops = {}
-    rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
+    rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram', channels=18,
                            dlc=True, recache=recache, rasterfs=rasterfs,
                            dlc_threshold=dlc_threshold, fill_invalid='interpolate', **extops)
 
-    rec = impute_multi(rec, sig='dlc', empty_values=None, keep_dims=dlc_chans)['rec']
+    log.info('imputing missing DLC values')
+    rec = impute_multi(rec, sig='dlc', empty_values=np.nan, keep_dims=dlc_chans)['rec']
     #rec = dlc2dist(rec, smooth_win=2, keep_dims=dlc_chans)
     dlc_data = rec['dlc'][:, :]
     dlc_valid = np.sum(np.isfinite(dlc_data), axis=0, keepdims=True) > 0
 
-    rec['dlcsh'] = rec['dlc'].shuffle_time(rand_seed=1000)
     rec['dlc_valid'] = rec['dlc']._modified_copy(data=dlc_valid, chans=['dlc_valid'])
+    log.info(f"DLC valid bins: {rec['dlc_valid'].as_continuous().sum()}/{rec['dlc_valid'].shape[1]}")
 
     rec['stim'] = rec['stim'].rasterize()
-    fn = lambda x: _dlog(x, -1)
-    rec['stim'] = rec['stim'].transform(fn, 'stim')
-    rec['stim'] = rec['stim'].normalize('minmax')
-
     if mono:
         rec['stim'] = rec['stim']._modified_copy(data=rec['stim']._data[:18, :])
+
 
     rec['resp'] = rec['resp'].rasterize()
 
@@ -101,7 +99,201 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
 
     return rec
 
-def free_fit(rec, **options):
+def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
+    """
+    special case: if dlc_memory=1 add a delay line with shuffled data to
+    the dlc signal to match the parameter count for dlc_memory=4
+    """
+
+    siteid = rec.meta['siteid']
+    if apply_hrtf:
+        log.info('Applying HRTF')
+        rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
+                             f_min=200, f_max=20000, channels=18)['rec']
+    elif rec['stim'].shape[0]==18:
+        log.info('Stacking on noise to control for HRTF')
+        stim2 = rec['stim'].shuffle_time(rand_seed=500)
+        rec['stim'] = rec['stim'].concatenate_channels([rec['stim'], stim2])
+
+    # log compress and normalize stim
+    fn = lambda x: _dlog(x, -1)
+    rec['stim'] = rec['stim'].transform(fn, 'stim')
+    rec['stim'] = rec['stim'].normalize('minmax')
+    rec['resp'] = rec['resp'].normalize('minmax')
+
+    cellids = rec['resp'].chans
+
+    #epoch_regex = "^STIM_"
+    #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
+    #est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
+    #val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
+
+    est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
+    val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
+
+    est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
+    val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
+
+    est = est.apply_mask()
+    val = val.apply_mask()
+    log.info(f"resp: {est['resp'].shape} stim: {est['stim'].shape} dlc: {est['dlc'].shape}")
+    dlc_count = rec['dlc'].shape[0]
+
+    if shuffle=='none':
+        input = {'stim': est['stim'].as_continuous().T, 'dlc': est['dlc'].as_continuous().T[:, :dlc_count]}
+        test_input = {'stim': val['stim'].as_continuous().T, 'dlc': val['dlc'].as_continuous().T[:, :dlc_count]}
+    elif shuffle=='dlc':
+        input = {'stim': est['stim'].as_continuous().T,
+                 'dlc': est['dlc'].shuffle_time(rand_seed=1000).as_continuous().T[:, :dlc_count]}
+        test_input = {'stim': val['stim'].as_continuous().T,
+                      'dlc': val['dlc'].shuffle_time(rand_seed=1000).as_continuous().T[:, :dlc_count]}
+    elif shuffle=='stim':
+        input = {'stim': est['stim'].shuffle_time(rand_seed=1000).as_continuous().T,
+                 'dlc': est['dlc'].as_continuous().T[:, :dlc_count]}
+        test_input = {'stim': val['stim'].shuffle_time(rand_seed=1000).as_continuous().T,
+                      'dlc': val['dlc'].as_continuous().T[:, :dlc_count]}
+
+    if dlc_memory == 1:
+        d = [input['dlc']] + [est['dlc'].shuffle_time(rand_seed=100).as_continuous().T]
+        input['dlc'] = np.concatenate(d, axis=1)
+        d = [test_input['dlc']] + [val['dlc'].shuffle_time(rand_seed=100).as_continuous().T]
+        test_input['dlc'] = np.concatenate(d, axis=1)
+        log.info('delay line with shuffled dlc')
+
+    target = est['resp'].as_continuous().T
+    test_target = val['resp'].as_continuous().T
+
+
+    acount=10  # number of auditory filters
+    dcount=4  # number of dlc filters
+    tcount = acount+dcount
+    l2count = 16
+    cellcount = len(cellids)
+    input_count = rec['stim'].shape[0]
+    dlc_count = input['dlc'].shape[1]
+
+    if dcount > 0:
+        layers = [
+            WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
+            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
+            WeightChannels(shape=(dlc_count, 1, dcount), input='dlc', output='space'),
+            FIR(shape=(dlc_memory, 1, dcount), input='space', output='space'),
+            ConcatSignals(input=['prediction','space'], output='prediction'),
+            RectifiedLinear(shape=(tcount,), input='prediction', output='prediction',
+                            no_offset=False, no_shift=False),
+            WeightChannels(shape=(tcount, 1, l2count), input='prediction', output='prediction'),
+            FIR(shape=(4, 1, l2count), input='prediction', output='prediction'),
+            RectifiedLinear(shape=(1, l2count), input='prediction', output='prediction',
+                            no_offset=False, no_shift=False),
+            WeightChannels(shape=(l2count, cellcount), input='prediction', output='prediction'),
+            #DoubleExponential(shape=(1, cellcount), input='prediction', output='prediction'),
+            RectifiedLinear(shape=(1, cellcount), input='prediction', output='prediction',
+                            no_offset=False, no_shift=False),
+        ]
+    else:
+        layers = [
+            WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
+            FIR(shape=(15, 1, acount), input='prediction', output='prediction'),
+            WeightChannels(shape=(tcount, cellcount), input='prediction', output='prediction'),
+            LevelShift(shape=(1, cellcount), input='prediction', output='prediction'),
+        ]
+
+    fitter = 'tf'
+    fitter_options = {'cost_function': 'squared_error',  # 'nmse'
+                      'early_stopping_tolerance': 1e-3,
+                      'validation_split': 0,
+                      'learning_rate': 1e-2, 'epochs': 2000
+                      }
+    fitter_options2 = {'cost_function': 'squared_error',
+                      'early_stopping_tolerance': 1e-4,
+                      'validation_split': 0,
+                      'learning_rate': 1e-3, 'epochs': 3000
+                      }
+
+    model = Model(layers=layers)
+    model = model.sample_from_priors()
+    #model = model.sample_from_priors()
+
+
+    log.info('Fit stage 1: without static output nonlinearity')
+    model.layers[-1].skip_nonlinearity()
+    model = model.fit(input=input, target=target, backend=fitter,
+                      fitter_options=fitter_options)
+    model.layers[-1].unskip_nonlinearity()
+    log.info('Fit stage 2: with static output nonlinearity')
+    model = model.fit(input=input, target=target, backend=fitter,
+                      verbose=0, fitter_options=fitter_options2)
+
+    fit_pred = model.predict(input=input)
+    prediction = model.predict(input=test_input)
+    if type(prediction) is dict:
+        fit_pred = fit_pred['prediction']
+        prediction = prediction['prediction']
+
+    fit_cc = np.array([np.corrcoef(fit_pred[:, i], target[:, i])[0, 1] for i in range(cellcount)])
+    cc = np.array([np.corrcoef(prediction[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
+
+    model.meta['fit_predxc'] = fit_cc
+    model.meta['predxc'] = cc
+    model.meta['prediction'] = prediction
+    model.meta['resp'] = test_target
+    model.meta['siteid'] = siteid
+    model.name = f'{siteid}/sh-{shuffle}/dlc_memory={dlc_memory}/hrtf={apply_hrtf}'
+    return model
+
+
+def compare_models(rec, model1, model2):
+    depth = rec.meta['depth']
+    sw = rec.meta['sw']
+    cc1 = model1.meta['predxc']
+    cc2 = model2.meta['predxc']
+    target = model1.meta['resp']
+    prediction1 = model1.meta['prediction']
+    prediction2 = model2.meta['prediction']
+
+    imopts = {'aspect': 'auto', 'origin': 'lower', 'interpolation': 'none'}
+
+    f, ax = plt.subplots(4, 3, figsize=(12, 8))
+
+    ax[0, 0].imshow(smooth(prediction1[:2000, :].T), **imopts)
+    ax[0, 0].set_title(rec.meta['siteid'])
+
+    ax[1, 0].imshow(smooth(target[:2000, :].T), **imopts)
+
+    nplt.plot_strf(model1.layers[1], model1.layers[0], ax=ax[0, 1])
+    ax[0, 1].set_title('model1 stim FIR')
+    nplt.plot_strf(model1.layers[3], model1.layers[2], ax=ax[1, 1])
+    ax[1, 1].set_title('model1 dlc FIR')
+    nplt.plot_strf(model2.layers[1], model2.layers[0], ax=ax[0, 2])
+    ax[0, 2].set_title('model2 stim FIR')
+    nplt.plot_strf(model2.layers[3], model2.layers[2], ax=ax[1, 2])
+    ax[1, 2].set_title('model2 dlc FIR')
+
+    ax[2, 0].plot(depth[sw > 0.4], cc1[sw > 0.4], '.', label='dlc-RS')
+    ax[2, 0].plot(depth[sw > 0.4], cc2[sw > 0.4], '.', label='dlcsh-RS')
+    ax[2, 0].plot(depth[sw <= 0.4], cc1[sw <= 0.4], '.', label='dlc-NS')
+    ax[2, 0].plot(depth[sw <= 0.4], cc2[sw <= 0.4], '.', label='dlcsh-NS')
+    ax[2, 0].set_title(f"pred cc1={np.mean(cc1):.3} cc2={np.mean(cc2):.3}")
+    ax[2, 0].set_xlabel('depth from L3-L4 border (um)')
+    ax[2, 0].legend(fontsize=8)
+
+    ax[3, 0].plot(depth[sw > 0.4], cc1[sw > 0.4] - cc2[sw > 0.4], '-', label='RS')
+    ax[3, 0].plot(depth[sw <= 0.4], cc1[sw <= 0.4] - cc2[sw <= 0.4], '-', label='NS')
+    ax[3, 0].set_xlabel('depth from L3-L4 border (um)')
+    ax[3, 0].set_ylabel('dlc diff')
+    ax[3, 0].legend(fontsize=8)
+
+    ax[2, 1].plot(model1.layers[-2].coefficients.T);
+    ax[2, 2].plot(model2.layers[-2].coefficients.T);
+    plt.tight_layout()
+
+    return f
+
+
+
+
+def free_fit_two(rec, **options):
+    # TODO : DELETE ME?  Redundant with free_fit and compare_models
     siteid = rec.meta['siteid']
 
     cellids = rec['resp'].chans
@@ -128,7 +320,7 @@ def free_fit(rec, **options):
     input_count = rec['stim'].shape[0]
     dlc_count = rec['dlc'].shape[0]
 
-    if dcount>0:
+    if dcount > 0:
         layers = [
             WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
             FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
@@ -257,3 +449,4 @@ def free_fit(rec, **options):
     plt.tight_layout()
 
     return model, model2, f
+

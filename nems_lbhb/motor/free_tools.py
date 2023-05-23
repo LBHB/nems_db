@@ -5,6 +5,9 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.interpolate import LinearNDInterpolator
 from scipy.ndimage import gaussian_filter
+from scipy import interpolate
+
+import logging
 
 from nems0 import db
 import nems0.epoch as ep
@@ -14,7 +17,9 @@ from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
-from nems_lbhb import baphy_io
+from nems_lbhb import baphy_io, runclass
+
+log = logging.getLogger(__name__)
 
 def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
                     egocentric_velocity=False, verbose=False):
@@ -68,7 +73,7 @@ def compute_d_theta(dlc_data, ref_x0y0=None, smooth_win=1.5, fs=1,
     theta = theta - theta0
     theta[theta < -np.pi] = (theta[theta < -np.pi] + 2 * np.pi)
     theta[theta > np.pi] = (theta[theta > np.pi] - 2 * np.pi)
-    theta *= 180 / np.pi
+    theta *= -180 / np.pi
 
     #v = np.concatenate([np.diff(dlc_data[0:2, :], axis=1),
     #                    np.zeros((2, 1))], axis=1)
@@ -146,6 +151,64 @@ def dlc2dist(rec, rasterfs=1, norm=False, keep_dims=None, **d_theta_opts):
         data=dist, chans=['d', 'theta', 'v', 'v_theta', 'v_fwd', 'v_lat'])
 
     return newrec
+
+def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
+                   f_min=200, f_max=20000, channels=None):
+
+    # require (stacked) binaural stim
+    if channels is None:
+        channels = int(rec['stim'].shape[0]/2)
+    rasterfs = rec['stim'].fs
+    stimcount = int(rec['stim'].shape[0]/channels)
+    log.info(f"HRTF: stim is {channels} x {stimcount}")
+
+    L0, R0, c, A = runclass.load_hrtf(format=hrtf_format, fmin=f_min, fmax=f_max, num_freqs=channels)
+
+    # assume dlc has already been imputed and normalized to (0,1)
+    dlc_data_imp = rec['dlc'][:, :]
+    speaker1_x0y0 = 1.0, -0.8
+    speaker2_x0y0 = 0.0, -0.8
+
+    d1, theta1, vel, rvel, d_fwd, d_lat = compute_d_theta(
+        dlc_data_imp, fs=rasterfs, smooth_win=smooth_win, ref_x0y0=speaker1_x0y0)
+    d2, theta2, vel, rvel, d_fwd, d_lat = compute_d_theta(
+        dlc_data_imp, fs=rasterfs, smooth_win=smooth_win, ref_x0y0=speaker2_x0y0)
+
+    # fall-off over distance
+    # -- currently fudged 5 db diff from front to back
+    dist_atten = 6
+    log.info(f"Imposing distance attenuation={dist_atten} dB ")
+    gaind1 = -(d1 - 1) * dist_atten
+    gaind2 = -(d2 - 1) * dist_atten
+
+    f = interpolate.interp1d(A, R0, axis=1, fill_value="extrapolate")
+    gainr1 = f(theta1)[:, 0, :] + gaind1
+    gainr2 = f(theta2)[:, 0, :] + gaind2
+    g = interpolate.interp1d(A, L0, axis=1, fill_value="extrapolate")
+    gainl1 = g(theta1)[:, 0, :] + gaind1
+    gainl2 = g(theta2)[:, 0, :] + gaind2
+
+    s1 = rec['stim'].as_continuous()[:channels, :]
+    if stimcount>1:
+        s2 = rec['stim'].as_continuous()[channels:, :]
+    else:
+        s2 = np.zeros_like(s1)
+
+    # dB = 10*log10(P2/P1)
+    # so, to scale the gtgrams:
+    #   P2 = 10^(dB/10) * P1
+    #r12 = s1 * 10 ** (gainr1 / 10) + s2 * 10 ** (gainr2 / 10)
+    #l12 = s1 * 10 ** (gainl1 / 10) + s2 * 10 ** (gainl2 / 10)
+    r12 = np.sqrt((s1**2) * 10 ** (gainr1 / 10) + (s2**2) * 10 ** (gainr2 / 10))
+    l12 = np.sqrt((s1**2) * 10 ** (gainl1 / 10) + (s2**2) * 10 ** (gainl2 / 10))
+
+    binaural_stim = np.concatenate([r12,l12], axis=0)
+    newrec = rec.copy()
+    newrec['stim'] = newrec['stim']._modified_copy(data=binaural_stim)
+    newrec['disttheta'] = newrec['stim']._modified_copy(
+        data=np.concatenate([d1,theta1,d2,theta2],axis=0),
+        chans=['d1','theta1','d2','theta2'])
+    return {'rec': newrec}
 
 def free_scatter_sum(rec):
     """

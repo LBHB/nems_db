@@ -1,27 +1,30 @@
 """
 Utilities for super-mega model
 """
-from os.path import basename, join
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.signal import convolve2d, butter, sosfilt
-import pandas as pd
-import scipy
-from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
-from scipy.sparse import csr_array
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-import seaborn as sns
+#from os.path import basename, join
 import os
 import datetime
-import tensorflow as tf
-import logging
-from joblib import Memory
 import copy
 import time
 import io
 import itertools
+import logging
+from joblib import Memory
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.signal import convolve2d, butter, sosfilt
+import pandas as pd
+#import scipy
+from scipy.interpolate import LinearNDInterpolator
+from scipy.ndimage import gaussian_filter
+from scipy.sparse import csr_array
+#import statsmodels.api as sm
+#import statsmodels.formula.api as smf
+#import seaborn as sns
+
+import tensorflow as tf
+from sklearn.decomposition import FactorAnalysis, PCA
 
 from nems0 import db, epoch, initializers, xforms
 import nems0.preprocessing as preproc
@@ -118,7 +121,8 @@ def f(x):
 
 @memory.cache
 def load_bnt_recording(siteid, batch=343, loadkey="gtgram.fs100.ch18",
-                       pc_count=10, epoch_len=2000, val_single=False):
+                       pc_count=10, epoch_len=2000, val_single=False,
+                       projection_method="pca"):
     """
     to test if val_single loaded properly and if sparse format works:
     val_single = np.stack([val_['resp'].extract_epoch(e)[:,:,:epoch_len] for e in val_epochs], axis=0)
@@ -140,9 +144,16 @@ def load_bnt_recording(siteid, batch=343, loadkey="gtgram.fs100.ch18",
     rec['resp'] = rec['resp'].normalize('minmax')
     rec = xforms.concat_constant(rec=rec, sig='stim', use_mean_val=True)['rec']
 
-    rec = preproc.resp_to_pc(rec, resp_sig='resp', pc_sig='pca', pc_count=pc_count,
-                             pc_source='all', overwrite_resp=False, whiten=False)['rec']
-
+    if projection_method=='pca':
+        rec = preproc.resp_to_pc(rec, resp_sig='resp', pc_sig='pca', pc_count=pc_count,
+                                 pc_source='all', overwrite_resp=False, whiten=False)['rec']
+    elif projection_method=='fa':
+        fa = FactorAnalysis(n_components=pc_count, random_state=0)
+        f = fa.fit_transform(rec['resp'].as_continuous().T)
+        new_chans = [f'FA{i}' for i in range(pc_count)]
+        rec['pca']=rec['resp']._modified_copy(data=f.T, chans=new_chans)
+    else:
+        raise ValueError(f'unsupported projection method {projection_method}')
     epoch_regex = '^STIM_'
     est, val_ = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
     est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
@@ -181,6 +192,7 @@ def load_bnt_recording(siteid, batch=343, loadkey="gtgram.fs100.ch18",
 
 
 def get_submodel(model_full, site_set):
+    """MOVED to nems_lbhb.initializers"""
     cell_siteids = model_full.meta['cell_siteids']
     site_mask = np.array([(s in site_set) for s in cell_siteids ])
     
@@ -205,6 +217,7 @@ def get_submodel(model_full, site_set):
 
 
 def save_submodel(model_full, model_sub):
+    """MOVED to nems_lbhb.initializers"""
     """
     NB this function operates in-place!!
     
