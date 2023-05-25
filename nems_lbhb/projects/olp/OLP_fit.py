@@ -1205,217 +1205,6 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='resp',
     weights[close_to_zero] = np.nan
     return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model#, get_error
 
-### From OLP_analysis_main on 2022_10_03. I don't think this has any use, but stashing it here in
-### case... If you don't miss it by the next time you come across this, just trash it.
-# def get_sep_stim_names(stim_name):
-#     seps = [m.start() for m in re.finditer('_(\d|n)', stim_name)]
-#     if len(seps) < 2 or len(seps) > 2:
-#         return None
-#     else:
-#         return [stim_name[seps[0] + 1:seps[1]], stim_name[seps[1] + 1:]]
-#
-# weight_list = []
-# batch = 339
-# fs = 100
-# lfreq, hfreq, bins = 100, 24000, 48
-# threshold = 0.75
-# cell_df = nd.get_batch_cells(batch)
-# cell_list = cell_df['cellid'].tolist()
-# cell_list = ohel.manual_fix_units(cell_list) #So far only useful for two TBR cells
-#
-# fit_epochs = ['10', '01', '20', '02', '11', '12', '21', '22']
-# loader = 'env100'
-# modelspecs_dir = '/auto/users/luke/Code/nems/modelspecs'
-#
-# for cellid in cell_list:
-#     loadkey = 'ns.fs100'
-#     manager = BAPHYExperiment(cellid=cellid, batch=batch)
-#     options = {'rasterfs': 100,
-#                'stim': False,
-#                'resp': True}
-#     rec = manager.get_recording(**options)
-#
-#     #GET sound envelopes and get the indices for chopping?
-#     expt_params = manager.get_baphy_exptparams()
-#     ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
-#     FG_folder, fgidx = ref_handle['FG_Folder'], list(set(ref_handle['Foreground']))
-#     fgidx.sort(key=int)
-#     idxstr = [str(ff).zfill(2) for ff in fgidx]
-#
-#     fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
-#                            f'{FG_folder}/{ff}*.wav'))[0] for ff in idxstr]
-#     fgname = [ff.split('/')[-1].split('.')[0].replace(' ', '') for ff in fg_paths]
-#     ep_fg = [f"STIM_null_{ff}" for ff in fgname]
-#
-#     prebins = int(ref_handle['PreStimSilence'] * options['rasterfs'])
-#     postbins = int(ref_handle['PostStimSilence'] * options['rasterfs'])
-#     durbins = int(ref_handle['Duration'] * options['rasterfs'])
-#     trialbins = durbins + postbins
-#
-#     env_cuts = {}
-#     for nm, pth in zip(fgname, fg_paths):
-#         sfs, W = wavfile.read(pth)
-#         spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
-#
-#         env = np.nanmean(spec, axis=0)
-#         cutoff = np.max(env) * threshold
-#
-#         # aboves = np.squeeze(np.argwhere(env >= cutoff))
-#         # belows = np.squeeze(np.argwhere(env < cutoff))
-#
-#         highs, lows, whole_thing = env >= cutoff, env < cutoff, env > 0
-#         prestimFalse = np.full((prebins,), False)
-#         poststimTrue = np.full((trialbins - len(env),), True)
-#         poststimFalse = np.full((trialbins - len(env),), False)
-#
-#         full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
-#         aboves = np.concatenate((prestimFalse, highs, poststimFalse))
-#         belows = np.concatenate((prestimFalse, lows, poststimFalse))
-#         belows_post = np.concatenate((prestimFalse, lows, poststimTrue))
-#
-#         env_cuts[nm] = [full, aboves, belows, belows_post]
-#
-#         f, ax = plt.subplots(3, 1, sharex=True, sharey=True)
-#         ax[0].plot(env)
-#         ax[0].hlines(cutoff, 0, 100, ls=':')
-#         ax[0].set_title(f"{nm}")
-#         ax[1].plot(env[aboves])
-#         ax[2].plot(env[belows])
-#
-#     rec['resp'].fs = fs
-#     rec['resp'] = rec['resp'].extract_channels([cellid])
-#     resp = copy.copy(rec['resp'].rasterize())
-#
-#     _, SR, _ = ohel.remove_spont_rate_std(resp)
-#
-#     stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
-#
-#     val = rec.copy()
-#     val['resp'] = val['resp'].rasterize()
-#     val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
-#
-#     est_sub = None
-#
-#     df0 = val['resp'].epochs.copy()
-#     df2 = val['resp'].epochs.copy()
-#     df0['name'] = df0['name'].apply(ohel.label_ep_type)
-#     df0 = df0.loc[df0['name'].notnull()]
-#     df3 = pd.concat([df0, df2])
-#
-#     val['resp'].epochs = df3
-#     val_sub = copy.deepcopy(val)
-#     val_sub['resp'] = val_sub['resp'].select_epochs(fit_epochs)
-#
-#     val = val_sub
-#     fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
-#     val['resp'] = val['resp'].transform(fn)
-#
-#     print(f'calc weights {cellid}')
-#
-#     #where twostims fit actually begins
-#     epcs = val.epochs[val.epochs['name'].str.count('-0-1') >= 1].copy()
-#     sepname = epcs['name'].apply(get_sep_stim_names)
-#     epcs['nameA'] = [x[0] for x in sepname.values]
-#     epcs['nameB'] = [x[1] for x in sepname.values]
-#
-#     # epochs with two sounds in them
-#     epcs_twostim = epcs[epcs['name'].str.count('-0-1') == 2].copy()
-#
-#     A, B, AB, sepnames = ([], [], [], [])  # re-defining sepname
-#     for i in range(len(epcs_twostim)):
-#         if any((epcs['nameA'] == epcs_twostim.iloc[i].nameA) & (epcs['nameB'] == 'null')) \
-#                 and any((epcs['nameA'] == 'null') & (epcs['nameB'] == epcs_twostim.iloc[i].nameB)):
-#             A.append('STIM_' + epcs_twostim.iloc[i].nameA + '_null')
-#             B.append('STIM_null_' + epcs_twostim.iloc[i].nameB)
-#             AB.append(epcs_twostim['name'].iloc[i])
-#             sepnames.append(sepname.iloc[i])
-#
-#     #Calculate weights
-#     subsets = len(list(env_cuts.values())[0])
-#     weights = np.zeros((2, len(AB), subsets))
-#     Efit = np.zeros((5,len(AB), subsets))
-#     nMSE = np.zeros((len(AB), subsets))
-#     nf = np.zeros((len(AB), subsets))
-#     r = np.zeros((len(AB), subsets))
-#     cut_len = np.zeros((len(AB), subsets-1))
-#     get_error=[]
-#
-#     for i in range(len(AB)):
-#         names=[[A[i]],[B[i]],[AB[i]]]
-#         Fg = names[1][0].split('_')[2].split('-')[0]
-#         cut_list = env_cuts[Fg]
-#
-#         for ss, cut in enumerate(cut_list):
-#             weights[:,i,ss], Efit[:,i,ss], nMSE[i,ss], nf[i,ss], _, r[i,ss], _ = \
-#                     calc_psth_weights_of_model_responses_list(val, names,
-#                                                               signame='resp', cuts=cut)
-#             if ss != 0:
-#                 cut_len[i, ss-1] = np.sum(cut)
-#             # get_error.append(ge)
-#
-#     if subsets == 4:
-#         weight_df = pd.DataFrame(
-#             [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values,
-#              weights[0, :, 0], weights[1, :, 0], nMSE[:, 0], nf[:, 0], r[:, 0],
-#              weights[0, :, 1], weights[1, :, 1], nMSE[:, 1], nf[:, 1], r[:, 1], cut_len[:,0],
-#              weights[0, :, 2], weights[1, :, 2], nMSE[:, 2], nf[:, 2], r[:, 2], cut_len[:,1],
-#              weights[0, :, 3], weights[1, :, 3], nMSE[:, 3], nf[:, 3], r[:, 3], cut_len[:,2],])
-#         weight_df = weight_df.T
-#         weight_df.columns = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE', 'nf', 'r',
-#                              'weightsA_h', 'weightsB_h', 'nMSE_h', 'nf_h', 'r_h', 'h_idxs',
-#                              'weightsA_l', 'weightsB_l', 'nMSE_l', 'nf_l', 'r_l', 'l_idxs',
-#                              'weightsA_lp', 'weightsB_lp', 'nMSE_lp', 'nf_lp', 'r_lp', 'lp_idxs']
-#         cols = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE']
-#         print(weight_df[cols])
-#
-#         weight_df = weight_df.astype({'weightsA': float, 'weightsB': float,
-#                                       'weightsA_h': float, 'weightsB_h': float,
-#                                       'weightsA_l': float, 'weightsB_l': float,
-#                                       'weightsA_lp': float, 'weightsB_lp': float,
-#                                       'nMSE': float, 'nf': float, 'r': float,
-#                                       'nMSE_h': float, 'nf_h': float, 'r_h': float,
-#                                       'nMSE_l': float, 'nf_l': float, 'r_l': float,
-#                                       'nMSE_lp': float, 'nf_lp': float, 'r_lp': float,
-#                                       'h_idxs': float, 'l_idxs': float, 'lp_idxs': float})
-#
-#     else:
-#         raise ValueError(f"Only {subsets} subsets. You got lazy and didn't make this part"
-#                          f"flexible yet.")
-#
-#
-#     weight_df.insert(loc=0, column='cellid', value=cellid)
-#
-#     weight_list.append(weight_df)
-#
-# weight_df0 = pd.concat(weight_list)
-#
-#
-# ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df0.namesA, weight_df0.namesB)]
-# weight_df0 = weight_df0.drop(columns=['namesA', 'namesB'])
-# weight_df0['epoch'] = ep_names
-#
-# weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
-# weight_df0['threshold'] = str(int(threshold * 100))
-# if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
-#     raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
-#
-# ##load here.
-# OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights20.h5'  # weight + corr
-# OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_partial_weights.h5'  # weight + corr
-#
-# part_weights = False
-# if part_weights == True:
-#     os.makedirs(os.path.dirname(OLP_partialweights_db_path),exist_ok=True)
-#     store = pd.HDFStore(OLP_partialweights_db_path)
-#     df_store=copy.deepcopy(weight_df0)
-#     store['df'] = df_store.copy()
-#     store.close()
-#
-# else:
-#     store = pd.HDFStore(OLP_partialweights_db_path)
-#     weight_df0=store['df']
-#     store.close()
-
 
 def get_parm_data(cellid,runclassid=128):
     '''2023_04_04. Added by SVD and amended by GRH. Takes a given cellid and finds the parmfiles for OLP runs. It then uses
@@ -1483,15 +1272,21 @@ def get_parm_data(cellid,runclassid=128):
     return parmfiles
 
 
-
+# I think
 def OLP_fit_cell_pred_individual(cellid, batch, threshold=None, snip=None, pred=False, fit_epos='syn',
                                  fs=100):
-    '''2023_04_06. Added many things. First off the loader that uses get_parm_data and gives you labeled parmfiles
+    '''2023_05_17. I think this is old and useless now with the new function I made
+
+    2023_04_06. Added many things. First off the loader that uses get_parm_data and gives you labeled parmfiles
     that are associated with different kinds of olp runs. The function will fit individually for all the good ones it
     finds and add one big, labeled df at the end that it'll save for every run associated with that unit. Also,
     the new area + layer thing is used.
     2022_12_29. Added this from the bigger funxtion to make one that works for each cellid and can
     divvy it up to the cluster.'''
+
+    # Test
+    raise ValueError('You forgot you use this, looks like you do. If you never see this, delete me.')
+
     if fit_epos == 'bin':
         fit_epochs, lbl_fn = ['10', '01', '20', '02', '11', '12', '21', '22'], ohel.label_ep_type
     elif fit_epos == 'syn':
@@ -1748,7 +1543,9 @@ def OLP_fit_cell_pred_individual(cellid, batch, threshold=None, snip=None, pred=
 
 def OLP_fit_partial_weights(batch, threshold=None, snip=None, pred=False, fit_epos='syn',
                             fs=100, filter_animal=None, filter_experiment=None, note=None):
-    '''2022_12_28. This is an updated version of the OLP_fit that allows you to either use the sound
+    '''Old and probably DEFUNCT as of 2023_05_17
+
+    2022_12_28. This is an updated version of the OLP_fit that allows you to either use the sound
     envelope of the FG to fit the model (use threshold) or snip out different parts of the stimuli
     to fit (use snip, [start, length] ie [0, 0.5] for 0-500, 500-1000, and whole thing to be fit
     separately). Pred being toggled on only works if you are thusfar using batch 341 that has a
@@ -2000,7 +1797,7 @@ def OLP_fit_partial_weights(batch, threshold=None, snip=None, pred=False, fit_ep
     return weight_df0, cuts_info
 
 
-
+# Probably delete if you havent't unminimized this 2 months from 2023_05_17
 def OLP_fit_partial_cell_individual(cellid, batch, snip=None, fit_epos='syn', fs=100):
     '''2023_04_27. Updating to add cell_metrics stuff.
     2023_04_06. Added many things. First off the loader that uses get_parm_data and gives you labeled parmfiles
@@ -2283,9 +2080,9 @@ def OLP_fit_partial_cell_individual(cellid, batch, snip=None, fit_epos='syn', fs
     #                      f"there is nothing to fit. But maybe check that is correct.")
 
 
-
 def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=100):
-    '''2023_04_28. Modifying snip code I know works and adapting it to the individual.
+    '''2023_05_17. This is the good one that generates the complete df with all the info you want
+    2023_04_28. Modifying snip code I know works and adapting it to the individual.
 
     2022_12_28. This is an updated version of the OLP_fit that allows you to either use the sound
     envelope of the FG to fit the model (use threshold) or snip out different parts of the stimuli
@@ -2486,6 +2283,31 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                 Apref, Bpref = AcorAB - AcorLin, BcorAB - BcorLin
                 pref = Apref - Bpref
 
+                # 2023_05_16. Adding for getting the right paths for BG and FG for stats after
+                Sounds = ref_handle['SoundPairs']
+
+                # Get unique .wav file names for bg and fg
+                bg_files = list(np.unique([cc['bg_sound_name'] for cc in Sounds.values()]))
+                fg_files = list(np.unique([cc['fg_sound_name'] for cc in Sounds.values()]))
+
+                # Find, using the string index (in case of variety in spaces in names) to get the file extension
+                bg_ext = [dd for dd in bg_files if seps[0][:2]==dd[:2]][0]
+                fg_ext = [dd for dd in fg_files if seps[1][:2]==dd[:2]][0]
+
+                # Define the paths for each of the sounds for this run for summoning later
+                # If the synth is N or A, it is natural, do not go into synthetic folders
+                if synth_kind == 'A' or synth_kind == 'N':
+                    bg_path = f"/auto/users/hamersky{ref_handle['bg_SoundPath'][7:]}/{bg_ext}"
+                    fg_path = f"/auto/users/hamersky{ref_handle['fg_SoundPath'][7:]}/{fg_ext}"
+
+                else:
+                    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                                 'S': 'Spectral', 'C': 'Cochlear'}
+                    bg_path = glob.glob(f"/auto/users/hamersky{ref_handle['bg_SoundPath'][7:]}/"
+                                        f"{kind_dict[synth_kind]}/{bg_ext[:2]}*")[0]
+                    fg_path = glob.glob(f"/auto/users/hamersky{ref_handle['fg_SoundPath'][7:]}/"
+                                        f"{kind_dict[synth_kind]}/{fg_ext[:2]}*")[0]
+
                 cell_df.append({'epoch': stimmy,
                                 'kind': kind,
                                 'synth_kind': synth_kind,
@@ -2508,7 +2330,9 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                                 'fg_FR_start': B_FR_start,
                                 'bg_FR_end': A_FR_end,
                                 'fg_FR_end': B_FR_end,
-                                'supp': supp})
+                                'supp': supp,
+                                'BG_path': bg_path,
+                                'FG_path': fg_path})
             cell_df = pd.DataFrame(cell_df)
             cell_df['SR'], cell_df['STD'], cell_df['batch'], cell_df['parmfile'] = SR, STD, batch, pf
             cell_df.insert(loc=0, column='layer', value=layer)
@@ -2582,30 +2406,22 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
             check_epochs = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df.namesA, weight_df.namesB)]
             weight_df.insert(loc=0, column='epoch', value=check_epochs)
 
+            # Add relative gain metric for all the fits
+            for ss in cut_labels:
+                weight_df[f'FG_rel_gain{ss}'] = (weight_df[f'weightsB{ss}'] - weight_df[f'weightsA{ss}']) / \
+                                                (np.abs(weight_df[f'weightsB{ss}']) + np.abs(
+                                                    weight_df[f'weightsA{ss}']))
+                weight_df[f'BG_rel_gain{ss}'] = (weight_df[f'weightsA{ss}'] - weight_df[f'weightsB{ss}']) / \
+                                                (np.abs(weight_df[f'weightsA{ss}']) + np.abs(
+                                                    weight_df[f'weightsB{ss}']))
+
+
             # Merge the informational dataframe (cell_df) with the one with the data (weight_df)
             merge = pd.merge(cell_df, weight_df, on="epoch")
 
             merge.insert(loc=0, column='cellid', value=cellid)
             merge['fit_segment'] = f"{int(snip[0] * 1000)}-{int((snip[0] + snip[1]) * 1000)}"
             row = real_olps.iloc[cc]
-
-            # Use the weights to calculate the relative gain metric
-            weight_df['FG_rel_gain'] = (weight_df.weightsB - weight_df.weightsA) / \
-                                             (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
-            weight_df['FG_rel_gain_start'] = (weight_df.weightsB_start - weight_df.weightsA_start) / \
-                                             (np.abs(weight_df.weightsB_start) + np.abs(weight_df.weightsA_start))
-            weight_df['FG_rel_gain_end'] = (weight_df.weightsB_end - weight_df.weightsA_end) / \
-                                           (np.abs(weight_df.weightsB_end) + np.abs(weight_df.weightsA_end))
-            weight_df['FG_rel_gain_nopost'] = (weight_df.weightsB_nopost - weight_df.weightsA_nopost) / \
-                                           (np.abs(weight_df.weightsB_nopost) + np.abs(weight_df.weightsA_nopost))
-            weight_df['BG_rel_gain'] = (weight_df.weightsA - weight_df.weightsB) / \
-                                             (np.abs(weight_df.weightsA) + np.abs(weight_df.weightsB))
-            weight_df['BG_rel_gain_start'] = (weight_df.weightsA_start - weight_df.weightsB_start) / \
-                                             (np.abs(weight_df.weightsA_start) + np.abs(weight_df.weightsB_start))
-            weight_df['BG_rel_gain_end'] = (weight_df.weightsA_end - weight_df.weightsB_end) / \
-                                           (np.abs(weight_df.weightsA_end) + np.abs(weight_df.weightsB_end))
-            weight_df['BG_rel_gain_nopost'] = (weight_df.weightsA_nopost - weight_df.weightsB_nopost) / \
-                                           (np.abs(weight_df.weightsA_nopost) + np.abs(weight_df.weightsB_nopost))
 
             merge['olp_type'], merge['RMS'], merge['ramp'], merge['SNR'] = row['olp_type'], row['RMS'], \
                                                                            row['ramp'], row['SNR']

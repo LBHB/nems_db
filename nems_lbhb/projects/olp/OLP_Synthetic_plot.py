@@ -87,6 +87,7 @@ def plot_synthetic_weights(weight_df, plotA='weightsA', plotB='weightsB', areas=
         area_show = [[nn] * len(synth_show) for nn in areas]
         area_show = [item for sublist in area_show for item in sublist]
     else:
+        synth_show_full = synth_show
         area_show = [areas] * len(synth_show)
 
     for cnt, (ax, ar, syn) in enumerate(zip(axes, area_show, synth_show_full)):
@@ -1378,3 +1379,179 @@ def synthetic_summary_weight_multi_bar(df, suffixes=['', '_start', '_end'], show
             stat_dict[f'C{ss}'] = N * 4, M * 4, S * 4, T * 4, C * 4
 
     return stat_dict
+
+
+def plot_cc_cuts(df, sn, type, power_thresh=0.2, percent_lims=[10, 90], sk='N'):
+    '''2023_05_19. Mostly for testing the spectral statistic method, but it is a cute figure. Takes a dataframe,
+    usually filter it by the binaural, dynamic, SNR conditions first, as well as keeping the olp_type=synthetic
+    first. Also, area/layer. Anyhow, it takes a dataframe and a name of a sound, use sound_df.FG.unique()
+    or sound_df.BG.unique() with your dataframe to get the keys that would work, and label it FG or BG for type.
+    The power_thresh isn't super  useful anymore but the percent_lims should do the trick.'''
+    lfreq, hfreq, bins = 100, 24000, 48
+    # sk = bgs.synth_kind.unique()[0]
+    imopts_cc = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'inferno', 'aspect': 'auto'}
+    imopts_spec = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
+
+    filt_df = df.loc[df.synth_kind==sk]
+    sound = filt_df[[f'{type}', f'{type}_path', f'{type}_rel_gain_all', 'synth_kind']]
+    sound = sound.drop_duplicates(subset=[f'{type}_path'])
+    sound = sound.sort_values(by=f'{type}_rel_gain_all')
+
+    row = sound.loc[sound[f'{type}'] == sn]
+
+    name, path, gain = row[f'{type}'].values[0], row[f'{type}_path'].values[0], \
+                       np.around(row[f'{type}_rel_gain_all'], 3).values[0]
+    sfs, W = wavfile.read(path)
+    spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+    freq_mean = np.nanmean(spec, axis=1)
+    biggun = np.max(freq_mean)
+    x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+    csm = np.cumsum(freq_mean)
+    big = np.max(csm)
+    norm_mean = freq_mean/biggun
+
+    lower, upper = percent_lims[0] / 100, percent_lims[1] / 100
+    bin_high = np.abs(csm - (big * upper)).argmin()
+    bin_low = np.abs(csm - (big * lower)).argmin()
+    bandwidth = np.log2(x_freq[bin_high] / x_freq[bin_low])
+
+    power_mask = norm_mean >= power_thresh
+    change_mask = power_mask[:-1] != power_mask[1:]
+    change_idx = np.where(power_mask[:-1] != power_mask[1:])[0]
+
+    if np.all(power_mask == True):
+        binup, bindown = 0, bins
+    else:
+        if power_mask[0] == True:
+            binup = 0
+        else:
+            binup = change_idx[0]
+
+        if power_mask[-1] == True:
+            bindown = bins
+        else:
+            bindown = change_idx[-1]
+    bandw = np.log2(x_freq[bindown] / x_freq[binup])
+
+    fig, axes = plt.subplots(2, 5, figsize=(14, 6))
+    ax = np.ravel(axes)
+    ax[0].imshow(np.sqrt(spec), **imopts_spec)
+    ax[1].plot(norm_mean)
+    ax[1].set_ylabel('Norm Freq Mean')
+    ax[1].set_title(f'Spec Mean: thresh={power_thresh}')
+    ax[2].plot(csm, color='yellowgreen')
+    ax[2].set_title(f'CSM - {percent_lims[0]}%-{percent_lims[1]}%')
+    ax[2].vlines([bin_low,bin_high], 0, big, color='black', ls=':')
+    ax[1].vlines([binup,bindown], 0, 1, color='black', ls=':')
+    ax[0].hlines([binup,bindown], 0, spec.shape[1], color='blue', ls=':')
+    ax[0].hlines([bin_high,bin_low], 0, spec.shape[1], color='green', ls=':')
+    ax[3].imshow(np.sqrt(spec[binup:bindown, :]), **imopts_spec)
+    ax[4].imshow(np.sqrt(spec[bin_low:bin_high, :]), **imopts_spec)
+    ax[0].set_title(f'{type}: {name} - gain: {gain}', fontsize=8, fontweight='bold')
+    ax[1].hlines([power_thresh], 0, spec.shape[0], color='red', ls='--')
+    ax[0].set_yticks([0, binup, bindown, bin_low, bin_high, len(x_freq)])
+    ax[0].set_yticklabels([int(x_freq[0]), int(x_freq[binup]), int(x_freq[bindown]), int(x_freq[bin_low]),
+                           int(x_freq[bin_high]), int(x_freq[-1])])
+    ax[3].set_title(f"Bandwidth: {bandw:.2f}")
+    ax[4].set_title(f"Bandwidth: {bandwidth:.2f}")
+
+    cc = np.corrcoef(spec)
+    # cpow = cc[np.triu_indices(bins, k=1)].mean()
+    cpow = cc[np.triu_indices(bins, k=1)].mean()
+    ax[5].imshow(cc, **imopts_cc)
+    ax[5].set_title(f'CC: {cpow:.3f}', fontsize=7, fontweight='bold')
+    ax[5].set_yticks([]), ax[5].set_xticks([])
+
+    # Done by power threshold
+    cut_spec = spec[binup:bindown, :]
+    ccc = np.corrcoef(cut_spec)
+    ccpow = ccc[np.triu_indices(cut_spec.shape[0], k=1)].mean()
+
+    # Done by CSM
+    cut_spec_csm = spec[bin_low:bin_high, :]
+    cccsm = np.corrcoef(cut_spec_csm)
+    cccsmpow = cccsm[np.triu_indices(cut_spec_csm.shape[0], k=1)].mean()
+
+    ax[3].set_yticks([0, cut_spec.shape[0]])
+    ax[3].set_yticklabels([int(x_freq[binup]), int(x_freq[bindown])])
+    ax[8].imshow(ccc, **imopts_cc)
+    ax[8].set_title(f'CC: {ccpow:.3f}', fontsize=7, fontweight='bold')
+    ax[8].set_yticks([]), ax[8].set_xticks([])
+
+    ax[4].set_yticks([0, cut_spec_csm.shape[0]])
+    ax[4].set_yticklabels([int(x_freq[bin_low]), int(x_freq[bin_high])])
+    ax[9].imshow(cccsm, **imopts_cc)
+    ax[9].set_title(f'CC: {cccsmpow:.3f}', fontsize=7, fontweight='bold')
+    ax[9].set_yticks([]), ax[9].set_xticks([])
+
+    ax[6].spines['left'].set_visible(False), ax[6].spines['bottom'].set_visible(False)
+    ax[6].set_yticks([]), ax[6].set_xticks([])
+    ax[7].spines['left'].set_visible(False), ax[7].spines['bottom'].set_visible(False)
+    ax[7].set_yticks([]), ax[7].set_xticks([])
+
+
+def plot_spec_cc(df, type, percent_lims=[10,90], sk='N'):
+    '''2023_05_19. Makes a big display of all of the sounds in a given BG/FG category, organized by ascending
+    relative gain, and plots the spectrogram cut by the given bandwidth parameter (percent_lims) and then plots
+    the spectral correlation matric next to it. Includes gain, cc, bandwidth, and cc if you didn't filter the
+    spectrogram by bandwidth as a check.'''
+    lfreq, hfreq, bins = 100, 24000, 48
+    imopts_cc = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'inferno', 'aspect': 'auto'}
+    imopts_spec = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
+
+    filt_df = df.loc[df.synth_kind==sk]
+    sound = filt_df[[f'{type}', f'{type}_path', f'{type}_rel_gain_all', 'synth_kind']]
+    sound = sound.drop_duplicates(subset=[f'{type}_path'])
+    sound = sound.sort_values(by=f'{type}_rel_gain_all')
+
+    width = int(np.ceil(len(sound) / 7)) * 2
+    leftovers = width*7 - len(sound)*2
+
+    fig, axes = plt.subplots(7, width, figsize=(10, 12))
+    ax = np.ravel(axes)
+    cnt = 0
+    for rr in range(len(sound)):
+        name, path, gain = sound.iloc[rr][f'{type}'], sound.iloc[rr][f'{type}_path'], \
+                           np.around(sound.iloc[rr][f'{type}_rel_gain_all'], 3)
+        sfs, W = wavfile.read(path)
+        spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+        freq_mean = np.nanmean(spec, axis=1)
+        x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+        csm = np.cumsum(freq_mean)
+        big = np.max(csm)
+
+        lower, upper = percent_lims[0] / 100, percent_lims[1] / 100
+        bin_high = np.abs(csm - (big * upper)).argmin()
+        bin_low = np.abs(csm - (big * lower)).argmin()
+        bandwidth = np.log2(x_freq[bin_high] / x_freq[bin_low])
+
+        cut_spec = spec[bin_low:bin_high, :]
+        cc = np.corrcoef(cut_spec)
+        cpow = cc[np.triu_indices(cut_spec.shape[0], k=1)].mean()
+
+        cc_full = np.corrcoef(spec)
+        cpow_full = cc_full[np.triu_indices(spec.shape[0], k=1)].mean()
+
+        ax[rr+cnt].imshow(np.sqrt(cut_spec), **imopts_spec)
+        ax[rr+cnt].set_yticks([0, cut_spec.shape[0]])
+        ax[rr+cnt].set_yticklabels([int(x_freq[bin_low]), int(x_freq[bin_high])])
+        ax[rr+cnt+1].imshow(cc, **imopts_cc)
+        ax[rr+cnt+1].set_yticks([0, cut_spec.shape[0]-1]), ax[rr+cnt+1].set_xticks([])
+        ax[rr+cnt+1].set_yticklabels([bin_low, bin_high-1])
+        ax[rr+cnt].set_title(f'{name} | gain: {gain}\nbw: {bandwidth:.1f} | fcc: {cpow_full:.3f}', fontsize=8) #, fontweight='bold')
+        ax[rr+cnt+1].set_title(f'CC: {cpow:.3f}', fontsize=8, fontweight='bold')
+        ax[rr+cnt].spines['top'].set_visible(True), ax[rr+cnt].spines['right'].set_visible(True)
+        ax[rr+cnt+1].spines['top'].set_visible(True), ax[rr+cnt+1].spines['right'].set_visible(True)
+
+        cnt+=1
+
+    ax[0].set_ylabel('Freq (Hz)', fontsize=6)
+
+    for aa in range(leftovers):
+        ax[-aa-1].spines['left'].set_visible(False), ax[-aa-1].spines['bottom'].set_visible(False)
+        ax[-aa-1].set_yticks([]), ax[-aa-1].set_xticks([])
+
+    fig.suptitle(f'{type} - {sk}\n ', fontweight='bold', fontsize=10)
+    fig.tight_layout()

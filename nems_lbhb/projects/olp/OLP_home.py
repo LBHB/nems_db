@@ -47,17 +47,265 @@ path = '/auto/users/hamersky/olp_analysis/Synthetic_Full.h5' # Still needs the C
 path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500.h5' # The half models, use this now
 path = '/auto/users/hamersky/olp_analysis/a1_celldat1.h5'
 path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500_with_stats.h5' # The half models, use this now
-
 weight_df = ofit.OLP_fit_weights(loadpath=path)
 weight_df['batch'] = 340
+
+
 
 # The thing I was working on in January with fit
 path = '/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL'
 # 2023_05_02. Starting with Prince data too and new df structure
-path = '/auto/users/hamersky/olp_analysis/2023-05-02_batch344_0-500_metrics'
-path = '/auto/users/hamersky/olp_analysis/2023-05-04_batch344_0-500_metrics'
-path = '/auto/users/hamersky/olp_analysis/2023-05-05_batch344_0-500_metrics' # Full one
+# path = '/auto/users/hamersky/olp_analysis/2023-05-10_batch344_0-500_metrics' # Full one with updated PRNB layers
+path = '/auto/users/hamersky/olp_analysis/2023-05-17_batch344_0-500_metrics' #full one with PRNB layers and paths
 weight_df = jl.load(path)
+
+sound_df = ohel.get_sound_statistics_from_df(weight_df, percent_lims=[10,90], append=True)
+
+
+
+# Using this to play with the statistics of the sounds
+filt = weight_df
+filt = filt.loc[(filt.area=='A1')] #| (filt.area=='PEG')]
+filt = filt.loc[(filt.layer=='NA') | (filt.layer=='5') | (filt.layer=='44') | (filt.layer=='13') |
+                (filt.layer=='4') | (filt.layer=='56') | (filt.layer=='16')]
+
+filt = filt.loc[filt.dyn_kind=='ff']
+filt = filt.loc[filt.kind=='11']
+filt = filt.loc[filt.SNR==0]
+filt = filt.loc[filt.olp_type=='synthetic']
+# filt = filt.loc[(filt.synth_kind=='N')] # | (filt.synth_kind=='A')]
+
+# fr_thresh=0.02
+# filt = filt.loc[(filt.bg_FR >= fr_thresh) & (filt.fg_FR >= fr_thresh)]
+weight_lim = [0, 2]
+filt = filt.loc[((filt[f'weightsA'] >= weight_lim[0]) & (filt[f'weightsA'] <= weight_lim[1])) &
+                            ((filt[f'weightsB'] >= weight_lim[0]) & (filt[f'weightsB'] <= weight_lim[1]))]
+# r_thresh = 0.4
+# filt = filt.loc[filt['r']>=r_thresh]
+
+
+bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock
+filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
+filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
+
+sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=True)
+
+
+sound_metric_scatter(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
+                          x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'])
+
+def sound_metric_scatter_bgfg_sep(df, x_metrics, x_labels=None, fr_thresh=0.03, r_cut=None):
+    '''2023_05_24. Takes a sound df, must already be filtered by singular area, and the layers you want, and
+    it will plot separately the mean relative gain for each sound across the different synthetic conditions. BG and FG
+    will be on different rows for ease of viewing, but the axes will be shared so you can see the different spaces
+    they occupy.'''
+
+    df = df.loc[(df.bg_FR >= fr_thresh) & (df.fg_FR >= fr_thresh)]
+    df = df.loc[(df.kind=='11') & (df.dyn_kind=='ff') & (df.SNR==0) & (df.olp_type=='synthetic')]
+
+    if r_cut:
+        df = df.dropna(axis=0, subset='r')
+        df = df.loc[df.r >= r_cut]
+    df = df.copy()
+
+    # Get rid of when the weights are unrealistic
+    weight_lim = [0, 2]
+    df = df.loc[((df[f'weightsA'] >= weight_lim[0]) & (df[f'weightsA'] <= weight_lim[1])) &
+                        ((df[f'weightsB'] >= weight_lim[0]) & (df[f'weightsB'] <= weight_lim[1]))]
+
+    ylim_max = np.max([df.BG_rel_gain_all.max(), df.FG_rel_gain_all.max()])
+    ylim_min = np.min([df.BG_rel_gain_all.min(), df.FG_rel_gain_all.min()])
+
+    fig, axes = plt.subplots(2, len(x_metrics), figsize=(12, 5*len(areas)), sharey=True)
+    ax = axes.ravel()
+
+    count = 0
+    for ll in ['BG', 'FG']:
+        for cnt, met in enumerate(x_metrics):
+
+            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
+            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
+            xlim_min = xlim_min - np.abs(xlim_max)*0.05
+
+            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
+            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
+            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+
+            if ll == 'BG':
+                colors = {'N':'cornflowerblue', 'M':'royalblue', 'T':'blue', 'S':'darkblue', 'C':'black'}
+            elif ll == 'FG':
+                colors = {'N': 'yellowgreen', 'M': 'forestgreen', 'T': 'green', 'S': 'darkgreen', 'C': 'black'}
+
+            for key, val in colors.items():
+                sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind==key],
+                               ax=ax[cnt+count], s=24, color=val, label=key)
+
+                sb.scatterplot(x=f'{ll}_{met}', y=ylim_max*1.1, data=met_av.loc[met_av.synth_kind==key],
+                               ax=ax[cnt+count], marker='d', color=val, s=100)
+                sb.scatterplot(x=xlim_max*1.1, y=f'{ll}_rel_gain_all', data=gain_av.loc[gain_av.synth_kind==key],
+                               ax=ax[cnt+count], marker='<', color=val, s=200)
+
+            ax[cnt+count].set_ylim(ylim_min, ylim_max*1.1), ax[cnt+count].set_xlim(xlim_min,xlim_max*1.1)
+            ax[cnt+count].set_ylabel(''), ax[cnt+count].set_xlabel('')
+            ax[count].set_ylabel(f'Relative Gain', fontweight='bold', fontsize=10)
+            if count != 0:
+                if x_labels:
+                    ax[cnt + count].set_xlabel(f'{x_labels[cnt]}', fontweight='bold', fontsize=10)
+                else:
+                    ax[cnt + count].set_ylabel(f'{met}', fontweight='bold', fontsize=10)
+
+        count += len(x_metrics)
+
+    fig.suptitle(f'{df.area.unique()[0]} - FR threshold: {fr_thresh} - r > {r_cut}', fontsize=12, fontweight='bold')
+
+
+sound_metric_scatter_bgfg_sep(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
+                          x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'])
+
+def sound_metric_scatter_combined(df, x_metrics, x_labels=None, fr_thresh=0.03, r_cut=None):
+    '''2023_05_24. Takes a sound df, must already be filtered by singular area, and the layers you want, and
+    it will plot separately the mean relative gain for each sound across the different synthetic conditions. BG and FG
+    will be on different rows for ease of viewing, but the axes will be shared so you can see the different spaces
+    they occupy.'''
+
+    df = df.loc[(df.bg_FR >= fr_thresh) & (df.fg_FR >= fr_thresh)]
+    df = df.loc[(df.kind=='11') & (df.dyn_kind=='ff') & (df.SNR==0) & (df.olp_type=='synthetic')]
+
+    if r_cut:
+        df = df.dropna(axis=0, subset='r')
+        df = df.loc[df.r >= r_cut]
+    df = df.copy()
+
+    # Get rid of when the weights are unrealistic
+    weight_lim = [0, 2]
+    df = df.loc[((df[f'weightsA'] >= weight_lim[0]) & (df[f'weightsA'] <= weight_lim[1])) &
+                        ((df[f'weightsB'] >= weight_lim[0]) & (df[f'weightsB'] <= weight_lim[1]))]
+
+    ylim_max = np.max([df.BG_rel_gain_all.max(), df.FG_rel_gain_all.max()])
+    ylim_min = np.min([df.BG_rel_gain_all.min(), df.FG_rel_gain_all.min()])
+
+    fig, axes = plt.subplots(2, len(x_metrics), figsize=(12, 5*len(areas)), sharey=True)
+    ax = axes.ravel()
+
+    count = 0
+    for ll in ['BG', 'FG']:
+        for cnt, met in enumerate(x_metrics):
+
+            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
+            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
+            xlim_min = xlim_min - np.abs(xlim_max)*0.05
+
+            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
+            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
+            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+
+            if ll == 'BG':
+                colors = {'N':'cornflowerblue', 'M':'royalblue', 'T':'blue', 'S':'darkblue', 'C':'black'}
+            elif ll == 'FG':
+                colors = {'N': 'yellowgreen', 'M': 'forestgreen', 'T': 'green', 'S': 'darkgreen', 'C': 'darkslategrey'}
+
+            for key, val in colors.items():
+                if cnt==0:
+                    plot = sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind==key],
+                               ax=ax[cnt+count], s=24, color=val, label=f'{key}, {ll}')
+
+                else:
+                    sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind == key],
+                                   ax=ax[cnt + count], s=24, color=val)
+
+                sb.scatterplot(x=f'{ll}_{met}', y=ylim_max*1.1, data=met_av.loc[met_av.synth_kind==key],
+                               ax=ax[cnt+count], marker='v', color=val, s=150)
+                sb.scatterplot(x=xlim_max*1.1, y=f'{ll}_rel_gain_all', data=gain_av.loc[gain_av.synth_kind==key],
+                               ax=ax[cnt+count], marker='<', color=val, s=150)
+
+                plt.setp(plot.get_legend().get_texts(), fontsize='5')
+                plt.show()
+
+            ax[cnt+count].set_ylim(ylim_min, ylim_max*1.1), ax[cnt+count].set_xlim(xlim_min,xlim_max*1.1)
+            ax[cnt+count].set_ylabel(''), ax[cnt+count].set_xlabel('')
+            ax[count].set_ylabel(f'Relative Gain', fontweight='bold', fontsize=10)
+
+
+    count += len(x_metrics)
+
+    xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
+    xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
+    xlim_min = xlim_min - np.abs(xlim_max) * 0.05
+
+    to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
+    to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
+    met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+    gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+
+    if ll == 'BG':
+        from matplotlib import cm
+        from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+        greys = cm.get_cmap('Greys', 12)
+        cols = greys(np.linspace(.25, 1, 5))
+
+        colors = {'N': 'cornflowerblue', 'M': 'royalblue', 'T': 'blue', 'S': 'darkblue', 'C': 'black'}
+
+        for cnt, met in enumerate(x_metrics):
+
+            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
+            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
+            xlim_min = xlim_min - np.abs(xlim_max)*0.05
+
+            to_plot_bg = df[[f'BG', 'BG_rel_gain_all', 'synth_kind', f'BG_{met}']]
+            to_plot_fg = df[[f'FG', 'FG_rel_gain_all', 'synth_kind', f'FG_{met}']]
+            to_plot_bg = to_plot_bg.drop_duplicates(subset=[f'BG', 'synth_kind'])
+            to_plot_fg = to_plot_fg.drop_duplicates(subset=[f'FG', 'synth_kind'])
+            to_plot_bg, to_plot_fg = to_plot_bg.drop(labels=['BG'],axis=1), to_plot_fg.drop(labels=['FG'], axis=1)
+
+            to_plot_bg = to_plot_bg.rename(columns={'BG_rel_gain_all': 'rel_gain', 'BG_Fcorr':'FCorr'})
+            to_plot_fg = to_plot_fg.rename(columns={'FG_rel_gain_all': 'rel_gain', 'FG_Fcorr':'FCorr'})
+
+            to_plot = pd.concat([to_plot_bg, to_plot_fg])
+
+            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
+            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
+            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+            # met_std_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+
+
+
+            if x_labels:
+                ax[cnt + count].set_xlabel(f'{x_labels[cnt]}', fontweight='bold', fontsize=10)
+            else:
+                ax[cnt + count].set_ylabel(f'{met}', fontweight='bold', fontsize=10)
+
+
+    fig.suptitle(f'{df.area.unique()[0]} - FR threshold: {fr_thresh} - r > {r_cut}', fontsize=12, fontweight='bold')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 2023_05_19. Testing spectral correlation stuff.
+sound_df.FG.unique()
+sound_df.BG.unique()
+
+sn = 'Gobble'
+kind = 'FG'
+osyn.plot_cc_cuts(sound_df, sn, kind, percent_lims=[10,90], sk='N')
+
+# 2023_05_19. The big spectral correlation viewer.
+osyn.plot_spec_cc(sound_df, 'BG', percent_lims=[10,90], sk='N')
+osyn.plot_spec_cc(sound_df, 'FG', percent_lims=[10,90], sk='N')
+
 
 
 fr_thresh=0.03
@@ -67,26 +315,45 @@ suffs = ['']
 for ss in suffs:
     filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
                             ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
-r_thresh = 0.6
-filt = filt.loc[(filt[f'r_start'] >= r_thresh) & (filt[f'r_end'] >= r_thresh)]
+r_thresh = 0.4
+r_ = filt.loc[(filt[f'r_start'] >= r_thresh) & (filt[f'r_end'] >= r_thresh)]
 
 filt = weight_df.loc[weight_df.synth_kind=='N']
 
+
+
+
+sound_df = ohel.get_sound_statistics_from_df(weight_df, append=True)
+
+
+
+
+
+# 2023_05_10 most recent filters
 filt = weight_df
+filt = filt.loc[(filt.area=='A1') | (filt.area=='PEG')]
 filt = filt.loc[(filt.layer=='NA') | (filt.layer=='5') | (filt.layer=='44') | (filt.layer=='13') |
-                (filt.layer=='4') | (filt.layer=='56')]
-
-PRN = filt.loc[filt.animal == 'PRN_A']
-
-PRNB = filt.loc[filt.animal == 'PRN_B']
-
-blank_area = filt.loc[filt.area=='']
-sites = np.unique([aa[:6] for aa in blank_area.cellid])
-
+                (filt.layer=='4') | (filt.layer=='56') | (filt.layer=='16')]
 
 filt = filt.loc[filt.dyn_kind=='ff']
 filt = filt.loc[filt.kind=='11']
 filt = filt.loc[filt.SNR==0]
+filt = filt.loc[(filt.synth_kind=='N') | (filt.synth_kind=='A')]
+
+# for snr
+filt = filt.loc[(filt.animal=='PRN_A') | (filt.animal=='PRN_B')]
+filt = filt.loc[filt.olp_type=='dynamic']
+
+zero = filt.loc[filt.SNR==0]
+ten = filt.loc[filt.SNR==10]
+
+
+weight_lim = [-1, 2]
+suffs = ['']
+for ss in suffs:
+    filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
+                            ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
+
 
 filt = filt.loc[filt.olp_type=='synthetic']
 filt = filt.loc[filt.synth_kind=='N']
@@ -98,320 +365,31 @@ filt = filt.loc[filt.animal!='ARM']
 filt = filt.loc[filt.olp_type=='binaural']
 
 
-ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
+ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.5, strict_r=True, summary=True)
 
 
 
 
 
 
-fr_thresh=0.03
-filt = weight_df.loc[(weight_df.bg_FR_start >= fr_thresh) & (weight_df.fg_FR_start >= fr_thresh)
-               & (weight_df.bg_FR_end >= fr_thresh) & (weight_df.fg_FR_end >= fr_thresh)]
-filt = filt.loc[filt.synth_kind=='A']
-
-weight_lim = [-1, 2]
-
-suffs = ['', '_pred']
-for ss in suffs:
-    filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
-                            ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
-
-r_thresh = 0.6
-filt = filt.loc[(filt[f'r_start'] >= r_thresh) & (filt[f'r_end'] >= r_thresh)]
-
-a1, peg = filt.loc[filt.area=='A1'], filt.loc[filt.area=='PEG']
-fig, ax = plt.subplots(2, 2, figsize=(12,12), sharey=True, sharex=True)
-ax = np.ravel(ax)
 
 
-X, Y = a1.weightsA, a1.weightsA_pred
-reg = stats.linregress(X, Y)
-ax[0].scatter(x=X, y=Y, s=3, label=f"n={len(a1.weightsA)}"
-                                   f"slope: {reg.slope:.3f}\n"
-                                         f"coef: {reg.rvalue:.3f}\n"
-                                         f"p = {reg.pvalue:.3f}")
-ax[0].set_ylabel('BG Weight Pred'), ax[0].set_xlabel('BG Weight')
-ax[0].set_title('A1')
-ax[0].legend()
-ax[0].plot([0,1.2], [0,1.2], color='black')
-X, Y = peg.weightsA, peg.weightsA_pred
-reg = stats.linregress(X, Y)
-ax[1].scatter(x=X, y=Y, s=3, label=f"n={len(a1.weightsA)}"
-                                   f"slope: {reg.slope:.3f}\n"
-                                         f"coef: {reg.rvalue:.3f}\n"
-                                         f"p = {reg.pvalue:.3f}")
-ax[1].set_ylabel('BG Weight Pred'), ax[1].set_xlabel('BG Weight')
-ax[1].set_title('PEG')
-ax[1].legend()
-ax[1].plot([0,1.2], [0,1.2], color='black')
-X, Y = a1.weightsB, a1.weightsB_pred
-reg = stats.linregress(X, Y)
-ax[2].scatter(x=X, y=Y, s=3, color='yellowgreen', label=f"n={len(a1.weightsA)}"
-                                   f"slope: {reg.slope:.3f}\n"
-                                         f"coef: {reg.rvalue:.3f}\n"
-                                         f"p = {reg.pvalue:.3f}")
-ax[2].set_ylabel('FG Weight Pred'), ax[2].set_xlabel('FG Weight')
-ax[2].set_title('A1')
-ax[2].legend()
-ax[2].plot([0,1.2], [0,1.2], color='black')
-X, Y = peg.weightsB, peg.weightsB_pred
-reg = stats.linregress(X, Y)
-ax[3].scatter(x=X, y=Y, s=3, color='yellowgreen', label=f"n={len(a1.weightsA)}"
-                                   f"slope: {reg.slope:.3f}\n"
-                                         f"coef: {reg.rvalue:.3f}\n"
-                                         f"p = {reg.pvalue:.3f}")
-ax[3].set_ylabel('FG Weight Pred'), ax[3].set_xlabel('FG Weight')
-ax[3].set_title('PEG')
-ax[3].legend()
-ax[3].plot([0,1.2], [0,1.2], color='black')
-fig.suptitle(f"not filtered by FR or r")
 
+## Figure 1 ##
 
-'CLT012a-052-1'
-
-response_heatmaps_comparison(weight_df, site='CLT009a', bg='Bulldozer', fg='FightSqueak', cellid=None,
+# D. Heatmap example of suppression. Some good examples.
+ofig.response_heatmaps_comparison(weight_df, site='CLT009a', bg='Bulldozer', fg='FightSqueak', cellid=None,
                                      batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
                              example=True, lin_sum=True, positive_only=False)
 
-response_heatmaps_comparison(weight_df, site='CLT012a', bg='Bees', fg='Bugle', cellid='CLT012a-052-1',
+ofig.response_heatmaps_comparison(weight_df, site='CLT012a', bg='Bees', fg='Bugle', cellid='CLT012a-052-1',
                                      batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
                              example=True, lin_sum=True, positive_only=False)
 
-response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
+ofig.response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
                                      batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
                              example=True, lin_sum=True, positive_only=False)
 
-def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_kind='11',
-                                 synth_kind='N', sigma=None, example=False, sort=True, lin_sum=True, positive_only=False):
-    '''Takes out the BG, FG, combo, diff psth heatmaps from the interactive plot and makes it it's own
-    figure. You provide the weight_df, site, and sounds, and then optionally you can throw a cellid
-    or list of them in and it'll go ahead and only label those on the y axis so you can better see
-    it. Turn example to True if you'd like it to be a more generically titled than using the actually
-    epoch names, which are not good for posters. Added 2022_09_01
-
-    Added sorting for the difference panel which will in turn sort all other panels 2022_09_07. Also,
-    added mandatory normalization of responses by the max for each unit across the three epochs.
-
-    2023_01_23. Added lin_sum option. This totally changes the figure and gets rid of the difference array plot
-    and instead plots the heatmap of the linear sum and uses that for comparisons.
-
-    response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
-                                     batch=340, bin_kind='11',
-                                     synth_kind='A', sigma=2, sort=True, example=True, lin_sum=True)'''
-    df['expt_num'] = [int(aa[4:6]) for aa in df['cellid']]
-    if synth_kind == 'n/a':
-        all_cells = df.loc[(df['cellid'].str.contains(site)) & (df.BG == bg) & (df.FG == fg) & (df.kind == bin_kind)]
-    else:
-        all_cells = df.loc[(df['cellid'].str.contains(site)) & (df.BG==bg) & (df.FG==fg) & (df.kind==bin_kind)
-                     & (df.synth_kind==synth_kind)]
-    print(f"all_cells is {len(all_cells)}")
-
-    manager = BAPHYExperiment(cellid=all_cells.cellid.unique()[0], batch=batch)
-    options = ohel.get_load_options(batch) #gets options that will include gtgram if batch=339
-    rec = manager.get_recording(**options)
-
-    resp = copy.copy(rec['resp'].rasterize())
-    norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
-    rec['resp'].fs, fs = 100, 100
-    font_size=5
-
-    epo = list(all_cells.epoch)[0]
-    epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
-    r = norm_spont.extract_epochs(epochs)
-
-    # # Gets the spont rate for each channel - maybe useful
-    # resp = copy.copy(rec['resp'].rasterize())
-    # rec['resp'].fs = 100
-    # SR_list = []
-    # for cc in resp.chans:
-    #     inp = resp.extract_channels([cc])
-    #     norm_spont, SR, STD = ohel.remove_spont_rate_std(inp)
-    #     SR_list.append(SR)
-
-    resp_plot = np.stack([np.nanmean(aa, axis=0) for aa in list(r.values())])
-
-    # # Subtracts SR from each
-    # for nn, sr in enumerate(SR_list):
-    #     resp_plot[:, nn, :] = resp_plot[:, nn, :] - sr
-
-    prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
-    time = (np.arange(0, r[epochs[0]].shape[-1]) / rec['resp'].fs) - prestim
-    dur = manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['Duration']
-
-    # Gets rid of SR for the epochs we care about
-    for ww in range(resp_plot.shape[1]):
-        chan_prestim = resp_plot[:, ww, :int(prestim*fs)]
-        SR = np.mean(chan_prestim)
-        resp_plot[:, ww, :] = resp_plot[:, ww, :] - SR
-
-    if lin_sum:
-        ls = np.expand_dims(resp_plot[0, :, :] + resp_plot[1, :, :], axis=0)
-        resp_plot = np.append(resp_plot, ls, axis=0)
-
-    resps = resp_plot
-
-    # Adding code to normalize each cell to the max of that cell to any of the epochs
-    for nn in range(resp_plot.shape[1]):
-        # max_val = np.max(np.abs(resp_plot[:,nn,int(prestim*fs):int((prestim+dur)*fs)]))
-        max_val = np.max(np.abs(resp_plot[:,nn,:]))
-        resp_plot[:,nn,:] = resp_plot[:,nn,:] / max_val
-
-    # Get difference array before smoothing
-    ls_array = resp_plot[0,:,:] + resp_plot[1,:,:]
-    # diff_array = resp_plot[2,:,:] - resp_plot[1,:,:]
-    diff_array = resp_plot[2,:,:] - ls_array
-
-    num_ids = [cc[8:] for cc in all_cells.cellid.tolist()]
-    if sort == True:
-        if lin_sum:
-            sort_array = resp_plot[-2, :, int(prestim * fs):int((prestim + dur) * fs)]
-        else:
-            sort_array = diff_array[:,int(prestim*fs):int((prestim+dur)*fs)]
-        means = list(np.nanmean(sort_array, axis=1))
-        indexes = list(range(len(means)))
-        sort_df = pd.DataFrame(list(zip(means, indexes)), columns=['mean', 'idx'])
-        sort_df = sort_df.sort_values('mean', ascending=True)
-        if positive_only:
-            sort_list = [int(aa[1]['idx']) for aa in sort_df.iterrows() if aa[1]['mean'] > 0]
-        else:
-            sort_list = sort_df.idx
-        diff_array = diff_array[sort_list, :]
-        resp_plot = resp_plot[:, sort_list, :]
-        num_array = np.asarray(num_ids)
-        num_ids = list(num_array[sort_list])
-
-    if cellid:
-        if isinstance(cellid, list):
-            if len(cellid[0].split('-')) == 3:
-                cellid = [aa[8:] for aa in cellid]
-            elif len(cellid[0].split('-')) == 2:
-                cellid = [aa for aa in cellid]
-        num_ids = [ii if ii in cellid else '' for ii in num_ids]
-        font_size=8
-        num_ids[-1], num_ids[0] = '1', f'{len(num_ids)}'
-
-    # Smooth if you have given it a sigma by which to smooth
-    if sigma:
-        resp_plot = sf.gaussian_filter1d(resps, sigma, axis=2)
-        diff_array = sf.gaussian_filter1d(diff_array, sigma, axis=1)
-
-    # Adding code to normalize each cell to the max of that cell to any of the epochs
-    for nn in range(resp_plot.shape[1]):
-        # max_val = np.max(np.abs(resp_plot[:,nn,int(prestim*fs):int((prestim+dur)*fs)]))
-        max_val = np.max(np.abs(resp_plot[:, nn, :]))
-        resp_plot[:, nn, :] = resp_plot[:, nn, :] / max_val
-
-    # Get the min and max of the array, find the biggest magnitude and set max and min
-    # to the abs and -abs of that so that the colormap is centered at zero
-    cmax, cmin = np.max(resp_plot), np.min(resp_plot)
-    biggest = np.maximum(np.abs(cmax),np.abs(cmin))
-    cmax, cmin = np.abs(biggest), -np.abs(biggest)
-
-    #if you don't want difference array and just the responses and the linear sum
-    if lin_sum:
-        if sort == True:
-            resp_plot = resp_plot[:, sort_list, :]
-
-        epochs.append('Linear Sum')
-
-        fig, axes = plt.subplots(figsize=(9, 12))
-        BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
-        FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
-        lsheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
-        combheat = plt.subplot2grid((11, 6), (6, 0), rowspan=2, colspan=5)
-        cbar_main = plt.subplot2grid((11, 6), (2, 5), rowspan=4, colspan=1)
-        ax = [BGheat, FGheat, lsheat, combheat, cbar_main]
-
-        for (ww, qq) in enumerate(epochs):
-            dd = ax[ww].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
-                               cmap='bwr', aspect='auto', origin='lower',
-                               extent=[time[0], time[-1], 0, len(all_cells)])
-            ax[ww].vlines([int(prestim), int(prestim+dur)], ymin=0, ymax=len(all_cells),
-                          color='black', lw=1, ls=':')
-            # ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
-            ax[ww].set_yticks([*range(0, len(sort_list))])
-            ax[ww].set_yticklabels(num_ids, fontsize=font_size) #, fontweight='bold')
-            ax[ww].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
-            if example == True:
-                titles = [f"BG - {bg}", f"FG - {fg}", f"Combo\nBG+FG", 'Linear Sum']
-                ax[ww].set_ylabel(f"{titles[ww]}", fontsize=12, fontweight='bold', rotation=90,
-                                  horizontalalignment='center') # , labelpad=40)
-                ax[0].set_title(f'Site {all_cells.iloc[0].cellid[:7]} Responses', fontweight='bold', fontsize=12)
-            else:
-                ax[ww].set_title(f"{qq}", fontsize=8, fontweight='bold')
-                ax[ww].set_ylabel('Unit', fontweight='bold', fontsize=8)
-            ax[ww].spines['top'].set_visible(True), ax[ww].spines['right'].set_visible(True)
-
-        # ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
-        ax[0].set_xticks([]), ax[1].set_xticks([]), ax[2].set_xticks([])
-        # Add the colorbar to the axis to the right of these, the diff will get separate cbar
-        fig.colorbar(dd, ax=ax[4], aspect=10)
-        ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
-        ax[4].spines['bottom'].set_visible(False), ax[4].spines['left'].set_visible(False)
-        ax[4].set_yticks([]), ax[4].set_xticks([])
-        ax[3].set_xlabel('Time (s)', fontsize=9, fontweight='bold')
-
-    # Plot BG, FG, Combo and difference array
-    else:
-        fig, axes = plt.subplots(figsize=(9, 12))
-        BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
-        FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
-        combheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
-        diffheat = plt.subplot2grid((11, 6), (7, 0), rowspan=2, colspan=5)
-        cbar_main = plt.subplot2grid((11, 6), (2, 5), rowspan=2, colspan=1)
-        cbar_diff = plt.subplot2grid((11, 6), (7, 5), rowspan=2, colspan=1)
-        ax = [BGheat, FGheat, combheat, diffheat, cbar_main, cbar_diff]
-
-        for (ww, qq) in enumerate(range(0,len(epochs))):
-            dd = ax[qq].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
-                               cmap='bwr', aspect='auto', origin='lower',
-                               extent=[time[0], time[-1], 0, len(all_cells)])
-            ax[qq].vlines([int(prestim), int(prestim+dur)], ymin=0, ymax=len(all_cells),
-                          color='black', lw=1, ls=':')
-            # ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
-            ax[qq].set_yticks([*range(0, len(all_cells))])
-            ax[qq].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
-            ax[qq].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
-            if example == True:
-                titles = [f"BG - {bg}", f"FG - {fg}", f"Combo\nBG+FG"]
-                ax[qq].set_ylabel(f"{titles[ww]}", fontsize=12, fontweight='bold', rotation=90,
-                                  horizontalalignment='center') # , labelpad=40)
-                ax[0].set_title(f'Site {all_cells.iloc[0].cellid[:7]} Responses', fontweight='bold', fontsize=12)
-            else:
-                ax[qq].set_title(f"{epochs[ww]}", fontsize=8, fontweight='bold')
-                ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
-            ax[qq].spines['top'].set_visible(True), ax[qq].spines['right'].set_visible(True)
-        ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
-        ax[0].set_xticks([]), ax[1].set_xticks([])
-        # Add the colorbar to the axis to the right of these, the diff will get separate cbar
-        fig.colorbar(dd, ax=ax[4], aspect=7)
-        ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
-        ax[4].spines['bottom'].set_visible(False), ax[4].spines['left'].set_visible(False)
-        ax[4].set_yticks([]), ax[4].set_xticks([])
-
-        # Plot the difference heatmap with its own colorbar
-        dmax, dmin = np.max(diff_array), np.min(diff_array)
-        biggestd = np.maximum(np.abs(dmax),np.abs(dmin))
-        # dmax, dmin = np.abs(biggestd), -np.abs(biggestd)
-        dmax, dmin = 1, -1
-        ddd = ax[3].imshow(diff_array, vmin=dmin, vmax=dmax,
-                               cmap='PuOr', aspect='auto', origin='lower',
-                               extent=[time[0], time[-1], 0, len(all_cells)])
-        ax[3].vlines([0, int(dur)], ymin=0, ymax=len(all_cells),
-                     color='black', lw=1, ls=':')
-        ax[3].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
-        ax[3].set_yticks([*range(0, len(all_cells))])
-        ax[3].set_ylabel('Unit', fontweight='bold', fontsize=9)
-        ax[3].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
-        ax[3].set_title(f"Difference (Combo - Linear Sum)", fontsize=12, fontweight='bold')
-        ax[3].set_xlabel('Time (s)', fontsize=9, fontweight='bold')
-        ax[3].spines['top'].set_visible(True), ax[3].spines['right'].set_visible(True)
-
-        fig.colorbar(ddd, ax=ax[5], aspect=7)
-        ax[5].spines['top'].set_visible(False), ax[5].spines['right'].set_visible(False)
-        ax[5].spines['bottom'].set_visible(False), ax[5].spines['left'].set_visible(False)
-        ax[5].set_yticks([]), ax[5].set_xticks([])
 
 
 
@@ -426,285 +404,16 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
 
 
 
-
-
-if 'FG_rel_gain_start' not in weight_df.columns:
-    weight_df['FG_rel_gain_start'] = (weight_df.weightsB_start - weight_df.weightsA_start) / \
-                                      (np.abs(weight_df.weightsB_start) + np.abs(weight_df.weightsA_start))
-    weight_df['FG_rel_gain_end'] = (weight_df.weightsB_end - weight_df.weightsA_end) / \
-                                    (np.abs(weight_df.weightsB_end) + np.abs(weight_df.weightsA_end))
-    weight_df['BG_rel_gain_start'] = (weight_df.weightsA_start - weight_df.weightsB_start) / \
-                                      (np.abs(weight_df.weightsA_start) + np.abs(weight_df.weightsB_start))
-    weight_df['BG_rel_gain_end'] = (weight_df.weightsA_end - weight_df.weightsB_end) / \
-                                    (np.abs(weight_df.weightsA_end) + np.abs(weight_df.weightsB_end))
 
 
 weight_df = weight_df.loc[weight_df.synth_kind=='N']
 ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
 
-def plot_weight_prediction_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, pred=False, weight_lim=[-1,2]):
-    areas = list(df.area.unique())
+plot_weight_prediction_comparisons(filt, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True)
 
-    # This can be mushed into one liners using list comprehension and show_suffixes
-    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
 
-    quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                   & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
 
-    quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
-                   & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
 
-    fig, ax = plt.subplots(1, 2, figsize=(7, 6), sharey=True)
-    ax = np.ravel(ax)
-
-    stat_list, filt_list = [], []
-    for num, aa in enumerate(areas):
-        area_df = quad3.loc[quad3.area == aa]
-        if strict_r == False:
-            filt = area_df.loc[(area_df[f'r_start'] >= r_thresh) & (area_df[f'r_end'] >= r_thresh)]
-        else:
-            filt = area_df.loc[(area_df[f'r_start'] >= r_thresh) & (area_df[f'r_end'] >= r_thresh) &
-                               (area_df[f'r_start_pred'] >= r_thresh) & (area_df[f'r_end_pred'] >= r_thresh)]
-
-        if weight_lim:
-            # suffs = ['', '_start', '_end', '_pred', '_start_pred', '_end_pred']
-            suffs = [aa[8:] for aa in filt.columns.to_list() if "weightsA" in aa and not 'nopost' in aa]
-            for ss in suffs:
-                filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
-                                ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
-
-        pred_suff, colors = ['', '_pred'], ['black', 'red']
-        for nn, pr in enumerate(pred_suff):
-            ax[num].scatter(x=['BG_start', 'BG_end'],
-                                 y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
-                                 label=f'Total{pr} (n={len(filt)})', color=colors[nn])  # , marker=symbols[cnt])
-            ax[num].scatter(x=['FG_start', 'FG_end'],
-                                 y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
-                                 color=colors[nn])  # , marker=symbols[cnt])
-            ax[num].errorbar(x=['BG_start', 'BG_end'],
-                                  y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
-                                  yerr=[stats.sem(filt[f'weightsA_start{pr}']), stats.sem(filt[f'weightsA_end{pr}'])],
-                                  xerr=None, color=colors[nn])
-            ax[num].errorbar(x=['FG_start', 'FG_end'],
-                                  y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
-                                  yerr=[stats.sem(filt[f'weightsB_start{pr}']), stats.sem(filt[f'weightsB_end{pr}'])],
-                                  xerr=None, color=colors[nn])
-
-            ax[num].legend(fontsize=8, loc='upper right')
-
-            BGsBGe = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsA_end{pr}'])
-            FGsFGe = stats.ttest_ind(filt[f'weightsB_start{pr}'], filt[f'weightsB_end{pr}'])
-            BGsFGs = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsB_start{pr}'])
-            BGeFGe = stats.ttest_ind(filt[f'weightsA_end{pr}'], filt[f'weightsB_end{pr}'])
-
-            tts = {f"BGsBGe_{aa}{pr}": BGsBGe.pvalue, f"FGsFGe_{aa}{pr}": FGsFGe.pvalue,
-                   f"BGsFGs_{aa}{pr}": BGsFGs.pvalue, f"BGeFGe_{aa}{pr}": BGeFGe.pvalue}
-            print(tts)
-            stat_list.append(tts), filt_list.append(filt)
-
-        ax[0].set_ylabel(f'Mean Weight', fontsize=14, fontweight='bold')
-        ax[num].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
-        ax[num].tick_params(axis='both', which='major', labelsize=10)
-        ax[num].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12,
-                                     fontweight='bold')
-
-    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}, synth={df.synth_kind.unique()}", fontweight='bold', fontsize=10)
-    fig.tight_layout()
-
-def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, pred=False):
-    '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
-    with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
-    stay True at this point'''
-    areas = list(df.area.unique())
-
-    # This can be mushed into one liners using list comprehension and show_suffixes
-    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
-
-    quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                   & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
-
-    quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
-                   & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
-
-    if pred == True:
-        fig, ax = plt.subplots(2, 4, figsize=(13, 12), sharey=True)
-        pred_suff = ['', '_pred']
-    else:
-        fig, ax = plt.subplots(1, 4, figsize=(13, 6), sharey=True)
-        pred_suff = ['']
-    ax = np.ravel(ax)
-
-    colors = ['mediumorchid', 'darkorange', 'orangered', 'green']
-
-    stat_list, filt_list = [], []
-    for nm, pr in enumerate(pred_suff):
-        nm = nm * 4
-        for num, aa in enumerate(areas):
-            area_df = quad3.loc[quad3.area==aa]
-            if strict_r == True:
-                filt = area_df.loc[(area_df[f'r_start{pr}'] >= r_thresh) & (area_df[f'r_end{pr}'] >= r_thresh)]
-            else:
-                filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
-
-            if summary == True:
-                alph = 0.35
-            else:
-                alph = 1
-
-            for ee, an in enumerate(list(filt.animal.unique())):
-                animal_df = filt.loc[filt.animal == an]
-                ax[num + nm].scatter(x=['BG_start', 'BG_end'],
-                                y=[np.nanmean(animal_df[f'weightsA_start{pr}']), np.nanmean(animal_df[f'weightsA_end{pr}'])],
-                                   label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)#, marker=symbols[cnt])
-                ax[num + nm].scatter(x=['FG_start', 'FG_end'],
-                                y=[np.nanmean(animal_df[f'weightsB_start{pr}']), np.nanmean(animal_df[f'weightsB_end{pr}'])],
-                                   color=colors[ee], alpha=alph) #, marker=symbols[cnt])
-                ax[num + nm].errorbar(x=['BG_start', 'BG_end'],
-                                y=[np.nanmean(animal_df[f'weightsA_start{pr}']), np.nanmean(animal_df[f'weightsA_end{pr}'])],
-                               yerr=[stats.sem(animal_df[f'weightsA_start{pr}']), stats.sem(animal_df[f'weightsA_end{pr}'])], xerr=None,
-                               color=colors[ee], alpha=alph)
-                ax[num + nm].errorbar(x=['FG_start', 'FG_end'],
-                                y=[np.nanmean(animal_df[f'weightsB_start{pr}']), np.nanmean(animal_df[f'weightsB_end{pr}'])],
-                               yerr=[stats.sem(animal_df[f'weightsB_start{pr}']), stats.sem(animal_df[f'weightsB_end{pr}'])], xerr=None,
-                               color=colors[ee], alpha=alph)
-
-                ax[num + nm].legend(fontsize=8, loc='upper right')
-
-            BGsBGe = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsA_end{pr}'])
-            FGsFGe = stats.ttest_ind(filt[f'weightsB_start{pr}'], filt[f'weightsB_end{pr}'])
-            BGsFGs = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsB_start{pr}'])
-            BGeFGe = stats.ttest_ind(filt[f'weightsA_end{pr}'], filt[f'weightsB_end{pr}'])
-
-            tts = {f"BGsBGe_{aa}{pr}": BGsBGe.pvalue, f"FGsFGe_{aa}{pr}": FGsFGe.pvalue,
-                   f"BGsFGs_{aa}{pr}": BGsFGs.pvalue, f"BGeFGe_{aa}{pr}": BGeFGe.pvalue}
-            print(tts)
-            stat_list.append(tts), filt_list.append(filt)
-
-            ax[0].set_ylabel(f'Mean Weight{pr}', fontsize=14, fontweight='bold')
-            ax[num + nm].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
-            ax[num + nm].tick_params(axis='both', which='major', labelsize=10)
-            ax[num + nm].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
-
-            if summary == True:
-                ax[num + nm].scatter(x=['BG_start', 'BG_end'],
-                                y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
-                                label=f'Total (n={len(filt)})', color='black')  # , marker=symbols[cnt])
-                ax[num + nm].scatter(x=['FG_start', 'FG_end'],
-                                y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
-                                color='black')  # , marker=symbols[cnt])
-                ax[num + nm].errorbar(x=['BG_start', 'BG_end'],
-                                 y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
-                                 yerr=[stats.sem(filt[f'weightsA_start{pr}']), stats.sem(filt[f'weightsA_end{pr}'])],
-                                 xerr=None, color='black')
-                ax[num + nm].errorbar(x=['FG_start', 'FG_end'],
-                                 y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
-                                 yerr=[stats.sem(filt[f'weightsB_start{pr}']), stats.sem(filt[f'weightsB_end{pr}'])],
-                                 xerr=None, color='black')
-
-                ax[num + nm].legend(fontsize=8, loc='upper right')
-
-    for num, aa in enumerate(areas):
-        area_FG, area_BG = quad2.loc[quad2.area == aa], quad6.loc[quad6.area == aa]
-
-        # for cnt, ss in enumerate(show_suffixes):
-        filt_BG = area_BG.loc[(area_BG['r_start'] >= r_thresh) & (area_BG['r_end'] >= r_thresh)]
-        filt_FG = area_FG.loc[(area_FG['r_start'] >= r_thresh) & (area_FG['r_end'] >= r_thresh)]
-        animal_BG, animal_FG = filt_BG.loc[filt_BG.animal == an], filt_FG.loc[filt_FG.animal == an]
-        ax[num+len(areas)].scatter(x=['BG_start', 'BG_end'],
-                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
-                           label=f'BG+/FGo or\nBGo/FG+ (n={len(filt_BG)}, {len(filt_FG)})', color="dimgrey") #, marker=symbols[cnt])
-        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
-                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],color='dimgrey')
-                           # label=f'{an} (n={len(animal_BG)}, {len(animal_FG)})', color='dimgrey') #, marker=symbols[cnt])
-        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
-                        y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
-                       yerr=[stats.sem(filt_BG[f'weightsA_start']), stats.sem(filt_BG[f'weightsA_end'])], xerr=None,
-                       color='dimgrey')
-        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
-                        y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],
-                       yerr=[stats.sem(filt_FG[f'weightsB_start']), stats.sem(filt_FG[f'weightsB_end'])], xerr=None,
-                       color='dimgrey')
-
-        area_df = quad3.loc[quad3.area==aa]
-        if strict_r == True:
-            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
-        else:
-            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
-
-        ax[num + len(areas)].scatter(x=['BG_start', 'BG_end'],
-                        y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
-                        label=f'BG+/FG+ (n={len(filt)})', color='black')  # , marker=symbols[cnt])
-        ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
-                        y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
-                        color='black')  # , marker=symbols[cnt])
-        ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
-                         y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
-                         yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
-                         xerr=None,
-                         color='black')
-        ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
-                         y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
-                         yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
-                         xerr=None,
-                         color='black')
-
-        BGsBGe = stats.ttest_ind(filt_BG['weightsA_start'], filt_BG['weightsA_end'])
-        FGsFGe = stats.ttest_ind(filt_FG['weightsB_start'], filt_FG['weightsB_end'])
-
-        ttt = {f'BGsBGe_null_{aa}': BGsBGe.pvalue, f'FGsFGe_null_{aa}': FGsFGe.pvalue}
-        stat_list.append(ttt)
-
-        ax[num+len(areas)].legend(fontsize=8, loc='upper right')
-        ax[2].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
-        ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
-        ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
-        ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
-
-    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}", fontweight='bold', fontsize=10)
-    fig.tight_layout()
-
-    fig, axes = plt.subplots(2, 2, figsize=(13, 6), sharey=True)
-    ax = np.ravel(axes, 'F')
-
-    edges = np.arange(-1, 2, .05)
-    axn = 0
-    for num, aaa in enumerate(areas):
-        to_plot = filt_list[num]
-
-        na, xa = np.histogram(to_plot['weightsA_start'], bins=edges)
-        na = na / na.sum() * 100
-        nb, xb = np.histogram(to_plot['weightsB_start'], bins=edges)
-        nb = nb / nb.sum() * 100
-
-        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
-        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
-        ax[axn].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[axn].set_title(f"{aaa} - 0-0.5s", fontweight='bold', fontsize=14)
-        ax[axn].tick_params(axis='both', which='major', labelsize=10)
-        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
-
-        axn += 1
-
-        na, xa = np.histogram(to_plot['weightsA_end'], bins=edges)
-        na = na / na.sum() * 100
-        nb, xb = np.histogram(to_plot['weightsB_end'], bins=edges)
-        nb = nb / nb.sum() * 100
-
-        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
-        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
-        ax[axn].legend(('Background', 'Foreground'), fontsize=12)
-        ax[0].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[2].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[axn].set_title(f"{aaa} - 0.5-1s", fontweight='bold', fontsize=14)
-        ax[axn].tick_params(axis='both', which='major', labelsize=10)
-        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
-
-        axn += 1
-    fig.tight_layout()
-
-    return stat_list
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 6), sharex=True, sharey=True)
 axes[0].scatter(weight_a1.weightsA, weight_a1.weightsB, s=5, color='black')
@@ -971,9 +680,12 @@ weight_df = ohel.add_sound_stats(weight_df, sound_df)
 
 ofig.sound_metric_scatter(weight_df0, ['Fstationary', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
                           ['Frequency\nNon-stationariness', 'Temporal\nNon-Stationariness', 'Bandwidth'],
-                          area='PEG', threshold=0.03, synth_kind='N', r_cut=0.6)
+                          area='A1', threshold=0.03, synth_kind='N', r_cut=0.6)
 
 
+ofig.sound_metric_scatter(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
+                          ['Frequency\nNon-stationariness', 'Temporal\nNon-Stationariness', 'Bandwidth'],
+                          area='A1', threshold=0.03, synth_kind='N', r_cut=0.6)
 
 
 
@@ -996,7 +708,7 @@ weight_df0 = ohel.filter_weight_df(weight_df, suffixes=[''], fr_thresh=0.03, r_t
                                    bads=True, bad_filt={'RMS_power': 0.95, 'max_power': 0.3})
 
 weight_df0 = ohel.filter_synth_df_by(weight_df, use='N', suffixes=[''], fr_thresh=0.03, \
-                                r_thresh=0.6, quad_return=3, bin_kind='11', weight_lims=[-1.5, 2.5], area='PEG')
+                                r_thresh=0.6, quad_return=3, bin_kind='11', weight_lims=[-1.5, 2.5], area='A1')
 
 weight_df0 = ohel.filter_synth_df_by(weight_df, use='C', suffixes=['', '_start', '_end'], fr_thresh=0.03, \
                                 r_thresh=0.6, quad_return=3, bin_kind='11', weight_lims=[-1.5, 2.5], area='A1')
@@ -1504,500 +1216,10 @@ weight_df0, cuts_info = ofit.OLP_fit_partial_weights(341, threshold=None, snip=[
 #This loads the big boy from all the above.
 weight_df = jl.load('/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL')
 
-## I THINK GARBAGE NOW 2023_01_12
-# ### Adding to slap in a fix for the FR
-#     # Gets some cell metrics
-#     metrics = []
-#     for cellid in cell_list:
-#         cell_metric = ofit.calc_psth_metrics_cuts(batch, cellid, cut_ids=cuts_info)
-#         cell_metric.insert(loc=0, column='cellid', value=cellid)
-#         print(f"Adding cellid {cellid}.")
-#         metrics.append(cell_metric)
-#     df = pd.concat(metrics)
-#     df.reset_index()
-#
-#     weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
-#     weight_df0['fit_segment'] = f"{int(snip[0] * 1000)}-{int((snip[0] + snip[1]) * 1000)}"
-#
-#     OLP_savepath = f'/auto/users/hamersky/olp_analysis/Batch341_test_{int(snip[0] * 1000)}-{int((snip[0] + snip[1]) * 1000)}_metrics.h5'  # weight + corr
-#     os.makedirs(os.path.dirname(OLP_savepath), exist_ok=True)
-#     store = pd.HDFStore(OLP_savepath)
-#     df_store = copy.deepcopy(weight_df0)
-#     store['df'] = df_store.copy()
-#     store.close()
-#
-#
-#
-# OLP_metrics_db_path = f'/auto/users/hamersky/olp_analysis/ARM_Dynamic_test{int(snip[0] * 1000)}-{int((snip[0]+snip[1]) * 1000)}metrics.h5'  # weight + corr
-# os.makedirs(os.path.dirname(OLP_metrics_db_path), exist_ok=True)
-# store = pd.HDFStore(OLP_metrics_db_path)
-# df_store = copy.deepcopy(df)
-# store['df'] = df_store.copy()
-# store.close()
-#
-# weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
-# weight_df0['fit_segment'] = f"{int(snip[0] * 1000)}-{int((snip[0]+snip[1]) * 1000)}"
-#
-#
-#
-# OLP_savepath = f'/auto/users/hamersky/olp_analysis/ARM_Dynamic_OLP_segment{int(snip[0] * 1000)}-{int((snip[0]+snip[1]) * 1000)}.h5'  # weight + corr
-# os.makedirs(os.path.dirname(OLP_savepath), exist_ok=True)
-# store = pd.HDFStore(OLP_savepath)
-# df_store = copy.deepcopy(all_df)
-# store['df'] = df_store.copy()
-# store.close()
-#
-#
-# # I think this is when you're combining other dfs you loaded with a new fit
-# weight_df0 = pd.merge(right=weight_df0, left=df, on=['cellid', 'epoch'])
-# # weight_df0['threshold'] = str(int(threshold * 100))
-# # if df.shape[0] != weights_df.shape[0] or weight_df.shape[0] != weights_df.shape[0]:
-# #     raise ValueError("Resulting weights_df does not match length of parts, some epochs were dropped.")
-#
-#
-# OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/test500-750metrics.h5'  # weight + corr
-# os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
-# store = pd.HDFStore(OLP_partialweights_db_path)
-# df_store = copy.deepcopy(weight_df0)
-# store['df'] = df_store.copy()
-# store.close()
 
-##load here, 2022_10_24, these are from clathrus synthetic as I try to fit the partial model
-OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_control_segment500-750_goodmetrics.h5'  # weight + corr
 
-OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_full_partial_weights_nometrics.h5'  # weight + corr
-OLP_partialweights_db_path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_full_partial_weights_withmetrics.h5'  # weight + corr
 
-part_weights = False
-if part_weights == True:
-    os.makedirs(os.path.dirname(OLP_partialweights_db_path),exist_ok=True)
-    store = pd.HDFStore(OLP_partialweights_db_path)
-    df_store=copy.deepcopy(weight_df0)
-    store['df'] = df_store.copy()
-    store.close()
 
-else:
-    store = pd.HDFStore(OLP_partialweights_db_path)
-    df=store['df']
-    store.close()
-
-import re
-
-
-
-def calc_psth_metrics_cuts(batch, cellid, parmfile=None, paths=None, cut_ids=None):
-    start_win_offset = 0  # Time (in sec) to offset the start of the window used to calculate threshold, exitatory percentage, and inhibitory percentage
-    if parmfile:
-        manager = BAPHYExperiment(parmfile)
-    else:
-        manager = BAPHYExperiment(cellid=cellid, batch=batch)
-
-    options = ohel.get_load_options(batch) #gets options that will include gtgram if batch=339
-    rec = manager.get_recording(**options)
-
-    area_df = db.pd_query(f"SELECT DISTINCT area FROM sCellFile where cellid like '{manager.siteid}%%'")
-    area = area_df.area.iloc[0]
-
-    if rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT'].shape[0] >= 2:
-        # rec = ohel.remove_olp_test(rec)
-        rec = remove_olp_test(rec)
-
-    rec['resp'] = rec['resp'].extract_channels([cellid])
-    resp = copy.copy(rec['resp'].rasterize())
-    rec['resp'].fs = 100
-
-    norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
-    # params = ohel.get_expt_params(resp, manager, cellid)
-    params = get_expt_params(resp, manager, cellid)
-
-
-    epcs = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PreStimSilence'].copy()
-    ep2 = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PostStimSilence'].iloc[0].copy()
-    params['prestim'], params['poststim'] = epcs.iloc[0]['end'], ep2['end'] - ep2['start']
-    params['lenstim'] = ep2['end']
-
-    stim_epochs = ep.epoch_names_matching(resp.epochs, 'STIM_')
-
-    if paths and cellid[:3] == 'TBR':
-        print(f"Deprecated, run on {cellid} though...")
-        stim_epochs, rec, resp = ohel.path_tabor_get_epochs(stim_epochs, rec, resp, params)
-
-    epoch_repetitions = [resp.count_epoch(cc) for cc in stim_epochs]
-    full_resp = np.empty((max(epoch_repetitions), len(stim_epochs),
-                          (int(params['lenstim']) * rec['resp'].fs)))
-    full_resp[:] = np.nan
-    for cnt, epo in enumerate(stim_epochs):
-        resps_list = resp.extract_epoch(epo)
-        full_resp[:resps_list.shape[0], cnt, :] = resps_list[:, 0, :]
-
-    #Calculate a few metrics
-    corcoef = ohel.calc_base_reliability(full_resp)
-    avg_resp = ohel.calc_average_response(full_resp, params)
-    snr = compute_snr(resp)
-
-    #Grab and label epochs that have two sounds in them (no null)
-    presil, postsil = int(params['prestim'] * rec['resp'].fs), int(params['poststim'] * rec['resp'].fs)
-    twostims = resp.epochs[resp.epochs['name'].str.count('-1') == 2].copy()
-    ep_twostim = twostims.name.unique().tolist()
-    ep_twostim.sort()
-
-    ep_names = resp.epochs[resp.epochs['name'].str.contains('STIM_')].copy()
-    ep_names = ep_names.name.unique().tolist()
-    ep_types = list(map(ohel.label_ep_type, ep_names))
-    ep_synth_type = list(map(ohel.label_synth_type, ep_names))
-
-    ep_df = pd.DataFrame({'name': ep_names, 'type': ep_types, 'synth_type': ep_synth_type})
-
-    cell_dff = []
-    for cnt, stimmy in enumerate(ep_twostim):
-        kind = ohel.label_pair_type(stimmy)
-        # synth_kind = ohel.label_synth_type(stimmy)
-        synth_kind = label_synth_type(stimmy)
-        dynamic_kind = label_dynamic_ep_type(stimmy)
-        # seps = (stimmy.split('_')[1], stimmy.split('_')[2])
-        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", stimmy)[0])
-        BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]
-
-        Aepo, Bepo = 'STIM_' + seps[0] + '_null', 'STIM_null_' + seps[1]
-
-        rAB = resp.extract_epoch(stimmy)
-        rA, rB = resp.extract_epoch(Aepo), resp.extract_epoch(Bepo)
-
-        fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR)
-        rAsm = np.squeeze(np.apply_along_axis(fn, 2, rA))
-        rBsm = np.squeeze(np.apply_along_axis(fn, 2, rB))
-        rABsm = np.squeeze(np.apply_along_axis(fn, 2, rAB))
-
-        rA_st, rB_st = rAsm[:, presil:-postsil], rBsm[:, presil:-postsil]
-        rAB_st = rABsm[:, presil:-postsil]
-
-        rAm, rBm = np.nanmean(rAsm, axis=0), np.nanmean(rBsm, axis=0)
-        rABm = np.nanmean(rABsm, axis=0)
-
-        AcorAB = np.corrcoef(rAm, rABm)[0, 1]  # Corr between resp to A and resp to dual
-        BcorAB = np.corrcoef(rBm, rABm)[0, 1]  # Corr between resp to B and resp to dual
-
-        A_FR, B_FR, AB_FR = np.nanmean(rA_st), np.nanmean(rB_st), np.nanmean(rAB_st)
-
-        min_rep = np.min((rA.shape[0], rB.shape[0]))  # only will do something if SoundRepeats==Yes
-        lin_resp = np.nanmean(rAsm[:min_rep, :] + rBsm[:min_rep, :], axis=0)
-        supp = np.nanmean(lin_resp - AB_FR)
-
-        AcorLin = np.corrcoef(rAm, lin_resp)[0, 1]  # Corr between resp to A and resp to lin
-        BcorLin = np.corrcoef(rBm, lin_resp)[0, 1]  # Corr between resp to B and resp to lin
-
-        Apref, Bpref = AcorAB - AcorLin, BcorAB - BcorLin
-        pref = Apref - Bpref
-
-        # If there are no cuts provided, just make one that takes everything.
-        if not cut_ids:
-            cut_ids = {'': np.full((int(params['lenstim'] * params['fs']),), True)}
-
-        # Start the dict that becomes the df with universal things regardless of if cuts or not
-        cell_dict = {'epoch': stimmy,
-                        'kind': kind,
-                        'synth_kind': synth_kind,
-                        'dynamic_kind': dynamic_kind,
-                        'BG': BG,
-                        'FG': FG,
-                        'AcorAB': AcorAB,
-                        'BcorAB': BcorAB,
-                        'AcorLin': AcorLin,
-                        'BcorLin': BcorLin,
-                        'pref': pref,
-                        'Apref': Apref,
-                        'Bpref': Bpref
-                        }
-
-        for lb, cut in cut_ids.items():
-            cut_st = cut[presil:-postsil]
-            rA_st_cut, rB_st_cut, rAB_st_cut = rA_st[:, cut_st], rB_st[:, cut_st], rAB_st[:, cut_st]
-            rAsm_cut, rBsm_cut, rABsm_cut = rAsm[:, cut], rBsm[:, cut], rABsm[:, cut]
-
-            # AcorAB = np.corrcoef(rAm_cut, rABm_cut)[0, 1]  # Corr between resp to A and resp to dual
-            # BcorAB = np.corrcoef(rBm_cut, rABm_cut)[0, 1]  # Corr between resp to B and resp to dual
-
-            A_FR, B_FR, AB_FR = np.nanmean(rA_st_cut), np.nanmean(rB_st_cut), np.nanmean(rAB_st_cut)
-
-            min_rep = np.min((rA.shape[0], rB.shape[0])) #only will do something if SoundRepeats==Yes
-            lin_resp = np.nanmean(rAsm_cut[:min_rep, :] + rBsm_cut[:min_rep, :], axis=0)
-            supp = np.nanmean(lin_resp - AB_FR)
-
-            # AcorLin = np.corrcoef(rAm_cut, lin_resp)[0, 1]  # Corr between resp to A and resp to lin
-            # BcorLin = np.corrcoef(rBm_cut, lin_resp)[0, 1]  # Corr between resp to B and resp to lin
-
-            # Apref, Bpref = AcorAB - AcorLin, BcorAB - BcorLin
-            # pref = Apref - Bpref
-
-            cell_dict[f"bg_FR{lb}"], cell_dict[f"fg_FR{lb}"], cell_dict[f"combo_FR{lb}"] = A_FR, B_FR, AB_FR
-            # cell_dict[f"AcorAB{lb}"], cell_dict[f"BcorAB{lb}"] = AcorAB, BcorAB
-            # cell_dict[f"AcorLin{lb}"], cell_dict[f"B_corLin{lb}"] = AcorLin, BcorLin
-            # cell_dict[f"pref{lb}"], cell_dict[f"Apref{lb}"], cell_dict[f"Bpref{lb}"] = pref, Apref, Bpref
-            cell_dict[f"supp{lb}"] = supp
-
-        cell_dff.append(cell_dict)
-
-        # if params['Binaural'] == 'Yes':
-        #     dA, dB = ohel.get_binaural_adjacent_epochs(stimmy)
-        #
-        #     rdA, rdB = resp.extract_epoch(dA), resp.extract_epoch(dB)
-        #     rdAm = np.nanmean(np.squeeze(np.apply_along_axis(fn, 2, rdA))[:, presil:-postsil], axis=0)
-        #     rdBm = np.nanmean(np.squeeze(np.apply_along_axis(fn, 2, rdB))[:, presil:-postsil], axis=0)
-        #
-        #     ABcordA = np.corrcoef(rABm, rdAm)[0, 1]  # Corr between resp to AB and resp to BG swap
-        #     ABcordB = np.corrcoef(rABm, rdBm)[0, 1]  # Corr between resp to AB and resp to FG swap
-
-    cell_df = pd.DataFrame(cell_dff)
-    cell_df['SR'], cell_df['STD'] = SR, STD
-    # cell_df['corcoef'], cell_df['avg_resp'], cell_df['snr'] = corcoef, avg_resp, snr
-    cell_df.insert(loc=0, column='area', value=area)
-
-    return cell_df
-
-
-OLP_fit_partial_weights(batch, threshold=None, synth=False, snip=None, fs=100, labels=None):
-weight_list = []
-
-weight_list = []
-batch = 340
-fs = 100
-lfreq, hfreq, bins = 100, 24000, 48
-# threshold = 0.75
-threshold = None
-snip = [0, 0.5]
-synth = True
-cell_df = nd.get_batch_cells(batch)
-cell_list = cell_df['cellid'].tolist()
-cell_list = ohel.manual_fix_units(cell_list)  # So far only useful for two TBR cells
-
-# Only CLT synth units
-cell_list = [cell for cell in cell_list if (cell.split('-')[0][:3] == 'CLT') & (int(cell.split('-')[0][3:6]) < 26)]
-fit_epochs = ['N', 'C', 'T', 'S', 'U', 'M', 'A']
-fit_epochs = ['10', '01', '20', '02', '11', '12', '21', '22']
-
-loader = 'env100'
-modelspecs_dir = '/auto/users/luke/Code/nems/modelspecs'
-
-for cellid in cell_list:
-    loadkey = 'ns.fs100'
-    manager = BAPHYExperiment(cellid=cellid, batch=batch)
-    options = {'rasterfs': 100,
-               'stim': False,
-               'resp': True}
-    rec = manager.get_recording(**options)
-
-    # GET sound envelopes and get the indices for chopping?
-    expt_params = manager.get_baphy_exptparams()
-    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
-    FG_folder, fgidx = ref_handle['FG_Folder'], list(set(ref_handle['Foreground']))
-    fgidx.sort(key=int)
-    idxstr = [str(ff).zfill(2) for ff in fgidx]
-
-    fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
-                           f'{FG_folder}/{ff}*.wav'))[0] for ff in idxstr]
-    fgname = [ff.split('/')[-1].split('.')[0].replace(' ', '') for ff in fg_paths]
-    ep_fg = [f"STIM_null_{ff}" for ff in fgname]
-
-    prebins = int(ref_handle['PreStimSilence'] * options['rasterfs'])
-    postbins = int(ref_handle['PostStimSilence'] * options['rasterfs'])
-    durbins = int(ref_handle['Duration'] * options['rasterfs'])
-    trialbins = durbins + postbins
-
-    if threshold:
-        env_cuts = {}
-        for nm, pth in zip(fgname, fg_paths):
-            sfs, W = wavfile.read(pth)
-            spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
-
-            env = np.nanmean(spec, axis=0)
-            cutoff = np.max(env) * threshold
-
-            # aboves = np.squeeze(np.argwhere(env >= cutoff))
-            # belows = np.squeeze(np.argwhere(env < cutoff))
-
-            highs, lows, whole_thing = env >= cutoff, env < cutoff, env > 0
-            prestimFalse = np.full((prebins,), False)
-            poststimTrue = np.full((trialbins - len(env),), True)
-            poststimFalse = np.full((trialbins - len(env),), False)  ## Something is wrong here with the lengths
-
-            full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
-            aboves = np.concatenate((prestimFalse, highs, poststimFalse))
-            belows = np.concatenate((prestimFalse, lows, poststimFalse))
-            belows_post = np.concatenate((prestimFalse, lows, poststimTrue))
-
-            env_cuts[nm] = [full, aboves, belows, belows_post]
-
-            f, ax = plt.subplots(3, 1, sharex=True, sharey=True)
-            ax[0].plot(env)
-            ax[0].hlines(cutoff, 0, 100, ls=':')
-            ax[0].set_title(f"{nm}")
-            ax[1].plot(env[highs])
-            ax[2].plot(env[lows])
-
-            cut_labels = ['', '_h', '_l', '_lp']
-
-    if snip:
-        start, dur = int(snip[0] * fs), int(snip[1] * fs)
-        prestimFalse = np.full((prebins,), False)
-        # poststimTrue = np.full((trialbins - len(env),), True)
-        poststimFalse = np.full((trialbins - durbins), False)
-        # if start == dur:
-        #
-        # else:
-        end = durbins - start - dur
-        goods = [False] * start + [True] * dur + [False] * end
-        bads = [not ll for ll in goods]
-
-        full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
-        goods = np.concatenate((prestimFalse, goods, poststimFalse))
-        bads = np.concatenate((prestimFalse, bads, poststimFalse))
-        cut_list = [full, goods, bads]
-        cut_labels = ['', '_good', '_bad']
-
-    rec['resp'].fs = fs
-    rec['resp'] = rec['resp'].extract_channels([cellid])
-    resp = copy.copy(rec['resp'].rasterize())
-
-    _, SR, _ = ohel.remove_spont_rate_std(resp)
-
-    stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
-
-    val = rec.copy()
-    val['resp'] = val['resp'].rasterize()
-    val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
-
-    est_sub = None
-
-    df0 = val['resp'].epochs.copy()
-    df2 = val['resp'].epochs.copy()
-    if synth == True:
-        df0['name'] = df0['name'].apply(ohel.label_synth_type)
-    else:
-        df0['name'] = df0['name'].apply(ohel.label_ep_type)
-    df0 = df0.loc[df0['name'].notnull()]
-    df3 = pd.concat([df0, df2])
-
-    val['resp'].epochs = df3
-    val_sub = copy.deepcopy(val)
-    val_sub['resp'] = val_sub['resp'].select_epochs(fit_epochs)
-
-    val = val_sub
-    fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
-    val['resp'] = val['resp'].transform(fn)
-
-    print(f'calc weights {cellid}')
-
-    # where twostims fit actually begins
-    epcs = val.epochs[val.epochs['name'].str.count('-0-1') >= 1].copy()
-    sepname = epcs['name'].apply(get_sep_stim_names)
-    epcs['nameA'] = [x[0] for x in sepname.values]
-    epcs['nameB'] = [x[1] for x in sepname.values]
-
-    # epochs with two sounds in them
-    epcs_twostim = epcs[epcs['name'].str.count('-0-1') == 2].copy()
-
-    A, B, AB, sepnames = ([], [], [], [])  # re-defining sepname
-    for i in range(len(epcs_twostim)):
-        if any((epcs['nameA'] == epcs_twostim.iloc[i].nameA) & (epcs['nameB'] == 'null')) \
-                and any((epcs['nameA'] == 'null') & (epcs['nameB'] == epcs_twostim.iloc[i].nameB)):
-            A.append('STIM_' + epcs_twostim.iloc[i].nameA + '_null')
-            B.append('STIM_null_' + epcs_twostim.iloc[i].nameB)
-            AB.append(epcs_twostim['name'].iloc[i])
-            sepnames.append(sepname.iloc[i])
-
-    # Calculate weights
-    if synth == True:
-        subsets = len(cut_list)
-    else:
-        subsets = len(list(env_cuts.values())[0])
-    weights = np.zeros((2, len(AB), subsets))
-    Efit = np.zeros((5, len(AB), subsets))
-    nMSE = np.zeros((len(AB), subsets))
-    nf = np.zeros((len(AB), subsets))
-    r = np.zeros((len(AB), subsets))
-    cut_len = np.zeros((len(AB), subsets - 1))
-    get_error = []
-
-    if synth:
-        for i in range(len(AB)):
-            names = [[A[i]], [B[i]], [AB[i]]]
-            for ss, cut in enumerate(cut_list):
-                weights[:, i, ss], Efit[:, i, ss], nMSE[i, ss], nf[i, ss], _, r[i, ss] = \
-                    ofit.calc_psth_weights_of_model_responses_list(val, names,
-                                                                   signame='resp', cuts=cut)
-                if ss != 0:
-                    cut_len[i, ss - 1] = np.sum(cut)
-
-    else:
-        for i in range(len(AB)):
-            names = [[A[i]], [B[i]], [AB[i]]]
-            Fg = names[1][0].split('_')[2].split('-')[0]
-            cut_list = env_cuts[Fg]
-
-            for ss, cut in enumerate(cut_list):
-                weights[:, i, ss], Efit[:, i, ss], nMSE[i, ss], nf[i, ss], _, r[i, ss] = \
-                    ofit.calc_psth_weights_of_model_responses_list(val, names,
-                                                                   signame='resp', cuts=cut)
-                if ss != 0:
-                    cut_len[i, ss - 1] = np.sum(cut)
-                # get_error.append(ge)
-
-    ### This was all before I more smarter and less lazier and coded the stuff below to be flexible about how you're cutting
-    # if subsets == 4 & synth == False:
-    #     weight_df = pd.DataFrame(
-    #         [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values,
-    #          weights[0, :, 0], weights[1, :, 0], nMSE[:, 0], nf[:, 0], r[:, 0],
-    #          weights[0, :, 1], weights[1, :, 1], nMSE[:, 1], nf[:, 1], r[:, 1], cut_len[:,0],
-    #          weights[0, :, 2], weights[1, :, 2], nMSE[:, 2], nf[:, 2], r[:, 2], cut_len[:,1],
-    #          weights[0, :, 3], weights[1, :, 3], nMSE[:, 3], nf[:, 3], r[:, 3], cut_len[:,2],])
-    #     weight_df = weight_df.T
-    #     weight_df.columns = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE', 'nf', 'r',
-    #                          'weightsA_h', 'weightsB_h', 'nMSE_h', 'nf_h', 'r_h', 'h_idxs',
-    #                          'weightsA_l', 'weightsB_l', 'nMSE_l', 'nf_l', 'r_l', 'l_idxs',
-    #                          'weightsA_lp', 'weightsB_lp', 'nMSE_lp', 'nf_lp', 'r_lp', 'lp_idxs']
-    #     cols = ['namesA', 'namesB', 'weightsA', 'weightsB', 'nMSE']
-    #     print(weight_df[cols])
-    #
-    #     weight_df = weight_df.astype({'weightsA': float, 'weightsB': float,
-    #                                   'weightsA_h': float, 'weightsB_h': float,
-    #                                   'weightsA_l': float, 'weightsB_l': float,
-    #                                   'weightsA_lp': float, 'weightsB_lp': float,
-    #                                   'nMSE': float, 'nf': float, 'r': float,
-    #                                   'nMSE_h': float, 'nf_h': float, 'r_h': float,
-    #                                   'nMSE_l': float, 'nf_l': float, 'r_l': float,
-    #                                   'nMSE_lp': float, 'nf_lp': float, 'r_lp': float,
-    #                                   'h_idxs': float, 'l_idxs': float, 'lp_idxs': float})
-
-    # If this part is working the above code is useless.
-    # Makes a list of lists that iterates through the arrays you created, then flattens them in the next line
-    big_list = [[weights[0, :, ee], weights[1, :, ee], nMSE[:, ee], nf[:, ee], r[:, ee]] for ee in range(len(cut_list))]
-    flat_list = [item for sublist in big_list for item in sublist]
-    small_list = [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values]
-    # Combines the lists into a format that is conducive to the dataframe format I want to make
-    bigger_list = small_list + flat_list
-    weight_df = pd.DataFrame(bigger_list)
-    weight_df = weight_df.T
-
-    # Automatically generates a list of column names based on the names of the subsets provided above
-    column_labels1 = ['namesA', 'namesB']
-    column_labels2 = [[f"weightsA{cl}", f"weightsB{cl}", f"nMSE{cl}", f"nf{cl}", f"r{cl}"] for cl in cut_labels]
-    column_labels_flat = [item for sublist in column_labels2 for item in sublist]
-    column_labels = column_labels1 + column_labels_flat
-    # Renames the columns according to that list - should work for any scenario as long as you specific names above
-    weight_df.columns = column_labels1 + column_labels_flat
-
-    # Not sure why I need this, I guess some may not be floats, so just doing it
-    col_dict = {ii: float for ii in column_labels_flat}
-    weight_df = weight_df.astype(col_dict)
-
-    weight_df.insert(loc=0, column='cellid', value=cellid)
-    weight_list.append(weight_df)
-
-weight_df0 = pd.concat(weight_list)
-
-ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df0.namesA, weight_df0.namesB)]
-weight_df0 = weight_df0.drop(columns=['namesA', 'namesB'])
-weight_df0['epoch'] = ep_names
 
 OLP_partialweights_db_path = f'/auto/users/hamersky/olp_analysis/Binaural_OLP_control_segment{int(snip[0] * 1000)}-{int((snip[0] + snip[1]) * 1000)}_nometrics.h5'  # weight + corr
 os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
