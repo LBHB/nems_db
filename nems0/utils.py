@@ -246,19 +246,27 @@ def find_module(query: object, modelspec: object, find_all_matches: object = Fal
         target_i = []
     else:
         target_i = None
-    for i, m in enumerate(modelspec):
-        if query in m[key]:
-            if find_all_matches:
-                target_i.append(i)
-            else:
-                target_i = i
-                break
+    if modelspec.meta.get('engine', 'nems0') == 'nems0':
+        for i, m in enumerate(modelspec):
+            if query in m[key]:
+                if find_all_matches:
+                    target_i.append(i)
+                else:
+                    target_i = i
+                    break
+    else:
+        for i, m in enumerate(modelspec.layers):
+            if query in str(m.__class__):
+                if find_all_matches:
+                    target_i.append(i)
+                else:
+                    target_i = i
+                    break
 
     if not target_i:
         log.debug("target_module: %s not found in modelspec.", query)
     else:
-        log.debug("target_module: %s found at modelspec[%d]",
-                  query, target_i)
+        log.debug(f"target_module: {query} found at modelspec[{target_i}]")
 
     return target_i
 
@@ -301,6 +309,16 @@ def keyword_extract_options(kw):
         options = chunks[1:]
     return options
 
+def parse_kw_string(kw_string, registry):
+    xfspec = []
+    for kw in escaped_split(kw_string, '-'):
+        try:
+            xfspec.extend(registry[kw])
+        except KeyError:
+            log.error("No keyword found for: '%s', raising KeyError.", kw)
+            raise
+
+    return xfspec
 
 
 def get_channel_number(sig, channel=None):

@@ -2580,8 +2580,8 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                     totalunits += 1
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
-                        # unit_names.append("{0}{1}".format(chan_names[c], u+1))
-                        unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                        unit_names.append("{0}{1}".format(chan_names[c], u+1))
+                        #unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
                         unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                     spiketimes.append(unit_spike_events / spikefs)
@@ -3123,9 +3123,9 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
             if invalid_onsets[-1] > invalid_offsets[-1]:
                 invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
             for (a, b) in zip(invalid_onsets, invalid_offsets):
-                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap ):
+                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
                     x[a:b] = np.linspace(x[a-1], x[b], b-a)
-                    y[a:b] = np.linspace(y[a - 1], y[b], b - a)
+                    y[a:b] = np.linspace(y[a-1], y[b], b-a)
                 else:
                     x[a:b] = np.nan
                     y[a:b] = np.nan

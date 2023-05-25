@@ -150,7 +150,7 @@ def save_resource(uri, data=None, json=None):
     return err
 
 
-def load_resource(uri):
+def load_resource(uri, raw=False):
     '''
     Loads and returns the resource (probably a JSON) found at URI.
     '''
@@ -165,7 +165,7 @@ def load_resource(uri):
             return r.data
         else:
             file_extension=r.url.split(".")[-1]
-            if file_extension=='m':
+            if raw | (file_extension=='m'):
                 # matlab code? Just return text
                 return r.text
             # otherwise, assume JSON
@@ -180,7 +180,7 @@ def load_resource(uri):
     elif local_uri(uri):
         filepath = local_uri(uri)
         file_extension=filepath.split(".")[-1]
-        if file_extension=='m':
+        if raw | (file_extension=='m'):
             with open(filepath, mode='r') as f:
                 # matlab code? Just return text
                 return f.read()

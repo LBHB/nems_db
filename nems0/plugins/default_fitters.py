@@ -879,14 +879,21 @@ def _parse_options(fitkey, **default_options):
                 options['cost_function'] = 'nmse_pc'
             if loss_type == 'nmses':
                 options['cost_function'] = 'nmse_shrinkage'
+        elif op.startswith('pat'):
+            options['early_stopping_patience'] = int(op[3:])
+        elif op == 'cd':
+            options['fitter'] = 'coordinate_descent'
         elif op.startswith('t'):
             # Should use \ to escape going forward, but keep d-sub in
             # for backwards compatibility.
-            num = op.replace('d', '.').replace('\\', '')
-            tolpower = float(num[1:])*(-1)
-            options['tolerance'] = 10**tolpower
-        elif op == 'cd':
-            options['fitter'] = 'coordinate_descent'
+            tolstring = op[1:]
+            if 'e' in tolstring:
+                base, exponent = tolstring.split('e')
+                options['tolerance'] = int(base) * 10 ** -int(exponent)
+            else:
+                num = op.replace('d', '.').replace('\\', '')
+                tolpower = float(num[1:])*(-1)
+                options['tolerance'] = 10**tolpower
         elif op == 'b':
             options['choose_best'] = True
         elif op.startswith('rb'):
