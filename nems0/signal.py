@@ -1309,7 +1309,9 @@ class RasterizedSignal(SignalBase):
                                                    mask=mask,
                                                    allow_incomplete=allow_incomplete)
         else:
-            epoch_indices = epoch
+            # JCW commented out previous epoch_indices statement because function should take in time values and needs to be converted to indices
+            # epoch_indices = epoch
+            epoch_indices = self.get_epoch_indices(epoch)
 
         if epoch_indices.size == 0:
             if allow_empty:
