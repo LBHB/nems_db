@@ -284,8 +284,9 @@ def remove_clicks(w, max_threshold=15, verbose=False):
 
     return w_clean
 
+
 def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False, channels=18, rasterfs=100, f_min=200, f_max=20000,
-             mono=False, binaural=False, binsplit=True,
+             mono=False, binaural=False, binsplit=False,
              **options):
     """
     :param exptevents: from baphy
@@ -315,8 +316,14 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     ReferenceHandle = exptparams['TrialObject'][1]['ReferenceHandle'][1]
     OveralldB = exptparams['TrialObject'][1]['OveralldB']
 
+    HW_setup_primary_L = [3,5,7,9,10,12,14,17,19,20]
+    if exptparams.get('HWSetup', 0) in HW_setup_primary_L:
+        primary_channel=1
+    else:
+        primary_channel=0
+
     if (ReferenceClass=='BigNat') & \
-            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('FitBinaural','None').strip() != 'None'):
+            (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('TestBinaural','None').strip() != 'None'):
         # Binaural natural sounds
         sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
         sound_root = sound_root.replace("H:/", "/auto/data/")
@@ -357,6 +364,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         if ReferenceClass == 'BigNat':
             sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
             sound_root = sound_root.replace("H:/", "/auto/data/")
+            sound_root = sound_root.replace("E:/sounds/v2", "/auto/data/sounds/BigNat/v2")
+            sound_root = sound_root.replace("E:/", "/auto/data/")
             sound_root = Path(sound_root)
         else:
             subset = ReferenceHandle['Subsets']
@@ -443,7 +452,6 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         stim_epochs = [s.replace(" ", "") for s in stim_epochs]
     else:
         raise ValueError(f"ReferenceClass {ReferenceClass} gtgram not supported.")
-
     if len(stim_epochs) == 0:
         return {}, [], {}
 
@@ -508,8 +516,8 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
     else:
         wav_all = {}
         fs_all = {}
+        log.info(f'{len(wav1)} distinct wavs or wav combinations')
         for (f1,c1,t1,f2,c2,t2,n) in zip(wav1,chan1,type1,wav2,chan2,type2,stim_epochs):
-            #print(f1,f2)
             if f1.upper() != "NULL":
                 w1 = wav_unique[f1].copy()
                 if f2.upper() != "NULL":
@@ -519,7 +527,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             else:
                 w2 = wav_unique[f2].copy()
                 w1 = np.zeros(w2.shape)
-            log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
+            #log.info(f"{f1}, {f2}, {w1.std()}, {w2.std()}")
 
             if ReferenceClass == "OverlappingPairs":
                 if f1 == 'null':
@@ -559,8 +567,11 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 if f2.lower() != 'null':
                     w2 = w2 / np.max(np.abs(w2)) * 5
 
+            if (type(binaural) is str) & (binaural == 'force'):
+                max_chans=2
+
             w = np.zeros((w1.shape[0], max_chans))
-            if (binaural is None) | (binaural == False):
+            if (binaural is None) | (binaural == False) | ((type(binaural) is str) & (binaural == 'force')):
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
                 w[:, [c2]] += w2
@@ -570,21 +581,32 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
 
-            else:
+            elif (type(binaural) is str) & (binaural=='crude'):
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
                 db_atten = 6
                 factor = 10**(-db_atten/20)
                 w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
                 w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+            else:
+                raise ValueError(f"Unknown binaural value {binaural}")
+            if (primary_channel>0) & (max_chans>1) & ((type(binaural) is str) & (binaural == 'force')):
+                log.info(f'Flipping channels to make primary_channel={primary_channel}')
+                w = np.flip(w, axis=1)
 
             # scale to OveralldB level
             sf = 10 ** ((80 - OveralldB) / 20)
             w /= sf
 
             wav_all[n] = w
-    if (binaural is None) | (binaural == False):
-        log.info('No binaural processing')
+    if (binaural is None) | (binaural == False) | ((type(binaural) is str) & (binaural == 'force')):
+        if max_chans == 1:
+            log.info('Mono, single channel processing')
+        elif primary_channel == 0:
+            log.info('Binaural stim, primary is right speaker')
+        else:
+            log.info('Binaural stim, primary is left speaker, flipping bank order')
+
     else:
         log.info(f'binaural db_atten = {db_atten}')
     # pad with zeros and convert to from wav to output format (or passthrough wav)

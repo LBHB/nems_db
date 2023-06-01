@@ -15,6 +15,8 @@ from nems0.utils import escaped_split, escaped_join
 from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
 from nems0.plugins import (default_keywords, default_loaders, default_fitters,
                           default_initializers)
+from nems.tools import json
+
 
 log = logging.getLogger(__name__)
 
@@ -230,12 +232,26 @@ def fit_model_xform(cellid, batch, modelname, autoPlot=True, saveInDB=False,
         cell_name = cellid
 
     if ctx['modelspec'].meta.get('engine', 'nems0') == 'nems-lite':
-        if 'modelpath' not in modelspec.meta:
-            prefix = get_setting('NEMS_RESULTS_DIR')
-            destination = os.path.join(prefix, str(batch), cell_name)
-            modelspec.meta['modelpath'] = destination
+        from nems.tools import json
+        if get_setting('USE_NEMS_BAPHY_API'):
+            prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
         else:
-            destination = modelspec.meta['modelpath']
+            prefix = get_setting('NEMS_RESULTS_DIR')
+        batch = modelspec.meta.get('batch', 0)
+        cellid = modelspec.meta.get('cellid', 'cell')
+        basepath = os.path.join(prefix, str(batch), cellid)
+
+        # use nems-lite model path namer
+        filepath = json.generate_model_filepath(modelspec, basepath=basepath)
+        destination = os.path.dirname(filepath)
+        modelspec.meta['modelpath'] = destination
+
+        #if 'modelpath' not in modelspec.meta:
+        #    prefix = get_setting('NEMS_RESULTS_DIR')
+        #    destination = os.path.join(prefix, str(batch), cell_name)
+        #    modelspec.meta['modelpath'] = destination
+        #else:
+        #    destination = modelspec.meta['modelpath']
         modelspec.meta['figurefile'] = os.path.join(destination,'figure.0000.png')
 
     elif 'modelpath' not in modelspec.meta:
@@ -252,7 +268,7 @@ def fit_model_xform(cellid, batch, modelname, autoPlot=True, saveInDB=False,
         destination = modelspec.meta['modelpath']
 
     # figure out URI for location to save results (either file or http, depending on USE_NEMS_BAPHY_API)
-    if get_setting('USE_NEMS_BAPHY_API'):
+    if (ctx['modelspec'].meta.get('engine', 'nems0') == 'nems0') & get_setting('USE_NEMS_BAPHY_API'):
         prefix = 'http://' + get_setting('NEMS_BAPHY_API_HOST') + ":" + str(get_setting('NEMS_BAPHY_API_PORT')) + \
                  '/results'
         """
@@ -366,7 +382,8 @@ def find_model_xform_file(cellid, batch=271,
     #    uri = filepath.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     # hack: hard-coded assumption that server will use this data root
-    uri = filepath.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
+    uri = filepath.replace('http://hyrax.ohsu.edu:3003/results', get_setting('NEMS_RESULTS_DIR'))
+    uri = uri.replace('/auto/data/nems_db/results', get_setting('NEMS_RESULTS_DIR'))
 
     return uri, old
 

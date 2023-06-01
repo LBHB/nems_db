@@ -13,9 +13,10 @@ mpl.rcParams.update(mplparams)
 import matplotlib.pyplot as plt
 
 
-def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, dot_colors=None, dot_markers=None,
-                      fill_styles=None, plot_stat='r_test', plot_medians=False, labeled_models=None, show_legend=True,
-                      y_lim=None):
+def model_comp_pareto(batch, modelgroups, ax, cellids, nparms_modelgroups=None, dot_colors=None, 
+                      dot_markers=None,
+                      fill_styles=None, plot_stat='r_test', plot_medians=False, labeled_models=None, 
+                      show_legend=True, y_lim=None):
 
     if labeled_models is None:
         labeled_models = []

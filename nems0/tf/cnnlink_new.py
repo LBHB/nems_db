@@ -161,6 +161,7 @@ def fit_tf(
         epoch_name: str = "REFERENCE",
         use_tensorboard: bool = False,
         kernel_regularizer: str = None,
+        stim_train=None, resp_train=None, fs=None,
         **context
         ) -> dict:
     """TODO
@@ -314,7 +315,7 @@ def fit_tf(
             decay_steps=10000,
             decay_rate=0.9
         )
-
+    log.info(f"Learning rate: {learning_rate:.2e} Tol: {early_stopping_tolerance:.2e} Cost: {cost_fn}")
     from nems0.tf.loss_functions import pearson
     model = modelbuilder.ModelBuilder(
         name='Test-model',
@@ -476,6 +477,244 @@ def fit_tf(
         shutil.rmtree(log_dir_base)
 
     return {'modelspec': modelspec}
+
+def fit_tf_core(
+        modelspec,
+        stim_train=None, resp_train=None, state_train=None,
+        fs=100,
+        est=None,
+        use_modelspec_init: bool = True,
+        optimizer: str = 'adam',
+        max_iter: int = 10000,
+        cost_function: str = 'squared_error',
+        early_stopping_steps: int = 5,
+        early_stopping_tolerance: float = 5e-4,
+        early_stopping_val_split: float = 0,
+        learning_rate: float = 1e-4,
+        variable_learning_rate: bool = False,
+        batch_size: typing.Union[None, int] = None,
+        seed: int = 0,
+        initializer: str = 'random_normal',
+        filepath: typing.Union[str, Path] = None,
+        freeze_layers: typing.Union[None, list] = None,
+        epoch_name: str = "REFERENCE",
+        use_tensorboard: bool = False,
+        kernel_regularizer: str = None,
+        **context
+        ):
+    """TODO
+
+    :param est:
+    :param modelspec:
+    :param use_modelspec_init:
+    :param optimizer:
+    :param max_iter:
+    :param cost_function:
+    :param early_stopping_steps:
+    :param early_stopping_tolerance:
+    :param learning_rate:
+    :param batch_size:
+    :param seed:
+    :param filepath:
+    :param freeze_layers: Indexes of layers to freeze prior to training. Indexes are modelspec indexes, so are offset
+      from model layer indexes.
+    :param epoch_name
+    :param context:
+
+    :return: dict {'modelspec': modelspec}
+    """
+
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    #os.environ['TF_DETERMINISTIC_OPS'] = '1'   # makes output deterministic, but reduces prediction accuracy
+
+    log.info('Building tensorflow keras model from modelspec.')
+
+    filepath = Path(f'/auto/data/tmp/')
+    tbroot = Path(f'/auto/data/tmp/tensorboard/')
+    cellid = modelspec.meta.get('cellid', 'CELL')
+    tbpath = tbroot
+
+    checkpoint_filepath = filepath / 'weights.hdf5'
+    tensorboard_filepath = tbpath
+    gradient_filepath = filepath / 'gradients'
+
+    # update seed based on fit index
+    seed += modelspec.fit_index
+
+    log.info(f'Feature dimensions: {stim_train.shape}; Data dimensions: {resp_train.shape}.')
+    if state_train is not None:
+        state_shape = state_train.shape
+        log.info(f'State dimensions: {state_shape}')
+        train_data = [stim_train, state_train]
+    else:
+        state_train, state_shape = None, None
+        train_data = stim_train
+
+    # get the layers and build the model
+    log.info(f"Cost function: {cost_function}")
+    cost_fn = loss_functions.get_loss_fn(cost_function)
+    model_layers = modelbuilder.modelspec2tf(modelspec,
+        use_modelspec_init=use_modelspec_init, seed=seed, fs=fs,
+        initializer=initializer, freeze_layers=freeze_layers,
+        kernel_regularizer=kernel_regularizer)
+
+    if np.any([isinstance(layer, Conv2D_NEMS) or isinstance(layer, WeightChannelsNew) for layer in model_layers]):
+        # need a "channel" dimension for Conv2D (like rgb channels, not frequency). Only 1 channel for our data.
+        stim_train = stim_train[..., np.newaxis]
+        train_data = train_data[..., np.newaxis]
+
+    # do some batch sizing logic
+    batch_size = stim_train.shape[0] if batch_size == 0 else batch_size
+
+    from nems0.tf.loss_functions import pearson
+    model = modelbuilder.ModelBuilder(
+        name='Test-model',
+        layers=model_layers,
+        learning_rate=learning_rate,
+        loss_fn=cost_fn,
+        optimizer=optimizer,
+        metrics=[pearson],
+    ).build_model(input_shape=stim_train.shape, state_shape=state_shape, batch_size=batch_size)
+
+    if freeze_layers is not None:
+        for freeze_index in freeze_layers:
+            log.info(f'TF layer #{freeze_index}: "{model.layers[freeze_index + 1].name}" is not trainable.')
+
+    # tracking early termination
+    model.early_terminated = False
+
+    # create the callbacks
+    early_stopping = callbacks.DelayedStopper(monitor='val_loss',
+                                              patience=30 * early_stopping_steps,
+                                              min_delta=early_stopping_tolerance,
+                                              verbose=1,
+                                              restore_best_weights=True)
+    regular_stopping = callbacks.DelayedStopper(monitor='loss',
+                                              patience=30 * early_stopping_steps,
+                                              min_delta=early_stopping_tolerance,
+                                              verbose=1,
+                                              restore_best_weights=True)
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=str(checkpoint_filepath),
+                                                    save_best_only=False,
+                                                    save_weights_only=True,
+                                                    save_freq=100 * stim_train.shape[0],
+                                                    monitor='loss',
+                                                    verbose=0)
+    sparse_logger = callbacks.SparseProgbarLogger(n_iters=50)
+    nan_terminate = tf.keras.callbacks.TerminateOnNaN()
+    nan_weight_terminate = callbacks.TerminateOnNaNWeights()
+    tensorboard = tf.keras.callbacks.TensorBoard(log_dir=str(tensorboard_filepath),  # TODO: generic tensorboard dir?
+                                                histogram_freq=0,  # record the distribution of the weights
+                                                write_graph=False,
+                                                update_freq='epoch',
+                                                profile_batch=0)
+    # gradient_logger = callbacks.GradientLogger(filepath=str(gradient_filepath),
+    #                                            train_input=stim_train,
+    #                                            model=model)
+
+    # save an initial set of weights before freezing, in case of termination before any checkpoints
+    #log.info('saving weights to : %s', str(checkpoint_filepath) )
+    model.save_weights(str(checkpoint_filepath), overwrite=True)
+
+    if version.parse(tf.__version__)>=version.parse("2.2.0"):
+        callback0 = [sparse_logger]
+        verbose=0
+    else:
+        callback0 = []
+        verbose = 2
+    # enable the below to log tracked parameters to tensorboard
+    if use_tensorboard:
+        callback0.append(tensorboard)
+        log.info(f'Enabling tensorboard, log: {str(tensorboard_filepath)}')
+        # enable the below to record gradients to visualize in tensorboard; this is very slow,
+        # and loading all this into tensorboard can use A LOT of memory
+        # callback0.append(gradient_logger)
+
+    if early_stopping_val_split > 0:
+        callback0.append(early_stopping)
+        log.info(f'Enabling early stopping, val split: {str(early_stopping_val_split)}')
+    else:
+        callback0.append(regular_stopping)
+        log.info(f'Stop tolerance: min_delta={early_stopping_tolerance}')
+
+    log.info(f'Fitting model (batch_size={batch_size})...')
+    history = model.fit(
+        train_data,
+        resp_train,
+        validation_split=early_stopping_val_split,
+        verbose=verbose,
+        epochs=max_iter,
+        callbacks=callback0 + [
+            nan_terminate,
+            nan_weight_terminate,
+            checkpoint,
+        ],
+        batch_size=batch_size
+    )
+
+    # did we terminate on a nan loss or weights? Load checkpoint if so
+    if np.all(np.isnan(model.predict(train_data))) or model.early_terminated:  # TODO: should this be np.any()?
+        log.warning('Model terminated on nan loss or weights, restoring saved weights.')
+        try:
+            # this can fail if it nans out before a single checkpoint gets saved, either because no saved weights
+            # exist, or it tries to load a in different model from the init
+            model.load_weights(str(checkpoint_filepath))
+            log.warning('Reloaded previous saved weights after nan loss.')
+        except (tf.errors.NotFoundError, ValueError):
+            pass
+
+    modelspec = tf2modelspec(model, modelspec)
+
+    # debug: dump modelspec parameters
+    #for i in range(len(modelspec)):
+    #    log.info(modelspec.phi[i])
+
+    contains_tf_only_layers = np.any(['tf_only' in m['fn'] for m in modelspec.modules])
+    if not contains_tf_only_layers:
+        # compare the predictions from the model and modelspec
+        error = compare_ms_tf(modelspec, model, est, train_data)
+        if error > 1e-5:
+            log.warning(f'Mean difference between NEMS and TF model prediction: {error}')
+        else:
+            log.info(f'Mean difference between NEMS and TF model prediction: {error}')
+    else:
+        # nothing to compare, ms evaluation is not implemented for this type of model
+        pass
+
+    # add in some relevant meta information
+    modelspec.meta['n_parms'] = len(modelspec.phi_vector)
+    try:
+        n_epochs = len(history.history['loss'])
+        if 'val_loss' in history.history.keys():
+            #val_stop = np.argmin(history.history['val_loss'])
+            #loss = history.history['loss'][val_stop]
+            loss = np.nanmin(history.history['val_loss'])
+        else:
+            loss = np.nanmin(history.history['loss'])
+
+    except KeyError:
+        n_epochs = 0
+        loss = 0
+    if modelspec.fit_count == 1:
+        modelspec.meta['n_epochs'] = n_epochs
+        modelspec.meta['loss'] = loss
+    else:
+        if modelspec.fit_index == 0:
+            modelspec.meta['n_epochs'] = np.zeros(modelspec.fit_count)
+            modelspec.meta['loss'] = np.zeros(modelspec.fit_count)
+        modelspec.meta['n_epochs'][modelspec.fit_index] = n_epochs
+        modelspec.meta['loss'][modelspec.fit_index] = loss
+
+    try:
+        max_iter = modelspec.meta['extra_results']
+        modelspec.meta['extra_results'] = max(max_iter, n_epochs)
+    except KeyError:
+        modelspec.meta['extra_results'] = n_epochs
+
+    return modelspec
+
+
 
 def fit_tf_iterate(modelspec,
                    est: recording.Recording,

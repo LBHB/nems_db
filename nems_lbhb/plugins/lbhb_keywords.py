@@ -612,7 +612,7 @@ def lv(kw):
             sig_in = 'pred'
         
         elif op.startswith('hp'):
-            cutoff = np.float(op[2:].replace(',', '.'))
+            cutoff = float(op[2:].replace(',', '.'))
 
     mean = 0.01 * np.ones([n_chans, n_vars])
     sd = 0.01 * np.ones([n_chans, n_vars])

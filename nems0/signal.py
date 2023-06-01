@@ -11,6 +11,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import h5py
+from scipy.sparse import csr_array
 
 from nems0.epoch import (remove_overlap, merge_epoch, epoch_contained,
                         epoch_intersection, epoch_names_matching)
@@ -202,7 +203,7 @@ class SignalBase:
 
         # svd - kludge warning! rounding to prevent accidental increase in duration
         # due to floating point limits
-        self.ntimes = np.int(np.round(fs*max_time))
+        self.ntimes = int(np.round(fs*max_time))
 
         if segments is None:
             segments = np.array([[0, self.ntimes]])
@@ -767,7 +768,7 @@ class SignalBase:
              if list of tuples (epoch times), mask is OR combo of all epoch times
         '''
 
-        mask = np.zeros([1, self.ntimes], dtype=np.bool)
+        mask = np.zeros([1, self.ntimes], dtype=bool)
 
         if (epoch is None) or (epoch is False):
             pass
@@ -836,7 +837,7 @@ class SignalBase:
             # find matching epoch periods
             indices = self.get_epoch_indices(epoch, boundary_mode, fix_overlap)
 
-        data = np.zeros([1, self.ntimes], dtype=np.bool)
+        data = np.zeros([1, self.ntimes], dtype=bool)
         for lb, ub in indices:
             if onsets_only:
                 data[:, lb] = True
@@ -1071,7 +1072,7 @@ class RasterizedSignal(SignalBase):
 
     def __init__(self, fs, data, name, recording, chans=None, epochs=None,
                  segments=None, meta=None, safety_checks=True,
-                 normalization='none', **other_attributes):
+                 normalization='none', sparse=False, **other_attributes):
         '''
         Parameters
         ----------
@@ -1086,11 +1087,14 @@ class RasterizedSignal(SignalBase):
         '''
         if data.ndim==1:
             # assume one dim should be time
-            data=np.reshape(data,(1,data.size))
-            
+            data = np.reshape(data,(1,data.size))
+        if sparse:
+            data = csr_array(data)
+        else:
+            data.flags.writeable = False
         super().__init__(fs, data, name, recording, chans, epochs, segments,
                          meta, safety_checks, normalization)
-        self._data.flags.writeable = False
+        #self._data.flags.writeable = False
 
         # Install the indexers
         self.iloc = SimpleSignalIndexer(self)
@@ -1103,6 +1107,7 @@ class RasterizedSignal(SignalBase):
         else:
             self.n_extradims = []
         self.signal_type = str(type(self))
+        self.sparse = sparse
 
         # Verify that we have a long time series
         if safety_checks and self.ntimes < self.nchans:
@@ -1543,8 +1548,8 @@ class RasterizedSignal(SignalBase):
         data = self.as_continuous().copy()
 #        sig_valid_start = np.sum(np.isfinite(data[0,:]))
 
-        mask = np.zeros_like(data, dtype=np.bool)
-        mask2 = np.zeros_like(data, dtype=np.bool)
+        mask = np.zeros_like(data, dtype=bool)
+        mask2 = np.zeros_like(data, dtype=bool)
 
         for ep in epochs:
             lb, ub = ep
@@ -1607,7 +1612,7 @@ class RasterizedSignal(SignalBase):
             if not invert:
                 m[..., split_start:split_end] = np.nan
             else:
-                mask = np.ones_like(m, dtype=np.bool)
+                mask = np.ones_like(m, dtype=bool)
                 mask[:, split_start:split_end] = 0
                 m[mask] = np.nan
             return self._modified_copy(m.reshape(self.nchans, -1))
@@ -2088,12 +2093,23 @@ class RasterizedSignal(SignalBase):
 
         return self._modified_copy(data)
 
-    def rasterize(self, fs=None):
+    def rasterize(self, fs=None, sparse=False):
         """
         A pass-through. We don't need to rasterize, since the
         signal is already a raster!
         """
-        return self
+        if fs is not None:
+            log.info('IGNORING fs PARAMETER IN rasterize()')
+        if sparse & ~self.sparse:
+            return RasterizedSignal(fs=self.fs, data=self._data, name=self.name,
+                             recording=self.recording, chans=self.chans,
+                             epochs=self.epochs, meta=self.meta, sparse=sparse)
+        elif ~sparse and self.sparse:
+            return RasterizedSignal(fs=self.fs, data=self._data.todense(), name=self.name,
+                             recording=self.recording, chans=self.chans,
+                             epochs=self.epochs, meta=self.meta, sparse=sparse)
+        else:
+            return self
 
     def as_continuous(self, mask=None):
         '''
@@ -2102,10 +2118,14 @@ class RasterizedSignal(SignalBase):
         but if mask signal provided, do return a copy, with only masked
         portion
         '''
-        if mask is None:
-            return self._data
+        if self.sparse:
+            d = self._data.todense()
         else:
-            return self._data[:, mask.as_continuous()[0, :]]
+            d = self._data
+        if mask is None:
+            return d
+        else:
+            return d[:, mask.as_continuous()[0, :]]
 
 
 class PointProcess(SignalBase):
@@ -2157,7 +2177,7 @@ class PointProcess(SignalBase):
         return PointProcess(data=data, safety_checks=False, **attributes)
 
 
-    def rasterize(self, fs=None):
+    def rasterize(self, fs=None, sparse=False):
         """
         convert list of spike times to a raster of spike rate, with duration
         matching max end time in the event_times list
@@ -2179,7 +2199,7 @@ class PointProcess(SignalBase):
         else:
             max_time=max_epoch_time
 
-        max_bin = np.int(np.round(fs*max_time))
+        max_bin = int(np.round(fs*max_time))
         unit_count = len(self._data.keys())
         raster = np.zeros([unit_count, max_bin])
 
@@ -2194,7 +2214,7 @@ class PointProcess(SignalBase):
 
         return RasterizedSignal(fs=fs, data=raster, name=self.name,
                                 recording=self.recording, chans=cellids,
-                                epochs=self.epochs, meta=self.meta)
+                                epochs=self.epochs, meta=self.meta, sparse=sparse)
 
     def as_continuous(self):
         return self.rasterize()._data
@@ -2502,7 +2522,7 @@ class TiledSignal(SignalBase):
             if 'none' != normalization:
                 raise ValueError('normalization not supported for TiledSignal')
 
-    def rasterize(self, fs=None):
+    def rasterize(self, fs=None, sparse=False):
         '''
         Create a rasterized version of the signal and return it
 
@@ -2518,7 +2538,7 @@ class TiledSignal(SignalBase):
         z = np.zeros(chancount + [maxbin])
         zsig = RasterizedSignal(fs=self.fs, data=z, name=self.name,
                                 recording=self.recording, chans=self.chans,
-                                epochs=self.epochs, meta=self.meta)
+                                epochs=self.epochs, meta=self.meta, sparse=sparse)
         signal = zsig.replace_epochs(self._data)
 
         # replace nans with zeros. Assume that the signal was valid but zero
@@ -2932,7 +2952,7 @@ def merge_selections(signals):
     # If there are no overlapping values, then nanmean() will be equal
     # to the value found in each position
     the_mean = np.nanmean(bigary, axis=2)
-    if type(signals[0]._data[0][0]) is np.bool_:
+    if type(signals[0]._data[0][0]) is bool_:
         return signals[0]._modified_copy(the_mean)
     else:
         for a in arys:

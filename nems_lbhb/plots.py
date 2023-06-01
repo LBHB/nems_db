@@ -639,7 +639,7 @@ def plot_weights_64D(h, cellids, highlight_cellid=None, vmin=None, vmax=None, cb
     indexes2=[x[0] for x in indexes2]
 
     # make an inverse mask of the unique indexes
-    mask = np.ones(len(h),np.bool)
+    mask = np.ones(len(h),bool)
     mask[indexes]=0
 
     # plot the unique ones

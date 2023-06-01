@@ -750,7 +750,11 @@ class Recording:
         """
 
         if filemask is None:
-            groups = ep.group_epochs_by_occurrence_counts(self.epochs, epoch_regex)
+            if self['mask'] is not None:
+                mask = self['mask'].remove_epochs(self['mask'])
+                groups = ep.group_epochs_by_occurrence_counts(mask.epochs, epoch_regex)
+            else:
+                groups = ep.group_epochs_by_occurrence_counts(self.epochs, epoch_regex)
         else:
             epcopy=self.epochs.copy()
             epm = ep.epoch_names_matching(epcopy, regex_str=f'^FILE.*{filemask}$')
@@ -781,7 +785,7 @@ class Recording:
             g1 = groups[k].copy()
             g1.sort()
             n = len(g1)
-            vset = np.int(np.floor(n*0.8))
+            vset = int(np.floor(n*0.8))
 
             g={1: g1[:vset], 2: g1[vset:]}
             groups = g
@@ -915,7 +919,7 @@ class Recording:
         if jack_idx < 0 or njacks < 0:
             raise ValueError("Neither jack_idx nor njacks may be negative")
 
-        nrows = np.int(np.ceil(occurrences / njacks))
+        nrows = int(np.ceil(occurrences / njacks))
         idx_data = np.arange(nrows * njacks)
 
         if tiled:
@@ -926,7 +930,7 @@ class Recording:
 
         # jmask = bins that should be excluded, on top of whatever is already
         # False in m_data
-        jmask = np.zeros_like(m_data, dtype=np.bool)
+        jmask = np.zeros_like(m_data, dtype=bool)
         for idx in idx_data[jack_idx].tolist():
             if idx < occurrences:
                 lb, ub = epochs[idx]

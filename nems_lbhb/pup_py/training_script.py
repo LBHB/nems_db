@@ -207,11 +207,11 @@ if __name__ == '__main__':
                 pass
             else:
                 if i == 0:
-                    val = np.float(f.split('-')[-1].split('.')[0])
+                    val = float(f.split('-')[-1].split('.')[0])
                     mod = f
                 else:
-                    if np.float(f.split('-')[-1].split('.')[0]) < val:
-                        val = np.float(f.split('-')[-1].split('.')[0])
+                    if float(f.split('-')[-1].split('.')[0]) < val:
+                        val = float(f.split('-')[-1].split('.')[0])
                         mod = f
 
         if video_code is not None:

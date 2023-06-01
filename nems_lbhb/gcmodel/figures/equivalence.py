@@ -717,7 +717,7 @@ def equiv_vs_self(cellid, batch, modelname, LN_model, random_seed=1234):
     val = ctx['val']
     epochs = est['stim'].epochs
     stims = np.array(ep.epoch_names_matching(epochs, 'STIM_'))
-    indices = np.linspace(0, len(stims)-1, len(stims), dtype=np.int)
+    indices = np.linspace(0, len(stims)-1, len(stims), dtype=int)
 
     st0 = np.random.get_state()
     np.random.seed(random_seed)
@@ -725,7 +725,7 @@ def equiv_vs_self(cellid, batch, modelname, LN_model, random_seed=1234):
                                 replace=False)
     np.random.set_state(st0)
 
-    mask = np.zeros_like(stims, np.bool)
+    mask = np.zeros_like(stims, bool)
     mask[set1_idx] = True
     set1_stims = stims[mask].tolist()
     set2_stims = stims[~mask].tolist()
@@ -797,11 +797,11 @@ def partial_corr(C):
 
     C = np.asarray(C)
     p = C.shape[1]
-    P_corr = np.zeros((p, p), dtype=np.float)
+    P_corr = np.zeros((p, p), dtype=float)
     for i in range(p):
         P_corr[i, i] = 1
         for j in range(i+1, p):
-            idx = np.ones(p, dtype=np.bool)
+            idx = np.ones(p, dtype=bool)
             idx[i] = False
             idx[j] = False
             beta_i = linalg.lstsq(C[:, idx], C[:, j])[0]

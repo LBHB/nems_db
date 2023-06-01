@@ -14,11 +14,11 @@ from nems0.fitters.util import phi_to_vector, vector_to_phi
 
 
 def to_bounds_array(value, phi, which):
-    if which is 'lower':
+    if which == 'lower':
         default_value = -np.inf
         i = 0
 
-    elif which is 'upper':
+    elif which == 'upper':
         default_value = np.inf
         i = 1
 
@@ -28,14 +28,14 @@ def to_bounds_array(value, phi, which):
         value = np.array(value)
 
     if value is None:
-        return np.full_like(phi, default_value, dtype=np.float)
+        return np.full_like(phi, default_value, dtype=float)
 
     if isinstance(value, np.ndarray):
         if value.shape != phi.shape:
             raise ValueError('Bounds wrong shape')
         return value
 
-    return np.full_like(phi, value, dtype=np.float)
+    return np.full_like(phi, value, dtype=float)
 
 
 def simple_vector(modelspec, subset=None):

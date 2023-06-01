@@ -23,7 +23,6 @@ sql = "SELECT sCellFile.*, gSingleRaw.isolation, gPenetration.well, gPenetration
        " WHERE sCellFile.cellid like 'PRN%%' order by cellid"
 df_cell = db.pd_query(sql)
 
-
 datestr0 = df_cell.loc[0,'pendate']
 def days_since(datestr):
     d1 = datetime.strptime(datestr, "%Y-%m-%d")
@@ -34,29 +33,42 @@ def days_since(datestr):
 df_cell['siteid']=df_cell['cellid'].apply(db.get_siteid)
 df_cell['day']=df_cell['pendate'].apply(days_since)
 df_cell['SU']=df_cell['isolation']>=95
+df_cell['isAC'] = (df_cell['area'] == 'A1') | (df_cell['area'] == 'BS') | \
+     (df_cell['area'] == 'PEG')
+df_cell['AC_SU'] = df_cell['SU'] & df_cell['isAC']
 
 df_single_cell = df_cell.groupby('cellid').agg(
     {'well': 'first',
      'siteid': 'first',
      'day': 'first',
+     'isAC': 'first',
+     'AC_SU': 'first',
      'SU': 'first',
      'rawid': 'count'})
 df_site = df_single_cell.groupby('siteid').agg(
     {'well': 'first',
      'day': 'first',
+     'isAC': 'sum',
+     'AC_SU': 'sum',
      'SU': 'sum',
      'rawid': 'count'})
-df_site.columns = ['well','day','SU','N']
+df_site.columns = ['well','day','isAC','AC_SU','SU','N']
 
+d0 = df_site[['well','day','AC_SU']].reset_index()
 d1 = df_site[['well','day','SU']].reset_index()
 d2 = df_site[['well','day','N']].reset_index()
+d0['Type']='AC+SU'
 d1['Type']='SU'
 d2['Type']='SU+MU'
 cols = ['siteid','Well','Day','N units','Type']
+d0.columns=cols
 d1.columns=cols
 d2.columns=cols
-d = pd.concat([d1, d2], ignore_index=True)
+d = pd.concat([d0, d1, d2], ignore_index=True)
 
 f,ax=plt.subplots(1,1)
 sns.scatterplot(data=d, x='Day', y='N units', hue='Well', style='Type', palette='deep', ax=ax)
-ax.set_title('Prince left hemisphere')
+ax.set_title('Prince cell census')
+for i,r in df_site.iterrows():
+    ax.text(r.day, r.N, i, fontsize=7, rotation=90, va='bottom', ha='center')
+

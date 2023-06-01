@@ -99,7 +99,7 @@ def isi_histogram(resp, fs=1000, epoch="REFERENCE", ax=None, channel=0,
     for i in range(data.shape[0]):
         spike_times,=np.where(data[i,:] > 0)
         dual_spike_times, = np.where(data[i,:]>1)
-        dual_spike_count = np.int(np.sum(data[i,dual_spike_times]))
+        dual_spike_count = int(np.sum(data[i,dual_spike_times]))
         dd = np.concatenate((dd,np.diff(spike_times),np.zeros(dual_spike_count)))
 
     dd /= fs

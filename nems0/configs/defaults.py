@@ -13,6 +13,7 @@ import socket
 import datetime
 import os.path
 import os
+import sys
 
 
 ################################################################################
@@ -72,6 +73,8 @@ DEFAULT_SCRIPT_PATH = '/auto/users/nems/nems_db/nems_fit_single.py'
 
 # (cmd line function called every queue tick--to update queue load in tComputers)
 QUEUE_TICK_EXTERNAL_CMD = '/auto/users/svd/python/nems_db/bin/qsetload'
+
+JOB_LIB_PATH = '/tmp'
 
 ################################################################################
 # Plugins Registries
@@ -142,7 +145,9 @@ def configure_logging(filename=None):
         config['root']['handlers'].append('file')
 
     logging.config.dictConfig(config)
-
+    #logger = logging.getLogger()
+    #sys.stderr.write = logger.error
+    #sys.stdout.write = logger.info
 
 def init_settings():
     log = logging.getLogger(__name__)

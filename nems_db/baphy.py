@@ -254,7 +254,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0):
                 for trialidx in uniquetrials:
                     ff = (st[0, :] == trialidx)
                     this_spike_events = (st[1, ff]
-                                         + Offset_spikefs[np.int(trialidx-1)])
+                                         + Offset_spikefs[int(trialidx-1)])
                     if len(comment) > 0:
                         if comment == 'PC-cluster sorted by mespca.m':
                             # remove last spike, which is stray
@@ -440,7 +440,7 @@ def baphy_load_data(parmfilepath, **options):
             is_rem = resample(is_rem, new_len)
             is_rem[is_rem>0.01] = 1
             is_rem[is_rem<=0.01] = 0
-            state_dict['rem'] = is_rem.astype(np.bool)
+            state_dict['rem'] = is_rem.astype(bool)
         except:
             log.info("no rem analysis found")
 
@@ -1180,7 +1180,7 @@ def spike_time_to_raster(spike_dict, fs=100, event_times=None):
     if event_times is not None:
         maxtime = np.max(event_times["end"])
 
-    maxbin = np.int(np.ceil(fs*maxtime))
+    maxbin = int(np.ceil(fs*maxtime))
     unitcount = len(spike_dict.keys())
     raster = np.zeros([unitcount, maxbin])
 
@@ -1507,7 +1507,7 @@ def baphy_load_recording(**options):
             # generate pupil signals
             t_rem = nems.signal.RasterizedSignal(
                     fs=options['rasterfs'],
-                    data=np.reshape(state_dict['rem'].astype(np.bool),[1,-1]),
+                    data=np.reshape(state_dict['rem'].astype(bool),[1,-1]),
                     name='rem', recording=rec_name, chans=['rem'],
                     epochs=event_times)
 

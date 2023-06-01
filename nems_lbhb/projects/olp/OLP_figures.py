@@ -11,6 +11,7 @@ import nems_lbhb.projects.olp.OLP_helpers as ohel
 import copy
 from scipy import stats
 import glob
+import nems_lbhb.projects.olp.OLP_fit as ofit
 import pandas as pd
 
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))
@@ -512,15 +513,24 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
 
 
 def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_kind='11',
-                                 synth_kind='N', sigma=None, example=False, sort=True):
-    '''Takes out the BG, FG, combo, diff psth heatmaps from the interactive plot and makes it it's own
+                                 synth_kind='N', sigma=None, example=False, sort=True, lin_sum=True, positive_only=False):
+    '''2023_05_10. Moved from OLP_home. It appears what I changed was the Lin sum options
+
+    Takes out the BG, FG, combo, diff psth heatmaps from the interactive plot and makes it it's own
     figure. You provide the weight_df, site, and sounds, and then optionally you can throw a cellid
     or list of them in and it'll go ahead and only label those on the y axis so you can better see
     it. Turn example to True if you'd like it to be a more generically titled than using the actually
     epoch names, which are not good for posters. Added 2022_09_01
 
     Added sorting for the difference panel which will in turn sort all other panels 2022_09_07. Also,
-    added mandatory normalization of responses by the max for each unit across the three epochs.'''
+    added mandatory normalization of responses by the max for each unit across the three epochs.
+
+    2023_01_23. Added lin_sum option. This totally changes the figure and gets rid of the difference array plot
+    and instead plots the heatmap of the linear sum and uses that for comparisons.
+
+    response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
+                                     batch=340, bin_kind='11',
+                                     synth_kind='A', sigma=2, sort=True, example=True, lin_sum=True)'''
     df['expt_num'] = [int(aa[4:6]) for aa in df['cellid']]
     if synth_kind == 'n/a':
         all_cells = df.loc[(df['cellid'].str.contains(site)) & (df.BG == bg) & (df.FG == fg) & (df.kind == bin_kind)]
@@ -541,11 +551,37 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
     epo = list(all_cells.epoch)[0]
     epochs = [f"STIM_{epo.split('_')[1]}_null", f"STIM_null_{epo.split('_')[2]}", epo]
     r = norm_spont.extract_epochs(epochs)
+
+    # # Gets the spont rate for each channel - maybe useful
+    # resp = copy.copy(rec['resp'].rasterize())
+    # rec['resp'].fs = 100
+    # SR_list = []
+    # for cc in resp.chans:
+    #     inp = resp.extract_channels([cc])
+    #     norm_spont, SR, STD = ohel.remove_spont_rate_std(inp)
+    #     SR_list.append(SR)
+
     resp_plot = np.stack([np.nanmean(aa, axis=0) for aa in list(r.values())])
+
+    # # Subtracts SR from each
+    # for nn, sr in enumerate(SR_list):
+    #     resp_plot[:, nn, :] = resp_plot[:, nn, :] - sr
 
     prestim = resp.epochs[resp.epochs['name'] == 'PreStimSilence'].copy().iloc[0]['end']
     time = (np.arange(0, r[epochs[0]].shape[-1]) / rec['resp'].fs) - prestim
     dur = manager.get_baphy_exptparams()[-1]['TrialObject'][1]['ReferenceHandle'][1]['Duration']
+
+    # Gets rid of SR for the epochs we care about
+    for ww in range(resp_plot.shape[1]):
+        chan_prestim = resp_plot[:, ww, :int(prestim*fs)]
+        SR = np.mean(chan_prestim)
+        resp_plot[:, ww, :] = resp_plot[:, ww, :] - SR
+
+    if lin_sum:
+        ls = np.expand_dims(resp_plot[0, :, :] + resp_plot[1, :, :], axis=0)
+        resp_plot = np.append(resp_plot, ls, axis=0)
+
+    resps = resp_plot
 
     # Adding code to normalize each cell to the max of that cell to any of the epochs
     for nn in range(resp_plot.shape[1]):
@@ -560,12 +596,18 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
 
     num_ids = [cc[8:] for cc in all_cells.cellid.tolist()]
     if sort == True:
-        sort_array = diff_array[:,int(prestim*fs):int((prestim+dur)*fs)]
+        if lin_sum:
+            sort_array = resp_plot[-2, :, int(prestim * fs):int((prestim + dur) * fs)]
+        else:
+            sort_array = diff_array[:,int(prestim*fs):int((prestim+dur)*fs)]
         means = list(np.nanmean(sort_array, axis=1))
         indexes = list(range(len(means)))
         sort_df = pd.DataFrame(list(zip(means, indexes)), columns=['mean', 'idx'])
-        sort_df = sort_df.sort_values('mean', ascending=False)
-        sort_list = sort_df.idx
+        sort_df = sort_df.sort_values('mean', ascending=True)
+        if positive_only:
+            sort_list = [int(aa[1]['idx']) for aa in sort_df.iterrows() if aa[1]['mean'] > 0]
+        else:
+            sort_list = sort_df.idx
         diff_array = diff_array[sort_list, :]
         resp_plot = resp_plot[:, sort_list, :]
         num_array = np.asarray(num_ids)
@@ -579,76 +621,129 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
                 cellid = [aa for aa in cellid]
         num_ids = [ii if ii in cellid else '' for ii in num_ids]
         font_size=8
+        num_ids[-1], num_ids[0] = '1', f'{len(num_ids)}'
 
     # Smooth if you have given it a sigma by which to smooth
     if sigma:
-        resp_plot = sf.gaussian_filter1d(resp_plot, sigma, axis=2)
+        resp_plot = sf.gaussian_filter1d(resps, sigma, axis=2)
         diff_array = sf.gaussian_filter1d(diff_array, sigma, axis=1)
+
+    # Adding code to normalize each cell to the max of that cell to any of the epochs
+    for nn in range(resp_plot.shape[1]):
+        # max_val = np.max(np.abs(resp_plot[:,nn,int(prestim*fs):int((prestim+dur)*fs)]))
+        max_val = np.max(np.abs(resp_plot[:, nn, :]))
+        resp_plot[:, nn, :] = resp_plot[:, nn, :] / max_val
+
     # Get the min and max of the array, find the biggest magnitude and set max and min
     # to the abs and -abs of that so that the colormap is centered at zero
     cmax, cmin = np.max(resp_plot), np.min(resp_plot)
     biggest = np.maximum(np.abs(cmax),np.abs(cmin))
     cmax, cmin = np.abs(biggest), -np.abs(biggest)
 
-    # Plot BG, FG, Combo
-    fig, axes = plt.subplots(figsize=(9, 12))
-    BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
-    FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
-    combheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
-    diffheat = plt.subplot2grid((11, 6), (7, 0), rowspan=2, colspan=5)
-    cbar_main = plt.subplot2grid((11, 6), (2, 5), rowspan=2, colspan=1)
-    cbar_diff = plt.subplot2grid((11, 6), (7, 5), rowspan=2, colspan=1)
-    ax = [BGheat, FGheat, combheat, diffheat, cbar_main, cbar_diff]
+    #if you don't want difference array and just the responses and the linear sum
+    if lin_sum:
+        if sort == True:
+            resp_plot = resp_plot[:, sort_list, :]
 
-    for (ww, qq) in enumerate(range(0,len(epochs))):
-        dd = ax[qq].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
-                           cmap='bwr', aspect='auto', origin='lower',
-                           extent=[time[0], time[-1], 0, len(all_cells)])
-        ax[qq].vlines([int(prestim), int(prestim+dur)], ymin=0, ymax=len(all_cells),
-                      color='black', lw=1, ls=':')
-        # ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
-        ax[qq].set_yticks([*range(0, len(all_cells))])
-        ax[qq].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
-        ax[qq].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
-        if example == True:
-            titles = [f"BG - {bg}", f"FG - {fg}", f"Combo\nBG+FG"]
-            ax[qq].set_ylabel(f"{titles[ww]}", fontsize=12, fontweight='bold', rotation=90,
-                              horizontalalignment='center') # , labelpad=40)
-            ax[0].set_title(f'Site {all_cells.iloc[0].cellid[:7]} Responses', fontweight='bold', fontsize=12)
-        else:
-            ax[qq].set_title(f"{epochs[ww]}", fontsize=8, fontweight='bold')
-            ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
-        ax[qq].spines['top'].set_visible(True), ax[qq].spines['right'].set_visible(True)
-    ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
-    ax[0].set_xticks([]), ax[1].set_xticks([])
-    # Add the colorbar to the axis to the right of these, the diff will get separate cbar
-    fig.colorbar(dd, ax=ax[4], aspect=7)
-    ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
-    ax[4].spines['bottom'].set_visible(False), ax[4].spines['left'].set_visible(False)
-    ax[4].set_yticks([]), ax[4].set_xticks([])
+        epochs.append('Linear Sum')
 
-    # Plot the difference heatmap with its own colorbar
-    dmax, dmin = np.max(diff_array), np.min(diff_array)
-    biggestd = np.maximum(np.abs(dmax),np.abs(dmin))
-    # dmax, dmin = np.abs(biggestd), -np.abs(biggestd)
-    dmax, dmin = 1, -1
-    ddd = ax[3].imshow(diff_array, vmin=dmin, vmax=dmax,
-                           cmap='PuOr', aspect='auto', origin='lower',
-                           extent=[time[0], time[-1], 0, len(all_cells)])
-    ax[3].vlines([0, int(dur)], ymin=0, ymax=len(all_cells),
-                 color='black', lw=1, ls=':')
-    ax[3].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
-    ax[3].set_yticks([*range(0, len(all_cells))])
-    ax[3].set_ylabel('Unit', fontweight='bold', fontsize=9)
-    ax[3].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
-    ax[3].set_title(f"Difference (Combo - Linear Sum)", fontsize=12, fontweight='bold')
-    ax[3].set_xlabel('Time (s)', fontsize=9, fontweight='bold')
-    ax[3].spines['top'].set_visible(True), ax[3].spines['right'].set_visible(True)
+        fig, axes = plt.subplots(figsize=(9, 12))
+        BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
+        FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
+        lsheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
+        combheat = plt.subplot2grid((11, 6), (6, 0), rowspan=2, colspan=5)
+        cbar_main = plt.subplot2grid((11, 6), (2, 5), rowspan=4, colspan=1)
+        ax = [BGheat, FGheat, lsheat, combheat, cbar_main]
 
-    fig.colorbar(ddd, ax=ax[5], aspect=7)
-    ax[5].spines['top'].set_visible(False), ax[5].spines['right'].set_visible(False)
-    ax[5].spines['bottom'].set_visible(False), ax[5].spines['left'].set_visible(False)
-    ax[5].set_yticks([]), ax[5].set_xticks([])
+        for (ww, qq) in enumerate(epochs):
+            dd = ax[ww].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
+                               cmap='bwr', aspect='auto', origin='lower',
+                               extent=[time[0], time[-1], 0, len(all_cells)])
+            ax[ww].vlines([int(prestim), int(prestim+dur)], ymin=0, ymax=len(all_cells),
+                          color='black', lw=1, ls=':')
+            # ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
+            ax[ww].set_yticks([*range(0, len(sort_list))])
+            ax[ww].set_yticklabels(num_ids, fontsize=font_size) #, fontweight='bold')
+            ax[ww].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
+            if example == True:
+                titles = [f"BG - {bg}", f"FG - {fg}", f"Combo\nBG+FG", 'Linear Sum']
+                ax[ww].set_ylabel(f"{titles[ww]}", fontsize=12, fontweight='bold', rotation=90,
+                                  horizontalalignment='center') # , labelpad=40)
+                ax[0].set_title(f'Site {all_cells.iloc[0].cellid[:7]} Responses', fontweight='bold', fontsize=12)
+            else:
+                ax[ww].set_title(f"{qq}", fontsize=8, fontweight='bold')
+                ax[ww].set_ylabel('Unit', fontweight='bold', fontsize=8)
+            ax[ww].spines['top'].set_visible(True), ax[ww].spines['right'].set_visible(True)
+
+        # ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
+        ax[0].set_xticks([]), ax[1].set_xticks([]), ax[2].set_xticks([])
+        # Add the colorbar to the axis to the right of these, the diff will get separate cbar
+        fig.colorbar(dd, ax=ax[4], aspect=10)
+        ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
+        ax[4].spines['bottom'].set_visible(False), ax[4].spines['left'].set_visible(False)
+        ax[4].set_yticks([]), ax[4].set_xticks([])
+        ax[3].set_xlabel('Time (s)', fontsize=9, fontweight='bold')
+
+    # Plot BG, FG, Combo and difference array
+    else:
+        fig, axes = plt.subplots(figsize=(9, 12))
+        BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
+        FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
+        combheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
+        diffheat = plt.subplot2grid((11, 6), (7, 0), rowspan=2, colspan=5)
+        cbar_main = plt.subplot2grid((11, 6), (2, 5), rowspan=2, colspan=1)
+        cbar_diff = plt.subplot2grid((11, 6), (7, 5), rowspan=2, colspan=1)
+        ax = [BGheat, FGheat, combheat, diffheat, cbar_main, cbar_diff]
+
+        for (ww, qq) in enumerate(range(0,len(epochs))):
+            dd = ax[qq].imshow(resp_plot[ww, :, :], vmin=cmin, vmax=cmax,
+                               cmap='bwr', aspect='auto', origin='lower',
+                               extent=[time[0], time[-1], 0, len(all_cells)])
+            ax[qq].vlines([int(prestim), int(prestim+dur)], ymin=0, ymax=len(all_cells),
+                          color='black', lw=1, ls=':')
+            # ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
+            ax[qq].set_yticks([*range(0, len(all_cells))])
+            ax[qq].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
+            ax[qq].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
+            if example == True:
+                titles = [f"BG - {bg}", f"FG - {fg}", f"Combo\nBG+FG"]
+                ax[qq].set_ylabel(f"{titles[ww]}", fontsize=12, fontweight='bold', rotation=90,
+                                  horizontalalignment='center') # , labelpad=40)
+                ax[0].set_title(f'Site {all_cells.iloc[0].cellid[:7]} Responses', fontweight='bold', fontsize=12)
+            else:
+                ax[qq].set_title(f"{epochs[ww]}", fontsize=8, fontweight='bold')
+                ax[qq].set_ylabel('Unit', fontweight='bold', fontsize=8)
+            ax[qq].spines['top'].set_visible(True), ax[qq].spines['right'].set_visible(True)
+        ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
+        ax[0].set_xticks([]), ax[1].set_xticks([])
+        # Add the colorbar to the axis to the right of these, the diff will get separate cbar
+        fig.colorbar(dd, ax=ax[4], aspect=7)
+        ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
+        ax[4].spines['bottom'].set_visible(False), ax[4].spines['left'].set_visible(False)
+        ax[4].set_yticks([]), ax[4].set_xticks([])
+
+        # Plot the difference heatmap with its own colorbar
+        dmax, dmin = np.max(diff_array), np.min(diff_array)
+        biggestd = np.maximum(np.abs(dmax),np.abs(dmin))
+        # dmax, dmin = np.abs(biggestd), -np.abs(biggestd)
+        dmax, dmin = 1, -1
+        ddd = ax[3].imshow(diff_array, vmin=dmin, vmax=dmax,
+                               cmap='PuOr', aspect='auto', origin='lower',
+                               extent=[time[0], time[-1], 0, len(all_cells)])
+        ax[3].vlines([0, int(dur)], ymin=0, ymax=len(all_cells),
+                     color='black', lw=1, ls=':')
+        ax[3].set_xlim(-0.2, (dur + 0.3))  # arbitrary window I think is nice
+        ax[3].set_yticks([*range(0, len(all_cells))])
+        ax[3].set_ylabel('Unit', fontweight='bold', fontsize=9)
+        ax[3].set_yticklabels(num_ids, fontsize=font_size, fontweight='bold')
+        ax[3].set_title(f"Difference (Combo - Linear Sum)", fontsize=12, fontweight='bold')
+        ax[3].set_xlabel('Time (s)', fontsize=9, fontweight='bold')
+        ax[3].spines['top'].set_visible(True), ax[3].spines['right'].set_visible(True)
+
+        fig.colorbar(ddd, ax=ax[5], aspect=7)
+        ax[5].spines['top'].set_visible(False), ax[5].spines['right'].set_visible(False)
+        ax[5].spines['bottom'].set_visible(False), ax[5].spines['left'].set_visible(False)
+        ax[5].set_yticks([]), ax[5].set_xticks([])
 
 
 def resp_weight_scatter(weight_df, xcol='bg_FR', ycol='weightsB', threshold=0.03, quads=3):
@@ -669,11 +764,17 @@ def resp_weight_scatter(weight_df, xcol='bg_FR', ycol='weightsB', threshold=0.03
 
 
 def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB', 'weightsB'],
-                              synth_kind='N', threshold=0.03, quads=3):
+                              synth_kind='N', threshold=0.03, quads=3, r_thresh=0.6, area='A1'):
     '''Updated resp_weight_scatter to just plot all four combinations of FR/wt on one plot to avoid
     the silliness of four individual plots. Works the same, basically just give it a df.'''
     quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=quads)
     quad = quad.loc[quad.synth_kind == synth_kind].copy()
+
+    if r_thresh:
+        quad = quad.dropna(axis=0, subset='r')
+        quad = quad.loc[quad.r >= r_thresh]
+    if area:
+        quad = quad.loc[quad.area == area]
 
     fig, axes = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
     axes = axes.ravel()
@@ -698,6 +799,7 @@ def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB
     axes[2].set_ylabel(f"{ycol[2]}", fontsize=12, fontweight='bold')
     axes[2].set_xlabel(f"{xcol[0]}", fontsize=12, fontweight='bold')
     axes[3].set_xlabel(f"{xcol[1]}", fontsize=12, fontweight='bold')
+    fig.suptitle(f"FR Thresh: {threshold} - Area: {area} - r_thresh: {r_thresh}", fontweight='bold', fontsize=12)
 
 
 def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None, r_cut=None):
@@ -739,7 +841,7 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
     fig.tight_layout()
 
 
-def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold=0.03,
+def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1', threshold=0.03,
                          jitter=[0.25,0.2,0.03],
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
                          title_text='', r_cut=None):
@@ -766,8 +868,8 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, area='A1', threshold
         quad = quad.loc[quad[y_metric] <= metric_filter]
         quad = quad.loc[quad[y_metric] >= -metric_filter]
 
-    if y_metric=='BG_rel_gain':
-        y_metric2, title, ylabel = 'FG_rel_gain', 'Relative Gain', 'Relative Gain'
+    if y_metric==f'BG_rel_gain{suffix}':
+        y_metric2, title, ylabel = f'FG_rel_gain{suffix}', f'Relative Gain{suffix}', f'Relative Gain{suffix}'
     elif y_metric=='weightsB':
         y_metric2, title, ylabel = 'weightsA', 'How this sound effects a concurrent sound', 'Weight'
     elif y_metric=='weightsA':
@@ -896,7 +998,7 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
     fig, ax = plt.subplots(1, 4, figsize=(13, 6), sharey=True)
     ax = np.ravel(ax)
 
-    colors = ['mediumorchid', 'darkorange', 'orangered', 'green']
+    colors = ['mediumorchid', 'darkorange', 'orangered', 'green', 'yellow', 'blue']
 
     stat_list, filt_list = [], []
     for num, aa in enumerate(areas):
@@ -1016,7 +1118,7 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
 
         ax[num+len(areas)].legend(fontsize=8, loc='upper right')
         ax[2].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
-        ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
+        # ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
         ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
         ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
 
@@ -1063,6 +1165,73 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
     fig.tight_layout()
 
     return stat_list
+
+
+def plot_weight_prediction_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, pred=False, weight_lim=[-1,2]):
+    '''2023_05_10. Moved from OLP_home. I believe this is the same as plot_all_weight_comparisons above but
+    can handle when there is a prediction signal. Doesn't work if not.'''
+    areas = list(df.area.unique())
+
+    # This can be mushed into one liners using list comprehension and show_suffixes
+    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+
+    fig, ax = plt.subplots(1, 2, figsize=(7, 6), sharey=True)
+    ax = np.ravel(ax)
+
+    stat_list, filt_list = [], []
+    for num, aa in enumerate(areas):
+        area_df = quad3.loc[quad3.area == aa]
+        if strict_r == False:
+            filt = area_df.loc[(area_df[f'r_start'] >= r_thresh) & (area_df[f'r_end'] >= r_thresh)]
+        else:
+            filt = area_df.loc[(area_df[f'r_start'] >= r_thresh) & (area_df[f'r_end'] >= r_thresh) &
+                               (area_df[f'r_start_pred'] >= r_thresh) & (area_df[f'r_end_pred'] >= r_thresh)]
+
+        if weight_lim:
+            # suffs = ['', '_start', '_end', '_pred', '_start_pred', '_end_pred']
+            suffs = [aa[8:] for aa in filt.columns.to_list() if "weightsA" in aa and not 'nopost' in aa]
+            for ss in suffs:
+                filt = filt.loc[((filt[f'weightsA{ss}'] >= weight_lim[0]) & (filt[f'weightsA{ss}'] <= weight_lim[1])) &
+                                ((filt[f'weightsB{ss}'] >= weight_lim[0]) & (filt[f'weightsB{ss}'] <= weight_lim[1]))]
+
+        pred_suff, colors = ['', '_pred'], ['black', 'red']
+        for nn, pr in enumerate(pred_suff):
+            ax[num].scatter(x=['BG_start', 'BG_end'],
+                                 y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
+                                 label=f'Total{pr} (n={len(filt)})', color=colors[nn])  # , marker=symbols[cnt])
+            ax[num].scatter(x=['FG_start', 'FG_end'],
+                                 y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
+                                 color=colors[nn])  # , marker=symbols[cnt])
+            ax[num].errorbar(x=['BG_start', 'BG_end'],
+                                  y=[np.nanmean(filt[f'weightsA_start{pr}']), np.nanmean(filt[f'weightsA_end{pr}'])],
+                                  yerr=[stats.sem(filt[f'weightsA_start{pr}']), stats.sem(filt[f'weightsA_end{pr}'])],
+                                  xerr=None, color=colors[nn])
+            ax[num].errorbar(x=['FG_start', 'FG_end'],
+                                  y=[np.nanmean(filt[f'weightsB_start{pr}']), np.nanmean(filt[f'weightsB_end{pr}'])],
+                                  yerr=[stats.sem(filt[f'weightsB_start{pr}']), stats.sem(filt[f'weightsB_end{pr}'])],
+                                  xerr=None, color=colors[nn])
+
+            ax[num].legend(fontsize=8, loc='upper right')
+
+            BGsBGe = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsA_end{pr}'])
+            FGsFGe = stats.ttest_ind(filt[f'weightsB_start{pr}'], filt[f'weightsB_end{pr}'])
+            BGsFGs = stats.ttest_ind(filt[f'weightsA_start{pr}'], filt[f'weightsB_start{pr}'])
+            BGeFGe = stats.ttest_ind(filt[f'weightsA_end{pr}'], filt[f'weightsB_end{pr}'])
+
+            tts = {f"BGsBGe_{aa}{pr}": BGsBGe.pvalue, f"FGsFGe_{aa}{pr}": FGsFGe.pvalue,
+                   f"BGsFGs_{aa}{pr}": BGsFGs.pvalue, f"BGeFGe_{aa}{pr}": BGeFGe.pvalue}
+            print(tts)
+            stat_list.append(tts), filt_list.append(filt)
+
+        ax[0].set_ylabel(f'Mean Weight', fontsize=14, fontweight='bold')
+        ax[num].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
+        ax[num].tick_params(axis='both', which='major', labelsize=10)
+        ax[num].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12,
+                                     fontweight='bold')
+
+    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}, synth={df.synth_kind.unique()}", fontweight='bold', fontsize=10)
+    fig.tight_layout()
 
 
 def plot_partial_fit_bar(df, fr_thresh=0.03, r_thresh=0.6, suffixes=['_nopost', '_start', '_end'],
@@ -1642,3 +1811,47 @@ def spectrogram_stats_diagram(name, type, bg_fold=2, fg_fold=3, synth_kind='A'):
     ax[2].spines['top'].set_visible(True), ax[2].spines['bottom'].set_visible(True)
     ax[2].spines['left'].set_visible(True), ax[2].spines['right'].set_visible(True)
     ax[2].set_title(f"Average Standard\nDeviation: {np.around(np.std(spec, axis=0).mean(), 1)}", fontweight='bold', fontsize=12)
+
+
+def sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Tstationary', show='N'):
+    '''2022_12_06. Either going to be very useful for many things or not at all. Will take three different mentrics
+    from the sound_df dataframe and plot the connected points and then throw a bar in the background to summarize.'''
+    fig, ax = plt.subplots(1, 1, figsize=(5, 7))
+
+    to_plot = sound_df.loc[sound_df.synth_kind==show]
+    to_plot_bg, to_plot_fg = to_plot.loc[to_plot.type=='BG'], to_plot.loc[to_plot.type=='FG']
+
+    n = 2
+    xv = np.arange(n)
+    nc = len(suffixes)
+    xvv = np.repeat(xv, nc)
+    if len(suffixes)==3:
+        offsets, width = np.asarray([-0.3, 0, 0.3]), 0.2
+    elif len(suffixes) == 2:
+        offsets, width = np.asarray([-0.2, 0.2]), 0.3
+    else:
+        offsets, width = np.asarray([0]), 0.5
+    offsetsvv = np.tile(offsets, n)
+    X = list(xvv + offsetsvv)
+
+    colors = ['deepskyblue'] * len(suffixes) + ['yellowgreen'] * len(suffixes)
+    plot_list_bg = [np.nanmean(to_plot_bg[f'{metric}{ss}']) for ss in suffixes]
+    plot_list_fg = [np.nanmean(to_plot_fg[f'{metric}{ss}']) for ss in suffixes]
+
+    ax.bar(x=X[:len(suffixes)], height=plot_list_bg, color='deepskyblue', width=width)
+    ax.bar(x=X[len(suffixes):], height=plot_list_fg, color='yellowgreen', width=width)
+
+    plot_bg = [to_plot_bg[f'{metric}{ss}'] for ss in suffixes]
+    plot_fg = [to_plot_fg[f'{metric}{ss}'] for ss in suffixes]
+
+    for cnt in range(to_plot_bg.shape[0]):
+        ax.plot(X[:len(suffixes)], plot_bg, 'ko-', ms=3)
+    for cnt in range(to_plot_fg.shape[0]):
+        ax.plot(X[len(suffixes):], plot_fg, 'ko-', ms=3)
+
+    ax.set_xticks(X)
+    bg_labels, fg_labels = [f'BG\n{ss}' for ss in suffixes], [f'FG\n{ss}' for ss in suffixes]
+    ax.set_xticklabels(bg_labels+fg_labels, fontsize=10, fontweight='bold', rotation=0)
+    ax.set_ylabel(f"{metric}: {show}", fontsize=10, fontweight='bold')
+
+    fig.tight_layout()

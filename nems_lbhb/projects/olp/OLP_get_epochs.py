@@ -35,7 +35,7 @@ def get_rec_epochs(parmfile=None, fs=100, rec=None):
     twostims = [epo for epo in stim_epochs if 'null' not in epo]
 
     epoch_df = pd.DataFrame({'BG + FG': twostims})
-    epoch_df['BG'], epoch_df['FG'], epoch_df['Synth Type'], epoch_df['Binaural Type'] = \
+    epoch_df['BG'], epoch_df['FG'], epoch_df['Synth Type'], epoch_df['Binaural Type'], epoch_df['Dynamic Type'], epoch_df['SNR'] = \
         zip(*epoch_df['BG + FG'].apply(get_stim_type))
 
     return epoch_df
@@ -50,10 +50,11 @@ def get_stim_type(ep_name):
     synth_dict = {'N': 'Unsynthetic', 'C': 'Cochlear', 'T': 'Temporal', 'S': 'Spectral',
                   'U': 'Spectrotemporal', 'M': 'Spectemp Modulation', 'A': 'Non-RMS Unsynthetic'}
     binaural_dict = {'11': 'BG Contra, FG Contra', '12': 'BG Contra, FG Ipsi',
-                     '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Contra'}
+                     '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Ipsi'}
+    dynamic_dict = {'ff': 'fullBG/fullFG', 'hh': 'halfBG/halfFG', 'fh': 'fullBG/halfFG', 'hf': 'halfBG/fullFG'}
 
     if len(ep_name.split('_')) >= 3 and ep_name[:5] == 'STIM_':
-        seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        # seps = (ep_name.split('_')[1], ep_name.split('_')[2])
         seps = re.findall('_(null|\d{2}.*)_(null|\d{2}.*)', ep_name)[0]
         bg_ep, fg_ep = f"STIM_{seps[0]}_null", f"STIM_null_{seps[1]}"
 
@@ -69,14 +70,47 @@ def get_stim_type(ep_name):
         else:
             bino_kind = '11'
 
+        #get dynamic type
+        if len(seps[0].split('-')) >= 2 or len(seps[1].split('-')) >= 2:
+            if seps[0] != 'null' and seps[1] != 'null':
+                if seps[0].split('-')[1] == '0':
+                    btype = 'f'
+                else:
+                    btype = 'h'
+                if seps[1].split('-')[1] == '0':
+                    ftype = 'f'
+                else:
+                    ftype = 'h'
+                dyn_kind = btype + ftype
+            else:
+                if seps[0] == 'null':
+                    if seps[1].split('-')[1] == '0':
+                        ftype = 'f'
+                    else:
+                        ftype = 'h'
+                    dyn_kind = 'n' + ftype
+                elif seps[1] == 'null':
+                    if seps[0].split('-')[1] == '0':
+                        btype = 'f'
+                    else:
+                        btype = 'h'
+                    dyn_kind = btype + 'n'
+
+        #get snr
+        if len(seps[0].split('-')) >= 6:
+            snr = int(seps[0].split('-')[5][:-2])
+        else:
+            snr = 0
+
         synth_type = synth_dict[synth_kind]
         bino_type = binaural_dict[bino_kind]
+        dyn_type = dynamic_dict[dyn_kind]
 
     else:
         synth_type, bino_type = None, None
         bg_ep, fg_ep = f"STIM_{ep_name.split('_')[1]}_null", f"STIM_null_{ep_name.split('_')[2]}"
 
-    return bg_ep, fg_ep, synth_type, bino_type
+    return bg_ep, fg_ep, synth_type, bino_type, dyn_type, snr
 
 def r_ceiling(ra,rb):
     """
@@ -143,7 +177,7 @@ def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
     offset = 1
     dlist = []
     for c, cellid in enumerate(resp.chans):
-        print(cellid)
+        #print(cellid)
         ed = epoch_df.copy()
         ed['cellid']=cellid
         for i, r in ed.iterrows():
@@ -198,7 +232,7 @@ def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
 
     return epoch_df_all
 
-def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
+def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None, stim=None, resp=None):
     """
     cellid='CLT047c-03-1'
     epoch_fg='Gobble'
@@ -214,7 +248,8 @@ def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
         #         }
 
     f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)
-
+    if len(types)==1:
+        ax = np.array([ax]).T
     for i, acol in enumerate(ax.T):
         nat_epoch_df = epoch_df_all.loc[(epoch_df_all.cellid == cellid) &
                                         epoch_df_all['BG + FG'].str.endswith(list(types.keys())[i]) &
@@ -223,7 +258,7 @@ def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
                                         ].reset_index()
         epochs = list(nat_epoch_df.iloc[0][cols])
         for a, e, k in zip(acol, epochs, cols):
-            s = stim.extract_epoch(e)[0,0,:]
+            s = stim.extract_epoch(e)[0,:,:].sum(axis=0)/50
             r = resp.extract_channels([cellid]).extract_epoch(e).mean(axis=0)[0,:]
             a.plot(s)
             a.plot(r)
@@ -331,6 +366,7 @@ if __name__ == '__main__':
         ax[1].plot([0,len(nat_epoch_df)],[0,0],'--', color='gray', lw=0.5)
         ax[1].set_ylim([-0.2, 1.0])
 
+        # both-sum is cc of single stim with simul stim minus cc of single stim with sum of single stims
         nat_epoch_df[['FG cc(both-sum)','BG cc(both-sum)']].plot(lw=0.5,ax=ax[2])
         #nat_epoch_df[['cc(FG,FGBG)','cc(BG,FGBG)']].plot(lw=0.5,ax=ax[2])
         ax[2].plot([0,len(nat_epoch_df)],[0,0],'--', color='gray', lw=0.5)
@@ -354,7 +390,7 @@ if __name__ == '__main__':
     epoch_fg='Gobble'
     epoch_bg='Bees'
     epoch_bg='RockTumble'
-    f = examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types)
+    f = examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types, stim=stim, resp=resp)
 
     """
     f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)
