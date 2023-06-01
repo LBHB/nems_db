@@ -203,7 +203,7 @@ class SignalBase:
 
         # svd - kludge warning! rounding to prevent accidental increase in duration
         # due to floating point limits
-        self.ntimes = np.int(np.round(fs*max_time))
+        self.ntimes = int(np.round(fs*max_time))
 
         if segments is None:
             segments = np.array([[0, self.ntimes]])
@@ -768,7 +768,7 @@ class SignalBase:
              if list of tuples (epoch times), mask is OR combo of all epoch times
         '''
 
-        mask = np.zeros([1, self.ntimes], dtype=np.bool)
+        mask = np.zeros([1, self.ntimes], dtype=bool)
 
         if (epoch is None) or (epoch is False):
             pass
@@ -837,7 +837,7 @@ class SignalBase:
             # find matching epoch periods
             indices = self.get_epoch_indices(epoch, boundary_mode, fix_overlap)
 
-        data = np.zeros([1, self.ntimes], dtype=np.bool)
+        data = np.zeros([1, self.ntimes], dtype=bool)
         for lb, ub in indices:
             if onsets_only:
                 data[:, lb] = True
@@ -1546,8 +1546,8 @@ class RasterizedSignal(SignalBase):
         data = self.as_continuous().copy()
 #        sig_valid_start = np.sum(np.isfinite(data[0,:]))
 
-        mask = np.zeros_like(data, dtype=np.bool)
-        mask2 = np.zeros_like(data, dtype=np.bool)
+        mask = np.zeros_like(data, dtype=bool)
+        mask2 = np.zeros_like(data, dtype=bool)
 
         for ep in epochs:
             lb, ub = ep
@@ -1610,7 +1610,7 @@ class RasterizedSignal(SignalBase):
             if not invert:
                 m[..., split_start:split_end] = np.nan
             else:
-                mask = np.ones_like(m, dtype=np.bool)
+                mask = np.ones_like(m, dtype=bool)
                 mask[:, split_start:split_end] = 0
                 m[mask] = np.nan
             return self._modified_copy(m.reshape(self.nchans, -1))
@@ -2197,7 +2197,7 @@ class PointProcess(SignalBase):
         else:
             max_time=max_epoch_time
 
-        max_bin = np.int(np.round(fs*max_time))
+        max_bin = int(np.round(fs*max_time))
         unit_count = len(self._data.keys())
         raster = np.zeros([unit_count, max_bin])
 
@@ -2950,7 +2950,7 @@ def merge_selections(signals):
     # If there are no overlapping values, then nanmean() will be equal
     # to the value found in each position
     the_mean = np.nanmean(bigary, axis=2)
-    if type(signals[0]._data[0][0]) is np.bool_:
+    if type(signals[0]._data[0][0]) is bool_:
         return signals[0]._modified_copy(the_mean)
     else:
         for a in arys:

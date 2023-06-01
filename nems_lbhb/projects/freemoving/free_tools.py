@@ -1,23 +1,17 @@
+import os
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
-from scipy import interpolate
 
 import logging
 
-from nems0 import db
-import nems0.epoch as ep
-import nems0.plots.api as nplt
+from scipy import interpolate
+
+from nems0.analysis.gammatone.filters import centre_freqs
 from nems0.utils import smooth
-from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
-from nems_lbhb import baphy_io, runclass
+from nems_lbhb import runclass
 
 log = logging.getLogger(__name__)
 
@@ -152,6 +146,42 @@ def dlc2dist(rec, rasterfs=1, norm=False, keep_dims=None, **d_theta_opts):
 
     return newrec
 
+
+def free_scatter_sum(rec):
+    """
+    summarize spatial and velocity distributions with scatter
+    :param rec: recording with dist signal added
+    :return: f: handle to new figure
+    """
+    f,ax = plt.subplots(1,4,figsize=(12,3))
+    ax[0].plot(rec['dlc'][0,::20],500+rec['dlc'][1,::20],'.',markersize=2)
+    ax[0].plot(rec['dlc'][2,::20],500+rec['dlc'][3,::20],'.',markersize=2)
+    ax[0].invert_yaxis()
+    ax[0].set_xlabel('X position (pixels)', fontsize=10)
+    ax[0].set_ylabel('Y position (pixels)', fontsize=10)
+    ax[0].legend(('front','back'), fontsize=10)
+
+    ax[1].plot(rec['dist'][1,::20],rec['dist'][0,::20],'.',markersize=2)
+    ax[1].set_xlabel('Angle from speaker (deg clockwise)', fontsize=10)
+    ax[1].set_ylabel('Distance from speaker (pix)', fontsize=10)
+    ax[1].invert_yaxis()
+
+    ax[2].plot(rec['dist'][3,::20],rec['dist'][2,::20],'.',markersize=2)
+    ax[2].set_xlabel('Rotational velocity (deg clockwise/sec)', fontsize=10)
+    ax[2].set_ylabel('Velocity from speaker (pix/sec)', fontsize=10)
+    ax[2].set_xlim([-100,100])
+    ax[2].set_ylim([-100,100])
+    ax[2].invert_yaxis()
+
+    ax[3].plot(rec['dist'][5,::20],rec['dist'][4,::20],'.',markersize=2)
+    ax[3].set_xlabel('Fwd velocity (pix/sec)', fontsize=10)
+    ax[3].set_ylabel('Rightward velocity (pix/sec)', fontsize=10)
+    ax[3].set_xlim([-150,150])
+    ax[3].set_ylim([-150,150])
+    plt.tight_layout()
+
+    return f
+
 def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
                    f_min=200, f_max=20000, channels=None):
 
@@ -162,7 +192,7 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
     stimcount = int(rec['stim'].shape[0]/channels)
     log.info(f"HRTF: stim is {channels} x {stimcount}")
 
-    L0, R0, c, A = runclass.load_hrtf(format=hrtf_format, fmin=f_min, fmax=f_max, num_freqs=channels)
+    L0, R0, c, A = load_hrtf(format=hrtf_format, fmin=f_min, fmax=f_max, num_freqs=channels)
 
     # assume dlc has already been imputed and normalized to (0,1)
     dlc_data_imp = rec['dlc'][:, :]
@@ -210,38 +240,52 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
         chans=['d1','theta1','d2','theta2'])
     return {'rec': newrec}
 
-def free_scatter_sum(rec):
+
+def load_hrtf(format='az', fmin=200, fmax=20000, num_freqs=18):
     """
-    summarize spatial and velocity distributions with scatter
-    :param rec: recording with dist signal added
-    :return: f: handle to new figure
+    load HRFT and map to center frequencies of a gtgram fitlerbank
+    TODO: support for elevation, cleaner HRTF
+    :param format: str - has to be 'az' (default)
+    :param fmin: default 200
+    :param fmax: default 20000
+    :param num_freqs: default 18
+    :return: L0, R0, c, A -- tuple
+            L0: Left ear HRTF,
+            R0: Right ear HRTF,
+            c: frequency corresponding to each row (axis = 0),
+            A: azimuth corresponding to each column (axis =1)
     """
-    f,ax = plt.subplots(1,4,figsize=(12,3))
-    ax[0].plot(rec['dlc'][0,::20],500+rec['dlc'][1,::20],'.',markersize=2)
-    ax[0].plot(rec['dlc'][2,::20],500+rec['dlc'][3,::20],'.',markersize=2)
-    ax[0].invert_yaxis()
-    ax[0].set_xlabel('X position (pixels)', fontsize=10)
-    ax[0].set_ylabel('Y position (pixels)', fontsize=10)
-    ax[0].legend(('front','back'), fontsize=10)
 
-    ax[1].plot(rec['dist'][1,::20],rec['dist'][0,::20],'.',markersize=2)
-    ax[1].set_xlabel('Angle from speaker (deg clockwise)', fontsize=10)
-    ax[1].set_ylabel('Distance from speaker (pix)', fontsize=10)
-    ax[1].invert_yaxis()
+    c = np.sort(centre_freqs(fmax*2, num_freqs, fmin, fmax))
 
-    ax[2].plot(rec['dist'][3,::20],rec['dist'][2,::20],'.',markersize=2)
-    ax[2].set_xlabel('Rotational velocity (deg clockwise/sec)', fontsize=10)
-    ax[2].set_ylabel('Velocity from speaker (pix/sec)', fontsize=10)
-    ax[2].set_xlim([-100,100])
-    ax[2].set_ylim([-100,100])
-    ax[2].invert_yaxis()
+    if format == 'az':
+        filepath = Path(os.path.dirname(__file__)) / 'hrtf_az.csv'
+        arr = np.loadtxt(filepath, delimiter=",", dtype=float)
 
-    ax[3].plot(rec['dist'][5,::20],rec['dist'][4,::20],'.',markersize=2)
-    ax[3].set_xlabel('Fwd velocity (pix/sec)', fontsize=10)
-    ax[3].set_ylabel('Rightward velocity (pix/sec)', fontsize=10)
-    ax[3].set_xlim([-150,150])
-    ax[3].set_ylim([-150,150])
-    plt.tight_layout()
+        A = np.unique(arr[:, 0])
+        F = np.unique(arr[:, 1])
+        L = np.reshape(arr[:, 2], [len(A), len(F)]).T
+        R = np.reshape(arr[:, 3], [len(A), len(F)]).T
 
-    return f
+        f = interpolate.interp1d(F, L, axis=0)
+        g = interpolate.interp1d(F, R, axis=0)
+        L0 = f(c)
+        R0 = g(c)
+        if np.max(np.abs(A))<180:
+            A = np.concatenate([[-180], A, [180]])
+            L180 = np.mean(L0[:,[0, -1]], axis=1, keepdims=True)
+            L0 = np.concatenate([L180, L0, L180], axis=1)
+            R180 = np.mean(R0[:,[0, -1]], axis=1, keepdims=True)
+            R0 = np.concatenate([R180, R0, R180], axis=1)
 
+        #f,ax=plt.subplots(1,2)
+        #ax[0].imshow(L0, origin='lower', extent=[A[0],A[-1],c[0],c[-1]], aspect='auto')
+        #im=ax[1].imshow(R0, origin='lower', extent=[A[0],A[-1],c[0],c[-1]], aspect='auto')
+        #plt.colorbar(im, ax=ax[1])
+        #f,ax=plt.subplots(1,2)
+        #ax[0].imshow(L, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
+        #ax[1].imshow(R, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
+    else:
+        raise ValueError(f'Only az HRTF currently supported')
+
+    return L0, R0, c, A

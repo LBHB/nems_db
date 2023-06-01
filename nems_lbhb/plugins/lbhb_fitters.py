@@ -341,13 +341,13 @@ def _parse_pupLVbasic(options):
             choose_best = True
 
         elif op.startswith('af'):
-            fast_alpha = np.float('.'.join(op[2:].split(':')))
+            fast_alpha = float('.'.join(op[2:].split(':')))
 
         elif op.startswith('as'):
-            slow_alpha = np.float('.'.join(op[2:].split(':')))
+            slow_alpha = float('.'.join(op[2:].split(':')))
 
         elif op.startswith('a'):
-            alpha = np.float('.'.join(op[1:].split(':')))
+            alpha = float('.'.join(op[1:].split(':')))
 
         elif op.startswith('sc'):
             # force fast LV variance to be (-) corr. with pupil

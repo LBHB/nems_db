@@ -15,7 +15,7 @@ def stp_magnitude(tau, u, u2=None, tau2=None, urat=0.5, fs=100, A=0.5, quick_eva
     """ compute effect of stp (tau,u) on a dummy signal and computer effect magnitude
     """
     c = len(tau)
-    seg = np.int(fs * 0.05)
+    seg = int(fs * 0.05)
     pred = np.concatenate([np.zeros([c, seg * 2]), np.ones([c, seg * 4]) * A/2,
                            np.zeros([c, seg * 4]), np.ones([c, seg]) * A,
                            np.zeros([c, seg]), np.ones([c, seg]) * A,

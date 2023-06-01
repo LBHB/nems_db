@@ -207,7 +207,7 @@ def reformat_RDT_recording(rec):
     targets = np.unique(x[np.isfinite(x)])
     target_map = dict((t, i) for i, t in enumerate(targets))
     target_map[0] = 0
-    x_mapped = np.vectorize(target_map.get, otypes=[np.float])(x)
+    x_mapped = np.vectorize(target_map.get, otypes=[float])(x)
     m = ~np.isfinite(x_mapped)
     x_mapped[m] = 0
     x_mapped = x_mapped.astype('i')

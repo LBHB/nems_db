@@ -23,7 +23,7 @@ def est_halved(half=1, seed_idx=0, random_seed=1234, **ctx):
     est = ctx['est']
     epochs = est['stim'].epochs
     stims = np.array(ep.epoch_names_matching(epochs, 'STIM_'))
-    indices = np.linspace(0, len(stims)-1, len(stims), dtype=np.int)
+    indices = np.linspace(0, len(stims)-1, len(stims), dtype=int)
 
     st0 = np.random.get_state()
     random_seed += seed_idx
@@ -32,7 +32,7 @@ def est_halved(half=1, seed_idx=0, random_seed=1234, **ctx):
                                 replace=False)
     np.random.set_state(st0)
 
-    mask = np.zeros_like(stims, np.bool)
+    mask = np.zeros_like(stims, bool)
     mask[set1_idx] = True
     set1_stims = stims[mask].tolist()
     set2_stims = stims[~mask].tolist()

@@ -976,7 +976,7 @@ def generate_psth_from_resp(rec, resp_sig='resp', epoch_regex='^(STIM_|TAR_|CAT_
     if 'mask' in newrec.signals.keys():
         mask_data = newrec['mask']._data
     else:
-        mask_data = np.ones(respavg_data.shape).astype(np.bool)
+        mask_data = np.ones(respavg_data.shape).astype(bool)
     spont_periods = ((np.isnan(respavg_data)) & (mask_data==True))
     respavg_data[:, spont_periods[0,:]] = 0
     # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
@@ -1135,7 +1135,7 @@ def smooth_epoch_segments(sig, epoch_regex='^STIM_', mask=None):
     if mask is not None:
         mask_data = mask._data
     else:
-        mask_data = np.ones(respavg_data.shape).astype(np.bool)
+        mask_data = np.ones(respavg_data.shape).astype(bool)
 
     spont_periods = ((np.isnan(respavg_data)) & (mask_data==True))
 

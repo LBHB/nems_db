@@ -1469,7 +1469,7 @@ def psi_parm_read(filepath):
             globalparams['Physiology'] = 'Yes -- Passive'
         globalparams['SiteID'] = siteid
 
-    globalparams['HWSetup'] = 17
+    globalparams['HWSetup'] = 16
     globalparams['date'] = ctime.strftime("%Y-%m-%d")
     globalparams['SiteID'] = siteid
     globalparams['HWparams'] = {'DAQSystem': 'Open-Ephys'}
@@ -1696,6 +1696,7 @@ def psi_parm_read(filepath):
     exptevents = exptevents.sort_values(by=['Trial','start']).reset_index(drop=True)
 
     globalparams['rawfilecount'] = Tlen
+    exptparams['HWSetup'] = globalparams.get('HWSetup',-1)
 
     return globalparams, exptparams, exptevents
 
@@ -1808,6 +1809,8 @@ def baphy_parm_read(filepath, evpread=True):
             epoch_map[key] = val
         # replaces exptevents names using the map, i.e. get rid of commas
         exptevents.replace(epoch_map, inplace=True)
+
+    exptparams['HWSetup'] = globalparams.get('HWSetup',-1)
 
     return globalparams, exptparams, exptevents
 
@@ -1947,7 +1950,7 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
         elif op == 'voc':
             options.update({'runclass': 'VOC'})
         elif op == 'bin':
-            options.update({'binaural': 'crude'})
+            options.update({'binaural': 'force', 'binsplit': False})
         elif op.startswith('bin'):
             options.update({'binaural': float(op[3:]), 'binsplit': False})
 
@@ -2425,7 +2428,7 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
                 for trialidx in uniquetrials:
                     ff = (st[0, :] == trialidx)
                     this_spike_events = (st[1, ff]
-                                         + Offset_spikefs[np.int(trialidx - 1)])
+                                         + Offset_spikefs[int(trialidx - 1)])
                     if (comment != []):
                         if (comment == 'PC-cluster sorted by mespca.m'):
                             # remove last spike, which is stray
@@ -2563,7 +2566,7 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                         ff = (st[0, :] == trialidx)
                         try:
                             this_spike_events = (st[1, ff]
-                                                 + Offset_spikefs[np.int(trialidx - 1)])
+                                                 + Offset_spikefs[int(trialidx - 1)])
                         except:
                             import pdb
                             pdb.set_trace()
@@ -3074,7 +3077,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
 
 
 def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False,
-                   rasterfs=30, dlc_threshold=-1, fill_invalid='interpolate', max_gap=2,
+                   rasterfs=30, dlc_threshold=0.2, fill_invalid='interpolate', max_gap=2,
                    **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
@@ -3094,8 +3097,11 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
 
     # if options["dlc_smooth"]:
     #    raise ValueError('pupil_smooth not implemented. try pupil_median?')
-
-    dataframe = pd.read_hdf(dlcfilepath)
+    try:
+        dataframe = pd.read_hdf(dlcfilepath)
+    except:
+        log.info(f"DLC file {dlcfilepath} not found, returning empty data")
+        return {}, []
     scorer = dataframe.columns.get_level_values(0)[0]
     bodyparts = dataframe[scorer].columns.get_level_values(0)
 
@@ -4217,7 +4223,7 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         sql = f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'"
         cellid = list(db.pd_query(sql)['cellid'])
 
-    sql="SELECT * FROM gDataRaw WHERE not(isnull(depthinfo)) and depthinfo<>''"
+    sql="SELECT * FROM gDataRaw WHERE not(bad) AND not(isnull(depthinfo)) and depthinfo<>''"
     if siteid is not None:
         sql += f" AND cellid='{siteid}'"
     if rawid is not None:
@@ -4239,7 +4245,7 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         else:
             dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
 
-        if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA'):
+        if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA') | (dcell[c]['layer']=='BS') :
             dcell[c]['area'] = d['site area']
         elif dcell[c]['layer'].endswith('d'):
             dcell[c]['area'] = d.get('site area deep', 'XX')
@@ -4332,15 +4338,15 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
             if area_list[i]=='':
                 area_list[i]=area_list[i+1]
         area_string = ",".join(area_list)
-        if area_string!=dp.loc[0,'area']:
-            print('saving area labels back to sCellFile and gSingleCell')
-            sql = f"UPDATE gCellMaster set area='{area_string}' WHERE cellid='{siteid}'"
+        #if area_string!=dp.loc[0,'area']:
+        print('saving area labels back to sCellFile and gSingleCell')
+        sql = f"UPDATE gCellMaster set area='{area_string}' WHERE cellid='{siteid}'"
+        db.sql_command(sql)
+        for i, r in df_cell.iterrows():
+            sql = f"UPDATE gSingleCell SET area='{r.area}',layer='{r.layer}', depth={r.depth}, sw={np.round(r.sw,3)} WHERE cellid='{r.cellid}'"
             db.sql_command(sql)
-            for i, r in df_cell.iterrows():
-                sql = f"UPDATE gSingleCell SET area='{r.area}' WHERE cellid='{r.cellid}'"
-                db.sql_command(sql)
-                sql = f"UPDATE sCellFile SET area='{r.area}' WHERE cellid='{r.cellid}'"
-                db.sql_command(sql)
+            sql = f"UPDATE sCellFile SET area='{r.area}' WHERE cellid='{r.cellid}'"
+            db.sql_command(sql)
 
     return df_cell
 

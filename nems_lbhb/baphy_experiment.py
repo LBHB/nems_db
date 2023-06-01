@@ -332,7 +332,8 @@ class BAPHYExperiment:
         log.info(f"DLC file suffix: {suffix}")
         filenames = [self.folder / 'sorted' / s for s in self.experiment_with_runclass]
         if np.any([not f.with_suffix(suffix).exists() for f in filenames]):
-            raise IOError("DLC file doesn't exist")
+            log.info("DLC file doesn't exist for some recording(s)")
+            return [f.with_suffix(suffix) if f.with_suffix(suffix).exists() else "NODLC" for f in filenames]
         else:
             return [f.with_suffix(suffix) for f in filenames]
 
@@ -727,17 +728,18 @@ class BAPHYExperiment:
                     signals['resp'] = signals['resp'].append_time(r)
             
         if pupil:
-            def check_length(ps, rs):
-                for i, (p, r) in enumerate(zip(ps, rs)):
-                    rlen = r.ntimes
-                    plen = p.as_continuous().shape[1]
-                    if plen > rlen:
-                        ps[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
-                    elif rlen > plen:
-                        pcount = p.as_continuous().shape[0]
-                        ps[i] = p._modified_copy(np.append(p.as_continuous(), 
-                                                np.ones([pcount, rlen - plen]) * np.nan, axis=1))
-                return ps
+            # redundant with def above?
+            #def check_length(ps, rs):
+            #    for i, (p, r) in enumerate(zip(ps, rs)):
+            #        rlen = r.ntimes
+            #        plen = p.as_continuous().shape[1]
+            #        if plen > rlen:
+            #            ps[i] = p._modified_copy(p.as_continuous()[:, 0:-(plen-rlen)])
+            #        elif rlen > plen:
+            #            pcount = p.as_continuous().shape[0]
+            #            ps[i] = p._modified_copy(np.append(p.as_continuous(),
+            #                                    np.ones([pcount, rlen - plen]) * np.nan, axis=1))
+            #    return ps
 
             p_traces = self.get_pupil_trace(exptevents=exptevents, **kwargs)
             if np.all([type(p_traces[i][0]) is not np.ndarray for i in range(len(p_traces))]):
@@ -784,8 +786,15 @@ class BAPHYExperiment:
         if dlc:
             d_traces = self.get_dlc_trace(exptevents=exptevents, **kwargs)
 
+            # deal with some files not having dlc data (eg, head-fixed)
+            goodfile = [d for d in d_traces if len(d[1])>0][0]
+            emptyidx=[i for i in range(len(d_traces)) if len(d_traces[i][1])==0]
+            sigs = list(goodfile[0].keys())
+            for i in emptyidx:
+                ed = {k: np.array([[np.nan]*(len(sigs)+1)]) for k in sigs}
+                d_traces[i] = (ed, [])
+
             # multiple dlc signals
-            sigs = list(d_traces[0][0].keys())
             dlc_sigs = [nems0.signal.RasterizedSignal(
                 fs=kwargs['rasterfs'], data=np.concatenate([d[0][sig] for sig in sigs], axis=0),
                 name='dlc', recording=rec_name, chans=sigs,

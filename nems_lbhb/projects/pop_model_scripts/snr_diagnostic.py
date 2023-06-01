@@ -130,8 +130,8 @@ for category, name in zip([high_snr_low_r_test, high_snr_high_r_test], ['high_sn
         for s in stims:
             reps = []
             row = epochs[epochs.name == s]
-            starts = (row['start'].values * fs).astype(np.int)
-            ends = (row['end'].values * fs).astype(np.int)
+            starts = (row['start'].values * fs).astype(int)
+            ends = (row['end'].values * fs).astype(int)
             skip_stim = False
             for i, j in zip(starts, ends):
                 this_rep = resp[i:j]

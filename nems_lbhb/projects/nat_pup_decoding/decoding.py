@@ -2107,7 +2107,7 @@ def simulate_response(X, pup_mask, sim_first_order=False,
         X_small_sim = simulate.generate_simulated_trials(X_small, X, keep_stats=[1], var_first_order=var_first_order, N=nreps)
     
         X = np.concatenate((X_big_sim, X_small_sim), axis=1)
-        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(np.bool)
+        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(bool)
         pup_mask = np.concatenate((p_mask, ~p_mask), axis=1)
 
     elif sim_second_order:
@@ -2127,7 +2127,7 @@ def simulate_response(X, pup_mask, sim_first_order=False,
         X_small_sim = simulate.generate_simulated_trials(X_small, X, keep_stats=[2], var_first_order=var_first_order, N=nreps)
     
         X = np.concatenate((X_big_sim, X_small_sim), axis=1)
-        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(np.bool)
+        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(bool)
         pup_mask = np.concatenate((p_mask, ~p_mask), axis=1)
 
     elif sim_all:
@@ -2146,7 +2146,7 @@ def simulate_response(X, pup_mask, sim_first_order=False,
         X_small_sim = simulate.generate_simulated_trials(X_small, X, keep_stats=[1, 2], var_first_order=var_first_order, N=nreps)
     
         X = np.concatenate((X_big_sim, X_small_sim), axis=1)
-        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(np.bool)
+        p_mask = np.ones((1,) + X_big_sim.shape[1:]).astype(bool)
         pup_mask = np.concatenate((p_mask, ~p_mask), axis=1) 
 
     return X, pup_mask

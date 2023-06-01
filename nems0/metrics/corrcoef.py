@@ -158,7 +158,7 @@ def r_floor(result, pred_name='pred', resp_name='resp'):
 
         rf = np.sort(rf[np.isfinite(rf)], 0)
         if len(rf):
-            r_floor[i] = rf[np.int(len(rf) * 0.95)]
+            r_floor[i] = rf[int(len(rf) * 0.95)]
         else:
             r_floor[i] = 0
 
@@ -178,7 +178,7 @@ def _r_single(X, N=1000,limit=0.01):
         log.info('repcount<=1, rnorm=0')
         return 0
 
-    paircount = np.int(scipy.special.comb(repcount, 2))
+    paircount = int(scipy.special.comb(repcount, 2))
     pairs = []
     for p1 in range(repcount):
         for p2 in range(p1+1, repcount):

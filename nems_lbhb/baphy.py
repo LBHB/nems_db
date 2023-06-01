@@ -1322,7 +1322,7 @@ def spike_time_to_raster(spike_dict, fs=100, event_times=None):
     if event_times is not None:
         maxtime = np.max(event_times["end"])
 
-    maxbin = np.int(np.ceil(fs*maxtime))
+    maxbin = int(np.ceil(fs*maxtime))
     unitcount = len(spike_dict.keys())
     raster = np.zeros([unitcount, maxbin])
 
