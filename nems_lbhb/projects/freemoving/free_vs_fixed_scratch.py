@@ -51,7 +51,7 @@ siteids, cellids = db.get_batch_sites(346)
 siteid = 'PRN015a'
 
 siteid = 'PRN048a' # some of everything.
-siteid = 'PRN051a' # some of everything.
+siteid = 'PRN057a' # some of everything.
 
 d=get_spike_info(siteid=siteid, save_to_db=True)
 

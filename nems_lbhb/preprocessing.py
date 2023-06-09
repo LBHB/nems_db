@@ -1537,9 +1537,10 @@ def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
         new_sig = sig
 
     newrec = rec.copy()
-    data0 = rec[sig].rasterize().as_continuous()
+    data0 = rec[sig].rasterize().as_continuous().copy()
 
     imp = IterativeImputer(max_iter=10, random_state=0)
+    data0[np.isinf(data0)] = np.nan
     imp.fit(data0.T)
     data_imp = imp.transform(data0.T).T
     if empty_values is not None:
@@ -1553,7 +1554,10 @@ def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
 
     # normalize 0 to 1 - same scale for all channels
     if norm:
-        data_imp /= 640
+        if np.nanmax(data_imp)>700:
+            data_imp /= 1280
+        else:
+            data_imp /= 640
         #data_imp -= np.nanmin(data_imp)
         #data_imp /= np.nanmax(data_imp)
 

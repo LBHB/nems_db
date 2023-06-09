@@ -122,13 +122,14 @@ def j_corrcoef(result, pred_name='pred', resp_name='resp', njacks=20):
     return cc, ee
 
 
-def r_floor(result, pred_name='pred', resp_name='resp'):
+def r_floor(result=None, X1mat=None, X2mat=None, pred_name='pred', resp_name='resp'):
     '''
     corr coef floor based on shuffled responses
     '''
     # if running validation test, also measure r_floor
-    X1mat = result[pred_name].as_continuous()
-    X2mat = result[resp_name].as_continuous()
+    if (X1mat is None) | (X2mat is None):
+        X1mat = result[pred_name].as_continuous()
+        X2mat = result[resp_name].as_continuous()
     channel_count = X2mat.shape[0]
     r_floor = np.zeros(channel_count)
 

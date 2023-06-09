@@ -4,8 +4,10 @@ import numpy as np
 import logging
 import sys
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 import nems0.utils
+from nems0 import db
 import nems0.preprocessing as preproc
 import nems_lbhb.projects.freemoving.free_tools
 from nems_lbhb.projects.freemoving import free_model, free_tools
@@ -14,6 +16,7 @@ import nems
 from nems import Model
 from nems.layers import WeightChannels, FiniteImpulseResponse, DoubleExponential, RectifiedLinear
 from nems import visualization
+from nems.tools import dstrf as dtools
 
 log = logging.getLogger(__name__)
 
@@ -21,65 +24,20 @@ imopts_dstrf = {'origin': 'lower',
                 'interpolation': 'none',
                 'cmap': 'bwr',
                 'aspect': 'auto'}
-outpath = '/auto/users/svd/projects/free_moving/strfs'
+outpath = '/auto/data/nems_db/results/svd/strfs'
 
-didx = np.array([[[0.117, 0.698, 0.116, 0.651, 0.154, 0.654, 0.055, 0.646],
-        [0.116, 0.697, 0.115, 0.649, 0.153, 0.652, 0.054, 0.645],
-        [0.116, 0.696, 0.115, 0.647, 0.152, 0.65 , 0.053, 0.645],
-        [0.116, 0.696, 0.115, 0.647, 0.152, 0.65 , 0.052, 0.645],
-        [0.116, 0.696, 0.115, 0.647, 0.152, 0.65 , 0.052, 0.645],
-        [0.116, 0.695, 0.116, 0.647, 0.154, 0.651, 0.052, 0.644],
-        [0.116, 0.695, 0.116, 0.647, 0.154, 0.651, 0.052, 0.644],
-        [0.116, 0.695, 0.116, 0.647, 0.154, 0.651, 0.052, 0.644],
-        [0.116, 0.695, 0.114, 0.647, 0.153, 0.65 , 0.051, 0.643],
-        [0.116, 0.695, 0.114, 0.647, 0.153, 0.65 , 0.051, 0.643],
-        [0.116, 0.695, 0.114, 0.647, 0.152, 0.65 , 0.051, 0.643]],
-       [[0.53 , 0.453, 0.477, 0.494, 0.468, 0.448, 0.507, 0.546],
-        [0.53 , 0.453, 0.477, 0.494, 0.468, 0.448, 0.507, 0.546],
-        [0.53 , 0.453, 0.477, 0.494, 0.468, 0.448, 0.507, 0.546],
-        [0.53 , 0.453, 0.477, 0.494, 0.468, 0.448, 0.507, 0.546],
-        [0.537, 0.444, 0.489, 0.486, 0.478, 0.439, 0.517, 0.538],
-        [0.547, 0.433, 0.503, 0.475, 0.491, 0.428, 0.529, 0.526],
-        [0.561, 0.427, 0.515, 0.462, 0.502, 0.417, 0.547, 0.509],
-        [0.575, 0.409, 0.529, 0.44 , 0.513, 0.397, 0.567, 0.481],
-        [0.588, 0.379, 0.544, 0.41 , 0.526, 0.37 , 0.59 , 0.443],
-        [0.591, 0.373, 0.547, 0.404, 0.528, 0.365, 0.593, 0.437],
-        [0.592, 0.372, 0.547, 0.404, 0.529, 0.365, 0.593, 0.437]],
-       [[0.751, 0.122, 0.747, 0.178, 0.703, 0.155, 0.807, 0.2  ],
-        [0.751, 0.122, 0.746, 0.178, 0.703, 0.156, 0.807, 0.2  ],
-        [0.751, 0.122, 0.746, 0.178, 0.703, 0.155, 0.807, 0.2  ],
-        [0.751, 0.123, 0.744, 0.178, 0.702, 0.154, 0.807, 0.197],
-        [0.751, 0.123, 0.742, 0.178, 0.7  , 0.153, 0.808, 0.195],
-        [0.751, 0.123, 0.742, 0.178, 0.7  , 0.153, 0.808, 0.195],
-        [0.751, 0.123, 0.742, 0.178, 0.7  , 0.152, 0.808, 0.196],
-        [0.751, 0.123, 0.742, 0.177, 0.7  , 0.152, 0.807, 0.197],
-        [0.75 , 0.124, 0.74 , 0.178, 0.7  , 0.153, 0.806, 0.199],
-        [0.749, 0.124, 0.738, 0.179, 0.7  , 0.154, 0.805, 0.2  ],
-        [0.749, 0.124, 0.738, 0.179, 0.7  , 0.154, 0.805, 0.2  ]],
-       [[0.268, 0.204, 0.313, 0.209, 0.306, 0.249, 0.326, 0.131],
-        [0.268, 0.205, 0.313, 0.209, 0.306, 0.249, 0.326, 0.131],
-        [0.269, 0.205, 0.314, 0.209, 0.307, 0.249, 0.326, 0.131],
-        [0.27 , 0.205, 0.314, 0.209, 0.307, 0.249, 0.326, 0.131],
-        [0.26 , 0.208, 0.303, 0.213, 0.296, 0.252, 0.314, 0.133],
-        [0.244, 0.214, 0.286, 0.22 , 0.28 , 0.257, 0.295, 0.136],
-        [0.188, 0.252, 0.226, 0.254, 0.225, 0.291, 0.229, 0.185],
-        [0.153, 0.276, 0.187, 0.275, 0.19 , 0.313, 0.187, 0.217],
-        [0.152, 0.276, 0.187, 0.275, 0.19 , 0.313, 0.187, 0.217],
-        [0.152, 0.276, 0.187, 0.275, 0.19 , 0.313, 0.186, 0.216],
-        [0.153, 0.276, 0.187, 0.276, 0.19 , 0.313, 0.186, 0.215]],
-       [[0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ],
-        [0.5  , 0.2  , 0.5  , 0.25 , 0.46 , 0.25 , 0.53 , 0.25 ]]])
+filepath = Path(os.path.dirname(__file__)) / 'dlc_coordinates.npy'
+didx=np.load(filepath)
 
-def fit_strf(stim,resp):
+def load_rec(siteid, batch):
+    dlc_chans = 8
+    rasterfs = 50
+    rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs,
+                                    dlc_chans=dlc_chans, compute_position=True)
+    return rec
+
+
+def fit_strf(stim, resp):
     N = stim.shape[1]
     model = Model()
     model.add_layers(
@@ -105,6 +63,9 @@ def fit_strf(stim,resp):
     return fitted_model
 
 def fit_strfs(rec, verbose=False):
+
+    rec = free_tools.stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
+                                    f_min=200, f_max=20000, channels=18)['rec']
 
     sig = 'dlc'
     bntepochs = epoch_names_matching(rec[sig].epochs, "^FILE_.*BNT")
@@ -181,23 +142,166 @@ def fit_strfs(rec, verbose=False):
 
     return f
 
+def adjust_didx(dlc, didx):
+    # didx : posidx, dlcchan, lag
+    x, y = dlc[:, 0], dlc[:, 1]
+    x = x[np.isfinite(x)]
+    y = y[np.isfinite(y)]
 
-def pop_models(rec):
-    model = free_model.free_fit(rec, shuffle='none', dlc_memory=4)
-    model2 = free_model.free_fit(rec, shuffle='dlc', dlc_memory=4)
-    model3 = free_model.free_fit(rec, shuffle='stim', dlc_memory=4)
-    model4 = free_model.free_fit(rec, shuffle='none', apply_hrtf=False, dlc_memory=4)
-    model5 = free_model.free_fit(rec, shuffle='dlc', apply_hrtf=False, dlc_memory=4)
+    xnp = np.percentile(x, 15)
+    ynp = np.percentile(y, 90)
+    xsp = np.percentile(x, 80)
+    ysp = np.percentile(y, 15)
+    xnp_=didx[0, -1, 0]
+    ynp_=didx[0, -1, 1]
+    xsp_=didx[2, -1, 0]
+    ysp_=didx[2, -1, 1]
+    didx_new = didx.copy()
+    log.info(f"old (xnp,ynp): {xnp_:.3f},{ynp_:.3f} (xsp,ysp): {xsp_:.3f},{ysp_:.3f}")
+    log.info(f"new (xnp,ynp): {xnp:.3f},{ynp:.3f} (xsp,ysp): {xsp:.3f},{ysp:.3f}")
+    didx_new[:,:,8:2] = (didx[:,:,8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
+    didx_new[:,:,1:8:2] = (didx[:,:,1:8:2]-ysp_)/(ynp_-ysp_)*(ynp-ysp)+ysp
+
+    return didx_new
+
+
+def movement_plot(rec):
+
+    speaker1_x0y0 = 1.0, -0.8
+    speaker2_x0y0 = 0.0, -0.8
+    fs = rec['dlc'].fs
+    dlc = rec['dlc'].as_continuous().T
+
+    didx_ = adjust_didx(dlc, didx)
+
+    f = plt.figure()
+    plt.scatter(dlc[::10, 0], dlc[::10, 1], s=2, color='lightgray')
+    for i in range(len(didx_)):
+
+        # compute distance and angle to each speaker
+        # code pasted in from free_tools
+        d1, theta1, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
+            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
+        d2, theta2, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
+            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
+        #log.info(f"{i} {didx[i,-1,:2]} d1={d1[0,-1]} th1= {d2[0,-1]}")
+        plt.plot(didx_[i, -1, 2], didx_[i, -1, 3], "o", color='blue')
+        plt.plot(didx_[i, -1, 0], didx_[i, -1, 1], "o", color='red')
+        plt.text(didx_[i, -1, 0], didx_[i, -1, 1],
+                 f"{i}: d,th1=({d1[0,-1]:.1f},{theta1[0,-1]:.0f})\n  d,th2=({d2[0,-1]:.1f},{theta2[0,-1]:.0f})",
+                 va='center')
+        plt.plot(didx_[i, -6:, 0], didx_[i, -6:, 1], color='darkblue', lw=1)
+    plt.gca().invert_yaxis()
+    plt.title(rec.meta['siteid'], fontsize=12)
+    return f
+
+
+###
+### DSTRF stuff
+###
+
+def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_threshold=5):
+    """
+    compute mean dSTRF for a single cell at standardized positions
+    by "freezing" the DLC signal and computing the dSTRF for a bunch of stimuli
+    """
+    t_indexes = np.arange(time_step, rec['stim'].shape[1], time_step)
+    dlc = rec['dlc'].as_continuous().T
+    log.info(f"Computing dSTRF at {len(t_indexes)} timepoints, {dlc.shape[1]} DLC channels, t_step={time_step}")
+    if rec.meta['batch'] in [346, 347]:
+        dicount=didx.shape[0]
+    else:
+        dicount=4
+
+    dstrf = {}
+    mdstrf = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+    pc1 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+    pc2 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+    pc_count=3
+    pc_mag_all = np.zeros((len(model_list), dicount, pc_count))
+    for di in range(dicount):
+        dlc1 = dlc.copy()
+        dcount=dlc1.shape[1]
+        didx_ = adjust_didx(dlc, didx)
+
+        for t in t_indexes:
+            dlc1[(t-didx_.shape[1]+1):(t+1), :] = didx_[di,:,:dcount]
+        log.info(f"DLC values: {np.round(didx[di,-1,:dcount],3)}")
+        #log.info(f'di={di} Applying HRTF for frozen DLC coordinates')
+        #rec2 = rec.copy()
+        #rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
+        #rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
+        #                                 f_min=200, f_max=20000, channels=18)['rec']
+
+        for mi, m in enumerate(model_list):
+            stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
+            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes)
+
+            d = dstrf[di]['stim'][0, :, :, :]
+
+            if snr_threshold is not None:
+                d = np.reshape(d, (d.shape[0], d.shape[1] * d.shape[2]))
+                md = d.mean(axis=0, keepdims=True)
+                e = np.std(d - md, axis=1) / np.std(md)
+                if (e > snr_threshold).sum() > 0:
+                    log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
+
+                d = dstrf[di]['stim'][0, (e <= snr_threshold), :, :]
+            mdstrf[mi, di, :, :] = d.mean(axis=0)
+            pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
+            pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
+            pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
+            pc_mag_all[mi, di, :] = pc_mag[:, 0]
+    return mdstrf, pc1, pc2, pc_mag_all
+
+
+def dstrf_plots(rec, model_list, dstrf, out_channel):
+    cellid = rec['resp'].chans[out_channel]
+    labels = ['HRTF+DLC', 'HRTF', 'DLC']
+
+    f, ax = plt.subplots(len(model_list), dstrf.shape[1] + 1, figsize=(10, 8), sharex=True, sharey=True)
+    for mi, m in enumerate(model_list):
+        mmax = np.max(np.abs(dstrf[mi, :]))
+        for di in range(dstrf.shape[1]):
+            ax[mi, di].imshow(dstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            ax[mi, di].axhline(17.5, color='k', ls='--', lw=0.5)
+            if mi == len(model_list) - 1:
+                ax[mi, di].set_xlabel(f"di={di}", fontsize=9)
+
+        ax[mi, 0].text(0, 20, 'L')
+        ax[mi, 0].text(0, 2, 'R')
+
+        ax[mi, -1].imshow(dstrf[mi, 2] - dstrf[mi, 0], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        ax[mi, -1].axhline(17.5, color='k', ls='--', lw=0.5)
+        if mi == len(model_list) - 1:
+            ax[mi, -1].set_xlabel(f"Front-back", fontsize=9)
+
+        # ax[mi,3].set_title(f"{np.round(dlc[didx,:4],2)}")
+        ax[mi, 2].set_title(f"{cellid} - {m.name}", fontsize=9)
+        ax[mi, 0].set_ylabel(f"{labels[mi]} - r={m.meta['r_test'][out_channel, 0]:.3}", fontsize=9)
+    plt.tight_layout()
+
+    return f
+
+def pop_models(rec, skip_dstrf=False, **model_opts):
+    
+    model = free_model.free_fit(rec, shuffle='none', save_to_db=True, **model_opts)
+    model2 = free_model.free_fit(rec, shuffle='dlc', save_to_db=True, **model_opts)
+    model3 = free_model.free_fit(rec, shuffle='stim', save_to_db=True, **model_opts)
+    model4 = free_model.free_fit(rec, shuffle='none', apply_hrtf=False, save_to_db=True, **model_opts)
+    model5 = free_model.free_fit(rec, shuffle='dlc', apply_hrtf=False, save_to_db=True, **model_opts)
 
     depth = rec.meta['depth']
     di = np.argsort(depth)
+    siteid = rec.meta['siteid']
+    batch = rec.meta['batch']
 
     f, ax = plt.subplots(2, 1, figsize=(8, 6))
     labels = ['space+vel', 'hrtf']
     for i, m in enumerate([model, model2]):
         ax[0].plot(depth[di], m.meta['r_test'][di] - model5.meta['r_test'][di], label=labels[i])
     ax[0].set_ylabel('improvement')
-    ax[0].legend(fontsize=10);
+    ax[0].legend(fontsize=10)
 
     labels = ['full', 'y hrtf+no dlc', 'no aud+y dlc', 'no hrtf+y dlc', 'no hrtf+no dlc']
     ls = ['-', '-', ':', '-', '--']
@@ -209,9 +313,12 @@ def pop_models(rec):
     ax[1].legend(fontsize=10)
     f.suptitle(siteid)
     outfile = f'{outpath}/{siteid}_{batch}_predcomp.png'
-    log.info(f'Saving STRFs to {outfile}')
+    log.info(f'Saving predictions to {outfile}')
     f.patch.set_facecolor('white')
     f.savefig(outfile, format='png')
+
+    if skip_dstrf:
+        return f
 
     f = movement_plot(rec)
     outfile = f'{outpath}/dstrf_{batch}/{siteid}_position.png'
@@ -223,111 +330,26 @@ def pop_models(rec):
     for i,out_channel in enumerate(good_channels):
         cellid = rec['resp'].chans[out_channel]
         log.info(f'Computing dSTRFs for {cellid} ({i}/{len(good_channels)}')
-        mdstrf = dstrf_snapshots(rec, [model, model2, model4], D=12, out_channel=out_channel)
+        mdstrf, pc1, pc2, pc_mag = dstrf_snapshots(rec, [model, model2, model4], D=11, out_channel=out_channel)
         f = dstrf_plots(rec, [model, model2, model4], mdstrf, out_channel)
-        outfile = f'{outpath}/dstrf_{batch}/{cellid}_dstrf.png'
-        log.info(f'Saving dstrf plot to {outfile}')
-        f.patch.set_facecolor('white')
-        f.savefig(outfile, format='png')
+        outfile = f'{outpath}/dstrf_{batch}/{cellid}_mdstrf.pdf'
+        log.info(f'Saving mean dstrf plot to {outfile}')
+        #f.patch.set_facecolor('white')
+        f.savefig(outfile, format='pdf')
+        f = dstrf_plots(rec, [model, model2, model4], pc1, out_channel)
+        outfile = f'{outpath}/dstrf_{batch}/{cellid}_pc1.pdf'
+        log.info(f'Saving dstrf pc1 plot to {outfile}')
+        #f.patch.set_facecolor('white')
+        f.savefig(outfile, format='pdf')
 
     return f
 
-def movement_plot(rec):
-    speaker1_x0y0 = 1.0, -0.8
-    speaker2_x0y0 = 0.0, -0.8
-    fs = rec['dlc'].fs
-
-    dlc = rec['dlc'].as_continuous()[:8, :].T
-    f=plt.figure()
-    plt.scatter(dlc[::10, 0], dlc[::10, 1], s=2, color='lightgray')
-    for i in range(len(didx)):
-
-        # compute distance and angle to each speaker
-        # code pasted in from free_tools
-        d1, theta1, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
-        d2, theta2, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
-        #log.info(f"{i} {didx[i,-1,:2]} d1={d1[0,-1]} th1= {d2[0,-1]}")
-        plt.plot(didx[i, -1, 2], didx[i, -1, 3], "o", color='blue')
-        plt.plot(didx[i, -1, 0], didx[i, -1, 1], "o", color='red')
-        plt.text(didx[i, -1, 0], didx[i, -1, 1],
-                 f"{i}: d,th1=({d1[0,-1]:.1f},{theta1[0,-1]:.0f})\n  d,th2=({d2[0,-1]:.1f},{theta2[0,-1]:.0f})",
-                 va='center')
-        plt.plot(didx[i, -6:, 0], didx[i, -6:, 1], color='darkblue', lw=1)
-    plt.gca().invert_yaxis()
-    plt.title(rec.meta['siteid'], fontsize=12)
-    return f
-
-def dstrf_snapshots(rec, model_list, D=11, out_channel=0):
-    t_indexes = np.arange(100, rec['stim'].shape[1], 100)
-    dlc = rec['dlc'].as_continuous()[:8, :].T
-
-    if rec.meta['batch'] in [346,347]:
-        dicount=4
-    else:
-        dicount=5
-    dstrf = {}
-    mdstrf = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    for di in range(dicount):
-        dlc1 = dlc.copy()
-        for t in t_indexes:
-            dlc1[(t - didx.shape[1] + 1):(t + 1), :] = didx[di]
-
-        log.info(f'di={di} Applying HRTF for frozen DLC coordinates')
-        rec2 = rec.copy()
-        rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
-        rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
-                                                                       f_min=200, f_max=20000, channels=18)['rec']
-
-        for mi, m in enumerate(model_list):
-            if mi in [0, 1]:
-                # stim with hrtf
-                stim = {'stim': rec2['stim'].as_continuous().T, 'dlc': dlc1}
-            else:
-                stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
-            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes)
-            mdstrf[mi, di, :, :] = dstrf[di]['stim'][0, :, :, :].mean(axis=0)
-
-    return mdstrf
-
-def dstrf_plots(rec, model_list, mdstrf, out_channel):
-    cellid = rec['resp'].chans[out_channel]
-    labels = ['HRTF+DLC', 'HRTF', 'DLC']
-
-    f, ax = plt.subplots(len(model_list), len(didx) + 1, figsize=(10, 8), sharex=True, sharey=True)
-    for mi, m in enumerate(model_list):
-        mmax = np.max(np.abs(mdstrf[mi, :]))
-        for di in range(mdstrf.shape[1]):
-            ax[mi, di].imshow(mdstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
-            ax[mi, di].axhline(17.5, color='k', ls='--', lw=0.5)
-            if mi == len(model_list) - 1:
-                ax[mi, di].set_xlabel(f"di={di}", fontsize=12)
-        mm = np.max(np.abs(mdstrf[mi, 2] - mdstrf[mi, 0]))
-
-        ax[mi, 0].text(0, 20, 'L')
-        ax[mi, 0].text(0, 2, 'R')
-
-        ax[mi, -1].imshow(mdstrf[mi, 2] - mdstrf[mi, 0], vmin=-mmax / 2, vmax=mmax / 2, **imopts_dstrf)
-        ax[mi, -1].axhline(17.5, color='k', ls='--', lw=0.5)
-        if mi == len(model_list) - 1:
-            ax[mi, -1].set_xlabel(f"Front-back", fontsize=12)
-
-        # ax[mi,3].set_title(f"{np.round(dlc[didx,:4],2)}")
-        ax[mi, 2].set_title(f"{cellid} - {m.name}", fontsize=12)
-        ax[mi, 0].set_ylabel(f"{labels[mi]} - r={m.meta['r_test'][out_channel, 0]:.3}", fontsize=12)
-    plt.tight_layout()
-    return f
-
-def load_rec(siteid, batch):
-    dlc_chans = 8
-    rasterfs = 50
-    rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs, dlc_chans=dlc_chans)
-
-    rec = free_tools.stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
-                                                                  f_min=200, f_max=20000, channels=18)['rec']
-    return rec
-
+def fit_all_sites(batch=348):
+    siteids, cellids = db.get_batch_sites(batch)
+    for siteid in siteids:
+        rec = load_rec(siteid, batch)
+        pop_models(rec, skip_dstrf=True, acount=12, dcount=8, l2count=24,
+                   cost_function='squared_error')
 
 if __name__ == '__main__':
 
@@ -372,6 +394,11 @@ if __name__ == '__main__':
         f.savefig(outfile, format='png')
     elif cmd == 'dstrf':
         rec = load_rec(siteid, batch)
-        pop_models(rec)
+        pop_models(rec, acount=12, dcount=8, l2count=24)
+    elif cmd == 'cnn':
+        rec = load_rec(siteid, batch)
+        pop_models(rec, skip_dstrf=True, acount=12, dcount=8, l2count=24,
+                   cost_function='squared_error')
+
     else:
         log.info(f"Unknown command {cmd}")
