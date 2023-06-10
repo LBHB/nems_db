@@ -46,6 +46,7 @@ import logging
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.TwoStim_helpers as ts
 
+from nems0 import db
 from nems0.xform_helper import load_model_xform
 import joblib as jl
 from datetime import date
@@ -55,7 +56,7 @@ log = logging.getLogger(__name__)
 from nems0 import db
 
 def OLP_fit_weights(batch=340, parmfile=None, loadpath=None, savepath=None, filter=None,
-                    cells=None, fs=100):
+                    cells=None, fs=100, sound_stats=True):
     '''Puts all the compontents that go into weight_df into one command. Gives you the option
     to save the resulting dataframe it returns. But mainly it gives you the option to either
     pass an entire batch to it or take a single parmfile and only use the cells from that.
@@ -116,8 +117,9 @@ def OLP_fit_weights(batch=340, parmfile=None, loadpath=None, savepath=None, filt
                                    (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
         weight_df['FG_rel_gain'] = (weight_df.weightsB - weight_df.weightsA) / \
                                    (np.abs(weight_df.weightsB) + np.abs(weight_df.weightsA))
-        sound_df = ohel.get_sound_statistics_full(weight_df)
-        weight_df = ohel.add_sound_stats(weight_df, sound_df)
+        if sound_stats:
+            sound_df = ohel.get_sound_statistics_full(weight_df)
+            weight_df = ohel.add_sound_stats(weight_df, sound_df)
 
         if savepath:
             os.makedirs(os.path.dirname(savepath), exist_ok=True)
@@ -2080,7 +2082,7 @@ def OLP_fit_partial_cell_individual(cellid, batch, snip=None, fit_epos='syn', fs
     #                      f"there is nothing to fit. But maybe check that is correct.")
 
 
-def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=100):
+def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=100, modelname=None):
     '''2023_05_17. This is the good one that generates the complete df with all the info you want
     2023_04_28. Modifying snip code I know works and adapting it to the individual.
 
@@ -2122,7 +2124,9 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
             # Pred will only be true for that 341 batch Stephen made, I probably could take this out for now but
             # leaving in because it works. The else will be vanilla record loading options.
             if pred == True:
-                modelname = "gtgram.fs100.ch18-ld.pop-norm.l1-sev.fOLP_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.b322.f.nf-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+                # modelname = "gtgram.fs100.ch18-ld.pop-norm.l1-sev.fOLP_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80x100-relu.100-wc.100xR-lvl.R-dexp.R_prefit.b322.f.nf-tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4"
+                # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+                # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
                 xf, ctx = load_model_xform(cellid=cellid, batch=batch, modelname=modelname)
                 rec = ctx['val']
                 rec['pred'].chans, rec['pred'].fs = rec['resp'].chans, fs
@@ -2444,7 +2448,11 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
 
         final_weight_df = pd.concat(weight_df_list)
 
-        OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}'  # weight + corr
+        if modelname:
+            OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{modelname}/{cellid}'  # weight + corr
+        else:
+            OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}'  # weight + corr
+
         # OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}_{real_olps.iloc[cc]["olp_type"]}'  # weight + corr
         os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
 

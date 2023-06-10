@@ -1116,6 +1116,16 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
                                f'{ll}_path': pth})
 
                 if cuts:
+                    start_gain_df = synth_df[[f'{ll}', f'{ll}_rel_gain_start']]
+                    start_mean_df = start_gain_df.groupby(by=f'{ll}').agg(mean=(f'{ll}_rel_gain_start', np.mean)).reset_index(). \
+                        rename(columns={f'{ll}': f'{ll}_short_name'})
+                    start_mean_df.rename(columns={'mean': f'{ll}_rel_gain_avg_start'}, inplace=True)
+
+                    end_gain_df = synth_df[[f'{ll}', f'{ll}_rel_gain_end']]
+                    end_mean_df = end_gain_df.groupby(by=f'{ll}').agg(mean=(f'{ll}_rel_gain_end', np.mean)).reset_index(). \
+                        rename(columns={f'{ll}': f'{ll}_short_name'})
+                    end_mean_df.rename(columns={'mean': f'{ll}_rel_gain_avg_end'}, inplace=True)
+
                     one, two = spec[:, cuts[0]:int(cuts[1] * fs)], spec[:, int(cuts[1] * fs):]
                     t_dev_start, t_dev_end = np.std(one, axis=1), np.std(two, axis=1)
                     f_dev_start, f_dev_end = np.std(one, axis=0), np.std(two, axis=0)
@@ -1152,6 +1162,8 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
                     cc_end = np.corrcoef(cut_spec_end)
                     cpow_end = cc_end[np.triu_indices(cut_spec_end.shape[0], k=1)].mean()
 
+                    # sounds[cnt][f'{ll}_rel_gain_avg_start'] = start_mean_df[f'{ll}_rel_gain_avg_start']
+                    # sounds[cnt][f'{ll}_rel_gain_avg_end'] = end_mean_df[f'{ll}_rel_gain_avg_end']
                     sounds[cnt][f'{ll}_Tstationary_start'] = np.nanmean(t_dev_start)
                     sounds[cnt][f'{ll}_Tstationary_end'] = np.nanmean(t_dev_end)
                     sounds[cnt][f'{ll}_Fstationary_start'] = np.nanmean(f_dev_start)
@@ -1165,7 +1177,10 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
 
             sound_df = pd.DataFrame(sounds)
             # Merge the relative gain data into the DF of sounds
-            sound_df = pd.merge(sound_df, mean_df, on=f'{ll}_short_name').rename(columns={'mean': f'{ll}_rel_gain'})
+            sound_df = pd.merge(sound_df, mean_df, on=f'{ll}_short_name').rename(columns={'mean': f'{ll}_rel_gain_avg'})
+            if cuts:
+                sound_df = pd.merge(sound_df, start_mean_df, on=f'{ll}_short_name')
+                sound_df = pd.merge(sound_df, end_mean_df, on=f'{ll}_short_name')
 
             # Add mod spec calculations to sound_df, 2022_08_26
             mods = np.empty((sound_df.iloc[0][f'{ll}_spec'].shape[0], sound_df.iloc[0][f'{ll}_spec'].shape[1],
@@ -1228,13 +1243,14 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
                            # f'{ll}_Fstationary_wrong', f'{ll}_Fstationary',
                            f'{ll}_freq_range', f'{ll}_RMS_power',
                            f'{ll}_max_power', f'{ll}_temp_ps_std', f'{ll}_freq_ps_std',
-                           f'{ll}_short_name', f'{ll}_path', f'{ll}_rel_gain', f'{ll}_t50', f'{ll}_f50',
+                           f'{ll}_short_name', f'{ll}_path', f'{ll}_rel_gain_avg', f'{ll}_t50', f'{ll}_f50',
                            # f'{ll}_25th', f'{ll}_75th'
                            ]]
 
         # Adds the stuff that takes place in the cut loop, if it exists
         if cuts:
-            cut_df = main_df[[f'{ll}_Tstationary_start', f'{ll}_Tstationary_end',
+            cut_df = main_df[[f'{ll}_rel_gain_avg_start', f'{ll}_rel_gain_avg_end',
+                              f'{ll}_Tstationary_start', f'{ll}_Tstationary_end',
                               # f'{ll}_Fstationary_start', f'{ll}_Fstationary_end',
                               f'{ll}_Fcorr_start', f'{ll}_Fcorr_end',
                               f'{ll}_bandwidth_start', f'{ll}_bandwidth_end']]
@@ -1244,9 +1260,11 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
 
     # 2023_05_17. Option either lets you return your old df with this appended on it, or the sounds by themselves
     if append == True:
-        the_dfs['BG'].rename(columns={'BG_short_name': 'BG', 'BG_rel_gain': 'BG_rel_gain_all'}, inplace=True)
+        # the_dfs['BG'].rename(columns={'BG_short_name': 'BG', 'BG_rel_gain': 'BG_rel_gain_all'}, inplace=True)
+        the_dfs['BG'].rename(columns={'BG_short_name': 'BG'}, inplace=True)
         df = pd.merge(right=the_dfs['BG'], left=df, on=['BG', 'synth_kind', 'BG_path'], validate='m:1')
-        the_dfs['FG'].rename(columns={'FG_short_name': 'FG', 'FG_rel_gain': 'FG_rel_gain_all'}, inplace=True)
+        # the_dfs['FG'].rename(columns={'FG_short_name': 'FG', 'FG_rel_gain': 'FG_rel_gain_all'}, inplace=True)
+        the_dfs['FG'].rename(columns={'FG_short_name': 'FG'}, inplace=True)
         df = pd.merge(right=the_dfs['FG'], left=df, on=['FG', 'synth_kind', 'FG_path'], validate='m:1')
         df['bw_percent'] = f'{percent_lims[0]}/{percent_lims[1]}'
 

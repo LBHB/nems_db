@@ -203,7 +203,7 @@ class SignalBase:
 
         # svd - kludge warning! rounding to prevent accidental increase in duration
         # due to floating point limits
-        self.ntimes = np.int(np.round(fs*max_time))
+        self.ntimes = int(np.round(fs*max_time))
 
         if segments is None:
             segments = np.array([[0, self.ntimes]])
@@ -2197,7 +2197,7 @@ class PointProcess(SignalBase):
         else:
             max_time=max_epoch_time
 
-        max_bin = np.int(np.round(fs*max_time))
+        max_bin = int(np.round(fs*max_time))
         unit_count = len(self._data.keys())
         raster = np.zeros([unit_count, max_bin])
 

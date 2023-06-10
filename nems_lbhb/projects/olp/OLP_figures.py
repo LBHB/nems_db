@@ -975,11 +975,12 @@ def weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=None):
     ax.scatter(x=quad.avg_supp, y=quad.avg_weight, s=1)
     ax.set_xlabel('(LS - rAB) / rA+rB', fontweight='bold', fontsize=10)
     ax.set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
+    ax.plot([0,1.5], [0,1.5], color='black')
     ax.set_ylim(0, 1.25), ax.set_xlim(-1.5, 1.5)
     ax.set_title(f'r >= {r_cut} - n={quad.shape[0]}', fontsize=10, fontweight='bold')
     fig.tight_layout()
 
-def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True):
+def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, sep_hemi=False):
     '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
     with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
     stay True at this point'''
@@ -1234,7 +1235,7 @@ def plot_weight_prediction_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_
     fig.tight_layout()
 
 
-def plot_partial_fit_bar(df, fr_thresh=0.03, r_thresh=0.6, suffixes=['_nopost', '_start', '_end'],
+def plot_partial_fit_bar(df, fr_thresh=0.03, r_thresh=0.6, suffixes=['', '_start', '_end'],
                          syn='A', bin='11', animal=None):
     '''2022_11_08. Takes your dataframe (could be single animal or multi animal, you specify, and plots the different fits
     based on what you input for suffixes. It'll put A1 on the top and PEG on bottom.'''

@@ -10,9 +10,18 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script.py'
 
 # some neurons were added and renamed,and must be reprocecced
 # batch = 341
-batch = 344
+# batch = 344
+
+
+
+# 2023_06_09. Adding Stephen modelfits
+batch=345
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
+cell_list = cell_list[4:7]
+modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+# modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+
 # cell_list = cell_list[0:5]
 # cell_list = [cc for cc in cell_list if cc[:3]=='CLT']
 # cell_list = [cc for cc in cell_list if int(cc[3:6]) >= 27]
@@ -24,7 +33,7 @@ cell_list = cell_df['cellid'].tolist()
 for nn, cellid in enumerate(cell_list):
     # note = f'OLP_prediction_{cellid}_0-500ms'
     note = f'OLP_weights_{cellid}_0-500ms'
-    args = [cellid]
+    args = [cellid, batch, modelname]
     print(note)
     out = nd.add_job_to_queue(args, note, force_rerun=True,
                               user="greg", codeHash="master",
@@ -35,4 +44,3 @@ for nn, cellid in enumerate(cell_list):
         print(oo)
 
 print(f'\nenqueued {nn+1} jobs')
-

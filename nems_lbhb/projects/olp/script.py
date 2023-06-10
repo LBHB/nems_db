@@ -18,6 +18,8 @@ if queueid:
 
 # all parameters are pased as string, ensure proper datatypes
 cellid = sys.argv[1]
+batch = int(sys.argv[2])
+modelname = sys.argv[3]
 
 print(f"Running OLP Prediction cell {cellid}")
 
@@ -27,7 +29,7 @@ print(f"Running OLP Prediction cell {cellid}")
 # _ = OLP_fit_cell_pred_individual(cellid, 344, threshold=None, snip=[0, 0.5], pred=False,
 #                                  fit_epos='syn', fs=100)
 
-_ = OLP_fit_partial_weights_individual(cellid, 344, snip=[0, 0.5], pred=False, fs=100)
+_ = OLP_fit_partial_weights_individual(cellid, batch, snip=[0, 0.5], pred=True, fs=100, modelname=modelname)
 
 # Mark completed in the queue. Note that this should happen last thing!
 # Otherwise the job might still crash after being marked as complete.
