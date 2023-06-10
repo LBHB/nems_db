@@ -957,7 +957,7 @@ def residual(load_key):
         if op.endswith('0'):
             shuffle = True
         elif op.startswith('hp'):
-            cutoff = np.float(op[2:].replace(',','.'))
+            cutoff = float(op[2:].replace(',','.'))
         elif op.startswith('pred'):
             signal = 'pred'
 

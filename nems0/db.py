@@ -703,7 +703,7 @@ def update_job_tick(queueid=None):
 
 #### Results / performance logging
 
-def save_results(modelspec, preview_file, queueid=None):
+def save_results(modelspec, preview_file=None, queueid=None):
     """
     save performance data from modelspec to Results
     pull some information out of the queue table if queueid provided

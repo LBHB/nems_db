@@ -768,7 +768,7 @@ class SignalBase:
              if list of tuples (epoch times), mask is OR combo of all epoch times
         '''
 
-        mask = np.zeros([1, self.ntimes], dtype=np.bool)
+        mask = np.zeros([1, self.ntimes], dtype=bool)
 
         if (epoch is None) or (epoch is False):
             pass
@@ -837,7 +837,7 @@ class SignalBase:
             # find matching epoch periods
             indices = self.get_epoch_indices(epoch, boundary_mode, fix_overlap)
 
-        data = np.zeros([1, self.ntimes], dtype=np.bool)
+        data = np.zeros([1, self.ntimes], dtype=bool)
         for lb, ub in indices:
             if onsets_only:
                 data[:, lb] = True
@@ -1314,7 +1314,9 @@ class RasterizedSignal(SignalBase):
                                                    mask=mask,
                                                    allow_incomplete=allow_incomplete)
         else:
-            epoch_indices = epoch
+            # JCW commented out previous epoch_indices statement because function should take in time values and needs to be converted to indices
+            # epoch_indices = epoch
+            epoch_indices = self.get_epoch_indices(epoch)
 
         if epoch_indices.size == 0:
             if allow_empty:
@@ -1546,8 +1548,8 @@ class RasterizedSignal(SignalBase):
         data = self.as_continuous().copy()
 #        sig_valid_start = np.sum(np.isfinite(data[0,:]))
 
-        mask = np.zeros_like(data, dtype=np.bool)
-        mask2 = np.zeros_like(data, dtype=np.bool)
+        mask = np.zeros_like(data, dtype=bool)
+        mask2 = np.zeros_like(data, dtype=bool)
 
         for ep in epochs:
             lb, ub = ep
@@ -1610,7 +1612,7 @@ class RasterizedSignal(SignalBase):
             if not invert:
                 m[..., split_start:split_end] = np.nan
             else:
-                mask = np.ones_like(m, dtype=np.bool)
+                mask = np.ones_like(m, dtype=bool)
                 mask[:, split_start:split_end] = 0
                 m[mask] = np.nan
             return self._modified_copy(m.reshape(self.nchans, -1))
@@ -2950,7 +2952,7 @@ def merge_selections(signals):
     # If there are no overlapping values, then nanmean() will be equal
     # to the value found in each position
     the_mean = np.nanmean(bigary, axis=2)
-    if type(signals[0]._data[0][0]) is np.bool_:
+    if type(signals[0]._data[0][0]) is bool_:
         return signals[0]._modified_copy(the_mean)
     else:
         for a in arys:

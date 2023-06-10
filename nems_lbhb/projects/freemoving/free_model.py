@@ -23,34 +23,42 @@ from nems.layers import WeightChannels, FIR, LevelShift, \
     DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
 from nems import Model
 from nems.layers.base import Layer, Phi, Parameter
+from nems0.recording import load_recording
 import nems.visualization.model as nplt
 from nems0.modules.nonlinearity import _dlog
-from nems_lbhb.motor.free_tools import compute_d_theta, \
-    free_scatter_sum, dlc2dist, stim_filt_hrtf
+from nems_lbhb.projects.freemoving.free_tools import stim_filt_hrtf, compute_d_theta, \
+    free_scatter_sum, dlc2dist
+from nems0.epoch import epoch_names_matching
+from nems0.metrics.api import r_floor
 
 log = logging.getLogger(__name__)
 
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
-                   apply_hrtf=True, recache=False, dlc_chans=10, dlc_threshold=0.2, **options):
+                   recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False, **options):
 
     sitenum = int(siteid[3:6])
-    if sitenum <= 34:
-        binaural = False
+    if batch==347:
         mono = False
+        loadkey = f'gtgram.fs{rasterfs}.ch18.dlc.bin'
     else:
-        binaural = True
         mono = False
+        loadkey = f'gtgram.fs{rasterfs}.ch18.dlc'
+
+    log.info(f"{siteid}/{batch}/{loadkey}")
+    recording_uri = generate_recording_uri(batch=batch, loadkey=loadkey, cellid=siteid)
+    rec = load_recording(recording_uri)
 
     try:
-        df_siteinfo = get_spike_info(siteid=siteid, save_to_db=False)
-        a1cellids = df_siteinfo.loc[(df_siteinfo['area']=='A1') | (df_siteinfo['area']=='BS')].index.to_list()
+        df_siteinfo = get_depth_info(siteid=siteid)
+        a1cellids = df_siteinfo.loc[(df_siteinfo['area']=='A1') | (df_siteinfo['area']=='BS') |
+                                    (df_siteinfo['area']=='PEG')].index.to_list()
     except:
         df = db.pd_query(f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'")
         a1cellids = df['cellid'].to_list()
 
     if cellid is not None:
         a1cellids=[cellid]
-
+    """
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
     dparm = db.pd_query(sql)
     parmfile = [r.stimpath + r.stimfile for i, r in dparm.iterrows()]
@@ -66,8 +74,9 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram', channels=18,
                            dlc=True, recache=recache, rasterfs=rasterfs,
                            dlc_threshold=dlc_threshold, fill_invalid='interpolate', **extops)
+    """
 
-    log.info('imputing missing DLC values')
+    log.info('Imputing missing DLC values')
     rec = impute_multi(rec, sig='dlc', empty_values=np.nan, keep_dims=dlc_chans)['rec']
     #rec = dlc2dist(rec, smooth_win=2, keep_dims=dlc_chans)
     dlc_data = rec['dlc'][:, :]
@@ -79,6 +88,15 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     rec['stim'] = rec['stim'].rasterize()
     if mono:
         rec['stim'] = rec['stim']._modified_copy(data=rec['stim']._data[:18, :])
+
+    if compute_position:
+        rec2 = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
+                              f_min=200, f_max=20000, channels=18)['rec']
+        # get angle to each speaker and scale -1 to 1
+        theta = rec2['disttheta'].as_continuous()[[1, 3], :] / 180
+        chans = rec['dlc'].chans + ['th1','th2']
+        d = np.concatenate((rec['dlc']._data, theta), axis=0)
+        rec['dlc']=rec['dlc']._modified_copy(data=d, chans=chans)
 
 
     rec['resp'] = rec['resp'].rasterize()
@@ -92,14 +110,17 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
 
     try:
         rec.meta['depth'] = np.array([df_siteinfo.loc[c, 'depth'] for c in cellids])
-        rec.meta['sw'] = np.array([df_siteinfo.loc[c, 'sw'] for c in cellids])
+        #rec.meta['sw'] = np.array([df_siteinfo.loc[c, 'sw'] for c in cellids])
+        rec.meta['sw'] = np.ones(len(cellids)) * 1
     except:
         rec.meta['depth'] = np.array([float(c.split("-")[1]) for c in cellids])
         rec.meta['sw'] = np.ones(len(cellids)) * 100
 
     return rec
 
-def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
+def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
+             acount=20, dcount=10, l2count=30, cost_function='squared_error',
+             save_to_db=False, **options):
     """
     special case: if dlc_memory=1 add a delay line with shuffled data to
     the dlc signal to match the parameter count for dlc_memory=4
@@ -122,21 +143,29 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
     rec['resp'] = rec['resp'].normalize('minmax')
 
     cellids = rec['resp'].chans
+    OLD_MASK = False
+    if OLD_MASK:
+        # epoch_regex = "^STIM_"
+        # est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
+        # est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
+        # val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
+        est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
+        val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
 
-    #epoch_regex = "^STIM_"
-    #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
-    #est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
-    #val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
-
-    est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
-    val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
-
-    est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
-    val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
+        est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
+        val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
+    else:
+        val_epochs = epoch_names_matching(rec['resp'].epochs, "^STIM_00")
+        val = rec.copy()
+        val = val.create_mask(val_epochs).and_mask(val['dlc_valid'].as_continuous()[0, :])
+        mask = val['mask'].as_continuous()[0, :]
+        est = rec.copy()
+        est = est.create_mask(~mask).and_mask(est['dlc_valid'].as_continuous()[0, :])
 
     est = est.apply_mask()
     val = val.apply_mask()
-    log.info(f"resp: {est['resp'].shape} stim: {est['stim'].shape} dlc: {est['dlc'].shape}")
+    log.info(f"est resp: {est['resp'].shape} stim: {est['stim'].shape} dlc: {est['dlc'].shape}")
+    log.info(f"val resp: {val['resp'].shape} stim: {val['stim'].shape} dlc: {val['dlc'].shape}")
     dlc_count = rec['dlc'].shape[0]
 
     if shuffle=='none':
@@ -163,15 +192,17 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
     target = est['resp'].as_continuous().T
     test_target = val['resp'].as_continuous().T
 
+    # number of auditory filters, dlc filters, L2 filters
+    #acount, dcount, l2count = 16, 8, 30
+    #acount, dcount, l2count = 12, 4, 24
 
-    acount=10  # number of auditory filters
-    dcount=4  # number of dlc filters
     tcount = acount+dcount
-    l2count = 16
     cellcount = len(cellids)
     input_count = rec['stim'].shape[0]
     dlc_count = input['dlc'].shape[1]
 
+    modelstring = f"wc.Nx1x{acount}-fir.8x1x{acount}-wc.Dx1x{dcount}.dlc-fir.{dlc_memory}x1x{dcount}.dlc-concat.space-relu.{tcount}.f" +\
+        f"-wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.f-wc.{l2count}xR-relu.R"
     if dcount > 0:
         layers = [
             WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
@@ -180,11 +211,11 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
             FIR(shape=(dlc_memory, 1, dcount), input='space', output='space'),
             ConcatSignals(input=['prediction','space'], output='prediction'),
             RectifiedLinear(shape=(tcount,), input='prediction', output='prediction',
-                            no_offset=False, no_shift=False),
+                            no_offset=True, no_shift=True),
             WeightChannels(shape=(tcount, 1, l2count), input='prediction', output='prediction'),
             FIR(shape=(4, 1, l2count), input='prediction', output='prediction'),
             RectifiedLinear(shape=(1, l2count), input='prediction', output='prediction',
-                            no_offset=False, no_shift=False),
+                            no_offset=True, no_shift=True),
             WeightChannels(shape=(l2count, cellcount), input='prediction', output='prediction'),
             #DoubleExponential(shape=(1, cellcount), input='prediction', output='prediction'),
             RectifiedLinear(shape=(1, cellcount), input='prediction', output='prediction',
@@ -197,23 +228,24 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
             WeightChannels(shape=(tcount, cellcount), input='prediction', output='prediction'),
             LevelShift(shape=(1, cellcount), input='prediction', output='prediction'),
         ]
-
     fitter = 'tf'
-    fitter_options = {'cost_function': 'squared_error',  # 'nmse'
+    fitter_options = {'cost_function': cost_function,  # 'nmse'
                       'early_stopping_tolerance': 1e-3,
                       'validation_split': 0,
-                      'learning_rate': 1e-2, 'epochs': 2000
+                      'learning_rate': 1e-2, 'epochs': 3000
                       }
-    fitter_options2 = {'cost_function': 'squared_error',
+    fitter_options2 = {'cost_function': cost_function,
                       'early_stopping_tolerance': 1e-4,
                       'validation_split': 0,
-                      'learning_rate': 1e-3, 'epochs': 3000
+                      'learning_rate': 1e-3, 'epochs': 8000
                       }
 
     model = Model(layers=layers)
+    model.name = f'sh.{shuffle}-hrtf.{apply_hrtf}_{modelstring}_{cost_function.replace("_","")}'
     model = model.sample_from_priors()
-    #model = model.sample_from_priors()
-
+    model = model.sample_from_priors()
+    log.info(f'Site: {siteid}')
+    log.info(f'Model: {model.name}')
 
     log.info('Fit stage 1: without static output nonlinearity')
     model.layers[-1].skip_nonlinearity()
@@ -232,21 +264,30 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4, **options):
 
     fit_cc = np.array([np.corrcoef(fit_pred[:, i], target[:, i])[0, 1] for i in range(cellcount)])
     cc = np.array([np.corrcoef(prediction[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
+    rf = r_floor(X1mat=prediction.T, X2mat=test_target.T)
 
     model.meta['fit_predxc'] = fit_cc
     model.meta['predxc'] = cc
     model.meta['prediction'] = prediction
     model.meta['resp'] = test_target
     model.meta['siteid'] = siteid
-    model.name = f'{siteid}/sh-{shuffle}/dlc_memory={dlc_memory}/hrtf={apply_hrtf}'
+    model.meta['batch'] = rec.meta['batch']
+    model.meta['modelname'] = model.name
+    model.meta['cellids'] = est['resp'].chans
+    model.meta['r_test'] = cc[:, np.newaxis]
+    model.meta['r_fit'] = fit_cc[:, np.newaxis]
+    model.meta['r_floor'] = rf[:, np.newaxis]
+
+    if save_to_db:
+        db.save_results(model)
     return model
 
 
 def compare_models(rec, model1, model2):
     depth = rec.meta['depth']
     sw = rec.meta['sw']
-    cc1 = model1.meta['predxc']
-    cc2 = model2.meta['predxc']
+    cc1 = model1.meta['r_test']
+    cc2 = model2.meta['r_test']
     target = model1.meta['resp']
     prediction1 = model1.meta['prediction']
     prediction2 = model2.meta['prediction']

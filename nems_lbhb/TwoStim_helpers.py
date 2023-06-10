@@ -1307,7 +1307,7 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plo
         #wsearchb=wsearcha
         #margin=6
         if not hasattr(margin, "__len__"):
-            margin = np.float(margin)*np.ones(2)
+            margin = float(margin)*np.ones(2)
         wA_ = np.hstack((np.linspace(weights[0]-margin[0],weights[0],N),
                          (np.linspace(weights[0],weights[0]+margin[0],N)[1:])))
         wB_ = np.hstack((np.linspace(weights[1]-margin[1],weights[1],N),
@@ -1339,7 +1339,7 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plo
     while len(As) < 20:
         attempt+=1
         if (attempt > 1) and (len(As) > 0) and (len(As) > 2) and (not did_estimate):
-            margin = np.float(margin)*np.ones(2)
+            margin = float(margin)*np.ones(2)
             m = np.abs(weights[0]-As).max()*3
             if m==0: 
                 margin[0] = margin[0]/2
@@ -2136,7 +2136,7 @@ def generate_psth_from_resp_bgfg(rec, manager, resp_sig='resp', epoch_regex='^(S
     if 'mask' in newrec.signals.keys():
         mask_data = newrec['mask']._data
     else:
-        mask_data = np.ones(respavg_data.shape).astype(np.bool)
+        mask_data = np.ones(respavg_data.shape).astype(bool)
     spont_periods = ((np.isnan(respavg_data)) & (mask_data==True))
     respavg_data[:, spont_periods[0,:]] = 0
     # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
@@ -2145,7 +2145,7 @@ def generate_psth_from_resp_bgfg(rec, manager, resp_sig='resp', epoch_regex='^(S
 
     respavg_data_bg = respavg_bg.as_continuous().copy()
     respavg_spont_data_bg = respavg_with_spont_bg.as_continuous().copy()
-    mask_data_bg = np.ones(respavg_data_bg.shape).astype(np.bool)
+    mask_data_bg = np.ones(respavg_data_bg.shape).astype(bool)
     spont_periods_bg = ((np.isnan(respavg_data_bg)) & (mask_data_bg==True))
     respavg_data_bg[:, spont_periods_bg[0,:]] = 0
     # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]
@@ -2154,7 +2154,7 @@ def generate_psth_from_resp_bgfg(rec, manager, resp_sig='resp', epoch_regex='^(S
 
     respavg_data_fg = respavg_fg.as_continuous().copy()
     respavg_spont_data_fg = respavg_with_spont_fg.as_continuous().copy()
-    mask_data_fg = np.ones(respavg_data_fg.shape).astype(np.bool)
+    mask_data_fg = np.ones(respavg_data_fg.shape).astype(bool)
     spont_periods_fg = ((np.isnan(respavg_data_fg)) & (mask_data_fg==True))
     respavg_data_fg[:, spont_periods_fg[0,:]] = 0
     # respavg_spont_data[:, spont_periods[0,:]] = spont_rate[:, np.newaxis]

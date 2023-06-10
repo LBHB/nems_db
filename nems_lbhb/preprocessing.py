@@ -71,7 +71,7 @@ def fix_cpn_epochs(rec, sequence_only=False, use_old=False, **kwargs):
         new_epochs.loc[stim_mask, 'name'] = [s.split('context:')[0][:-1] for s in new_epochs[stim_mask].name]
 
         # Chop out first bin of each (to remove weird context effects) -- (and for the "dummy" prestim silence)
-        one_bin = np.float(1 / rec['resp'].fs)
+        one_bin = float(1 / rec['resp'].fs)
         new_epochs.loc[stim_mask, 'start'] = new_epochs.loc[stim_mask, 'start'].values + one_bin
         new_epochs.loc[sub, 'start'] = new_epochs.loc[sub, 'start'].values + one_bin
         # looks like was never actually dealing with prestim silence correctly, which resulted
@@ -576,7 +576,7 @@ def create_pupil_mask(rec, evoked_only=False, **options):
     if rm_rem & (state != 'rem'):
         # mask only reference presentations in which there was no rem sleep
         try:
-            rem_mask = r['rem'].as_continuous().astype(np.bool)
+            rem_mask = r['rem'].as_continuous().astype(bool)
             current_mask = r['mask'].as_continuous()
             new_mask = (~rem_mask & current_mask)
             r['mask'] = r['mask']._modified_copy(new_mask)
@@ -602,7 +602,7 @@ def create_pupil_mask(rec, evoked_only=False, **options):
 
     elif state == 'rem':
         try:
-            rem_mask = r['rem'].as_continuous().astype(np.bool)
+            rem_mask = r['rem'].as_continuous().astype(bool)
             current_mask = r['mask'].as_continuous()
             new_mask = (rem_mask & current_mask)
             r['mask'] = r['mask']._modified_copy(new_mask)
@@ -742,7 +742,7 @@ def create_pupil_mask(rec, evoked_only=False, **options):
     # newrec's mask. short_mask size should be equal to current_mask sum
     current_mask = newrec['mask'].as_continuous().squeeze()  # this is the long mask (which has rem excluded)
 
-    final_mask = np.zeros(current_mask.shape).astype(np.bool)
+    final_mask = np.zeros(current_mask.shape).astype(bool)
 
     j = 0
     # loop over the current mask (with the mask set to False when rem is True). 
@@ -1525,7 +1525,7 @@ if __name__ == '__main__':
     pass
 
 def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
-                 empty_values=None, keep_dims=None, **ctx):
+                 empty_values=None, keep_dims=None, fill_headfixed=True, **ctx):
     """
     Fill in nan values using signals in other channels. Currently for inferring
     missing values in DLC data
@@ -1537,9 +1537,10 @@ def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
         new_sig = sig
 
     newrec = rec.copy()
-    data0 = rec[sig].rasterize().as_continuous()
+    data0 = rec[sig].rasterize().as_continuous().copy()
 
     imp = IterativeImputer(max_iter=10, random_state=0)
+    data0[np.isinf(data0)] = np.nan
     imp.fit(data0.T)
     data_imp = imp.transform(data0.T).T
     if empty_values is not None:
@@ -1553,8 +1554,21 @@ def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
 
     # normalize 0 to 1 - same scale for all channels
     if norm:
-        data_imp -= np.nanmin(data_imp)
-        data_imp /= np.nanmax(data_imp)
+        if np.nanmax(data_imp)>700:
+            data_imp /= 1280
+        else:
+            data_imp /= 640
+        #data_imp -= np.nanmin(data_imp)
+        #data_imp /= np.nanmax(data_imp)
+
+    if fill_headfixed:
+        fepochs = epoch_names_matching(rec[sig].epochs, "^FILE_")
+        for f in fepochs:
+            if f.endswith('BNT') | f.endswith('OLP'):
+                log.info(f'Filling in DLC with head-fixed position: {f}')
+                e = rec[sig].get_epoch_indices(f)
+                dm = np.array([0.5, 0.2, 0.5, 0.25, 0.46, 0.25, 0.53, 0.25])
+                data_imp[:8,e[0,0]:e[0,1]] = dm[:,np.newaxis]
 
     newrec[new_sig] = newrec[sig]._modified_copy(data=data_imp, chans=new_chans)
 

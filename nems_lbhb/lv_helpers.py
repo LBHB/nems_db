@@ -104,11 +104,11 @@ def pup_nc_nmse(result, pred_name='pred', resp_name='resp', **context):
                 epochs = epochs[np.newaxis, :]
             delta_nc = []
             for i in range(epochs.shape[0]):
-                s_mask = epochs[i, :].astype(np.bool)
+                s_mask = epochs[i, :].astype(bool)
                 rb = X2[:, s_mask & p_mask] - X1[:, s_mask & p_mask]
                 rs = X2[:, s_mask & ~p_mask] - X1[:, s_mask & ~p_mask]
-                nc_big = np.corrcoef(rb)[result.meta['sig_corr_pairs'].astype(np.bool)]
-                nc_small = np.corrcoef(rs)[result.meta['sig_corr_pairs'].astype(np.bool)]
+                nc_big = np.corrcoef(rb)[result.meta['sig_corr_pairs'].astype(bool)]
+                nc_small = np.corrcoef(rs)[result.meta['sig_corr_pairs'].astype(bool)]
                 delta_nc.append(np.nanmean(abs(nc_big - nc_small)))
             pup_cost = np.nanmean(delta_nc)
 

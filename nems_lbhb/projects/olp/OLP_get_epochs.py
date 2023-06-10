@@ -50,7 +50,7 @@ def get_stim_type(ep_name):
     synth_dict = {'N': 'Unsynthetic', 'C': 'Cochlear', 'T': 'Temporal', 'S': 'Spectral',
                   'U': 'Spectrotemporal', 'M': 'Spectemp Modulation', 'A': 'Non-RMS Unsynthetic'}
     binaural_dict = {'11': 'BG Contra, FG Contra', '12': 'BG Contra, FG Ipsi',
-                     '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Contra'}
+                     '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Ipsi'}
     dynamic_dict = {'ff': 'fullBG/fullFG', 'hh': 'halfBG/halfFG', 'fh': 'fullBG/halfFG', 'hf': 'halfBG/fullFG'}
 
     if len(ep_name.split('_')) >= 3 and ep_name[:5] == 'STIM_':

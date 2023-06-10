@@ -122,13 +122,14 @@ def j_corrcoef(result, pred_name='pred', resp_name='resp', njacks=20):
     return cc, ee
 
 
-def r_floor(result, pred_name='pred', resp_name='resp'):
+def r_floor(result=None, X1mat=None, X2mat=None, pred_name='pred', resp_name='resp'):
     '''
     corr coef floor based on shuffled responses
     '''
     # if running validation test, also measure r_floor
-    X1mat = result[pred_name].as_continuous()
-    X2mat = result[resp_name].as_continuous()
+    if (X1mat is None) | (X2mat is None):
+        X1mat = result[pred_name].as_continuous()
+        X2mat = result[resp_name].as_continuous()
     channel_count = X2mat.shape[0]
     r_floor = np.zeros(channel_count)
 
@@ -158,7 +159,7 @@ def r_floor(result, pred_name='pred', resp_name='resp'):
 
         rf = np.sort(rf[np.isfinite(rf)], 0)
         if len(rf):
-            r_floor[i] = rf[np.int(len(rf) * 0.95)]
+            r_floor[i] = rf[int(len(rf) * 0.95)]
         else:
             r_floor[i] = 0
 
@@ -178,7 +179,7 @@ def _r_single(X, N=1000,limit=0.01):
         log.info('repcount<=1, rnorm=0')
         return 0
 
-    paircount = np.int(scipy.special.comb(repcount, 2))
+    paircount = int(scipy.special.comb(repcount, 2))
     pairs = []
     for p1 in range(repcount):
         for p2 in range(p1+1, repcount):

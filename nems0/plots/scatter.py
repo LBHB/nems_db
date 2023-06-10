@@ -92,7 +92,7 @@ def plot_scatter(sig1, sig2, ax=None, title=None, smoothing_bins=False,
             s2 = s2[:, s2[0, :].argsort()]
             # ????
             bincount = np.min([smoothing_bins, s2.shape[1]])
-            T = np.int(np.floor(s2.shape[1] / bincount))
+            T = int(np.floor(s2.shape[1] / bincount))
             x0 = np.zeros(bincount)
             y0 = np.zeros(bincount)
             minx=np.min(x)

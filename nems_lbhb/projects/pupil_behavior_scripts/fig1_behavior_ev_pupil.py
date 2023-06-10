@@ -54,7 +54,7 @@ def ev_pupil(cellid, batch, presilence=0.35):
     g = np.isfinite(p) & np.isfinite(b)
     cc_pup_beh = np.corrcoef(p[g], b[g])[0, 1]
 
-    pshift = np.int(pupil.fs * 0.75)
+    pshift = int(pupil.fs * 0.75)
     #pupil = pupil._modified_copy(np.roll(pupil._data, (0, pshift)))
     d = pupil._data
     pupil = pupil._modified_copy(np.roll(d / np.nanmax(d), (0, pshift)))

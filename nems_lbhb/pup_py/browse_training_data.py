@@ -290,7 +290,7 @@ class TrainingDataBrowser:
         self.close_button.grid(row=10, column=0)
     
     def long_axis_scroll(self, event):
-        val = np.float(self.long_axis_value.get())
+        val = float(self.long_axis_value.get())
         if event.num == 5 or event.delta == -120:
             val -= 1
         if event.num == 4 or event.delta == 120:
@@ -302,7 +302,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_la(self):
-        val = np.float(self.long_axis_value.get())
+        val = float(self.long_axis_value.get())
         val += 0.5
         self.long_axis_value.delete(0, 'end')
         self.long_axis_value.insert(0, string=str(round(val, 2)))
@@ -311,7 +311,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_la(self):
-        val = np.float(self.long_axis_value.get())
+        val = float(self.long_axis_value.get())
         val -= 0.5
         self.long_axis_value.delete(0, 'end')
         self.long_axis_value.insert(0, string=str(round(val, 2)))
@@ -320,7 +320,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
     
     def short_axis_scroll(self, event):
-        val = np.float(self.short_axis_value.get())
+        val = float(self.short_axis_value.get())
         if event.num == 5 or event.delta == -120:
             val -= 1
         if event.num == 4 or event.delta == 120:
@@ -332,7 +332,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
     
     def increase_sa(self):
-        val = np.float(self.short_axis_value.get())
+        val = float(self.short_axis_value.get())
         val += 0.5
         self.short_axis_value.delete(0, 'end')
         self.short_axis_value.insert(0, string=str(round(val, 2)))
@@ -341,7 +341,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_sa(self):
-        val = np.float(self.short_axis_value.get())
+        val = float(self.short_axis_value.get())
         val -= 0.5
         self.short_axis_value.delete(0, 'end')
         self.short_axis_value.insert(0, string=str(round(val, 2)))
@@ -350,7 +350,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def x_scroll(self, event):
-        val = np.float(self.x_pos_value.get())
+        val = float(self.x_pos_value.get())
         if event.num == 5 or event.delta == -120:
             val -= 1
         if event.num == 4 or event.delta == 120:
@@ -362,7 +362,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_x(self):
-        val = np.float(self.x_pos_value.get())
+        val = float(self.x_pos_value.get())
         val += 0.5
         self.x_pos_value.delete(0, 'end')
         self.x_pos_value.insert(0, string=str(round(val, 2)))
@@ -371,7 +371,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_x(self):
-        val = np.float(self.x_pos_value.get())
+        val = float(self.x_pos_value.get())
         val -= 0.5
         self.x_pos_value.delete(0, 'end')
         self.x_pos_value.insert(0, string=str(round(val, 2)))
@@ -380,7 +380,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def y_scroll(self, event):
-        val = np.float(self.y_pos_value.get())
+        val = float(self.y_pos_value.get())
         if event.num == 5 or event.delta == -120:
             val -= 1
         if event.num == 4 or event.delta == 120:
@@ -392,7 +392,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_y(self):
-        val = np.float(self.y_pos_value.get())
+        val = float(self.y_pos_value.get())
         val += 0.5
         self.y_pos_value.delete(0, 'end')
         self.y_pos_value.insert(0, string=str(round(val, 2)))
@@ -401,7 +401,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_y(self):
-        val = np.float(self.y_pos_value.get())
+        val = float(self.y_pos_value.get())
         val -= 0.5
         self.y_pos_value.delete(0, 'end')
         self.y_pos_value.insert(0, string=str(round(val, 2)))
@@ -410,7 +410,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def phi_scroll(self, event):
-        val = np.float(self.phi_value.get())
+        val = float(self.phi_value.get())
         if event.num == 5 or event.delta == -120:
             val -= 1
         if event.num == 4 or event.delta == 120:
@@ -422,7 +422,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def increase_phi(self):
-        val = np.float(self.phi_value.get())
+        val = float(self.phi_value.get())
         val += 0.5
         self.phi_value.delete(0, 'end')
         self.phi_value.insert(0, string=str(round(val, 2)))
@@ -431,7 +431,7 @@ class TrainingDataBrowser:
         self.pupil_plot = self.update_ellipse_plot()
 
     def decrease_phi(self):
-        val = np.float(self.phi_value.get())
+        val = float(self.phi_value.get())
         val -= 0.5
         self.phi_value.delete(0, 'end')
         self.phi_value.insert(0, string=str(round(val, 2)))
@@ -489,11 +489,11 @@ class TrainingDataBrowser:
 
     def save_ellipse_params(self):
 
-        X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
-        Y0_in = np.float(self.x_pos_value.get())
-        long_axis = np.float(self.long_axis_value.get())
-        short_axis = np.float(self.short_axis_value.get())
-        phi = np.float(self.phi_value.get()) / 180 * np.pi
+        X0_in = float(self.y_pos_value.get())  # these are flipped on purpose
+        Y0_in = float(self.x_pos_value.get())
+        long_axis = float(self.long_axis_value.get())
+        short_axis = float(self.short_axis_value.get())
+        phi = float(self.phi_value.get()) / 180 * np.pi
         # save eyelid key points
         self.sort_edgepoints()
         left = self.edgepoints[0]
@@ -559,11 +559,11 @@ class TrainingDataBrowser:
 
         loc = (0, 0)
 
-        X0_in = np.float(self.y_pos_value.get())  # these are flipped on purpose
-        Y0_in = np.float(self.x_pos_value.get())
-        long_axis = np.float(self.long_axis_value.get())
-        short_axis = np.float(self.short_axis_value.get())
-        phi = np.float(self.phi_value.get()) / 180 * np.pi
+        X0_in = float(self.y_pos_value.get())  # these are flipped on purpose
+        Y0_in = float(self.x_pos_value.get())
+        long_axis = float(self.long_axis_value.get())
+        short_axis = float(self.short_axis_value.get())
+        phi = float(self.phi_value.get()) / 180 * np.pi
 
         if self.edgepoints == []:
             self.edgepoints = get_eyelid_keypoints(frame_data)

@@ -22,11 +22,11 @@ def partial_corr(C):
 
     C = np.asarray(C)
     p = C.shape[1]
-    P_corr = np.zeros((p, p), dtype=np.float)
+    P_corr = np.zeros((p, p), dtype=float)
     for i in range(p):
         P_corr[i, i] = 1
         for j in range(i+1, p):
-            idx = np.ones(p, dtype=np.bool)
+            idx = np.ones(p, dtype=bool)
             idx[i] = False
             idx[j] = False
             beta_i = np.linalg.lstsq(C[:, idx], C[:, j])[0]

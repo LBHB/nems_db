@@ -356,8 +356,8 @@ def mark_invalid_trials(exptparams, exptevents, **options):
     trial_numbers = options.get('trial_numbers', None)
     sound_trial_numbers = options.get('sound_trial_numbers', None)
 
-    iv_trials = False * np.ones(events.shape[0]).astype(np.bool)
-    iv_sound_trials = False * np.ones(events.shape[0]).astype(np.bool)
+    iv_trials = False * np.ones(events.shape[0]).astype(bool)
+    iv_sound_trials = False * np.ones(events.shape[0]).astype(bool)
     if keep_early_trials == False:
         # mark early trials as invalid per soundTrial
         iv = events['soundTrial']=='EARLY_TRIAL'

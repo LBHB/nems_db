@@ -1586,7 +1586,7 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plo
         # wsearchb=wsearcha
         # margin=6
         if not hasattr(margin, "__len__"):
-            margin = np.float(margin) * np.ones(2)
+            margin = float(margin) * np.ones(2)
         wA_ = np.hstack((np.linspace(weights[0] - margin[0], weights[0], N),
                          (np.linspace(weights[0], weights[0] + margin[0], N)[1:])))
         wB_ = np.hstack((np.linspace(weights[1] - margin[1], weights[1], N),
@@ -1618,7 +1618,7 @@ def calc_psth_weights_of_model_responses_list(val, names, signame='pred', do_plo
     while len(As) < 20:
         attempt += 1
         if (attempt > 1) and (len(As) > 0) and (len(As) > 2) and (not did_estimate):
-            margin = np.float(margin) * np.ones(2)
+            margin = float(margin) * np.ones(2)
             m = np.abs(weights[0] - As).max() * 3
             if m == 0:
                 margin[0] = margin[0] / 2
