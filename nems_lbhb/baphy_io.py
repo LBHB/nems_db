@@ -2320,7 +2320,8 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
             new_stim = {}
             new_keys = []
             for k in keys:
-                matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
+                k_=k.replace(',','-')
+                matches = list(set(epochs[epochs.name.str.endswith(k_)].name.values))
                 for nk in matches:
                     new_stim[nk] = stim[k]
             stim = new_stim

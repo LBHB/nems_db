@@ -20,16 +20,18 @@ from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
 from nems_lbhb import baphy_io
-from nems_lbhb.motor.free_tools import compute_d_theta, \
+from nems_lbhb.projects.freemoving.free_tools import compute_d_theta, \
     free_scatter_sum, dlc2dist
-
-from nems_lbhb.projects.freemoving import free_model
-
-dt = datetime.date.today().strftime("%Y-%m-%d")
-figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
-os.makedirs(figpath, exist_ok=True)
+from nems_lbhb.projects.freemoving import free_model, free_vs_fixed_strfs
 
 
+# code to support dumping figures
+#dt = datetime.date.today().strftime("%Y-%m-%d")
+#figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
+#os.makedirs(figpath, exist_ok=True)
+
+
+# tested sites
 siteid = 'PRN020a'
 siteid = 'PRN010a'
 siteid = 'PRN015a'
@@ -39,6 +41,34 @@ siteid = 'PRN022a'
 siteid = 'PRN043a'
 siteid = 'PRN051a'
 
-dlc_chans=10
+# interesting sites
+siteid = 'PRN067a' # ok both
+siteid = 'PRN015a' # nice aud, single stream
+siteid = 'PRN047a' # some of everything.
+siteid = 'PRN074a' # ok both
+siteid = 'PRN048a' # some of everything.
+
+dlc_chans=8
 rasterfs=50
-rec = free_model.load_free_data(siteid, rasterfs=rasterfs, dlc_chans=dlc_chans)
+batch=348
+rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs, dlc_chans=dlc_chans, compute_position=True)
+
+modelopts={'dlc_memory': 4, 'acount': 12, 'dcount': 8, 'l2count': 24, 'cost_function': 'squared_error'}
+model = free_model.free_fit(rec, shuffle='none', **modelopts)
+model2 = free_model.free_fit(rec, shuffle='none', apply_hrtf=False, save_to_db=True, **modelopts)
+
+for i,c in enumerate(model2.meta['cellids']):
+    print(f"{i}: {c} {model.meta['r_test'][i,0]:.3f} {model2.meta['r_test'][i,0]:.3f} {rec.meta['depth'][i]}")
+print(f"MEAN              {model.meta['r_test'].mean():.3f} {model2.meta['r_test'].mean():.3f}")
+
+
+# scatter plot of free-moving position with example positions highlighted
+f = free_vs_fixed_strfs.movement_plot(rec)
+
+# sSTRFS for interesting units: PRN048a-269-1, PRN048a-285-2
+for out_channel in [8,9]:
+    cellid = rec['resp'].chans[out_channel]
+    mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, [model, model2], D=11, out_channel=out_channel)
+    f = free_vs_fixed_strfs.dstrf_plots(rec, [model, model2], mdstrf, out_channel)
+
+
