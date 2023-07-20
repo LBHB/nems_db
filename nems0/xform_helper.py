@@ -15,7 +15,7 @@ from nems0.utils import escaped_split, escaped_join
 from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
 from nems0.plugins import (default_keywords, default_loaders, default_fitters,
                           default_initializers)
-from nems.tools import json
+# from nems0.tools import json
 
 
 log = logging.getLogger(__name__)

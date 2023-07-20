@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sb
 import copy
-from nems_lbhb.baphy_experiment import BAPHYExperiment
 import nems_lbhb.projects.olp.OLP_helpers as ohel
 import nems_lbhb.projects.olp.OLP_fit as ofit
 import nems_lbhb.projects.olp.OLP_Synthetic_plot as osyn
@@ -88,197 +87,115 @@ bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock
 filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
 filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
 
+
+
+ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.5, strict_r=True, summary=True, sep_hemi=False)
+
+
 sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=True)
 
 
-sound_metric_scatter(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
+
+osyn.sound_metric_scatter_bgfg_sep(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
                           x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'])
 
-def sound_metric_scatter_bgfg_sep(df, x_metrics, x_labels=None, fr_thresh=0.03, r_cut=None):
-    '''2023_05_24. Takes a sound df, must already be filtered by singular area, and the layers you want, and
-    it will plot separately the mean relative gain for each sound across the different synthetic conditions. BG and FG
-    will be on different rows for ease of viewing, but the axes will be shared so you can see the different spaces
-    they occupy.'''
+osyn.sound_metric_scatter_combined(filt, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.4,
+                          x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'],
+                              suffix='_start')
 
-    df = df.loc[(df.bg_FR >= fr_thresh) & (df.fg_FR >= fr_thresh)]
-    df = df.loc[(df.kind=='11') & (df.dyn_kind=='ff') & (df.SNR==0) & (df.olp_type=='synthetic')]
+osyn.sound_metric_scatter_combined_flanks(filt, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
+                          x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'],
+                              suffix='_start')
 
-    if r_cut:
-        df = df.dropna(axis=0, subset='r')
-        df = df.loc[df.r >= r_cut]
-    df = df.copy()
+est = run_reg(filt, 0.4, 0.03, suffix='', synth=None, xs=['Fcorr', 'Tstationary', 'bandwidth'])
 
-    # Get rid of when the weights are unrealistic
-    weight_lim = [0, 2]
-    df = df.loc[((df[f'weightsA'] >= weight_lim[0]) & (df[f'weightsA'] <= weight_lim[1])) &
-                        ((df[f'weightsB'] >= weight_lim[0]) & (df[f'weightsB'] <= weight_lim[1]))]
+#Trying multiple regression
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 
-    ylim_max = np.max([df.BG_rel_gain_all.max(), df.FG_rel_gain_all.max()])
-    ylim_min = np.min([df.BG_rel_gain_all.min(), df.FG_rel_gain_all.min()])
+def run_reg(filt, r_cut, fr_thresh, suffix='', synth=None,
+            xs=['Fcorr', 'Tstationary', 'bandwidth'], category=None):
 
-    fig, axes = plt.subplots(2, len(x_metrics), figsize=(12, 5*len(areas)), sharey=True)
-    ax = axes.ravel()
+    xs = [f'{xx}{suffix}' for xx in xs]
+    y = [f'rel_gain{suffix}']
 
-    count = 0
-    for ll in ['BG', 'FG']:
-        for cnt, met in enumerate(x_metrics):
+    # r_cut = 0.4
+    dff = filt.dropna(axis=0, subset='r')
+    dff = dff.loc[dff[f'r{suffix}'] >= r_cut]
+    df = dff.copy()
 
-            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
-            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
-            xlim_min = xlim_min - np.abs(xlim_max)*0.05
+    # fr_thresh = 0.03
+    if suffix == '_start' or suffix == '_end':
+        df = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                    & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+    else:
+        df = df.loc[(df.bg_FR >= fr_thresh) & (df.fg_FR >= fr_thresh)]
 
-            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
-            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
-            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
-            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+    sound_df = ohel.get_sound_statistics_from_df(df, percent_lims=[15, 85], append=True)
 
-            if ll == 'BG':
-                colors = {'N':'cornflowerblue', 'M':'royalblue', 'T':'blue', 'S':'darkblue', 'C':'black'}
-            elif ll == 'FG':
-                colors = {'N': 'yellowgreen', 'M': 'forestgreen', 'T': 'green', 'S': 'darkgreen', 'C': 'black'}
+    nms = xs + y
+    bx, fx = [f'BG_{bb}' for bb in nms], [f'FG_{ff}' for ff in nms]
+    bx, fx = ['BG', 'synth_kind', 'cellid', 'layer'] + bx, ['FG', 'synth_kind', 'cellid', 'layer'] + fx
 
-            for key, val in colors.items():
-                sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind==key],
-                               ax=ax[cnt+count], s=24, color=val, label=key)
+    bgs, fgs = sound_df[bx], sound_df[fx]
+    bg_rn = {key:(key[3:] if len(key.split('_'))>1 else 'name') for key in bgs.columns.to_list() if key[:2]=='BG'}
+    fg_rn = {key:(key[3:] if len(key.split('_'))>1 else 'name') for key in fgs.columns.to_list() if key[:2]=='FG'}
+    bgs, fgs = bgs.rename(columns=bg_rn), fgs.rename(columns=fg_rn)
 
-                sb.scatterplot(x=f'{ll}_{met}', y=ylim_max*1.1, data=met_av.loc[met_av.synth_kind==key],
-                               ax=ax[cnt+count], marker='d', color=val, s=100)
-                sb.scatterplot(x=xlim_max*1.1, y=f'{ll}_rel_gain_all', data=gain_av.loc[gain_av.synth_kind==key],
-                               ax=ax[cnt+count], marker='<', color=val, s=200)
+    to_reg = pd.concat([bgs,fgs])
 
-            ax[cnt+count].set_ylim(ylim_min, ylim_max*1.1), ax[cnt+count].set_xlim(xlim_min,xlim_max*1.1)
-            ax[cnt+count].set_ylabel(''), ax[cnt+count].set_xlabel('')
-            ax[count].set_ylabel(f'Relative Gain', fontweight='bold', fontsize=10)
-            if count != 0:
-                if x_labels:
-                    ax[cnt + count].set_xlabel(f'{x_labels[cnt]}', fontweight='bold', fontsize=10)
-                else:
-                    ax[cnt + count].set_ylabel(f'{met}', fontweight='bold', fontsize=10)
+    if synth:
+        to_reg = to_reg.loc[to_reg.synth_kind==synth]
 
-        count += len(x_metrics)
-
-    fig.suptitle(f'{df.area.unique()[0]} - FR threshold: {fr_thresh} - r > {r_cut}', fontsize=12, fontweight='bold')
+    for xx in xs:
+        to_reg[xx] -= to_reg[xx].mean()
+        to_reg[xx] /= to_reg[xx].std()
 
 
-sound_metric_scatter_bgfg_sep(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], fr_thresh=0.03, r_cut=0.6,
-                          x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'])
-
-def sound_metric_scatter_combined(df, x_metrics, x_labels=None, fr_thresh=0.03, r_cut=None):
-    '''2023_05_24. Takes a sound df, must already be filtered by singular area, and the layers you want, and
-    it will plot separately the mean relative gain for each sound across the different synthetic conditions. BG and FG
-    will be on different rows for ease of viewing, but the axes will be shared so you can see the different spaces
-    they occupy.'''
-
-    df = df.loc[(df.bg_FR >= fr_thresh) & (df.fg_FR >= fr_thresh)]
-    df = df.loc[(df.kind=='11') & (df.dyn_kind=='ff') & (df.SNR==0) & (df.olp_type=='synthetic')]
-
-    if r_cut:
-        df = df.dropna(axis=0, subset='r')
-        df = df.loc[df.r >= r_cut]
-    df = df.copy()
-
-    # Get rid of when the weights are unrealistic
-    weight_lim = [0, 2]
-    df = df.loc[((df[f'weightsA'] >= weight_lim[0]) & (df[f'weightsA'] <= weight_lim[1])) &
-                        ((df[f'weightsB'] >= weight_lim[0]) & (df[f'weightsB'] <= weight_lim[1]))]
-
-    ylim_max = np.max([df.BG_rel_gain_all.max(), df.FG_rel_gain_all.max()])
-    ylim_min = np.min([df.BG_rel_gain_all.min(), df.FG_rel_gain_all.min()])
-
-    fig, axes = plt.subplots(2, len(x_metrics), figsize=(12, 5*len(areas)), sharey=True)
-    ax = axes.ravel()
-
-    count = 0
-    for ll in ['BG', 'FG']:
-        for cnt, met in enumerate(x_metrics):
-
-            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
-            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
-            xlim_min = xlim_min - np.abs(xlim_max)*0.05
-
-            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
-            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
-            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
-            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
-
-            if ll == 'BG':
-                colors = {'N':'cornflowerblue', 'M':'royalblue', 'T':'blue', 'S':'darkblue', 'C':'black'}
-            elif ll == 'FG':
-                colors = {'N': 'yellowgreen', 'M': 'forestgreen', 'T': 'green', 'S': 'darkgreen', 'C': 'darkslategrey'}
-
-            for key, val in colors.items():
-                if cnt==0:
-                    plot = sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind==key],
-                               ax=ax[cnt+count], s=24, color=val, label=f'{key}, {ll}')
-
-                else:
-                    sb.scatterplot(x=f'{ll}_{met}', y=f'{ll}_rel_gain_all', data=to_plot.loc[to_plot.synth_kind == key],
-                                   ax=ax[cnt + count], s=24, color=val)
-
-                sb.scatterplot(x=f'{ll}_{met}', y=ylim_max*1.1, data=met_av.loc[met_av.synth_kind==key],
-                               ax=ax[cnt+count], marker='v', color=val, s=150)
-                sb.scatterplot(x=xlim_max*1.1, y=f'{ll}_rel_gain_all', data=gain_av.loc[gain_av.synth_kind==key],
-                               ax=ax[cnt+count], marker='<', color=val, s=150)
-
-                plt.setp(plot.get_legend().get_texts(), fontsize='5')
-                plt.show()
-
-            ax[cnt+count].set_ylim(ylim_min, ylim_max*1.1), ax[cnt+count].set_xlim(xlim_min,xlim_max*1.1)
-            ax[cnt+count].set_ylabel(''), ax[cnt+count].set_xlabel('')
-            ax[count].set_ylabel(f'Relative Gain', fontweight='bold', fontsize=10)
+    # to_reg[f'Fcorr{suffix}'] -= to_reg[f'Fcorr{suffix}'].mean()
+    # to_reg[f'Tstationary{suffix}'] -= to_reg[f'Tstationary{suffix}'].mean()
+    # to_reg[f'bandwidth{suffix}'] -= to_reg[f'bandwidth{suffix}'].mean()
+    #
+    # to_reg[f'Fcorr{suffix}'] /= to_reg[f'Fcorr{suffix}'].std()
+    # to_reg[f'Tstationary{suffix}'] /= to_reg[f'Tstationary{suffix}'].std()
+    # to_reg[f'bandwidth{suffix}'] /= to_reg[f'bandwidth{suffix}'].std()
 
 
-    count += len(x_metrics)
+    # mod = smf.ols(formula=f'{y[0]} ~ C(layer) + Fcorr{suffix} + Tstationary{suffix} + '
+    #                       f'bandwidth{suffix}', data=to_reg)
+    string = ' + '.join(xs)
+    if category:
+        cats = [f'C({cc})' for cc in category]
+        cat_string = ' + '.join(cats)
+        fit_string = ' + '.join([string, cat_string])
+    else:
+        fit_string = string
 
-    xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
-    xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
-    xlim_min = xlim_min - np.abs(xlim_max) * 0.05
+    mod = smf.ols(formula=f'{y[0]} ~ {fit_string}', data=to_reg)
+    est = mod.fit()
 
-    to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
-    to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
-    met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
-    gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
+    if suffix=='':
+        suffix = '_full'
 
-    if ll == 'BG':
-        from matplotlib import cm
-        from matplotlib.colors import ListedColormap, LinearSegmentedColormap
-        greys = cm.get_cmap('Greys', 12)
-        cols = greys(np.linspace(.25, 1, 5))
-
-        colors = {'N': 'cornflowerblue', 'M': 'royalblue', 'T': 'blue', 'S': 'darkblue', 'C': 'black'}
-
-        for cnt, met in enumerate(x_metrics):
-
-            xlim_max = np.max([df[f'BG_{met}'].max(), df[f'FG_{met}'].max()])
-            xlim_min = np.min([df[f'BG_{met}'].min(), df[f'FG_{met}'].min()])
-            xlim_min = xlim_min - np.abs(xlim_max)*0.05
-
-            to_plot_bg = df[[f'BG', 'BG_rel_gain_all', 'synth_kind', f'BG_{met}']]
-            to_plot_fg = df[[f'FG', 'FG_rel_gain_all', 'synth_kind', f'FG_{met}']]
-            to_plot_bg = to_plot_bg.drop_duplicates(subset=[f'BG', 'synth_kind'])
-            to_plot_fg = to_plot_fg.drop_duplicates(subset=[f'FG', 'synth_kind'])
-            to_plot_bg, to_plot_fg = to_plot_bg.drop(labels=['BG'],axis=1), to_plot_fg.drop(labels=['FG'], axis=1)
-
-            to_plot_bg = to_plot_bg.rename(columns={'BG_rel_gain_all': 'rel_gain', 'BG_Fcorr':'FCorr'})
-            to_plot_fg = to_plot_fg.rename(columns={'FG_rel_gain_all': 'rel_gain', 'FG_Fcorr':'FCorr'})
-
-            to_plot = pd.concat([to_plot_bg, to_plot_fg])
-
-            to_plot = df[[f'{ll}', f'{ll}_rel_gain_all', 'synth_kind', f'{ll}_{met}']]
-            to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
-            met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
-            gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_all'].mean()
-            # met_std_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}'].mean()
+    return {f'{filt.area.unique()[0]}{suffix}': est}
 
 
 
-            if x_labels:
-                ax[cnt + count].set_xlabel(f'{x_labels[cnt]}', fontweight='bold', fontsize=10)
-            else:
-                ax[cnt + count].set_ylabel(f'{met}', fontweight='bold', fontsize=10)
 
 
-    fig.suptitle(f'{df.area.unique()[0]} - FR threshold: {fr_thresh} - r > {r_cut}', fontsize=12, fontweight='bold')
+# Y = to_reg[y].values
+# X = to_reg[xs].values
+# X2 = sm.add_constant(X)
+# est = sm.OLS(Y, X2)
+# est2 = est.fit()
+# print(est2.summary())
+#
+# regr = linear_model.LinearRegression()
+# xx = regr.fit(X, Y)
+
+# reg = stats.linregress(X, Y)
+# x = np.asarray([xlim_min, xlim_max])
+# y = reg.slope * x + reg.intercept
 
 
 
@@ -376,20 +293,29 @@ ofig.plot_all_weight_comparisons(filt, fr_thresh=0.03, r_thresh=0.5, strict_r=Tr
 
 
 ## Figure 1 ##
+# C. PSTHs
+opo.poster3_psths_with_specs(weight_df, 'CLT052d-018-1', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                         sigma=1, error=False, title='PEG - Mixed Suppression')
+opo.poster3_psths_with_specs(weight_df, 'CLT008a-046-2', 'Wind', 'Geese', batch=340, bin_kind='11', synth_kind='A',
+                         sigma=1, error=False, title='A1 - FG Suppression')
+
+
 
 # D. Heatmap example of suppression. Some good examples.
-ofig.response_heatmaps_comparison(weight_df, site='CLT009a', bg='Bulldozer', fg='FightSqueak', cellid=None,
-                                     batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
-                             example=True, lin_sum=True, positive_only=False)
-
-ofig.response_heatmaps_comparison(weight_df, site='CLT012a', bg='Bees', fg='Bugle', cellid='CLT012a-052-1',
-                                     batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
-                             example=True, lin_sum=True, positive_only=False)
-
+# ofig.response_heatmaps_comparison(weight_df, site='CLT009a', bg='Bulldozer', fg='FightSqueak', cellid=None,
+#                                      batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
+#                              example=True, lin_sum=True, positive_only=False)
+#
+# ofig.response_heatmaps_comparison(weight_df, site='CLT012a', bg='Bees', fg='Bugle', cellid='CLT012a-052-1',
+#                                      batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
+#                              example=True, lin_sum=True, positive_only=False)
 ofig.response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
-                                     batch=340, bin_kind='11', synth_kind='A', sigma=1, sort=True,
+                                     batch=340, bin_kind='11', synth_kind='A', sigma=3, sort=True,
                              example=True, lin_sum=True, positive_only=False)
 
+ofig.response_heatmaps_comparison(weight_df, site='CLT052d', bg='Wind', fg='Geese', cellid='CLT052d-018-1',
+                                     batch=340, bin_kind='11', synth_kind='A', sigma=3, sort=True,
+                             example=True, lin_sum=True, positive_only=False)
 
 
 
@@ -678,13 +604,13 @@ weight_df = ohel.add_sound_stats(weight_df, sound_df)
 
 
 
-ofig.sound_metric_scatter(weight_df0, ['Fstationary', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
-                          ['Frequency\nNon-stationariness', 'Temporal\nNon-Stationariness', 'Bandwidth'],
-                          area='A1', threshold=0.03, synth_kind='N', r_cut=0.6)
+ofig.sound_metric_scatter(weight_df0, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
+                          ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'],
+                          area='A1', threshold=0.03, synth_kind='N', r_cut=0.6, jitter=[0.005,0.2,0.03])
 
 
 ofig.sound_metric_scatter(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
-                          ['Frequency\nNon-stationariness', 'Temporal\nNon-Stationariness', 'Bandwidth'],
+                          ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'],
                           area='A1', threshold=0.03, synth_kind='N', r_cut=0.6)
 
 
@@ -860,7 +786,7 @@ osyn.sound_metric_scatter_all_synth(weight_df, x_metrics=['Fstationary', 'Tstati
 
 
 # Number 2 on the list of things to do
-ofig.weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=0.8)
+ofig.weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=0.6)
 
 # I use this for most things
 quad, _ = ohel.quadrants_by_FR(weight_df, threshold=0.03, quad_return=3)
@@ -899,11 +825,11 @@ ofig.sound_metric_scatter(weight_df, ['t50', 'f50'],
                           area='A1', threshold=0.03, synth_kind='N', title_text='')
 
 # Plots a single, example relative gain histogram
-ofig.plot_single_relative_gain_hist(weight_df, 0.03, synth_kind='N')
+ofig.plot_single_relative_gain_hist(filt, 0.03, synth_kind=None)
 
 # Plots the example that I piece together to make the linear model example
-weight_df = ofit.OLP_fit_weights(batch=333, cells=['TBR012a-31-1'])
-ofig.plot_linear_model_pieces_helper(weight_df, cellid='TBR012a-31-1', bg='Wind', fg='Chirp')
+weight_df0 = ofit.OLP_fit_weights(batch=333, cells=['TBR012a-31-1'], sound_stats=False)
+ofig.plot_linear_model_pieces_helper(weight_df0, cellid='TBR012a-31-1', bg='Wind', fg='Chirp')
 
 # Adds max_power
 ofig.sound_metric_scatter(weight_df, ['Fstationary', 'Tstationary', 'bandwidth', 'max_power', 'RMS_power'],

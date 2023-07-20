@@ -326,6 +326,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             (exptparams['TrialObject'][1]['ReferenceHandle'][1].get('TestBinaural','None').strip() != 'None'):
         # Binaural natural sounds
         sound_root = exptparams['TrialObject'][1]['ReferenceHandle'][1]['SoundPath'].replace("\\", "/")
+        sound_root = sound_root.replace("C:/Users/lbhb/Desktop/v2", "/auto/data/sounds/BigNat/v2")
         sound_root = sound_root.replace("H:/", "/auto/data/")
         sound_root = sound_root.replace("E:/sounds/v2", "/auto/data/sounds/BigNat/v2")
         sound_root = sound_root.replace("E:/", "/auto/data/")
@@ -659,7 +660,6 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                   for i in range(w.shape[1])]
 
             sg = [np.concatenate([sg_pre, np.abs(s[:,:duration_bins])**0.5, sg_post], axis=1) for s in sg]
-
             if mono & (max_chans_was>1):
                 sgshuff = np.random.permutation(sg[0].flatten())
                 sgshuff = np.reshape(sgshuff, sg[0].shape)
@@ -667,7 +667,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
             sg_unique[f] = np.concatenate(sg, axis=0)
 
             if binsplit and (binaural!=False):
-                sg_unique[f]=np.reshape(sg_unique[f],[channels,-1,sg_unique[f].shape[1]])
+                sg_unique[f]=np.reshape(sg_unique[f], [channels,-1,sg_unique[f].shape[1]])
     return sg_unique, list(sg_unique.keys()), stimparam
 
 
