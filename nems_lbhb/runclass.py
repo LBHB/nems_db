@@ -572,23 +572,27 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 max_chans=2
 
             w = np.zeros((w1.shape[0], max_chans))
-            if (binaural is None) | (binaural == False) | ((type(binaural) is str) & (binaural == 'force')):
+            if (binaural is None) | (binaural is False) | ((type(binaural) is str) & (binaural == 'force')):
                 #log.info(f'binaural model: None')
                 w[:, [c1]] = w1
                 w[:, [c2]] += w2
             elif type(binaural) is float:
                 db_atten = binaural
                 factor = 10**(-db_atten/20)
-                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
-                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+                w[:, [c1]] = w1*1/(1+factor)
+                w[:, [1-c1]] = w1*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)
+                w[:, [1-c2]] += w2*factor/(1+factor)
 
             elif (type(binaural) is str) & (binaural=='crude'):
                 #log.info(f'binaural model: {binaural}')
                 #import pdb; pdb.set_trace()
                 db_atten = 6
                 factor = 10**(-db_atten/20)
-                w[:, [c1]] = w1*1/(1+factor)+w2*factor/(1+factor)
-                w[:, [c2]] += w2*1/(1+factor)+w1*factor/(1+factor)
+                w[:, [c1]] = w1*1/(1+factor)
+                w[:, [1-c1]] = w1*factor/(1+factor)
+                w[:, [c2]] += w2*1/(1+factor)
+                w[:, [1-c2]] += w2*factor/(1+factor)
             else:
                 raise ValueError(f"Unknown binaural value {binaural}")
             if (primary_channel>0) & (max_chans>1) & ((type(binaural) is str) & (binaural == 'force')):
@@ -666,8 +670,9 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
                 sg.append(sgshuff)
             sg_unique[f] = np.concatenate(sg, axis=0)
 
-            if binsplit and (binaural!=False):
+            if binsplit and (binaural != False):
                 sg_unique[f]=np.reshape(sg_unique[f], [channels,-1,sg_unique[f].shape[1]])
+
     return sg_unique, list(sg_unique.keys()), stimparam
 
 

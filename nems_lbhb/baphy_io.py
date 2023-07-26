@@ -1923,6 +1923,7 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options['rasterfs'] = int(op[2:])
         elif op.startswith('ch'):
             options['chancount'] = int(op[2:])
+            options['channels'] = int(op[2:])
 
         elif op.startswith('fmap'):
             options['facemap'] = int(op[4:])
