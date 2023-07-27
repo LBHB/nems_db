@@ -1584,7 +1584,7 @@ def make_state_signal(rec, state_signals=['pupil'], permute_signals=[], generate
             #_split = int(trial_count/2)
             _t1=trial_intersect[0,0]
             _t2=trial_intersect[-1,1]
-            _split = int((_t1+_t2)/2)
+            _Xsplit = int((_t1+_t2)/2)
             epoch1 = np.array([[_t1,_split]])
             epoch2 = np.array([[_split,_t2]])
 

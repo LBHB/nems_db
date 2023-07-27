@@ -31,7 +31,12 @@ def get_rec_epochs(parmfile=None, fs=100, rec=None):
         options = {'rasterfs': fs, 'stim': False, 'resp': True}
         rec = manager.get_recording(**options)
 
-    stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
+    stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_.+?_[0-9]')
+
+    stim_epochs = [e for e in stim_epochs
+                   if (not e.startswith("STIM_cat")) & (not e.startswith("STIM_00cat")) &
+                   (not e.startswith("STIM_NULL:1+cat")) & (not e.startswith("STIM_NULL:1+00cat"))]
+
     twostims = [epo for epo in stim_epochs if 'null' not in epo]
 
     epoch_df = pd.DataFrame({'BG + FG': twostims})

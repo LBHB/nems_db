@@ -825,7 +825,6 @@ class BAPHYExperiment:
             signals['facepca'] = nems0.signal.RasterizedSignal.concatenate_time(facepca_sigs)
 
         if stim:
-            #import pdb; pdb.set_trace()
             stim_kwargs = {key:val for key, val in kwargs.items() if key not in ['hp','lp']}
             stim_sigs = [nems0.signal.TiledSignal(
                             data=io.baphy_load_stim(exptparams[i], str(p), epochs=baphy_events[i], **stim_kwargs)[0],

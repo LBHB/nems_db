@@ -1923,6 +1923,7 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options['rasterfs'] = int(op[2:])
         elif op.startswith('ch'):
             options['chancount'] = int(op[2:])
+            options['channels'] = int(op[2:])
 
         elif op.startswith('fmap'):
             options['facemap'] = int(op[4:])
@@ -2320,7 +2321,8 @@ def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
             new_stim = {}
             new_keys = []
             for k in keys:
-                matches = list(set(epochs[epochs.name.str.endswith(k)].name.values))
+                k_=k.replace(',','-')
+                matches = list(set(epochs[epochs.name.str.endswith(k_)].name.values))
                 for nk in matches:
                     new_stim[nk] = stim[k]
             stim = new_stim
