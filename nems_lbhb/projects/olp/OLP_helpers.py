@@ -11,6 +11,7 @@ import glob
 import seaborn as sb
 import re
 import nems0.epoch as ep
+import joblib as jl
 
 
 def manual_fix_units(cell_list):
@@ -884,19 +885,22 @@ def get_sound_statistics(weight_df, plot=True):
     return sound_df
 
 
-def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
-    '''2022_09_14. This is a way to look at the sound stats (passed as a list) from a sound_df and compare them. But also, if you add
+def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None):
+    '''2023_06_13. Updated to include lines with averages of the stats with SEM
+    2022_09_14. This is a way to look at the sound stats (passed as a list) from a sound_df and compare them. But also, if you add
     lines, a dictionary, which passes keys as those matching something found in stats, with a cutoff. That cut off will
     be drawn as a line on that subplot for that stat and it will also tell you what sounds are below that threshold,
     returning those sounds in a dictionary where the stat is a key and the values are a list of 'bad' sounds. Labels
     are optional, passing it will look prettier than it defaulting the labels to what the sound stat in the df.'''
+    from scipy import stats
     sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
     sound_df.rename(columns={'std': 'Tstationary', 'freq_stationary': 'Fstationary', 'RMS_norm_power': 'RMS_power',
                              'max_norm_power': 'max_power'}, inplace=True)
-    if isinstance(stats, list):
-        lens = len(stats)
-    elif isinstance(stats, str):
-        lens, stats = 1, [stats]
+    sound_df = sound_df.drop_duplicates('short_name')
+    if isinstance(metrics, list):
+        lens = len(metrics)
+    elif isinstance(metrics, str):
+        lens, stats = 1, [metrics]
 
     if lens <= 3:
         hh, ww = 1, lens
@@ -908,26 +912,83 @@ def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
     axes = np.ravel(axes)
 
     bads = {}
-    for cnt, (ax, st) in enumerate(zip(axes, stats)):
+    for cnt, (ax, st) in enumerate(zip(axes, metrics)):
         sb.barplot(x='short_name', y=st,
                    palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
                    data=sound_df, ci=68, ax=ax)
-        ax.set_xticklabels(sound_df.short_name, rotation=90, fontweight='bold', fontsize=7)
+        ax.set_xticklabels(sound_df.short_name, rotation=90, fontsize=7) #fontweight='bold')
         if labels:
             ax.set_ylabel(labels[cnt], fontweight='bold', fontsize=12)
         else:
-            ax.set_ylabel(stats[cnt], fontweight='bold', fontsize=12)
+            ax.set_ylabel(metrics[cnt], fontweight='bold', fontsize=12)
         ax.spines['top'].set_visible(True), ax.spines['right'].set_visible(True)
         ax.set(xlabel=None)
+        ymin, ymax = ax.get_ylim()
+        ax.set_ylim(0, ymax)
 
-        if st in lines.keys():
-            xmin, xmax = ax.get_xlim()
-            ax.hlines(lines[st], xmin=xmin, xmax=xmax, ls=':', color='black')
-            ax.set_xlim(xmin, xmax)
-            bad_df = sound_df.loc[sound_df[st] <= lines[st]]
-            bads[st] = bad_df.short_name.tolist()
-    axes[0].set_title(f"Synth: {synth_kind}", fontsize=10, fontweight='bold')
-    return bads
+        both = sound_df[['type', st]]
+        bgs, fgs = both.loc[both.type=='BG'], both.loc[both.type=='FG']
+        bg_med, fg_med = np.median(bgs[st]), np.median(fgs[st])
+        # avg = sound_df[['type', st]].groupby(by='type', as_index=False).mean()
+        # std = sound_df[['type', st]].groupby(by='type', as_index=False).sem()
+        bglen, fglen = sound_df['type'].value_counts()
+        xmin, xmax = ax.get_xlim()
+
+        ax.hlines(bg_med, xmin=xmin, xmax=xmin+bglen, ls='--', color='dodgerblue')
+        ax.hlines(fg_med, xmin=xmin+bglen, xmax=xmax, ls='--', color='olivedrab')
+
+        # if fill:
+        #     ax.fill_between([xmin, xmin+bglen], avg.loc[avg.type=='BG'][st].values[0] + std.loc[std.type=='BG'][st].values[0],
+        #                     avg.loc[avg.type == 'BG'][st].values[0] - std.loc[std.type == 'BG'][st].values[0],
+        #                        alpha=0.3, color='dodgerblue')
+        #     ax.fill_between([xmin+bglen, xmax], avg.loc[avg.type=='FG'][st].values[0] + std.loc[std.type=='FG'][st].values[0],
+        #                     avg.loc[avg.type == 'FG'][st].values[0] - std.loc[std.type == 'FG'][st].values[0],
+        #                        alpha=0.3, color='olivedrab')
+
+        # tt = stats.ttest_ind(sound_df.loc[sound_df.type=='BG'][st], sound_df.loc[sound_df.type=='FG'][st])
+        tt = stats.mannwhitneyu(sound_df.loc[sound_df.type=='BG'][st], sound_df.loc[sound_df.type=='FG'][st])
+
+        if cnt == 0:
+            ax.set_title(f'Synth: {synth_kind}, p={np.around(tt.pvalue, 3)}', fontsize=8, fontweight='bold')
+        else:
+            ax.set_title(f'p={np.around(tt.pvalue, 3)}', fontsize=8, fontweight='bold')
+
+        if lines:
+            if st in lines.keys():
+                xmin, xmax = ax.get_xlim()
+                ax.hlines(lines[st], xmin=xmin, xmax=xmax, ls=':', color='black')
+                ax.set_xlim(xmin, xmax)
+                bad_df = sound_df.loc[sound_df[st] <= lines[st]]
+                bads[st] = bad_df.short_name.tolist()
+    # axes[0].set_title(f"Synth: {synth_kind}", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+    if lines:
+        return bads
+    else:
+        return
+
+
+def sound_stat_violin(df, mets, met_labels):
+    '''2023_07_03. Quickly made this as an alternative and more concise version of the sound stat bar plot.
+    This just makes a violin plot of the given statistics you ask for. Make sure you also provide a
+    corresponding list of how you want them to be labeled. DF you pass is the straight df you load
+    and the bad sounds will get taken out in the function and the sound_df generated.'''
+    bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock
+    df = df.loc[df['BG'].apply(lambda x: x not in bads)]
+    df = df.loc[df['FG'].apply(lambda x: x not in bads)]
+    sound_df = ohel.get_sound_statistics_from_df(df, percent_lims=[15,85], append=False)
+    sounds = sound_df.loc[sound_df.synth_kind=='N']
+
+    fig, ax = plt.subplots(1, len(mets), figsize=(len(mets)*3,4))
+    for cnt, mt in enumerate(mets):
+        sn.violinplot(data=sounds, x="type", y=mt, ax=ax[cnt])
+        ax[cnt].set_xlabel('')
+        ax[cnt].set_xticklabels(sound_df.type.unique().tolist(), fontweight='bold', fontsize=10)
+        ax[cnt].set_ylabel(met_labels[cnt], fontweight='bold', fontsize=10)
+
+        tt = stats.ttest_ind(sounds.loc[sounds.type=='BG'][mt], sounds.loc[sounds.type=='FG'][mt]).pvalue
+        ax[cnt].set_title(f"p={np.around(tt, 5)}")
+    fig.tight_layout()
 
 
 def add_sound_stats(weight_df, sound_df):
@@ -1272,8 +1333,19 @@ def get_sound_statistics_from_df(df, percent_lims=[10, 90], append=True, fs=100)
 
     else:
         for aa in the_dfs.keys():
-            the_dfs[aa]['bw_percent'] = f'{percent_lims[0]}/{percent_lims[1]}',
-        return the_dfs
+            the_dfs[aa]['bw_percent'] = f'{percent_lims[0]}/{percent_lims[1]}'
+        the_dfs['BG']['type'], the_dfs['FG']['type'] = 'BG', 'FG'
+
+        bg_rn = {key: (key[3:] if len(key.split('_')) > 1 else key) for key in the_dfs['BG'].columns.to_list() if
+                 key[:2] == 'BG'}
+        fg_rn = {key: (key[3:] if len(key.split('_')) > 1 else key) for key in the_dfs['FG'].columns.to_list() if
+                 key[:2] == 'FG'}
+        bgs, fgs = the_dfs['BG'].rename(columns=bg_rn), the_dfs['FG'].rename(columns=fg_rn)
+        bgs, fgs = bgs.sort_values(by='name'), fgs.sort_values(by='name')
+
+        dfs = pd.concat([bgs, fgs])
+
+        return dfs
 
 
 def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
@@ -1475,3 +1547,75 @@ def add_animal_name_col(df):
 
     df['animal'] = animals
     return df
+
+
+def merge_dynamic_error(weight_df, dynamic_path='cache_dyn', SNR=0):
+    '''2023_07_05. Turned what I was doing into a function. This simply takes your existing big weight_df
+    and loads the dynamic calculations you did using enqueue_dynamic.py and script_dynamic.py and combines
+    them to a single relevant df. This you should then pass to ofig.plot_dynamic_error()'''
+    # Only take cells in layers that I care about
+    weight_df = weight_df.loc[(weight_df.layer=='NA') | (weight_df.layer=='5') | (weight_df.layer=='44') | (weight_df.layer=='13') |
+                    (weight_df.layer=='4') | (weight_df.layer=='56') | (weight_df.layer=='16') | (weight_df.layer=='BS')]
+    # Take out the dynamic runs that have the full-full
+    full_FRs = weight_df.loc[(weight_df.olp_type=='dynamic') & (weight_df.dyn_kind=='ff') & (weight_df.SNR==SNR)]
+    # Create dataframe to ultimately paste the full-full FRs on top of the half ones
+    FR_df = full_FRs[['cellid', 'area', 'BG', 'FG', 'bg_FR', 'fg_FR']]
+    FR_df = FR_df.rename(columns={"bg_FR": "full_bg_FR", "fg_FR": "full_fg_FR"})
+
+    # Load all the jobs that did the dynamic calculation for us and make them into one DF
+    saved_paths = glob.glob(f"/auto/users/hamersky/{dynamic_path}/*")
+    dyn_df = []
+    for path in saved_paths:
+        df = jl.load(path)
+        dyn_df.append(df)
+    dyn_df = pd.concat(dyn_df)
+    # merge the dynamic dataframe with the corresponding rows from the full df so we have all the info
+    dyn_stuff = pd.merge(weight_df, dyn_df, on=['epoch', 'dyn_kind', 'parmfile', 'cellid'])
+
+    # only keep the layers and SNR we want
+    filt = dyn_stuff
+    filt = filt.loc[(filt.layer=='NA') | (filt.layer=='5') | (filt.layer=='44') | (filt.layer=='13') |
+                    (filt.layer=='4') | (filt.layer=='56') | (filt.layer=='16') | (filt.layer=='BS')]
+    filt = filt.loc[dyn_stuff.SNR==SNR]
+
+    # Add the column that contains the full_FR to the filtered dynamic added dataframe
+    full_df = pd.merge(filt, FR_df, on=['cellid', 'area', 'BG', 'FG'])
+
+    return full_df
+
+
+def filter_across_synths(df, synth_show=['M','S','T','C'], snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=''):
+    '''2023_07_30. Takes a dataframe filtered by synthetic olp and applies several filters across all
+    synthetic conditions for that cell and stimulus pair. It will end with a dataframe that has an even
+    length of all of the synthetic conditions input in synth_show. All of the snr, r, and rg tests
+    must pass for all of the synthetic conditions to keep it.'''
+    synth_df = df.loc[df.synth_kind.isin(synth_show)]
+    synth_df['filt_name'] = synth_df['cellid'] + '-' + synth_df['BG'] + '-' + synth_df['FG']
+
+    new_df = pd.DataFrame()
+    unique_ids = synth_df.filt_name.unique().tolist()
+
+
+    cc = 1
+    for uid in unique_ids:
+        bools_summary = []
+        for sf in suffix:
+            id_df = synth_df.loc[synth_df.filt_name==uid]
+            rr = id_df[f'r{sf}']>=r_cut
+            snr = (id_df[f'bg_snr{sf}']>=snr_threshold) & (id_df[f'fg_snr{sf}']>=snr_threshold)
+            rg = (id_df[f'FG_rel_gain{sf}'] <= rel_cut) & (id_df[f'FG_rel_gain{sf}'] >= -rel_cut)
+            bools = rr.values.tolist() + snr.values.tolist() + rg.values.tolist()
+            # print(bools)
+
+            summary = all(i for i in bools)
+            bools_summary.append(summary)
+
+        full_summary = all(i for i in bools_summary)
+
+        if full_summary==True:
+            print(f"Adding {cc}")
+            cc +=1
+            new_df = pd.concat([new_df, id_df])
+
+    ret_df = new_df.drop(['filt_name'], axis=1)
+    return ret_df

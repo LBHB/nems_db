@@ -13,6 +13,7 @@ from scipy import stats
 import glob
 import nems_lbhb.projects.olp.OLP_fit as ofit
 import pandas as pd
+from matplotlib import cm
 
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))
 
@@ -390,7 +391,7 @@ def sorted_modspecs(sorted, sounds, label):
 
 
 def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N',
-                     sigma=None, error=True):
+                     sigma=None, error=True, title=None):
     '''Makes panel three of APAN 2021 poster and NGP 2022 poster, this is a better way than the way
     normalized_linear_error_figure in this file does it, which relies on an old way of loading and
     saving the data that doesn't use DFs and is stupid. The other way also only works with marmoset
@@ -463,7 +464,12 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
     ax[2].spines['top'].set_visible(True), ax[2].spines['right'].set_visible(True)
     # ax[2].vlines(params['SilenceOnset'], ymax * .9, ymax, colors='black', linestyles='-', lw=0.25)
 
-    ax[0].set_title(f"{cellid}", fontweight='bold', size=12)
+    if title:
+        ax[0].set_title(f"{title}", fontweight='bold', size=16)
+        # ax[0].set_title(f"wBG: {row.weightsA:.2f} wFG: {row.weightsB:.2f}\n{title}", fontweight='bold', size=16)
+    else:
+        ax[0].set_title(f"{cellid}", fontweight='bold', size=16)
+
     xmin, xmax = ax[2].get_xlim()
 
     # Spectrogram part
@@ -763,12 +769,19 @@ def resp_weight_scatter(weight_df, xcol='bg_FR', ycol='weightsB', threshold=0.03
     ax.legend()
 
 
-def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB', 'weightsB'],
-                              synth_kind='N', threshold=0.03, quads=3, r_thresh=0.6, area='A1'):
+def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB', 'weightsB'], fr_met='snr',
+                              synth_kind='N', threshold=0.03, snr_threshold=0.12, quads=3, r_thresh=0.6, area='A1'):
     '''Updated resp_weight_scatter to just plot all four combinations of FR/wt on one plot to avoid
     the silliness of four individual plots. Works the same, basically just give it a df.'''
-    quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=quads)
-    quad = quad.loc[quad.synth_kind == synth_kind].copy()
+    if threshold:
+        quad, _ = ohel.quadrants_by_FR(weight_df, threshold=threshold, quad_return=quads)
+    if snr_threshold:
+        weight_df = weight_df.loc[(weight_df.bg_snr >= snr_threshold) & (weight_df.fg_snr >= snr_threshold)]
+    quad = weight_df
+    if isinstance(synth_kind, list):
+        quad = quad.loc[quad.synth_kind.isin(synth_kind)].copy()
+    else:
+        quad = quad.loc[quad.synth_kind == synth_kind].copy()
 
     if r_thresh:
         quad = quad.dropna(axis=0, subset='r')
@@ -779,7 +792,7 @@ def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB
     fig, axes = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
     axes = axes.ravel()
 
-    xcol = ['bg_FR', 'fg_FR', 'bg_FR', 'fg_FR']
+    xcol = [f'bg_{fr_met}', f'fg_{fr_met}', f'bg_{fr_met}', f'fg_{fr_met}']
     # ycol = ['weightsA', 'weightsA', 'weightsB', 'weightsB']
     cols = ['deepskyblue', 'deepskyblue', 'yellowgreen', 'yellowgreen']
 
@@ -799,8 +812,11 @@ def resp_weight_multi_scatter(weight_df, ycol=['weightsA', 'weightsA', 'weightsB
     axes[2].set_ylabel(f"{ycol[2]}", fontsize=12, fontweight='bold')
     axes[2].set_xlabel(f"{xcol[0]}", fontsize=12, fontweight='bold')
     axes[3].set_xlabel(f"{xcol[1]}", fontsize=12, fontweight='bold')
-    fig.suptitle(f"FR Thresh: {threshold} - Area: {area} - r_thresh: {r_thresh}", fontweight='bold', fontsize=12)
-
+    axes[0].set_ylim(-1.5,2.5)
+    if threshold:
+        fig.suptitle(f"FR Thresh: {threshold} - Area: {area} - r_thresh: {r_thresh}", fontweight='bold', fontsize=12)
+    if snr_threshold:
+        fig.suptitle(f"snr >= {snr_threshold} - Area: {area} - r_thresh: {r_thresh}", fontweight='bold', fontsize=12)
 
 def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind=None, r_cut=None):
     '''2022_09_06. Takes a DF (you filter it by types of sounds and area beforehand) and will plot
@@ -842,9 +858,9 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
 
 
 def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1', threshold=0.03,
-                         jitter=[0.25,0.2,0.03],
+                         jitter=[0.25,0.2,0.03], snr_threshold=0.12,
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
-                         title_text='', r_cut=None):
+                         title_text='', r_cut=None, mean=True):
     '''Updated 2022_09_21 to add the ability to filter the dataframe by model fit accuracy.
     Makes a series of scatterplots that compare a stat of the sounds to some metric of data. In
     a usual situation it would be Tstationariness, bandwidth, and Fstationariness compared to relative
@@ -856,17 +872,22 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
     When inputting x_metric names, always make it a list. All entries should be found in the df being
     passed, but you should remove the BG_ or FG_ prefix.
     Made into a function from OLP_analysis_main on 2022_09_07'''
-    quad, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
-    quad = quad.loc[(quad.area==area) & (quad.synth_kind==synth_kind) & (quad.kind==bin_kind)]
+    if threshold:
+        df, _ = ohel.quadrants_by_FR(df, threshold=threshold, quad_return=quad_return)
+    if snr_threshold:
+        df = df.loc[(df.bg_snr >= snr_threshold) & (df.fg_snr >= snr_threshold)]
+
+    quad = df.loc[(df.area==area) & (df.synth_kind==synth_kind) & (df.kind==bin_kind)]
     if r_cut:
         quad = quad.dropna(axis=0, subset='r')
         quad = quad.loc[quad.r >= r_cut]
     quad = quad.copy()
-
     # I use 2.5 for relative gain, I'm sure weights have one too...
     if metric_filter:
         quad = quad.loc[quad[y_metric] <= metric_filter]
         quad = quad.loc[quad[y_metric] >= -metric_filter]
+
+    quad = ohel.get_sound_statistics_from_df(quad, percent_lims=[15, 85], append=True)
 
     if y_metric==f'BG_rel_gain{suffix}':
         y_metric2, title, ylabel = f'FG_rel_gain{suffix}', f'Relative Gain{suffix}', f'Relative Gain{suffix}'
@@ -878,16 +899,36 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
         y_metric2, title, ylabel = y_metric, y_metric, y_metric
 
     # fig, axes = plt.subplots(1, len(x_metrics), figsize=(len(x_metrics)*5, 6))
-    fig, axes = plt.subplots(1, len(x_metrics), figsize=(12, 5))
+    fig, axes = plt.subplots(1, len(x_metrics), figsize=(10, 5))
 
 
     for cnt, (ax, met) in enumerate(zip(axes, x_metrics)):
         # Add a column that is the data for that metric, but jittered, for viewability
-        quad[f'jitter_BG_{met}'] = quad[f'BG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
-        quad[f'jitter_FG_{met}'] = quad[f'FG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
-        # Do the plotting
-        sb.scatterplot(x=f'jitter_BG_{met}', y=y_metric, data=quad, ax=ax, s=4, color='cornflowerblue')
-        sb.scatterplot(x=f'jitter_FG_{met}', y=y_metric2, data=quad, ax=ax, s=4, color='olivedrab')
+        if mean==False:
+            quad[f'jitter_BG_{met}'] = quad[f'BG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
+            quad[f'jitter_FG_{met}'] = quad[f'FG_{met}'] + np.random.normal(0, jitter[cnt], len(quad))
+            # Do the plotting
+            sb.scatterplot(x=f'jitter_BG_{met}', y=y_metric, data=quad, ax=ax, s=4, color='cornflowerblue')
+            sb.scatterplot(x=f'jitter chro_FG_{met}', y=y_metric2, data=quad, ax=ax, s=4, color='olivedrab')
+        else:
+            to_plot_BG = quad[['BG', f'BG_{met}', y_metric]]
+            mean_BG = to_plot_BG.groupby(by='BG').mean()
+            sem_BG = to_plot_BG.groupby(by='BG').sem()
+
+            to_plot_FG = quad[['FG', f'FG_{met}', y_metric2]]
+            mean_FG = to_plot_FG.groupby(by='FG').mean()
+            sem_FG = to_plot_FG.groupby(by='FG').sem()
+
+            ax.errorbar(x=mean_BG[f'BG_{met}'], y=mean_BG[y_metric], yerr=sem_BG[y_metric], ls='none', color='black',
+                        elinewidth=0.5)
+            ax.scatter(x=mean_BG[f'BG_{met}'], y=mean_BG[y_metric], color='deepskyblue')
+
+            ax.errorbar(x=mean_FG[f'FG_{met}'], y=mean_FG[y_metric2], yerr=sem_FG[y_metric2], ls='none', color='black',
+                        elinewidth=0.5)
+            ax.scatter(x=mean_FG[f'FG_{met}'], y=mean_FG[y_metric2], color='yellowgreen')
+
+            # sb.scatterplot(x=f'BG_{met}', y=y_metric, data=to_plot_BG, ax=ax, s=30, color='cornflowerblue')
+            # sb.scatterplot(x=f'FG_{met}', y=y_metric2, data=to_plot_FG, ax=ax, s=30, color='olivedrab')
         ax.set_xlabel(x_labels[cnt], fontweight='bold', fontsize=10)
         if cnt==0:
             ax.set_ylabel(ylabel, fontweight='bold', fontsize=10)
@@ -905,8 +946,12 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
                                                  f"p = {reg.pvalue:.3f}")
         ax.legend()
 
-
-    fig.suptitle(f"{title} - {synth_kind} - {title_text} - r >= {r_cut}", fontweight='bold', fontsize=10)
+    if threshold:
+        fig.suptitle(f"{area} - {synth_kind} - r >= {r_cut} - FR_thresh >= {threshold} "
+                     f"- {title_text}", fontweight='bold', fontsize=10)
+    if snr_threshold:
+        fig.suptitle(f"{area} - {synth_kind} - r >= {r_cut} - snr >= {snr_threshold} "
+                     f"- {title_text}", fontweight='bold', fontsize=10)
 
 
 def scatter_model_accuracy(df, stat='FG_rel_gain', bin_kind='11', synth_kind='N', threshold=0.03):
@@ -960,46 +1005,137 @@ def r_filtered_weight_histogram_summary(df, synth_kind='N', bin_kind='11', manua
         oph.histogram_summary_plot(dff, 0.03, title_text=lbl)
 
 
-
-def weights_supp_comp(weight_df, quads=3, thresh=0.03, r_cut=None):
-    '''2022_09_30. Uses the usual stuff to calculate the old way of calculating suppression:
+def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_threshold=0.12, r_cut=None):
+    '''2023_07_12. Updated to take an x parameter that will use rAB/(rA+rB) if you put in
+    'resp' and will use the old suppresion metric if you pass 'supp.' Also, r_cut option.
+    2022_09_30. Uses the usual stuff to calculate the old way of calculating suppression:
     ((rAB-sp) - (rA-sp) + (rB-sp)) / (rA-sp) + (rB-sp), and compares it with average weight:
     (wFG+wBG) / 2. Then scatters them.'''
+    weight_df = weight_df.loc[weight_df.area==area]
+    if area=='A1':
+        col = 'indigo'
+    elif area=='PEG':
+        col = 'maroon'
+
     weight_df['avg_weight'] = (weight_df.weightsA + weight_df.weightsB) / 2
-    weight_df['avg_supp'] = (-weight_df['supp']) / (weight_df['bg_FR'] + weight_df['fg_FR'])
-    quad, _ = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if x=='supp':
+        weight_df['avg_supp'] = (-weight_df['supp']) / (weight_df['bg_FR'] + weight_df['fg_FR'])
+        xlabel = '(LS - rAB) / rA+rB'
+    elif x=='resp':
+        weight_df['avg_supp'] = (weight_df['combo_FR']) / (weight_df['bg_FR'] + weight_df['fg_FR'])
+        # weight_df = weight_df.loc[(weight_df.combo_FR >= 0) & (weight_df.bg_FR >= 0) &
+        #                           (weight_df.fg_FR >= 0)]
+        xlabel = 'rAB / (rA + rB)'
+        # weight_df = weight_df.loc[(weight_df.avg_supp >= 0) & (weight_df.avg_supp <= 2)]
+
+
+    if thresh:
+        weight_df, _ = ohel.quadrants_by_FR(weight_df, threshold=thresh, quad_return=quads)
+    if snr_threshold:
+        weight_df = weight_df.loc[(weight_df.bg_snr >= snr_threshold) & (weight_df.fg_snr >= snr_threshold)]
+
     if r_cut:
-        quad = quad.dropna(axis=0, subset='r')
-        quad = quad.loc[quad.r >= r_cut]
+        weight_df = weight_df.dropna(axis=0, subset='r')
+        weight_df = weight_df.loc[weight_df.r >= r_cut]
+    else:
+        r_cut = 'None'
+    area = weight_df.area.unique()[0]
+
+    # from scipy.stats import pearsonr
+    # corr, pp = pearsonr(quad.avg_supp, quad.avg_weight)
     fig, ax = plt.subplots(1,1,figsize=(8,8))
-    ax.scatter(x=quad.avg_supp, y=quad.avg_weight, s=1)
-    ax.set_xlabel('(LS - rAB) / rA+rB', fontweight='bold', fontsize=10)
+    ax.scatter(x=weight_df.avg_supp, y=weight_df.avg_weight, s=1, color=col)
+    ax.set_xlabel(xlabel, fontweight='bold', fontsize=10)
     ax.set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
-    ax.plot([0,1.5], [0,1.5], color='black')
-    ax.set_ylim(0, 1.25), ax.set_xlim(-1.5, 1.5)
-    ax.set_title(f'r >= {r_cut} - n={quad.shape[0]}', fontsize=10, fontweight='bold')
+    # ax.plot([0,1], [0,1], color='black')
+    ymin, ymax = ax.get_ylim()
+    xmin, xmax = ax.get_xlim()
+    mini, maxi = np.min([ymin, xmin]), np.max([ymax, xmax])
+    ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
+
+    Y, X = weight_df.avg_weight, weight_df.avg_supp
+    reg = stats.linregress(X, Y)
+    x = np.asarray(ax.get_xlim())
+    x = np.asarray([x[0]+0.05, x[1]-0.05])
+    y = reg.slope * x + reg.intercept
+    ax.plot(x, y, color='black', label=f"coef: {reg.rvalue:.3f}\n"
+                                          f"p = {reg.pvalue:.3f}")
+    # ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
+    #                                       f"coef: {reg.rvalue:.3f}\n"
+    #                                       f"p = {reg.pvalue:.3f}")
+    ax.legend()
+
+    ax.set_title(f'{area} - snr >= {snr_threshold} -  fr >= {thresh} - r >= {r_cut}\nn={weight_df.shape[0]}\n', fontsize=10, fontweight='bold')
     fig.tight_layout()
 
-def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True, summary=True, sep_hemi=False):
+
+def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh=0.6, strict_r=True,
+                                weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None):
     '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
     with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
     stay True at this point'''
     areas = list(df.area.unique())
+    areas.sort()
+
+    if sep_hemi == True:
+        colors = ['mediumorchid', 'darkorange', 'orangered', 'green', 'yellow', 'blue']
+    else:
+        if sort_category:
+            colors = ['red', 'navy', 'limegreen', 'magenta', 'teal', 'orange']
+            df = df.copy()
+            df['animal'] = df[sort_category]
+
+            # voc_labels = {'Yes': 'Vocalization', 'No': 'Non-vocalization'}
+            # df['animal'] = df['Vocalization'].map(voc_labels)
+        else:
+            df['animal'] = [cc.split('_')[0] for cc in df['animal']]
+            colors = ['mediumorchid', 'darkorange', 'yellow', 'blue', 'green', 'pink']
+
 
     # This can be mushed into one liners using list comprehension and show_suffixes
-    quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                           & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+    if fr_thresh:
+        quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                               & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
 
-    quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                   & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+        quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                       & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
 
-    quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
-                   & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
+        quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
+                       & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
+        print("FR thresh did happen")
+
+    elif snr_threshold:
+        print("FR thresh didn't happen")
+        quad3 = df.loc[(df.bg_snr_start >= snr_threshold) & (df.fg_snr_start >= snr_threshold)
+                       & (df.bg_snr_end >= snr_threshold) & (df.fg_snr_end >= snr_threshold)]
+
+        quad2 = df.loc[(df.bg_snr_start < snr_threshold) & (df.fg_snr_start > snr_threshold)
+                       & (df.bg_snr_end < snr_threshold) & (df.fg_snr_end > snr_threshold)]
+
+        quad6 = df.loc[(df.bg_snr_start > snr_threshold) & (df.fg_snr_start < snr_threshold)
+                       & (df.bg_snr_end > snr_threshold) & (df.fg_snr_end < snr_threshold)]
+    else:
+        raise ValueError('Need a threshold for this one, either FR or snr.')
+
+    if weight_lims:
+        quad3 = quad3.loc[((quad3[f'weightsA_start'] >= weight_lim[0]) & (quad3[f'weightsA_start'] <= weight_lim[1])) &
+                          ((quad3[f'weightsB_start'] >= weight_lim[0]) & (quad3[f'weightsB_start'] <= weight_lim[1])) &
+                          ((quad3[f'weightsA_end'] >= weight_lim[0]) & (quad3[f'weightsA_end'] <= weight_lim[1])) &
+                          ((quad3[f'weightsB_end'] >= weight_lim[0]) & (quad3[f'weightsB_end'] <= weight_lim[1]))]
+
+        quad2 = quad2.loc[((quad2[f'weightsA_start'] >= weight_lim[0]) & (quad2[f'weightsA_start'] <= weight_lim[1])) &
+                          ((quad2[f'weightsB_start'] >= weight_lim[0]) & (quad2[f'weightsB_start'] <= weight_lim[1])) &
+                          ((quad2[f'weightsA_end'] >= weight_lim[0]) & (quad2[f'weightsA_end'] <= weight_lim[1])) &
+                          ((quad2[f'weightsB_end'] >= weight_lim[0]) & (quad2[f'weightsB_end'] <= weight_lim[1]))]
+
+        quad6 = quad6.loc[((quad6[f'weightsA_start'] >= weight_lim[0]) & (quad6[f'weightsA_start'] <= weight_lim[1])) &
+                          ((quad6[f'weightsB_start'] >= weight_lim[0]) & (quad6[f'weightsB_start'] <= weight_lim[1])) &
+                          ((quad6[f'weightsA_end'] >= weight_lim[0]) & (quad6[f'weightsA_end'] <= weight_lim[1])) &
+                          ((quad6[f'weightsB_end'] >= weight_lim[0]) & (quad6[f'weightsB_end'] <= weight_lim[1]))]
 
     fig, ax = plt.subplots(1, 4, figsize=(13, 6), sharey=True)
     ax = np.ravel(ax)
 
-    colors = ['mediumorchid', 'darkorange', 'orangered', 'green', 'yellow', 'blue']
 
     stat_list, filt_list = [], []
     for num, aa in enumerate(areas):
@@ -1123,7 +1259,8 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
         ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
         ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
 
-    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, strict_r={strict_r}", fontweight='bold', fontsize=10)
+    fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, snr >= {snr_threshold}, "
+                 f"strict_r={strict_r}", fontweight='bold', fontsize=10)
     fig.tight_layout()
 
     fig, axes = plt.subplots(2, 2, figsize=(13, 6), sharey=True)
@@ -1139,12 +1276,13 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
         nb, xb = np.histogram(to_plot['weightsB_start'], bins=edges)
         nb = nb / nb.sum() * 100
 
-        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
-        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
-        ax[axn].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[axn].set_title(f"{aaa} - 0-0.5s", fontweight='bold', fontsize=14)
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
+        # ax[axn].set_ylabel('Percentage of cells', fontweight='bold', fontsize=12)
+        ax[axn].set_title(f"{aaa} - 0-0.5s", fontweight='bold', fontsize=12)
         ax[axn].tick_params(axis='both', which='major', labelsize=10)
-        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+        ax[1].set_xlabel("Mean Weight", fontweight='bold', fontsize=12)
+        ax[3].set_xlabel("Mean Weight", fontweight='bold', fontsize=12)
 
         axn += 1
 
@@ -1153,14 +1291,14 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, r_thresh=0.6, strict_r=True,
         nb, xb = np.histogram(to_plot['weightsB_end'], bins=edges)
         nb = nb / nb.sum() * 100
 
-        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue')
-        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen')
+        ax[axn].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+        ax[axn].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
         ax[axn].legend(('Background', 'Foreground'), fontsize=12)
-        ax[0].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[2].set_ylabel('Percentage\nof cells', fontweight='bold', fontsize=14)
-        ax[axn].set_title(f"{aaa} - 0.5-1s", fontweight='bold', fontsize=14)
+        ax[0].set_ylabel('Percentage of cells', fontweight='bold', fontsize=12)
+        ax[1].set_ylabel('Percentage of cells', fontweight='bold', fontsize=12)
+        ax[axn].set_title(f"{aaa} - 0.5-1s", fontweight='bold', fontsize=12)
         ax[axn].tick_params(axis='both', which='major', labelsize=10)
-        ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
+        # ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
 
         axn += 1
     fig.tight_layout()
@@ -1856,3 +1994,438 @@ def sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Tsta
     ax.set_ylabel(f"{metric}: {show}", fontsize=10, fontweight='bold')
 
     fig.tight_layout()
+
+
+def plot_dynamic_errors(full_df, dyn_kind='all', snr_threshold=0.12, thresh=None, r_cut=None):
+    '''2023_07_05. Rework of a function I made a few months back. Takes a dataframe that has had the
+    dynamic calculations done to it using script_dynamic.py and enqueue_dynamic.py which call
+    ofit.calc_dyn_metrics(). The dataframe is created and pooled with your existing, main df using
+    ohel.merge_dynamic_error().'''
+    areas = full_df.area.unique().tolist()
+    areas.sort()
+
+    if dyn_kind == 'fh' or dyn_kind == 'hf':
+        fig, axes = plt.subplots(2, 1, figsize=(10,6))
+        dyn_plot = [dyn_kind]
+    elif dyn_kind == 'all':
+        fig, axes = plt.subplots(4, 1, figsize=(10, 12), sharey=True)
+        dyn_plot = ['fh', 'hf']
+
+    cc = 0
+    for dd in dyn_plot:
+        for cnt, ar in enumerate(areas):
+            dyn_df = full_df.loc[full_df.dyn_kind == dd]
+            area_df = dyn_df.loc[dyn_df.area == ar]
+            n_before_thresh = len(area_df)
+
+            if dd == 'hf':
+                if thresh:
+                    quad3 = area_df.loc[area_df.full_bg_FR >= thresh]
+                if snr_threshold:
+                    quad3 = area_df.loc[area_df.bg_snr >= snr_threshold]
+                alone_col = 'yellowgreen'
+
+            elif dd == 'fh':
+                if thresh:
+                    quad3 = area_df.loc[area_df.full_fg_FR >= thresh]
+                if snr_threshold:
+                    quad3 = area_df.loc[area_df.fg_snr >= snr_threshold]
+                alone_col = 'deepskyblue'
+
+            if r_cut:
+                quad3 = quad3.dropna(axis=0, subset='r')
+                quad3 = quad3.loc[quad3.r >= 0.6]
+
+            n_after_thresh = len(quad3)
+
+            E_full = np.array(area_df.E_full.to_list())#[:, 50:-50]
+            E_alone = np.array(quad3.E_alone.to_list())#[:, 50:-50]
+
+            full = quad3.groupby(['E_full']).mean()
+
+
+            full_av = np.nanmean(E_full, axis=0)
+            alone_av = np.nanmean(E_alone, axis=0)
+
+            baseline = np.nanmean(alone_av[:int(alone_av.shape[0]/2)])
+
+            se_full = E_full.std(axis=0) / np.sqrt(E_full.shape[0])
+            se_alone = E_alone.std(axis=0) / np.sqrt(E_alone.shape[0])
+
+            if full_av.shape[0] == 200:
+                time = (np.arange(0, full_av.shape[0]) / 100)
+                time = time - 0.5
+            else:
+                time = (np.arange(0, full_av.shape[0]) / 100)
+
+            axes[cc+cnt].plot(time, full_av, label='Full Error', color='black')
+            axes[cc+cnt].plot(time, alone_av, label='Alone Error', color=alone_col)
+
+            axes[cc+cnt].fill_between(time, (full_av - se_full*2), (full_av + se_full*2),
+                                 alpha=0.4, color='black')
+            axes[cc+cnt].fill_between(time, (alone_av - se_alone*2), (alone_av + se_alone*2),
+                                 alpha=0.4, color=alone_col)
+
+            axes[cc+cnt].legend()
+            axes[cc+cnt].set_title(f"{ar} - {dd} - n={len(quad3)}", fontweight='bold', fontsize=10)
+            axes[cc+cnt].set_xticks(np.arange(time[0],time[-1],0.5))
+            ymin, ymax = axes[cc+cnt].get_ylim()
+            axes[cc+cnt].vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+            if full_av.shape[0] == 200:
+                axes[cc + cnt].vlines([0, 1], ymin, ymax, colors='black', linestyles='--')
+            axes[cc+cnt].hlines([baseline], time[0], time[-1], colors='black', linestyles='--', lw=0.5)
+        axes[-1].set_xlabel("Time (s)", fontweight='bold', fontsize=10)
+        cc += len(dyn_plot)
+    fig.tight_layout()
+
+
+def plot_dynamic_site_errors(full_df, dyn_kind='fh', area='A1', thresh=0.03, r_cut=None):
+    '''2023_07_05. Rework of a function I made a few months back. Takes a dataframe that has had the
+    dynamic calculations done to it using script_dynamic.py and enqueue_dynamic.py which call
+    ofit.calc_dyn_metrics(). The dataframe is created and pooled with your existing, main df using
+    ohel.merge_dynamic_error().'''
+    dyn_df = full_df.loc[full_df.dyn_kind == dyn_kind]
+    area_df = dyn_df.loc[dyn_df.area == area]
+
+    sites = [dd.split('-')[0] for dd in area_df.cellid]
+    area_df['site'] = sites
+    unique_sites = list(area_df.site.unique())
+
+    dims = int(np.ceil(np.sqrt(len(area_df.site.unique()))))
+
+    fig, axes = plt.subplots(dims, dims, figsize=(20, 15))#, sharey=True)
+    axes = np.ravel(axes)
+
+    for site, ax in zip(unique_sites, axes):
+        site_df = area_df.loc[area_df['site']==site]
+        if dyn_kind == 'hf':
+            # quad3 = site_df.loc[site_df.full_bg_FR >= thresh]
+            alone_col = 'yellowgreen'
+        elif dyn_kind == 'fh':
+            # quad3 = site_df.loc[site_df.full_fg_FR >= thresh]
+            alone_col = 'deepskyblue'
+        quad3 = site_df
+        # if r_cut:
+        #     quad3 = quad3.dropna(axis=0, subset='r')
+        #     quad3 = quad3.loc[quad3.r >= 0.6]
+
+        E_full = np.array(quad3.E_full.to_list())#[:, 50:-50]
+        E_alone = np.array(quad3.E_alone.to_list())#[:, 50:-50]
+
+        full_av = np.nanmean(E_full, axis=0)
+        alone_av = np.nanmean(E_alone, axis=0)
+
+        # baseline = np.nanmean(alone_av[:int(alone_av.shape[0]/2)])
+
+        se_full = E_full.std(axis=0) / np.sqrt(E_full.shape[0])
+        se_alone = E_alone.std(axis=0) / np.sqrt(E_alone.shape[0])
+
+        if full_av.shape[0] == 200:
+            time = (np.arange(0, full_av.shape[0]) / 100)
+            time = time - 0.5
+        else:
+            time = (np.arange(0, full_av.shape[0]) / 100)
+
+        ax.plot(time, full_av, label='Full Error', color='black')
+        ax.plot(time, alone_av, label='Alone Error', color=alone_col)
+
+        # ax.fill_between(time, (full_av - se_full*2), (full_av + se_full*2),
+        #                      alpha=0.4, color='black')
+        # ax.fill_between(time, (alone_av - se_alone*2), (alone_av + se_alone*2),
+        #                      alpha=0.4, color=alone_col)
+
+        ax.legend()
+        ax.set_title(f"{site} - n={len(quad3)}", fontweight='bold', fontsize=8)
+        ax.set_xticks(np.arange(time[0],time[-1],0.5))
+        ymin, ymax = ax.get_ylim()
+        # ax.vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+        # if full_av.shape[0] == 200:
+        #     ax.vlines([0, 1], ymin, ymax, colors='black', linestyles=':')
+        # ax.hlines([baseline], time[0], time[-1], colors='black', linestyles='--', lw=0.5)
+
+    fig.suptitle(f"{area} - {dyn_kind}", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+
+
+def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=None, area='A1'):
+    '''2023_07_14. Function to make figures 2B and 2C. Takes a prefiltered (just for
+    olp_type, snr, layer, stuff like that), and makes a histogram of the weights,
+    plots the means, and then plots the relative gain histogram.'''
+
+    if threshold:
+        filt, _ = ohel.quadrants_by_FR(filt, threshold=threshold, quad_return=3)
+    if snr_threshold:
+        filt = filt.loc[(filt.bg_snr >= snr_threshold) & (filt.fg_snr >= snr_threshold)]
+
+    area_df = filt.loc[filt.area==area]
+    if r_cut:
+        area_df = area_df.dropna(axis=0, subset='r')
+        area_df = area_df.loc[area_df.r >= r_cut]
+
+    to_plot = area_df
+
+    f = plt.figure(figsize=(12, 6))
+    hist = plt.subplot2grid((10, 18), (0, 0), rowspan=5, colspan=8)
+    mean = plt.subplot2grid((10, 18), (0, 9), rowspan=5, colspan=2)
+    relhist = plt.subplot2grid((10, 18), (0, 12), rowspan=5, colspan=7)
+    ax = [hist, mean, relhist]
+
+    edges = np.arange(-0.3, 1.5, .05)
+    na, xa = np.histogram(to_plot.weightsA, bins=edges)
+    na = na / na.sum() * 100
+    nb, xb = np.histogram(to_plot.weightsB, bins=edges)
+    nb = nb / nb.sum() * 100
+    ax[0].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+    ax[0].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
+    ax[0].legend(('Background', 'Foreground'), fontsize=12, prop=dict(weight='bold'), labelspacing=0.25)
+
+    ax[0].set_ylabel('Percentage of cells', fontweight='bold', fontsize=10)
+    ax[0].set_title(f"{area}, BG+/FG+, n={len(to_plot)}", fontweight='bold', fontsize=10)
+    ax[0].set_xlabel("Weight", fontweight='bold', fontsize=10)
+    ax[0].tick_params(axis='both', which='major', labelsize=8)
+    ymin, ymax = ax[0].get_ylim()
+
+    BG1, FG1 = np.mean(to_plot.weightsA), np.mean(to_plot.weightsB)
+    BG1sem, FG1sem = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
+    ttest1 = stats.ttest_ind(to_plot.weightsA, to_plot.weightsB)
+
+    # ax[1].boxplot([to_plot.weightsA, to_plot.weightsB],
+    #               positions=[1,2], patch_artist=True,
+    #               boxprops=dict(facecolor='deepskyblue'), showmeans=True,
+    #               showfliers=False)
+    #
+    # box_plot = ax[1].boxplot([to_plot.weightsA, to_plot.weightsB], notch=True,
+    #                          boxprops=dict(facecolor='deepskyblue'))
+
+    ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
+    ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
+
+    ax[1].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
+    ax[1].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+
+    # ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
+    # ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
+
+    ax[1].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+    ax[1].set_xticklabels(['BG','FG'], fontsize=8, fontweight='bold')
+    ax[1].tick_params(axis='y', which='major', labelsize=8)
+    if ttest1.pvalue < 0.001:
+        title = 'p<0.001'
+    else:
+        title = f"{ttest1.pvalue:.3f}"
+    ax[1].set_title(f"BG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}\n{title}", fontsize=8)
+
+
+    rel_weight = (to_plot.weightsB - to_plot.weightsA) / (to_plot.weightsB + to_plot.weightsA)
+    supps = [cc for cc in rel_weight if cc < 0]
+    percent_supp = np.around((len(supps) / len(rel_weight)) * 100, 1)
+    # Filter dataframe to get rid of the couple with super weird, big or small weights
+    rel = rel_weight.loc[rel_weight <= 2.5]
+    rel = rel.loc[rel >= -2.5]
+
+    sups = [cc for cc in rel if cc < 0]
+    enhs = [cc for cc in rel if cc >= 0]
+
+    sup_edges = np.arange(-2.4, 0.1, .1)
+    enh_edges = np.arange(0, 2.5, .1)
+    na, xa = np.histogram(sups, bins=sup_edges)
+    nb, xb = np.histogram(enhs, bins=enh_edges)
+    aa = na / (na.sum() + nb.sum()) * 100
+    bb = nb / (na.sum() + nb.sum()) * 100
+
+    ax[2].hist(xa[:-1], xa, weights=aa, histtype='step', color='tomato', fill=True)
+    ax[2].hist(xb[:-1], xb, weights=bb, histtype='step', color='dodgerblue', fill=True)
+
+    ax[2].legend(('FG Suppressed', 'FG Enhanced'), fontsize=12, prop=dict(weight='bold'), labelspacing=0.25)
+    ax[2].set_ylabel('Percentage of cells', fontweight='bold', fontsize=10)
+    ax[2].set_xlabel("Relative Gain (RG)", fontweight='bold', fontsize=10)
+    if threshold:
+        ax[2].set_title(f"r >= {r_cut}, FR_thresh >= {threshold}\n% suppressed: {percent_supp}", fontsize=8)
+    elif snr_threshold:
+        ax[2].set_title(f"r >= {r_cut}, snr_thresh >= {snr_threshold}\n% suppressed: {percent_supp}", fontsize=8)
+    ax[2].set_xlim(-1.75,1.75)
+
+
+def r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshold=0.03, area='A1'):
+    '''2023_07_17. Supplemental figure to show what weight distributions across the various groups of r thresholds.
+    Give it an increment that can divisble into 1 and it'll add a last panel for a percent stacked bar graph.'''
+    if threshold:
+        filt, _ = ohel.quadrants_by_FR(filt, threshold=threshold, quad_return=3)
+        thresh = threshold
+    if snr_threshold:
+        filt = filt.loc[(filt.bg_snr >= snr_threshold) & (filt.fg_snr >= snr_threshold)]
+        thresh = snr_threshold
+
+    area_df = filt.loc[filt.area==area]
+    incs = np.arange(0, 1, increment)
+    plots = len(incs)
+
+    fig, ax = plt.subplots(1, plots+1, figsize=(plots*2.5, 4))
+
+    inc_lims = np.append(incs, 1)
+    totals, total, maxs = {}, 0, []
+    for cnt, inc in enumerate(list(incs)):
+        r_df = area_df.dropna(axis=0, subset='r')
+        r_df = r_df.loc[(r_df.r >= inc) & (r_df.r < inc_lims[cnt+1])]
+
+        BG1, FG1 = np.mean(r_df.weightsA), np.mean(r_df.weightsB)
+        BG1sem, FG1sem = stats.sem(r_df.weightsA), stats.sem(r_df.weightsB)
+        ttest1 = stats.ttest_ind(r_df.weightsA, r_df.weightsB)
+
+        # ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
+        # ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
+        # ax[1].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
+        # ax[1].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+
+        ax[cnt].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
+        ax[cnt].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
+
+        ax[cnt].set_xticklabels(['BG','FG'], fontsize=8, fontweight='bold')
+        # ax.tick_params(axis='y', which='major', labelsize=8)
+        if cnt != 0:
+            ax[cnt].set_yticklabels([])
+
+        lil, big = ax[cnt].get_ylim()
+        maxs.append(big)
+        bin_name = f"r={np.around(inc, 1)}-{np.around(inc_lims[cnt + 1], 1)}"
+        totals[bin_name] = len(r_df)
+        total += len(r_df)
+
+        if ttest1.pvalue < 0.001:
+            title = 'p<0.001'
+        else:
+            title = f"p={ttest1.pvalue:.3f}"
+        ax[cnt].set_title(f"{area} - {bin_name}\nBG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}\n"
+                          f"n={len(r_df)}\n{title}", fontsize=8)
+
+    big_y = np.max(maxs)
+    for aa in range(len(maxs)):
+        ax[aa].set_ylim(0, big_y)
+
+    ax[0].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+
+    from matplotlib import cm
+    greys = cm.get_cmap('inferno', 12)
+    cols = greys(np.linspace(0, 0.9, len(incs))).tolist()
+    # cols.reverse()
+
+    percents = [(pp/total)*100 for pp in totals.values()]
+    names = [lbl for lbl in list(totals.keys())]
+
+    for cc in range(len(names)):
+        bottom = np.sum(percents[cc+1:])
+        ax[-1].bar('total', height=percents[cc], bottom=bottom, color=cols[cc],
+                     width=1, label=names[cc])#, edgecolor='white')
+
+    ax[-1].legend(names, bbox_to_anchor=(0.8,1.025), loc="upper left")
+    ax[-1].set_ylabel('Percent', fontweight='bold', fontsize=10)
+    ax[-1].set_xticks([])
+    ax[-1].set_xlim(-1,1)
+    ax[-1].set_title(f'snr>={snr_threshold}\nn={total}', fontsize=7)
+
+    fig.tight_layout()
+
+
+def weight_summary_histograms_flanks(filt, snr_threshold=0.12, fr_thresh=0.03, r_cut=None, area='A1'):
+    '''2023_07_14. Makes the complement to 2B and 2C, but this time uses the weights when units only are responsive
+    to BG or FG alone.'''
+    if fr_thresh:
+        quad2 = filt.loc[(np.abs(filt.bg_FR_start) <= fr_thresh) & (filt.fg_FR_start >= fr_thresh)
+                   & (np.abs(filt.bg_FR_end) <= fr_thresh) & (filt.fg_FR_end >= fr_thresh)]
+
+        quad6 = filt.loc[(filt.bg_FR_start >= fr_thresh) & (np.abs(filt.fg_FR_start) <= fr_thresh)
+                   & (filt.bg_FR_end >= fr_thresh) & (np.abs(filt.fg_FR_end) <= fr_thresh)]
+        title_thresh = f'fr >= {fr_thresh}'
+
+    elif snr_threshold:
+        quad2 = filt.loc[(filt.bg_snr_start < snr_threshold) & (filt.fg_snr_start > snr_threshold)
+                       & (filt.bg_snr_end < snr_threshold) & (filt.fg_snr_end > snr_threshold)]
+
+        quad6 = filt.loc[(filt.bg_snr_start > snr_threshold) & (filt.fg_snr_start < snr_threshold)
+                       & (filt.bg_snr_end > snr_threshold) & (filt.fg_snr_end < snr_threshold)]
+        title_thresh = f'snr >= {snr_threshold}'
+
+    area_df2, area_df6 = quad2.loc[quad2.area==area], quad6.loc[quad6.area==area]
+
+    if r_cut:
+        area_df2, area_df6 = area_df2.dropna(axis=0, subset='r'), area_df6.dropna(axis=0, subset='r')
+        area_df2, area_df6 = area_df2.loc[area_df2.r >= r_cut], area_df6.loc[area_df6.r >= r_cut]
+
+    to_plotFG, to_plotBG = area_df2, area_df6
+
+    f = plt.figure(figsize=(12, 6))
+    histBG = plt.subplot2grid((10, 18), (0, 0), rowspan=5, colspan=7)
+    histFG = plt.subplot2grid((10, 18), (0, 8), rowspan=5, colspan=7, sharey=histBG)
+    mean = plt.subplot2grid((10, 18), (0, 16), rowspan=5, colspan=2)
+    ax = [histBG, histFG, mean]
+
+    edges = np.arange(-0.3, 1.5, .05)
+    na, xa = np.histogram(to_plotBG.weightsA, bins=edges)
+    na = na / na.sum() * 100
+    nb, xb = np.histogram(to_plotFG.weightsB, bins=edges)
+    nb = nb / nb.sum() * 100
+    ax[0].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+    ax[1].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
+    ax[0].set_title(f"{area}: Respond to BG alone only\nn={len(to_plotBG.weightsA)}", fontweight='bold', fontsize=10)
+    ax[1].set_title(f"{area}: Respond to FG alone only\nn={len(to_plotFG.weightsB)}", fontweight='bold', fontsize=10)
+    ax[0].set_xlabel("Background Weight", fontsize=10, fontweight='bold')
+    ax[1].set_xlabel("Foreground Weight", fontsize=10, fontweight='bold')
+    # ax[0].legend('BG', fontsize=12, prop=dict(weight='bold'))
+    # ax[1].legend('FG', fontsize=12, prop=dict(weight='bold'))
+    ax[0].set_ylabel('Percentage of cells', fontweight='bold', fontsize=10)
+
+    BG1, FG1 = np.mean(to_plotBG.weightsA), np.mean(to_plotFG.weightsB)
+    BG1sem, FG1sem = stats.sem(to_plotBG.weightsA), stats.sem(to_plotFG.weightsB)
+    ttest1 = stats.ttest_ind(to_plotBG.weightsA, to_plotFG.weightsB)
+
+    ax[2].bar("BG", BG1, yerr=BG1sem, color='white')
+    ax[2].bar("FG", FG1, yerr=FG1sem, color='white')
+
+    ax[2].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
+    ax[2].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+
+    # ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
+    # ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
+
+    ax[2].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+    ax[2].set_xticklabels(['BG','FG'], fontsize=8, fontweight='bold')
+    ax[2].tick_params(axis='y', which='major', labelsize=8)
+    if ttest1.pvalue < 0.001:
+        title = 'p<0.001'
+    else:
+        title = f"{ttest1.pvalue:.3f}"
+    ax[2].set_title(f"{title_thresh}\nBG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}\n{title}", fontsize=8)
+
+
+def snr_scatter(df, xcol='bg_snr', ycol='fg_snr', thresh=0.3, area='A1'):
+    '''2022_09_06. Takes a dataframe and just scatters two of the columns from that dataframe.
+    I was using it to check if weights are correlated with the concurrent sound's FR.'''
+    df = df.loc[df.area==area]
+
+    fig, ax = plt.subplots(1, 3, figsize=(12,4))
+    sb.scatterplot(x=xcol, y=ycol, data=df, ax=ax[0], s=3)
+    ax[0].set_xlabel(xcol, fontsize=8, fontweight='bold')
+    ax[0].set_ylabel(ycol, fontsize=8, fontweight='bold')
+    xmin, xmax = ax[0].get_xlim()
+    ymin, ymax = ax[1].get_ylim()
+    ax[0].vlines([thresh], ymin, ymax, colors='black', linestyles=':', lw=1)
+    ax[0].hlines([thresh], xmin, xmax, colors='black', linestyles=':', lw=1)
+    size = len(df)
+    snr3 = len(df.loc[(df.bg_snr >= thresh) & (df.fg_snr >= thresh)]) / size * 100
+    snr6 = len(df.loc[(df.bg_snr < thresh) & (df.fg_snr < thresh)]) / size * 100
+    ax[0].set_title(f'{df.area.unique()[0]}: thresh={thresh}\nAbove: {np.around(snr3,1)}%, Below: {np.around(snr6,1)}%', fontsize=10, fontweight='bold')
+
+    edges = np.arange(0, 1, .05)
+    na, xa = np.histogram(df[xcol], bins=edges)
+    na = na / na.sum() * 100
+    nb, xb = np.histogram(df[ycol], bins=edges)
+    nb = nb / nb.sum() * 100
+
+    ax[1].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+    ax[2].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
+    ax[1].set_xlabel(xcol, fontsize=8, fontweight='bold'), ax[2].set_xlabel(ycol, fontsize=8, fontweight='bold')
+    ymin, ymax = ax[1].get_ylim()
+    ymin1, ymax1 = ax[2].get_ylim()
+    maxmax = np.max([ymax, ymax1])
+    ax[1].vlines([thresh], ymin, maxmax, colors='black', linestyles=':', lw=1)
+    ax[2].vlines([thresh], ymin, maxmax, colors='black', linestyles=':', lw=1)

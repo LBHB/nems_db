@@ -5,6 +5,8 @@ import nems0.db as nd
 import nems0.utils
 from nems_lbhb.projects.olp.OLP_fit import OLP_fit_cell_pred_individual
 from nems_lbhb.projects.olp.OLP_fit import OLP_fit_partial_weights_individual
+from nems_lbhb.projects.olp.OLP_fit import calc_dyn_metrics
+import nems_lbhb.projects.olp.OLP_fit as ofit
 
 if 'QUEUEID' in os.environ:
     queueid = os.environ['QUEUEID']
@@ -19,9 +21,9 @@ if queueid:
 # all parameters are pased as string, ensure proper datatypes
 cellid = sys.argv[1]
 batch = int(sys.argv[2])
-cache_path = sys.argv[3]
+parmfile = sys.argv[3]
 
-print(f"Running OLP Prediction cell {cellid}")
+print(f"Running OLP dynamic prediction cell {cellid}")
 
 
 # first run 2022_12 with Mateo
@@ -33,8 +35,7 @@ print(f"Running OLP Prediction cell {cellid}")
 # batch = 345
 # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 
-_ = OLP_fit_partial_weights_individual(cellid, batch, snip=[0, 0.5], pred=False, fs=100, modelname=None,
-                                       cache_path=cache_path)
+_ = calc_dyn_metrics(cellid=cellid, batch=batch, parmfile=parmfile)
 
 # Mark completed in the queue. Note that this should happen last thing!
 # Otherwise the job might still crash after being marked as complete.

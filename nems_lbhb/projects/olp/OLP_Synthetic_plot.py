@@ -231,14 +231,18 @@ def relative_gain_synthetic_histograms(weight_df, thresh=0.03, quads=3, synth_sh
         aa.vlines(0, ymin, ymax, ls=':', lw=0.5)
 
 
-def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, area='A1', batch=340,
-                                              synth_show=None, r_cut=None, rel_cut=2.5, figsize=(12,20)):
+def synthetic_relative_gain_comparisons_specs(df, bg, fg, snr_threshold=0.12, thresh=0.03, quads=3, area='A1',
+                                              batch=340, synth_show=None, r_cut=None, rel_cut=2.5,
+                                              figsize=(12,20)):
     '''Made 2022_09_08. Makes the big figure on panel 5 of my 2022 NGP Poster. It takes a dataframe
     and a list of the synthetic code letters and vertically arranges them as histograms of relative
     gain, all aligned on the same zero so you can ideally see the shift. You also can put in a BG
     and FG name (with spaces in the name if it has!) and it will show the corresponding spectrograms
     for the synthetic conditions nextdoor to the relative gain plot. It's a fun figure.'''
-    quad, _ = ohel.quadrants_by_FR(df, threshold=thresh, quad_return=quads)
+    if thresh:
+        quad, _ = ohel.quadrants_by_FR(df, threshold=thresh, quad_return=quads)
+    if snr_threshold:
+        quad = df.loc[(df.bg_snr >= snr_threshold) & (df.fg_snr >= snr_threshold)]
     quad = quad.loc[quad.area==area]
     if r_cut:
         quad = quad.dropna(axis=0, subset='r')
@@ -274,35 +278,56 @@ def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, 
         to_plot = quad.loc[quad.synth_kind==synth_show[qq]].copy()
         # Calculate relative gain and percent suppressed
         rel_gain = (to_plot.weightsB - to_plot.weightsA) / \
-                              (to_plot.weightsB + to_plot.weightsA)
-        supps = [cc for cc in rel_gain if cc < 0]
-        percent_supp = np.around((len(supps) / len(rel_gain)) * 100, 1)
-        print(percent_supp)
+                   (to_plot.weightsB + to_plot.weightsA)
+        # rel_gain = to_plot.FG_rel_gain
 
         if rel_cut:
             rel_gain = rel_gain.loc[rel_gain <= rel_cut]
             rel_gain = rel_gain.loc[rel_gain >= -rel_cut]
 
         # Plot
-        p = sb.distplot(rel_gain, bins=50, color='black', norm_hist=True, kde=True, ax=ax[qq],
-                        kde_kws=dict(linewidth=0.5))
+        supps = [cc for cc in rel_gain if cc < 0]
+        percent_supp = np.around((len(supps) / len(rel_gain)) * 100, 1)
+        print(percent_supp)
+        # Filter dataframe to get rid of the couple with super weird, big or small weights
+        rel = rel_gain.loc[rel_gain <= 2.5]
+        rel = rel.loc[rel >= -2.5]
+
+        sups = [cc for cc in rel_gain if cc < 0]
+        enhs = [cc for cc in rel_gain if cc >= 0]
+
+        sup_edges = np.arange(-1.4, 0.1, 0.05)
+        enh_edges = np.arange(0, 1.5, 0.05)
+        na, xa = np.histogram(sups, bins=sup_edges)
+        nb, xb = np.histogram(enhs, bins=enh_edges)
+        aa = na / (na.sum() + nb.sum()) * 100
+        bb = nb / (na.sum() + nb.sum()) * 100
+
+        ax[qq].hist(xa[:-1], xa, weights=aa, histtype='step', color='tomato', fill=True)
+        ax[qq].hist(xb[:-1], xb, weights=bb, histtype='step', color='dodgerblue', fill=True)
 
         ymin, ymax = ax[qq].get_ylim()
-        ax[qq].vlines(0, ymin, ymax, color='black', ls = '--', lw=1)
-        # Change color of suppressed to red, enhanced to blue
-        for rectangle in p.patches:
-            if rectangle.get_x() < 0:
-                rectangle.set_facecolor('tomato')
-        for rectangle in p.patches:
-            if rectangle.get_x() >= 0:
-                rectangle.set_facecolor('dodgerblue')
-        # This might have to be change if I use %, which I want to, but density is between 0-1, cleaner
-        ax[qq].set_yticks([0,1])
-        ax[qq].set_yticklabels([0,1])
+        ymaxs.append(ymax)
+        # # Plot
+        # p = sb.distplot(rel_gain, bins=50, color='black', norm_hist=True, kde=True, ax=ax[qq],
+        #                 kde_kws=dict(linewidth=0.5))
+        #
+        # # Change color of suppressed to red, enhanced to blue
+        # for rectangle in p.patches:
+        #     if rectangle.get_x() < 0:
+        #         rectangle.set_facecolor('tomato')
+        # for rectangle in p.patches:
+        #     if rectangle.get_x() >= 0:
+        #         rectangle.set_facecolor('dodgerblue')
+        # # This might have to be change if I use %, which I want to, but density is between 0-1, cleaner
+        # ax[qq].set_yticks([0,1])
+        # ax[qq].set_yticklabels([0,1])
         # All axes match natural. Would need to be changed if natural cuts for some reason.
         if qq == 0:
-            ax[qq].set_ylabel('Density', fontweight='bold', fontsize=8)
+            ax[qq].set_ylabel('Percent of cells', fontweight='bold', fontsize=8)
             xmin, xmax = ax[qq].get_xlim()
+            ax[qq].set_title(f'Area: {area}\nnr >= {r_cut}, quads={quads}\nrel_cut={rel_cut}', fontsize=7,
+                             fontweight='bold', loc='right')
         else:
             ax[qq].set_xlim(xmin, xmax)
             ax[qq].set_ylabel('')
@@ -356,8 +381,13 @@ def synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, quads=3, 
             # if qq == (lens - 1):
             #     ax[qqq].set_xlabel('Time (s)', fontweight='bold', fontsize=10)
 
+    maxymax = np.max(ymaxs)
+    for qq in range(len(synth_show)):
+        ax[qq].set_ylim(0, maxymax)
+        ax[qq].vlines(0, 0, maxymax, color='black', ls = '--', lw=1)
 
-def synthetic_relative_gain_comparisons(df, thresh=0.03, quads=3, area=None,
+
+def synthetic_relative_gain_comparisons(df, snr_threshold=0.12, thresh=None, quads=3, area='PEG',
                                               synth_show=None, r_cut=None, rel_cut=2.5):
     '''Updated 2022_10_03. Took out the spectrograms from the original function.
     Made 2022_09_08. Makes the big figure on panel 5 of my 2022 NGP Poster. It takes a dataframe
@@ -365,7 +395,10 @@ def synthetic_relative_gain_comparisons(df, thresh=0.03, quads=3, area=None,
     gain, all aligned on the same zero so you can ideally see the shift. You also can put in a BG
     and FG name (with spaces in the name if it has!) and it will show the corresponding spectrograms
     for the synthetic conditions nextdoor to the relative gain plot. It's a fun figure.'''
-    quad, _ = ohel.quadrants_by_FR(df, threshold=thresh, quad_return=quads)
+    if thresh:
+        quad, _ = ohel.quadrants_by_FR(df, threshold=thresh, quad_return=quads)
+    if snr_threshold:
+        quad = df.loc[(df.bg_snr >= snr_threshold) & (df.fg_snr >= snr_threshold)]
     if r_cut:
         quad = quad.dropna(axis=0, subset='r')
         quad = quad.loc[quad.r >= r_cut]
@@ -385,39 +418,48 @@ def synthetic_relative_gain_comparisons(df, thresh=0.03, quads=3, area=None,
 
     fig, axes = plt.subplots(len(synth_show), 1, figsize=(4, len(synth_show)*4))
 
+    ymaxs = []
     for qq, (ax, syn) in enumerate(zip(axes, synth_show)):
         to_plot = quad.loc[quad.synth_kind==syn].copy()
 
         # Calculate percent suppressed
         rel_gain = (to_plot.weightsB - to_plot.weightsA) / \
                               (to_plot.weightsB + to_plot.weightsA)
-        supps = [cc for cc in rel_gain if cc < 0]
-        percent_supp = np.around((len(supps) / len(rel_gain)) * 100, 1)
-        print(percent_supp)
+        # rel_gain = to_plot.FG_rel_gain
 
         if rel_cut:
             rel_gain = rel_gain.loc[rel_gain <= rel_cut]
             rel_gain = rel_gain.loc[rel_gain >= -rel_cut]
 
         # Plot
-        p = sb.distplot(rel_gain, bins=50, color='black', norm_hist=True, kde=True, ax=ax,
-                        kde_kws=dict(linewidth=0.5))
+        supps = [cc for cc in rel_gain if cc < 0]
+        percent_supp = np.around((len(supps) / len(rel_gain)) * 100, 1)
+        print(percent_supp)
+        # Filter dataframe to get rid of the couple with super weird, big or small weights
+        rel = rel_gain.loc[rel_gain <= 2.5]
+        rel = rel.loc[rel >= -2.5]
+
+        sups = [cc for cc in rel_gain if cc < 0]
+        enhs = [cc for cc in rel_gain if cc >= 0]
+
+        sup_edges = np.arange(-1.4, 0.1, 0.05)
+        enh_edges = np.arange(0, 1.5, 0.05)
+        na, xa = np.histogram(sups, bins=sup_edges)
+        nb, xb = np.histogram(enhs, bins=enh_edges)
+        aa = na / (na.sum() + nb.sum()) * 100
+        bb = nb / (na.sum() + nb.sum()) * 100
+
+        ax.hist(xa[:-1], xa, weights=aa, histtype='step', color='tomato', fill=True)
+        ax.hist(xb[:-1], xb, weights=bb, histtype='step', color='dodgerblue', fill=True)
 
         ymin, ymax = ax.get_ylim()
-        ax.vlines(0, ymin, ymax, color='black', ls = '--', lw=1)
-        # Change color of suppressed to red, enhanced to blue
-        for rectangle in p.patches:
-            if rectangle.get_x() < 0:
-                rectangle.set_facecolor('tomato')
-        for rectangle in p.patches:
-            if rectangle.get_x() >= 0:
-                rectangle.set_facecolor('dodgerblue')
+        ymaxs.append(ymax)
         # This might have to be change if I use %, which I want to, but density is between 0-1, cleaner
-        ax.set_yticks([0,1])
-        ax.set_yticklabels([0,1])
+        # ax.set_yticks([0,1])
+        # ax.set_yticklabels([0,1])
         # All axes match natural. Would need to be changed if natural cuts for some reason.
         if qq == 0:
-            ax.set_ylabel('Density', fontweight='bold', fontsize=8)
+            ax.set_ylabel('Percent of cells', fontweight='bold', fontsize=8)
             xmin, xmax = ax.get_xlim()
         else:
             ax.set_xlim(xmin, xmax)
@@ -427,12 +469,17 @@ def synthetic_relative_gain_comparisons(df, thresh=0.03, quads=3, area=None,
             ax.set_xlabel('Relative Gain', fontweight='bold', fontsize=10)
         else:
             ax.set_xticklabels([])
-        ax.text((xmin+(np.abs(xmin)*0.1)), 0.75, f"Percent\nSuppression:\n{percent_supp}", fontsize=6)
+        ax.text((xmin+(np.abs(xmin)*0.1)), 0.75, f"Percent\nSuppression:\n{percent_supp}\nn={len(to_plot)}", fontsize=6)
 
         ax.set_ylabel(f"{kind_dict[syn]}", fontweight='bold', fontsize=10)
 
-    fig.suptitle(f'Area: {area}, r >= {r_cut}, quads={quads}, rel_cut={rel_cut}, thresh={thresh}',
-                 fontsize=7, fontweight='bold')
+    maxymax = np.max(ymaxs)
+    for ax in axes:
+        ax.set_ylim(0, maxymax)
+        ax.vlines(0, 0, maxymax, color='black', ls = '--', lw=1)
+
+    fig.suptitle(f'Area: {area}\nr >= {r_cut}, quads={quads}\nrel_cut={rel_cut}, thresh={thresh}',
+                 fontsize=7, fontweight='bold', ha='right', x=1)
     fig.tight_layout()
 
 
@@ -1300,7 +1347,7 @@ def synthetic_summary_relative_gain_multi_bar(weight_df0, suffixes=['', '_start'
         ax.set_xlabel("Relative FG Suppresion", fontsize=10, fontweight='bold')
         ax.set_yticklabels(['Cochlear', 'Temporal', 'Spectral', 'Spectrotemporal\nModulation', 'Natural'], fontsize=10,
                            fontweight='bold')
-        ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]}", fontsize=10, fontweight='bold')
+        ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]} - n={len(C)}", fontsize=10, fontweight='bold')
     fig.tight_layout()
 
     return stat_dict
@@ -1787,6 +1834,79 @@ def sound_metric_scatter_combined(df, x_metrics, x_labels=None, synth_show=['N',
                  fontsize=12, fontweight='bold')
 
 
+def synthetic_sound_metric_scatters(filt, x_metrics, x_labels=None, synth_show=['N', 'M', 'S', 'T', 'C'],
+                                  suffix=''):
+    '''2023_07_27. Reworked osyn.sound_metric_scatter_combined() so that the rows are the different areas and the
+    columns are the metrics you give it.'''
+    areas = filt.area.unique().tolist()
+
+    area_sound_dict = {}
+    for aa in areas:
+        area_df = filt.loc[filt.area==aa]
+        print(f'Getting your {aa} sound_df.')
+        area_sound_dict[aa] = ohel.get_sound_statistics_from_df(area_df, percent_lims=[15, 85], append=True)
+    sound_df = pd.concat(list(area_sound_dict.values()))
+
+    ylim_max = np.max([sound_df[f'BG_rel_gain_avg{suffix}'].max(), sound_df[f'FG_rel_gain_avg{suffix}'].max()])
+    ylim_min = np.min([sound_df[f'BG_rel_gain_avg{suffix}'].min(), sound_df[f'FG_rel_gain_avg{suffix}'].min()])
+
+    fig, axes = plt.subplots(len(areas), len(x_metrics), figsize=(len(x_metrics) *4, len(areas) *5), sharey=True, sharex='col')
+    ax = axes.ravel()
+
+    count = 0
+    for ar in areas:
+        area_df = area_sound_dict[ar]
+        for ll in ['BG', 'FG']:
+            for cnt, met in enumerate(x_metrics):
+
+                xlim_max = np.max([area_df[f'BG_{met}{suffix}'].max(), area_df[f'FG_{met}{suffix}'].max()])
+                xlim_min = np.min([area_df[f'BG_{met}{suffix}'].min(), area_df[f'FG_{met}{suffix}'].min()])
+                xlim_min = xlim_min - np.abs(xlim_max) * 0.05
+
+                to_plot = area_df[[f'{ll}', f'{ll}_rel_gain_avg{suffix}', 'synth_kind', f'{ll}_{met}{suffix}']]
+                to_plot = to_plot.drop_duplicates(subset=[f'{ll}', 'synth_kind'])
+                met_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_{met}{suffix}'].mean()
+                gain_av = to_plot.groupby('synth_kind', as_index=False)[f'{ll}_rel_gain_avg{suffix}'].mean()
+
+                if ll == 'BG':
+                    colors = {'N': 'cornflowerblue', 'M': 'royalblue', 'T': 'blue', 'S': 'darkblue', 'C': 'black'}
+                elif ll == 'FG':
+                    colors = {'N': 'yellowgreen', 'M': 'forestgreen', 'T': 'green', 'S': 'darkgreen', 'C': 'darkslategrey'}
+
+                for key, val in colors.items():
+                    if cnt == 0:
+                        plot = sb.scatterplot(x=f'{ll}_{met}{suffix}', y=f'{ll}_rel_gain_avg{suffix}',
+                                              data=to_plot.loc[to_plot.synth_kind == key],
+                                              ax=ax[cnt + count], s=24, color=val, label=f'{key}, {ll}')
+                        ax[cnt+count].set_title(f"{ar}: n={int(len(area_df)/len(synth_show))}", fontweight='bold', loc='left', fontsize=12)
+
+                    else:
+                        sb.scatterplot(x=f'{ll}_{met}{suffix}', y=f'{ll}_rel_gain_avg{suffix}',
+                                       data=to_plot.loc[to_plot.synth_kind == key],
+                                       ax=ax[cnt + count], s=24, color=val)
+
+                    sb.scatterplot(x=f'{ll}_{met}{suffix}', y=ylim_max * 1.1, data=met_av.loc[met_av.synth_kind == key],
+                                   ax=ax[cnt + count], marker='v', color=val, s=150)
+                    sb.scatterplot(x=xlim_max * 1.1, y=f'{ll}_rel_gain_avg{suffix}',
+                                   data=gain_av.loc[gain_av.synth_kind == key],
+                                   ax=ax[cnt + count], marker='<', color=val, s=150)
+                    ax[cnt+count].xaxis.set_tick_params(labelbottom=True)
+
+                    plt.setp(plot.get_legend().get_texts(), fontsize='5')
+                    plt.show()
+
+                # ax[cnt + count].set_ylim(ylim_min * 1.1, ylim_max * 1.1), ax[cnt + count].set_xlim(xlim_min, xlim_max * 1.1)
+                ax[cnt + count].set_ylabel(''), ax[cnt + count].set_xlabel('')
+                ax[count].set_ylabel(f'Relative Gain', fontweight='bold', fontsize=12)
+
+                if x_labels:
+                    ax[cnt+count].xaxis.set_label(True)
+                    ax[cnt + count].set_xlabel(f'{x_labels[cnt]}', fontweight='bold', fontsize=12)
+                else:
+                    ax[cnt + count].set_ylabel(f'{met}{suffix}', fontweight='bold', fontsize=12)
+        count += len(x_metrics)
+
+
 def sound_metric_scatter_combined_flanks(df, x_metrics, x_labels=None, synth_show=['N', 'M', 'S', 'T', 'C'],
                                   fr_thresh=0.03, r_cut=None, suffix=''):
     '''2023_05_30. This does the same thing as sound_metric_scatter_combined, but instead of using quadrant3
@@ -1944,3 +2064,97 @@ def sound_metric_scatter_combined_flanks(df, x_metrics, x_labels=None, synth_sho
                  f'bg_n={len(df_bg)}, fg_n={len(df_fg)} - flank quads - '
                  f'{suffix}',
                  fontsize=12, fontweight='bold')
+
+
+def synthetic_rel_gain_summary(filt, synth_show=['M', 'S', 'T', 'C']):
+    '''2023_07_25. A worse version of osyn.synthetic_summary_relative_gain_all_areas(). Scatter not bar.'''
+    fig, ax = plt.subplots(1, 1, figsize=(5,8))
+    cnt_list = []
+    for cnt, syn in enumerate(synth_show):
+        x_pos = cnt+1
+        syn_df = filt.loc[filt.synth_kind==syn]
+        a1, peg = syn_df.loc[syn_df.area=='A1'], syn_df.loc[syn_df.area=='PEG']
+        a1_mean, peg_mean = a1.FG_rel_gain.mean(), peg.FG_rel_gain.mean()
+        a1_sem, peg_sem = a1.FG_rel_gain.sem(), peg.FG_rel_gain.sem()
+
+        ax.scatter(x_pos-0.1, a1_mean, color='indigo')
+        ax.scatter(x_pos+0.1, peg_mean, color='maroon')
+        ax.errorbar(x_pos-0.1, y=a1_mean, yerr=a1_sem, ls='none', color='indigo', capsize=5)
+        ax.errorbar(x_pos+0.1, y=peg_mean, yerr=peg_sem, ls='none', color='maroon', capsize=5)
+        cnt_list.append(x_pos)
+
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, 0)
+    ax.xaxis.tick_top()
+    ax.spines['top'].set_visible(True), ax.spines['bottom'].set_visible(False)
+    ax.set_xticks(cnt_list)
+    ax.set_xticklabels(synth_show, fontsize=10, fontweight='bold')
+    ax.set_ylabel('Relative Gain', fontsize=12, fontweight='bold')
+
+
+def synthetic_summary_relative_gain_all_areas(filt, synth_show=['M', 'S', 'T', 'C'], mult_comp=1):
+    '''2023_07_25. Takes a dataframe that has been filtered using ohel.filter_across_synths() and a list of
+    conditions to plot and will make a summary horizontal bar plot of the average relative gains. Use
+    mult_comp not being default 1 if you want to make multiple comparisons in each area.'''
+    kind_dict = {'A': 'Non-RMS Norm\nNatural', 'N': 'Natural', 'M': 'Spectrotemporal\nModulation',
+                  'U': 'Spectro-\ntemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
+
+    # Grab the areas that are present in the dataframe, separate the dataframe by area, and make a list of
+    # dictionaries of each synth condition in synth_show for each area
+    areas = filt.area.unique().tolist()
+    area_dicts = {dd:filt.loc[filt.area==dd] for dd in areas}
+    synth_dicts = [{f'{ar}_{syn}':area_dicts[ar].loc[area_dicts[ar].synth_kind == syn] for syn in synth_show} for ar in areas]
+
+    # Get all comparisons possible given the synth_show parameter
+    c = list(itertools.combinations(synth_show, 2))
+    stat_combos = [''.join(dd) for dd in c]
+
+    # Calculate individual stats for each synthetic combination and area and make one big dict to return
+    stat_dict = {}
+    for cnt, ar in enumerate(areas):
+        sd = synth_dicts[cnt]
+        for ss in stat_combos:
+            one, two = ss[0], ss[1]
+            stat_dict[f'{ar}_{ss}'] = stats.wilcoxon(sd[f'{ar}_{one}']['FG_rel_gain'],
+                                                      sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
+
+    synth_show.reverse()
+    ylabels = [kind_dict[kk] for kk in synth_show]
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+    y_pos_list = []
+    for cnt, ss in enumerate(synth_show):
+        y_pos = cnt+1
+        if cnt==0:
+            ax.barh(y=y_pos+0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
+                    linestyle='None', height=0.4, label='A1')
+            ax.barh(y=y_pos-0.2, width=synth_dicts[1][f'PEG_{ss}']['FG_rel_gain'].mean(), color='coral',
+                    linestyle='None', height=0.4, label='PEG')
+        else:
+            ax.barh(y=y_pos + 0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
+                    linestyle='None', height=0.4)
+            ax.barh(y=y_pos - 0.2, width=synth_dicts[1][f'PEG_{ss}']['FG_rel_gain'].mean(), color='coral',
+                    linestyle='None', height=0.4)
+        ax.errorbar(y=y_pos+0.2, x=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                    xerr=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+        ax.errorbar(y=y_pos-0.2, x=synth_dicts[1][f'PEG_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                    xerr=synth_dicts[1][f'PEG_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+
+        ax.legend(fontsize=10)
+        y_pos_list.append(y_pos)
+
+    ax.yaxis.tick_right()
+    ax.yaxis.set_label_position("right")
+    ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+    ax.set_yticks(y_pos_list)
+    ax.set_yticklabels(ylabels, fontsize=10, fontweight='bold')
+
+    ax.tick_params(axis='x', labelsize=10)
+    ax.set_xlabel("Relative Gain", fontsize=12, fontweight='bold')
+
+    # ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]} - n={len(C)}", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+
+    return stat_dict
