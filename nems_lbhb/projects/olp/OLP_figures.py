@@ -1117,7 +1117,7 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
     else:
         raise ValueError('Need a threshold for this one, either FR or snr.')
 
-    if weight_lims:
+    if weight_lim:
         quad3 = quad3.loc[((quad3[f'weightsA_start'] >= weight_lim[0]) & (quad3[f'weightsA_start'] <= weight_lim[1])) &
                           ((quad3[f'weightsB_start'] >= weight_lim[0]) & (quad3[f'weightsB_start'] <= weight_lim[1])) &
                           ((quad3[f'weightsA_end'] >= weight_lim[0]) & (quad3[f'weightsA_end'] <= weight_lim[1])) &
@@ -1153,17 +1153,17 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
         for ee, an in enumerate(list(filt.animal.unique())):
             animal_df = filt.loc[filt.animal == an]
             ax[num].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                            y=[np.median(animal_df[f'weightsA_start']), np.median(animal_df[f'weightsA_end'])],
                                label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)#, marker=symbols[cnt])
             ax[num].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                            y=[np.median(animal_df[f'weightsB_start']), np.median(animal_df[f'weightsB_end'])],
                                color=colors[ee], alpha=alph) #, marker=symbols[cnt])
             ax[num].errorbar(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(animal_df[f'weightsA_start']), np.nanmean(animal_df[f'weightsA_end'])],
+                            y=[np.median(animal_df[f'weightsA_start']), np.median(animal_df[f'weightsA_end'])],
                            yerr=[stats.sem(animal_df[f'weightsA_start']), stats.sem(animal_df[f'weightsA_end'])], xerr=None,
                            color=colors[ee], alpha=alph)
             ax[num].errorbar(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(animal_df[f'weightsB_start']), np.nanmean(animal_df[f'weightsB_end'])],
+                            y=[np.median(animal_df[f'weightsB_start']), np.median(animal_df[f'weightsB_end'])],
                            yerr=[stats.sem(animal_df[f'weightsB_start']), stats.sem(animal_df[f'weightsB_end'])], xerr=None,
                            color=colors[ee], alpha=alph)
 
@@ -1186,17 +1186,17 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
 
         if summary == True:
             ax[num].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                            y=[np.median(filt[f'weightsA_start']), np.median(filt[f'weightsA_end'])],
                             label=f'Total (n={len(filt)})', color='black')  # , marker=symbols[cnt])
             ax[num].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                            y=[np.median(filt[f'weightsB_start']), np.median(filt[f'weightsB_end'])],
                             color='black')  # , marker=symbols[cnt])
             ax[num].errorbar(x=['BG_start', 'BG_end'],
-                             y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
+                             y=[np.median(filt[f'weightsA_start']), np.median(filt[f'weightsA_end'])],
                              yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
                              xerr=None, color='black')
             ax[num].errorbar(x=['FG_start', 'FG_end'],
-                             y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
+                             y=[np.median(filt[f'weightsB_start']), np.median(filt[f'weightsB_end'])],
                              yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
                              xerr=None, color='black')
 
@@ -2147,7 +2147,7 @@ def plot_dynamic_site_errors(full_df, dyn_kind='fh', area='A1', thresh=0.03, r_c
     fig.tight_layout()
 
 
-def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=None, area='A1'):
+def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=None, area='A1', bar=True):
     '''2023_07_14. Function to make figures 2B and 2C. Takes a prefiltered (just for
     olp_type, snr, layer, stuff like that), and makes a histogram of the weights,
     plots the means, and then plots the relative gain histogram.'''
@@ -2185,7 +2185,7 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     ax[0].tick_params(axis='both', which='major', labelsize=8)
     ymin, ymax = ax[0].get_ylim()
 
-    BG1, FG1 = np.mean(to_plot.weightsA), np.mean(to_plot.weightsB)
+    BG1, FG1 = np.median(to_plot.weightsA), np.median(to_plot.weightsB)
     BG1sem, FG1sem = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
     ttest1 = stats.ttest_ind(to_plot.weightsA, to_plot.weightsB)
 
@@ -2197,11 +2197,16 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     # box_plot = ax[1].boxplot([to_plot.weightsA, to_plot.weightsB], notch=True,
     #                          boxprops=dict(facecolor='deepskyblue'))
 
-    ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
-    ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
+    if bar:
+        ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
+        ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
 
-    ax[1].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
-    ax[1].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+    else:
+        ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
+        ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
+
+        ax[1].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
+        ax[1].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
 
     # ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
     # ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')

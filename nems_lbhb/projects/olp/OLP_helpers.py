@@ -896,7 +896,11 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
     sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
     sound_df.rename(columns={'std': 'Tstationary', 'freq_stationary': 'Fstationary', 'RMS_norm_power': 'RMS_power',
                              'max_norm_power': 'max_power'}, inplace=True)
-    sound_df = sound_df.drop_duplicates('short_name')
+    try:
+        sound_df = sound_df.drop_duplicates('short_name')
+    except:
+        pass
+
     if isinstance(metrics, list):
         lens = len(metrics)
     elif isinstance(metrics, str):
@@ -1619,3 +1623,29 @@ def filter_across_synths(df, synth_show=['M','S','T','C'], snr_threshold=0.12, r
 
     ret_df = new_df.drop(['filt_name'], axis=1)
     return ret_df
+
+
+def label_vocalization(filt, species):
+    '''2023_07_27. These manual bricks of labels were taking up room on my scratch file and annoying me so I made this.
+    Pass it a dataframe and specify the species and it'll just simply add it.'''
+    if species == 'ferret':
+        voc_labels = {'Bell': 'No', 'Branch': 'No', 'Bugle': 'No', 'CashRegister': 'No', 'Castinets': 'No',
+                      'Chickens': 'No', 'Dice': 'No', 'Dolphin': 'No', 'Fight': 'Yes', 'FightSqueak': 'Yes',
+                      'Fight_Squeak': 'Yes', 'FireCracker': 'No', 'Geese': 'No', 'Gobble': 'Yes',
+                      'Gobble_High': 'Yes', 'Heels': 'No', 'Keys': 'No', 'KitGroan': 'Yes', 'KitHigh': 'Yes',
+                      'KitWhine': 'Yes', 'Kit_Groan': 'Yes', 'Kit_High': 'Yes', 'Kit_Low': 'Yes',
+                      'Kit_Whine': 'Yes', 'ManA': 'No', 'ManB': 'No', 'Tsik': 'No', 'TwitterB': 'No',
+                      'Typing': 'No', 'WomanA': 'No', 'WomanB': 'No', 'Woodblock': 'No', 'Xylophone': 'No'}
+        # If you're doing this you don't want to split by hemisphere, so get rid of that modifier
+        filt['animal'] = filt.animal.str[:3]
+    elif species == 'marmoset':
+        voc_labels = {'Alarm': 'Yes', 'Bell': 'No', 'Blacksmith': 'No', 'Branch': 'No', 'CashRegister': 'No',
+                      'Castinets': 'No', 'Chickens': 'No', 'Chirp': 'Yes', 'Dice': 'No', 'Geese': 'No',
+                      'Heels': 'No', 'Keys': 'No', 'Loud_Shrill': 'Yes', 'ManA': 'No', 'ManB': 'No',
+                      'Phee': 'Yes', 'Seep': 'Yes', 'Trill': 'Yes', 'Tsik': 'Yes', 'TsikEk': 'Yes',
+                      'Tsik_Ek': 'Yes', 'TwitterA': 'Yes', 'TwitterB': 'Yes', 'Typing': 'No', 'WomanA': 'No',
+                      'WomanB': 'No', 'Woodblock': 'No', 'Xylophone': 'No'}
+    filt['Vocalization'] = filt['FG'].map(voc_labels)
+    filt['animal_voc'] = filt['animal'] + '_' + filt['Vocalization'].replace({'Yes':'voc', 'No': 'non'})
+
+    return filt
