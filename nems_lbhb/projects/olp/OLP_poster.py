@@ -693,7 +693,10 @@ def poster5_synthetic_relative_gain_comparisons_specs(df, bg, fg, thresh=0.03, q
     if isinstance(synth_show, str):
         synth_show = [synth_show]
 
-    lens = len(synth_show)
+    try:
+        lens = len(synth_show)
+    except:
+        lens = 1
     hists, bgs, fgs = [], [], []
     # fig, axes = plt.subplots(len(synth_show), 3, figsize=(8, len(synth_show)*2))
     fig, axes = plt.subplots(figsize=(8, lens*2))
