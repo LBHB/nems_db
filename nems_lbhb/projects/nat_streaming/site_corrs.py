@@ -96,8 +96,121 @@ epoch_name = "STIM_19Blender-0-1-2_01FightSqueak-0-1-1"
 epoch_name = "STIM_19Blender-0-1-1_01FightSqueak-0-1-1"
 #epoch_id = epoch_df.loc[epoch_df['BG + FG']==epoch_name].index.values[0]
 
-for epoch_id in range(len(epoch_df)): # in range(5): #
+unique_bg = list(epoch_df['BG'].unique())
+for ebg in unique_bg:
+    bids = (epoch_df['BG']==ebg)
 
+    ebgs = epoch_df.loc[bids, 'BG'].to_list()
+    efgs = epoch_df.loc[bids, 'FG'].to_list()
+    efgbgs = epoch_df.loc[bids, 'BG + FG'].to_list()
+    epoch_list = [efgbgs, efgs, ebgs]
+    rfgbg = np.concatenate([resp.extract_epoch(e) for e in efgbgs],axis=2).mean(axis=0)
+    rfg = np.concatenate([resp.extract_epoch(e) for e in efgs],axis=2).mean(axis=0)
+    rbg = np.concatenate([resp.extract_epoch(e) for e in ebgs],axis=2).mean(axis=0)
+
+    # norm_psth = psth - np.mean(psth[:,:25], axis=1, keepdims=True)
+    norm_psth = rfgbg - np.mean(rfgbg, axis=1, keepdims=True)
+    #norm_psth = rbg - np.mean(rbg, axis=1, keepdims=True)
+    s = np.std(norm_psth, axis=1, keepdims=True)
+    norm_psth /= (s + (s == 0))
+    sc = norm_psth @ norm_psth.T / norm_psth.shape[1]
+
+    use_abs_corr = False
+    if use_abs_corr:
+        cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, use_abs=True, count=8, threshold=1.5)
+    else:
+        cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, count=5, threshold=1.85)
+
+    # create figure with 4x3 subplots
+    f, ax = plt.subplots(4, 3, figsize=(6, 6), sharex='row', sharey='row')
+
+    # iterate through epochs, plotting data for each one in a different column
+    for col, epochs in enumerate(epoch_list):
+
+        # extract spike data for current epoch and cell (cid)
+        raster = np.concatenate([resp.extract_epoch(e) for e in epochs], axis=2)
+        psth = np.mean(raster, axis=0)
+        norm_psth = psth - np.mean(psth, axis=1, keepdims=True)
+        #norm_psth = psth - np.mean(psth[:, :25], axis=1, keepdims=True)
+        s = np.std(psth, axis=1, keepdims=True)
+        norm_psth /= (s + (s == 0))
+        sc = norm_psth @ norm_psth.T / norm_psth.shape[1]
+
+        # for display, compute relative to spont
+        norm_psth = psth - np.mean(psth[:, :25], axis=1, keepdims=True)
+
+        spec = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in epochs], axis=1)
+
+        ax[0, col].imshow(spec, aspect='auto', cmap='gray_r', interpolation='none',
+                          origin='lower', extent=[-0.5, 1.5, 1, spec.shape[0]])
+        ax[0, col].set_title(epochs[0].replace("STIM_", ""))
+        ax[0, col].set_ylabel('Freq')
+
+        sc_sorted = sc[cc_idx, :][:, cc_idx]
+
+        cluster_count = idx_to_cluster_array.max()
+        cluster_psth = np.zeros((cluster_count, psth.shape[1]))
+        cluster_n = np.zeros(cluster_count)
+        mean_cc = np.zeros(cluster_count)
+        for c in range(cluster_count):
+            cluster_psth[c, :] = norm_psth[(idx_to_cluster_array == c + 1), :].mean(axis=0)
+            cluster_n[c] = (idx_to_cluster_array == c + 1).sum()
+            cc_sub = sc[(idx_to_cluster_array == c + 1), :][:, (idx_to_cluster_array == c + 1)]
+            mean_cc[c] = cc_sub[np.triu_indices(cc_sub.shape[0],k=1)].mean()
+
+        ax[1, col].vlines(np.cumsum(cluster_n)[:-1] - 0.5, -0.5, sc_sorted.shape[1] - 0.5, lw=0.5, color='r')
+        ax[1, col].hlines(np.cumsum(cluster_n)[:-1] - 0.5, -0.5, sc_sorted.shape[1] - 0.5, lw=0.5, color='r')
+        ccstr = "\n".join([f" {i+1}: {cc:.3f}" for i,cc in enumerate(mean_cc)])
+        ax[1,col].text(sc_sorted.shape[0],sc_sorted.shape[1],ccstr)
+
+        extent = [0, cluster_psth.shape[1]/rec['resp'].fs, cluster_count+0.5, 0.5]
+        if col == 0:
+            cluster_psth0 = cluster_psth
+        cluster_cc = np.zeros(cluster_count)
+
+        for c in range(cluster_count):
+            cluster_cc[c] = np.corrcoef(cluster_psth[c], cluster_psth0[c])[0, 1]
+        if col == 1:
+            fg_cc = cluster_cc
+        elif col == 2:
+            bg_cc = cluster_cc
+        if use_abs_corr:
+            ax[1, col].imshow(np.abs(sc_sorted), aspect='equal', cmap='gray_r', interpolation='none',
+                              vmin=0, vmax=1)
+        else:
+            ax[1, col].imshow(sc_sorted, aspect='equal', cmap='gray_r', interpolation='none',
+                              vmin=0, vmax=1)
+        ax[2, col].imshow(cluster_psth, aspect='auto', interpolation='none',
+                          origin='upper', vmin=0, extent=extent)
+
+        extent = [0, cluster_psth.shape[1]/rec['resp'].fs, psth.shape[0]+0.5, 0.5]
+        ax[3, col].imshow(psth[cc_idx, :], aspect='auto', interpolation='none',
+                          origin='upper', cmap='gray_r', extent=extent)
+
+        if col > 0:
+            for c in range(cluster_count):
+                ax[2, col].text(cluster_psth.shape[1]/rec['resp'].fs, c+1,
+                                f" {cluster_cc[c]:.2f}", va='center', fontsize=7)
+        if col == 2:
+            cc_diff = fg_cc - bg_cc
+            for c in range(cluster_count):
+                if cc_diff[c] > 0:
+                    tcol = 'blue'
+                else:
+                    tcol = 'red'
+                ax[2, 0].text(cluster_psth.shape[1]/rec['resp'].fs, c+1,
+                              f" {cc_diff[c]:.2f} ({int(cluster_n[c])})",
+                              va='center', fontsize=7, color=tcol)
+        if col == 0:
+            ax[1, 0].set_ylabel('Unit (sorted)')
+            ax[2, 0].set_ylabel('Cluster')
+    f.suptitle(f"{ebg}: Signal correlation")
+    plt.tight_layout()
+    print(f"{ebg}: {cluster_n}")
+
+raise ValueError("stopping")
+
+for epoch_id in range(len(epoch_df)): # in range(5): #
     # names of epochs from this triad
     efg = epoch_df.loc[epoch_id, 'FG']
     ebg = epoch_df.loc[epoch_id, 'BG']
