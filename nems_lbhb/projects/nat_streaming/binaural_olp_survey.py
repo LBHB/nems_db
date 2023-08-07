@@ -7,6 +7,7 @@ import sys, importlib
 import numpy as np
 
 import matplotlib as mpl
+mpl.use('Qt5Agg')
 params = {'axes.spines.right': False,
           'axes.spines.top': False,
           'legend.fontsize': 12,
@@ -44,40 +45,9 @@ from nems0 import db
 from nems_lbhb.baphy_io import get_depth_info
 import nems0.epoch as ep
 from nems.models.LN import LN_reconstruction
+from nems0.analysis.cluster import cluster_corr, hierarchical_cluster
 
 log = logging.getLogger(__name__)
-
-def cluster_corr(corr_array, inplace=False, return_indices=False):
-    """
-    Rearranges the correlation matrix, corr_array, so that groups of highly
-    correlated variables are next to each other
-
-    Parameters
-    ----------
-    corr_array : pandas.DataFrame or numpy.ndarray
-        a NxN correlation matrix
-
-    Returns
-    -------
-    pandas.DataFrame or numpy.ndarray
-        a NxN correlation matrix with the columns and rows rearranged
-    """
-    pairwise_distances = sch.distance.pdist(corr_array)
-    linkage = sch.linkage(pairwise_distances, method='complete')
-    cluster_distance_threshold = pairwise_distances.max() / 1.75
-    idx_to_cluster_array = sch.fcluster(linkage, cluster_distance_threshold,
-                                        criterion='distance')
-    idx = np.argsort(idx_to_cluster_array)
-
-    if not inplace:
-        corr_array = corr_array.copy()
-
-    if isinstance(corr_array, pd.DataFrame):
-        return corr_array.iloc[idx, :].T.iloc[idx, :]
-    if return_indices:
-        return idx, idx_to_cluster_array
-
-    return corr_array[idx, :][:, idx]
 
 loadkey = "psth.fs50"
 batch=345
@@ -119,7 +89,7 @@ print(counts.loc[gg])
 elist = counts.loc[gg, 'BG + FG'].to_list()
 
 #plt.close('all')
-for e in elist:
+for e in elist[:2]:
     use_siteids = epoch_df.loc[epoch_df['BG + FG']==e, 'siteid'].to_list()
     sids = [i for i,s in enumerate(siteids) if s in use_siteids]
 
@@ -149,7 +119,10 @@ for e in elist:
     s = np.std(psth, axis=1, keepdims=True)
     norm_psth /= (s + (s == 0))
     sc = norm_psth @ norm_psth.T / norm_psth.shape[1]
-    cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True)
+    #cc_idx, idx_to_cluster_array = cluster_corr(sc, threshold=1.75, return_indices=True)
+    #cc_idx, idx_to_cluster_array = cluster_corr(sc, threshold=1.5, use_abs=True, return_indices=True)
+    cc_idx, idx_to_cluster_array = hierarchical_cluster(sc, threshold=8)
+
     cluster_count=idx_to_cluster_array.max()
 
     f,ax = plt.subplots(3, 3, figsize=(6,4), sharex='row', sharey='row')
