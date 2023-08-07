@@ -28,6 +28,7 @@ import nems_lbhb.SPO_helpers as sp
 from nems0.xform_helper import load_model_xform
 from datetime import date
 import joblib as jl
+from nems_lbhb import baphy_io
 
 
 
@@ -58,6 +59,12 @@ path = '/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL'
 path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch328_0-500_marm'
 weight_df = jl.load(path)
 
+
+#spikes path
+weight_dff = ohel.add_spike_widths(filt, save_name='ferrets_with_spikes', cutoff={'PRN': 0.3, 'other': 0.375})
+path = f'/auto/users/hamersky/olp_analysis/ferrets_with_spikes'
+weight_df = jl.load(path)
+
 # 2023_05_02. Starting with Prince data too and new df structure
 # path = '/auto/users/hamersky/olp_analysis/2023-05-10_batch344_0-500_metrics' # Full one with updated PRNB layers
 # path = '/auto/users/hamersky/olp_analysis/2023-05-17_batch344_0-500_metrics' #full one with PRNB layers and paths
@@ -85,8 +92,22 @@ filt = filt.loc[filt.SNR==0]
 filt = filt.loc[filt.olp_type=='synthetic']
 filt = filt.loc[filt.olp_type=='binaural']
 
-filt = filt.loc[((filt.synth_kind=='N') & (filt['animal'].isin(['CLT_A','CLT_B','PRN_A','PRN_B']))) |
+
+# filt = filt.loc[((filt.synth_kind=='N') & (filt['animal']=='CLT') & (filt['olp_type']=='synthetic')) |
+#                 ((filt.synth_kind=='A') & (filt['animal'].isin(['CLT', 'PRN'])) & (filt['olp_type']=='binaural')) |
+#                 ((filt.synth_kind=='N') & (filt['animal']=='PRN') |
+#                 ((filt.synth_kind=='A') & (filt['animal'].isin(['TNC','ARM']))))]
+filt = filt.loc[((filt.synth_kind=='N') & (filt['animal']=='CLT') & (filt['olp_type']=='synthetic')) |
+                ((filt.synth_kind=='A') & (filt['animal']=='CLT') & (filt['olp_type']!='synthetic')) |
+                ((filt.synth_kind=='N') & (filt['animal']=='PRN')) |
                 ((filt.synth_kind=='A') & (filt['animal'].isin(['TNC','ARM'])))]
+#
+# filt = filt.loc[((filt.synth_kind=='N') & (filt['animal']=='CLT') & (filt['olp_type']=='synthetic')) |
+#                 ((filt.synth_kind=='N') & (filt['animal'].isin(['CLT', 'PRN']))) |
+#                 ((filt.synth_kind=='A') & (filt['animal'].isin(['TNC','ARM'])))]
+
+# filt = filt.loc[((filt.synth_kind=='N') & (filt['animal'].isin(['CLT_A','CLT_B','PRN_A','PRN_B']))) |
+#                 ((filt.synth_kind=='A') & (filt['animal'].isin(['TNC','ARM'])))]
 # filt = filt.loc[(filt.synth_kind=='N') | (filt.synth_kind=='A')]
 # filt = filt.loc[(filt.synth_kind=='N')]
 
@@ -98,199 +119,50 @@ bads = ['Branch', 'CashRegister', 'Heels', 'Woodblock', 'Castinets', 'Dice'] #RM
 filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
 filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
 
-weight_lim = [-0.5, 2]
-filt = filt.loc[((filt[f'weightsA'] >= weight_lim[0]) & (filt[f'weightsA'] <= weight_lim[1])) &
-                            ((filt[f'weightsB'] >= weight_lim[0]) & (filt[f'weightsB'] <= weight_lim[1]))]
-
-##maybe useless
-snr_threshold = 0.12
-filt = filt.loc[(filt.bg_snr >= snr_threshold) & (filt.fg_snr >= snr_threshold)]
-r_cut = 0.4
-filt = filt.dropna(axis=0, subset='r')
-filt = filt.loc[filt.r >= r_cut]
-rel_cut = 2.5
-filt = filt.loc[(filt['FG_rel_gain'] <= rel_cut) & (filt[f'FG_rel_gain'] >= -rel_cut)]
-filt = filt.loc[(filt['BG_rel_gain'] <= rel_cut) & (filt[f'BG_rel_gain'] >= -rel_cut)]
-
-area = 'A1'
-filt = filt.loc[filt.area==area]
-##
-
-sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=False)
+filt = ohel.df_filters(filt, snr_threshold=0.12, rel_cut=2.5, r_cut=0.4, weight_lim=[-0.5,2])
 
 
 
 
 
 
-# Marmoset vocal labels #
-path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch328_0-500_marm'
-weight_df = jl.load(path)
-filt = ohel.label_vocalization(weight_df, species='marmoset')
-
-filt.loc[(filt['area'] == 'A1orR') | (filt['area'] == 'R'), 'area'] = 'A1'
-# Don't keep the A1?/AL? labels, they're kinda small anyway
-filt = filt.loc[filt['area'].isin(['ML', 'AL', 'A1'])]
-
-
-bad_dict = plot_sound_stats(sound_df, ['Fcorr', 'Tstationary', 'bandwidth', 'max_power', 'RMS_power'],
-                                 labels=['Frequency Non-stationarity', 'Temporal Non-stationarity', 'Bandwidth (octaves)',
-                                         'Max Power', 'RMS Power'],
-                                 lines={'RMS_power': 0.95, 'max_power': 0.3}, synth_kind='N')
-# bads = list(bad_dict['RMS_power'])
-# bads = ['Waves', 'CashRegister', 'Heels', 'Keys', 'Woodblock', 'Castinets', 'Dice']  # Max Power
-# Just gets us around running that above function, this is the output.
-bads = ['Tsik', 'Blacksmith', 'Branch', 'Keys', 'Woodblock']  # RMS Power Woodblock
-filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
-filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
-
-
-weight_summary_histograms(ff, threshold=None, snr_threshold=0.12, r_cut=0.4, area='A1', bar=True)
-
-plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
-                                 weight_lims=[-0.5,2], summary=True, sep_hemi=False, sort_category=None)
-##########################
-
-
-
-
-
-# Takes a spectrogram and makes side panels describing some metrics you can get from it
-ofig.spectrogram_stats_diagram('Jackhammer', 'BG')
-ofig.spectrogram_stats_diagram('Fight Squeak', 'FG')
-
-# Compares the sound stats of the first and second half of the sound
-ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Tstationary', show='N')
-ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Fstationary', show='N')
-ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='bandwidth', show='N')
-
-# 2023_05_19. Testing spectral correlation stuff.
-sound_df.FG.unique()
-sound_df.BG.unique()
-
-sn = 'Gobble'
-kind = 'FG'
-osyn.plot_cc_cuts(sound_df, sn, kind, percent_lims=[10,90], sk='N')
-
-# 2023_05_19. The big spectral correlation viewer.
-osyn.plot_spec_cc(sound_df, 'BG', percent_lims=[10,90], sk='N')
-osyn.plot_spec_cc(sound_df, 'FG', percent_lims=[10,90], sk='N')
+from nems_lbhb.stats import jack_mean_err
+m,se = jack_mean_err(x, do_median=True)
 
 
 
 
 
 
-full_est = {}
-for aa in ['', '_start', '_end']:
-    est = run_reg(filt, 0.4, 0.03, suffix=aa, synth=None, xs=['Fcorr', 'Tstationary', 'bandwidth'])
-    full_est[list(est.keys())[0]] = est[list(est.keys())[0]]
-
-coefs = {}
-for kk, vv in full_est.items():
-    coefs[kk] = vv.params
-
-for cnt, ee in enumerate(list(coefs.keys())):
-    rnms = {key: (key.split('_')[0] if len(key.split('_')) > 1 else key) for key in coefs[ee].index.to_list()}
-    if cnt==0:
-        ca = coefs[ee].to_frame(name=ee).T
-        ca = ca.rename(columns=rnms)
-    else:
-        cb = coefs[ee].to_frame(name=ee).T
-        cb = cb.rename(columns=rnms)
-        ca = pd.concat([ca, cb])
-
-ccs = ca.drop(labels='Intercept', axis=1)
 
 
-est = run_reg(filt, r_cut=0.4, snr_threshold=0.12, suffix='', synth=None, xs=['Fcorr', 'Tstationary', 'bandwidth'],
-              category='Vocalization', area='A1')
+
+
+
+
+
+
+
+
 
 #Trying multiple regression
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
+a1, voc_label = ohel.run_sound_stats_reg(filt, r_cut=0.4, snr_threshold=0.12, suffix='', synth=None,
+              xs=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
+              category='Vocalization', area='A1', shuffle=True)
 
-def run_reg(df, r_cut=0.4, snr_threshold=0.12, suffix='', area='A1', synth=None, xs=['Fcorr', 'Tstationary', 'bandwidth'],
-            category='Vocalization'):
+peg, voc_label = ohel.run_sound_stats_reg(filt, r_cut=0.4, snr_threshold=0.12, suffix='', synth=None,
+              xs=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
+              category='Vocalization', area='PEG', shuffle=True)
 
-    df = df.loc[df.area==area]
+for aa in a1.keys():
+    print(f'{aa}, r={np.around(a1[aa].rsquared, 2)}')
 
-    if category:
-        if category=='Vocalization':
-            voc_labels = {'Yes': 1, 'No': 0}
-            df['Vocalization'] = df['Vocalization'].map(voc_labels)
+ofig.plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
+                        cat='Vocalization', omit='C(Vocalization)[T.3]')
 
-    xs = [f'{xx}{suffix}' for xx in xs]
-    y = [f'rel_gain{suffix}']
 
-    if r_cut:
-        df = df.dropna(axis=0, subset='r')
-        df = df.loc[df[f'r{suffix}'] >= r_cut]
-    df = df.copy()
 
-    # fr_thresh = 0.03
-    if snr_threshold:
-        if suffix == '_start' or suffix == '_end':
-            df = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
-                        & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
-        else:
-            df = df.loc[(df.bg_snr >= snr_threshold) & (df.fg_snr >= snr_threshold)]
 
-    sound_df = ohel.get_sound_statistics_from_df(df, percent_lims=[15, 85], append=True)
-
-    nms = xs + y
-    bx, fx = [f'BG_{bb}' for bb in nms], [f'FG_{ff}' for ff in nms]
-    if category:
-        if isinstance(category, list):
-            bx, fx = ['BG', 'synth_kind', 'cellid', 'layer'] + bx + category, ['FG', 'synth_kind', 'cellid', 'layer'] + fx + category
-        elif isinstance(category, str):
-            bx, fx = ['BG', 'synth_kind', 'cellid', 'layer'] + bx + [category], ['FG', 'synth_kind', 'cellid', 'layer'] + fx + [category]
-    else:
-        bx, fx = ['BG', 'synth_kind', 'cellid', 'layer'] + bx, ['FG', 'synth_kind', 'cellid', 'layer'] + fx
-    # bx, fx = ['BG', 'synth_kind', 'cellid', 'layer'] + bx, ['FG', 'synth_kind', 'cellid', 'layer'] + fx
-
-    bgs, fgs = sound_df[bx], sound_df[fx]
-    bg_rn = {key:(key[3:] if len(key.split('_'))>1 else 'name') for key in bgs.columns.to_list() if key[:2]=='BG'}
-    fg_rn = {key:(key[3:] if len(key.split('_'))>1 else 'name') for key in fgs.columns.to_list() if key[:2]=='FG'}
-    bgs, fgs = bgs.rename(columns=bg_rn), fgs.rename(columns=fg_rn)
-
-    to_reg = pd.concat([bgs,fgs])
-
-    if synth:
-        to_reg = to_reg.loc[to_reg.synth_kind==synth]
-
-    for xx in xs:
-        to_reg[xx] -= to_reg[xx].mean()
-        to_reg[xx] /= to_reg[xx].std()
-
-    # to_reg[f'Fcorr{suffix}'] -= to_reg[f'Fcorr{suffix}'].mean()
-    # to_reg[f'Tstationary{suffix}'] -= to_reg[f'Tstationary{suffix}'].mean()
-    # to_reg[f'bandwidth{suffix}'] -= to_reg[f'bandwidth{suffix}'].mean()
-    #
-    # to_reg[f'Fcorr{suffix}'] /= to_reg[f'Fcorr{suffix}'].std()
-    # to_reg[f'Tstationary{suffix}'] /= to_reg[f'Tstationary{suffix}'].std()
-    # to_reg[f'bandwidth{suffix}'] /= to_reg[f'bandwidth{suffix}'].std()
-    # mod = smf.ols(formula=f'{y[0]} ~ C(layer) + Fcorr{suffix} + Tstationary{suffix} + '
-    #                       f'bandwidth{suffix}', data=to_reg)
-
-    string = ' + '.join(xs)
-    if category:
-        if isinstance(category, list):
-            cats = [f'C({cc})' for cc in category]
-            cat_string = ' + '.join(cats)
-        elif isinstance(category, str):
-            cat_string = f'C({category})'
-        fit_string = ' + '.join([string, cat_string])
-    else:
-        fit_string = string
-
-    mod = smf.ols(formula=f'{y[0]} ~ {fit_string}', data=to_reg)
-    est = mod.fit()
-
-    if suffix=='':
-        suffix = '_full'
-
-    return {f'{area}{suffix}': est}
 
 
 
@@ -333,14 +205,25 @@ ofig.response_heatmaps_comparison(weight_df, site='CLT052d', bg='Wind', fg='Gees
                                      batch=340, bin_kind='11', synth_kind='A', sigma=3, sort=True,
                              example=True, lin_sum=True, positive_only=False)
 
+weight_df['site'] = [dd[:7] for dd in weight_df['cellid']]
+
+ofig.response_heatmaps_comparison(weight_df, site='ARM029a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
+                                     batch=340, bin_kind='11', synth_kind='A', sigma=3, sort=True,
+                             example=True, lin_sum=True, positive_only=False)
 
 ## Figure 2 ##
 #2A
 # Model
 #2B weights summary A1
-ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='A1', bar=True)
+ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='A1', rel_cut=2.5,
+                               bar=True)
 #2C weights summary PEG
-ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='PEG', bar=True)
+ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='PEG', rel_cut=2.5,
+                               bar=True)
+
+
+
+
 
 ## For the figure if only I could find a good example 2022_11_01
 # ofig.psths_with_specs_partial_fit(weight_df, 'CLT047c-012-1', 'Bees', 'Gobble', sigma=1, error=False)
@@ -353,7 +236,9 @@ ofig.psths_with_specs_partial_fit(weight_df, 'CLT012a-052-1', 'Bees', 'Bugle', s
 ## Figure 3 ##
 #3A/B
 ofig.plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
-                                 weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None)
+                                 weight_lim=[-0.5, 2], summary=True, sep_hemi=False, sort_category=None)
+
+
 
 # 3A Relative gain intro
 # ofig.plot_single_relative_gain_hist(filt, threshold=0.03, r_cut=0.06)
@@ -386,24 +271,69 @@ ohel.plot_sound_stats(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'],
 # 5C sound stats with rel gain
 ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
                           ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
-                          area='A1', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind='N',
-                          r_cut=0.4, jitter=None, mean=True)
+                          area='A1', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind=None,
+                          r_cut=0.4, jitter=None, mean=True, vocalization=True)
 ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
                           ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
-                          area='PEG', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind='N',
-                          r_cut=0.4, jitter=None, mean=True)
+                          area='PEG', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind=None,
+                          r_cut=0.4, jitter=None, mean=True, vocalization=True)
 
 # ofig.sound_metric_scatter(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
 #                           ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
 #                           area='A1', threshold=0.03, synth_kind='N', r_cut=0.6, jitter=[0.005,0.2,0.03])
 
+# 5C+ Spectral overlap
+ofig.plot_spectral_overlap_scatter(filt, area='A1')
+ofig.plot_spectral_overlap_scatter(filt, area='PEG')
+
+# Helpful for diagnosing spectral overlap stuff
+# overlap_info = ohel.get_spectral_overlap_stats_and_paths(filt, area=None)
+# row = ohel.plot_spectral_overlap_specs(overlap_info, BG='Bees', FG='FightSqueak')
+# row = ohel.plot_spectral_overlap_specs(overlap_info, BG='Jackhammer', FG='WomanA')
+
+
+#5D Vocalizations
+voc_masks = {'No': 'Non-vocalization', 'Other': 'Other\nVocalization', 'Yes': 'Ferret\nVocalization'}
+filtt = filt.copy()
+filtt['Vocalization'] = filtt['Vocalization'].map(voc_masks)
+ofig.plot_all_weight_comparisons(filtt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+                                 weight_lim=[-0.5,2], summary=False, sep_hemi=False, sort_category="Vocalization",
+                                 flanks=False)
+
+#5E Regression
+ofig.plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
+                        cat='Vocalization', omit='C(Vocalization)[T.3]')
+
+
+
+##Other stats stuff probably not useful but maybe
+# # Takes a spectrogram and makes side panels describing some metrics you can get from it
+# ofig.spectrogram_stats_diagram('Jackhammer', 'BG')
+# ofig.spectrogram_stats_diagram('Fight Squeak', 'FG')
+#
+# # Compares the sound stats of the first and second half of the sound
+# ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Tstationary', show='N')
+# ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='Fstationary', show='N')
+# ofig.sound_stats_half_compare(sound_df, suffixes=['_start', '_end'], metric='bandwidth', show='N')
+#
+# # 2023_05_19. Testing spectral correlation stuff.
+# sound_df.FG.unique()
+# sound_df.BG.unique()
+#
+# sn = 'Gobble'
+# kind = 'FG'
+# osyn.plot_cc_cuts(sound_df, sn, kind, percent_lims=[10,90], sk='N')
+#
+# # 2023_05_19. The big spectral correlation viewer.
+# osyn.plot_spec_cc(sound_df, 'BG', percent_lims=[10,90], sk='N')
+# osyn.plot_spec_cc(sound_df, 'FG', percent_lims=[10,90], sk='N')
 
 ## Figure 6 ##
 
 ## Figure 6 ##
 # 6A shows relative gain histograms across synthetic conditions
-df = ohel.filter_across_synths(filt, synth_show=['M','S','T','C'], snr_threshold=0.12, r_cut=0.4,
-                               rel_cut=2.5, suffix=[''])
+df = ohel.filter_across_condition(filt, synth_show=['M','S','T','C'], filt_kind='synth_kind',
+                                  snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=[''])
 
 osyn.synthetic_relative_gain_comparisons_specs(df, 'Jackhammer', 'Fight Squeak', thresh=None, snr_threshold=0.12,
                                                synth_show=['M', 'S', 'T', 'C'],
@@ -441,6 +371,112 @@ osyn.synthetic_sound_metric_scatters(df, ['Fcorr', 'Tstationary', 'bandwidth'], 
 #                           x_labels=['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'],
 #                               suffix='_end')
 
+## Figure 7 ##
+# 7A Marmoset
+path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch328_0-500_marm'
+weight_df = jl.load(path)
+filt = ohel.label_vocalization(weight_df, species='marmoset')
+
+filt.loc[(filt['area'] == 'A1orR') | (filt['area'] == 'R'), 'area'] = 'A1'
+filt = filt.loc[filt['area'].isin(['ML', 'AL', 'A1'])]
+filt.loc[(filt['area'] == 'AL') | (filt['area'] == 'ML'), 'area'] = '2nd'
+filt = filt.loc[filt['area'].isin(['A1', '2nd'])]
+
+# Don't keep the A1?/AL? labels, they're kinda small anyway
+filt = filt.loc[filt.dyn_kind=='ff']
+
+# sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=False)
+# bad_dict = ohel.plot_sound_stats(sound_df, ['Fcorr', 'Tstationary', 'bandwidth', 'max_power', 'RMS_power'],
+#                                  labels=['Frequency Non-stationarity', 'Temporal Non-stationarity', 'Bandwidth (octaves)',
+#                                          'Max Power', 'RMS Power'], lines={'RMS_power': 0.95, 'max_power': 0.3}, synth_kind='A')
+# bads = list(bad_dict['RMS_power'])
+bads = ['Branch', 'CashRegister', 'Heels', 'Woodblock', 'Castinets', 'Dice'] #rms
+# Just gets us around running that above function, this is the output.
+filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
+filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
+
+quiet = filt.loc[filt.noisy!='Yes']
+
+
+ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='A1', rel_cut=2.5,
+                               bar=True)
+ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area='2nd', rel_cut=2.5,
+                               bar=True)
+
+ofig.metric_weight_bars(quiet, snr_threshold=0.12, r_cut=0.4)
+
+
+
+
+# area_summary_bars(filt, snr_threshold=0.12, r_cut=0.4, category='fg_noise')
+
+filt = quiet
+snr_threshold = 0.12
+filt = filt.loc[(filt.bg_snr >= snr_threshold) & (filt.fg_snr >= snr_threshold)]
+r_cut = 0.4
+filt = filt.dropna(axis=0, subset='r')
+filt = filt.loc[filt.r >= r_cut]
+rel_cut = 2.5
+filt = filt.loc[(filt['FG_rel_gain'] <= rel_cut) & (filt[f'FG_rel_gain'] >= -rel_cut)]
+filt = filt.loc[(filt['BG_rel_gain'] <= rel_cut) & (filt[f'BG_rel_gain'] >= -rel_cut)]
+
+area = '2nd' # of '2nd'
+ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
+                          ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
+                          area=area, metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind='A',
+                          r_cut=0.4, jitter=None, mean=True)
+filt['marmoset'] = 'marm'
+stat_dict = ofig.summary_relative_gain_all_areas(filt, kind_show=['marm'], category='marmoset', mult_comp=None,
+                                     statistic='paired', secondary_area_name='2nd')
+
+
+# 7B - layers in ferrets
+stat_dict = ofig.summary_relative_gain_all_areas(filt, kind_show=['13', '44', '56'], category='layer', mult_comp=3,
+                                     statistic='independent')
+
+# 7C - Binaural in ferrets
+bin_dff = ohel.filter_across_condition(filt, synth_show=['11','21','12','22'], filt_kind='kind',
+                                 snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=[''])
+ofig.summary_relative_gain_all_areas(bin_dff, kind_show=['11','21','12','22'], category='kind', mult_comp=3)
+
+# bin_df = filter_across_condition(filt, synth_show=['11','12','21','22'], filt_kind='kind',
+#                                  snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=['_start', '_end'])
+#
+# ofig.plot_all_weight_comparisons(bin_df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+#                                  weight_lim=[-0.5,2], summary=False, sep_hemi=False, sort_category='kind')
+
+#7D - SNR in ferrets
+# Filter by SNR
+filt = filt.loc[(filt.olp_type!='binaural') & (filt.olp_type!='synthetic')]
+filt['filt_name'] = filt['filt_name'] = filt['cellid'] + '-' + filt['BG'] + '-' + filt['FG']
+
+snr10 = filt.loc[filt.SNR==10]
+epoch_names = snr10.filt_name.tolist()
+
+filt = filt.loc[filt.filt_name.isin(epoch_names)]
+filt = filt.drop(labels=['filt_name'], axis=1)
+
+snr_df = ohel.filter_across_condition(filt, synth_show=[0, 10], filt_kind='SNR', weight_lim=[-0.5, 2],
+                                 snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=['_start', '_end'])
+ofig.summary_relative_gain_all_areas(snr_df, kind_show=[0, 10], category='SNR', mult_comp=3, statistic='paired')
+
+# ofig.plot_all_weight_comparisons(snr_df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+#                                  weight_lim=[-0.5,2], summary=False, sep_hemi=False, sort_category='SNR')
+
+
+
+#7E - by site in ferrets
+ofig.site_relative_gain_summary(filt, snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, weight_lim=[-0.5,2])
+
+
+
+# 7? spike width
+ohel.plot_spike_width_distributions(filt, split_critter='PRN', line=[0.3, 0.375])
+ofig.plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+                                 weight_lim=[-0.5,2], summary=False, sep_hemi=False, sort_category='width', flanks=False)
+stat_dict = ofig.summary_relative_gain_all_areas(filt, kind_show=['broad', 'narrow'], category='width', mult_comp=1,
+                                     statistic='independent')
+
 
 #S1
 ofig.response_heatmaps_comparison(weight_df, site='CLT012a', bg='Bees', fg='Bugle', cellid='CLT012a-052-1',
@@ -463,10 +499,17 @@ ofig.weights_supp_comp(filt, x='resp', area='A1', quads=3, thresh=0.03, snr_thre
 ofig.weights_supp_comp(filt, x='resp', area='PEG', quads=3, thresh=0.03, snr_threshold=0.12, r_cut=None)
 
 #S4
-ofig.resp_weight_multi_scatter(filt, synth_kind=['N', 'A'], threshold=None, snr_threshold=0.12,
-                               r_thresh=None, area='A1')
-ofig.resp_weight_multi_scatter(filt, synth_kind=['N', 'A'], threshold=None, snr_threshold=0.12,
-                               r_thresh=None, area='PEG')
+# ofig.resp_weight_multi_scatter(filt, synth_kind=['N', 'A'], threshold=None, snr_threshold=0.12,
+#                                r_thresh=None, area='A1')
+# ofig.resp_weight_multi_scatter(filt, synth_kind=['N', 'A'], threshold=None, snr_threshold=0.12,
+#                                r_thresh=None, area='PEG')
+ofig.snr_weight_scatter(filt, ycol='weightsB-weightsA', fr_met='fg_snr-bg_snr', threshold=None, rel_cut=2.5,
+                        snr_threshold=0.12, quads=3, r_thresh=None, weight_lims=[-0.5,2], area='A1')
+ofig.snr_weight_scatter(filt, ycol='weightsB-weightsA', fr_met='fg_snr-bg_snr', threshold=None, rel_cut=2.5,
+                        snr_threshold=0.12, quads=3, r_thresh=None, weight_lims=[-0.5,2], area='PEG')
+
+ofig.snr_weight_scatter_all_areas(filt)
+
 
 #S5
 ofig.weight_summary_histograms_flanks(filt, snr_threshold=0.12, fr_thresh=None, r_cut=0.4, area='A1')
