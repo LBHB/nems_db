@@ -8,15 +8,15 @@ from flask import abort, Response, request
 from flask_restful import Resource
 
 import nems_lbhb.baphy as baphy
-import nems
+from nems0 import get_setting
 
 # Define some regexes for sanitizing inputs
 RECORDING_REGEX = re.compile(r"[\-_a-zA-Z0-9]+\.tar\.gz$")
 CELLID_REGEX = re.compile(r"^[\-_a-zA-Z0-9]+$")
 BATCH_REGEX = re.compile(r"^\d+$")
 
-nems_recordings_dir = nems.get_setting('NEMS_RECORDINGS_DIR')
-nems_results_dir = nems.get_setting('NEMS_RESULTS_DIR')
+nems_recordings_dir = get_setting('NEMS_RECORDINGS_DIR')
+nems_results_dir = get_setting('NEMS_RESULTS_DIR')
 
 
 def valid_recording_filename(recording_filename):

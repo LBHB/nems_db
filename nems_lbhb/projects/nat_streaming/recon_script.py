@@ -97,8 +97,14 @@ siteid = 'PRN051a'
 siteid = 'PRN031a'
 
 modeltype='LN'
+groupby = 'fg'
+
 if modeltype=='LN':
-    outpath = '/auto/users/svd/projects/olp/reconstruction_LN/'
+    if groupby=='bg':
+        outpath = '/auto/users/svd/projects/olp/reconstruction_LN/'
+    else:
+        outpath = '/auto/users/svd/projects/olp/reconstruction_LN_fg/'
+
 elif modeltype=='CNN':
     outpath = '/auto/users/svd/projects/olp/reconstruction_CNN/'
 
@@ -113,7 +119,7 @@ siteid='PRN015a'
 siteid='PRN050a'
 siteids,cellids = db.get_batch_sites(batch)
 
-for siteid in siteids[36:]:
+for siteid in ['PRN020b']: # siteids[36:]:
     uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
     rec = load_recording(uri)
     try:
@@ -149,7 +155,6 @@ for siteid in siteids[36:]:
     resp = rec['resp']
     stim = rec['stim']
 
-    unique_bg = list(epoch_df['BG'].unique())
     try:
         df_recon = pd.read_csv(outpath+'df_recon.csv', index_col=0)
         df_recon = df_recon.loc[df_recon.siteid!=siteid].copy()
@@ -158,10 +163,20 @@ for siteid in siteids[36:]:
         df_recons = []
 
     skip_recon = False
+    if groupby=='fg':
+        unique_group = list(epoch_df['FG'].unique())
+    elif groupby=='bg':
+        unique_group = list(epoch_df['BG'].unique())
+    else:
+        raise ValueError("groupby must be fg or bg")
 
-    for ebg in unique_bg:
-        print(f"Focusing on bg={ebg}")
-        bids = (epoch_df['BG']==ebg)
+    for estim in unique_group:
+        if groupby=='bg':
+            print(f"Focusing on bg={estim}")
+            bids = (epoch_df['BG']==estim)
+        else:
+            print(f"Focusing on fg={estim}")
+            bids = (epoch_df['FG']==estim)
 
         ebgs = epoch_df.loc[bids, 'BG'].to_list()
         efgs = epoch_df.loc[bids, 'FG'].to_list()
@@ -270,10 +285,10 @@ for siteid in siteids[36:]:
             if col == 0:
                 ax[1, 0].set_ylabel('Unit (sorted)')
                 ax[2, 0].set_ylabel('Cluster')
-        f1.suptitle(f"{ebg}: Signal correlation")
+        f1.suptitle(f"{estim}: Signal correlation")
         plt.tight_layout()
-        f1.savefig(f"{outpath}{siteid}_{ebg}_clusters.jpg")
-        print(f"{ebg}: {cluster_n}")
+        f1.savefig(f"{outpath}{siteid}_{estim}_clusters.jpg")
+        print(f"{estim}: {cluster_n}")
 
         if skip_recon:
             continue
@@ -283,9 +298,9 @@ for siteid in siteids[36:]:
         #
         # Fit decoder with different clusters of neurons
         #
-        shuffle_count=11
+        shuffle_count=5
         for shuffidx in range(shuffle_count):
-            print(f"{ebg}: decoder fitting shuffle {shuffidx}")
+            print(f"{estim}: decoder fitting shuffle {shuffidx}")
             models = []
             resps = []
             cellcount = rec['resp'].shape[0]
@@ -337,7 +352,7 @@ for siteid in siteids[36:]:
                 model = models[fidx]
                 resp2 = resps[fidx]
 
-                d={'siteid': siteid, 'ebg': ebg, 'cid': fidx}
+                d={'siteid': siteid, 'estim': estim, 'cid': fidx}
                 d['shuffidx'] = shuffidx
                 d['cluster_ids'] = ",".join([str(c) for c in cluster_ids])
                 d['n_units'] = resp2.shape[0]
@@ -394,11 +409,12 @@ for siteid in siteids[36:]:
                             d['Crbg'] = Cr
                 df_recons.append(pd.DataFrame(d, index=[0]))
 
-            f2.suptitle(f'{ebg.split("_")[1]} shuffidx={shuffidx} exclude={exclude_clusters}')
+            f2.suptitle(f'{estim} shuffidx={shuffidx} exclude={exclude_clusters}')
             plt.tight_layout()
             if shuffidx==0:
-                f2.savefig(f"{outpath}{siteid}_{ebg}_recon_shuff{shuffidx}.jpg")
-            #plt.close(f2)
+                f2.savefig(f"{outpath}{siteid}_{estim}_recon_shuff{shuffidx}.jpg")
+            else:
+                plt.close(f2)
 
         #plt.close(f1)
 

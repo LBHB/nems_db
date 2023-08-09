@@ -2,7 +2,7 @@ from flask import Flask
 from flask_restful import Api
 from nems_baphy.api import BaphyInterface, GetRecording, UploadResults,UploadQueueLog
 from nems_db.util import ensure_env_vars
-from nems import get_settings, get_setting
+from nems0 import get_settings, get_setting
 
 req_env_vars = ['NEMS_BAPHY_API_HOST',
                 'NEMS_BAPHY_API_PORT',
@@ -16,7 +16,7 @@ req_env_vars = ['NEMS_BAPHY_API_HOST',
 
 # Load the credentials, throwing an error if any are missing
 creds = get_settings()
-
+print(creds)
 for v in req_env_vars:
     if creds.get(v,None) is None:
         raise ValueError('Setting %s not specified in nems/configs/', v)
