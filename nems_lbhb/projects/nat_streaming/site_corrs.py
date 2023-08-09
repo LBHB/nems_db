@@ -64,6 +64,15 @@ uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
 #uri = '/auto/data/nems_db/recordings/344/CLT008a_4f9e060a5ec7a8dae28df42df445e5fadb3313d1.tgz'
 rec = load_recording(uri)
 
+batch=341
+loadkey = "gtgram.fs50.ch18"
+
+siteid='PRN017a'
+siteid='PRN015a'
+siteid='PRN022a'
+siteid='PRN013c'
+siteids,cellids = db.get_batch_sites(batch)
+
 d=get_depth_info(siteid=siteid).reset_index()
 a1chans=[r['index'] for i,r in d.iterrows() if r.area=='A1']
 keepchans = [c for c in a1chans if c in rec['resp'].chans]

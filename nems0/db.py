@@ -1173,8 +1173,8 @@ def list_batches(name=None):
 
     d = get_batches(name)
 
-    for x in range(0, len(d)):
-        print("{} {}".format(d['batch'][x], d['name'][x]))
+    #for x in range(0, len(d)):
+    #    print("{} {}".format(d['batch'][x], d['name'][x]))
 
     return d
 
