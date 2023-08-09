@@ -45,6 +45,7 @@ api.add_resource(GetDaq,
 #                 resource_class_kwargs={})
 
 api.add_resource(UploadResults,
+                 '/results/nems-lite/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  '/results/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  resource_class_kwargs={})
 
