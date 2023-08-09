@@ -759,6 +759,7 @@ $(document).ready(function(){
         $("[name='editLoadTree']").val('');
         $("[name='editModTree']").val('');
         $("[name='editFitTree']").val('');
+        $("[name='editExtraModels']").val('');
     }
 
     $("#editAnalysis").on('click',editAnalysis);
@@ -784,6 +785,7 @@ $(document).ready(function(){
                 $("[name='editLoadTree']").val(data.load);
                 $("[name='editModTree']").val(data.mod);
                 $("[name='editFitTree']").val(data.fit);
+                $("[name='editExtraModels']").val(data.model_extras);
             },
             error: function(error){
                 console.log(error);
@@ -838,12 +840,13 @@ $(document).ready(function(){
         var load = $("[name='editLoadTree']").val();
         var mod = $("[name='editModTree']").val();
         var fit = $("[name='editFitTree']").val();
+        var model_extras = $("[name='editExtraModels']").val();
 
         $.ajax({
            url: $SCRIPT_ROOT + '/edit_analysis',
            data: { name:name, id:id, status:status, tags:tags,
                   question:question, answer:answer, load:load,
-                  mod:mod, fit:fit },
+                  mod:mod, fit:fit, model_extras:model_extras },
            type: 'GET',
            success: function(data){
                $("#analysisEditorModal").modal('hide')

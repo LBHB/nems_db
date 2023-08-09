@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import Api
-from nems_baphy.api import BaphyInterface, GetRecording, UploadResults,UploadQueueLog
+from nems_baphy.api import BaphyInterface, GetRecording, UploadResults, UploadQueueLog, GetDaq
 from nems_db.util import ensure_env_vars
 from nems0 import get_settings, get_setting
 
@@ -36,11 +36,16 @@ api.add_resource(GetRecording,
                  '/recordings/<string:batch>/<string:file>',
                  resource_class_kwargs={})
 
+api.add_resource(GetDaq,
+                 '/daq/<string:animal>/<string:site>/<string:file>',
+                 resource_class_kwargs={})
+
 #api.add_resource(GetResults,
 #                 '/results/<string:batch>/<string:path>/<string:file>',
 #                 resource_class_kwargs={})
 
 api.add_resource(UploadResults,
+                 '/results/nems-lite/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  '/results/<string:batch>/<string:cellid>/<string:path>/<string:file>',
                  resource_class_kwargs={})
 

@@ -69,7 +69,7 @@ def enqueue_models_view():
     elif useExacloud:
         log.info('Starting exacloud jobs!')
         enqueue_exacloud_models(cellist=cSelected, batch=bSelected, modellist=mSelected, user=user.username,
-                                linux_user=exaOHSU, executable_path=exaExec, script_path=exaScript,
+                                linux_user=exaOHSU, executable_path=exaExec, script_path=exaScript, force_rerun=bool(force_rerun),
                                 time_limit=exaLimit, useGPU=useGPU, high_mem=exaHighMem, exclude=exaExclude)
         return jsonify(data=True)
 
