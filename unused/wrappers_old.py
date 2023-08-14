@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import nems
-import nems.initializers
+import nems0.initializers
 import nems.epoch as ep
 import nems.priors
 import nems.preprocessing as preproc

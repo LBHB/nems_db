@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-#import nems.recording
+#import nems0.recording
 import nems.modelspec as ms
 import nems.xforms as xforms
 import nems.plots.api as nplt

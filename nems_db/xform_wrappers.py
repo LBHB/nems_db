@@ -19,21 +19,21 @@ import matplotlib.pyplot as plt
 import sys
 
 import nems
-import nems.initializers
-import nems.epoch as ep
-import nems.priors
-import nems.preprocessing as preproc
-import nems.modelspec as ms
-import nems.plots.api as nplt
-import nems.metrics.api
-import nems.analysis.api
-import nems.utils
+import nems0.initializers
+import nems0.epoch as ep
+import nems0.priors
+import nems0.preprocessing as preproc
+import nems0.modelspec as ms
+import nems0.plots.api as nplt
+import nems0.metrics.api
+import nems0.analysis.api
+import nems0.utils
 import nems_db.baphy as nb
-import nems.db as nd
-from nems.recording import Recording, load_recording
-from nems.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
-import nems.xforms as xforms
-import nems.xform_helper as xhelp
+import nems0.db as nd
+from nems0.recording import Recording, load_recording
+from nems0.fitters.api import dummy_fitter, coordinate_descent, scipy_minimize
+import nems0.xforms as xforms
+import nems0.xform_helper as xhelp
 from nems_lbhb.old_xforms.xform_wrappers import generate_recording_uri as ogru
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
@@ -115,11 +115,11 @@ def generate_recording_uri(cellid=None, batch=None, loadkey=None,
     NEMS-format recording for a given cell/batch/loader string
 
     very baphy-specific. Needs to be coordinated with loader processing
-    in nems.xform_helper
+    in nems0.xform_helper
     """
 
     # remove any preprocessing keywords in the loader string.
-    loader = nems.utils.escaped_split(loadkey, '-')[0]
+    loader = nems0.utils.escaped_split(loadkey, '-')[0]
     log.info('loader=%s',loader)
 
     ops = loader.split(".")
@@ -213,18 +213,18 @@ def fit_model_xforms_baphy(cellid, batch, modelname,
        def fit_model(recording_uri, modelstring, destination):
 
      xfspec = [
-        ['nems.xforms.load_recordings', {'recording_uri_list': recordings}],
-        ['nems.xforms.add_average_sig', {'signal_to_average': 'resp',
+        ['nems0.xforms.load_recordings', {'recording_uri_list': recordings}],
+        ['nems0.xforms.add_average_sig', {'signal_to_average': 'resp',
                                          'new_signalname': 'resp',
                                          'epoch_regex': '^STIM_'}],
-        ['nems.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM_'}],
-        ['nems.xforms.init_from_keywords', {'keywordstring': modelspecname}],
-        ['nems.xforms.set_random_phi',  {}],
-        ['nems.xforms.fit_basic',       {}],
-        # ['nems.xforms.add_summary_statistics',    {}],
-        ['nems.xforms.plot_summary',    {}],
-        # ['nems.xforms.save_recordings', {'recordings': ['est', 'val']}],
-        ['nems.xforms.fill_in_default_metadata',    {}],
+        ['nems0.xforms.split_by_occurrence_counts', {'epoch_regex': '^STIM_'}],
+        ['nems0.xforms.init_from_keywords', {'keywordstring': modelspecname}],
+        ['nems0.xforms.set_random_phi',  {}],
+        ['nems0.xforms.fit_basic',       {}],
+        # ['nems0.xforms.add_summary_statistics',    {}],
+        ['nems0.xforms.plot_summary',    {}],
+        # ['nems0.xforms.save_recordings', {'recordings': ['est', 'val']}],
+        ['nems0.xforms.fill_in_default_metadata',    {}],
     ]
 
     """
@@ -233,7 +233,7 @@ def fit_model_xforms_baphy(cellid, batch, modelname,
              cellid, int(batch))
 
     # Segment modelname for meta information
-    kws = nems.utils.escaped_split(modelname, '_')
+    kws = nems0.utils.escaped_split(modelname, '_')
 
     old = False
     if (len(kws) > 3) or ((len(kws) == 3) and kws[1].startswith('stategain')
@@ -241,9 +241,9 @@ def fit_model_xforms_baphy(cellid, batch, modelname,
         # Check if modelname uses old format.
         log.info("Using old modelname format ... ")
         old = True
-        modelspecname = nems.utils.escaped_join(kws[1:-1], '_')
+        modelspecname = nems0.utils.escaped_join(kws[1:-1], '_')
     else:
-        modelspecname = nems.utils.escaped_join(kws[1:-1], '-')
+        modelspecname = nems0.utils.escaped_join(kws[1:-1], '-')
     loadkey = kws[0]
     fitkey = kws[-1]
 
@@ -259,13 +259,13 @@ def fit_model_xforms_baphy(cellid, batch, modelname,
         xfspec.append(['nems_lbhb.old_xforms.xforms.init_from_keywords',
                        {'keywordstring': modelspecname, 'meta': meta}])
         xfspec.extend(oxfh.generate_fitter_xfspec(fitkey))
-        xfspec.append(['nems.analysis.api.standard_correlation', {},
+        xfspec.append(['nems0.analysis.api.standard_correlation', {},
                        ['est', 'val', 'modelspec', 'rec'], ['modelspec']])
         if autoPlot:
             log.info('Generating summary plot ...')
-            xfspec.append(['nems.xforms.plot_summary', {}])
+            xfspec.append(['nems0.xforms.plot_summary', {}])
     else:
-#        uri_key = nems.utils.escaped_split(loadkey, '-')[0]
+#        uri_key = nems0.utils.escaped_split(loadkey, '-')[0]
 #        recording_uri = generate_recording_uri(cellid, batch, uri_key)
         log.info("DONE? Moved handling of registry_args to xforms_init_context")
         recording_uri = None
@@ -339,7 +339,7 @@ def fit_pop_model_xforms_baphy(cellid, batch, modelname, saveInDB=False):
             'githash': os.environ.get('CODEHASH', ''),
             'recording': loadkey}
 
-    uri_key = nems.utils.escaped_split(loadkey, '-')[0]
+    uri_key = nems0.utils.escaped_split(loadkey, '-')[0]
     recording_uri = generate_recording_uri(cellid, batch, uri_key)
 
     # pass cellid information to xforms so that loader knows which cells
@@ -407,7 +407,7 @@ def load_model_baphy_xform(cellid, batch=271,
 
     '''
 
-    kws = nems.utils.escaped_split(modelname, '_')
+    kws = nems0.utils.escaped_split(modelname, '_')
     old = False
     if (len(kws) > 3) or ((len(kws) == 3) and kws[1].startswith('stategain')
                           and not kws[1].startswith('stategain.')):
@@ -462,7 +462,7 @@ def model_pred_comp(cellid, batch, modelnames, occurrence=None,
                 r_vector = val['resp'].as_continuous()[0, :]
 
             validbins = np.isfinite(r_vector)
-            r_vector = nems.utils.smooth(r_vector[validbins], 7)
+            r_vector = nems0.utils.smooth(r_vector[validbins], 7)
             r_vector = r_vector[3:-3]
 
             # Convert bins to time (relative to start of epoch)

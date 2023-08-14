@@ -17,7 +17,7 @@ from matplotlib import pyplot as plt
 from sqlalchemy.orm import aliased
 
 from nems0 import db
-from nems.utils import lookup_fn_at
+from nems0.utils import lookup_fn_at
 
 pg.setConfigOptions(imageAxisOrder='row-major')
 pg.setConfigOption('background', '#EAEAF2')
