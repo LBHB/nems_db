@@ -23,8 +23,8 @@ from flask import jsonify, request
 from flask_login import login_required
 
 from nems_web.nems_analysis import app
-from nems.db import enqueue_models
-from nems.modelspec import _lookup_fn_at
+from nems0.db import enqueue_models
+from nems0.modelspec import _lookup_fn_at
 from nems_web.account_management.views import get_current_user
 from nems_lbhb.kamiak import kamiak_to_database
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models

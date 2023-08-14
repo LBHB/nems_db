@@ -78,15 +78,15 @@ def site_map():
 @app.route('/reload_modules')
 @login_required
 def reload_modules():
-    # import the nems.module package at time of routing
-    package = importlib.import_module('nems.modules')
-    # get list of references to modules in nems.modules package
+    # import the nems0.module package at time of routing
+    package = importlib.import_module('nems0.modules')
+    # get list of references to modules in nems0.modules package
     modnames = [
             modname for importer, modname, ispkg
             in pkgutil.iter_modules(package.__path__)
             ]
     mods = [
-            importlib.import_module('nems.modules.{0}'.format(m))
+            importlib.import_module('nems0.modules.{0}'.format(m))
             for m in modnames
             ]
     # for each module in the list, reload it

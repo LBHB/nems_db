@@ -40,14 +40,14 @@ from sqlalchemy.orm import Query
 from sqlalchemy import desc, asc, or_
 
 from nems_web.nems_analysis import app, bokeh_version
-from nems.db import Session, Tables
+from nems0.db import Session, Tables
 from nems_web.nems_analysis.ModelFinder import ModelFinder
 from nems_db.plots import PLOT_TYPES
 from nems_web.account_management.views import get_current_user
 from nems_web.run_custom.script_utils import scan_for_scripts
-from nems.uri import load_resource
+from nems0.uri import load_resource
 from nems_web.utilities.enclosure import split_by_enclosure
-from nems.utils import escaped_split
+from nems0.utils import escaped_split
 
 log = logging.getLogger(__name__)
 
