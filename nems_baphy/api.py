@@ -8,15 +8,15 @@ from flask import abort, Response, request
 from flask_restful import Resource
 
 import nems_lbhb.baphy as baphy
-import nems
+from nems0 import get_setting
 
 # Define some regexes for sanitizing inputs
 RECORDING_REGEX = re.compile(r"[\-_a-zA-Z0-9]+\.tar\.gz$")
 CELLID_REGEX = re.compile(r"^[\-_a-zA-Z0-9]+$")
 BATCH_REGEX = re.compile(r"^\d+$")
 
-nems_recordings_dir = nems.get_setting('NEMS_RECORDINGS_DIR')
-nems_results_dir = nems.get_setting('NEMS_RESULTS_DIR')
+nems_recordings_dir = get_setting('NEMS_RECORDINGS_DIR')
+nems_results_dir = get_setting('NEMS_RESULTS_DIR')
 
 
 def valid_recording_filename(recording_filename):
@@ -117,7 +117,35 @@ class GetRecording(Resource):
             f = io.open(filepath, 'rb')
             return Response(f, status=200, mimetype='application/gzip')
         except:
-            abort(400, 'file not found')
+            #print(f"looking for file: filepath")
+            abort(400, f'file {filepath} not found')
+
+    def put(self, batch, file):
+        abort(400, 'Not yet implemented')
+
+    def delete(self, batch, file):
+        abort(400, 'Not yet Implemented')
+
+
+class GetDaq(Resource):
+    '''
+    An interface to BAPHY that returns NEMS-compatable signal objects
+    '''
+    def __init__(self, **kwargs):
+        pass
+
+    def get(self, animal, site, file):
+        '''
+        Queries the MySQL database, finds the file, and returns
+        the corresponding data in a NEMS-friendly Recording object.
+        '''
+        filepath = os.path.join(nems_recordings_dir, 'daq', animal, site, file)
+
+        try:
+            f = io.open(filepath, 'rb')
+            return Response(f, status=200, mimetype='application/text')
+        except:
+            abort(400, f'file {filepath} not found')
 
     def put(self, batch, file):
         abort(400, 'Not yet implemented')
@@ -160,6 +188,7 @@ class UploadResults(Resource):
         print('save to : ' + filename)
         if not os.path.exists(fullpath):
            os.makedirs(fullpath, 0o777)
+        os.chmod(fullpath, 0o777)
         f = os.open(filename, os.O_RDWR|os.O_CREAT)
         os.write(f, data)
         os.close(f)
@@ -185,13 +214,14 @@ class UploadQueueLog(Resource):
         rounded_queueid = int(queueid) // 1000 * 1000
         log_dir /= str(rounded_queueid)
         if not log_dir.exists():
-            log_dir.mkdir(parents=True)
+            log_dir.mkdir(parents=True, mode=0o777, exist_ok=True)
         log_loc = log_dir / (str(queueid) + '.out')
 
         print('save to : ' + str(log_loc))
         f = os.open(log_loc, os.O_RDWR|os.O_CREAT)
         os.write(f, data)
         os.close(f)
+        os.chmod(log_loc, 0o777)
 
     def delete(self, batch, file):
         abort(400, 'Not yet Implemented')

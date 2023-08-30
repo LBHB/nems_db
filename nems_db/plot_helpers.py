@@ -3,7 +3,7 @@ import logging
 import pandas.io.sql as psql
 
 import nems_db.plots as plots
-from nems.db import Session, Tables, get_batch_cells
+from nems0.db import Session, Tables, get_batch_cells
 
 log = logging.getLogger(__name__)
 
