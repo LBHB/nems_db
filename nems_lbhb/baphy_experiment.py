@@ -395,7 +395,7 @@ class BAPHYExperiment:
         elif correction_method in ['openephys']:
             trial_starts = self.get_trial_starts('openephys')
             raw_rasterfs = self.get_raw_sampling_rate('openephys')
-            return [io.baphy_align_time_openephys(ev, ts, rfs, rasterfs) 
+            return [io.baphy_align_time_openephys(ev, ts, rfs, rasterfs)
                     for ev, ts, rfs in zip(baphy_events,trial_starts, raw_rasterfs)]
         elif correction_method in ['spikes','psi']:
             try:
@@ -658,30 +658,67 @@ class BAPHYExperiment:
         signals = {}
         
         if raw:
+            import warnings
+            warnings.warn("Trial alignment for multiple probes is slightly off. Using only event timestamps from 1 data stream.")
             if rawchans is None:
                 rawchans = np.arange(globalparams[0]['NumberOfElectrodes'])
             fs = kwargs['rasterfs']
             rawhp = kwargs['rawhp']
             rawlp = kwargs['rawlp']
-            d, t0, channel_xy, selected_chs, probe = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy, selected_chs, probe, probe_type = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                chans=rawchans, rasterfs=fs, rawhp=rawhp, rawlp=rawlp)
+
             #import pdb;pdb.set_trace()
             raw_baphy_events = [idf.copy() for idf in baphy_events]
+            d_aligned = []
             for i in range(len(baphy_events)):
                 #s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
                 #e = np.round(baphy_events[i].loc[:,'end'] * float(fs)) - np.round(t0[i]/fs)
                 #diff = np.round((baphy_events[i].loc[:,'end'] - baphy_events[i].loc[:,'start']) * float(fs))
+                # below commented out 08/18/23 for new data aligment with 2 probes
+                # raw_baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
+                # raw_baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
+                #if d[prb_index][i].shape[1] < raw_baphy_events[i].end.max() * fs:
+                # raise ValueError("Length of raw trace is shorter than max event in file {i}.")
+                # remove data prior to first baphy event to deal with different record buffer start time alignment - JCW
+                experiment_start_sample = raw_baphy_events[i][raw_baphy_events[i]['name'].str.endswith("EXPERIMENT")]['start'].values[0]
+                for prb_index in range(len(d)):
+                    d_expstart_sample = int(round(experiment_start_sample*fs - t0[prb_index]))
+                    d_aligned.append(d[prb_index][:, d_expstart_sample:])
+                # subtract experiment_start timestamp from all baphy_events to align to 0 to match raw data
+                raw_baphy_events[i].loc[:,'start'] -= experiment_start_sample
+                raw_baphy_events[i].loc[:,'end'] -= experiment_start_sample
 
-                raw_baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
-                raw_baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
+                data_lengths = []
+                for prb_index in range(len(d)):
+                    # check to make sure raw trace is longer than last event timestamp
+                    data_lengths.append(d_aligned[prb_index].shape[1])
+                    if d_aligned[prb_index].shape[1]<raw_baphy_events[i].end.max()*fs:
+                        raise ValueError("Length of raw trace is shorter than max event in file {i}.")
 
-                if d[i].shape[1]<raw_baphy_events[i].end.max()*fs:
-                    raise ValueError("Length of raw trace is shorter than max event in file {i}.")
+                # check to see if all data sources are the same length and if they aren't nan pad all data at the end to length of longest stream
+                if len(set(data_lengths)) <= 1:
+                    pass
+                else:
+                    padded_data = []
+                    max_d_stream = np.where(np.array(data_lengths) == max(data_lengths))[0]
+                    for i in range(len(d_aligned)):
+                        if (data_lengths[max_d_stream[0]] - d_aligned[i].shape[1]) > 0:
+                            nan_pad = np.empty((d_aligned[i].shape[0], data_lengths[max_d_stream[0]] - d_aligned[i].shape[1]))
+                            nan_pad[:] = np.nan
+                            temp_data = np.hstack((d_aligned[i], nan_pad))
+                        else:
+                            temp_data = d_aligned[i]
+                        padded_data.append(temp_data)
+                    d_aligned = padded_data
+            # concatenate any data/selected channels into single array for output
+            d = [np.concatenate(d_aligned, axis=0)]
+            selected_chs = [str(ch) for prb_chs in selected_chs for ch in prb_chs]
             raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='raw', recording=rec_name, chans=selected_chs,
-                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe})
+                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe, 'probe_type': probe_type})
                         for e, r in zip(raw_baphy_events, d)]
             signals['raw'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 
@@ -691,7 +728,7 @@ class BAPHYExperiment:
             fs = kwargs['rasterfs']
             muabp = kwargs['muabp']
             # get mua data
-            d, t0, channel_xy, selected_chs, probe = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
+            d, t0, channel_xy, selected_chs, probe, probe_type = io.jcw_get_continuous_data(self.openephys_folder, self.openephys_tarfile,
                                                self.openephys_tarfile_relpath, self.local_copy_raw,
                                                  mua = True, chans=rawchans, rasterfs=fs, muabp=muabp)
             # create rasterized signal object
@@ -706,12 +743,68 @@ class BAPHYExperiment:
 
                 if d[i].shape[1] < mua_baphy_events[i].end.max() * fs:
                     raise ValueError("Length of mua trace is shorter than max event in file {i}.")
-            raw_sigs = [nems0.signal.RasterizedSignal(
+
+                # import pdb;pdb.set_trace()
+                raw_baphy_events = [idf.copy() for idf in baphy_events]
+                d_aligned = []
+                for i in range(len(baphy_events)):
+                    # s = np.round(baphy_events[i].loc[:,'start'] * float(fs)) - np.round(t0[i]/fs)
+                    # e = np.round(baphy_events[i].loc[:,'end'] * float(fs)) - np.round(t0[i]/fs)
+                    # diff = np.round((baphy_events[i].loc[:,'end'] - baphy_events[i].loc[:,'start']) * float(fs))
+                    # below commented out 08/18/23 for new data aligment with 2 probes
+                    # raw_baphy_events[i].loc[:,'start'] -= np.round(t0[i])/fs
+                    # raw_baphy_events[i].loc[:,'end'] -= np.round(t0[i])/fs
+                    # if d[prb_index][i].shape[1] < raw_baphy_events[i].end.max() * fs:
+                    # raise ValueError("Length of raw trace is shorter than max event in file {i}.")
+                    # remove data prior to first baphy event to deal with different record buffer start time alignment - JCW
+                    experiment_start_sample = \
+                    raw_baphy_events[i][raw_baphy_events[i]['name'].str.endswith("EXPERIMENT")]['start'].values[0]
+                    for prb_index in range(len(d)):
+                        d_expstart_sample = int(round(experiment_start_sample * fs - t0[prb_index]))
+                        d_aligned.append(d[prb_index][:, d_expstart_sample:])
+                    # subtract experiment_start timestamp from all baphy_events to align to 0 to match raw data
+                    raw_baphy_events[i].loc[:, 'start'] -= experiment_start_sample
+                    raw_baphy_events[i].loc[:, 'end'] -= experiment_start_sample
+
+                    data_lengths = []
+                    for prb_index in range(len(d)):
+                        # check to make sure raw trace is longer than last event timestamp
+                        data_lengths.append(d_aligned[prb_index].shape[1])
+                        if d_aligned[prb_index].shape[1] < raw_baphy_events[i].end.max() * fs:
+                            raise ValueError("Length of raw trace is shorter than max event in file {i}.")
+
+                    # check to see if all data sources are the same length and if they aren't nan pad all data at the end to length of longest stream
+                    if len(set(data_lengths)) <= 1:
+                        pass
+                    else:
+                        padded_data = []
+                        max_d_stream = np.where(np.array(data_lengths) == max(data_lengths))[0]
+                        for i in range(len(d_aligned)):
+                            if (data_lengths[max_d_stream[0]] - d_aligned[i].shape[1]) > 0:
+                                nan_pad = np.empty(
+                                    (d_aligned[i].shape[0], data_lengths[max_d_stream[0]] - d_aligned[i].shape[1]))
+                                nan_pad[:] = np.nan
+                                temp_data = np.hstack((d_aligned[i], nan_pad))
+                            else:
+                                temp_data = d_aligned[i]
+                            padded_data.append(temp_data)
+                        d_aligned = padded_data
+                    # concatenate any data/selected channels into single array for output
+                    d = [np.concatenate(d_aligned, axis=0)]
+                    selected_chs = [str(ch) for prb_chs in selected_chs for ch in prb_chs]
+                    raw_sigs = [nems0.signal.RasterizedSignal(
                         fs=kwargs['rasterfs'], data=r,
                         name='mua', recording=rec_name, chans=selected_chs,
-                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe})
-                        for e, r in zip(mua_baphy_events, d)]
-            signals['mua'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
+                        epochs=e, meta={'channel_xy': channel_xy, 'probe': probe, 'probe_type': probe_type})
+                        for e, r in zip(raw_baphy_events, d)]
+                    signals['mua'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
+
+            # raw_sigs = [nems0.signal.RasterizedSignal(
+            #             fs=kwargs['rasterfs'], data=r,
+            #             name='mua', recording=rec_name, chans=selected_chs,
+            #             epochs=e, meta={'channel_xy': channel_xy, 'probe': probe})
+            #             for e, r in zip(mua_baphy_events, d)]
+            # signals['mua'] = nems0.signal.RasterizedSignal.concatenate_time(raw_sigs)
 
         if resp:
             spike_dicts = self.get_spike_data(raw_exptevents, **kwargs)

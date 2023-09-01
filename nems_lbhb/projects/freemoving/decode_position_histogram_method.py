@@ -1107,7 +1107,8 @@ for i, cell in enumerate(best_3_ss+worst_3_ss):
     ax[i, 3].imshow(trial_tc[cell].T)
     ax[i, 3].set_title(f"trial data only {cell}")
 
-def trial_dvst_design_matrix(rec, tbinwidth=0.1, dbinwidth=10):
+def trial_dvst_design_matrix(rec, tbinwidth=0.2, tbin_num=10, dbin_num=10):
+    """create a design matrix with binary values for time from target onset, distance, velocity and an offset"""
     # create target to lickspout epochs - trials
     tartime=0.6
     rasterfs = rec.meta['rasterfs']
@@ -1117,7 +1118,10 @@ def trial_dvst_design_matrix(rec, tbinwidth=0.1, dbinwidth=10):
     tarlickeps = (rec['resp'].extract_epoch(hit_fa_epochs))
     dlc_eps = (rec['dlc'].extract_epoch(hit_fa_epochs))
     dist_eps = (rec['dist'].extract_epoch(hit_fa_epochs))
-    trial_time = np.arange(0, len(tarlickeps[0, 0, :]), (tartime*rasterfs)/2)
+    trial_time_bin_edges = np.concatenate((np.arange(-tartime*rasterfs, 0, int(tbinwidth*rasterfs)), np.arange(0, len(tarlickeps[0, 0, :]), int(tbinwidth*rasterfs))))
+    if tbin_num:
+        trial_time_bin_edges = trial_time_bin_edges[:10]
+    dist_bin_edges =
     design_mat = []
 
     return design_mat
