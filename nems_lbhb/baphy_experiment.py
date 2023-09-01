@@ -178,13 +178,13 @@ class BAPHYExperiment:
                 self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
                 self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
             else:
-                self.siteid = os.path.split(parmfile[0])[-1][:7]
+                self.siteid = os.path.split(parmfile[0])[-1].split('-')[0]
                 self.cells_to_load = None
                 self.cells_to_extract = None
         else:
             self.parmfile = [io.adjust_parmfile_name(parmfile)]
             self.parmformat = [io.get_parmfile_format(parmfile)]
-            self.siteid = os.path.split(parmfile)[-1][:7]
+            self.siteid = os.path.split(parmfile)[-1].split('-')[0]
             self.batch = None
             self.rawid = [rawid] # todo infer from parmfile instad of parsing
             if cellid is None and rawid is not None:

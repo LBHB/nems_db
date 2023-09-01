@@ -1419,6 +1419,7 @@ def adjust_parmfile_name(parmfile):
     elif os.path.exists(aspath):
         return aspath
     else:
+        raise ValueError(f"parmfile {parmfile} does not exist as m-file or path.")
         return None
 
 
@@ -2554,6 +2555,7 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
 
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
+            prev_probe_id=""
             for u in range(0, unitcount):
                 st = s[u, 0]
                 # if st.size:
@@ -2583,14 +2585,21 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                         #       .format(trialidx,st[1,ff]))
 
                     totalunits += 1
+                    try:
+                        jobfile=sortinfo[c][0][sortidx]['sortparameters'][0][u]['Kilosort_job_source'][0][0][0]
+                        parts=jobfile.split("Probe")
+                        probe_id=parts[1][0]+"-"
+                    except:
+                        probe_id=prev_probe_id
+
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
                         unit_names.append("{0}{1}".format(chan_names[c], u+1))
                         #unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
-                        unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
+                        unit_names.append(f"{probe_id}{(c+1):03d}-{u+1}")
                     spiketimes.append(unit_spike_events / spikefs)
-
+                    prev_probe_id=probe_id
                 # else:
                 # TODO - Incorporate this, but deal with cases of truly missing data. This is
                 # designed only for cases where e.g. a single cellid doens't spike during one
