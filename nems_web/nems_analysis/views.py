@@ -40,14 +40,14 @@ from sqlalchemy.orm import Query
 from sqlalchemy import desc, asc, or_
 
 from nems_web.nems_analysis import app, bokeh_version
-from nems.db import Session, Tables
+from nems0.db import Session, Tables
 from nems_web.nems_analysis.ModelFinder import ModelFinder
 from nems_db.plots import PLOT_TYPES
 from nems_web.account_management.views import get_current_user
 from nems_web.run_custom.script_utils import scan_for_scripts
-from nems.uri import load_resource
+from nems0.uri import load_resource
 from nems_web.utilities.enclosure import split_by_enclosure
-from nems.utils import escaped_split
+from nems0.utils import escaped_split
 
 log = logging.getLogger(__name__)
 
@@ -273,13 +273,19 @@ def update_models():
                 .filter(Analysis.name == aSelected)
                 .first()
                 )
+        model_extras = (
+                session.query(Analysis.model_extras)
+                .filter(Analysis.name == aSelected)
+                .first()
+                )
+
         # Pass modeltree string from Analysis to a ModelFinder constructor,
         # which will use a series of internal methods to convert the tree string
         # to a list of model names.
         # Then add any additional models specified in extraModels, and add
         # model_lists from extraAnalyses.
         if modeltree and modeltree[0]:
-            model_list = _get_models(modeltree[0])
+            model_list = _get_models(modeltree[0], model_extras[0])
             extraModels = [m for m in extraModels if
                            (m not in model_list and m.strip() != '')]
             model_list.extend(extraModels)
@@ -306,7 +312,7 @@ def update_models():
     return jsonify(modellist=filtered_models)
 
 
-def _get_models(modeltree):
+def _get_models(modeltree, model_extras=None):
     load, mod, fit = _get_trees(modeltree)
     if load and mod and fit:
         loader = ModelFinder(load).modellist
@@ -318,6 +324,11 @@ def _get_models(modeltree):
         # Probably an old modeltree that doesn't have a separate
         # specification of loaders/preprocessors and fitters/postprocessors
         model_list = ModelFinder(mod, sep='_').modellist
+
+    if (model_extras is not None) and (len(model_extras)>0):
+        print(model_extras)
+        extras = [e.strip() for e in json.loads(model_extras).split(",")]
+        model_list.extend(extras)
 
     return model_list
 
@@ -664,6 +675,7 @@ def edit_analysis():
     eMod = request.args.get('mod')
     eFit = request.args.get('fit')
     eTree = json.dumps([eLoad, eMod, eFit])
+    eModelExtras = json.dumps(request.args.get('model_extras'))
 
     if eId == '__none':
         checkExists = False
@@ -691,6 +703,7 @@ def edit_analysis():
             except:
                 a.lastmod = str(modTime)
             a.modeltree = eTree
+            a.model_extras = eModelExtras
         else:
             log.info("You do not have permission to modify this analysis.")
             return jsonify(
@@ -706,14 +719,14 @@ def edit_analysis():
                     name=eName, status=eStatus, question=eQuestion,
                     answer=eAnswer, tags=eTags, batch='',
                     lastmod=modTime, modeltree=eTree, username=user.username,
-                    labgroup=user.labgroup, public='0'
+                    labgroup=user.labgroup, public='0', model_extras=eModelExtras
                     )
         except:
             a = Analysis(
                     name=eName, status=eStatus, question=eQuestion,
                     answer=eAnswer, tags=eTags, batch='',
                     lastmod=str(modTime), modeltree=eTree,
-                    username=user.username, labgroup=user.labgroup, public='0'
+                    username=user.username, labgroup=user.labgroup, public='0', model_extras=eModelExtras
                     )
 
         session.add(a)
@@ -749,7 +762,7 @@ def get_current_analysis():
     if len(aSelected) == 0:
         return jsonify(
                 name='', status='', tags='', question='',
-                answer='', tree='',
+                answer='', tree='', model_extras=''
                 )
 
     a = (
@@ -762,9 +775,14 @@ def get_current_analysis():
 
     session.close()
 
+    print(a.model_extras)
+    if len(a.model_extras)==0:
+        model_extras = ''
+    else:
+        model_extras = json.loads(a.model_extras)
     return jsonify(
             id=a.id, name=a.name, status=a.status, tags=a.tags,
-            question=a.question, answer=a.answer, load=load, mod=mod, fit=fit,
+            question=a.question, answer=a.answer, load=load, mod=mod, fit=fit, model_extras=model_extras
             )
 
 

@@ -13,7 +13,7 @@ new_loader = 'ozgf.fs100.ch18.n'
 These are all handled by nems_db.xform_wrappers.get_recording_uri and are separate
 from the xforms and modelspec keywords.
 
-The standard, literal 'loader' is now 'ld' in nems.plugins.default_loaders.
+The standard, literal 'loader' is now 'ld' in nems0.plugins.default_loaders.
 In the future there will likely be a short-cut added to make 'ld' implicit since
 every model uses it and all it does is load a recording into memory. However,
 in the meantime, the keyword 'ld' will likely need to follow the recording_uri
@@ -96,7 +96,7 @@ new = 'init.st-jk.nf5.m-basic' # for state, nfold w/ 5 folds, and use split_for_
 ```
 
 If you are having trouble translating any keywords you've been using into the new system,
-just ask Jacob! Or take a look at the function definitions in nems.plugins.default_keywords
+just ask Jacob! Or take a look at the function definitions in nems0.plugins.default_keywords
 (or nems_lbhb.plugins.lbhb_keywords once custom ones are added) if you want to figure out
 the parsing for yourself. None of the regex was too complicated so hopefully most of it
 is straightforward.

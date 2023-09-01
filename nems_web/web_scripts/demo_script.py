@@ -25,9 +25,9 @@ import pandas as pd
 # import sessionmaker and connection engine from db.py
 # both can be used for interacting with the mysql database, but an open session
 # is a required argument for the script_utils functions
-from nems.db import Session, engine
+from nems0.db import Session, engine
 # import helper functions for custom scripts
-from nems.web.run_custom.script_utils import filter_cells, form_data_array
+from nems0.web.run_custom.script_utils import filter_cells, form_data_array
 
 
 # visual attributes for the circle glyphs in the scatter plot

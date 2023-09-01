@@ -3,7 +3,7 @@ import pkgutil
 from flask import redirect, Response, url_for, render_template
 
 from nems_web.nems_analysis import app
-from nems.db import Session, Tables
+from nems0.db import Session, Tables
 
 
 @app.route('/cell_details/<cellid>')
@@ -42,7 +42,7 @@ def cell_details(cellid):
 
 
 # TODO: Need to redo this for the new nems repo.
-#       I guess it would just use the new nems.keywords defaults to
+#       I guess it would just use the new nems0.keywords defaults to
 #       follow the modelspec[i]['fn'] paths and get the docs there?
 #       Or was this even worth redoing?
 @app.route('/model_details/<modelname>')

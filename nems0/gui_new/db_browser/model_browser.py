@@ -6,11 +6,11 @@ from PyQt5 import uic
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
-from nems.recording import Recording
-from nems.gui_new.db_browser.layer_area import LayerArea
-from nems.gui_new.db_browser.ui_promoted import CollapsibleBox, LeftDockWidget, PG_PLOTS
+from nems0.recording import Recording
+from nems0.gui_new.db_browser.layer_area import LayerArea
+from nems0.gui_new.db_browser.ui_promoted import CollapsibleBox, LeftDockWidget, PG_PLOTS
 
-from nems.modelspec import _lookup_fn_at
+from nems0.modelspec import _lookup_fn_at
 
 
 log = logging.getLogger(__name__)

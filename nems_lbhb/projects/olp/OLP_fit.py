@@ -2082,7 +2082,33 @@ def OLP_fit_partial_cell_individual(cellid, batch, snip=None, fit_epos='syn', fs
     #                      f"there is nothing to fit. But maybe check that is correct.")
 
 
-def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=100, modelname=None):
+def compute_epoch_snr(ep_list):
+    '''2023_07_19. Based on compute_snr function Stephen sent. Takes epochs and computes snr. GIVE IT
+    IN ORDER AB(combo), A(bg), B(fg).'''
+    snr_list_AB_A_B = []
+    for cnt, ep_r in enumerate(ep_list):
+        products = np.dot(ep_r[:, 0, :], ep_r[:, 0, :].T)
+        per_rep_snrs = []
+
+        for i, _ in enumerate(ep_r):
+            total_power = products[i, i]
+            signal_powers = np.delete(products[i], i)
+            if total_power > 0:
+                # if frac_total:
+                rep_snr = np.nanmean(signal_powers) / total_power
+                # else:
+                #     rep_snr = np.nanmean(signal_powers / (total_power - signal_powers))
+                per_rep_snrs.append(rep_snr)
+        if len(per_rep_snrs) > 0:
+            snr_list_AB_A_B.append(np.nanmean(per_rep_snrs))
+        else:
+            snr_list_AB_A_B.append(0)
+
+    return snr_list_AB_A_B
+
+
+def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=100, modelname=None,
+                                       cache_path='cache_'):
     '''2023_05_17. This is the good one that generates the complete df with all the info you want
     2023_04_28. Modifying snip code I know works and adapting it to the individual.
 
@@ -2130,6 +2156,8 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                 xf, ctx = load_model_xform(cellid=cellid, batch=batch, modelname=modelname)
                 rec = ctx['val']
                 rec['pred'].chans, rec['pred'].fs = rec['resp'].chans, fs
+                rec['pred'] = rec['pred'].extract_channels([cellid])
+                rec['resp'] = rec['resp'].extract_channels([cellid])
             else:
                 options = {'rasterfs': 100,
                            'stim': False,
@@ -2236,6 +2264,9 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                 rAB = resp.extract_epoch(stimmy)
                 rA, rB = resp.extract_epoch(Aepo), resp.extract_epoch(Bepo)
 
+                # ep_dicts = {'combo': rAB, 'bg': rA, 'fg': rB}
+                snr_list_AB_A_B = compute_epoch_snr([rAB, rA, rB])
+
                 # I'm smoothing before I calculate here, this could be a problem and you may want to change that
                 fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR)
 
@@ -2245,8 +2276,12 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                 rABsm = np.squeeze(np.apply_along_axis(fn, 2, rAB))
 
                 # Filter out the reponse for the stimulus ('_st') period - without pre/post - also has spont gone
-                rA_st, rB_st = rAsm[:, prebins:-postbins], rBsm[:, prebins:-postbins]
-                rAB_st = rABsm[:, prebins:-postbins]
+                if rAsm.ndim ==2:
+                    rA_st, rB_st = rAsm[:, prebins:-postbins], rBsm[:, prebins:-postbins]
+                    rAB_st = rABsm[:, prebins:-postbins]
+                else:
+                    rA_st, rB_st = rAsm[prebins:-postbins], rBsm[prebins:-postbins]
+                    rAB_st = rABsm[prebins:-postbins]
 
                 # Get the mean across trials for the full stimulus plus pre and post - spont already subtracted
                 rAm, rBm = np.nanmean(rAsm, axis=0), np.nanmean(rBsm, axis=0)
@@ -2269,16 +2304,59 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                     _end = np.concatenate((np.full((prebins,), False), np.full((int(durbins/2,)), False), \
                              np.full((int(durbins/2,)),True), np.full((postbins,),False)))
 
-                A_FR_start = np.nanmean(np.nanmean(rAsm, axis=0)[_start])
-                A_FR_end = np.nanmean(np.nanmean(rAsm, axis=0)[_end])
-                B_FR_start = np.nanmean(np.nanmean(rBsm, axis=0)[_start])
-                B_FR_end = np.nanmean(np.nanmean(rBsm, axis=0)[_end])
-                AB_FR_start = np.nanmean(np.nanmean(rABsm, axis=0)[_start])
-                AB_FR_end = np.nanmean(np.nanmean(rABsm, axis=0)[_end])
+                if rAsm.ndim == 2:
+                    A_FR_start = np.nanmean(np.nanmean(rAsm, axis=0)[_start])
+                    A_FR_end = np.nanmean(np.nanmean(rAsm, axis=0)[_end])
+                    B_FR_start = np.nanmean(np.nanmean(rBsm, axis=0)[_start])
+                    B_FR_end = np.nanmean(np.nanmean(rBsm, axis=0)[_end])
+                    AB_FR_start = np.nanmean(np.nanmean(rABsm, axis=0)[_start])
+                    AB_FR_end = np.nanmean(np.nanmean(rABsm, axis=0)[_end])
+
+                else:
+                    A_FR_start = np.nanmean([_start])
+                    A_FR_end = np.nanmean([_end])
+                    B_FR_start = np.nanmean([_start])
+                    B_FR_end = np.nanmean([_end])
+                    AB_FR_start = np.nanmean([_start])
+                    AB_FR_end = np.nanmean([_end])
+
+                #snr metric
+                if snip:
+                    _start_st, _end_st = cut_list[cut_labels.index('_start')], \
+                                                       cut_list[cut_labels.index('_end')]
+                    goods = [False] * start + [True] * dur + [False] * end
+                    bads = [not ll for ll in goods]
+
+                    _start = np.concatenate((np.full((prebins,), True), goods, np.full((postbins,),False)))
+                    _end = np.concatenate((np.full((prebins,), True), bads, np.full((postbins,),True)))
+
+                else:
+                    _start_st = np.concatenate((np.full((prebins,), False), np.full((int(durbins/2,)), True), \
+                             np.full((int(durbins/2,)),False), np.full((postbins,),False)))
+                    _end_st = np.concatenate((np.full((prebins,), False), np.full((int(durbins/2,)), False), \
+                             np.full((int(durbins/2,)),True), np.full((postbins,),False)))
+
+                    _start = np.concatenate((np.full((prebins,), True), np.full((int(durbins/2,)), True), \
+                             np.full((int(durbins/2,)),False), np.full((postbins,),False)))
+                    _end = np.concatenate((np.full((prebins,), True), np.full((int(durbins/2,)), False), \
+                             np.full((int(durbins/2,)),True), np.full((postbins,),True)))
+
+                rA_start, rB_start, rAB_start = rA[:,:,_start], rB[:,:,_start], rAB[:,:,_start]
+                rA_end, rB_end, rAB_end = rA[:,:,_end], rB[:,:,_end], rAB[:,:,_end]
+                snr_list_AB_A_B_start = compute_epoch_snr([rAB_start, rA_start, rB_start])
+                snr_list_AB_A_B_end = compute_epoch_snr([rAB_end, rA_end, rB_end])
+
+                rA_start_st, rB_start_st, rAB_start_st = rA[:,:,_start_st], rB[:,:,_start_st], rAB[:,:,_start_st]
+                rA_end_st, rB_end_st, rAB_end_st = rA[:,:,_end_st], rB[:,:,_end_st], rAB[:,:,_end_st]
+                snr_list_AB_A_B_start_stim = compute_epoch_snr([rAB_start_st, rA_start_st, rB_start_st])
+                snr_list_AB_A_B_end_stim = compute_epoch_snr([rAB_end_st, rA_end_st, rB_end_st])
 
                 # Get some stuff for a dumb suppression metric
                 min_rep = np.min((rA.shape[0], rB.shape[0]))  # only will do something if SoundRepeats==Yes
-                lin_resp = np.nanmean(rAsm[:min_rep, :] + rBsm[:min_rep, :], axis=0)
+                if min_rep > 1:
+                    lin_resp = np.nanmean(rAsm[:min_rep, :] + rBsm[:min_rep, :], axis=0)
+                elif min_rep == 1:
+                    lin_resp = np.nanmean(rAsm[:] + rBsm[:], axis=0)
                 supp = np.nanmean(lin_resp - AB_FR)
 
                 AcorLin = np.corrcoef(rAm, lin_resp)[0, 1]  # Corr between resp to A and resp to lin
@@ -2328,12 +2406,27 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                                 'combo_FR': AB_FR,
                                 'bg_FR': A_FR,
                                 'fg_FR': B_FR,
+                                'combo_snr': snr_list_AB_A_B[0],
+                                'bg_snr': snr_list_AB_A_B[1],
+                                'fg_snr': snr_list_AB_A_B[2],
                                 'combo_FR_start': AB_FR_start,
                                 'combo_FR_end': AB_FR_end,
                                 'bg_FR_start': A_FR_start,
                                 'fg_FR_start': B_FR_start,
                                 'bg_FR_end': A_FR_end,
                                 'fg_FR_end': B_FR_end,
+                                'combo_snr_start': snr_list_AB_A_B_start[0],
+                                'combo_snr_end': snr_list_AB_A_B_end[0],
+                                'bg_snr_start': snr_list_AB_A_B_start[1],
+                                'bg_snr_end': snr_list_AB_A_B_end[1],
+                                'fg_snr_start': snr_list_AB_A_B_start[2],
+                                'fg_snr_end': snr_list_AB_A_B_end[2],
+                                'combo_snr_start_stim': snr_list_AB_A_B_start_stim[0],
+                                'combo_snr_end_stim': snr_list_AB_A_B_end_stim[0],
+                                'bg_snr_start_stim': snr_list_AB_A_B_start_stim[1],
+                                'bg_snr_end_stim': snr_list_AB_A_B_end_stim[1],
+                                'fg_snr_start_stim': snr_list_AB_A_B_start_stim[2],
+                                'fg_snr_end_stim': snr_list_AB_A_B_end_stim[2],
                                 'supp': supp,
                                 'BG_path': bg_path,
                                 'FG_path': fg_path})
@@ -2451,7 +2544,7 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
         if modelname:
             OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{modelname}/{cellid}'  # weight + corr
         else:
-            OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}'  # weight + corr
+            OLP_partialweights_db_path = f'/auto/users/hamersky/{cache_path}/{cellid}'  # weight + corr
 
         # OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}_{real_olps.iloc[cc]["olp_type"]}'  # weight + corr
         os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
@@ -2463,3 +2556,116 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
     else:
         raise ValueError(f"{cellid} was found to have {len(real_olps)} real OLPs (not test or binaural fusion), "
                          f"there is nothing to fit. But maybe check that is correct.")
+
+
+def calc_dyn_metrics(batch, cellid=None, parmfile=None):
+    '''2023_07_03. Called by enqueue_dynamic.py and script_dynamic.py to take the half epochs using
+    parmfiles and cellids taken from the half epochs in a dynamic OLP run.'''
+    manager = BAPHYExperiment(parmfile=parmfile, cellid=cellid, batch=batch)
+
+    options = ohel.get_load_options(batch) #gets options that will include gtgram if batch=339
+    rec = manager.get_recording(**options)
+
+    # area = db.pd_query(f"SELECT DISTINCT area FROM sCellFile where cellid like '{manager.siteid}%%'").area.iloc[0]
+
+    rec['resp'] = rec['resp'].extract_channels([cellid])
+    resp = copy.copy(rec['resp'].rasterize())
+    rec['resp'].fs = 100
+
+    norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
+
+    expt_params = manager.get_baphy_exptparams()
+    ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+    ref_handle = {key: val.strip() if type(val) is str else val for key, val in ref_handle.items()}
+
+    prebins, postbins = int(ref_handle['PreStimSilence'] * rec['resp'].fs), int(ref_handle['PostStimSilence'] * rec['resp'].fs)
+    durbins = int(ref_handle['Duration'] * rec['resp'].fs)
+    trialbins, lenbins = durbins + postbins, prebins + postbins + durbins
+    presil, postsil = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']
+
+    twostims = resp.epochs[resp.epochs['name'].str.count('-0-1') == 2].copy()
+    halfstims = resp.epochs[resp.epochs['name'].str.count(f"-{ref_handle['SilenceOnset']}-1") == 1].copy()
+    halfstims = halfstims.loc[~halfstims['name'].str.contains('null')]
+
+    ep_twostim = twostims.name.unique().tolist()
+    ep_twostim.sort()
+    ep_halfstim = halfstims.name.unique().tolist()
+    ep_halfstim.sort()
+
+    cell_df = []
+    for cnt, stimmy in enumerate(ep_halfstim):
+        dyn_kind = ohel.label_dynamic_ep_type(stimmy)
+        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", stimmy)[0])
+        BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]
+        BG_ep, FG_ep = f"STIM_{seps[0]}_null", f"STIM_null_{seps[1]}"
+
+        if dyn_kind == 'fh':
+            suffix = '-' + '-'.join(seps[0].split('-')[1:])
+            alone = f'STIM_{seps[0]}_null'
+            full = f"STIM_{seps[0]}_{seps[1].split('-')[0]}{suffix}"
+        elif dyn_kind == 'hf':
+            suffix = '-' + '-'.join(seps[1].split('-')[1:])
+            alone = f'STIM_null_{seps[1]}'
+            full = f"STIM_{seps[0].split('-')[0]}{suffix}_{seps[1]}"
+
+        rhalf = resp.extract_epoch(stimmy)
+        ralone, rfull = resp.extract_epoch(alone), resp.extract_epoch(full)
+        rA, rB = resp.extract_epoch(BG_ep), resp.extract_epoch(FG_ep)
+
+        # Get the average of repetitions and cut out just the stimulus
+        ralone_st = np.squeeze(np.nanmean(ralone[:, :, prebins:-postbins], axis=0))
+        rhalf_st = np.squeeze(np.nanmean(rhalf[:, :, prebins:-postbins], axis=0))
+        rfull_st = np.squeeze(np.nanmean(rfull[:, :, prebins:-postbins], axis=0))
+
+        ralone = np.squeeze(np.nanmean(ralone[:, :, :], axis=0))
+        rhalf = np.squeeze(np.nanmean(rhalf[:, :, :], axis=0))
+        rfull = np.squeeze(np.nanmean(rfull[:, :, :], axis=0))
+
+        # Get correlations
+        alonecorhalf = np.corrcoef(ralone_st, rhalf_st)[0, 1]  # Corr between resp to A and resp to dual
+        fullcorhalf = np.corrcoef(rfull_st, rhalf_st)[0, 1]  # Corr between resp to B and resp to dual
+
+        # FR and STD
+        alone_FR, half_FR, full_FR = np.nanmean(ralone_st), np.nanmean(rhalf_st), np.nanmean(rfull_st)
+        std = np.std(np.concatenate([ralone_st, rhalf_st, rfull_st], axis=0))
+
+        # What we really want from here, compares the difference of the half to the full and alone resp
+        E_full = (np.abs(rfull - rhalf)) / std
+        E_alone = (np.abs(ralone - rhalf)) / std
+
+        # time = (np.arange(0, ralone.shape[-1]) / fs) - 0.5
+        #
+        # fig, ax = plt.subplots(2, 1, figsize=(10,8))
+        #
+        # ax[0].plot(time[prebins:-postbins], ralone_st - SR, label='Alone')
+        # ax[0].plot(time[prebins:-postbins], rhalf_st - SR, label='Half')
+        # ax[0].plot(time[prebins:-postbins], rfull_st - SR, label='Full')
+        # ax[0].legend()
+        #
+        # ax[1].plot(time[prebins:-postbins], E_full, label='Full')
+        # ax[1].plot(time[prebins:-postbins], E_alone, label='Alone')
+        # ax[1].legend()
+
+        cell_df.append({'epoch': stimmy,
+                        'dyn_kind': dyn_kind,
+                        # 'BG': BG,
+                        # 'FG': FG,
+                        'fullcorhalf': fullcorhalf,
+                        'alonecorhalf': alonecorhalf,
+                        'half_FR': half_FR,
+                        'full_FR': full_FR,
+                        'E_alone': E_alone,
+                        'E_full': E_full,
+                        'resp_alone': ralone,
+                        'resp_half': rhalf,
+                        'resp_full': rfull})
+
+    cell_df = pd.DataFrame(cell_df)
+    cell_df['parmfile'], cell_df['cellid'] = parmfile, cellid
+
+    OLP_dyn_db_path = f"/auto/users/hamersky/cache_dyn_no_spont/{cellid}-{parmfile.split('/')[-1][:-2]}"  # weight + corr
+    os.makedirs(os.path.dirname(OLP_dyn_db_path), exist_ok=True)
+
+    jl.dump(cell_df, OLP_dyn_db_path)
+
+    return cell_df

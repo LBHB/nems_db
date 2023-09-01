@@ -1092,8 +1092,7 @@ def get_batches(name=None, verbose=True):
     params = ()
     sql = "SELECT *,id as batch FROM sBatch WHERE 1"
     if name is not None:
-        sql += " AND name like %s"
-        params = params+("%"+name+"%",)
+        sql += f" AND name like '%{name}%'"
     d = pd_query(sql=sql, params=params)
     if verbose:
         for i, r in d.iterrows():
@@ -1174,8 +1173,8 @@ def list_batches(name=None):
 
     d = get_batches(name)
 
-    for x in range(0, len(d)):
-        print("{} {}".format(d['batch'][x], d['name'][x]))
+    #for x in range(0, len(d)):
+    #    print("{} {}".format(d['batch'][x], d['name'][x]))
 
     return d
 

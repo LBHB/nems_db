@@ -7,7 +7,7 @@ the plot should also open on its own in a web browser when the function is run.
 
 """
 
-from nems.utilities.output import web_print
+from nems0.utilities.output import web_print
 
 import nems_scripts.demo_script as demo
 # This information would normally be passed by the web interface,

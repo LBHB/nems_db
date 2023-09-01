@@ -29,12 +29,12 @@ import copy
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import resample
-import nems.signal
-import nems.recording
-import nems.db as db
-from nems.recording import Recording
-from nems.recording import load_recording
-from nems.utils import recording_filename_hash
+import nems0.signal
+import nems0.recording
+import nems0.db as db
+from nems0.recording import Recording
+from nems0.recording import load_recording
+from nems0.utils import recording_filename_hash
 from nems_lbhb.io import (baphy_parm_read, baphy_align_time, load_pupil_trace,
                           get_rem, load_rem_options, set_default_pupil_options)
 
@@ -1108,7 +1108,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
                 )
 
         # generate response signal
-        t_resp = nems.signal.RasterizedSignal(
+        t_resp = nems0.signal.RasterizedSignal(
                 fs=options['rasterfs'], data=raster_all, name='resp',
                 recording=cellid, chans=cellids, epochs=event_times
                 )
@@ -1167,7 +1167,7 @@ def baphy_load_recording_RDT(cellid, batch, options):
         signals['bg'] = stim2
 
     signals['state'] = state
-    rec = nems.recording.Recording(signals=signals)
+    rec = nems0.recording.Recording(signals=signals)
     return rec
 
 
@@ -1205,7 +1205,7 @@ def dict_to_signal(stim_dict, fs=100, event_times=None, signal_name='stim',
 
     z = np.zeros([chancount, maxbin])
 
-    empty_stim = nems.signal.RasterizedSignal(
+    empty_stim = nems0.signal.RasterizedSignal(
             data=z, fs=fs, name=signal_name,
             epochs=event_times, recording=recording_name
             )
@@ -1415,7 +1415,7 @@ def baphy_load_recording(**options):
         goodtrials = np.concatenate((goodtrials, _goodtrials))
 
         # generate response signal
-        t_resp = nems.signal.PointProcess(
+        t_resp = nems0.signal.PointProcess(
                 fs=options['rasterfs'], data=spike_dict,
                 name='resp', recording=rec_name, chans=list(spike_dict.keys()),
                 epochs=event_times
@@ -1446,7 +1446,7 @@ def baphy_load_recording(**options):
                               axis=1)
 
             # generate pupil signals
-            t_pupil = nems.signal.RasterizedSignal(
+            t_pupil = nems0.signal.RasterizedSignal(
                     fs=options['rasterfs'], data=state_dict['pupiltrace'],
                     name='pupil', recording=rec_name, chans=['pupil'],
                     epochs=event_times)
@@ -1479,7 +1479,7 @@ def baphy_load_recording(**options):
                               axis=1)
 
             # generate pupil signals
-            t_pupil_s = nems.signal.RasterizedSignal(
+            t_pupil_s = nems0.signal.RasterizedSignal(
                     fs=options['rasterfs'], data=state_dict['pupil_eyespeed'],
                     name='pupil_eyespeed', recording=rec_name, chans=['pupil_eyespeed'],
                     epochs=event_times)
@@ -1505,7 +1505,7 @@ def baphy_load_recording(**options):
                               axis=0)
             print(np.nansum(state_dict['rem']))
             # generate pupil signals
-            t_rem = nems.signal.RasterizedSignal(
+            t_rem = nems0.signal.RasterizedSignal(
                     fs=options['rasterfs'],
                     data=np.reshape(state_dict['rem'].astype(bool),[1,-1]),
                     name='rem', recording=rec_name, chans=['rem'],
@@ -1520,19 +1520,19 @@ def baphy_load_recording(**options):
         if options['stim'] and options["runclass"] == "RDT":
             log.info("concatenating RDT stim")
 
-            t_stim1 = nems.signal.TiledSignal(
+            t_stim1 = nems0.signal.TiledSignal(
                 fs=options['rasterfs'], data=stim1_dict,
                 name='fg', epochs=event_times,
                 recording=rec_name
             )
-            t_stim2 = nems.signal.TiledSignal(
+            t_stim2 = nems0.signal.TiledSignal(
                 fs=options['rasterfs'], data=stim2_dict,
                 name='bg', epochs=event_times,
                 recording=rec_name
             )
             BigStimMatrix = state_dict['BigStimMatrix'].copy()
             del state_dict['BigStimMatrix']
-            t_state = nems.signal.TiledSignal(
+            t_state = nems0.signal.TiledSignal(
                 fs=options['rasterfs'], data=state_dict,
                 name='state', epochs=event_times,
                 recording=rec_name
@@ -1554,7 +1554,7 @@ def baphy_load_recording(**options):
         if options['stim']:
             # accumulate dictionaries
             # CRH replaced cellid w/ site (for when cellid is list)
-            t_stim = nems.signal.TiledSignal(
+            t_stim = nems0.signal.TiledSignal(
                     data=stim_dict, fs=options['rasterfs'], name='stim',
                     epochs=event_times, recording=rec_name
                     )
@@ -1588,7 +1588,7 @@ def baphy_load_recording(**options):
     if options["runclass"] == "RDT":
         signals['state'] = state
         #signals['stim'].meta={'BigStimMatrix': BigStimMatrix}
-    rec = nems.recording.Recording(signals=signals, meta=meta, name=siteid)
+    rec = nems0.recording.Recording(signals=signals, meta=meta, name=siteid)
 
     if goodtrials.size > np.sum(goodtrials):
         log.info(goodtrials)

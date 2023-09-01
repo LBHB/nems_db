@@ -16,13 +16,10 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script.py'
 
 # 2023_06_09. Adding Stephen modelfits
 # batch=345  # stephen modelfits
-# batch =328  # marm
-batch = 344
-# cache_path = 'cache_marm'
-cache_path = 'cache_snr'
+batch =328  # marm
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
-# cell_list = cell_list[111:119]
+cell_list = cell_list[111:119]
 # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 
@@ -38,7 +35,7 @@ for nn, cellid in enumerate(cell_list):
     # note = f'OLP_prediction_{cellid}_0-500ms'
     note = f'OLP_weights_{cellid}_0-500ms'
     try:
-        args = [cellid, batch, cache_path]
+        args = [cellid, batch, modelname]
     except:
         args = [cellid, batch]
     print(note)
