@@ -134,6 +134,7 @@ class BAPHYExperiment:
             self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
             self.channels_to_load = nops['channels']
             self.units_to_load = nops['units']
+            self.probe_ids_to_load = nops['probe_ids']
             self.rawid = nops['rawid']
             # get list of corresponding parmfiles at this site for these rawids
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
@@ -178,13 +179,13 @@ class BAPHYExperiment:
                 self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
                 self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
             else:
-                self.siteid = os.path.split(parmfile[0])[-1][:7]
+                self.siteid = os.path.split(parmfile[0])[-1].split('-')[0]
                 self.cells_to_load = None
                 self.cells_to_extract = None
         else:
             self.parmfile = [io.adjust_parmfile_name(parmfile)]
             self.parmformat = [io.get_parmfile_format(parmfile)]
-            self.siteid = os.path.split(parmfile)[-1][:7]
+            self.siteid = os.path.split(parmfile)[-1].split('-')[0]
             self.batch = None
             self.rawid = [rawid] # todo infer from parmfile instad of parsing
             if cellid is None and rawid is not None:
@@ -1376,8 +1377,12 @@ class BAPHYExperiment:
                 if self.cells_to_load is not None:
                     for i in range(len(self.cells_to_load)):
                         if self.channels_to_load is not None:
-                            # Use channel_to_load and units_to_load
-                            chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                            if len(self.probe_ids_to_load[i])>0:
+                                # Use probe-chan-unit
+                                chan_unit_str = f'{self.probe_ids_to_load[i]}-{self.channels_to_load[i]:03d}-{self.units_to_load[i]}'
+                            else:
+                                # Use channel_to_load and units_to_load
+                                chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]

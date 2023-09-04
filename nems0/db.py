@@ -1457,6 +1457,27 @@ def get_stable_batch_cells(batch=None, cellid=None, rawid=None, label ='parm'):
 
         return cellids, rawid
 
+#
+# LBHB-specific celldb functions
+#
+
+def quick_site_info(sitemask="", areamask=None):
+
+    if areamask is None:
+        sarea=""
+    else:
+        sarea=f" AND area like '{areamask}'"
+    sql="SELECT cellid, area, count(*) as n_files" + \
+        f" FROM sCellFile where cellid like '{sitemask}%'{sarea}" +\
+        " GROUP BY cellid, area"
+    d = pd_query(sql)
+    d['siteid']=d['cellid'].apply(get_siteid)
+    d['n_cells']=1
+
+    d = d.groupby(['siteid','area'])[['n_cells','n_files']].sum()
+    d = d.reset_index()
+    return d
+
 
 def get_wft(cellid=None):
     engine = Engine()
@@ -1537,6 +1558,24 @@ def get_rawid(cellid, run_num):
     d = pd.read_sql(sql=sql, con=engine, params=params)
 
     return [d['rawid'].values[0]]
+
+def find_cell_data(cellid=None, runclass=None):
+    if cellid is None and runclass is None:
+        raise ValueError('find_cell_data: cellid or runclass required')
+
+    where=[]
+    if cellid is not None:
+        where.append(f"sCellFile.cellid like '{cellid}%'")
+    if runclass is not None:
+        where.append(f"gDataRaw.runclass='{runclass}'")
+    wherestr = " AND ".join(where)
+
+    sql="SELECT DISTINCT gDataRaw.cellid as siteid, rawid, runclass, concat(sCellFile.stimpath, sCellFile.stimfile) as stimfile" +\
+        " FROM gDataRaw INNER JOIN sCellFile ON gDataRaw.id=sCellFile.rawid" +\
+        " WHERE " + wherestr
+    d = pd_query(sql)
+
+    return d
 
 def get_pen_location(cellid):
     """

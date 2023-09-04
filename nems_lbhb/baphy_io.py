@@ -1755,6 +1755,7 @@ def adjust_parmfile_name(parmfile):
     elif os.path.exists(aspath):
         return aspath
     else:
+        raise ValueError(f"parmfile {parmfile} does not exist as m-file or path.")
         return None
 
 
@@ -2890,6 +2891,7 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
 
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
+            prev_probe_id=""
             for u in range(0, unitcount):
                 st = s[u, 0]
                 # if st.size:
@@ -2919,14 +2921,28 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                         #       .format(trialidx,st[1,ff]))
 
                     totalunits += 1
+                    try:
+                        jobfile=sortinfo[c][0][sortidx]['sortparameters'][0][u]['Kilosort_job_source'][0][0][0]
+                        parts=jobfile.split("Probe")
+                        probe_id=parts[1][0]+"-"
+                    except:
+                        probe_id = None
+                    if probe_id is None:
+                        try:
+                            jobfile = sortinfo[c][0][sortidx]['sortparameters'][u][0]['Kilosort_job_source'][0][0][0]
+                            parts = jobfile.split("Probe")
+                            probe_id = parts[1][0] + "-"
+                        except:
+                            probe_id = prev_probe_id
+
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
                         unit_names.append("{0}{1}".format(chan_names[c], u+1))
                         #unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
-                        unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
+                        unit_names.append(f"{probe_id}{(c+1):03d}-{u+1}")
                     spiketimes.append(unit_spike_events / spikefs)
-
+                    prev_probe_id=probe_id
                 # else:
                 # TODO - Incorporate this, but deal with cases of truly missing data. This is
                 # designed only for cases where e.g. a single cellid doens't spike during one
@@ -4574,19 +4590,31 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         raise ValueError(f"No depthinfo for siteid {siteid}")
     d = json.loads(dinfo.loc[0,'depthinfo'])
 
+    # backward compatibility: nest depth info under the default ProbeA
+    if 'parmfile' in d.keys():
+        d={'ProbeA': d.copy()}
     dcell = {}
     for c in cellid:
         dcell[c] = {'siteid': siteid}
-        chstr = str(int(c.split("-")[1]))
-        if len(d['channel info'][chstr])==3:
-            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        cparts = c.split("-")
+        chstr = str(int(cparts[-2]))
+        if len(cparts)==4:
+            probeid = cparts[1]
         else:
-            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
+            probeid = 'A'
+        d_ = d['Probe'+probeid]
+        if chstr not in d_['channel info'].keys():
+            print('subtracting 384')
+            chstr=f"{(int(chstr)-384)}"
+        if len(d_['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d_['channel info'][chstr]
 
         if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA') | (dcell[c]['layer']=='BS') :
-            dcell[c]['area'] = d['site area']
+            dcell[c]['area'] = d_['site area']
         elif dcell[c]['layer'].endswith('d'):
-            dcell[c]['area'] = d.get('site area deep', 'XX')
+            dcell[c]['area'] = d_.get('site area deep', 'XX')
         else:
             dcell[c]['area'] = dcell[c]['layer']
 
@@ -4796,6 +4824,7 @@ def parse_cellid(options):
             else [options['cellid']]
         units = []
         channels = []
+        probe_ids = []
         for cellid in cellids:
             t = cellid.split("_")
             # print(cellids)
@@ -4805,12 +4834,14 @@ def parse_cellid(options):
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
                 scf_ = db.get_cell_files(t[0], rawid=rawid_)
-                scf_ = scf_[['rawid', 'cellid', 'channum', 'unit']].drop_duplicates()
+                scf_ = scf_[['rawid', 'cellid', 'probe_id', 'channum', 'unit']].drop_duplicates()
                 assert len(scf_) == 1
                 scf.append(scf_)
             assert len(scf) == len(rawid)
             channels.append(scf[0].iloc[0].channum)
             units.append(scf[0].iloc[0].unit)
+            probe_ids.append(scf[0].iloc[0].probe_id)
+        options['probe_ids'] = probe_ids
         options['channels'] = channels
         options['units'] = units
 

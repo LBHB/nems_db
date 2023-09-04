@@ -18,13 +18,16 @@ import nems0.xforms as xforms
 import nems0.xform_helper as xhelp
 import nems0.epoch as ep
 import nems0.modelspec as ms
-from nems0.utils import find_module, get_setting, find_common
-import nems0.db as nd
+from nems0.utils import find_module, get_setting, find_common, smooth
+from nems0 import db
 import nems_lbhb.old_xforms.xforms as oxf
 import nems_lbhb.old_xforms.xform_helper as oxfh
 from nems0.modules.weight_channels import gaussian_coefficients
 from nems0.modules.fir import da_coefficients
 from nems0.gui.decorators import scrollable
+
+from nems_lbhb import baphy_experiment
+from nems_lbhb import baphy_io
 
 font_size=8
 params = {'legend.fontsize': font_size-2,
@@ -40,16 +43,6 @@ params = {'legend.fontsize': font_size-2,
 plt.rcParams.update(params)
 
 
-#def ax_remove_box(ax=None):
-#    """
-#    remove right and top lines from plot border
-#    """
-#    if ax is None:
-#        ax = plt.gca()
-#    ax.spines['right'].set_visible(False)
-#    ax.spines['top'].set_visible(False)
-
-
 def get_model_preds(cellid, batch, modelname):
     xf, ctx = xhelp.load_model_xform(cellid, batch, modelname,
                                      eval_model=False)
@@ -57,6 +50,8 @@ def get_model_preds(cellid, batch, modelname):
     #ctx, l = oxf.evaluate(xf, ctx, stop=-1)
 
     return xf, ctx
+
+
 
 
 def compare_model_preds(cellid, batch, modelname1, modelname2,
@@ -387,8 +382,8 @@ def scatter_model_set(modelnames=[], batch=322, cellids=None, stat='r_test', sf=
 
     shortened, prefix, suffix = find_common(modelnames)
     shortened = [s if len(s)>0 else "_" for s in shortened]
-    d = nd.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
-    dse = nd.batch_comp(batch, modelnames, cellids=cellids, stat='se_test')
+    d = db.batch_comp(batch, modelnames, cellids=cellids, stat=stat)
+    dse = db.batch_comp(batch, modelnames, cellids=cellids, stat='se_test')
 
     modelcount = d.shape[1]
     goodcells = (d/dse*2)>1
@@ -990,7 +985,6 @@ def pop_weights(modelspec, rec=None, idx=None, sig="state", variable="g", prefix
 
     return ax
 
-
 def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
 
     # for case where given single array
@@ -1035,7 +1029,7 @@ def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
             fs = []
             for c in cellids[i]:
                 try:
-                    fs.append(nd.get_wft(c))
+                    fs.append(db.get_wft(c))
                 except:
                     fs.append(-1)
 
@@ -1051,7 +1045,7 @@ def depth_analysis_64D(h, cellids, l4=None, depth_list=None, title=None):
             fs = []
             for c in cellids[i]:
                 try:
-                    fs.append(nd.get_wft(c))
+                    fs.append(db.get_wft(c))
                 except:
                     fs.append(-1)
             chan_depth_weight.append(pd.DataFrame(data=np.vstack((chans, depths, w, fs)).T,
@@ -1487,13 +1481,13 @@ def model_comp_pareto(modelnames=None, batch=0, modelgroups=None, goodcells=None
     else:
         cellids=list(goodcells.index)
 
-    b_ceiling = nd.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
-    b_n = nd.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
+    b_ceiling = db.batch_comp(batch, modelnames, cellids=cellids, stat=plot_stat)
+    b_n = db.batch_comp(batch, modelnames, cellids=cellids, stat='n_parms')
 
     # find good cells
     if goodcells is None:
-        b_test = nd.batch_comp(batch, modelnames, stat='r_test')
-        b_se = nd.batch_comp(batch, modelnames, stat='se_test')
+        b_test = db.batch_comp(batch, modelnames, stat='r_test')
+        b_se = db.batch_comp(batch, modelnames, stat='se_test')
         b_goodcells = np.zeros_like(b_test)
         for i, m in enumerate(modelnames):
             td = b_test[[m]].join(b_se[[m]], rsuffix='_se')
@@ -1808,3 +1802,127 @@ def scatter_bin_lin(data, x, y, bins=10, s=3, color='lightgray', color2=None, ax
         resulte[:,i] = np.nanstd(x[b_, :], axis=0)/np.sqrt(np.sum(b_))
     ax.errorbar(result[0], result[1], resulte[1], linewidth=2, color=color2)
 
+def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
+                resp=None, depths=None,
+                ax=None, smooth_win=1,
+                resp_len=0.1, snr_norm=False):
+
+    if resp is not None:
+        fs = resp.fs
+        if depths is None:
+            cellids = resp.chans
+            depths = np.array([int(c.split('-')[-2]) for c in cellids])
+
+    elif mua:
+        d = db.find_cell_data(siteid, runclass="FTC")
+
+        parmfile = d.loc[0, 'stimfile']
+        print(f"Loading {parmfile}")
+        ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
+        #rawhp = 100
+        #rawlp = 250
+        #rec = ex.get_recording(raw=True, resp=False, pupil=False, recache=False, rawchans=None, stim=False,
+        #                       rasterfs=fs, rawlp=rawlp, rawhp=rawhp)
+        #fs = 200
+        bp = (500, 5000)
+        rec = ex.get_recording(mua=True, raw=False, pupil=False, resp=False, stim=False, recache=False, rawchans=None,
+                               rasterfs=fs, muabp=bp)
+        resp = rec['mua'].copy()
+        cellids=resp.chans
+        if probe is not None:
+            cellids=[c for c in cellids if f'{probe}-' in c]
+            resp = resp.extract_channels(cellids)
+        chans = [int(c.split('-')[-1]) for c in cellids]
+        depths = np.array(chans)
+
+    else:
+        d = db.find_cell_data(siteid, runclass="FTC")
+
+        parmfile = d.loc[0, 'stimfile']
+        print(f"Loading {parmfile}")
+        ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
+        rec = ex.get_recording(loadkey=f'psth.fs{fs}')
+        resp=rec['resp'].copy()
+        cellids=resp.chans
+        if probe is not None:
+            cellids=[c for c in cellids if f'-{probe}-' in c]
+            resp=rec['resp'].extract_channels(cellids)
+        chans = [int(c.split('-')[-2]) for c in cellids]
+
+        def get_tail(x):
+            return "-".join(x.split('-')[1:])
+
+        try:
+            df=baphy_io.get_depth_info(siteid=siteid).reset_index()
+            df['cu'] = df['index'].apply(get_tail)
+            df = df.reset_index()
+            depths = np.array([df.loc[df['cu']==get_tail(c),'depth'].values[0] for c in cellids])
+        except:
+            print('depth calc error')
+            depths=np.array(chans)
+
+    resp = resp.rasterize()
+    #resp = resp._modified_copy(data=np.abs(resp._data))
+
+    e = resp.epochs
+    pre_epochs= e.loc[e.name=='PreStimSilence']
+    prestimsilence=np.mean(pre_epochs['end']-pre_epochs['start'])
+    prestimbins = int(prestimsilence*fs)
+    endbin = int(resp_len*fs) + prestimbins
+
+    stim_epochs = ep.epoch_names_matching(resp.epochs, "^STIM_")
+    freqs = np.array([int(s.split("_")[1]) for s in stim_epochs])
+    stim_epochs = [stim_epochs[i] for i in np.argsort(freqs)]
+    freqs = np.sort(freqs)
+
+    sig = np.zeros(resp.shape[0])
+    nse = np.zeros(resp.shape[0])
+
+    r = np.zeros((resp.shape[0], len(freqs)))
+    for i,s in enumerate(stim_epochs):
+        r_ = resp.extract_epoch(s)
+        print(i, s, r_.shape)
+
+        r[:, i] = np.mean(r_[:, :, prestimbins:endbin], axis=(0, 2)) - \
+                  np.mean(r_[:, :, :prestimbins], axis=(0, 2))
+        if snr_norm:
+            rsh_ = np.reshape(np.random.permutation(r_.flatten()), r_.shape)
+            idx = np.triu_indices(r_.shape[0], k=1)
+            for u in range(r_.shape[1]):
+                rr = r_[:,u,:]-r_[:,u,:].mean(axis=1, keepdims=True)
+                sig[u] += np.mean((rr @ rr.T)[idx])
+                rr = rsh_[:,u,:]-rsh_[:,u,:].mean(axis=1, keepdims=True)
+                nse[u] += np.mean((rr @ rr.T)[idx])
+            sig += np.std(r_.mean(axis=0), axis=1)
+            nse += np.std(np.reshape(np.random.permutation(r_.flatten()),r_.shape).mean(axis=0), axis=1)
+
+    if snr_norm:
+        #f, ax_ = plt.subplots(2, 1)
+        #ax_[0].plot(sig)
+        #ax_[0].plot(nse)
+        #ax_[1].plot(r.std(axis=1))
+        sig[sig < 0] = 0
+        nse[nse <= 0] = 1
+        rs=r.std(axis=1, keepdims=True)
+        rs[rs==0]=1
+        w = np.sqrt(sig[:, np.newaxis]/nse[:, np.newaxis])
+        r = r * w
+
+    if smooth_win is not None:
+        r = smooth(r, smooth_win, axis=1)
+    if ax is None:
+        f, ax = plt.subplots()
+
+    ax.imshow(r, origin='lower')
+    ii = np.arange(0,len(freqs),10)
+    ax.set_xticks(ii,freqs[ii])
+    ax.set_xlabel('Frequency(Hz)')
+    ii = np.arange(0, len(depths), 10)
+    ax.set_yticks(ii, depths[ii])
+    ax.set_ylabel('Depth (um)')
+    if probe is not None:
+        ax.set_title(siteid + " Probe " + probe)
+    else:
+        ax.set_title(siteid)
+
+    return ax

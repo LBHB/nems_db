@@ -3,26 +3,14 @@ import io
 import logging
 import time
 import sys, importlib
+from pathlib import Path
 
 import numpy as np
-
-import matplotlib as mpl
-params = {'axes.spines.right': False,
-          'axes.spines.top': False,
-          'legend.fontsize': 12,
-          'axes.labelsize': 12,
-          'axes.titlesize': 12,
-          'xtick.labelsize': 12,
-          'ytick.labelsize': 12,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-mpl.rcParams.update(params)
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import scipy
 import scipy.cluster.hierarchy as sch
-
+import json
 import nems0.modelspec as ms
 import nems0.xforms as xforms
 import nems0.xform_helper as xhelp
@@ -48,99 +36,126 @@ import nems0.epoch as ep
 from nems.models.LN import LN_reconstruction, CNN_reconstruction
 from nems0.analysis.cluster import cluster_corr
 from nems.models import LN
+from nems_lbhb.projects.nat_streaming.recon_tools import nmse, corrcoef, recon_site_stim, get_cluster_data
 
 log = logging.getLogger(__name__)
 
-import importlib
-importlib.reload(LN)
+cluster_count = 3
+use_dlog=True
+batch = 341
+modeltype = 'LN'
+cluster_treatment = "exclude"
+reverse_sites = True
 
-def get_cluster_data(rec, idx_to_cluster_array, cluster_ids):
-    resp = rec['resp']
-    stim = rec['stim']
-    keep_cellids = [resp.chans[i] for i in range(len(idx_to_cluster_array)) if idx_to_cluster_array[i] in cluster_ids]
-
-    resp2 = resp.extract_channels(keep_cellids)
-
-    bnt_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_.*seq')
-    if len(bnt_epochs)==0:
-        bnt_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_00cat') + \
-                     ep.epoch_names_matching(rec['resp'].epochs, 'STIM_cat')
-
-    bnt_stim = np.stack([stim.extract_epoch(e)[0].T for e in bnt_epochs], axis=0)
-    bnt_resp = np.stack([resp2.extract_epoch(e).mean(axis=0).T for e in bnt_epochs], axis=0)
-
-    print("Resp shape:", bnt_resp.shape, "Stim shape:", bnt_stim.shape)
-
-    return bnt_resp, bnt_stim, resp2
-
-def nmse(a, b):
-    """
-    mse of a vs. b, normed by std of b
-    :param a:
-    :param b:
-    :return:
-    """
-    return np.std(a - b) / np.std(b)
-
-def corrcoef(a,b):
-    return np.corrcoef(a.flatten(),b.flatten())[0,1]
-
-batch = 345
-siteids,cellids = db.get_batch_sites(batch)
-# lab-specific code to load data from one experiment.
-loadkey = "gtgram.fs50.ch18.bin6"
-siteid = 'PRN015a'
-siteid = 'PRN043a'
-siteid = 'PRN050a'
-siteid = 'PRN053a'
-siteid = 'PRN051a'
-siteid = 'PRN031a'
-
-if os.uname()[1]=='capybara':
-    modeltype = 'CNN'
+if os.uname()[1]=='agouti':
+    #groupby = 'all'
     groupby = 'bg'
-    cluster_treatment = "exclude"
-    #modeltype = 'LN'
-    #groupby='fg'
-    #cluster_treatment = "exclude"
-elif os.uname()[1] == 'agouti':
-    modeltype = 'LN'
-    groupby = 'bg'
-    cluster_treatment = "include"
+    cluster_count = 3
+    #reverse_sites=True
 elif os.uname()[1] == 'manatee':
-    modeltype = 'LN'
+    groupby = 'fgbg'
+    cluster_count = 4
+elif os.uname()[1] == 'hyena':
     groupby = 'bg'
-    cluster_treatment = "exclude"
+    cluster_count = 4
+elif os.uname()[1] == 'capybara':
+    groupby = 'fgbg'
+    cluster_count=4
 else:
     raise ValueError("Only runs on agouti, capybara, manatee")
 
-outpath = f'/auto/users/svd/projects/olp/reconstruction_{modeltype}_{groupby}_{cluster_treatment}/'
+if use_dlog:
+    dlstr = ""
+else:
+    dlstr = "_nocomp"
+if cluster_count > 3:
+    cluster_str = f"_c{cluster_count}"
+else:
+    cluster_str = ""
 
-print(outpath)
+shuffle_count=11
 
-batch=341
+
 loadkey = "gtgram.fs50.ch18"
+if len(sys.argv)>1:
+    siteids=[sys.argv[1]]
+else:
+    siteids, cellids = db.get_batch_sites(batch)
+    if batch==341:
+        #siteids.remove('SLJ008a')
+        siteids.remove('PRN004a')
+        siteids.remove('PRN031a')
+        siteids.remove('PRN042a')
+        siteids.remove('PRN045b')
+        siteids.remove('CLT052d')
 
-siteid='PRN017a'
-siteid='PRN022a'
-siteid='PRN013c'
-siteid='PRN015a'
-siteid='PRN050a'
+    if reverse_sites:
+        # start at one end of the site list
+        siteids.sort(reverse=True)
+    else:
+        # or at the other
+        siteids.sort()
 
-siteids,cellids = db.get_batch_sites(batch)
-siteids.sort(reverse=True)
-
-siteids.remove('ARM027a')
-siteids.remove('PRN004a')
-siteids.remove('PRN031a')
-siteids.remove('PRN042a')
-siteids.remove('PRN045b')
-siteids.remove('CLT052d')
+    #siteid = siteids[0]
 
 for siteid in siteids:
+    plt.close('all')
+
+    if len(sys.argv)>2:
+        estim=sys.argv[2]
+        unique_group=[estim]
+    else:
+        uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
+        rec = load_recording(uri)
+
+        epoch_df_all = OLP_get_epochs.get_rec_epochs(fs=50, rec=rec)
+        epoch_df = epoch_df_all.loc[(epoch_df_all['Dynamic Type'] == 'fullBG/fullFG')]
+        epoch_df = epoch_df.loc[(epoch_df['SNR'] == 0)]
+        # epoch_df = epoch_df.loc[(epoch_df['SNR']==10)]
+        epoch_df = epoch_df.loc[(epoch_df['Binaural Type'] == 'BG Contra, FG Contra') |
+                                (epoch_df['Binaural Type'] == 'BG Ipsi, FG Contra')]
+        # epoch_df = epoch_df_all.loc[(epoch_df_all['Binaural Type'] == 'BG Ipsi, FG Contra')]
+        if (epoch_df['Synth Type'] == 'Unsynthetic').sum() > 0:
+            epoch_df = epoch_df.loc[(epoch_df['Synth Type'] == 'Unsynthetic')]
+        else:
+            epoch_df = epoch_df.loc[(epoch_df['Synth Type'] == 'Non-RMS Unsynthetic')]
+        epoch_df = epoch_df.reset_index()
+
+        print(f"{siteid}: {epoch_df.shape}")
+
+        if groupby == 'fg':
+            unique_group = list(epoch_df['FG'].unique())
+        elif groupby == 'bg':
+            unique_group = list(epoch_df['BG'].unique())
+        elif groupby == 'fgbg':
+            unique_group = list(epoch_df['BG + FG'].unique())
+        elif groupby == 'all':
+            unique_group = ['STIM_']
+        else:
+            raise ValueError("groupby must be fg or bg")
+
+    for estim in unique_group:
+        df_recon = recon_site_stim(siteid, estim, cluster_count=cluster_count,
+                        batch=batch, modeltype=modeltype, groupby=groupby,
+                        shuffle_count=shuffle_count, force_rerun=False)
+
+"""
+if batch==341:
+    siteids.remove('PRN004a')
+    siteids.remove('PRN031a')
+    siteids.remove('PRN042a')
+    siteids.remove('PRN045b')
+    siteids.remove('CLT052d')
+
+for siteid in siteids:
+    sql=f"SELECT * FROM aRecon WHERE siteid='{siteid}'" +\
+        f" AND groupby='{groupby}' AND shuffidx={shuffle_count}" +\
+        f" AND batch={batch} AND cluster_count={cluster_count}"
+    dtest=db.pd_query(sql)
+
     try:
-        df_recon = pd.read_csv(outpath+'df_recon.csv', index_col=0)
-        if ((df_recon['siteid']==siteid) & (df_recon['shuffidx']==10)).sum()>0:
+        df_recon = pd.read_csv(outpath / 'df_recon.csv', index_col=0)
+        if ((df_recon['siteid']==siteid) & (df_recon['shuffidx']==shuffle_count-1)).sum()>0:
             print(f"{siteid} shuffidx>=10 already analyzed. Skipping")
             continue
         df_recon = df_recon.loc[df_recon.siteid!=siteid].copy()
@@ -158,10 +173,12 @@ for siteid in siteids:
     except:
         keepchans = [c for c in rec['resp'].chans]
     rec['resp'] = rec['resp'].rasterize().extract_channels(keepchans)
+    rec['stim'] = rec['stim'].rasterize()
 
     # log compress and normalize stim
-    fn = lambda x: _dlog(x, -1)
-    rec['stim'] = rec['stim'].transform(fn, 'stim')
+    if use_dlog:
+        fn = lambda x: _dlog(x, -1)
+        rec['stim'] = rec['stim'].transform(fn, 'stim')
     rec['stim'] = rec['stim'].normalize('minmax')
     rec['resp'] = rec['resp'].normalize('minmax')
 
@@ -187,28 +204,41 @@ for siteid in siteids:
     skip_recon = False
     if groupby=='fg':
         unique_group = list(epoch_df['FG'].unique())
-    elif groupby=='bg':
+    elif groupby == 'bg':
         unique_group = list(epoch_df['BG'].unique())
+    elif groupby == 'fgbg':
+        unique_group = list(epoch_df['BG + FG'].unique())
+    elif groupby=='all':
+        unique_group = ['STIM_']
     else:
         raise ValueError("groupby must be fg or bg")
-
+    break_list=[]
     for estim in unique_group:
         if groupby=='bg':
             print(f"Focusing on bg={estim}")
             bids = (epoch_df['BG']==estim)
             estim_label = estim.split("_")[1]
-        else:
+        elif groupby == 'fg':
             print(f"Focusing on fg={estim}")
-            bids = (epoch_df['FG']==estim)
+            bids = (epoch_df['FG'] == estim)
             estim_label = estim.split("_")[2]
+        elif groupby == 'fgbg':
+            print(f"Focusing on epoch={estim}")
+            bids = (epoch_df['BG + FG'] == estim)
+            estim_label = estim.replace("STIM_","")
+        else:
+            print(f"Single clustering for all stim")
+            bids = (epoch_df['BG + FG'].str.startswith(estim))
+            estim_label = 'ALL'
+
 
         ebgs = epoch_df.loc[bids, 'BG'].to_list()
         efgs = epoch_df.loc[bids, 'FG'].to_list()
         efgbgs = epoch_df.loc[bids, 'BG + FG'].to_list()
         epoch_list = [efgbgs, efgs, ebgs]
-        rfgbg = np.concatenate([resp.extract_epoch(e) for e in efgbgs],axis=2).mean(axis=0)
-        rfg = np.concatenate([resp.extract_epoch(e) for e in efgs],axis=2).mean(axis=0)
-        rbg = np.concatenate([resp.extract_epoch(e) for e in ebgs],axis=2).mean(axis=0)
+        rfgbg = np.concatenate([resp.extract_epoch(e).mean(axis=0,keepdims=True) for e in efgbgs],axis=2).mean(axis=0)
+        rfg = np.concatenate([resp.extract_epoch(e).mean(axis=0,keepdims=True) for e in efgs],axis=2).mean(axis=0)
+        rbg = np.concatenate([resp.extract_epoch(e).mean(axis=0,keepdims=True) for e in ebgs],axis=2).mean(axis=0)
 
         # norm_psth = psth - np.mean(psth[:,:25], axis=1, keepdims=True)
         r=rfgbg
@@ -219,7 +249,6 @@ for siteid in siteids:
         norm_psth /= (s + (s == 0))
         sc = norm_psth @ norm_psth.T / norm_psth.shape[1]
 
-        cluster_count = 3
         use_abs_corr = False
         if use_abs_corr:
             cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, use_abs=True, count=cluster_count, threshold=1.5)
@@ -233,7 +262,7 @@ for siteid in siteids:
         for col, epochs in enumerate(epoch_list):
 
             # extract spike data for current epoch and cell (cid)
-            raster = np.concatenate([resp.extract_epoch(e) for e in epochs], axis=2)
+            raster = np.concatenate([resp.extract_epoch(e).mean(axis=0,keepdims=True) for e in epochs], axis=2)
             psth = np.mean(raster, axis=0)
             norm_psth = psth - np.mean(psth, axis=1, keepdims=True)
             #norm_psth = psth - np.mean(psth[:, :25], axis=1, keepdims=True)
@@ -309,9 +338,9 @@ for siteid in siteids:
             if col == 0:
                 ax[1, 0].set_ylabel('Unit (sorted)')
                 ax[2, 0].set_ylabel('Cluster')
-        f1.suptitle(f"{estim}: Signal correlation")
+        f1.suptitle(f"{siteid} {estim}: Signal correlation")
         plt.tight_layout()
-        f1.savefig(f"{outpath}{siteid}_{estim}_clusters.jpg")
+        f1.savefig(outpath / f"{siteid}_{estim}_clusters.jpg")
         print(f"{estim}: {cluster_n}")
 
         if skip_recon:
@@ -322,7 +351,6 @@ for siteid in siteids:
         #
         # Fit decoder with different clusters of neurons
         #
-        shuffle_count = 11
         for shuffidx in range(shuffle_count):
             print(f"{estim}: decoder fitting shuffle {shuffidx}")
             models = []
@@ -333,7 +361,18 @@ for siteid in siteids:
             else:
                 idx_cluster_map = np.random.permutation(idx_to_cluster_array)
             cmin, cmax = idx_cluster_map.min(), idx_cluster_map.max()
-            cluster_sets = [[c] for c in range(cmin, cmax+1)] + [[c for c in range(cmin, cmax+1)]]
+
+            min_cluster_units = 0
+            if min_cluster_units>0:
+                cluster_sets = [[c] for c in range(cmin, cmax+1)
+                                if cluster_n[c-1]>min_cluster_units] \
+                               + [[c for c in range(cmin, cmax+1)]]
+                cc_diff = [c for i,c in enumerate(cc_diff)
+                           if cluster_n[i]>min_cluster_units]
+                cluster_cc = [c for i,c in enumerate(cluster_cc)
+                           if cluster_n[i]>min_cluster_units]
+            if shuffidx==0:
+                break_list.append(len(cluster_sets))
             if cluster_treatment=='exclude':
                 # leave out one cluster (instead of just fitting for that one cluster)
                 call = np.arange(cmin,cmax+1)
@@ -365,31 +404,36 @@ for siteid in siteids:
             f2, ax = plt.subplots(len(cluster_sets)+1, 3, figsize=(8, 8), sharex=True, sharey=True)
             for col, epochs in enumerate(epoch_list):
                 spec = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in epochs], axis=1).T
-                ax[0, col].imshow(spec.T, aspect='auto', cmap='gray_r', interpolation='none',
-                                  origin='lower', extent=[-0.5, 1.5, 1, spec.shape[1]], vmin=0, vmax=1)
-                ax[0, col].set_title(epochs[0].replace("STIM_", ""), fontsize=8)
                 if col == 0:
                     ax[0, col].set_ylabel('Freq')
+                    vmax = spec.max()
+                ax[0, col].imshow(spec.T**2, aspect='auto', cmap='gray_r', interpolation='none',
+                                  origin='lower', extent=[-0.5, 1.5, 1, spec.shape[1]], vmin=0, vmax=vmax)
+                ax[0, col].set_title(epochs[0].replace("STIM_", ""), fontsize=8)
 
             for fidx, cluster_ids in enumerate(cluster_sets):
                 model = models[fidx]
                 resp2 = resps[fidx]
-
-                d={'siteid': siteid, 'estim': estim, 'cid': fidx}
+                if fidx<len(cluster_sets)-1:
+                    cid=fidx
+                else:
+                    cid=cluster_count
+                d={'siteid': siteid, 'estim': estim, 'cid': cid}
                 d['shuffidx'] = shuffidx
                 d['cluster_ids'] = ",".join([str(c) for c in cluster_ids])
                 d['n_units'] = resp2.shape[0]
+                d['total_units'] = resp.shape[0]
                 if fidx>=len(cluster_cc):
                     d['cluster_cc']=0
+                    d['cc_diff']=0
                 else:
                     d['cluster_cc']=cluster_cc[fidx]
-
+                    d['cc_diff']=cc_diff[fidx]
                 spec_fg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgs], axis=1).T
                 spec_bg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in ebgs], axis=1).T
                 spec_fgbg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgbgs], axis=1).T
-
                 for col, epochs in enumerate(epoch_list):
-                    raster = np.concatenate([resp2.extract_epoch(e) for e in epochs], axis=2)
+                    raster = np.concatenate([resp2.extract_epoch(e).mean(axis=0,keepdims=True) for e in epochs], axis=2)
                     psth = np.mean(raster, axis=0).T
 
                     #raster0 = np.concatenate([resps[-1].extract_epoch(e) for e in epochs], axis=2)
@@ -401,8 +445,8 @@ for siteid in siteids:
                     recon = model.predict(psth)
                     #recon -= recon0
 
-                    ax[fidx+1, col].imshow(recon.T, aspect='auto', cmap='gray_r', interpolation='none',
-                                      origin='lower', extent=[-0.5, 1.5, 1, recon.shape[1]], vmin=0, vmax=1)
+                    ax[fidx+1, col].imshow(recon.T**2, aspect='auto', cmap='gray_r', interpolation='none',
+                                      origin='lower', extent=[-0.5, 1.5, 1, recon.shape[1]], vmin=0, vmax=vmax)
                     if col == 0:
                         recon0 = recon
                         d['Efg'] = nmse(recon, spec_fg)  # np.corrcoef(recon.flatten(), spec_fg.flatten())[0,1] #
@@ -411,6 +455,22 @@ for siteid in siteids:
                         d['Cfg'] = corrcoef(recon, spec_fg)  # np.corrcoef(recon.flatten(), spec_fg.flatten())[0,1] #
                         d['Cbg'] = corrcoef(recon, spec_bg)  # np.corrcoef(recon.flatten(), spec_bg.flatten())[0,1] #
                         d['Cfgbg'] = corrcoef(recon, spec_fgbg)  # np.corrcoef(recon.flatten(), spec_bg.flatten())[0,1] #
+
+                        # compute SNR of fg in reconstruction
+                        from scipy.stats import linregress
+                        from sklearn import linear_model
+                        X = np.stack([np.ones_like(spec_fg.flatten()), spec_fg.flatten(), spec_bg.flatten()], axis=1)**2
+                        Y = spec_fgbg.flatten()[:,np.newaxis]**2
+                        Yest = recon.flatten()[:,np.newaxis]**2
+
+                        m = linear_model.LinearRegression()
+                        m.fit(X,Y)
+                        m2 = linear_model.LinearRegression()
+                        m2.fit(X,Yest)
+                        d['wFGact']=m.coef_[0,1]
+                        d['wBGact']=m.coef_[0,2]
+                        d['wFG']=m2.coef_[0,1]
+                        d['wBG']=m2.coef_[0,2]
 
                         if len(cluster_ids)==1:
                             n_units = (np.isin(idx_to_cluster_array, cluster_ids)).sum()
@@ -424,7 +484,7 @@ for siteid in siteids:
                         C = corrcoef(recon, spec)  # np.corrcoef(recon.flatten(), spec.flatten())[0,1] #
                         Cr = corrcoef(recon, recon0)  # np.corrcoef(recon.flatten(), recon0.flatten())[0,1] #
                         ax[fidx+1, col].set_title(f"E={E:.3f}, Er={Er:.3f}", fontsize=8)
-                        if col==1:
+                        if col == 1:
                             d['Erfg'] = Er
                             d['Crfg'] = Cr
                         else:
@@ -435,14 +495,22 @@ for siteid in siteids:
             f2.suptitle(f'{estim} shuffidx={shuffidx} treatment={cluster_treatment}')
             plt.tight_layout()
             if shuffidx==0:
-                f2.savefig(f"{outpath}{siteid}_{estim}_recon_shuff{shuffidx}.jpg")
-            else:
-                plt.close(f2)
+                f2.savefig(outpath / f"{siteid}_{estim}_recon_shuff{shuffidx}.jpg")
 
-        #plt.close(f1)
+            plt.close(f2)
 
     df_recon = pd.concat(df_recons, ignore_index=True)
-    df_recon.to_csv(outpath+'df_recon.csv')
+    df_recon.to_csv(outpath / 'df_recon.csv')
+    for i,r in df_recon.iloc[:10].iterrows():
+        res = r[['cluster_ids', 'n_units',
+                'cluster_cc', 'Efg', 'Ebg', 'Efgbg', 'Cfg', 'Cbg', 'Cfgbg', 'Erfg',
+                'Crfg', 'Erbg', 'Crbg']].to_dict()
+        res = json.dumps(res)
+        sql=f"INSERT INTO aRecon (siteid, estim, cid, shuffidx, batch, groupby, cluster_count, results)" +\
+            f" VALUES ('{siteid}','{estim}',{cid},{shuffidx},{batch},'{groupby}',{cluster_count}, '{res}')"
+        db.sql_command(sql)
+
+    d=db.pd_query("SELECT * FROM aRecon")
 
     d = df_recon.loc[df_recon.siteid==siteid].copy()
     d['fg_rat'] = d['Efg']# /d['Efgbg']
@@ -459,19 +527,25 @@ for siteid in siteids:
                    lw=0.5, color='lightblue')
         ax[0].plot(p.loc[p.shuffidx == sh, ['bg_rat']].values,
                    lw=0.5, color='orange')
-    breaks = np.arange(cluster_count,(p['shuffidx']==0).sum(), cluster_count+1)
+    breaks = np.cumsum(np.array(break_list))-1
+    #breaks = np.arange(cluster_count,(p['shuffidx']==0).sum(), cluster_count+1)
     yl = ax[0].get_ylim()
     ax[0].vlines(breaks, yl[0], yl[1], ls='--', color='gray')
     for i, e in enumerate(unique_group):
-        e_ = e.split("_")[1]
-        if e_=='null':
+        if groupby=='bg':
+            e_ = e.split("_")[1]
+        elif groupby == 'fg':
             e_ = e.split("_")[2]
-        ax[0].text(breaks[i], yl[1], e_, ha='right')
+        elif groupby == 'all':
+            e_ = e.split("_")[-1]
+        else:
+            e_ = e.split("_")[1] + "\n" + e.split("_")[2]
+        ax[0].text(breaks[i], yl[1], e_, ha='right', va='top', fontsize=6)
 
     ax[0].set_ylabel('MSE')
 
     ax[1].plot(p.loc[p.shuffidx == 0, ['fg_crat', 'bg_crat']].values)
-    for sh in range(1, shuffle_count):
+    for sh in range(1, shuffle_count+1):
         ax[1].plot(p.loc[p.shuffidx == sh, ['fg_crat']].values,
                    lw=0.5, color='lightblue')
         ax[1].plot(p.loc[p.shuffidx == sh, ['bg_crat']].values,
@@ -481,4 +555,8 @@ for siteid in siteids:
     ax[1].legend(('FG ratio','BG ratio'))
     ax[1].set_ylabel('CC')
     f3.suptitle(siteid)
-    f3.savefig(f"{outpath}{siteid}_summary_clusters.jpg")
+
+    f3.savefig(outpath / f"{siteid}_summary_clusters.jpg")
+    plt.close(f3)
+    plt.close(f1)
+"""
