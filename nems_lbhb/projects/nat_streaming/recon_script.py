@@ -48,9 +48,10 @@ cluster_treatment = "exclude"
 reverse_sites = True
 
 if os.uname()[1]=='agouti':
-    groupby = 'all'
-    #groupby = 'fgbg'
-    cluster_count = 4
+    #groupby = 'all'
+    groupby = 'bg'
+    cluster_count = 3
+    #reverse_sites=True
 elif os.uname()[1] == 'manatee':
     groupby = 'fgbg'
     cluster_count = 4
@@ -58,7 +59,6 @@ elif os.uname()[1] == 'hyena':
     groupby = 'bg'
     cluster_count = 4
 elif os.uname()[1] == 'capybara':
-    reverse_sites=False
     groupby = 'fgbg'
     cluster_count=4
 else:
@@ -82,6 +82,7 @@ if len(sys.argv)>1:
 else:
     siteids, cellids = db.get_batch_sites(batch)
     if batch==341:
+        #siteids.remove('SLJ008a')
         siteids.remove('PRN004a')
         siteids.remove('PRN031a')
         siteids.remove('PRN042a')

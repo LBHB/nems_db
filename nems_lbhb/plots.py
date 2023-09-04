@@ -1802,27 +1802,44 @@ def scatter_bin_lin(data, x, y, bins=10, s=3, color='lightgray', color2=None, ax
         resulte[:,i] = np.nanstd(x[b_, :], axis=0)/np.sqrt(np.sum(b_))
     ax.errorbar(result[0], result[1], resulte[1], linewidth=2, color=color2)
 
-def ftc_heatmap(siteid, mua=False, probe=None, fs=500, ax=None, smooth_win=1, resp_len=0.1):
+def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
+                resp=None, depths=None,
+                ax=None, smooth_win=1,
+                resp_len=0.1, snr_norm=False):
 
-    d = db.find_cell_data(siteid, runclass="FTC")
+    if resp is not None:
+        fs = resp.fs
+        if depths is None:
+            cellids = resp.chans
+            depths = np.array([int(c.split('-')[-2]) for c in cellids])
 
-    parmfile=d.loc[0,'stimfile']
-    print(f"Loading {parmfile}")
-    if mua:
+    elif mua:
+        d = db.find_cell_data(siteid, runclass="FTC")
+
+        parmfile = d.loc[0, 'stimfile']
+        print(f"Loading {parmfile}")
         ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
-        rawhp = 100
-        rawlp = 250
-        rec = ex.get_recording(raw=True, resp=False, pupil=False, recache=False, rawchans=None, stim=False,
-                               rasterfs=fs, rawlp=rawlp, rawhp=rawhp)
+        #rawhp = 100
+        #rawlp = 250
+        #rec = ex.get_recording(raw=True, resp=False, pupil=False, recache=False, rawchans=None, stim=False,
+        #                       rasterfs=fs, rawlp=rawlp, rawhp=rawhp)
         #fs = 200
-        #bp = (500, 5000)
-        #rec = ex.get_recording(mua=True, raw=False, pupil=False, resp=False, stim=False, recache=False, rawchans=None,
-        #                       rasterfs=fs, muabp=bp)
-        resp = rec['raw'].copy()
-        chans = [int(c) for c in resp.chans]
+        bp = (500, 5000)
+        rec = ex.get_recording(mua=True, raw=False, pupil=False, resp=False, stim=False, recache=False, rawchans=None,
+                               rasterfs=fs, muabp=bp)
+        resp = rec['mua'].copy()
+        cellids=resp.chans
+        if probe is not None:
+            cellids=[c for c in cellids if f'{probe}-' in c]
+            resp = resp.extract_channels(cellids)
+        chans = [int(c.split('-')[-1]) for c in cellids]
         depths = np.array(chans)
 
     else:
+        d = db.find_cell_data(siteid, runclass="FTC")
+
+        parmfile = d.loc[0, 'stimfile']
+        print(f"Loading {parmfile}")
         ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
         rec = ex.get_recording(loadkey=f'psth.fs{fs}')
         resp=rec['resp'].copy()
@@ -1845,28 +1862,57 @@ def ftc_heatmap(siteid, mua=False, probe=None, fs=500, ax=None, smooth_win=1, re
             depths=np.array(chans)
 
     resp = resp.rasterize()
-    resp = resp._modified_copy(data=np.abs(resp._data))
+    #resp = resp._modified_copy(data=np.abs(resp._data))
 
     e = resp.epochs
     pre_epochs= e.loc[e.name=='PreStimSilence']
     prestimsilence=np.mean(pre_epochs['end']-pre_epochs['start'])
     prestimbins = int(prestimsilence*fs)
-    endbin=int(resp_len*fs) + prestimbins
+    endbin = int(resp_len*fs) + prestimbins
 
-    stim_epochs=ep.epoch_names_matching(resp.epochs, "^STIM_")
+    stim_epochs = ep.epoch_names_matching(resp.epochs, "^STIM_")
     freqs = np.array([int(s.split("_")[1]) for s in stim_epochs])
     stim_epochs = [stim_epochs[i] for i in np.argsort(freqs)]
-    freqs=np.sort(freqs)
+    freqs = np.sort(freqs)
+
+    sig = np.zeros(resp.shape[0])
+    nse = np.zeros(resp.shape[0])
+
     r = np.zeros((resp.shape[0], len(freqs)))
     for i,s in enumerate(stim_epochs):
         r_ = resp.extract_epoch(s)
-        print(i,s,r_.shape)
-        r[:,i] = np.mean(r_[:,:,prestimbins:endbin], axis=(0,2)) - \
-                 np.mean(r_[:, :, :prestimbins], axis=(0, 2))
+        print(i, s, r_.shape)
+
+        r[:, i] = np.mean(r_[:, :, prestimbins:endbin], axis=(0, 2)) - \
+                  np.mean(r_[:, :, :prestimbins], axis=(0, 2))
+        if snr_norm:
+            rsh_ = np.reshape(np.random.permutation(r_.flatten()), r_.shape)
+            idx = np.triu_indices(r_.shape[0], k=1)
+            for u in range(r_.shape[1]):
+                rr = r_[:,u,:]-r_[:,u,:].mean(axis=1, keepdims=True)
+                sig[u] += np.mean((rr @ rr.T)[idx])
+                rr = rsh_[:,u,:]-rsh_[:,u,:].mean(axis=1, keepdims=True)
+                nse[u] += np.mean((rr @ rr.T)[idx])
+            sig += np.std(r_.mean(axis=0), axis=1)
+            nse += np.std(np.reshape(np.random.permutation(r_.flatten()),r_.shape).mean(axis=0), axis=1)
+
+    if snr_norm:
+        #f, ax_ = plt.subplots(2, 1)
+        #ax_[0].plot(sig)
+        #ax_[0].plot(nse)
+        #ax_[1].plot(r.std(axis=1))
+        sig[sig < 0] = 0
+        nse[nse <= 0] = 1
+        rs=r.std(axis=1, keepdims=True)
+        rs[rs==0]=1
+        w = np.sqrt(sig[:, np.newaxis]/nse[:, np.newaxis])
+        r = r * w
+
     if smooth_win is not None:
-        r=smooth(r, smooth_win, axis=1)
+        r = smooth(r, smooth_win, axis=1)
     if ax is None:
-        f,ax=plt.subplots()
+        f, ax = plt.subplots()
+
     ax.imshow(r, origin='lower')
     ii = np.arange(0,len(freqs),10)
     ax.set_xticks(ii,freqs[ii])
@@ -1874,10 +1920,9 @@ def ftc_heatmap(siteid, mua=False, probe=None, fs=500, ax=None, smooth_win=1, re
     ii = np.arange(0, len(depths), 10)
     ax.set_yticks(ii, depths[ii])
     ax.set_ylabel('Depth (um)')
-    ax.set_title(siteid)
+    if probe is not None:
+        ax.set_title(siteid + " Probe " + probe)
+    else:
+        ax.set_title(siteid)
 
     return ax
-
-
-siteid="PRN033a"
-ftc_heatmap(siteid, mua=True, smooth_win=6)

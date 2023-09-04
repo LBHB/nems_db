@@ -358,7 +358,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
             spec_fg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgs], axis=1).T
             spec_bg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in ebgs], axis=1).T
             spec_fgbg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgbgs], axis=1).T
-
+            recons = []
             for col, epochs in enumerate(epoch_list):
                 raster = np.concatenate([resp2.extract_epoch(e).mean(axis=0,keepdims=True) for e in epochs], axis=2)
                 psth = np.mean(raster, axis=0).T
@@ -370,7 +370,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
                 spec = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in epochs], axis=1).T
 
                 recon = model.predict(psth)
-                #recon -= recon0
+                recons.append(recon)
 
                 if shuffidx==0:
                     ax[fidx+1, col].imshow(recon.T**2, aspect='auto', cmap='gray_r', interpolation='none',
@@ -384,21 +384,6 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
                     d['Cbg'] = corrcoef(recon, spec_bg)  # np.corrcoef(recon.flatten(), spec_bg.flatten())[0,1] #
                     d['Cfgbg'] = corrcoef(recon, spec_fgbg)  # np.corrcoef(recon.flatten(), spec_bg.flatten())[0,1] #
 
-                    # compute SNR of fg in reconstruction
-                    from scipy.stats import linregress
-                    from sklearn import linear_model
-                    X = np.stack([np.ones_like(spec_fg.flatten()), spec_fg.flatten(), spec_bg.flatten()], axis=1)**2
-                    Y = spec_fgbg.flatten()[:,np.newaxis]**2
-                    Yest = recon.flatten()[:,np.newaxis]**2
-
-                    m = linear_model.LinearRegression()
-                    m.fit(X,Y)
-                    m2 = linear_model.LinearRegression()
-                    m2.fit(X,Yest)
-                    d['wFGact']=m.coef_[0,1]
-                    d['wBGact']=m.coef_[0,2]
-                    d['wFG']=m2.coef_[0,1]
-                    d['wBG']=m2.coef_[0,2]
 
                     if shuffidx==0:
                         if len(cluster_ids)==1:
@@ -420,6 +405,30 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
                     else:
                         d['Erbg'] = Er
                         d['Crbg'] = Cr
+
+            # compute SNR of fg in reconstruction
+            from scipy.stats import linregress
+            from sklearn import linear_model
+            X = np.stack([np.ones_like(spec_fg.flatten()), spec_fg.flatten(), spec_bg.flatten()], axis=1) ** 2
+            Y = spec_fgbg.flatten()[:, np.newaxis] ** 2
+            Xest = np.stack([np.ones_like(recons[1].flatten()),
+                             recons[1].flatten(),
+                             recons[2].flatten()], axis=1) ** 2
+            Yest = recons[0].flatten()[:, np.newaxis] ** 2
+
+            m = linear_model.LinearRegression()
+            m.fit(X, Y)
+            m2 = linear_model.LinearRegression()
+            m2.fit(X, Yest)
+            m3 = linear_model.LinearRegression()
+            m3.fit(Xest, Yest)
+            d['wFGact'] = m.coef_[0, 1]
+            d['wBGact'] = m.coef_[0, 2]
+            d['wFG'] = m2.coef_[0, 1]
+            d['wBG'] = m2.coef_[0, 2]
+            d['wFGest'] = m3.coef_[0, 1]
+            d['wBGest'] = m3.coef_[0, 2]
+
             df_recons.append(pd.DataFrame(d, index=[0]))
 
         if shuffidx==0:
@@ -437,7 +446,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
     for i, r in df_recon.iterrows():
         res = r[['cluster_ids', 'n_units', 'total_units',
                 'cluster_cc', 'Efg', 'Ebg', 'Efgbg', 'Cfg', 'Cbg', 'Cfgbg', 'Erfg',
-                'Crfg', 'Erbg', 'Crbg','wFG','wBG','wFGact','wBGact']].to_dict()
+                'Crfg', 'Erbg', 'Crbg','wFG','wBG','wFGact','wBGact','wFGest','wBGest']].to_dict()
         res = json.dumps(res)
         shuffidx=r['shuffidx']
         cid=r['cid']
