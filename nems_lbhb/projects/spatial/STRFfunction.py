@@ -81,9 +81,10 @@ def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid
         cellnumlist = range(len(chans))
     else:
         cellnumlist = [i for i,c in enumerate(cellids) if c==cellid]
-    
+
     for cid in cellnumlist:
         cellid = ctx['est']['resp'].chans[cid]
+        log.info(f"Fitting model for cell {cellid} ({loadkey}, {architecture})")
         X_ = ctx['est']['stim'].extract_epochs(stim_epochs)
         Y_ = ctx['est']['resp'].extract_epochs(stim_epochs)
         # convert to matrix
