@@ -63,7 +63,7 @@ def load_data(site,stim_format,architecture="LN_STRF"):
     
     return cellnum, rec, ctx, loadkey, siteid, siteids
 
-def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF"):
+def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid=None):
     batch = 338
     epochs = ctx['est']['resp'].epochs
     stim_epochs = ep.epoch_names_matching(epochs, "^STIM_")

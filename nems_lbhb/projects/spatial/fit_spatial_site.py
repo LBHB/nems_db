@@ -106,6 +106,9 @@ if __name__ == '__main__':
         exit(-1)
 
     cellid = sys.argv[1]
+    siteid = cellid.split("-")[0]
+    if cellid == siteid:
+        cellid = None
     batch = 338
     #int(sys.argv[2])
     modelname = sys.argv[2]
@@ -116,8 +119,8 @@ if __name__ == '__main__':
     print('modelname', modelname)
     """
 
-    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(cellid,modelname,architecture)
-    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(cellid,modelname,cellnum,ctx, loadkey, architecture)
+    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture)
+    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum,ctx, loadkey, architecture, cellid=cellid)
 
     """
     log.info("Running xform_helper.fit_model_xform({0},{1},{2})".format(cellid, batch, modelname))

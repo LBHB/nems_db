@@ -53,7 +53,7 @@ def fb_weights(rfg,rbg,rfgbg,spontbins=50):
 
     return weights2+1
 
-monostim=True
+monostim=False
 if monostim:
     batch = 341
     loadkey = "gtgram.fs50.ch18"
@@ -78,11 +78,11 @@ else:
     siteid = siteids[4]
 
 outpath='/home/svd/Documents/onedrive/projects/olp/'
-cluster_count0 = 4
+cluster_count0 = 3
 groupby = 'bg'
 pc_count0 = 8
-siteids.sort(reverse=True)
-
+#siteids.sort(reverse=True)
+#siteids=[siteids[-2]]
 dfs = []
 
 for siteid in siteids:
@@ -223,8 +223,7 @@ for siteid in siteids:
              }
         dfs.append(pd.DataFrame(d))
 
-        single_plot = False
-        if single_plot:
+        if len(siteids)==1:
             # create figure with 4x3 subplots
             f, ax = plt.subplots(5, 3, figsize=(6, 8), sharex='row', sharey='row')
 
@@ -323,9 +322,11 @@ df['dcc'] = df['cc_fg']-df['cc_bg']
 ci = df['Binaural Type']=='BG Ipsi, FG Contra'
 cc = df['Binaural Type']=='BG Contra, FG Contra'
 
-f,ax = plt.subplots(3, 4, sharex='row', sharey='row')
+f,ax = plt.subplots(3, 4)
 sns.scatterplot(df, x='mw_fg', y='mw_bg', ax=ax[0,0], s=5)
+ax[0,0].plot([0,1],[0,1],'k--', lw=0.5)
 sns.scatterplot(df, x='cc_fg', y='cc_bg', ax=ax[0,1], s=5)
+ax[0,1].plot([0,1],[0,1],'k--', lw=0.5)
 
 sns.regplot(df.loc[ci], x='mean_sc_fgbg', y='dmw',
             fit_reg=True, ax=ax[1,0], scatter_kws={'s': 3})
@@ -363,6 +364,7 @@ sns.regplot(df, x='mean_sc_bg', y='dcc',
             fit_reg=True, ax=ax[2,2], scatter_kws={'s': 3})
 ax[2,2].set_title(f"r={np.corrcoef(df['mean_sc_bg'], df['dcc'])[0,1]:.3}")
 
+f.suptitle(f"groupby {groupby} - batch {batch} - clusters {cluster_count}")
 plt.tight_layout()
 
 outfile = f"{outpath}site_corrs_{batch}_{groupby}_{cluster_count0}.pdf"

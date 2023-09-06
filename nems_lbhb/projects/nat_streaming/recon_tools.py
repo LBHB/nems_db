@@ -304,9 +304,10 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
             cluster_sets[-1] = call
 
         for fidx, cluster_ids in enumerate(cluster_sets):
-            log.info("***********************************************")
-            log.info(f"{estim}: decoder fitting shuffle {shuffidx} cluster {fidx}: {cluster_ids}")
-            log.info("***********************************************")
+            log.info("***********************************************************")
+            log.info(f"   Starting site {siteid} - {estim}")
+            log.info(f"   decoder fitting shuffle {shuffidx} cluster {fidx}: {cluster_ids}")
+            log.info("***********************************************************")
             bnt_resp, bnt_stim, resp2 = get_cluster_data(rec, idx_cluster_map, cluster_ids)
 
             nl_kwargs = {'no_shift': False, 'no_offset': False, 'no_gain': False}
