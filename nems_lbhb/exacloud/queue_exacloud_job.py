@@ -23,6 +23,104 @@ def db_session():
         session.close()
 
 
+def enqueue_exacloud_script(
+        script_path, parameter_string, user,
+        executable_path='/home/users/davids/miniconda3/envs/nems/bin/python', linux_user="davids", priority=1,
+        time_limit=14, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
+    """Enqueues models similarly to nems0.db.enqueue_models, except on the Exacloud cluster at ACC.
+
+    :param script_path: Script to run.
+    :param parameter_string: string of parameter(s) to pass to script
+    :param user: LBHB username.
+    :param executable_path: Executable used to run script (default nems python)
+    :param linux_user: OHSU Username of one starting the job.
+    :param time_limit: Max hours the job will run for. Jobs will terminated if not complete by the end of the time limit.
+    :param reserve_gb: Max GB required for the job. Job will fail if memory use goes above this level.
+    :param useGPU: Whether or not to be GPU job.
+    :param high_mem: Whether or not GPU should be a higher memory one.
+    :param exclude: List of nodes to exclude. Comma separated values, no spaces.
+    """
+    # if batch_path in [None, 'None', 'NONE', '']:
+    #     batch_path = Path(r'/home/exacloud/lustre1/LBHB/code/nems_db/nems_lbhb/exacloud/batch_job.py')
+
+    # extra parameters for future
+    time_limit = f'--time_limit={time_limit}'
+    use_gpu = '--use_gpu' if useGPU else ''
+    reserve_gb = f'--reserve_gb={reserve_gb}' if reserve_gb else ''
+    high_mem = '--high_mem' if high_mem else ''
+    exclude = f'--exclude={exclude}' if exclude is not None else ''
+    extra_options = ' '.join([time_limit, reserve_gb, use_gpu, high_mem, exclude])
+
+    # Convert to list of tuples b/c product object only useable once.
+
+    queue_items = []
+
+    engine = db.Engine()
+    conn = engine.connect()
+
+    add_msg_str = ''
+    progname = ' '.join([extra_options, executable_path, script_path, parameter_string])
+    note = parameter_string.replace(' ', '/')
+
+    output = False
+
+    sql = 'SELECT * FROM tQueue WHERE allowqueuemaster=18 AND note="' + note + '"'
+    r = conn.execute(sql)
+    if r.rowcount > 0:
+        # existing job, figure out what to do with it
+
+        x = r.fetchone()
+        queueid = x['id']
+        complete = x['complete']
+        if force_rerun:
+            if complete == 1:
+                message = "Resetting existing queue entry for: %s\n" % note
+                sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
+                r = conn.execute(sql)
+                output = True
+            elif complete == 2:
+                message = "Dead queue entry for: %s exists, resetting." % note
+                sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
+                r = conn.execute(sql)
+                output = True
+
+            else:  # complete in [-1, 0] -- already running or queued
+                message = "Incomplete entry for: %s exists, skipping." % note
+
+        else:
+
+            if complete == 1:
+                message = "Completed entry for: %s exists, skipping." % note
+            elif complete == 2:
+                message = "Dead entry for: %s exists, skipping." % note
+            else:  # complete in [-1, 0] -- already running or queued
+                message = "Incomplete entry for: %s exists, skipping." % note
+        log.info(message)
+    else:
+        # new job
+        queue_item = tQueue(
+            progname=progname,
+            machinename='exacloud',
+            queuedate=datetime.datetime.now(),
+            user=user,
+            linux_user=linux_user,
+            note=note,
+            priority=priority,
+            allowqueuemaster=18,  # exacloud specific code
+        )
+
+        queue_items.append(queue_item)
+        message = f"Added exacloud job: {note}{add_msg_str}"
+        output = True
+
+        log.info(message)
+
+    with db_session() as session:
+        session.add_all(queue_items)
+
+    return output
+
+
 def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executable_path, script_path, priority=1,
                             time_limit=14, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
     """Enqueues models similarly to nems0.db.enqueue_models, except on the Exacloud cluster at ACC.

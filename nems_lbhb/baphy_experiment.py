@@ -134,6 +134,7 @@ class BAPHYExperiment:
             self.cells_to_load = nops['cellid']      # this is all "stable" cellids across these rawid
             self.channels_to_load = nops['channels']
             self.units_to_load = nops['units']
+            self.probe_ids_to_load = nops['probe_ids']
             self.rawid = nops['rawid']
             # get list of corresponding parmfiles at this site for these rawids
             d = db.get_batch_cell_data(batch=batch, cellid=self.siteid, label='parm', rawid=self.rawid)
@@ -1376,8 +1377,12 @@ class BAPHYExperiment:
                 if self.cells_to_load is not None:
                     for i in range(len(self.cells_to_load)):
                         if self.channels_to_load is not None:
-                            # Use channel_to_load and units_to_load
-                            chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                            if len(self.probe_ids_to_load[i])>0:
+                                # Use probe-chan-unit
+                                chan_unit_str = f'{self.probe_ids_to_load[i]}-{self.channels_to_load[i]:03d}-{self.units_to_load[i]}'
+                            else:
+                                # Use channel_to_load and units_to_load
+                                chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]

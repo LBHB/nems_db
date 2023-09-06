@@ -137,9 +137,18 @@ def probe_finder(openephys_folder):
     """little function to find the names of each probe a recording was made with OE version 0.6.0 using neuropixels"""
     # find version of OE. This method will probably only be supported by version 0.6.0 or up.
     OE_version = openephys_gui_version(openephys_folder)
+    settings_file = file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    # check whether or not the probe is a neuropixel. If not, assume UCLA
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        probe_type = 'NPX'
+    else:
+        probe_type = 'UCLA'
+
+    # only started doing two probe recordings with version 0.6.0 - not worth time to check for probes in past versions
     if OE_version[1] >= 6:
-        settings_file = file_finder(openephys_folder, 'settings.xml')
-        info = oes.XML2Dict(settings_file)
         data_streams = list(info['SIGNALCHAIN']['PROCESSOR']['Neuropix-PXI']['STREAM'].keys())
         # get data sources, i.e. probes
         stream_sources = [stream.split('-')[0] for stream in data_streams]
@@ -151,8 +160,127 @@ def probe_finder(openephys_folder):
         print("Version has not been checked for Probe numbering...assuming only 1 probe")
         probes = ['ProbeA']
 
-    return probes
+    return probes, probe_type
 
+def npx_channel_map_finder(openephys_folder):
+    """Quick copy of channel finding method in data extraction tools. Returns the OE channel number and xy position of Probe(s) found in settings xml"""
+    # check version and file format and grab recording settings
+    version = openephys_gui_version(openephys_folder)
+    format = format_finder(openephys_folder)
+    settings_file = file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        probe_type = 'NPX'
+        if version[1] < 6:
+            selected_chans = []
+            # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
+            # recorded channels
+            channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
+            channel_names = list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
+            channel_nums = [channel_info[ch]['number'] for ch in channel_names]
+            LFP_channel_names = [ch for ch in channel_names if ch[:3] == 'LFP']
+            LFP_channel_nums = [channel_info[ch]['number'] for ch in LFP_channel_names]
+            channel_state = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL']
+            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if
+                                        channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+            # LFP channel nums continue counting where AP left off..but xy pos only had 384 electrodes...subtract difference?
+            enabled_LFP_channel_names = ['CH' + str(int(ch) - 384) for ch in enabled_LFP_channel_nums]
+            electrode_xpos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            electrode_ypos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            if len(electrode_xpos) < 384:
+                raise ValueError(
+                    "OE GUI METADATA is missing neuropixels channel position data...hardcode the settings.xml")
+            enabled_LFP_xpos = {k: electrode_xpos[k] for k in enabled_LFP_channel_names if k in electrode_xpos}
+            enabled_LFP_ypos = {k: electrode_ypos[k] for k in enabled_LFP_channel_names if k in electrode_ypos}
+            if type(chans) is tuple:
+                chans = list(chans)
+            selected_chans.append(chans + 1)
+            # given that all old probe recordings only used the first bank of electrodes...physical chan pos is selected
+            selected_chans_physical = selected_chans
+            selected_chans_xypos = {str(ch): [enabled_LFP_xpos['CH' + str(ch)], enabled_LFP_ypos['CH' + str(ch)]] for ch
+                                    in chans if 'CH' + str(ch) in electrode_xpos}
+            probe = ['NPX']
+
+        elif version[1] >= 6:
+            # check to see if there are mulitple probes
+            try:
+                # make a list of ordered unique probes
+                # get data streams
+                data_streams = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['STREAM'].keys())
+                # get data sources, i.e. probes
+                stream_sources = [stream.split('-')[0] for stream in data_streams]
+                # get ordered list of unique sources - probes
+                used = set()
+                probes = [probe for probe in stream_sources if probe not in used and (used.add(probe) or True)]
+                probes.sort()
+            except:
+                print("No probes found - hardcoding to ProbeA")
+                probes = ['ProbeA']
+
+            # Get slot numbers in NP_PROBE editor. Should be the same as ordering as probe names A/B/etc based on lowest slot channels
+            editor_keys = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'].keys())
+            probe_editor_names = [probe_num for probe_num in editor_keys if 'NP_PROBE' in probe_num]
+            probe_ports = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_num]['port']) for probe_num in
+                           probe_editor_names]
+            # assuming the lowest slot number is equivalent to the letter assignment of probe names we'll map between the probes and the editor to get channel positions
+            probe_ports, probe_editor_names = (list(t) for t in zip(*sorted(zip(probe_ports, probe_editor_names))))
+
+            # check to make sure number of probes identified in editor and streams is the same
+            if len(probe_editor_names) != len(probes):
+                raise UserWarning("number of probes identified by streams and OE editor do not match")
+            else:
+                selected_chans = []
+                selected_chans_xypos = []
+                selected_chans_physical = []
+                for probe, probe_editor_name in zip(probes, probe_editor_names):
+                    # sort channels and get x/y pos
+                    channel_nums = list(
+                        info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys())
+                    channel_bank = [
+                        int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'][ch_key]) for
+                        ch_key in
+                        info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys()]
+                    ch_prefix = channel_nums[0][:2]
+                    # get raw channel numbers in order to be used with bank info for physical channel assignment
+                    oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
+                    # correct for physical location by using channel bank
+                    ch_nums_physical_corrected = np.array(
+                        [ch + bnk * 384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
+                    # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
+                    # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
+                    zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
+                    sorted_oe_phys = sorted(zipped_oe_phys)
+                    sorted_oe_phys_tupes = zip(*sorted_oe_phys)
+                    sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
+                    # get keys in sorted order data will be loaded in
+                    sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
+                    # get channel xy pos in oe number scheme
+                    ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name][
+                        'ELECTRODE_XPOS']
+                    ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name][
+                        'ELECTRODE_YPOS']
+                    # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
+                    channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
+                    channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
+                    # for channel subset selection in baphy_experiment - get recording method (rawchans=)
+                    all_chans = sorted_oe
+                    idx = all_chans.tolist()
+                    recChans1 = sorted_oe + 1
+                    recChans_physical = sorted_physical + 1
+                    selected_chans.append(np.take(recChans1, idx))
+                    selected_chans_physical_temp = np.take(recChans_physical, idx)
+                    selected_chans_physical.append(selected_chans_physical_temp)
+                    selected_chans_xpos = np.take(channel_xpos, idx)
+                    selected_chans_ypos = np.take(channel_ypos, idx)
+                    selected_chans_xypos.append({probe:
+                        {str(ch): [selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in
+                         zip(selected_chans_physical_temp, range(len(selected_chans_physical_temp)))}})
+
+            probe = probes
+    return selected_chans_xypos
 
 def file_finder(root_folder, filename):
     """
@@ -927,7 +1055,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
     # extract data to tmp local folder and return local folder path
     tmppath = extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile,
                             experiment_openephys_tarfile_relpath, mua)
-    
+
     # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
     NPX = 'Sources/Neuropix-PXI'
     NPX1 = 'Neuropix-PXI'
@@ -2798,7 +2926,14 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                         parts=jobfile.split("Probe")
                         probe_id=parts[1][0]+"-"
                     except:
-                        probe_id=prev_probe_id
+                        probe_id = None
+                    if probe_id is None:
+                        try:
+                            jobfile = sortinfo[c][0][sortidx]['sortparameters'][u][0]['Kilosort_job_source'][0][0][0]
+                            parts = jobfile.split("Probe")
+                            probe_id = parts[1][0] + "-"
+                        except:
+                            probe_id = prev_probe_id
 
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
@@ -4455,19 +4590,31 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         raise ValueError(f"No depthinfo for siteid {siteid}")
     d = json.loads(dinfo.loc[0,'depthinfo'])
 
+    # backward compatibility: nest depth info under the default ProbeA
+    if 'parmfile' in d.keys():
+        d={'ProbeA': d.copy()}
     dcell = {}
     for c in cellid:
         dcell[c] = {'siteid': siteid}
-        chstr = str(int(c.split("-")[1]))
-        if len(d['channel info'][chstr])==3:
-            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        cparts = c.split("-")
+        chstr = str(int(cparts[-2]))
+        if len(cparts)==4:
+            probeid = cparts[1]
         else:
-            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
+            probeid = 'A'
+        d_ = d['Probe'+probeid]
+        if chstr not in d_['channel info'].keys():
+            print('subtracting 384')
+            chstr=f"{(int(chstr)-384)}"
+        if len(d_['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d_['channel info'][chstr]
 
         if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA') | (dcell[c]['layer']=='BS') :
-            dcell[c]['area'] = d['site area']
+            dcell[c]['area'] = d_['site area']
         elif dcell[c]['layer'].endswith('d'):
-            dcell[c]['area'] = d.get('site area deep', 'XX')
+            dcell[c]['area'] = d_.get('site area deep', 'XX')
         else:
             dcell[c]['area'] = dcell[c]['layer']
 
@@ -4677,6 +4824,7 @@ def parse_cellid(options):
             else [options['cellid']]
         units = []
         channels = []
+        probe_ids = []
         for cellid in cellids:
             t = cellid.split("_")
             # print(cellids)
@@ -4686,12 +4834,14 @@ def parse_cellid(options):
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
                 scf_ = db.get_cell_files(t[0], rawid=rawid_)
-                scf_ = scf_[['rawid', 'cellid', 'channum', 'unit']].drop_duplicates()
+                scf_ = scf_[['rawid', 'cellid', 'probe_id', 'channum', 'unit']].drop_duplicates()
                 assert len(scf_) == 1
                 scf.append(scf_)
             assert len(scf) == len(rawid)
             channels.append(scf[0].iloc[0].channum)
             units.append(scf[0].iloc[0].unit)
+            probe_ids.append(scf[0].iloc[0].probe_id)
+        options['probe_ids'] = probe_ids
         options['channels'] = channels
         options['units'] = units
 

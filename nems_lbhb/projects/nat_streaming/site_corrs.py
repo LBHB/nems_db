@@ -53,9 +53,9 @@ def fb_weights(rfg,rbg,rfgbg,spontbins=50):
 
     return weights2+1
 
-monostim=True
+monostim=False
 if monostim:
-    batch=341
+    batch = 341
     loadkey = "gtgram.fs50.ch18"
 
     siteids,cellids = db.get_batch_sites(batch)
@@ -72,16 +72,17 @@ if monostim:
         siteids.remove('ARM027a')
 else:
     # lab-specific code to load data from one experiment.
-    loadkey = "gtgram.fs50.ch18.bin100"
     batch = 345
+    loadkey = "gtgram.fs50.ch18.bin100"
     siteids,cellids = db.get_batch_sites(batch)
     siteid = siteids[4]
 
-
-cluster_count = 4
-groupby = 'fgbg'
-pc_count = 8
-
+outpath='/home/svd/Documents/onedrive/projects/olp/'
+cluster_count0 = 3
+groupby = 'bg'
+pc_count0 = 8
+#siteids.sort(reverse=True)
+#siteids=[siteids[-2]]
 dfs = []
 
 for siteid in siteids:
@@ -108,6 +109,11 @@ for siteid in siteids:
     epoch_df = epoch_df.loc[(epoch_df['Binaural Type'] == 'BG Contra, FG Contra') |
                             (epoch_df['Binaural Type'] == 'BG Ipsi, FG Contra')]
     #epoch_df = epoch_df_all.loc[(epoch_df_all['Binaural Type'] == 'BG Ipsi, FG Contra')]
+    if (epoch_df['Synth Type'] == 'Unsynthetic').sum() > 0:
+        epoch_df = epoch_df.loc[(epoch_df['Synth Type'] == 'Unsynthetic')]
+    else:
+        epoch_df = epoch_df.loc[(epoch_df['Synth Type'] == 'Non-RMS Unsynthetic')]
+
     epoch_df = epoch_df.reset_index()
 
     resp = rec['resp']
@@ -143,10 +149,10 @@ for siteid in siteids:
 
         use_abs_corr = False
         if use_abs_corr:
-            cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, use_abs=True, count=cluster_count, threshold=1.5)
+            cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, use_abs=True, count=cluster_count0, threshold=1.5)
         else:
-            cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, count=cluster_count, threshold=1.85)
-
+            cc_idx, idx_to_cluster_array = cluster_corr(sc, return_indices=True, count=cluster_count0, threshold=1.85)
+        pc_count = np.min([pc_count0, norm_psth.shape[0]])
         pca = PCA(n_components=pc_count)
         pca = pca.fit(norm_psth.T)
 
@@ -201,12 +207,15 @@ for siteid in siteids:
 
             if col > 0:
                 for c in range(pc_count):
-                    p_cc[c,col] = np.corrcoef(cluster_pc[c,col], cluster_pc[c,0])[0, 1]
+                    if (cluster_pc[c,col].std()>0) & (cluster_pc[c,0].std()>0):
+                        p_cc[c,col] = np.corrcoef(cluster_pc[c,col], cluster_pc[c,0])[0, 1]
                 for c in range(cluster_count):
-                    cluster_cc[c,col] = np.corrcoef(cluster_psth[c,col], cluster_psth[c,0])[0, 1]
+                    if (cluster_cc[c,col].std()>0) & (cluster_cc[c,0].std()>0):
+                        cluster_cc[c,col] = np.corrcoef(cluster_psth[c,col], cluster_psth[c,0])[0, 1]
 
-        d = {'siteid': siteid, 'groupby': groupby, 'cluster_count': cluster_count,
-             'estim': ebg, 'cid': np.arange(cluster_count), 'cluster_n': cluster_n,
+        d = {'siteid': siteid, 'groupby': groupby, 'cluster_count': cluster_count0,
+             'estim': ebg, 'Binaural Type': epoch_df.loc[bids,'Binaural Type'].values[0],
+             'cid': np.arange(cluster_count), 'cluster_n': cluster_n,
              'mw_fg': mw[:,0], 'mw_bg': mw[:,1],
              'cc_fg': mcc[:,0], 'cc_bg': mcc[:,1],
              'clc_fg': cluster_cc[:,1], 'clc_bg': cluster_cc[:,2],
@@ -214,8 +223,7 @@ for siteid in siteids:
              }
         dfs.append(pd.DataFrame(d))
 
-        single_plot = False
-        if single_plot:
+        if len(siteids)==1:
             # create figure with 4x3 subplots
             f, ax = plt.subplots(5, 3, figsize=(6, 8), sharex='row', sharey='row')
 
@@ -311,19 +319,41 @@ df = df.loc[((df['cluster_n']>2) &
 df['dmw'] = df['mw_fg']-df['mw_bg']
 df['dcc'] = df['cc_fg']-df['cc_bg']
 
-f,ax = plt.subplots(3,3, sharex='row', sharey='row')
-sns.scatterplot(df, x='mw_fg', y='mw_bg', ax=ax[0,0], s=5)
-sns.scatterplot(df, x='cc_fg', y='cc_bg', ax=ax[0,1], s=5)
+ci = df['Binaural Type']=='BG Ipsi, FG Contra'
+cc = df['Binaural Type']=='BG Contra, FG Contra'
 
-sns.regplot(df, x='mean_sc_fgbg', y='dmw',
+f,ax = plt.subplots(3, 4)
+sns.scatterplot(df, x='mw_fg', y='mw_bg', ax=ax[0,0], s=5)
+ax[0,0].plot([0,1],[0,1],'k--', lw=0.5)
+sns.scatterplot(df, x='cc_fg', y='cc_bg', ax=ax[0,1], s=5)
+ax[0,1].plot([0,1],[0,1],'k--', lw=0.5)
+
+sns.regplot(df.loc[ci], x='mean_sc_fgbg', y='dmw',
             fit_reg=True, ax=ax[1,0], scatter_kws={'s': 3})
-ax[1,0].set_title(f"r={np.corrcoef(df['mean_sc_fgbg'], df['dmw'])[0,1]:.3}")
-sns.regplot(df, x='mean_sc_fg', y='dmw',
+ax[1,0].set_title(f"CI r={np.corrcoef(df.loc[ci,'mean_sc_fgbg'], df.loc[ci,'dmw'])[0,1]:.3}")
+
+sns.regplot(df.loc[cc], x='mean_sc_fgbg', y='dmw',
             fit_reg=True, ax=ax[1,1], scatter_kws={'s': 3})
-ax[1,1].set_title(f"r={np.corrcoef(df['mean_sc_fg'], df['dmw'])[0,1]:.3}")
-sns.regplot(df, x='mean_sc_bg', y='dmw',
+ax[1,1].set_title(f"CC r={np.corrcoef(df.loc[cc,'mean_sc_fgbg'], df.loc[cc,'dmw'])[0,1]:.3}")
+
+sns.regplot(df.loc[ci], x='mean_sc_fg', y='dmw',
+            fit_reg=True, ax=ax[0,2], scatter_kws={'s': 3})
+ax[0,2].set_title(f"CI r={np.corrcoef(df.loc[ci,'mean_sc_fg'], df.loc[ci,'dmw'])[0,1]:.3}")
+
+sns.regplot(df.loc[cc], x='mean_sc_fg', y='dmw',
+            fit_reg=True, ax=ax[0,3], scatter_kws={'s': 3})
+ax[0,3].set_title(f"CC r={np.corrcoef(df.loc[cc,'mean_sc_fg'], df.loc[cc,'dmw'])[0,1]:.3}")
+
+sns.regplot(df.loc[ci], x='mean_sc_bg', y='dmw',
             fit_reg=True, ax=ax[1,2], scatter_kws={'s': 3})
-ax[1,2].set_title(f"r={np.corrcoef(df['mean_sc_bg'], df['dmw'])[0,1]:.3}")
+ax[1,2].set_title(f"CI r={np.corrcoef(df.loc[ci,'mean_sc_bg'], df.loc[ci,'dmw'])[0,1]:.3}")
+
+sns.regplot(df.loc[cc], x='mean_sc_bg', y='dmw',
+            fit_reg=True, ax=ax[1,3], scatter_kws={'s': 3})
+ax[1,3].set_title(f"CC r={np.corrcoef(df.loc[cc,'mean_sc_bg'], df.loc[cc,'dmw'])[0,1]:.3}")
+
+ax[1,0].set_ylim([-0.9, 0.5])
+
 sns.regplot(df, x='mean_sc_fgbg', y='dcc',
             fit_reg=True, ax=ax[2,0], scatter_kws={'s': 3})
 ax[2,0].set_title(f"r={np.corrcoef(df['mean_sc_fgbg'], df['dcc'])[0,1]:.3}")
@@ -334,7 +364,12 @@ sns.regplot(df, x='mean_sc_bg', y='dcc',
             fit_reg=True, ax=ax[2,2], scatter_kws={'s': 3})
 ax[2,2].set_title(f"r={np.corrcoef(df['mean_sc_bg'], df['dcc'])[0,1]:.3}")
 
+f.suptitle(f"groupby {groupby} - batch {batch} - clusters {cluster_count}")
 plt.tight_layout()
+
+outfile = f"{outpath}site_corrs_{batch}_{groupby}_{cluster_count0}.pdf"
+print(f"saving summ fit to {outfile}")
+f.savefig(outfile)
 
 raise ValueError("stopping")
 
