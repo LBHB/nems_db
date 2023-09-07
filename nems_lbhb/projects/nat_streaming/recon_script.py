@@ -49,18 +49,21 @@ reverse_sites = True
 
 if os.uname()[1]=='agouti':
     #groupby = 'all'
-    groupby = 'fgbg'
+    groupby = 'bg'
     cluster_count = 3
     #reverse_sites=True
 elif os.uname()[1] == 'manatee':
-    groupby = 'fgbg'
-    cluster_count = 4
+    batch=345
+    groupby = 'bg'
+    cluster_count = 3
+    reverse_sites = False
 elif os.uname()[1] == 'hyena':
     groupby = 'bg'
     cluster_count = 3
     reverse_sites = False
 elif os.uname()[1] == 'capybara':
     #groupby = 'fgbg'
+    batch=345
     groupby = 'bg'
     cluster_count = 3
 else:
