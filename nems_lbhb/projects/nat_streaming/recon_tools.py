@@ -94,6 +94,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
         f" AND groupby='{groupby}' AND shuffidx={shuffle_count-1}" +\
         f" AND batch={batch} AND cluster_count={cluster_count}" +\
         f" AND modeltype='{modeltype}'"
+    log.info(sql)
     dtest=db.pd_query(sql)
 
     if (force_rerun==False) and len(dtest)>0:
