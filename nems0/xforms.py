@@ -288,8 +288,17 @@ def load_recordings(recording_uri_list=None, normalize=False, cellid=None,
     '''
     Load one or more recordings into memory given a list of URIs.
     '''
+    try:
+        rec = load_recording(recording_uri_list[0])
+    except:
+        log.info(f'saved recording not found. Generating uri')
+        cellid=meta['cellid']
+        batch=meta['batch']
+        loadkey = meta['loader'].split('-')[0]
+        from nems_lbhb import xform_wrappers
+        uri = xform_wrappers.generate_recording_uri(cellid=cellid, batch=batch, loadkey=loadkey)
+        rec = load_recording(uri)
 
-    rec = load_recording(recording_uri_list[0])
     other_recordings = [load_recording(uri) for uri in recording_uri_list[1:]]
     if other_recordings:
         rec.concatenate_recordings(other_recordings)

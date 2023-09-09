@@ -11,6 +11,10 @@ import scipy
 import scipy.cluster.hierarchy as sch
 import seaborn as sns
 
+from sklearn.linear_model import SGDClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LogisticRegression, RidgeClassifier, RidgeClassifierCV
 
 import nems0.modelspec as ms
 import nems0.xforms as xforms
@@ -22,6 +26,7 @@ from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
 from nems0.plugins import (default_keywords, default_loaders,
                           default_initializers, default_fitters)
 from nems0.modules.nonlinearity import _dlog
+from nems0.utils import smooth
 
 from nems_lbhb import baphy_experiment
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
@@ -53,7 +58,7 @@ def fb_weights(rfg,rbg,rfgbg,spontbins=50):
 
     return weights2+1
 
-monostim=False
+monostim=True
 if monostim:
     batch = 341
     loadkey = "gtgram.fs50.ch18"
@@ -78,13 +83,14 @@ else:
 
 outpath='/home/svd/Documents/onedrive/projects/olp/'
 cluster_count0 = 3
-groupby = 'fgbgboth'
+groupby = 'bg'
 pc_count0 = 8
 
 #siteids.sort(reverse=True)
 #siteids=[siteids[5]]
+#siteids=siteids[10:15]
 dfs = []
-
+dfdiscrims = []
 for siteid in siteids:
     uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
     rec = load_recording(uri)
@@ -100,7 +106,6 @@ for siteid in siteids:
     rec['stim'] = rec['stim'].transform(fn, 'stim')
     rec['stim'] = rec['stim'].normalize('minmax')
     rec['resp'] = rec['resp'].normalize('minmax')
-
 
     epoch_df_all = OLP_get_epochs.get_rec_epochs(fs=50, rec=rec)
     epoch_df = epoch_df_all.loc[(epoch_df_all['Dynamic Type'] == 'fullBG/fullFG')]
@@ -172,6 +177,7 @@ for siteid in siteids:
         else:
             bid_set = [epoch_df.loc[bids].index.to_list()[0]]
 
+        mean_cc_set = {}
         for bid in bid_set:
             if len(bid_set)>=0:
                 ebgs = epoch_df.loc[[bid], 'BG'].to_list()
@@ -250,11 +256,13 @@ for siteid in siteids:
                  'mean_sc_fgbg': mean_cc[:,0], 'mean_sc_fg': mean_cc[:,1], 'mean_sc_bg': mean_cc[:,2],
                  }
             dfs.append(pd.DataFrame(d))
-
+            mean_cc_set[estim]=mean_cc
             #if len(siteids)==1:
-            if (resp.shape[0]>15) and \
-                    (('KitWhine' in estim) or ('KitHigh' in estim) or
-                     ('FightSqueak' in estim) or ('Gobble' in estim)):
+            #if False and (resp.shape[0]>15) and \
+            #        (('KitWhine' in estim) or ('KitHigh' in estim) or
+            #         ('FightSqueak' in estim) or ('Gobble' in estim)):
+            #if True:
+            if False:
                 # create figure with 4x3 subplots
                 f, ax = plt.subplots(3, 4, figsize=(8, 4), sharey='row') # , sharex='row')
 
@@ -363,6 +371,173 @@ for siteid in siteids:
                 print(f"saving clusters fit to {outfile}")
                 f.savefig(outfile)
 
+        ebgs = epoch_df.loc[bids, 'BG'].to_list()
+        efgs = epoch_df.loc[bids, 'FG'].to_list()
+        efgbgs = epoch_df.loc[bids, 'BG + FG'].to_list()
+        epoch_list = [efgbgs, efgs, ebgs]
+        rfgbg = np.stack([resp.extract_epoch(e) for e in efgbgs], axis=0)#.mean(axis=1, keepdims=True)
+        rfg = np.stack([resp.extract_epoch(e) for e in efgs], axis=0)#.mean(axis=1, keepdims=True)
+        rbg = np.stack([resp.extract_epoch(e) for e in ebgs], axis=0)#.mean(axis=1, keepdims=True)
+
+        norm=True
+        if norm:
+            m = np.mean(rfgbg, axis=(0,1,3), keepdims=True)
+            s = np.std(rfgbg, axis=(0,1,3), keepdims=True)
+            s=(s+(s==0))
+            norm_fgbg = (rfgbg - m) / s
+            norm_fg = (rfg - m) / s
+            norm_bg = (rbg - m) / s
+        else:
+            norm_fgbg=rfgbg
+            norm_fg=rfg
+            norm_bg=rbg
+
+        shuffle_count=11
+        ecount = rfgbg.shape[0]
+        paircount = int(ecount*(ecount-1)/2)
+        pred = np.zeros((shuffle_count,cluster_count, int(ecount*(ecount-1)/2), norm_fgbg.shape[1] * 2))
+        paircc = np.zeros((shuffle_count, cluster_count, int(ecount*(ecount-1)/2), 3))
+        s1=[[]] * paircount
+        s2=[[]] * paircount
+        for shuffidx in range(shuffle_count):
+            if shuffidx == 0:
+                idx_cluster_map = idx_to_cluster_array
+            else:
+                idx_cluster_map = np.random.permutation(idx_to_cluster_array)
+            #idx_cluster_map = np.random.permutation(idx_to_cluster_array)
+            cmin, cmax = idx_cluster_map.min(), idx_cluster_map.max()
+
+            #cluster_sets = [[c] for c in range(cmin, cmax + 1)] \
+            #               + [[c for c in range(cmin, cmax + 1)]]
+            cluster_sets = [[c] for c in range(cmin, cmax + 1)]
+
+            cluster_treatment='exclude'
+            #cluster_treatment='include'
+            if cluster_treatment=='exclude':
+                # leave out one cluster (instead of just fitting for that one cluster)
+                call = np.arange(cmin,cmax+1)
+                cluster_sets = [np.setdiff1d(call,c) for c in cluster_sets]
+                cluster_sets[-1] = call
+
+            fgsim = np.zeros((cluster_count+1,ecount,ecount))
+            bgsim = np.zeros((cluster_count+1,ecount,ecount))
+            ffsim = np.zeros((cluster_count+1,ecount,ecount))
+            bbsim = np.zeros((cluster_count+1,ecount,ecount))
+            for fidx, cluster_ids in enumerate(cluster_sets):
+                keepids = [i for i in range(len(idx_cluster_map)) if idx_cluster_map[i] in cluster_ids]
+                #print(cluster_ids, keepids)
+                ec = 0
+                for jj in range(ecount):
+                    for ii in range(0,jj):
+                        s1[ec]=efgbgs[jj]
+                        s2[ec]=efgbgs[ii]
+                        x1 = smooth(norm_fg[ii,:,keepids,25:],window_len=3,axis=2)[:,:,2::5]
+                        x2 = smooth(norm_fg[jj,:,keepids,25:],window_len=3,axis=2)[:,:,2::5]
+                        #x1 = norm_fgbg[ii,:,keepids,25:75]#.mean(axis=2,keepdims=True)
+                        #x2 = norm_fgbg[jj,:,keepids,25:75]#.mean(axis=2,keepdims=True)
+                        X = np.concatenate([x1,x2], axis=1)
+                        X = np.transpose(X,[1,0,2])
+                        X = np.reshape(X,[X.shape[0], -1])
+                        Y = np.concatenate([np.zeros(x1.shape[1]),
+                                            np.ones(x2.shape[1])])
+                        x1t = smooth(norm_fgbg[ii,:,keepids,25:],window_len=3,axis=2)[:,:,2::5]
+                        x2t = smooth(norm_fgbg[jj,:,keepids,25:],window_len=3,axis=2)[:,:,2::5]
+                        Xt = np.concatenate([x1t,x2t], axis=1)
+                        Xt = np.transpose(Xt,[1,0,2])
+                        Xt = np.reshape(Xt,[Xt.shape[0], -1])
+                        Yt = np.concatenate([np.zeros(x1t.shape[1]),np.ones(x2t.shape[1])])
+                        clf = LogisticRegression(random_state=0) #, max_iter=500, tol=1e-3)
+                        #clf = RidgeClassifier(random_state=0, solver='svd')
+                        clf.fit(X, Y)
+                        pred[shuffidx, fidx, ec, :] = clf.predict_proba(Xt)[:, 0]
+
+                        E = np.zeros((Xt.shape[0], Xt.shape[0]))
+                        for aa in range(Xt.shape[0]):
+                            for bb in range(Xt.shape[0]):
+                                E[aa,bb]=np.corrcoef(Xt[aa], Xt[bb])[0,1]
+                                #E[aa, bb] = np.std(X[aa,:]-X[bb,:])
+                        np.fill_diagonal(E, np.nan)
+                        #paircc = np.zeros((shuffle_count, cluster_count, int(ecount * (ecount - 1) / 2), 3))
+                        nt = x1t.shape[1]
+                        paircc[shuffidx,fidx,ec,0]=np.nanmean(E[:nt,:nt])
+                        paircc[shuffidx,fidx,ec,1]=np.nanmean(E[nt:,nt:])
+                        paircc[shuffidx,fidx,ec,2]=np.nanmean(E[nt:,:nt])
+                        #N = X.shape[0]
+                        #for ex in range(N):
+                        #    clf = LogisticRegression(random_state=0) #, max_iter=500, tol=1e-3)
+                        #    #clf = RidgeClassifier(random_state=0, solver='svd')
+                        #    fitidx = np.ones(N, dtype=bool)
+                        #    fitidx[ex] = 0
+                        #    clf.fit(X[fitidx], Y[fitidx])
+                        #    #pred[shuffidx, fidx, ec, ex] = clf._predict_proba_lr(X[[ex]])[0, 0]
+                        #    pred[shuffidx, fidx, ec, ex] = clf.predict_proba(X[[ex]])[0, 0]
+                        ec += 1
+
+        mpred = (np.mean(pred[:,:,:,:norm_fgbg.shape[1]], axis=3) + 1 -\
+                np.mean(pred[:,:,  :, norm_fgbg.shape[1]:], axis=3))/2
+        #mpred = np.concatenate((mpred[1:].max(axis=0,keepdims=True),mpred), axis=0)
+        from scipy.special import comb
+
+        for cidx in range(cluster_count):
+            if cidx<cluster_count:
+                mcc=mean_cc_set[estim][cidx,0]
+                mn=cluster_n[cidx]
+            else:
+                mcc=0
+                mn=resp.shape[0]
+            mp = mpred[0,cidx,:]
+            mpmax = mpred[1:,cidx,:].max(axis=0)
+            mpmin = mpred[1:,cidx,:].min(axis=0)
+            pairccmax = paircc[1:,cidx,:].max(axis=0)
+            pairccmin = paircc[1:,cidx,:].min(axis=0)
+            d=pd.DataFrame(
+                {'siteid': siteid, 's1': s1, 's2': s2, 'cidx': cidx,
+                 'mean_cc': mcc, 'cluster_n': cluster_n[cidx],
+                 'mp': mp, 'mpmin': mpmin, 'mpmax': mpmax,
+                 's1cc': paircc[0,cidx,:,0], 's1ccmin': pairccmin[:,0], 's1ccmax': pairccmax[:,0],
+                 's2cc': paircc[0, cidx, :,1], 's2ccmin': pairccmin[:,1], 's2ccmax': pairccmax[:,1],
+                 's1s2cc': paircc[0, cidx, :, 2], 's1s2ccmin': pairccmin[:, 2], 's1s2ccmax': pairccmax[:, 2],
+
+                 })
+            dfdiscrims.append(d)
+
+        #f, ax = plt.subplots(1, cluster_count)
+        #for i, a in enumerate(ax):
+        #    a.imshow(mpred[:, i, :])
+        #f.suptitle(f"{siteid} {ebg}")
+
+        """
+        t1 = np.reshape(norm_fgbg[ii,:,keepids], (norm_fgbg.shape[1],-1))
+                    t2 = np.reshape(norm_fg[jj,:,keepids], (norm_fg.shape[1],-1))
+                    t2a = np.reshape(norm_fg[ii,:,keepids], (norm_fg.shape[1],-1))
+                    t3 = np.reshape(norm_bg[jj,:,keepids], (norm_bg.shape[1],-1))
+                    t3a = np.reshape(norm_bg[ii,:,keepids], (norm_bg.shape[1],-1))
+                    cc_ = t1 @ t2.T / len(keepids)**2
+                    fgsim[fidx,ii,jj]=cc_.mean()
+                    cc_ = t1 @ t3.T / len(keepids)**2
+                    bgsim[fidx,ii,jj]=cc_.mean()
+                    cc_ = t2a @ t2.T / len(keepids)**2
+                    #np.fill_diagonal(cc_,np.nan)
+                    ffsim[fidx,ii,jj]=np.nanmean(cc_)
+                    cc_ = t3a @ t3.T / len(keepids)**2
+                    #np.fill_diagonal(cc_,np.nan)
+                    bbsim[fidx,ii,jj]=np.nanmean(cc_)
+                    fgsim[fidx,ii,jj]=np.corrcoef(t1.flatten(), t2.flatten())[0,1]
+                    bgsim[fidx,ii,jj]=np.corrcoef(t1.flatten(), t3.flatten())[0,1]
+                    ffsim[fidx,ii,jj]=np.corrcoef(t2a.flatten(), t2.flatten())[0,1]
+                    bbsim[fidx,ii,jj]=np.corrcoef(t3a.flatten(), t3.flatten())[0,1]
+                fgsim[fidx,:,jj] /= fgsim[fidx,jj,jj]
+                bgsim[fidx, :, jj] /= bgsim[fidx, jj,jj]
+        f,ax = plt.subplots(1,4)
+        ax[0].imshow(np.concatenate([fgsim[i] for i in range(cluster_count+1)], axis=0))
+        ax[1].imshow(np.concatenate([bgsim[i] for i in range(cluster_count + 1)], axis=0))
+        ax[2].imshow(np.concatenate([ffsim[i] for i in range(cluster_count + 1)], axis=0))
+        ax[3].imshow(np.concatenate([bbsim[i] for i in range(cluster_count + 1)], axis=0))
+        f.suptitle(f"{siteid} {ebg}")
+        """
+
+
+
 df = pd.concat(dfs, ignore_index=True)
 df = df.loc[(df['cluster_n']>4) &
              np.isfinite(df['cc_fg']) & np.isfinite(df['cc_bg']) &
@@ -371,6 +546,7 @@ df = df.loc[(df['cluster_n']>4) &
              (df['mw_fg']<1.0) & (df['mw_bg']<1.0)]
 df['relgain'] = df['mw_fg']-df['mw_bg']
 df['dcc'] = df['cc_fg']-df['cc_bg']
+
 
 ci = df['Binaural Type']=='BG Ipsi, FG Contra'
 cc = df['Binaural Type']=='BG Contra, FG Contra'
@@ -418,3 +594,56 @@ if len(siteids)>1:
     print(f"saving summ fit to {outfile}")
     f.savefig(outfile)
 
+
+
+dfd = pd.concat(dfdiscrims, ignore_index=True)
+dfd['mpdiff']=(dfd['mp']-dfd['mpmin'])/(dfd['mpmax']-dfd['mpmin'])
+dfd['ccdiff']=(dfd['s1s2cc']-dfd['s1s2ccmin'])/(dfd['s1s2ccmax']-dfd['s1s2ccmin'])
+dfd['mpdiff2']=(dfd['mpmin']-dfd['mp'])/(dfd['mpmax']-dfd['mpmin'])
+
+dfd=dfd.merge(df[['siteid','cid','estim','relgain']].loc[df['cid']==0],
+              how='left',left_on=['siteid','s1'], right_on=['siteid','estim'])
+dfd=dfd.merge(df[['siteid','cid','estim','relgain']].loc[df['cid']==0],
+              how='left',left_on=['siteid','s2'], right_on=['siteid','estim'], suffixes=('_1','_2'))
+dfd['mrelgain']=(dfd['relgain_1']+dfd['relgain_2'])/2
+
+f=plt.figure()
+ax=f.add_subplot(4,1,1)
+dfd[['s1s2ccmin','s1s2ccmax']].plot(lw=0.5, ax=ax)
+dfd[['s1s2cc']].plot(color='red', ax=ax)
+dfd[['mean_cc']].plot(ls='--', lw=0.5, ax=ax)
+
+ax=f.add_subplot(4,2,3)
+cc=(dfd['cidx']<=cluster_count) & (np.isfinite(dfd['ccdiff']))
+sns.regplot(dfd.loc[cc], x='mean_cc', y='ccdiff',
+            fit_reg=True, ax=ax, scatter_kws={'s': 3})
+ax.set_title(f"r={np.corrcoef(dfd.loc[cc,'mean_cc'], dfd.loc[cc,'ccdiff'])[0,1]:.3}")
+ax=f.add_subplot(4,2,4)
+sns.regplot(dfd.loc[cc], x='mean_cc', y='mrelgain',
+            fit_reg=True, ax=ax, scatter_kws={'s': 3})
+hi = np.sum(dfd['s1s2cc']>dfd['s1s2ccmax'])
+lo = np.sum(dfd['s1s2cc']<dfd['s1s2ccmin'])
+T=dfd.shape[0]
+mid= T-hi-lo
+print(f'cc lo {lo} {lo/T:.2f}/mid {mid}/hi {hi} {hi/T:.2f}' )
+
+ax=f.add_subplot(4,1,3)
+dfd[['mpmin','mpmax']].plot(lw=0.5, ax=ax)
+dfd[['mp']].plot(color='red', ax=ax)
+dfd[['mean_cc']].plot(ls='--', lw=0.5, ax=ax)
+
+ax=f.add_subplot(4,2,7)
+cc=dfd['cidx']<=cluster_count
+sns.regplot(dfd.loc[cc], x='mean_cc', y='mpdiff',
+            fit_reg=True, ax=ax, scatter_kws={'s': 3})
+ax=f.add_subplot(4,2,8)
+sns.regplot(dfd.loc[cc], x='cluster_n', y='mpdiff',
+            fit_reg=True, ax=ax, scatter_kws={'s': 3})
+
+plt.tight_layout()
+
+hi = np.sum(dfd['mp']>dfd['mpmax'])
+lo = np.sum(dfd['mp']<dfd['mpmin'])
+T=dfd.shape[0]
+mid= T-hi-lo
+print(f'decode lo {lo} {lo/T:.2f}/mid {mid}/hi {hi} {hi/T:.2f}' )
