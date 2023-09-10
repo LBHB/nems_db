@@ -454,8 +454,8 @@ for siteid in siteids:
                         E = np.zeros((Xt.shape[0], Xt.shape[0]))
                         for aa in range(Xt.shape[0]):
                             for bb in range(Xt.shape[0]):
-                                E[aa,bb]=np.corrcoef(Xt[aa], Xt[bb])[0,1]
-                                #E[aa, bb] = np.std(X[aa,:]-X[bb,:])
+                                #E[aa,bb]=np.corrcoef(Xt[aa], Xt[bb])[0,1]
+                                E[aa, bb] = np.std(X[aa,:]-X[bb,:])
                         np.fill_diagonal(E, np.nan)
                         #paircc = np.zeros((shuffle_count, cluster_count, int(ecount * (ecount - 1) / 2), 3))
                         nt = x1t.shape[1]
@@ -600,6 +600,8 @@ dfd = pd.concat(dfdiscrims, ignore_index=True)
 dfd['mpdiff']=(dfd['mp']-dfd['mpmin'])/(dfd['mpmax']-dfd['mpmin'])
 dfd['ccdiff']=(dfd['s1s2cc']-dfd['s1s2ccmin'])/(dfd['s1s2ccmax']-dfd['s1s2ccmin'])
 dfd['mpdiff2']=(dfd['mpmin']-dfd['mp'])/(dfd['mpmax']-dfd['mpmin'])
+dfd['s1s2shmean']=(dfd['s1s2ccmin'] + dfd['s1s2ccmax'])/2
+dfd['ccdiff2']=dfd['s1s2cc']-dfd['s1s2shmean']
 
 dfd=dfd.merge(df[['siteid','cid','estim','relgain']].loc[df['cid']==0],
               how='left',left_on=['siteid','s1'], right_on=['siteid','estim'])
@@ -613,14 +615,20 @@ dfd[['s1s2ccmin','s1s2ccmax']].plot(lw=0.5, ax=ax)
 dfd[['s1s2cc']].plot(color='red', ax=ax)
 dfd[['mean_cc']].plot(ls='--', lw=0.5, ax=ax)
 
-ax=f.add_subplot(4,2,3)
+ax=f.add_subplot(4,3,4)
 cc=(dfd['cidx']<=cluster_count) & (np.isfinite(dfd['ccdiff']))
 sns.regplot(dfd.loc[cc], x='mean_cc', y='ccdiff',
             fit_reg=True, ax=ax, scatter_kws={'s': 3})
 ax.set_title(f"r={np.corrcoef(dfd.loc[cc,'mean_cc'], dfd.loc[cc,'ccdiff'])[0,1]:.3}")
-ax=f.add_subplot(4,2,4)
-sns.regplot(dfd.loc[cc], x='mean_cc', y='mrelgain',
+ax=f.add_subplot(4,3,5)
+sns.regplot(dfd.loc[cc], x='mean_cc', y='ccdiff2',
             fit_reg=True, ax=ax, scatter_kws={'s': 3})
+ax.set_title(f"r={np.corrcoef(dfd.loc[cc,'mean_cc'], dfd.loc[cc,'ccdiff2'])[0,1]:.3}")
+ax=f.add_subplot(4,3,6)
+sns.scatterplot(dfd.loc[cc], x='s1s2shmean', y='s1s2cc', ax=ax, s=5)
+ax.plot([0,1], [0,1], 'k--', lw=0.5)
+
+
 hi = np.sum(dfd['s1s2cc']>dfd['s1s2ccmax'])
 lo = np.sum(dfd['s1s2cc']<dfd['s1s2ccmin'])
 T=dfd.shape[0]
