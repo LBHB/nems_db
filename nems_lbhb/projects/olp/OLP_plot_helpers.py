@@ -267,7 +267,7 @@ def get_resp_and_stim_info(cellid_and_stim_str, df_filtered):
     animal_id = cellid[:3]
 
     if animal_id == 'HOD' or animal_id == 'TBR':
-        batch = 333
+        batch = 328
     elif animal_id == 'ARM':
         # got to code in for batch to differentiate between A1 and PEG batches,
         # where can I get that info above?
@@ -918,6 +918,8 @@ def plot_model_diagram_parts(cellid_and_stim_str, df_filtered):
     for e, c, s, a in zip(r_mean.keys(), colors, styles, axnum):
         ax[a].plot(time, sf.gaussian_filter1d(r_mean[e], sigma=1)
                    * fs, color=c, linestyle=s, label=e)
+        ax[a].spines['top'].set_visible(True), ax[a].spines['right'].set_visible(True)
+
     ax[5].legend((f"BG+FG Combo",
                   f"Model Prediction, r={np.around(this_cell_stim.r, 2)}"), fontsize=6)
     # ax[2].set_title(f"{cellid_and_stim_str} sup:{this_cell_stim['suppression']}")
