@@ -54,7 +54,24 @@ def fb_weights(rfg, rbg, rfgbg, spontbins=50):
 
 
 def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
+    """
+    returns cell_epoch_df DataFrame with many columns
     
+    'BG + FG', 'BG', 'FG' : FG/BG pairing info
+    'Synth Type', 'Binaural Type', 'Dynamic Type', 'SNR': other OLP parameters
+    'cellid', 'area', 'iso': unit name, area and isolation
+    'cellstd' : std of response across all stimuli
+    'rfg', 'rbg' : mean evoked fg, bg response
+    'p1fg', 'p1bg' : mean response predicted by model 1 (CNN)
+    'p2fg', 'p2bg' : mean response predicted by model 2 (LN)
+    'rwfg', 'rwbg', 'p1wfg', 'p1wbg', 'p2wfg', 'p2wbg' : fg, bg weights for actual and predicted response
+    'rw0','rwfg0', 'rwbg0' : actual weights for 1/2 of the reps--used to calculate noise levels in actual response
+    'reps', number of times fgbg stimulus was presented
+    'sf', : How predicted weights should be scaled to account for noise affecting weights of actual response
+    'CNN', 'LN' : prediction correlation for each model
+    'CNN_floor', 'LN_floor' : noise floor on prediction (shuffled in time). "good" models have prediction correlation> noise floor
+    
+    """
     if modelnames is None:
         modelnames = [
             "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
@@ -65,7 +82,8 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     cellid = [c for s,c in zip(siteids, cellids) if s==siteid]
     
     df = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=["CNN","LN"])
-    #df = df.reset_index()
+    dffloor = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=["CNN","LN"], stat='r_floor')
+    df = df.merge(dffloor, how='inner', left_index=True, right_index=True, suffixes=('','_floor'))
 
     try:
         di = baphy_io.get_depth_info(siteid=siteid)
@@ -203,13 +221,13 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     cell_epoch_df['sf']=sf
 
     # link to area labels
-    cell_epoch_df = cell_epoch_df.merge(dfsite[['area','iso','CNN','LN']], how='left', left_on='cellid',
+    cell_epoch_df = cell_epoch_df.merge(dfsite[['area','iso','CNN','LN','CNN_floor','LN_floor']], how='left', left_on='cellid',
                                         right_index=True)
 
     return cell_epoch_df, rec, rec2
 
 
-def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0):
+def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0, exclude_low_pred=True):
     
     # original
     #minresp, mingain, maxgain = 0.05, 0, 2.0
@@ -224,48 +242,60 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0):
         (cell_epoch_df['p1wfg']<maxgain) & (cell_epoch_df['p1wbg']<maxgain) & \
         (cell_epoch_df['p2wfg']>mingain) & (cell_epoch_df['p2wbg']>mingain) & \
         (cell_epoch_df['p2wfg']<maxgain) & (cell_epoch_df['p2wbg']<maxgain)
+    
+    if exclude_low_pred:
+        keepidx= (cell_epoch_df['LN']>cell_epoch_df['LN_floor']) & (cell_epoch_df['CNN']>cell_epoch_df['CNN_floor'])
+        rFB=(rFB & keepidx)
+            
     rCC = cell_epoch_df['Binaural Type']=='BG Contra, FG Contra'
     rIC = cell_epoch_df['Binaural Type']=='BG Ipsi, FG Contra'
     labels=['BG Contra, FG Contra','BG Ipsi, FG Contra']
     print('valid n', rFB.sum(), 'out of', len(rFB), 'frac: ', np.round(rFB.mean(),3))
+    
+    if rIC.sum()==0:
+        rrset=[rFB]
+        figlabels=['mono']
+    else:
+        rrset= [rFB & rCC, rFB & rIC]
+        figlabels=['CC','CI']
+    for rr, figlabel in zip(rrset, figlabels):
+        f, axs = plt.subplots(2, 3, figsize=(8, 6))
+        labels = ['CNN pred', 'LN pred']
+        prefs = ['r', 'p1', 'p2']
+        for pre, ax, label in zip(prefs[1:], axs, labels):
+            ax[0].plot([0, 1], [0, 1], 'k--')
+            ax[1].plot([0, 1], [0, 1], 'k--')
+            ax[2].plot([-1.2, 1], [-1.2, 1], 'k--')
 
-    f, axs = plt.subplots(2, 3, figsize=(8, 6))
-    labels = ['CNN pred', 'LN pred']
-    prefs = ['r', 'p1', 'p2']
-    for pre, ax, label in zip(prefs[1:], axs, labels):
-        ax[0].plot([0, 1], [0, 1], 'k--')
-        ax[1].plot([0, 1], [0, 1], 'k--')
-        ax[2].plot([-1.2, 1], [-1.2, 1], 'k--')
+            fr = cell_epoch_df.loc[rr, 'rwfg']
+            fp = cell_epoch_df.loc[rr, pre + 'wfg'] * cell_epoch_df.loc[rr, 'sf']
 
-        fr = cell_epoch_df.loc[rFB, 'rwfg']
-        fp = cell_epoch_df.loc[rFB, pre + 'wfg'] * cell_epoch_df.loc[rFB, 'sf']
+            br = cell_epoch_df.loc[rr, 'rwbg']
+            bp = cell_epoch_df.loc[rr, pre + 'wbg'] * cell_epoch_df.loc[rr, 'sf']
 
-        br = cell_epoch_df.loc[rFB, 'rwbg']
-        bp = cell_epoch_df.loc[rFB, pre + 'wbg'] * cell_epoch_df.loc[rFB, 'sf']
+            dr = fr - br
+            dp = fp - bp
+            ax[0].scatter(fr, fp, s=2)
+            ax[0].set_title(f"r={np.corrcoef(fr, fp)[0, 1]:.3f} mse={np.std(fr-fp)/np.std(fr):.3f}")
+            ax[0].set_xlim([-0.1, 1.5])
+            ax[0].set_ylim([-0.1, 1.5])
+            ax[0].set_ylabel(label + ' w_fg')
+            ax[0].set_xlabel(f'Actual w_fg ({fr.mean():.3f})')
 
-        dr = fr - br
-        dp = fp - bp
-        ax[0].scatter(fr, fp, s=2)
-        ax[0].set_title(f"r={np.corrcoef(fr, fp)[0, 1]:.3f} mse={np.std(fr-fp)/np.std(fr):.3f}")
-        ax[0].set_xlim([-0.1, 1.5])
-        ax[0].set_ylim([-0.1, 1.5])
-        ax[0].set_ylabel(label + ' w_fg')
-        ax[0].set_xlabel(f'Actual w_fg ({fr.mean():.3f})')
+            ax[1].scatter(br, bp, s=2)
+            ax[1].set_xlim([-0.1, 1.5])
+            ax[1].set_ylim([-0.1, 1.5])
+            ax[1].set_title(f"r={np.corrcoef(br, bp)[0, 1]:.3f} mse={np.std(br-bp)/np.std(br):.3f}")
+            ax[1].set_ylabel(label + ' w_bg')
+            ax[1].set_xlabel(f'Actual w_bg ({br.mean():.3f})')
 
-        ax[1].scatter(br, bp, s=2)
-        ax[1].set_xlim([-0.1, 1.5])
-        ax[1].set_ylim([-0.1, 1.5])
-        ax[1].set_title(f"r={np.corrcoef(br, bp)[0, 1]:.3f} mse={np.std(br-bp)/np.std(br):.3f}")
-        ax[1].set_ylabel(label + ' w_bg')
-        ax[1].set_xlabel(f'Actual w_bg ({br.mean():.3f})')
-
-        ax[2].scatter(dr, dp, s=2)
-        ax[2].set_xlim([-1.2, 1])
-        ax[2].set_ylim([-1.2, 1])
-        ax[2].set_title(f"r={np.corrcoef(dr, dp)[0, 1]:.3f} mse={np.std(dr-dp)/np.std(dr):.3f}")
-        ax[2].set_ylabel(f'{label} relative gain ({dp.mean():.3f})')
-        ax[2].set_xlabel(f'Actual relative gain ({dr.mean():.3f})')
-    f.suptitle(f'{siteid} ({area})')
-    plt.tight_layout()
+            ax[2].scatter(dr, dp, s=2)
+            ax[2].set_xlim([-1.2, 1])
+            ax[2].set_ylim([-1.2, 1])
+            ax[2].set_title(f"r={np.corrcoef(dr, dp)[0, 1]:.3f} mse={np.std(dr-dp)/np.std(dr):.3f}")
+            ax[2].set_ylabel(f'{label} relative gain ({dp.mean():.3f})')
+            ax[2].set_xlabel(f'Actual relative gain ({dr.mean():.3f})')
+        f.suptitle(f'{siteid} {figlabel} ({area})')
+        plt.tight_layout()
     
     return f
