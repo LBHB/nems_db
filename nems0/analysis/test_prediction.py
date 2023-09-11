@@ -134,7 +134,7 @@ def standard_correlation(est, val, modelspec=None, modelspecs=None, rec=None,
             use_mask = False
         r_test[:,i], se_test[:,i] = nmet.j_corrcoef(v, 'pred', output_name)
         r_fit[:,i], se_fit[:,i] = nmet.j_corrcoef(e, 'pred', output_name)
-        r_floor[:,i] = nmet.r_floor(v, 'pred', output_name)
+        r_floor[:,i] = nmet.r_floor(v, pred_name='pred',  resp_name=output_name)
 
         mse_test[:,i], se_mse_test[:,i] = nmet.j_nmse(v, 'pred', output_name)
         mse_fit[:,i], se_mse_fit[:,i] = nmet.j_nmse(e, 'pred', output_name)
@@ -224,7 +224,7 @@ def correlation_per_model(est, val, modelspecs, rec=None):
     mse_fits = [nmet.nmse(e, 'pred', 'resp') for e in est]
     ll_fits = [nmet.likelihood_poisson(e, 'pred', 'resp') for e in est]
 
-    r_floors = [nmet.r_floor(v, 'pred', 'resp') for v in val]
+    r_floors = [nmet.r_floor(v, pred_name='pred', resp_name='resp') for v in val]
     if rec is None:
         r_ceilings = [None]*len(r_floors)
     else:

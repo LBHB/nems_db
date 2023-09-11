@@ -82,24 +82,28 @@ def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=
         times file. This results in the first trial having a start timestamp of
         0.
     '''
+
+    temp_timestamps = timestamps
     if rasterfs is not None:
-        timestamps = np.round(timestamps * rasterfs) / rasterfs
+        temp_timestamps = np.round(temp_timestamps * rasterfs) / rasterfs
 
     n_baphy = events['Trial'].max()
-    n_oe = len(timestamps)
+    n_oe = len(temp_timestamps)
     if n_baphy != n_oe:
         mesg = f'Number of trials in BAPHY ({n_baphy}) and ' \
                'OpenEphys ({n_oe}) do not match'
         raise ValueError(mesg)
 
     if baphy_legacy_format:
-        timestamps = timestamps - timestamps[0]
+        temp_timestamps = temp_timestamps - temp_timestamps[0]
 
     events = events.copy()
-    for i, timestamp in enumerate(timestamps):
+    for i, timestamp in enumerate(temp_timestamps):
         m = events['Trial'] == i + 1
         events.loc[m, ['start', 'end']] += timestamp
-    return events
+    event_temp = events
+
+    return event_temp
 
 
 ###############################################################################
@@ -129,6 +133,154 @@ def format_finder(openephys_folder):
             format = ['openephys']
     return format
 
+def probe_finder(openephys_folder):
+    """little function to find the names of each probe a recording was made with OE version 0.6.0 using neuropixels"""
+    # find version of OE. This method will probably only be supported by version 0.6.0 or up.
+    OE_version = openephys_gui_version(openephys_folder)
+    settings_file = file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    # check whether or not the probe is a neuropixel. If not, assume UCLA
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        probe_type = 'NPX'
+    else:
+        probe_type = 'UCLA'
+
+    # only started doing two probe recordings with version 0.6.0 - not worth time to check for probes in past versions
+    if OE_version[1] >= 6:
+        data_streams = list(info['SIGNALCHAIN']['PROCESSOR']['Neuropix-PXI']['STREAM'].keys())
+        # get data sources, i.e. probes
+        stream_sources = [stream.split('-')[0] for stream in data_streams]
+        # get ordered list of unique sources - probes
+        used = set()
+        probes = [probe for probe in stream_sources if probe not in used and (used.add(probe) or True)]
+        probes.sort()
+    else:
+        print("Version has not been checked for Probe numbering...assuming only 1 probe")
+        probes = ['ProbeA']
+
+    return probes, probe_type
+
+def npx_channel_map_finder(openephys_folder):
+    """Quick copy of channel finding method in data extraction tools. Returns the OE channel number and xy position of Probe(s) found in settings xml"""
+    # check version and file format and grab recording settings
+    version = openephys_gui_version(openephys_folder)
+    format = format_finder(openephys_folder)
+    settings_file = file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        probe_type = 'NPX'
+        if version[1] < 6:
+            selected_chans = []
+            # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
+            # recorded channels
+            channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
+            channel_names = list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
+            channel_nums = [channel_info[ch]['number'] for ch in channel_names]
+            LFP_channel_names = [ch for ch in channel_names if ch[:3] == 'LFP']
+            LFP_channel_nums = [channel_info[ch]['number'] for ch in LFP_channel_names]
+            channel_state = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL']
+            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if
+                                        channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+            # LFP channel nums continue counting where AP left off..but xy pos only had 384 electrodes...subtract difference?
+            enabled_LFP_channel_names = ['CH' + str(int(ch) - 384) for ch in enabled_LFP_channel_nums]
+            electrode_xpos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            electrode_ypos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            if len(electrode_xpos) < 384:
+                raise ValueError(
+                    "OE GUI METADATA is missing neuropixels channel position data...hardcode the settings.xml")
+            enabled_LFP_xpos = {k: electrode_xpos[k] for k in enabled_LFP_channel_names if k in electrode_xpos}
+            enabled_LFP_ypos = {k: electrode_ypos[k] for k in enabled_LFP_channel_names if k in electrode_ypos}
+            if type(chans) is tuple:
+                chans = list(chans)
+            selected_chans.append(chans + 1)
+            # given that all old probe recordings only used the first bank of electrodes...physical chan pos is selected
+            selected_chans_physical = selected_chans
+            selected_chans_xypos = {str(ch): [enabled_LFP_xpos['CH' + str(ch)], enabled_LFP_ypos['CH' + str(ch)]] for ch
+                                    in chans if 'CH' + str(ch) in electrode_xpos}
+            probe = ['NPX']
+
+        elif version[1] >= 6:
+            # check to see if there are mulitple probes
+            try:
+                # make a list of ordered unique probes
+                # get data streams
+                data_streams = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['STREAM'].keys())
+                # get data sources, i.e. probes
+                stream_sources = [stream.split('-')[0] for stream in data_streams]
+                # get ordered list of unique sources - probes
+                used = set()
+                probes = [probe for probe in stream_sources if probe not in used and (used.add(probe) or True)]
+                probes.sort()
+            except:
+                print("No probes found - hardcoding to ProbeA")
+                probes = ['ProbeA']
+
+            # Get slot numbers in NP_PROBE editor. Should be the same as ordering as probe names A/B/etc based on lowest slot channels
+            editor_keys = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'].keys())
+            probe_editor_names = [probe_num for probe_num in editor_keys if 'NP_PROBE' in probe_num]
+            probe_ports = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_num]['port']) for probe_num in
+                           probe_editor_names]
+            # assuming the lowest slot number is equivalent to the letter assignment of probe names we'll map between the probes and the editor to get channel positions
+            probe_ports, probe_editor_names = (list(t) for t in zip(*sorted(zip(probe_ports, probe_editor_names))))
+
+            # check to make sure number of probes identified in editor and streams is the same
+            if len(probe_editor_names) != len(probes):
+                raise UserWarning("number of probes identified by streams and OE editor do not match")
+            else:
+                selected_chans = []
+                selected_chans_xypos = []
+                selected_chans_physical = []
+                for probe, probe_editor_name in zip(probes, probe_editor_names):
+                    # sort channels and get x/y pos
+                    channel_nums = list(
+                        info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys())
+                    channel_bank = [
+                        int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'][ch_key]) for
+                        ch_key in
+                        info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys()]
+                    ch_prefix = channel_nums[0][:2]
+                    # get raw channel numbers in order to be used with bank info for physical channel assignment
+                    oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
+                    # correct for physical location by using channel bank
+                    ch_nums_physical_corrected = np.array(
+                        [ch + bnk * 384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
+                    # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
+                    # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
+                    zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
+                    sorted_oe_phys = sorted(zipped_oe_phys)
+                    sorted_oe_phys_tupes = zip(*sorted_oe_phys)
+                    sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
+                    # get keys in sorted order data will be loaded in
+                    sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
+                    # get channel xy pos in oe number scheme
+                    ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name][
+                        'ELECTRODE_XPOS']
+                    ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name][
+                        'ELECTRODE_YPOS']
+                    # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
+                    channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
+                    channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
+                    # for channel subset selection in baphy_experiment - get recording method (rawchans=)
+                    all_chans = sorted_oe
+                    idx = all_chans.tolist()
+                    recChans1 = sorted_oe + 1
+                    recChans_physical = sorted_physical + 1
+                    selected_chans.append(np.take(recChans1, idx))
+                    selected_chans_physical_temp = np.take(recChans_physical, idx)
+                    selected_chans_physical.append(selected_chans_physical_temp)
+                    selected_chans_xpos = np.take(channel_xpos, idx)
+                    selected_chans_ypos = np.take(channel_ypos, idx)
+                    selected_chans_xypos.append({probe:
+                        {str(ch): [selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in
+                         zip(selected_chans_physical_temp, range(len(selected_chans_physical_temp)))}})
+
+            probe = probes
+    return selected_chans_xypos
 
 def file_finder(root_folder, filename):
     """
@@ -350,6 +502,8 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
     """
     data = []
     channels = []
+    timestamps = []
+    header = []
     for i in range(len(continuous_data)):
         if bool(continuous_data[i]):
             try:
@@ -362,9 +516,10 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
                             channels.append(
                                 [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['names']))])
-                            timestamps = continuous_data[i][0].timestamps
-                            header = continuous_data[i][0].metadata
-                            header['sampleRate'] = header['sample_rate']
+                            timestamps.append(continuous_data[i][0].timestamps)
+                            tempheader = continuous_data[i][0].metadata
+                            tempheader['sampleRate'] = tempheader['sample_rate']
+                            header.append(tempheader)
                         else:
                             continue
                     else:
@@ -374,9 +529,10 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
                             channels.append(
                                 [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['names']))])
-                            timestamps = continuous_data[i][0].timestamps
-                            header = continuous_data[i][0].metadata
-                            header['sampleRate'] = header['sample_rate']
+                            timestamps.append(continuous_data[i][0].timestamps)
+                            tempheader = continuous_data[i][0].metadata
+                            tempheader['sampleRate'] = tempheader['sample_rate']
+                            header.append(tempheader)
                         else:
                             continue
                 elif version[1] >= 6:
@@ -388,9 +544,10 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
                             channels.append(
                                 [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
-                            timestamps = continuous_data[i][0].timestamps
-                            header = continuous_data[i][0].metadata
-                            header['sampleRate'] = header['sample_rate']
+                            timestamps.append(continuous_data[i][0].timestamps)
+                            tempheader = continuous_data[i][0].metadata
+                            tempheader['sampleRate'] = tempheader['sample_rate']
+                            header.append(tempheader)
                         else:
                             continue
                     else:
@@ -400,9 +557,10 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
                             channels.append(
                                 [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
                                  for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
-                            timestamps = continuous_data[i][0].timestamps
-                            header = continuous_data[i][0].metadata
-                            header['sampleRate'] = header['sample_rate']
+                            timestamps.append(continuous_data[i][0].timestamps)
+                            tempheader = continuous_data[i][0].metadata
+                            tempheader['sampleRate'] = tempheader['sample_rate']
+                            header.append(tempheader)
                         else:
                             continue
             except:
@@ -413,8 +571,28 @@ def continuous_binary_data_unpacking(continuous_data, version, mua):
     # timestamps = continuous_data[0][0].timestamps
     # header = continuous_data[0][0].metadata
     # header['sampleRate'] = header['sample_rate']
-    data = np.vstack(data)
-    channels = np.concatenate(channels)
+    # nanpad both data sources to be the same length
+    # data_lengths = []
+    # for i in range(len(data)):
+    #     data_lengths.append(data[i].shape[1])
+    # # check to see if all data sources are the same length and if they aren't nan pad all data at the end to length of longest stream
+    # if len(set(data_lengths)) <= 1:
+    #     # data = np.vstack(data)
+    #     pass
+    # else:
+    #     padded_data = []
+    #     max_d_stream = np.where(np.array(data_lengths) == max(data_lengths))[0]
+    #     for i in range(len(data)):
+    #         if (data_lengths[max_d_stream[0]] - data[i].shape[1]) > 0:
+    #             nan_pad = np.empty((data[i].shape[0], data_lengths[max_d_stream[0]] - data[i].shape[1]))
+    #             nan_pad[:] = np.nan
+    #             temp_data = np.hstack((data[i], nan_pad))
+    #         else:
+    #             temp_data = data[i]
+    #         padded_data.append(temp_data)
+    #     # data = np.vstack(padded_data)
+    #     data = padded_data
+    # channels = np.concatenate(channels)
 
     return {
         'header': header,
@@ -440,8 +618,33 @@ def load_trial_starts_openephys_master(openephys_folder):
         df = data[0]
         df.rename(columns={'timestamp':'timestamps'}, inplace=True)
         df['stream_type'] = df['stream_name'].str.split('-').str[1]
+        df['probe_name'] = df['stream_name'].str.split('-').str[0]
         #ts = df.query('(line == 1) & (state == 1)')
-        ts = df.query("line == 1 and state == 1 and stream_type == 'LFP'")
+        if len(df['probe_name'].unique()) > 1:
+            prb_ts = {}
+            for prb_name in df['probe_name'].unique():
+                temp_df = df.query("line == 1 and state == 1 and stream_type == 'LFP' and probe_name == @prb_name")
+                prb_ts[prb_name] = temp_df['timestamps'].values
+                # warn user if number of probes is greater than 1
+            # find max pairwise difference in probe_timestamps
+            diff_matrix = np.empty((len(prb_ts.keys()), len(prb_ts.keys())))
+            for i, prb_i in enumerate(prb_ts.keys()):
+                for j, prb_j in enumerate(prb_ts.keys()):
+                    diff_matrix[i, j] = max(np.abs(prb_ts[prb_i] - prb_ts[prb_j]))
+            max_ts_diff = np.round(np.max(diff_matrix)*1000, decimals=2)
+            import warnings
+            warnings.warn("Number of probes is greater than 1. Only using timestamps from 1 probe. Max ts diff = " + str(max_ts_diff) + "ms")
+            if max_ts_diff > 2:
+                raise ValueError("Probe ts difference is greater than 1ms. Difference might start impacting alignment")
+        # now only finding timestamps for single stream, the changes in timestamp values between streams seems neglible
+        ts = df.query("line == 1 and state == 1 and stream_type == 'LFP' and probe_name == 'ProbeA'")
+
+        # after looking at it, the timestamps for each stream seem small enough in difference that adding multiple timestamps seems unneccisarily complex.
+        # timestamp_dict = {}
+        # if len(ts['stream_name'].unique()) > 1:
+        #     print('more than one stream...making list of stream event timestamp arrays')
+        #     for stream in ts['stream_name'].unique():
+        #         timestamp_dict[stream] = ts['timestamps'][ts['stream_name'] == stream].values
         return ts['timestamps'].values
 
     elif 6 > version[1] >= 5:
@@ -603,7 +806,7 @@ def gunzip(source, destination, buffer_size=200*1024*1024):
         with open(destination, 'wb') as d:
             shutil.copyfileobj(s, d, buffer_size)
 
-def extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+def extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath, mua):
     """
     Should take a folder and extract the continuous data for open_ephys files and binary files that are tar or gzip compressed to local machine.
     If recording is a neuropixel recording, only locally extract the LFP files which are smaller. Return parent of files, list of filenames, and list of filepaths.
@@ -698,47 +901,130 @@ def extract_local(version, format, chans, experiment_openephys_folder, experimen
         #     else:
         #         continue
         gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/*.gz', recursive=True)
-        for f in gz_file_paths:
-            if os.path.dirname(f).endswith('-LFP'):
-                if os.path.basename(f).split('.')[0] == 'continuous':
-                    gz_LFP_file = f
-                    gz_LFP_filepath = os.path.dirname(f)
-                elif os.path.basename(f).split('.')[0] == 'timestamps':
-                    gz_LFP_timestamps_file = f
-                    gz_LFP_timestamps_filepath = os.path.dirname(f)
-                elif os.path.basename(f).split('.')[0] == 'sample_numbers':
-                    gz_LFP_sample_numbers_file = f
-                    gz_LFP_sample_numbers_filepath = os.path.dirname(f)
-            else:
-                continue
-        # make a temp path that copies all non-gzipped files (new open-ephys loader detects record node paths/timestamps/etc. and crashes if path structure doesn't match)
-        gz_path_split = gz_LFP_file.split('/')
-        source = '/'.join(gz_path_split[:9])
-        tmp_destination = tmppath / '/'.join(gz_path_split[7:9])
-        shutil.copytree(source, tmp_destination, ignore=shutil.ignore_patterns('*.gz'), dirs_exist_ok=True)
-        
-        # make new file destination to unzip raw LFP data/timestamps/sample_numbers
-        tmp_gz_path = tmppath / '/'.join(gz_path_split[7:-1])
-        continuous_newfile = tmp_gz_path / 'continuous.dat'
-        ts_newfile = tmp_gz_path / 'timestamps.npy'
-        smp_num_newfile = tmp_gz_path / 'sample_numbers.npy'
 
-        #set write permissions to new temp folder
-        log.info(f"Temp unzipping raw data to {tmp_gz_path}")
-        os.umask(0)
-        os.makedirs(tmp_gz_path, mode=0o777, exist_ok=True)
+        if mua:
+            # If multiple probes, will have multiple LFP files. Pack into list.
+            gz_AP_files = []
+            gz_AP_file_paths = []
+            gz_AP_timestamps_files = []
+            gz_AP_timestamps_filepaths = []
+            gz_AP_sample_numbers_files = []
+            gz_AP_sample_numbers_filepaths = []
 
-        # gunzip .gz files to new tmp destination
-        gunzip(gz_LFP_file, continuous_newfile)
-        gunzip(gz_LFP_timestamps_file, ts_newfile)
-        gunzip(gz_LFP_sample_numbers_file, smp_num_newfile)
-        for root, dirs, files in os.walk(tmp_destination):
-            for d in dirs:
-                os.chmod(os.path.join(root, d), 0o777)
-            for f in files:
-                os.chmod(os.path.join(root, f), 0o777)
-        # point to the local folder
-        openephys_folder = tmp_destination
+            for f in gz_file_paths:
+                if os.path.dirname(f).endswith('-AP'):
+                    if os.path.basename(f).split('.')[0] == 'continuous':
+                        # gz_LFP_file = f
+                        # gz_LFP_filepath = os.path.dirname(f)
+                        gz_AP_files.append(f)
+                        gz_AP_file_paths.append(os.path.dirname(f))
+                    elif os.path.basename(f).split('.')[0] == 'timestamps':
+                        # gz_LFP_timestamps_file = f
+                        # gz_LFP_timestamps_filepath = os.path.dirname(f)
+                        gz_AP_timestamps_files.append(f)
+                        gz_AP_timestamps_filepaths.append(os.path.dirname(f))
+                    elif os.path.basename(f).split('.')[0] == 'sample_numbers':
+                        # gz_LFP_sample_numbers_file = f
+                        # gz_LFP_sample_numbers_filepath = os.path.dirname(f)
+                        gz_AP_sample_numbers_files.append(f)
+                        gz_AP_sample_numbers_filepaths.append(os.path.dirname(f))
+                else:
+                    continue
+            # make a temp path that copies all non-gzipped files (new open-ephys loader detects record node paths/timestamps/etc. and crashes if path structure doesn't match)
+            gz_path_split = gz_AP_files[0].split('/')
+            source = '/'.join(gz_path_split[:9])
+            tmp_destination = tmppath / '/'.join(gz_path_split[7:9])
+            shutil.copytree(source, tmp_destination, ignore=shutil.ignore_patterns('*.gz'), dirs_exist_ok=True)
+
+            # for each LFP file in recording create a new temp file location and gunzip the files to that path
+            for gz_AP_file, gz_AP_timestamps_file, gz_AP_sample_numbers_file in zip(gz_AP_files,
+                                                                                       gz_AP_timestamps_files,
+                                                                                       gz_AP_sample_numbers_files):
+                gz_path_split = gz_AP_file.split('/')
+                # make new file destination to unzip raw LFP data/timestamps/sample_numbers
+                tmp_gz_path = tmppath / '/'.join(gz_path_split[7:-1])
+                continuous_newfile = tmp_gz_path / 'continuous.dat'
+                ts_newfile = tmp_gz_path / 'timestamps.npy'
+                smp_num_newfile = tmp_gz_path / 'sample_numbers.npy'
+
+                # set write permissions to new temp folder
+                log.info(f"Temp unzipping raw data to {tmp_gz_path}")
+                os.umask(0)
+                os.makedirs(tmp_gz_path, mode=0o777, exist_ok=True)
+
+                # gunzip .gz files to new tmp destination
+                gunzip(gz_AP_file, continuous_newfile)
+                gunzip(gz_AP_timestamps_file, ts_newfile)
+                gunzip(gz_AP_sample_numbers_file, smp_num_newfile)
+            # go back through and make sure all permissions are given to new directory
+            for root, dirs, files in os.walk(tmp_destination):
+                for d in dirs:
+                    os.chmod(os.path.join(root, d), 0o777)
+                for f in files:
+                    os.chmod(os.path.join(root, f), 0o777)
+            # point to the local folder
+            openephys_folder = tmp_destination
+
+        else:
+            # If multiple probes, will have multiple LFP files. Pack into list.
+            gz_LFP_files = []
+            gz_LFP_file_paths = []
+            gz_LFP_timestamps_files = []
+            gz_LFP_timestamps_filepaths = []
+            gz_LFP_sample_numbers_files = []
+            gz_LFP_sample_numbers_filepaths = []
+
+            for f in gz_file_paths:
+                if os.path.dirname(f).endswith('-LFP'):
+                    if os.path.basename(f).split('.')[0] == 'continuous':
+                        # gz_LFP_file = f
+                        # gz_LFP_filepath = os.path.dirname(f)
+                        gz_LFP_files.append(f)
+                        gz_LFP_file_paths.append(os.path.dirname(f))
+                    elif os.path.basename(f).split('.')[0] == 'timestamps':
+                        # gz_LFP_timestamps_file = f
+                        # gz_LFP_timestamps_filepath = os.path.dirname(f)
+                        gz_LFP_timestamps_files.append(f)
+                        gz_LFP_timestamps_filepaths.append(os.path.dirname(f))
+                    elif os.path.basename(f).split('.')[0] == 'sample_numbers':
+                        # gz_LFP_sample_numbers_file = f
+                        # gz_LFP_sample_numbers_filepath = os.path.dirname(f)
+                        gz_LFP_sample_numbers_files.append(f)
+                        gz_LFP_sample_numbers_filepaths.append(os.path.dirname(f))
+                else:
+                    continue
+            # make a temp path that copies all non-gzipped files (new open-ephys loader detects record node paths/timestamps/etc. and crashes if path structure doesn't match)
+            gz_path_split = gz_LFP_files[0].split('/')
+            source = '/'.join(gz_path_split[:9])
+            tmp_destination = tmppath / '/'.join(gz_path_split[7:9])
+            shutil.copytree(source, tmp_destination, ignore=shutil.ignore_patterns('*.gz'), dirs_exist_ok=True)
+
+            # for each LFP file in recording create a new temp file location and gunzip the files to that path
+            for gz_LFP_file, gz_LFP_timestamps_file, gz_LFP_sample_numbers_file in zip(gz_LFP_files, gz_LFP_timestamps_files, gz_LFP_sample_numbers_files):
+                gz_path_split = gz_LFP_file.split('/')
+                # make new file destination to unzip raw LFP data/timestamps/sample_numbers
+                tmp_gz_path = tmppath / '/'.join(gz_path_split[7:-1])
+                continuous_newfile = tmp_gz_path / 'continuous.dat'
+                ts_newfile = tmp_gz_path / 'timestamps.npy'
+                smp_num_newfile = tmp_gz_path / 'sample_numbers.npy'
+
+                #set write permissions to new temp folder
+                log.info(f"Temp unzipping raw data to {tmp_gz_path}")
+                os.umask(0)
+                os.makedirs(tmp_gz_path, mode=0o777, exist_ok=True)
+
+                # gunzip .gz files to new tmp destination
+                gunzip(gz_LFP_file, continuous_newfile)
+                gunzip(gz_LFP_timestamps_file, ts_newfile)
+                gunzip(gz_LFP_sample_numbers_file, smp_num_newfile)
+            # go back through and make sure all permissions are given to new directory
+            for root, dirs, files in os.walk(tmp_destination):
+                for d in dirs:
+                    os.chmod(os.path.join(root, d), 0o777)
+                for f in files:
+                    os.chmod(os.path.join(root, f), 0o777)
+            # point to the local folder
+            openephys_folder = tmp_destination
 
     return openephys_folder
 
@@ -768,13 +1054,15 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
     
     # extract data to tmp local folder and return local folder path
     tmppath = extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile,
-                            experiment_openephys_tarfile_relpath)
-    
+                            experiment_openephys_tarfile_relpath, mua)
+
     # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
     NPX = 'Sources/Neuropix-PXI'
     NPX1 = 'Neuropix-PXI'
     if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        probe_type = 'NPX'
         if version[1] < 6:
+            selected_chans = []
             # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
             # recorded channels
             channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
@@ -796,50 +1084,89 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             enabled_LFP_ypos = {k: electrode_ypos[k] for k in enabled_LFP_channel_names if k in electrode_ypos}
             if type(chans) is tuple:
                 chans = list(chans)
-            selected_chans = chans + 1
+            selected_chans.append(chans + 1)
             #given that all old probe recordings only used the first bank of electrodes...physical chan pos is selected
             selected_chans_physical = selected_chans
             selected_chans_xypos = {str(ch): [enabled_LFP_xpos['CH' + str(ch)], enabled_LFP_ypos['CH' + str(ch)]] for ch
                                     in chans if 'CH' + str(ch) in electrode_xpos}
+            probe = ['NPX']
 
         elif version[1] >= 6:
+            # check to see if there are mulitple probes
+            try:
+                # make a list of ordered unique probes
+                # get data streams
+                data_streams = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['STREAM'].keys())
+                # get data sources, i.e. probes
+                stream_sources = [stream.split('-')[0] for stream in data_streams]
+                # get ordered list of unique sources - probes
+                used = set()
+                probes = [probe for probe in stream_sources if probe not in used and (used.add(probe) or True)]
+                probes.sort()
+            except:
+                print("No probes found - hardcoding to ProbeA")
+                probes = ['ProbeA']
 
-            # sort channels and get x/y pos
-            channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys())
-            channel_bank = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'][ch_key]) for ch_key in info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys()]
-            ch_prefix  = channel_nums[0][:2]
-            # get raw channel numbers in order to be used with bank info for physical channel assignment
-            oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
-            # correct for physical location by using channel bank
-            ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
-            # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
-            # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
-            zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
-            sorted_oe_phys = sorted(zipped_oe_phys)
-            sorted_oe_phys_tupes = zip(*sorted_oe_phys)
-            sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
-            # get keys in sorted order data will be loaded in
-            sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
-            # get channel xy pos in oe number scheme
-            ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
-            ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
-            # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
-            channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
-            channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
-            # for channel subset selection in baphy_experiment - get recording method (rawchans=)
-            all_chans = sorted_oe
-            if type(chans) is tuple:
-                chans = list(chans)
-            idx = all_chans[chans].tolist()
-            recChans1 = sorted_oe + 1
-            recChans_physical = sorted_physical + 1
-            selected_chans = np.take(recChans1, idx)
-            selected_chans_physical = np.take(recChans_physical, idx)
-            selected_chans_xpos = np.take(channel_xpos, idx)
-            selected_chans_ypos = np.take(channel_ypos, idx)
-            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans_physical, range(len(selected_chans_physical)))}
-            probe = ['NPX']
+            # Get slot numbers in NP_PROBE editor. Should be the same as ordering as probe names A/B/etc based on lowest slot channels
+            editor_keys = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'].keys())
+            probe_editor_names = [probe_num for probe_num in editor_keys if 'NP_PROBE' in probe_num]
+            probe_ports = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_num]['port']) for probe_num in
+                           probe_editor_names]
+            # assuming the lowest slot number is equivalent to the letter assignment of probe names we'll map between the probes and the editor to get channel positions
+            probe_ports, probe_editor_names = (list(t) for t in zip(*sorted(zip(probe_ports, probe_editor_names))))
+
+            # check to make sure number of probes identified in editor and streams is the same
+            if len(probe_editor_names) != len(probes):
+                raise UserWarning("number of probes identified by streams and OE editor do not match")
+            else:
+                selected_chans = []
+                selected_chans_xypos = []
+                selected_chans_physical = []
+                for probe, probe_editor_name in zip(probes, probe_editor_names):
+                    # sort channels and get x/y pos
+                    channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys())
+                    channel_bank = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'][ch_key]) for ch_key in info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['CHANNELS'].keys()]
+                    ch_prefix  = channel_nums[0][:2]
+                    # get raw channel numbers in order to be used with bank info for physical channel assignment
+                    oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
+                    # correct for physical location by using channel bank
+                    ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
+                    # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
+                    # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
+                    zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
+                    sorted_oe_phys = sorted(zipped_oe_phys)
+                    sorted_oe_phys_tupes = zip(*sorted_oe_phys)
+                    sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
+                    # get keys in sorted order data will be loaded in
+                    sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
+                    # get channel xy pos in oe number scheme
+                    ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['ELECTRODE_XPOS']
+                    ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR'][probe_editor_name]['ELECTRODE_YPOS']
+                    # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
+                    channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
+                    channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
+                    # for channel subset selection in baphy_experiment - get recording method (rawchans=)
+                    all_chans = sorted_oe
+                    if type(chans) is tuple:
+                        chans = list(chans)
+                        idx = all_chans[chans].tolist()
+                    else:
+                        idx = all_chans.tolist()
+                    recChans1 = sorted_oe + 1
+                    recChans_physical = sorted_physical + 1
+                    selected_chans.append(np.take(recChans1, idx))
+                    selected_chans_physical_temp = np.take(recChans_physical, idx)
+                    selected_chans_physical.append(selected_chans_physical_temp)
+                    selected_chans_xpos = np.take(channel_xpos, idx)
+                    selected_chans_ypos = np.take(channel_ypos, idx)
+                    selected_chans_xypos.append({str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans_physical_temp, range(len(selected_chans_physical_temp)))})
+
+            probe = probes
     else:
+        probe_type = 'UCLA'
+        selected_chans = []
+        selected_chans_xypos = []
+        selected_chans_physical = []
         for openephys_folder, tarfile_fullpath, tarfile_relpath in \
                 zip(experiment_openephys_folder, experiment_openephys_tarfile,
                     experiment_openephys_tarfile_relpath):
@@ -894,14 +1221,21 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             idx = all_chans[chans].tolist()
             selected_data = np.take(data_files, idx)
             recChans1 = [ch.split('CH')[1] for ch in recChans_list]
-            selected_chans = np.take(recChans1, idx)
+            selected_chans.append(np.take(recChans1, idx))
             # to make things match between neuropixels and UCLA(which already should be in the physical channel nums) remake the selected_chans with different name
-            selected_chans_physical = selected_chans
+            selected_chans_physical.append(selected_chans)
             selected_probe_chans = np.take(recChan_probe, idx)
-            selected_chans_xypos = {ch:all_chans_xy[ch] for ch in selected_probe_chans}
-            probe = ['UCLA']
+            selected_chans_xypos.append({ch:all_chans_xy[ch] for ch in selected_probe_chans})
+            # assume 1 probe for UCLA type and hardcode to A
+            probe = ['ProbeA']
 
-    selected_chans_physical_str = [str(ch) for ch in selected_chans_physical]
+    selected_chans_physical_str = []
+    for i in range(len(selected_chans_physical)):
+        probe_chans = selected_chans_physical[i]
+        probe_letter = probe[i][-1:]
+        temp_chan_strs = [probe_letter + '-' + str(ch) for ch in probe_chans]
+        selected_chans_physical_str.append(temp_chan_strs)
+    # selected_chans_physical_str = [str(ch) for ch in prb_selected_chans_physical]
 
     # create list of files found in temporary folder for open-ephys or binary format and check if selected channel files exist and load data. If binary and file exists just load data.
     list_of_tmpfiles = []
@@ -915,12 +1249,12 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             if version[1] < 6:
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
-                timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+                timestamp0 = [int(data['timestamps'][i][0] / int(data['header']['sampleRate']) * rasterfs for i in range(len(data['timestamps'])))]
 
             elif version[1] >=6:
                 data = load_openephys(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
-                timestamp0 = int(data['timestamps'][0] * rasterfs)
+                timestamp0 = [int(data['timestamps'][i][0] * rasterfs) for i in range(len(data['timestamps']))]
         except:
             raise IOError('loading binary data failed...still zipped?')
 
@@ -947,7 +1281,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 log.info('no CH in filename, loading without it')
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_data_unpacking(data)
-        timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+        timestamp0 = [int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)]
 
     log.info(f'timestamp0 is {timestamp0}')
 
@@ -957,99 +1291,101 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
 
     # sort channels based on channel mapping
     raw_chans = data['channels']
-    continuous_data = []
+    # continuous_data = []
     #timestamp0 = []
-    for selected_ch in selected_chans:
-        raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
-        temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
-        if mua is True:
-            # filter data within bandwidth
-            muabp = list(muabp)
-            sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
-            d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+    for i in range(len(selected_chans)):
+        continuous_data = []
+        for selected_ch in selected_chans[i]:
+            raw_mapping_index = np.where(raw_chans[i] == selected_ch)[0][0]
+            temp_data = data['data'][i][raw_chans[i] == selected_ch, :].squeeze(axis=0)
+            if mua is True:
+                # filter data within bandwidth
+                muabp = list(muabp)
+                sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header'][i]['sampleRate']), output='sos')
+                d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
 
-            # calculate number of bins to sum mua over for resampling
-            n = int(int(data['header']['sampleRate']) / rasterfs)
-            # if signal is not divisible by requested sample rate, remove remainder
-            d = d[:int(len(d) - len(d) % n)]
-            # resample mua as sum of higher sampling rate bins - mua power
-            d = np.sum(d.reshape(-1, n), axis=1)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-        elif rasterfs is None and rawlp is None and rawhp is None:
-            print("no parameters specified")
-            continuous_data.append(temp_data[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0])
-        elif rawlp is not None and rawhp is not None and rasterfs is not None:
-            print("bandpass filter and sample rate specified")
-            # filter data within bandwidth
-            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
-                                      output='sos')
-            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            resample_new_size = int(
-                np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-        elif rawlp is not None and rawhp is not None:
-            print("bandpass filter selected sample rate set to 4*Nyquist")
-            # filter data within bandwidth
-            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
-                                      output='sos')
-            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            resample_new_size = int(
-                np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
-        elif rawlp is not None and rasterfs is not None:
-            # filter data within bandwidth
-            print("lowpass filter selected and sample rate specified")
-            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
-                                      output='sos')
-            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            resample_new_size = int(
-                np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-        elif rawhp is not None and rasterfs is not None:
-            # filter data within bandwidth
-            print("high pass filter selected and sample rate specified")
-            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
-                                      output='sos')
-            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            resample_new_size = int(
-                np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
-        elif rawlp is not None:
-            print("lowpass filter selected sample rate set to 4*Nyquist")
-            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
-            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            resample_new_size = int(
-                np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
-        elif rawhp is not None:
-            print("highpass filter selected sample rate not adjusted")
-            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
-            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
-            continuous_data.append(data['hpfiltered'][np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0])
-        else:
-            print("sample rate specified...downsampling data")
-            resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
-            d = scipy.signal.resample(temp_data, resample_new_size)
-            continuous_data.append(d[np.newaxis, :])
-            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+                # calculate number of bins to sum mua over for resampling
+                n = int(int(data['header'][i]['sampleRate']) / rasterfs)
+                # if signal is not divisible by requested sample rate, remove remainder
+                d = d[:int(len(d) - len(d) % n)]
+                # resample mua as sum of higher sampling rate bins - mua power
+                d = np.sum(d.reshape(-1, n), axis=1)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            elif rasterfs is None and rawlp is None and rawhp is None:
+                print("no parameters specified")
+                continuous_data.append(temp_data[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0])
+            elif rawlp is not None and rawhp is not None and rasterfs is not None:
+                print("bandpass filter and sample rate specified")
+                # filter data within bandwidth
+                sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header'][i]['sampleRate']),
+                                          output='sos')
+                data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                resample_new_size = int(
+                    np.round(len(data['bpfiltered']) * rasterfs / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            elif rawlp is not None and rawhp is not None:
+                print("bandpass filter selected sample rate set to 4*Nyquist")
+                # filter data within bandwidth
+                sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header'][i]['sampleRate']),
+                                          output='sos')
+                data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                resample_new_size = int(
+                    np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+            elif rawlp is not None and rasterfs is not None:
+                # filter data within bandwidth
+                print("lowpass filter selected and sample rate specified")
+                sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header'][i]['sampleRate']),
+                                          output='sos')
+                data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                resample_new_size = int(
+                    np.round(len(data['lpfiltered']) * rasterfs / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            elif rawhp is not None and rasterfs is not None:
+                # filter data within bandwidth
+                print("high pass filter selected and sample rate specified")
+                sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header'][i]['sampleRate']),
+                                          output='sos')
+                data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                resample_new_size = int(
+                    np.round(len(data['hpfiltered']) * rasterfs / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+            elif rawlp is not None:
+                print("lowpass filter selected sample rate set to 4*Nyquist")
+                sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header'][i]['sampleRate']), output='sos')
+                data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                resample_new_size = int(
+                    np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+            elif rawhp is not None:
+                print("highpass filter selected sample rate not adjusted")
+                sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header'][i]['sampleRate']), output='sos')
+                data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+                continuous_data.append(data['hpfiltered'][np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0])
+            else:
+                print("sample rate specified...downsampling data")
+                resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header'][i]['sampleRate'])))
+                d = scipy.signal.resample(temp_data, resample_new_size)
+                continuous_data.append(d[np.newaxis, :])
+                #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+    timestamp0_list = timestamp0
 
-    continuous_data_list.append(np.concatenate(continuous_data, axis=0))
-    timestamp0_list.append(timestamp0)
 
-    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_physical_str, probe
+    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_physical_str, probe, probe_type
 
 
 # def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
@@ -1419,6 +1755,7 @@ def adjust_parmfile_name(parmfile):
     elif os.path.exists(aspath):
         return aspath
     else:
+        raise ValueError(f"parmfile {parmfile} does not exist as m-file or path.")
         return None
 
 
@@ -2554,6 +2891,7 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
 
             s = np.reshape(s, (-1, 1))
             unitcount = s.shape[0]
+            prev_probe_id=""
             for u in range(0, unitcount):
                 st = s[u, 0]
                 # if st.size:
@@ -2583,14 +2921,28 @@ def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortid
                         #       .format(trialidx,st[1,ff]))
 
                     totalunits += 1
+                    try:
+                        jobfile=sortinfo[c][0][sortidx]['sortparameters'][0][u]['Kilosort_job_source'][0][0][0]
+                        parts=jobfile.split("Probe")
+                        probe_id=parts[1][0]+"-"
+                    except:
+                        probe_id = None
+                    if probe_id is None:
+                        try:
+                            jobfile = sortinfo[c][0][sortidx]['sortparameters'][u][0]['Kilosort_job_source'][0][0][0]
+                            parts = jobfile.split("Probe")
+                            probe_id = parts[1][0] + "-"
+                        except:
+                            probe_id = prev_probe_id
+
                     if chancount <= 8:
                         # svd -- avoid letter channel names from now on?
                         unit_names.append("{0}{1}".format(chan_names[c], u+1))
                         #unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
-                        unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
+                        unit_names.append(f"{probe_id}{(c+1):03d}-{u+1}")
                     spiketimes.append(unit_spike_events / spikefs)
-
+                    prev_probe_id=probe_id
                 # else:
                 # TODO - Incorporate this, but deal with cases of truly missing data. This is
                 # designed only for cases where e.g. a single cellid doens't spike during one
@@ -4099,9 +4451,10 @@ def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_
 
     # new method
     def usematfile():
+        # parse cellid compatible with multi-probe recordings
         cparts = cellid.split("-")
-        chan = int(cparts[1])
-        unit = int(cparts[2])
+        chan = int(cparts[-2])
+        unit = int(cparts[-1])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
 
@@ -4238,19 +4591,31 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
         raise ValueError(f"No depthinfo for siteid {siteid}")
     d = json.loads(dinfo.loc[0,'depthinfo'])
 
+    # backward compatibility: nest depth info under the default ProbeA
+    if 'parmfile' in d.keys():
+        d={'ProbeA': d.copy()}
     dcell = {}
     for c in cellid:
         dcell[c] = {'siteid': siteid}
-        chstr = str(int(c.split("-")[1]))
-        if len(d['channel info'][chstr])==3:
-            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        cparts = c.split("-")
+        chstr = str(int(cparts[-2]))
+        if len(cparts)==4:
+            probeid = cparts[1]
         else:
-            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
+            probeid = 'A'
+        d_ = d['Probe'+probeid]
+        if chstr not in d_['channel info'].keys():
+            print('subtracting 384')
+            chstr=f"{(int(chstr)-384)}"
+        if len(d_['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d_['channel info'][chstr]
 
         if dcell[c]['layer'].isnumeric() | (dcell[c]['layer']=='NA') | (dcell[c]['layer']=='BS') :
-            dcell[c]['area'] = d['site area']
+            dcell[c]['area'] = d_['site area']
         elif dcell[c]['layer'].endswith('d'):
-            dcell[c]['area'] = d.get('site area deep', 'XX')
+            dcell[c]['area'] = d_.get('site area deep', 'XX')
         else:
             dcell[c]['area'] = dcell[c]['layer']
 
@@ -4316,7 +4681,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
 
     if save_to_db:
         df_cell['cellid'] = df_cell.index
-        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[1]))
+        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[-2]))
         a = list(df_cell['area'])
         if 'A1' in a:
             default_area='A1'
@@ -4460,6 +4825,7 @@ def parse_cellid(options):
             else [options['cellid']]
         units = []
         channels = []
+        probe_ids = []
         for cellid in cellids:
             t = cellid.split("_")
             # print(cellids)
@@ -4469,12 +4835,14 @@ def parse_cellid(options):
             scf = []
             for rawid_ in rawid:  # rawid is actually a list of rawids
                 scf_ = db.get_cell_files(t[0], rawid=rawid_)
-                scf_ = scf_[['rawid', 'cellid', 'channum', 'unit']].drop_duplicates()
+                scf_ = scf_[['rawid', 'cellid', 'probe_id', 'channum', 'unit']].drop_duplicates()
                 assert len(scf_) == 1
                 scf.append(scf_)
             assert len(scf) == len(rawid)
             channels.append(scf[0].iloc[0].channum)
             units.append(scf[0].iloc[0].unit)
+            probe_ids.append(scf[0].iloc[0].probe_id)
+        options['probe_ids'] = probe_ids
         options['channels'] = channels
         options['units'] = units
 

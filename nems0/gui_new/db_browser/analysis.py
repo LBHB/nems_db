@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5 import uic
 
 from nems0 import db as nd
-from nems.utils import simple_search, load_settings, save_settings
+from nems0.utils import simple_search, load_settings, save_settings
 
 qt_creator_file = Path(r'ui') / 'analysis.ui'
 Ui_Widget, QtBaseClass = uic.loadUiType(qt_creator_file)

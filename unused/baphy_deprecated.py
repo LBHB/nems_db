@@ -21,7 +21,7 @@ import io
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import nems.signal
+import nems0.signal
 import nems.recording
 
 try:
