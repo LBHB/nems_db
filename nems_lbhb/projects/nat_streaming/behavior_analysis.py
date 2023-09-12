@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from nems0 import db
 from nems0.utils import smooth
 
+plt.ion()
+
 sql = "SELECT * FROM gDataRaw where cellid like 'LMD%' AND training=1 AND bad=0"
 
 d_rawfiles=db.pd_query(sql)
@@ -18,14 +20,14 @@ plt.figure()
 plt.plot(d_rawfiles['trials'])
 
 # pick last file
-session_id=39
+session_id=44
 
 r = d_rawfiles.loc[session_id]
 path = os.path.join(r['resppath'], r['parmfile'])
 triallog = os.path.join(path,'trial_log.csv')
 
 d = pd.read_csv(triallog)
-interesting_data = d[['trial_number','response','correct','response_time']].copy()
+interesting_data = d[['trial_number','response','correct','response_time', 'snr']].copy()
 
 plt.figure()
 
