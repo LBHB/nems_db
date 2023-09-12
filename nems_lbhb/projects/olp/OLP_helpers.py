@@ -15,6 +15,8 @@ import joblib as jl
 from nems_lbhb import baphy_io
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from nems_lbhb.stats import jack_mean_err
+
 
 
 def manual_fix_units(cell_list):
@@ -888,7 +890,7 @@ def get_sound_statistics(weight_df, plot=True):
     return sound_df
 
 
-def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None):
+def plot_sound_stats(sound_df, metrics, labels=None, synth_kind=None, lines=None, sort=True):
     '''2023_06_13. Updated to include lines with averages of the stats with SEM
     2022_09_14. This is a way to look at the sound stats (passed as a list) from a sound_df and compare them. But also, if you add
     lines, a dictionary, which passes keys as those matching something found in stats, with a cutoff. That cut off will
@@ -896,9 +898,13 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
     returning those sounds in a dictionary where the stat is a key and the values are a list of 'bad' sounds. Labels
     are optional, passing it will look prettier than it defaulting the labels to what the sound stat in the df.'''
     from scipy import stats
-    sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
+    if synth_kind:
+        sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
+    else:
+        synth_kind = 'Natural'
     sound_df.rename(columns={'std': 'Tstationary', 'freq_stationary': 'Fstationary', 'RMS_norm_power': 'RMS_power',
                              'max_norm_power': 'max_power'}, inplace=True)
+    sound_df['short_name'] = [dd.replace('_', '') for dd in sound_df.short_name]
     try:
         sound_df = sound_df.drop_duplicates('short_name')
     except:
@@ -915,10 +921,17 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
         hh, ww = int(np.ceil(lens / 3)), 3
     sound_df['Tstationary'] = [np.mean(aa) for aa in sound_df['Tstationary']]
 
+    if sort:
+        bgs, fgs = sound_df.loc[sound_df.type=='BG'], sound_df.loc[sound_df.type=='FG']
+        bgs = bgs.sort_values('short_name')
+        vv, oo, nn = fgs.loc[fgs.Vocalization=='Yes'], fgs.loc[fgs.Vocalization=='Other'], fgs.loc[fgs.Vocalization=='No']
+        vv, oo, nn = vv.sort_values('short_name'), oo.sort_values('short_name'), nn.sort_values('short_name')
+        sound_df = pd.concat([bgs, vv, oo, nn])
+
     fig, axes = plt.subplots(hh, ww, figsize=(ww * 5, hh * 5))
     axes = np.ravel(axes)
 
-    bads = {}
+    bads, stat = {}, {}
     for cnt, (ax, st) in enumerate(zip(axes, metrics)):
         sb.barplot(x='short_name', y=st,
                    palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
@@ -933,16 +946,39 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
         ymin, ymax = ax.get_ylim()
         ax.set_ylim(0, ymax)
 
-        both = sound_df[['type', st]]
-        bgs, fgs = both.loc[both.type=='BG'], both.loc[both.type=='FG']
-        bg_med, fg_med = np.median(bgs[st]), np.median(fgs[st])
-        # avg = sound_df[['type', st]].groupby(by='type', as_index=False).mean()
-        # std = sound_df[['type', st]].groupby(by='type', as_index=False).sem()
-        bglen, fglen = sound_df['type'].value_counts()
-        xmin, xmax = ax.get_xlim()
+        if sort:
+            both = sound_df[['type', st, 'Vocalization']]
+            bgs, fgs = both.loc[both.type=='BG'], both.loc[both.type=='FG']
+            vv, oo, nn = fgs.loc[fgs.Vocalization == 'Yes'], fgs.loc[fgs.Vocalization == 'Other'], fgs.loc[
+                fgs.Vocalization == 'No']
+            bg_med, vv_med, oo_med, nn_med = np.median(bgs[st]), np.median(vv[st]), np.median(oo[st]), np.median(nn[st])
+            fg_med = np.median(fgs[st])
+            bg_med, bg_err = jack_mean_err(bgs[st], do_median=True)
+            fg_med, fg_err = jack_mean_err(fgs[st], do_median=True)
+            vv_med, vv_err = jack_mean_err(vv[st], do_median=True)
+            oo_med, oo_err = jack_mean_err(oo[st], do_median=True)
+            nn_med, nn_err = jack_mean_err(nn[st], do_median=True)
+            stat[f'bg_{st}'], stat[f'fg_{st}'] = (bg_med, bg_err), (fg_med, fg_err)
+            stat[f'voc_{st}'], stat[f'oth_{st}'], stat[f'nonv_{st}'] = (vv_med, vv_err), (oo_med, oo_err), (nn_med, nn_err)
+            bglen, vvlen, oolen, nnlen = len(bgs), len(vv), len(oo), len(nn)
+            xmin, xmax = ax.get_xlim()
+            ax.hlines(bg_med, xmin=xmin, xmax=xmin+bglen, ls='--', color='dodgerblue')
+            ax.hlines(vv_med, xmin=xmin+bglen, xmax=xmin+bglen+vvlen, ls='--', color='olivedrab')
+            ax.hlines(oo_med, xmin=xmin+bglen+vvlen, xmax=xmin+bglen+vvlen+oolen, ls='--', color='olivedrab')
+            ax.hlines(nn_med, xmin=xmin+bglen+vvlen+nnlen, xmax=xmin+bglen+vvlen+oolen+nnlen, ls='--', color='olivedrab')
 
-        ax.hlines(bg_med, xmin=xmin, xmax=xmin+bglen, ls='--', color='dodgerblue')
-        ax.hlines(fg_med, xmin=xmin+bglen, xmax=xmax, ls='--', color='olivedrab')
+        else:
+            both = sound_df[['type', st]]
+            bgs, fgs = both.loc[both.type=='BG'], both.loc[both.type=='FG']
+            bg_med, bg_err = jack_mean_err(bgs[st], do_median=True)
+            fg_med, fg_err = jack_mean_err(fgs[st], do_median=True)
+            stat[f'bg_{st}'], stat[f'fg_{st}'] = (bg_med, bg_err), (fg_med, fg_err)
+            # std = sound_df[['type', st]].groupby(by='type', as_index=False).sem()
+            bglen, fglen = sound_df['type'].value_counts()
+            xmin, xmax = ax.get_xlim()
+
+            ax.hlines(bg_med, xmin=xmin, xmax=xmin+bglen, ls='--', color='dodgerblue')
+            ax.hlines(fg_med, xmin=xmin+bglen, xmax=xmax, ls='--', color='olivedrab')
 
         # if fill:
         #     ax.fill_between([xmin, xmin+bglen], avg.loc[avg.type=='BG'][st].values[0] + std.loc[std.type=='BG'][st].values[0],
@@ -952,9 +988,10 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
         #                     avg.loc[avg.type == 'FG'][st].values[0] - std.loc[std.type == 'FG'][st].values[0],
         #                        alpha=0.3, color='olivedrab')
 
+        stat[f'bg_{st}'], stat[f'fg_{st}']
         # tt = stats.ttest_ind(sound_df.loc[sound_df.type=='BG'][st], sound_df.loc[sound_df.type=='FG'][st])
         tt = stats.mannwhitneyu(sound_df.loc[sound_df.type=='BG'][st], sound_df.loc[sound_df.type=='FG'][st])
-
+        stat[f'stats_{st}'] = tt.pvalue
         if cnt == 0:
             ax.set_title(f'Synth: {synth_kind}, p={np.around(tt.pvalue, 3)}', fontsize=8, fontweight='bold')
         else:
@@ -972,7 +1009,7 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind='N', lines=None)
     if lines:
         return bads
     else:
-        return
+        return stat
 
 
 def sound_stat_violin(df, mets, met_labels):
@@ -1087,6 +1124,13 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
         df = df.loc[df.area==area]
 
     synths = list(df.synth_kind.unique())
+    if len(synths)==2 or synths==['N']:
+        synths.sort(reverse=True)
+        simple_names = []
+
+    df['BG_filt_name'], df['FG_filt_name'] = [dd.replace(' ', '') for dd in df['BG']], [dd.replace(' ', '') for dd in df['FG']]
+    df['BG_filt_name'], df['FG_filt_name'] = [dd.replace('_', '') for dd in df['BG_filt_name']], \
+                                             [dd.replace('_', '') for dd in df['FG_filt_name']]
 
     # To avoid passing cuts as a parameter, just use it if it's in the dataframe, if not, pass none
     try:
@@ -1101,24 +1145,29 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
     for ll in ['BG', 'FG']:
         # Split any dataframe into the synth kinds (as those have the same names) and do the same thing for each
         # before recombining
-        syn_df = []
+        syn_df, bad_dict = [], {}
         for syn in synths:
             # This is getting the mean rel gain for each sound (FG rel gain for FGs, etc)
             synth_df = df.loc[df.synth_kind == syn].copy()
+            synth_df = synth_df.sort_values(f'{ll}_filt_name')
+            bad_idx = []
 
-            gain_df = synth_df[[f'{ll}', f'{ll}_rel_gain']]
-            mean_df = gain_df.groupby(by=f'{ll}').agg(mean=(f'{ll}_rel_gain', np.mean)).reset_index(). \
-                rename(columns={f'{ll}': f'{ll}_short_name'})
+            gain_df = synth_df[[f'{ll}_filt_name', f'{ll}_rel_gain']]
+            mean_df = gain_df.groupby(by=f'{ll}_filt_name').agg(mean=(f'{ll}_rel_gain', np.mean)).reset_index(). \
+                rename(columns={f'{ll}_filt_name': f'{ll}_short_name'})
 
             # get the paths to the specific sounds used within this subset of the data
-            paths = list(synth_df[f'{ll}_path'].unique())
+            paths = [list(synth_df.loc[synth_df[f'{ll}_filt_name']==dd][f'{ll}_path'])[0] for dd in mean_df[f'{ll}_short_name']]
+            # paths = list(synth_df[f'{ll}_path'].unique())
             names = [bb.split('/')[-1].split('.')[0] for bb in paths]
+            flt_names = [dd[2:].replace(' ', '') for dd in names]
+            flt_names = [dd.replace('_', '') for dd in flt_names]
 
             sounds = []
             means = np.empty((bins, len(names)))
             means[:] = np.NaN
 
-            for cnt, sn, pth in zip(range(len(paths)), names, paths):
+            for cnt, sn, pth, flt in zip(range(len(paths)), names, paths, flt_names):
                 sfs, W = wavfile.read(pth)
                 spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
 
@@ -1141,35 +1190,6 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
                 bin_low = np.abs(csm - (big * lower)).argmin()
                 bandwidth = np.log2(x_freq[bin_high] / x_freq[bin_low])
 
-                ### Started this 2023_08_02 then realized I can just do it easily after this is made with the outputs
-                # # Spectral overlap I think
-                # possible_kinds = ['BG', 'FG']
-                # possible_kinds.remove(ll)
-                # other = possible_kinds[0]
-                #
-                # # Get names and paths only of the opposite sound that was actually paired with this particular BG
-                # other_paths = list(synth_df.loc[synth_df.BG == sn[2:], f'{other}_path'].unique())
-                # other_names = [bb.split('/')[-1].split('.')[0] for bb in other_paths]
-                # other_dict = {}
-                # for op in other_paths:
-                #     osfs, oW = wavfile.read(op)
-                #     ospec = gtgram(oW, osfs, 0.02, 0.01, bins, lfreq, hfreq)
-                #
-                #     ofreq_mean = np.nanmean(ospec, axis=1)
-                #     ocsm = np.cumsum(ofreq_mean)
-                #     obig = np.max(ocsm)
-                #
-                #     olower, oupper = percent_lims[0] / 100, percent_lims[1] / 100
-                #     obin_high = np.abs(ocsm - (obig * oupper)).argmin()
-                #     obin_low = np.abs(ocsm - (obig * olower)).argmin()
-                #     other_bandwidth = np.log2(x_freq[obin_high] / x_freq[obin_low])
-                #
-                #     other_range = (x_freq[obin_low], x_freq[obin_high])
-                #
-                #     ol = max(range[0], other_range[0]), min(range[1], other_range[1]) + 1
-                #     overlap = np.log2(ol[1] / ol[0])
-                #     percent_overlap = (overlap / bandwidth) * 100
-
                 # Chops the spectrogram before calculating spectral metric
                 cut_spec = spec[bin_low:bin_high, :]
                 cc = np.corrcoef(cut_spec)
@@ -1191,7 +1211,17 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
                 temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)[1:].std()
                 freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)[1:].std()
 
-                sounds.append({f'{ll}_name': sn.split('_')[0],
+                if len(synths) == 2 or synths==['N']:
+                    if flt in simple_names:
+                        bad_idx.append(cnt)
+                        print(f'Saving index cnt={cnt} to take {flt}, or {sn} out.')
+                    else:
+                        simple_names.append(flt)
+                        print(f'Adding {flt}, or {sn}. While cnt = {cnt}')
+
+
+
+                sounds.append({f'{ll}_name': sn, #.split('_')[0],
                                'synth_kind': syn,
                                f'{ll}_Tstationary': np.nanmean(dev),
                                f'{ll}_Fcorr': cpow,
@@ -1213,18 +1243,19 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
                                f'{ll}_temp_ps_std': temp_ps,
                                f'{ll}_freq_ps_std': freq_ps,
                                # f'{ll}_short_name': sn[2:].split('_')[0].replace(' ', ''),
-                               f'{ll}_short_name': pth.split('/')[-1].split('.')[0][2:].replace(' ',''),
+                               # f'{ll}_short_name': pth.split('/')[-1].split('.')[0][2:].replace(' ',''),
+                               f'{ll}_short_name': flt,
                                f'{ll}_path': pth})
 
                 if cuts:
-                    start_gain_df = synth_df[[f'{ll}', f'{ll}_rel_gain_start']]
-                    start_mean_df = start_gain_df.groupby(by=f'{ll}').agg(mean=(f'{ll}_rel_gain_start', np.mean)).reset_index(). \
-                        rename(columns={f'{ll}': f'{ll}_short_name'})
+                    start_gain_df = synth_df[[f'{ll}_filt_name', f'{ll}_rel_gain_start']]
+                    start_mean_df = start_gain_df.groupby(by=f'{ll}_filt_name').agg(mean=(f'{ll}_rel_gain_start', np.mean)).reset_index(). \
+                        rename(columns={f'{ll}_filt_name': f'{ll}_short_name'})
                     start_mean_df.rename(columns={'mean': f'{ll}_rel_gain_avg_start'}, inplace=True)
 
-                    end_gain_df = synth_df[[f'{ll}', f'{ll}_rel_gain_end']]
-                    end_mean_df = end_gain_df.groupby(by=f'{ll}').agg(mean=(f'{ll}_rel_gain_end', np.mean)).reset_index(). \
-                        rename(columns={f'{ll}': f'{ll}_short_name'})
+                    end_gain_df = synth_df[[f'{ll}_filt_name', f'{ll}_rel_gain_end']]
+                    end_mean_df = end_gain_df.groupby(by=f'{ll}_filt_name').agg(mean=(f'{ll}_rel_gain_end', np.mean)).reset_index(). \
+                        rename(columns={f'{ll}_filt_name': f'{ll}_short_name'})
                     end_mean_df.rename(columns={'mean': f'{ll}_rel_gain_avg_end'}, inplace=True)
 
                     one, two = spec[:, cuts[0]:int(cuts[1] * fs)], spec[:, int(cuts[1] * fs):]
@@ -1338,6 +1369,9 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
             sound_df[f'{ll}_cumwt'], sound_df[f'{ll}_cumft'] = cumwt, cumft
             sound_df[f'{ll}_t50'], sound_df[f'{ll}_f50'] = freq50t, freq50f
             sound_df[f'{ll}_meanT'], sound_df[f'{ll}_meanF'] = ots, ofs
+
+            sound_df.drop(bad_idx, inplace=True)
+
             # End mod spec addition 2022_08_26
             syn_df.append(sound_df)
 
@@ -1369,13 +1403,13 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
         # print(f'Before append, df is len={len(df)}')
         # print(f'Before append, the_dfs["BG"] is len={len(the_dfs["BG"])}')
         # the_dfs['BG'].rename(columns={'BG_short_name': 'BG', 'BG_rel_gain': 'BG_rel_gain_all'}, inplace=True)
-        the_dfs['BG'].rename(columns={'BG_short_name': 'BG'}, inplace=True)
-        df = pd.merge(right=the_dfs['BG'], left=df, on=['BG', 'synth_kind', 'BG_path'], validate='m:1')
+        the_dfs['BG'].rename(columns={'BG_short_name': 'BG_filt_name'}, inplace=True)
+        df = pd.merge(right=the_dfs['BG'], left=df, on=['BG_filt_name', 'synth_kind', 'BG_path'], validate='m:1')
         # print(f"After merging with the_dfs['BG'], df is now len={len(df)}")
         # print(f'Before append, the_dfs["FG"] is len={len(the_dfs["FG"])}')
         # the_dfs['FG'].rename(columns={'FG_short_name': 'FG', 'FG_rel_gain': 'FG_rel_gain_all'}, inplace=True)
-        the_dfs['FG'].rename(columns={'FG_short_name': 'FG'}, inplace=True)
-        df = pd.merge(right=the_dfs['FG'], left=df, on=['FG', 'synth_kind', 'FG_path'], validate='m:1')
+        the_dfs['FG'].rename(columns={'FG_short_name': 'FG_filt_name'}, inplace=True)
+        df = pd.merge(right=the_dfs['FG'], left=df, on=['FG_filt_name', 'synth_kind', 'FG_path'], validate='m:1')
         # print(f"After merging with the_dfs['FG'], df is now len={len(df)}")
         df['bw_percent'] = f'{percent_lims[0]}/{percent_lims[1]}'
 
@@ -1711,6 +1745,8 @@ def label_vocalization(filt, species):
         # If you're doing this you don't want to split by hemisphere, so get rid of that modifier
         filt['animal'] = filt.animal.str[:3]
         filt['Vocalization'] = filt['FG'].map(voc_labels)
+        filt['animal_voc'] = filt['animal'] + '_' + filt['Vocalization'].replace({'Yes':'voc', 'No': 'non'})
+
     elif species == 'marmoset':
         voc_labels = {'Alarm': 'Yes', 'Bell': 'No', 'Blacksmith': 'No', 'Branch': 'No', 'CashRegister': 'No',
                       'Castinets': 'No', 'Chickens': 'No', 'Chirp': 'Yes', 'Dice': 'No', 'Geese': 'No',
@@ -1725,8 +1761,20 @@ def label_vocalization(filt, species):
         filt.noisy.fillna('non', inplace=True)
         filt['fg_noise'] = filt['animal'] + '_' + filt['Vocalization'].replace({'Yes': 'voc', 'No': 'non'}) + '_' + \
                            filt['noisy'].replace({'Yes': 'noise', 'No': 'quiet'})
+        filt['animal_voc'] = filt['animal'] + '_' + filt['Vocalization'].replace({'Yes':'voc', 'No': 'non'})
 
-    filt['animal_voc'] = filt['animal'] + '_' + filt['Vocalization'].replace({'Yes':'voc', 'No': 'non'})
+    elif species == 'sounds':
+        voc_labels = {'Bell': 'No', 'Branch': 'No', 'Bugle': 'No', 'CashRegister': 'No', 'Castinets': 'No',
+                      'Chickens': 'Other', 'Dice': 'No', 'Dolphin': 'Other', 'Fight': 'Yes', 'FightSqueak': 'Yes',
+                      'Fight_Squeak': 'Yes', 'FireCracker': 'No', 'Geese': 'Other', 'Gobble': 'Yes',
+                      'Gobble_High': 'Yes', 'GobbleHigh': 'Yes', 'Heels': 'No', 'Keys': 'No', 'KitGroan': 'Yes', 'KitHigh': 'Yes',
+                      'KitWhine': 'Yes', 'Kit_Groan': 'Yes', 'Kit_High': 'Yes', 'Kit_Low': 'Yes', 'KitLow': 'Yes',
+                      'Kit_Whine': 'Yes', 'ManA': 'Other', 'ManB': 'Other', 'Tsik': 'Other', 'TwitterB': 'Other',
+                      'Typing': 'No', 'WomanA': 'Other', 'WomanB': 'Other', 'Woodblock': 'No', 'Xylophone': 'No'}
+        bgs, fgs = filt.loc[filt.type=='BG'], filt.loc[filt.type=='FG']
+        fgs['Vocalization'] = fgs['short_name'].map(voc_labels)
+        bgs['Vocalization'] = 'Background'
+        filt = pd.concat([bgs, fgs])
 
     return filt
 
@@ -1957,7 +2005,7 @@ def run_sound_stats_reg(df, r_cut=0.4, snr_threshold=0.12, suffix='', area='A1',
 
     df.rename(columns={'bg_snr': 'BG_snr', 'fg_snr': 'FG_snr'}, inplace=True)
 
-    sound_df = get_sound_statistics_from_df(df, percent_lims=[15, 85], append=True)
+    sound_df = get_sound_statistics_from_df(df, percent_lims=[15, 85], append=True,)
     # sound_df.loc[sound_df.BG_spectral_overlap <= 0, 'BG_spectral_overlap'] = 0.0
 
     if category == 'Vocalization':
@@ -1993,13 +2041,13 @@ def run_sound_stats_reg(df, r_cut=0.4, snr_threshold=0.12, suffix='', area='A1',
     for shuff in shuffle_list:
         to_reg = pd.concat([bgs, fgs])
         if shuff != 'full':
-            if shuff=='Vocalization':
-                fgs_voc = to_reg.loc[to_reg.Vocalization!=3]
-                bgs_voc = to_reg.loc[to_reg.Vocalization==3]
-                fgs_voc[shuff] = np.random.permutation(fgs_voc[shuff].values)
-                to_reg = pd.concat([fgs_voc, bgs_voc])
-            else:
-                to_reg[shuff] = np.random.permutation(to_reg[shuff].values)
+            # if shuff=='Vocalization':
+            #     fgs_voc = to_reg.loc[to_reg.Vocalization!=3]
+            #     bgs_voc = to_reg.loc[to_reg.Vocalization==3]
+            #     fgs_voc[shuff] = np.random.permutation(fgs_voc[shuff].values)
+            #     to_reg = pd.concat([fgs_voc, bgs_voc])
+            # else:
+            to_reg[shuff] = np.random.permutation(to_reg[shuff].values)
 
         if synth:
             to_reg = to_reg.loc[to_reg.synth_kind==synth]
@@ -2032,3 +2080,99 @@ def run_sound_stats_reg(df, r_cut=0.4, snr_threshold=0.12, suffix='', area='A1',
         vocal_dict = {}
 
     return ests, vocal_dict
+
+
+def get_olp_filter(weight_df, kind='vanilla', metric=False):
+    '''2023_08_08. The day I got tired of running tons of dumb little piecemeal code every time I started
+    a new console. This will take the dataframe you load and apply the appropriate filters based on what
+    you are trying to ultimately do. Inputs for kind include vanilla, binaural, synthetic, '''
+    # Adds a vocalization column that kind of manually labels the FGs as the type they are
+    # Also, removes the tags I left on the animal column specifying hemisphere
+    filt = label_vocalization(weight_df, species='ferret')
+    # Keep both primary and secondary areas for now,
+    filt = filt.loc[(filt.area == 'A1') | (filt.area == 'PEG')]
+    # Rename some layers that are named funny because of the labelling GUI, not a meaningful distinction
+    filt.loc[filt.layer == '4', 'layer'] = '44'
+    filt.loc[filt.layer == '5', 'layer'] = '56'
+    filt.loc[filt.layer == 'BS', 'layer'] = '13'
+    # Save only certain layers that are cortical
+    filt = filt.loc[(filt.layer == 'NA') | (filt.layer == '5') | (filt.layer == '44') | (filt.layer == '13') |
+                    (filt.layer == '4') | (filt.layer == '56') | (filt.layer == '16') | (filt.layer == 'BS')]
+
+    # Keep the vanilla OLP parameters, this being dynamic full-full, binaural contra-contra, and no SNR
+    if kind == 'vanilla':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.kind == '11']
+        filt = filt.loc[filt.SNR == 0]
+
+        # This deals with synthetics and how to deal with the natural ('N') and non-RMS natural ('A'),
+        # Which constitute multiple presentations of the same stimuli to a cell, which we want to average them
+        # It also deals with that some PRN days had multiple OLP sessions played to the same cell
+        # Each OLP has its own vanilla control within with a different epoch name, so those all need to be
+        # averaged across so one cell doesn't get represented 4 times in the average. This does not yet deal
+        # with instances where one electrode site implant received the same stimulus across days, those are still
+        # being treated as unique instances.
+        prn = filt.loc[filt.animal == 'PRN']
+        prn = prn.loc[(prn.synth_kind == 'N') | (prn.synth_kind == 'A')]
+        prn_filt = prn.groupby(by=['cellid', 'BG', 'FG', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
+                               as_index=False).mean()
+        # Moves along with everyone who isn't Prince (which means each day was a unique penetration)
+        # For now going to average the synthetics (only applies to Clathrus) and keep everything else.
+        filt = filt.loc[((filt.synth_kind == 'N') & (filt['animal'] == 'CLT') & (filt['olp_type'] == 'synthetic')) |
+                        ((filt.synth_kind == 'A') & (filt['animal'] == 'CLT') & (filt['olp_type'] == 'synthetic')) |
+                        ((filt.synth_kind == 'A') & (filt['animal'] == 'CLT') & (filt['olp_type'] != 'synthetic')) |
+                        ((filt.synth_kind == 'A') & (filt['animal'].isin(['TNC', 'ARM'])))]
+        others = filt.loc[filt.animal != 'PRN']
+        others_filt = others.groupby(by=['cellid', 'BG', 'FG', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
+                                     as_index=False).mean()
+        # Put these two modified dataframes back together. They lost some info in the average, but most categorical
+        # columns that are needed should be preserved manually.
+        filt = pd.concat([others_filt, prn_filt])
+        # Synth_kind couldn't be kept because some are 'A', but with it gone and the averages of N and A performed
+        # just call everything N because it's broadly the natural stimuli
+        filt['synth_kind'] = 'N'
+        # Some functions need layer or kind in there to filter them out, so just readd that.
+        filt['layer'], filt['kind'] = 'NA', '11'
+    elif kind == 'binaural':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.SNR == 0]
+        filt = filt.loc[filt.olp_type == 'binaural']
+    elif kind == 'SNR':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.kind == '11']
+        # SNR run is constructed around olp_type=='dynamic', but there will be a whole bunch of other
+        # dynamic instances at 0 SNR, so you want the ones that are matched to an off-SNR one, hence
+        # a new column that identifies SNR 10 instances, gets their cellid and sounds played and then
+        # gets all other times that cell heard those sounds from the dataframe.
+        # The utility of getting rid of binaural and synthetic ahead of time is days in Prince when
+        # SNR, binaural, and synthetic were all played.
+        filt = filt.loc[(filt.olp_type != 'binaural') & (filt.olp_type != 'synthetic')]
+        filt['filt_name'] = filt['filt_name'] = filt['cellid'] + '-' + filt['BG'] + '-' + filt['FG']
+        snr10 = filt.loc[filt.SNR == 10]
+        epoch_names = snr10.filt_name.tolist()
+        filt = filt.loc[filt.filt_name.isin(epoch_names)]
+        filt = filt.drop(labels=['filt_name'], axis=1)
+    elif kind == 'synthetic':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.kind == '11']
+        filt = filt.loc[filt.olp_type == 'synthetic']
+    elif kind == 'sounds':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.kind == '11']
+        filt = filt.loc[filt.SNR == 0]
+        filt = filt.loc[((filt.synth_kind=='A') & (filt.olp_type!='synthetic')) |
+                        ((filt.synth_kind=='N') & (filt.olp_type=='synthetic'))]
+
+    # sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=False)
+    # bad_dict = ohel.plot_sound_stats(sound_df, ['max_power', 'RMS_power'], labels=['Max Power', 'RMS Power'],
+    #                                  lines={'RMS_power': 0.95, 'max_power': 0.3}, synth_kind='N')
+    # bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock for 'N'
+    # Get rid of the sounds that, through the lines above, would have been decided to not meet our criteria
+    bads = ['Branch', 'CashRegister', 'Heels', 'Woodblock', 'Castinets', 'Dice', 'Tsik', 'TwitterB']  # RMS power + noisy marm
+    filt = filt.loc[filt['BG'].apply(lambda x: x not in bads)]
+    filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
+
+    if metric == True:
+        filt = df_filters(filt, snr_threshold=0.12, rel_cut=2.5, r_cut=0.4, weight_lim=[-0.5, 2])
+
+    return filt

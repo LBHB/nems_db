@@ -15,6 +15,7 @@ import nems_lbhb.projects.olp.OLP_fit as ofit
 import pandas as pd
 from matplotlib import cm
 import itertools
+from nems_lbhb.stats import jack_mean_err
 
 
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))
@@ -86,7 +87,8 @@ def intro_figure_spectrograms_wip():
 def intro_figure_spectrograms_two():
     '''2022_11_24. Plots two spectrograms and then the overlapping, useful for my experiment schematic.'''
     path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
-    piano_path = path + 'Background2/03Insect Buzz.wav'
+    # piano_path = path + 'Background2/03Insect Buzz.wav'
+    piano_path = path + 'Background2/08Waterfall.wav'
     bass_path = path + 'Foreground3/01Fight Squeak.wav'
     paths = [piano_path, bass_path]
 
@@ -101,6 +103,45 @@ def intro_figure_spectrograms_two():
         specs.append(spec)
         ax[nn].spines['top'].set_visible(True), ax[nn].spines['bottom'].set_visible(True)
         ax[nn].spines['left'].set_visible(True), ax[nn].spines['right'].set_visible(True)
+
+    comb = specs[0] + specs[1]
+    ax[4].imshow(comb, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                 cmap='gray_r')
+    ax[3].set_yticks([]), ax[3].set_xticks([])
+    ax[3].spines['top'].set_visible(False), ax[3].spines['bottom'].set_visible(False)
+    ax[3].spines['left'].set_visible(False), ax[3].spines['right'].set_visible(False)
+    ax[4].set_yticks([]), ax[4].set_xticks([])
+    ax[4].spines['top'].set_visible(True), ax[4].spines['bottom'].set_visible(True)
+    ax[4].spines['left'].set_visible(True), ax[4].spines['right'].set_visible(True)
+    ax[4].set_ylabel('Frequency (Hz)'), ax[4].set_xlabel('Time (s)')
+    ax[1].set_ylabel('Frequency (Hz)'), ax[2].set_xlabel('Time (s)')
+
+
+def intro_figure_spectrograms_colors():
+    '''2022_11_24. Plots two spectrograms and then the overlapping, useful for my experiment schematic.'''
+    path = '/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+    piano_path = path + 'Background2/08Waterfall.wav'
+    # piano_path = path + 'Background2/08Waterfall.wav'
+    # bass_path = path + 'Foreground3/01Fight Squeak.wav'
+    bass_path = path + 'Foreground3/02Gobble.wav'
+
+    paths = [piano_path, bass_path]
+    cols = ['Blues', 'Greens', 'gray_r']
+
+    fig, ax = plt.subplots(5, 1, figsize=(7.5, 10))
+    specs = []
+    for nn, pth in enumerate(paths):
+        sfs, W = wavfile.read(pth)
+        spec = gtgram(W, sfs, 0.02, 0.01, 48, 0, 24000)
+        ax[nn].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                      cmap=cols[nn])
+        ax[nn].set_yticks([]), ax[nn].set_xticks([])
+        specs.append(spec)
+        ax[nn].spines['top'].set_visible(True), ax[nn].spines['bottom'].set_visible(True)
+        ax[nn].spines['left'].set_visible(True), ax[nn].spines['right'].set_visible(True)
+
+    ax[2].imshow(spec, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
+                  cmap=cols[nn])
 
     comb = specs[0] + specs[1]
     ax[4].imshow(comb, aspect='auto', origin='lower', extent=[0, spec.shape[1], 0, spec.shape[0]],
@@ -539,6 +580,7 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
     response_heatmaps_comparison(weight_df, site='CLT008a', bg='Wind', fg='Geese', cellid='CLT008a-046-2',
                                      batch=340, bin_kind='11',
                                      synth_kind='A', sigma=2, sort=True, example=True, lin_sum=True)'''
+    plt.rcParams['svg.fonttype'] = 'none'
     df['expt_num'] = [int(aa[4:6]) for aa in df['cellid']]
     if synth_kind == 'n/a':
         all_cells = df.loc[(df['cellid'].str.contains(site)) & (df.BG == bg) & (df.FG == fg) & (df.kind == bin_kind)]
@@ -1136,9 +1178,9 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
     (wFG+wBG) / 2. Then scatters them.'''
     weight_df = weight_df.loc[weight_df.area==area]
     if area=='A1':
-        col = 'indigo'
+        col = 'violet' #'indigo'
     elif area=='PEG':
-        col = 'maroon'
+        col = 'coral' #'maroon'
 
     weight_df['avg_weight'] = (weight_df.weightsA + weight_df.weightsB) / 2
     if x=='supp':
@@ -1192,8 +1234,9 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
     fig.tight_layout()
 
 
-def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh=0.6, strict_r=True,
-                                weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None, flanks=False):
+def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+                                weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None,
+                                stat_plot='median', flanks=False):
     '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
     with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
     stay True at this point'''
@@ -1280,20 +1323,27 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
         sort_animals.sort()
         for ee, an in enumerate(sort_animals):
             animal_df = filt.loc[filt.animal == an]
-            ax[num].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.median(animal_df[f'weightsA_start']), np.median(animal_df[f'weightsA_end'])],
-                               label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)#, marker=symbols[cnt])
-            ax[num].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.median(animal_df[f'weightsB_start']), np.median(animal_df[f'weightsB_end'])],
-                               color=colors[ee], alpha=alph) #, marker=symbols[cnt])
-            ax[num].errorbar(x=['BG_start', 'BG_end'],
-                            y=[np.median(animal_df[f'weightsA_start']), np.median(animal_df[f'weightsA_end'])],
-                           yerr=[stats.sem(animal_df[f'weightsA_start']), stats.sem(animal_df[f'weightsA_end'])], xerr=None,
-                           color=colors[ee], alpha=alph)
-            ax[num].errorbar(x=['FG_start', 'FG_end'],
-                            y=[np.median(animal_df[f'weightsB_start']), np.median(animal_df[f'weightsB_end'])],
-                           yerr=[stats.sem(animal_df[f'weightsB_start']), stats.sem(animal_df[f'weightsB_end'])], xerr=None,
-                           color=colors[ee], alpha=alph)
+
+            if stat_plot == 'mean':
+                bg_m_start, fg_m_start = np.mean(animal_df.weightsA_start), np.mean(animal_df.weightsB_start)
+                bg_se_start, fg_se_start = stats.sem(animal_df.weightsA_start), stats.sem(animal_df.weightsB_start)
+                bg_m_end, fg_m_end = np.mean(animal_df.weightsA_end), np.mean(animal_df.weightsB_end)
+                bg_se_end, fg_se_end = stats.sem(animal_df.weightsA_end), stats.sem(animal_df.weightsB_end)
+                stat_label = 'Mean'
+            elif stat_plot == 'median':
+                bg_m_start, bg_se_start = jack_mean_err(animal_df.weightsA_start, do_median=True)
+                fg_m_start, fg_se_start = jack_mean_err(animal_df.weightsB_start, do_median=True)
+                bg_m_end, bg_se_end = jack_mean_err(animal_df.weightsA_end, do_median=True)
+                fg_m_end, fg_se_end = jack_mean_err(animal_df.weightsB_end, do_median=True)
+                stat_label = 'Median'
+
+            ax[num].scatter(x=['BG_start', 'BG_end'], y=[bg_m_start, bg_m_end],
+                            label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)
+            ax[num].scatter(x=['FG_start', 'FG_end'], y=[fg_m_start, fg_m_end], color=colors[ee], alpha=alph)
+            ax[num].errorbar(x=['BG_start', 'BG_end'], y=[bg_m_start, bg_m_end], yerr=[bg_se_start, bg_se_end],
+                            xerr=None, color=colors[ee], alpha=alph)
+            ax[num].errorbar(x=['FG_start', 'FG_end'], y=[fg_m_start, fg_m_end], yerr=[fg_se_start, fg_se_end],
+                            xerr=None, color=colors[ee], alpha=alph)
 
             ax[num].legend(fontsize=8, loc='upper right')
 
@@ -1307,28 +1357,35 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
         print(tts)
         stat_list.append(tts), filt_list.append(filt)
 
-        ax[0].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+        ax[0].set_ylabel(f'{stat_label} Weight', fontsize=14, fontweight='bold')
         ax[num].set_title(f'{aa} - Respond to both\n BG and FG alone', fontsize=14, fontweight='bold')
         ax[num].tick_params(axis='both', which='major', labelsize=10)
         ax[num].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
 
         if summary == True:
-            ax[num].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.median(filt[f'weightsA_start']), np.median(filt[f'weightsA_end'])],
-                            label=f'Total (n={len(filt)})', color='black')  # , marker=symbols[cnt])
-            ax[num].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.median(filt[f'weightsB_start']), np.median(filt[f'weightsB_end'])],
-                            color='black')  # , marker=symbols[cnt])
-            ax[num].errorbar(x=['BG_start', 'BG_end'],
-                             y=[np.median(filt[f'weightsA_start']), np.median(filt[f'weightsA_end'])],
-                             yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
-                             xerr=None, color='black')
-            ax[num].errorbar(x=['FG_start', 'FG_end'],
-                             y=[np.median(filt[f'weightsB_start']), np.median(filt[f'weightsB_end'])],
-                             yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
-                             xerr=None, color='black')
+            if stat_plot == 'mean':
+                bg_m_start_summary, fg_m_start_summary = np.mean(filt.weightsA_start), np.mean(filt.weightsB_start)
+                bg_se_start_summary, fg_se_start_summary = stats.sem(filt.weightsA_start), stats.sem(filt.weightsB_start)
+                bg_m_end_summary, fg_m_end_summary = np.mean(filt.weightsA_end), np.mean(filt.weightsB_end)
+                bg_se_end_summary, fg_se_end_summary = stats.sem(filt.weightsA_end), stats.sem(filt.weightsB_end)
+                stat_label = 'Mean'
+            elif stat_plot == 'median':
+                bg_m_start_summary, bg_se_start_summary = jack_mean_err(filt.weightsA_start, do_median=True)
+                fg_m_start_summary, fg_se_start_summary = jack_mean_err(filt.weightsB_start, do_median=True)
+                bg_m_end_summary, bg_se_end_summary = jack_mean_err(filt.weightsA_end, do_median=True)
+                fg_m_end_summary, fg_se_end_summary = jack_mean_err(filt.weightsB_end, do_median=True)
+                stat_label = 'Median'
+
+            ax[num].scatter(x=['BG_start', 'BG_end'], y=[bg_m_start_summary, bg_m_end_summary],
+                            label=f'Total (n={len(filt)})', color='black')
+            ax[num].scatter(x=['FG_start', 'FG_end'], y=[fg_m_start_summary, fg_m_end_summary], color='black')
+            ax[num].errorbar(x=['BG_start', 'BG_end'], y=[bg_m_start_summary, bg_m_end_summary],
+                             yerr=[bg_se_start_summary, bg_se_end_summary], xerr=None, color='black')
+            ax[num].errorbar(x=['FG_start', 'FG_end'], y=[fg_m_start_summary, fg_m_end_summary],
+                             yerr=[fg_se_start_summary, fg_se_end_summary], xerr=None, color='black')
 
             ax[num].legend(fontsize=8, loc='upper right')
+
     if flanks==True:
         for num, aa in enumerate(areas):
             area_FG, area_BG = quad2.loc[quad2.area == aa], quad6.loc[quad6.area == aa]
@@ -1337,20 +1394,28 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
             filt_BG = area_BG.loc[(area_BG['r_start'] >= r_thresh) & (area_BG['r_end'] >= r_thresh)]
             filt_FG = area_FG.loc[(area_FG['r_start'] >= r_thresh) & (area_FG['r_end'] >= r_thresh)]
             animal_BG, animal_FG = filt_BG.loc[filt_BG.animal == an], filt_FG.loc[filt_FG.animal == an]
+
+            if stat_plot == 'mean':
+                bg_m_start, fg_m_start = np.mean(filt_BG.weightsA_start), np.mean(filt_FG.weightsB_start)
+                bg_se_start, fg_se_start = stats.sem(filt_BG.weightsA_start), stats.sem(filt_FG.weightsB_start)
+                bg_m_end, fg_m_end = np.mean(filt_BG.weightsA_end), np.mean(filt_FG.weightsB_end)
+                bg_se_end, fg_se_end = stats.sem(filt_BG.weightsA_end), stats.sem(filt_FG.weightsB_end)
+                stat_label = 'Mean'
+            elif stat_plot == 'median':
+                bg_m_start, bg_se_start = jack_mean_err(filt_BG.weightsA_start, do_median=True)
+                fg_m_start, fg_se_start = jack_mean_err(filt_FG.weightsB_start, do_median=True)
+                bg_m_end, bg_se_end = jack_mean_err(filt_BG.weightsA_end, do_median=True)
+                fg_m_end, fg_se_end = jack_mean_err(filt_FG.weightsB_end, do_median=True)
+                stat_label = 'Median'
+
             ax[num+len(areas)].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
-                               label=f'BG+/FGo or\nBGo/FG+ (n={len(filt_BG)}, {len(filt_FG)})', color="dimgrey") #, marker=symbols[cnt])
-            ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],color='dimgrey')
-                               # label=f'{an} (n={len(animal_BG)}, {len(animal_FG)})', color='dimgrey') #, marker=symbols[cnt])
-            ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(filt_BG[f'weightsA_start']), np.nanmean(filt_BG[f'weightsA_end'])],
-                           yerr=[stats.sem(filt_BG[f'weightsA_start']), stats.sem(filt_BG[f'weightsA_end'])], xerr=None,
-                           color='dimgrey')
-            ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(filt_FG[f'weightsB_start']), np.nanmean(filt_FG[f'weightsB_end'])],
-                           yerr=[stats.sem(filt_FG[f'weightsB_start']), stats.sem(filt_FG[f'weightsB_end'])], xerr=None,
-                           color='dimgrey')
+                            y=[bg_m_start, bg_m_end], label=f'BG+/FGo or\nBGo/FG+ (n={len(filt_BG)}, {len(filt_FG)})',
+                                       color="dimgrey")
+            ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'], y=[fg_m_start, fg_m_end], color='dimgrey')
+            ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'], y=[bg_m_start, bg_m_end], yerr=[bg_se_start, bg_se_end],
+                                        xerr=None, color='dimgrey')
+            ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'], y=[fg_m_start, fg_m_end], yerr=[fg_se_start, fg_se_end],
+                                        xerr=None, color='dimgrey')
 
             area_df = quad3.loc[quad3.area==aa]
             if strict_r == True:
@@ -1358,22 +1423,27 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
             else:
                 filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
 
-            ax[num + len(areas)].scatter(x=['BG_start', 'BG_end'],
-                            y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
-                            label=f'BG+/FG+ (n={len(filt)})', color='black')  # , marker=symbols[cnt])
-            ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'],
-                            y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
-                            color='black')  # , marker=symbols[cnt])
-            ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'],
-                             y=[np.nanmean(filt[f'weightsA_start']), np.nanmean(filt[f'weightsA_end'])],
-                             yerr=[stats.sem(filt[f'weightsA_start']), stats.sem(filt[f'weightsA_end'])],
-                             xerr=None,
-                             color='black')
-            ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'],
-                             y=[np.nanmean(filt[f'weightsB_start']), np.nanmean(filt[f'weightsB_end'])],
-                             yerr=[stats.sem(filt[f'weightsB_start']), stats.sem(filt[f'weightsB_end'])],
-                             xerr=None,
-                             color='black')
+            if stat_plot == 'mean':
+                bg_m_start_summary, fg_m_start_summary = np.mean(filt.weightsA_start), np.mean(filt.weightsB_start)
+                bg_se_start_summary, fg_se_start_summary = stats.sem(filt.weightsA_start), stats.sem(
+                    filt.weightsB_start)
+                bg_m_end_summary, fg_m_end_summary = np.mean(filt.weightsA_end), np.mean(filt.weightsB_end)
+                bg_se_end_summary, fg_se_end_summary = stats.sem(filt.weightsA_end), stats.sem(filt.weightsB_end)
+                stat_label = 'Mean'
+            elif stat_plot == 'median':
+                bg_m_start_summary, bg_se_start_summary = jack_mean_err(filt.weightsA_start, do_median=True)
+                fg_m_start_summary, fg_se_start_summary = jack_mean_err(filt.weightsB_start, do_median=True)
+                bg_m_end_summary, bg_se_end_summary = jack_mean_err(filt.weightsA_end, do_median=True)
+                fg_m_end_summary, fg_se_end_summary = jack_mean_err(filt.weightsB_end, do_median=True)
+                stat_label = 'Median'
+
+            ax[num+len(areas)].scatter(x=['BG_start', 'BG_end'], y=[bg_m_start_summary, bg_m_end_summary],
+                            label=f'BG+/FG+ (n={len(filt)})', color='black')
+            ax[num+len(areas)].scatter(x=['FG_start', 'FG_end'], y=[fg_m_start_summary, fg_m_end_summary], color='black')
+            ax[num+len(areas)].errorbar(x=['BG_start', 'BG_end'], y=[bg_m_start_summary, bg_m_end_summary],
+                             yerr=[bg_se_start_summary, bg_se_end_summary], xerr=None, color='black')
+            ax[num+len(areas)].errorbar(x=['FG_start', 'FG_end'], y=[fg_m_start_summary, fg_m_end_summary],
+                             yerr=[fg_se_start_summary, fg_se_end_summary], xerr=None, color='black')
 
             BGsBGe = stats.ttest_ind(filt_BG['weightsA_start'], filt_BG['weightsA_end'])
             FGsFGe = stats.ttest_ind(filt_FG['weightsB_start'], filt_FG['weightsB_end'])
@@ -1382,7 +1452,7 @@ def plot_all_weight_comparisons(df, fr_thresh=0.03, snr_threshold=0.12, r_thresh
             stat_list.append(ttt)
 
             ax[num+len(areas)].legend(fontsize=8, loc='upper right')
-            ax[2].set_ylabel('Mean Weight', fontsize=14, fontweight='bold')
+            ax[2].set_ylabel(f'{stat_label} Weight', fontsize=14, fontweight='bold')
             # ax[2].set_yticklabels([0.3,0.4,0.5,0.6,0.7,0.8])
             ax[num+len(areas)].set_xticklabels(['0-0.5s\nBG', '0.5-1s\nBG', '0-0.5s\nFG', '0.5-1s\nFG'], fontsize=12, fontweight='bold')
             ax[num+len(areas)].set_title(f'{aa} - Respond to only\none sound alone', fontsize=14, fontweight='bold')
@@ -2276,7 +2346,7 @@ def plot_dynamic_site_errors(full_df, dyn_kind='fh', area='A1', thresh=0.03, r_c
 
 
 def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=None, rel_cut=2.5,
-                            area='A1', bar=True):
+                            area='A1', bar=True, stat_plot='median'):
     '''2023_07_14. Function to make figures 2B and 2C. Takes a prefiltered (just for
     olp_type, snr, layer, stuff like that), and makes a histogram of the weights,
     plots the means, and then plots the relative gain histogram.'''
@@ -2317,29 +2387,36 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     ax[0].tick_params(axis='both', which='major', labelsize=8)
     ymin, ymax = ax[0].get_ylim()
 
-    BG1, FG1 = np.median(to_plot.weightsA), np.median(to_plot.weightsB)
-    BG1sem, FG1sem = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
+    if stat_plot=='mean':
+        bg_m, bg_m = np.mean(to_plot.weightsA), np.mean(to_plot.weightsB)
+        bg_se, fg_se = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
+        label = 'Mean'
+    elif stat_plot=='median':
+        bg_m, bg_se = jack_mean_err(to_plot.weightsA, do_median=True)
+        fg_m, fg_se = jack_mean_err(to_plot.weightsB, do_median=True)
+        label = 'Median'
+
     ttest1 = stats.ttest_ind(to_plot.weightsA, to_plot.weightsB)
 
     if bar:
-        ax[1].bar("BG", BG1, yerr=BG1sem, color='deepskyblue')
-        ax[1].bar("FG", FG1, yerr=FG1sem, color='yellowgreen')
+        ax[1].bar("BG", bg_m, yerr=bg_se, color='deepskyblue')
+        ax[1].bar("FG", fg_m, yerr=fg_se, color='yellowgreen')
 
     else:
-        ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
-        ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
+        ax[1].bar("BG", bg_m, yerr=bg_se, color='white')
+        ax[1].bar("FG", fg_m, yerr=fg_se, color='white')
 
-        ax[1].scatter(x=['BG', 'FG'], y=[BG1, FG1], color=['deepskyblue', 'yellowgreen'])
-        ax[1].errorbar(x=['BG', 'FG'], y=[BG1, FG1], yerr=[BG1sem, FG1sem], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+        ax[1].scatter(x=['BG', 'FG'], y=[bg_m, fg_m], color=['deepskyblue', 'yellowgreen'])
+        ax[1].errorbar(x=['BG', 'FG'], y=[bg-M, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
 
-    ax[1].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+    ax[1].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=10)
     ax[1].set_xticklabels(['BG','FG'], fontsize=8, fontweight='bold')
     ax[1].tick_params(axis='y', which='major', labelsize=8)
     if ttest1.pvalue < 0.001:
         title = 'p<0.001'
     else:
         title = f"{ttest1.pvalue:.3f}"
-    ax[1].set_title(f"BG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}\n{title}", fontsize=8)
+    ax[1].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}", fontsize=8)
 
 
     rel_weight = (to_plot.weightsB - to_plot.weightsA) / (to_plot.weightsB + to_plot.weightsA)
@@ -2547,8 +2624,11 @@ def snr_scatter(df, xcol='bg_snr', ycol='fg_snr', thresh=0.3, area='A1'):
     ax[0].hlines([thresh], xmin, xmax, colors='black', linestyles=':', lw=1)
     size = len(df)
     snr3 = len(df.loc[(df.bg_snr >= thresh) & (df.fg_snr >= thresh)]) / size * 100
-    snr6 = len(df.loc[(df.bg_snr < thresh) & (df.fg_snr < thresh)]) / size * 100
-    ax[0].set_title(f'{df.area.unique()[0]}: thresh={thresh}\nAbove: {np.around(snr3,1)}%, Below: {np.around(snr6,1)}%', fontsize=10, fontweight='bold')
+    snr5 = len(df.loc[(df.bg_snr < thresh) & (df.fg_snr < thresh)]) / size * 100
+    snr2 = len(df.loc[(df.bg_snr < thresh) & (df.fg_snr >= thresh)]) / size * 100
+    snr6 = len(df.loc[(df.bg_snr >= thresh) & (df.fg_snr < thresh)]) / size * 100
+    ax[0].set_title(f'{df.area.unique()[0]}: thresh={thresh}\nAbove: {np.around(snr3,1)}%, Below: {np.around(snr5,1)}%\n'
+                    f'FG Only: {np.around(snr2,1)}%, BG only: {np.around(snr6,2)}%', fontsize=10, fontweight='bold')
 
     edges = np.arange(0, 1, .05)
     na, xa = np.histogram(df[xcol], bins=edges)
@@ -2566,10 +2646,12 @@ def snr_scatter(df, xcol='bg_snr', ycol='fg_snr', thresh=0.3, area='A1'):
     ax[2].vlines([thresh], ymin, maxmax, colors='black', linestyles=':', lw=1)
 
 
-def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, category='area'):
+def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area=None, category='area'):
     '''2023_07_28. Takes a dataframe with one or multiple areas and makes a simple summary bar plot of the median
     weights. If you put any other categorical column in the category input it'll work too.'''
 
+    if area:
+        filt = filt.loc[filt.area==area]
     if threshold:
         filt, _ = ohel.quadrants_by_FR(filt, threshold=threshold, quad_return=3)
     if snr_threshold:
@@ -2608,7 +2690,7 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, cate
         else:
             title = f"{ttest1.pvalue:.3f}"
 
-        little_title = f"{ar} - BG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}, {title}"
+        little_title = f"{ar[0]} - BG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}, {title}"
         titles.append(little_title)
 
         count += 1
@@ -2620,8 +2702,10 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, cate
     ax.legend(('Background', 'Foreground'), fontsize=14, prop=dict(weight='bold'), labelspacing=0.25)
 
     title_list = '\n'.join(titles)
-    ax.set_title(f"{title_list}", fontsize=10)
-
+    if area=='A1' or area=='PEG':
+        ax.set_title(f"{area}\n{title_list}", fontsize=10)
+    else:
+        ax.set_title(f"{title_list}", fontsize=10)
 
 def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], category='kind', mult_comp=3,
                                     statistic='paired', secondary_area_name='PEG'):
@@ -2724,7 +2808,7 @@ def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], categ
         lab_a1, lab_peg = '\n'.join(legend_labels_a1), '\n'.join(legend_labels_peg)
         ax.legend(labels=[lab_a1, lab_peg])
     if category=='SNR':
-        ax.set_ylabel('FG db relative to BG', fontsize=12, fontweight='bold')
+        ax.set_ylabel('BG db relative to FG', fontsize=12, fontweight='bold')
 
     # ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]} - n={len(C)}", fontsize=10, fontweight='bold')
     fig.tight_layout()
@@ -2841,7 +2925,7 @@ def plot_spectral_overlap_scatter(filt, area='A1', y_metric='rel_gain'):
                    y=[row[f'BG_{y_metric}'], row[f'FG_{y_metric}']],
                    color=['deepskyblue', 'yellowgreen'], zorder=2, s=10)
 
-    Y = np.concatenate((dff[f'BG_{ymetric}'].values, dff[f'FG_{ymetric}'].values))
+    Y = np.concatenate((dff[f'BG_{y_metric}'].values, dff[f'FG_{y_metric}'].values))
     X = np.concatenate((dff[f'BG_spectral_overlap'].values, dff[f'FG_spectral_overlap'].values))
     reg = stats.linregress(X, Y)
     x = np.asarray(ax.get_xlim())
@@ -2949,7 +3033,7 @@ def plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidt
     labels = [cont_var_labels, cat_var_labels]
 
     figgy_size = len(cont_var) + len(cat_var) + 1
-    f = plt.figure(figsize=(12, 4))
+    f = plt.figure(figsize=(10, 4))
     cont = plt.subplot2grid((4, figgy_size), (0, 0), rowspan=5, colspan=len(cont_var))
     cat = plt.subplot2grid((4, figgy_size), (0, len(cont_var)+1), rowspan=5, colspan=len(cat_var))
     axes = [cont, cat]
@@ -2993,3 +3077,224 @@ def plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidt
         ax.legend()
     f.tight_layout()
 
+
+def example_dynamic_psth(df, cellid, bg, fg, dyn='fh', smooth=True, sigma=1):
+    '''2023_08_14. Takes the big original dataframe you load and a specific cellid, bg, and fg, as well as which
+    dyn kind you want to plot and plots the PSTHs above and the difference metric below. Find your example using
+    ofig.plot_dynamic_row_psth(), which takes a bit of poking around.'''
+    row = df.loc[(df.cellid==cellid) & (df.BG==bg) & (df.FG==fg) & (df.dyn_kind==dyn)]
+    row = row.iloc[0]
+
+    if dyn == 'fh':
+        alone_col, half_col = 'deepskyblue', 'slateblue'
+    elif dyn == 'hf':
+        alone_col, half_col = 'yellowgreen', 'darkolivegreen'
+
+    if row.resp_full.shape[0] == 200:
+        time = (np.arange(0, row.resp_full.shape[0]) / 100)
+        time = time - 0.5
+    else:
+        time = (np.arange(0, row.resp_full.shape[0]) / 100)
+
+    fig, ax = plt.subplots(2, 1, figsize=(10,6), sharex=True)
+
+    if smooth:
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_full, sigma), color='black', label='Full BG / Full FG (Full)')
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_half, sigma), color=half_col, label='Full BG / Half FG (Half)')
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_alone, sigma), color=alone_col, label='Full BG (Alone)')
+    else:
+        ax[0].plot(time, row.resp_full, label='Full BG / Full FG (Full)', color='black')
+        ax[0].plot(time, row.resp_half, label='Full BG / Half FG (Half)', color=half_col)
+        ax[0].plot(time, row.resp_alone, label='Full BG (Alone)', color=alone_col)
+
+    ax[0].legend()
+    ax[0].set_title(f"{row.area} - {row.cellid} - BG: {row.BG}, FG: {row.FG} ", fontweight='bold', fontsize=10)
+    ax[0].set_xticks(np.arange(time[0],time[-1],0.5))
+    ymin, ymax = ax[0].get_ylim()
+    ax[0].vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+    if row.resp_full.shape[0] == 200:
+        ax[0].vlines([0, 1], ymin, ymax, colors='black', linestyles='--')
+    ax[0].set_ylim(ymin, ymax)
+    ax[0].set_ylabel('spk/s', fontweight='bold', fontsize=10)
+
+    full_err_per_cell = np.abs(row['resp_full'] - row['resp_half'])
+    alone_err_per_cell = np.abs(row['resp_alone'] - row['resp_half'])
+    std_per_cell = np.std(np.concatenate((row['resp_full'], row['resp_half'], row['resp_alone'])), keepdims=True)
+    # norm per cell:
+    full_err = full_err_per_cell / std_per_cell
+    full_err_se = full_err.std(axis=0) / np.sqrt(full_err.shape[0])
+
+    # norm per cell:
+    alone_err = alone_err_per_cell / std_per_cell
+    alone_err_se = alone_err.std(axis=0) / np.sqrt(alone_err.shape[0])
+
+    if smooth:
+        ax[1].plot(time, sf.gaussian_filter1d(full_err, sigma), color='black', label='Full - Half')
+        # ax[1].fill_between(time, (full_err - full_err_se * 2), (full_err + full_err_se * 2),
+        #                             alpha=0.4, color='black')
+        ax[1].plot(time, sf.gaussian_filter1d(alone_err, sigma), color=alone_col, label='Alone - Half')
+        # ax[1].fill_between(time, (alone_err - alone_err_se * 2), (alone_err + alone_err_se * 2),
+        #                             alpha=0.4, color=alone_col)
+    else:
+        ax[1].plot(time, full_err, color='black', label='Full - Half')
+        ax[1].plot(time, alone_err, color=alone_col, label='Alone - Half')
+
+    ax[1].legend()
+    baseline = np.nanmean(alone_err[50:100])
+    ax[1].set_xticks(np.arange(time[0], time[-1], 0.5))
+    ymin, ymax = ax[1].get_ylim()
+    ax[1].vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+    if full_err.shape[0] == 200:
+        ax[1].vlines([0, 1], ymin, ymax, colors='black', linestyles='--')
+    ax[1].hlines([baseline], time[0], time[-1], colors='black', linestyles='--', lw=0.5)
+
+    ax[-1].set_xlabel("Time (s)", fontweight='bold', fontsize=10)
+    ax[-1].set_xlim(-0.2, 1.3)
+
+
+def plot_dynamic_row_psth(area_df, ii, smooth=True, sigma=1):
+    row = area_df.iloc[ii]
+
+    if dyn == 'fh':
+        alone_col, half_col = 'deepskyblue', 'slateblue'
+    elif dyn == 'hf':
+        alone_col, half_col = 'yellowgreen', 'darkolivegreen'
+
+    if row.resp_full.shape[0] == 200:
+        time = (np.arange(0, row.resp_full.shape[0]) / 100)
+        time = time - 0.5
+    else:
+        time = (np.arange(0, row_resp_full.shape[0]) / 100)
+
+    fig, ax = plt.subplots(2, 1, figsize=(10,6), sharex=True)
+
+    if smooth:
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_full, sigma), color='black', label='Full BG / Full FG')
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_alone, sigma), color=alone_col, label='Full BG')
+        ax[0].plot(time, sf.gaussian_filter1d(row.resp_half, sigma), color=half_col, label='Full BG / Half FG')
+    else:
+        ax[0].plot(time, row.resp_full, label='Full BG / Full FG', color='black')
+        ax[0].plot(time, row.resp_alone, label='Full BG', color=alone_col)
+        ax[0].plot(time, row.resp_half, label='Full BG / Half FG', color=half_col)
+
+    ax[0].legend()
+    ax[0].set_title(f"{row.cellid} - BG: {row.BG}, FG: {row.FG} ", fontweight='bold', fontsize=10)
+    ax[0].set_xticks(np.arange(time[0],time[-1],0.5))
+    ymin, ymax = ax[0].get_ylim()
+    ax[0].vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+    if row.resp_full.shape[0] == 200:
+        ax[0].vlines([0, 1], ymin, ymax, colors='black', linestyles='--')
+    ax[0].set_xlabel("Time (s)", fontweight='bold', fontsize=10)
+
+    if smooth:
+        ax[1].plot(time, sf.gaussian_filter1d(np.abs(row.resp_full - row.resp_half), sigma), color='black')
+        ax[1].plot(time, sf.gaussian_filter1d(np.abs(row.resp_alone - row.resp_half), sigma), color=alone_col)
+
+
+    else:
+        ax[1].plot(time, np.abs(row.resp_full - row.resp_half), color='black')
+        ax[1].plot(time, np.abs(row.resp_alone - row.resp_half), color=alone_col)
+
+
+def plot_dynamic_errors(full_df, dyn_kind='all', snr_threshold=0.12):
+    '''2023_08_14. The dynamic summary plot, finally. Give it the dataframe you loaded straight up from
+    ohel.merge_dynamic_error() and specify which dynamic kind (fh or hf, or all if you want both plotted together)'''
+    areas = full_df.area.unique().tolist()
+    full_df = full_df.loc[(full_df.bg_snr >= snr_threshold) & (full_df.fg_snr >= snr_threshold)]
+    areas.sort()
+
+    if dyn_kind == 'fh' or dyn_kind == 'hf':
+        fig, axes = plt.subplots(2, 1, figsize=(10,6), sharex=True, sharey=True)
+        dyn_plot = [dyn_kind]
+    elif dyn_kind == 'all':
+        fig, axes = plt.subplots(4, 1, figsize=(10, 12), sharey=True, sharex=True)
+        dyn_plot = ['fh', 'hf']
+
+    cc, time_dict, mins, maxs = 0, {}, [], []
+    for dd in dyn_plot:
+        for cnt, ar in enumerate(areas):
+            dyn_df = full_df.loc[full_df.dyn_kind == dd]
+            area_df = dyn_df.loc[dyn_df.area == ar]
+
+            if dd == 'hf':
+                alone_col, half_col = 'yellowgreen', 'darkolivegreen'
+            elif dd == 'fh':
+                alone_col, half_col = 'deepskyblue', 'slateblue'
+            quad3 = area_df
+
+            full_per_cell = np.stack(quad3['resp_full'].values)  # instance X time PSTH
+            half_per_cell = np.stack(quad3['resp_half'].values)  # instance X time PSTH
+            alone_per_cell = np.stack(quad3['resp_alone'].values)  # instance X time PSTH
+            full_err_per_cell = np.abs(full_per_cell - half_per_cell)
+            alone_err_per_cell = np.abs(alone_per_cell - half_per_cell)
+            std_per_cell = np.std(np.concatenate((np.stack(quad3['resp_full'].values),
+                                np.stack(quad3['resp_half'].values), np.stack(quad3['resp_alone'].values)),
+                                       axis=1), axis=1, keepdims=True)
+            # norm per cell:
+            full_err_per_cell = full_err_per_cell / std_per_cell
+            full_err = full_err_per_cell.mean(axis=0)
+            full_err_se = full_err_per_cell.std(axis=0) / np.sqrt(full_err_per_cell.shape[0])
+
+            # norm per cell:
+            alone_err_per_cell = alone_err_per_cell / std_per_cell
+            alone_err = alone_err_per_cell.mean(axis=0)
+            alone_err_se = alone_err_per_cell.std(axis=0) / np.sqrt(alone_err_per_cell.shape[0])
+
+            if full_err.shape[0] == 200:
+                time = (np.arange(0, full_err.shape[0]) / 100)
+                time = time - 0.5
+            else:
+                time = (np.arange(0, full_err.shape[0]) / 100)
+
+            axes[cc+cnt].plot(time, full_err, color='black')
+            axes[cc+cnt].fill_between(time, (full_err - full_err_se*2), (full_err + full_err_se*2),
+                                 alpha=0.4, color='black')
+            axes[cc+cnt].plot(time, alone_err, color=alone_col)
+            axes[cc+cnt].fill_between(time, (alone_err - alone_err_se*2), (alone_err + alone_err_se*2),
+                                 alpha=0.4, color=alone_col)
+
+            baseline = np.nanmean(alone_err[50:100])
+
+            #calculate metric
+            stim_section = (full_err - alone_err_se*2)[100:150]
+            above_baseline = list(stim_section > baseline)
+            bool = above_baseline + [False, False, False]
+            three_below = [aa for aa in range(len(above_baseline)) if not any([bool[aa], bool[aa+1], bool[aa+2]])]
+            first_three_below = three_below[0] + 100 #First time the line remains below baseline, +the chopped part
+
+            # three_above = [aa for aa in range(len(above_baseline)) if all([bool[aa], bool[aa+1], bool[aa+2]])]
+            # last_three_above = three_above[-1] + 3 + 100 #Last time line is above baseline for 3 bins, +the chopped
+
+            axes[cc+cnt].legend()
+            axes[cc+cnt].set_title(f"{ar} - {dd} - n={len(quad3)} "
+                                   f"Time to baseline: {np.around(time[first_three_below] - 0.5, 2)}s",
+                                   fontweight='bold', fontsize=10)
+            axes[cc+cnt].set_xticks(np.arange(time[0],time[-1],0.5))
+            ymin, ymax = axes[cc+cnt].get_ylim()
+            mins.append(ymin), maxs.append(ymax)
+            # axes[cc+cnt].vlines([0.5], ymin, ymax, colors='black', linestyles=':')
+
+            axes[cc+cnt].plot(time[first_three_below], baseline*0.9, color='black', marker='^', markersize=10)
+            # axes[cc+cnt].arrow(time[first_three_below], baseline*0.9 - 0.05, 0, 0.05, head_width=0.015, color='black')
+            # axes[cc+cnt].vlines(time[first_three_below], ymax, ymin, colors='red', linestyles='solid')
+            # axes[cc+cnt].vlines(time[last_three_above]-0.001, ymax, ymax/2, colors='green', linestyles=':')
+            time_dict[f'{ar}_{dd}'] = np.around(time[first_three_below], 2) - 0.5
+            # time_dict[f'{ar}_{dd}_3above'] = np.around(time[last_three_above], 2) - 0.5
+
+            # if full_err.shape[0] == 200:
+            #     axes[cc + cnt].vlines([0, 1], ymin, ymax, colors='black', linestyles='--')
+            axes[cc+cnt].hlines([baseline], time[0], time[-1], colors='black', linestyles='--', lw=0.5)
+        axes[-1].set_xlabel("Time (s)", fontweight='bold', fontsize=10)
+        axes[-1].set_xlim(-0.2, 1.3)
+
+        ymi, yma = min(mins), max(maxs)
+        for ax in axes:
+            ax.vlines([0.5], ymi, yma, colors='black', linestyles=':')
+            if full_err.shape[0] == 200:
+                ax.vlines([0, 1], ymi, yma, colors='black', linestyles='--')
+            ax.set_ylim(ymi, yma)
+
+        cc += len(dyn_plot)
+    fig.tight_layout()
+
+    return time_dict
