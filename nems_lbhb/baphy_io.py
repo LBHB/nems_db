@@ -634,7 +634,7 @@ def load_trial_starts_openephys_master(openephys_folder):
             max_ts_diff = np.round(np.max(diff_matrix)*1000, decimals=2)
             import warnings
             warnings.warn("Number of probes is greater than 1. Only using timestamps from 1 probe. Max ts diff = " + str(max_ts_diff) + "ms")
-            if max_ts_diff > 2:
+            if max_ts_diff > 10:
                 raise ValueError("Probe ts difference is greater than 1ms. Difference might start impacting alignment")
         # now only finding timestamps for single stream, the changes in timestamp values between streams seems neglible
         ts = df.query("line == 1 and state == 1 and stream_type == 'LFP' and probe_name == 'ProbeA'")
