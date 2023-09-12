@@ -155,3 +155,14 @@ if __name__ == "__main__":
     day_list = ['SQD019Ta', 'SQD020Ta', 'SQD021Ta', 'SQD022Ta', 'SQD023Ta', 'SQD024Ta']
     my_test.sample_plots(XVARIABLE, day_list)
 
+    dataframe = my_test.dataframe
+
+    import seaborn as sns
+    # fun = sns.load_dataset(dataframe)
+    sns.relplot(
+        data=dataframe, kind='line',
+        x='day', y='correct'
+    )
+
+
+
