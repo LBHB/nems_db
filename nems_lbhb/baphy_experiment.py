@@ -176,8 +176,12 @@ class BAPHYExperiment:
                     self.siteid = cellid[:7]
                 else:
                     raise TypeError
-                self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
-                self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
+                if len(cellid[0].split("-")) > 3:
+                    self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+                else:
+                    self.probe_ids_to_load = ['' for c in cellid]
+                self.channels_to_load = [int(c.split("-")[-2]) for c in self.cells_to_load]
+                self.units_to_load = [int(c.split("-")[-1]) for c in self.cells_to_load]
             else:
                 self.siteid = os.path.split(parmfile[0])[-1].split('-')[0]
                 self.cells_to_load = None
@@ -201,13 +205,17 @@ class BAPHYExperiment:
 
             self.cells_to_extract = cellid
             self.cells_to_load = cellid
-            self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
-            self.units_to_load = [int(c.split("-")[2]) for c in cellid]
+            self.channels_to_load = [int(c.split("-")[-2]) for c in cellid]
+            self.units_to_load = [int(c.split("-")[-1]) for c in cellid]
+            if len(cellid[0].split("-"))>3:
+                self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+            else:
+                self.probe_ids_to_load = ['' for c in cellid]
             self.siteid = cellid[0].split('-')[0]
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
-        if len(self.parmfile)==0:
+        if len(self.parmfile) == 0:
             raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
         # we cannot assume all parmfiles come from same folder/experiment (site+number)

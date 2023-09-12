@@ -63,7 +63,7 @@ def load_data(site,stim_format,architecture="LN_STRF"):
     
     return cellnum, rec, ctx, loadkey, siteid, siteids
 
-def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF"):
+def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid=None):
     batch = 338
     epochs = ctx['est']['resp'].epochs
     stim_epochs = ep.epoch_names_matching(epochs, "^STIM_")
@@ -73,27 +73,31 @@ def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF"):
 
 
     rlist = []
-    strflist =[]
-    cell_list=[]
-    cid = 0
-    
-    for i in range(cellnum):
-        cid=i
+    strflist = []
+    cell_list = []
+
+    cellids = ctx['est']['resp'].chans
+    if cellid is None:
+        cellnumlist = range(len(chans))
+    else:
+        cellnumlist = [i for i,c in enumerate(cellids) if c==cellid]
+
+    for cid in cellnumlist:
         cellid = ctx['est']['resp'].chans[cid]
+        log.info(f"Fitting model for cell {cellid} ({loadkey}, {architecture})")
         X_ = ctx['est']['stim'].extract_epochs(stim_epochs)
         Y_ = ctx['est']['resp'].extract_epochs(stim_epochs)
-# convert to matrix
+        # convert to matrix
         X_est = np.stack([X_[k][0,:,:].T for k in X_.keys()], axis=0)
         Y_est = np.stack([Y_[k][0,[cid],:].T for k in X_.keys()], axis=0)
 
         X_ = ctx['val']['stim'].extract_epochs(val_epochs)
         Y_ = ctx['val']['resp'].extract_epochs(val_epochs)
-# convert to matrix
+        # convert to matrix
         X_val = np.stack([X_[k][0,:,:].T for k in X_.keys()], axis=0)
         Y_val = np.stack([Y_[k][0,[cid],:].T for k in X_.keys()], axis=0)
 
-#fit single sound STRF
-
+        #fit single sound STRF
         if architecture == "LN_Tiled_STRF":
             input_channels = int(X_est.shape[2]/2)
             time_lags = 16

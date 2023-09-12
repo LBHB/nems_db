@@ -4451,9 +4451,10 @@ def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_
 
     # new method
     def usematfile():
+        # parse cellid compatible with multi-probe recordings
         cparts = cellid.split("-")
-        chan = int(cparts[1])
-        unit = int(cparts[2])
+        chan = int(cparts[-2])
+        unit = int(cparts[-1])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
 
@@ -4680,7 +4681,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
 
     if save_to_db:
         df_cell['cellid'] = df_cell.index
-        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[1]))
+        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[-2]))
         a = list(df_cell['area'])
         if 'A1' in a:
             default_area='A1'

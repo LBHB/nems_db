@@ -1,6 +1,6 @@
 import numpy as np
 
-def j_mean_err(x, do_median=False, n=20):
+def jack_mean_err(x, do_median=False, n=20):
     """
     Jackknifed estimate and SE of mean or media
     :param x: data, assume a 1d vector

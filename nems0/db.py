@@ -1275,8 +1275,8 @@ def get_batch_sites(batch, modelname_filter=None):
 
     #sort siteids and cellids by siteids
     sorted_pairs = sorted(zip(siteids, cellids))
-    tuples = zip(*sorted_pairs)
-    siteids, cellids = [list(tuple) for tuple in tuples]
+    siteids = [p[0] for p in sorted_pairs]
+    cellids = [p[1] for p in sorted_pairs]
 
     return siteids, cellids
 

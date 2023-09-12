@@ -38,6 +38,7 @@ from nems0.analysis.cluster import cluster_corr
 from nems.models import LN
 import nems0.plots.api as nplt
 from nems0.uri import save_resource, load_resource
+from nems0.utils import progress_fun
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
         f" AND groupby='{groupby}' AND shuffidx={shuffle_count-1}" +\
         f" AND batch={batch} AND cluster_count={cluster_count}" +\
         f" AND modeltype='{modeltype}'"
+    log.info(sql)
     dtest=db.pd_query(sql)
 
     if (force_rerun==False) and len(dtest)>0:
@@ -285,14 +287,16 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
         cmin, cmax = idx_cluster_map.min(), idx_cluster_map.max()
 
         min_cluster_units = 0
-        if min_cluster_units>0:
+        if min_cluster_units > 0:
             cluster_sets = [[c] for c in range(cmin, cmax+1)
                             if cluster_n[c-1]>min_cluster_units] \
                            + [[c for c in range(cmin, cmax+1)]]
             cc_diff = [c for i,c in enumerate(cc_diff)
                        if cluster_n[i]>min_cluster_units]
             cluster_cc = [c for i,c in enumerate(cluster_cc)
-                       if cluster_n[i]>min_cluster_units]
+                          if cluster_n[i]>min_cluster_units]
+            mean_cc = [c for i, c in enumerate(mean_cc)
+                       if cluster_n[i] > min_cluster_units]
         else:
             cluster_sets = [[c] for c in range(cmin, cmax+1)] \
                            + [[c for c in range(cmin, cmax+1)]]
@@ -304,9 +308,10 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
             cluster_sets[-1] = call
 
         for fidx, cluster_ids in enumerate(cluster_sets):
-            log.info("***********************************************")
-            log.info(f"{estim}: decoder fitting shuffle {shuffidx} cluster {fidx}: {cluster_ids}")
-            log.info("***********************************************")
+            log.info("***********************************************************")
+            log.info(f"   Starting site {siteid} - {estim}")
+            log.info(f"   decoder fitting shuffle {shuffidx} cluster {fidx}: {cluster_ids}")
+            log.info("***********************************************************")
             bnt_resp, bnt_stim, resp2 = get_cluster_data(rec, idx_cluster_map, cluster_ids)
 
             nl_kwargs = {'no_shift': False, 'no_offset': False, 'no_gain': False}
@@ -352,9 +357,11 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
             if fidx>=len(cluster_cc):
                 d['cluster_cc']=0
                 d['cc_diff']=0
+                d['mean_cc']=0
             else:
                 d['cluster_cc']=cluster_cc[fidx]
                 d['cc_diff']=cc_diff[fidx]
+                d['mean_cc'] = mean_cc[fidx]
             spec_fg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgs], axis=1).T
             spec_bg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in ebgs], axis=1).T
             spec_fgbg = np.concatenate([stim.extract_epoch(e)[0, :, :] for e in efgbgs], axis=1).T
@@ -434,6 +441,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
         if shuffidx==0:
             plt.tight_layout()
             f2.suptitle(f'{estim} shuffidx={shuffidx} treatment={cluster_treatment}')
+        progress_fun()
 
     df_recon = pd.concat(df_recons, ignore_index=True)
 
@@ -445,7 +453,7 @@ def recon_site_stim(siteid, estim, cluster_count=4, batch=341, modeltype="LN",
 
     for i, r in df_recon.iterrows():
         res = r[['cluster_ids', 'n_units', 'total_units',
-                'cluster_cc', 'Efg', 'Ebg', 'Efgbg', 'Cfg', 'Cbg', 'Cfgbg', 'Erfg',
+                'cluster_cc', 'cc_diff', 'mean_cc', 'Efg', 'Ebg', 'Efgbg', 'Cfg', 'Cbg', 'Cfgbg', 'Erfg',
                 'Crfg', 'Erbg', 'Crbg','wFG','wBG','wFGact','wBGact','wFGest','wBGest']].to_dict()
         res = json.dumps(res)
         shuffidx=r['shuffidx']
