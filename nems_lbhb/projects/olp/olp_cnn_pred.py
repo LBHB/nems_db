@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import sys, importlib
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+import seaborn as sns
 
 import nems0.modelspec as ms
 import nems0.xforms as xforms
@@ -50,6 +51,37 @@ def fb_weights(rfg, rbg, rfgbg, spontbins=50):
 
     return weights2 + 1
 
+
+def pred_comp(batch=341, modelnames=None):
+    if modelnames is None:
+        if batch == 341:
+            modelnames = [
+                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+            ]
+        else:
+            modelnames = [
+                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            ]
+    df = db.batch_comp(batch,modelnames, stat='r_ceiling', shortnames=['CNN','LN'])
+    dftest = db.batch_comp(batch,modelnames, stat='r_test', shortnames=['CNN','LN'])
+    dffloor = db.batch_comp(batch,modelnames, stat='r_floor', shortnames=['CNN','LN'])
+    df = df.merge(dftest, left_index=True, right_index=True, suffixes=['','_test'])
+    df = df.merge(dffloor, left_index=True, right_index=True, suffixes=['','_floor'])
+    df['keepidx']=(df['LN_test']>df['LN_floor']) & (df['CNN_test']>df['CNN_floor'])
+
+    d_ = df.loc[df['keepidx']]
+    f=plt.figure()
+    ax=f.add_subplot(1,2,1)
+    ax.scatter(d_['LN'],d_['CNN'],s=3,color='black')
+    ax.plot([0,1],[0,1],'k--')
+
+    ax=f.add_subplot(1,4,3)
+    sns.barplot(d_[['LN','CNN']], ax=ax)
+
+    print(f"f.savefig('/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')")
+    return f
 
 def get_valid_olp_rows(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
                        exclude_low_pred=True, AC_only=True):
