@@ -1195,6 +1195,8 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
                 cc = np.corrcoef(cut_spec)
                 cpow = cc[np.triu_indices(cut_spec.shape[0], k=1)].mean()
 
+                cut_dev = np.std(cut_spec, axis=1)
+
                 freq_range = (int(x_freq[bin_low]), int(x_freq[bin_high]))
 
                 freq75 = x_freq[np.abs(csm - (big * 0.75)).argmin()]
@@ -1223,7 +1225,7 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
 
                 sounds.append({f'{ll}_name': sn, #.split('_')[0],
                                'synth_kind': syn,
-                               f'{ll}_Tstationary': np.nanmean(dev),
+                               f'{ll}_Tstationary': np.nanmean(cut_dev),
                                f'{ll}_Fcorr': cpow,
                                f'{ll}_bandwidth': bandwidth,
                                'bw_percent': f'{percent_lims[0]}/{percent_lims[1]}',
@@ -2114,25 +2116,32 @@ def get_olp_filter(weight_df, kind='vanilla', metric=False):
         # being treated as unique instances.
         prn = filt.loc[filt.animal == 'PRN']
         prn = prn.loc[(prn.synth_kind == 'N') | (prn.synth_kind == 'A')]
-        prn_filt = prn.groupby(by=['cellid', 'BG', 'FG', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
+        prn_filt = prn.groupby(by=['cellid', 'BG', 'FG', 'layer', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
+                               as_index=False).mean()
+
+        slj = filt.loc[filt.animal == 'SLJ']
+        slj_filt = slj.groupby(by=['cellid', 'BG', 'FG', 'layer', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
                                as_index=False).mean()
         # Moves along with everyone who isn't Prince (which means each day was a unique penetration)
         # For now going to average the synthetics (only applies to Clathrus) and keep everything else.
         filt = filt.loc[((filt.synth_kind == 'N') & (filt['animal'] == 'CLT') & (filt['olp_type'] == 'synthetic')) |
                         ((filt.synth_kind == 'A') & (filt['animal'] == 'CLT') & (filt['olp_type'] == 'synthetic')) |
                         ((filt.synth_kind == 'A') & (filt['animal'] == 'CLT') & (filt['olp_type'] != 'synthetic')) |
-                        ((filt.synth_kind == 'A') & (filt['animal'].isin(['TNC', 'ARM'])))]
+                        ((filt.synth_kind == 'A') & (filt['animal'].isin(['TNC', 'ARM'])))] #|
+                        #((filt.SNR == 0) & (filt['animal'] == 'SLJ') & (filt['olp_type'] != 'binaural'))]
         others = filt.loc[filt.animal != 'PRN']
-        others_filt = others.groupby(by=['cellid', 'BG', 'FG', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
+        others_filt = others.groupby(by=['cellid', 'BG', 'FG', 'layer', 'Vocalization', 'animal', 'area', 'BG_path', 'FG_path'],
                                      as_index=False).mean()
         # Put these two modified dataframes back together. They lost some info in the average, but most categorical
         # columns that are needed should be preserved manually.
-        filt = pd.concat([others_filt, prn_filt])
+        filt = pd.concat([others_filt, prn_filt, slj_filt])
         # Synth_kind couldn't be kept because some are 'A', but with it gone and the averages of N and A performed
         # just call everything N because it's broadly the natural stimuli
         filt['synth_kind'] = 'N'
         # Some functions need layer or kind in there to filter them out, so just readd that.
-        filt['layer'], filt['kind'] = 'NA', '11'
+        filt['kind'] = '11'
+        # filt['layer'] = 'NA'
+
     elif kind == 'binaural':
         filt = filt.loc[filt.dyn_kind == 'ff']
         filt = filt.loc[filt.SNR == 0]

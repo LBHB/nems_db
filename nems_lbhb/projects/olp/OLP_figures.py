@@ -1255,7 +1255,7 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
             # df['animal'] = df['Vocalization'].map(voc_labels)
         else:
             df['animal'] = [cc.split('_')[0] for cc in df['animal']]
-            colors = ['mediumorchid', 'darkorange', 'yellow', 'blue', 'green', 'pink']
+            colors = ['mediumorchid', 'darkorange', 'limegreen', 'blue', 'goldenrod', 'pink']
 
 
     # This can be mushed into one liners using list comprehension and show_suffixes
