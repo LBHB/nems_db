@@ -192,7 +192,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"][0]}',
+        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
@@ -211,7 +211,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'Percent correct for session {Non_nose_poke["day"][0]} without early_nps',
+        plt.title(f'Percent correct for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
@@ -223,9 +223,10 @@ class behav:
 if __name__ == "__main__":
 
 #     #runclass NFB = 2afc, VOW = vowel
-    my_test = behav('LMD', 'NFB', days='all', migrate_only=True)
+    my_test = behav('SQD', 'VOW', days='all', migrate_only=False)
     my_test.variables()
-    XVARIABLE = ['snr']
-    day_list = ['LMD065Ta', 'LMD066Ta', 'LMD067Ta']
+    XVARIABLE = ['spatial_config']
+    day_list = ['SQD019Ta', 'SQD020Ta', 'SQD021Ta', 'SQD022Ta', 'SQD023Ta', 'SQD024Ta',
+                'SQD025Ta', 'SQD026Ta', 'SQD027Ta', 'SQD028Ta']
     my_test.sample_plots(XVARIABLE, day_list, kind='bar')
     my_test.perform_over_time(XVARIABLE, day_list)
