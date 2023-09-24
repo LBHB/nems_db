@@ -818,9 +818,11 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
     from nems.visualization import model
     fig = model.plot_model(
         modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
-
-    # Needed to make into a Bytes because you can't deepcopy figures!
-    figures.append(nplt.fig2BytesIO(fig))
+    if fig is not None:
+        # Needed to make into a Bytes because you can't deepcopy figures!
+        figures.append(nplt.fig2BytesIO(fig))
+    else:
+        log.info("plot_model returned None instead of figure handle?")
 
     return {'figures': figures}
 
