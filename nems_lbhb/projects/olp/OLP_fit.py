@@ -2135,7 +2135,8 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
         weight_df_list = []
         for cc, pf in enumerate(olp_parms):
             # Load the single OLP run that you will be fitting this time
-            manager = BAPHYExperiment(cellid=cellid, parmfile=pf)
+            # manager = BAPHYExperiment(cellid=cellid, parmfile=pf)
+            manager = BAPHYExperiment(cellid=cellid, parmfile=[pf])
             # cell_metric = calc_psth_metrics(manager)
 
             # Getting area info. If the laminar analysis has been run it'll get the first, if not it'll fail

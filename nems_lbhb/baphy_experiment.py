@@ -176,8 +176,13 @@ class BAPHYExperiment:
                     self.siteid = cellid[:7]
                 else:
                     raise TypeError
-                self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
-                self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
+                if len(cellid[0].split("-")) > 3:
+                    self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+                else:
+                    self.probe_ids_to_load = ['' for c in cellid]
+                self.probes_to_load = [str(c.split("-")[-3]) for c in self.cells_to_load]
+                self.channels_to_load = [int(c.split("-")[-2]) for c in self.cells_to_load]
+                self.units_to_load = [int(c.split("-")[-1]) for c in self.cells_to_load]
             else:
                 self.siteid = os.path.split(parmfile[0])[-1].split('-')[0]
                 self.cells_to_load = None
@@ -201,13 +206,18 @@ class BAPHYExperiment:
 
             self.cells_to_extract = cellid
             self.cells_to_load = cellid
-            self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
-            self.units_to_load = [int(c.split("-")[2]) for c in cellid]
+            self.probes_to_load = [str(c.split("-")[-3]) for c in cellid]
+            self.channels_to_load = [int(c.split("-")[-2]) for c in cellid]
+            self.units_to_load = [int(c.split("-")[-1]) for c in cellid]
+            if len(cellid[0].split("-"))>3:
+                self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+            else:
+                self.probe_ids_to_load = ['' for c in cellid]
             self.siteid = cellid[0].split('-')[0]
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
-        if len(self.parmfile)==0:
+        if len(self.parmfile) == 0:
             raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
@@ -1382,7 +1392,10 @@ class BAPHYExperiment:
                                 chan_unit_str = f'{self.probe_ids_to_load[i]}-{self.channels_to_load[i]:03d}-{self.units_to_load[i]}'
                             else:
                                 # Use channel_to_load and units_to_load
-                                chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                                try:
+                                    chan_unit_str = '{}-{:03d}-{}'.format(self.probes_to_load[i], self.channels_to_load[i], self.units_to_load[i])
+                                except:
+                                    chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]
