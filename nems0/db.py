@@ -991,7 +991,7 @@ def add_batch_data(cellid, batch, recording_uri_list):
     return True
 
 
-def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
+def get_batch_cells(batch=None, cellid=None, rawid=None, area=None, as_list=False):
     '''
     Retrieve a dataframe from Data containing all cellids in a batch.
 
@@ -1019,21 +1019,26 @@ def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
     #engine = Engine()
     SQL_ENGINE = get_setting('SQL_ENGINE')
     params = ()
-    sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
+    if area is None:
+        sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
+    else:
+        sql = f"SELECT DISTINCT Data.cellid,Data.batch FROM Data INNER JOIN sCellFile on Data.cellid=sCellFile.cellid WHERE area='{area}'"
+
     if batch is not None:
         sql += f" AND batch={batch}"
         #params = params+(batch,)
 
     if cellid is not None:
         if SQL_ENGINE == 'sqlite':
-            sql += " AND cellid like '%s'"
+            sql += " AND Data.cellid like '%s'"
         else:
-            sql += " AND cellid like %s"
+            sql += " AND Data.cellid like %s"
         params = params+(cellid+"%",)
 
     if rawid is not None:
-        sql+= " AND rawid = %d"
+        sql+= " AND Data.rawid = %d"
         params=params+(rawid,)
+
 
     #d = pd.read_sql(sql=sql, con=engine, params=params)
 
@@ -1231,14 +1236,14 @@ def get_batch_modelnames(batch, cellid_filter=None, modelname_filter=None, min_c
     return d
     
     
-def get_batch_sites(batch, modelname_filter=None):
+def get_batch_sites(batch, modelname_filter=None, area=None):
     """
     get all siteids and a representative cellid from each site in a batch
     :param batch: NEMS batch
     :return: (siteids, cellids) tuple lists of siteids and cellids
     """
     if modelname_filter is None:
-        d = get_batch_cells(batch=batch)
+        d = get_batch_cells(batch=batch, area=area)
     else:
         d = batch_comp(batch=batch, modelnames=[modelname_filter])
         d = d.reset_index()
