@@ -143,13 +143,17 @@ class behav:
         YVARIABLE = 'early_nosepoke'
         plot_frame['early_nosepoke'] = (plot_frame['response'] == 'early_np').astype(bool)
         series2 = plot_frame.groupby(XVARIABLE)[YVARIABLE].mean()
-        series2.plot(kind=kind)
+        ax = series2.plot(kind=kind)
         plt.axhline(y=0.5, linestyle='--')
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {self.dataframe["day"][0]}',
+        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
                   fontsize = 8)
+        counts = plot_frame.groupby(XVARIABLE)[YVARIABLE].count().values
+        for i, p in enumerate(ax.patches):
+            ax.annotate(str(counts[i]), (p.get_x() * 1.005, p.get_height() * 0.005))
+
         plt.tight_layout()
         plt.show()
         print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
@@ -157,13 +161,16 @@ class behav:
         YVARIABLE = 'correct'
         Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
         series3 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
-        series3.plot(kind=kind)
+        ax2 = series3.plot(kind=kind)
         plt.axhline(y=0.5, linestyle='--')
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'Percent correct for session {self.dataframe["day"][0]} without early_nps',
+        plt.title(f'Percent correct for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
+        counts2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count().values
+        for i, p in enumerate(ax2.patches):
+            ax2.annotate(str(counts2[i]), (p.get_x() * 1.005, p.get_height() * 0.005))
         plt.tight_layout()
         plt.show()
         print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
@@ -185,7 +192,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {self.dataframe["day"][0]}',
+        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
@@ -204,7 +211,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'Percent correct for session {self.dataframe["day"][0]} without early_nps',
+        plt.title(f'Percent correct for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
@@ -216,9 +223,10 @@ class behav:
 if __name__ == "__main__":
 
 #     #runclass NFB = 2afc, VOW = vowel
-    my_test = behav('LMD', 'NFB', days='all', migrate_only=True)
+    my_test = behav('SQD', 'VOW', days='all', migrate_only=False)
     my_test.variables()
-    XVARIABLE = ['snr']
-    day_list = ['LMD063Ta', 'LMD064Ta', 'LMD065Ta', 'LMD066Ta']
-    # my_test.sample_plots(XVARIABLE, day_list, kind='line')
+    XVARIABLE = ['spatial_config']
+    day_list = ['SQD019Ta', 'SQD020Ta', 'SQD021Ta', 'SQD022Ta', 'SQD023Ta', 'SQD024Ta',
+                'SQD025Ta', 'SQD026Ta', 'SQD027Ta', 'SQD028Ta']
+    my_test.sample_plots(XVARIABLE, day_list, kind='bar')
     my_test.perform_over_time(XVARIABLE, day_list)
