@@ -216,8 +216,7 @@ class behav:
                 series = Non_nose_poke[Non_nose_poke[v] == w].groupby('day')[YVARIABLE].mean()
                 series.plot(kind='line', label=f'{w}')
         plt.axhline(y=0.5, linestyle='--')
-        # plt.ylim([0, 1])
-        plt.ylim([0.8, 1.2])
+        plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
         plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
@@ -268,15 +267,15 @@ if __name__ == "__main__":
 
 #     #runclass NFB = 2afc, VOW = vowel
     example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks='')
-    example.dataframe.shape
+    print(example.dataframe.shape)
     example.remove_remind_trials()
-    example.dataframe.shape
+    print(example.dataframe.shape)
 
-    example.variables()
-    XVARIABLE = ['day']
+    # example.variables()
+    XVARIABLE = ['snr']
     day_list = []
 
     example.sample_plots(XVARIABLE, day_list)
     example.perform_over_time(XVARIABLE, day_list)
-    example.plot_trial_duration(XVARIABLE, day_list)
+    # example.plot_trial_duration(XVARIABLE, day_list)
 
