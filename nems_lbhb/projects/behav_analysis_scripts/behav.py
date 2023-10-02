@@ -133,6 +133,7 @@ class behav:
         interesting_data_all['incorrect'] = ((interesting_data_all['response'] != 'early_np') & \
                                              (interesting_data_all['correct'] == False)).astype(float)
         interesting_data_all['correct_val'] = (interesting_data_all['correct']).astype(float)
+        interesting_data_all['early_nosepoke'] = (interesting_data_all['response'] == 'early_np').astype(bool)
 
         return interesting_data_all, all_data_extensive
 
@@ -141,35 +142,38 @@ class behav:
         print(self.dataframe.columns)
         print(self.dataframe['day'].unique())
 
-    def sample_plots(self, XVARIABLE, day_list=[], kind='bar'):
+    def sample_plots(self, XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct'):
 
         if len(day_list) == 0:
             plot_frame = self.dataframe.copy()
         else:
             plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
 
-        YVARIABLE = 'early_nosepoke'
-        plot_frame['early_nosepoke'] = (plot_frame['response'] == 'early_np').astype(bool)
-        series2 = plot_frame.groupby(XVARIABLE)[YVARIABLE].mean()
-        ax = series2.plot(kind=kind)
-        plt.axhline(y=0.5, linestyle='--')
-        plt.ylim([0, 1])
-        plt.xlabel(XVARIABLE)
-        plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
-                  fontsize = 8)
-        counts = plot_frame.groupby(XVARIABLE)[YVARIABLE].count().values
-        for i, p in enumerate(ax.patches):
-            ax.annotate(str(counts[i]), (p.get_x() * 1.005, p.get_height() * 0.005))
+        if YVARIABLE=='correct':
+            Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
+        else:
+            Non_nose_poke = plot_frame
+        series2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
 
-        plt.tight_layout()
-        plt.show()
-        print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
-
-        YVARIABLE = 'correct'
-        Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
-        series3 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
-        ax2 = series3.plot(kind=kind)
+        f,ax=plt.subplots()
+        series2.plot(kind=kind, ax=ax)
+        # plt.axhline(y=0.5, linestyle='--')
+        # plt.ylim([0, 1])
+        # plt.xlabel(XVARIABLE)
+        # plt.ylabel(YVARIABLE)
+        # plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
+        #           fontsize = 8)
+        # counts = plot_frame.groupby(XVARIABLE)[YVARIABLE].count().values
+        # for i, p in enumerate(ax.patches):
+        #     ax.annotate(str(counts[i]), (p.get_x() * 1.005, p.get_height() * 0.005))
+        #
+        # plt.tight_layout()
+        # plt.show()
+        # print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
+        #
+        # YVARIABLE = 'correct'
+        #series3 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
+        #ax2 = series3.plot(kind=kind)
         plt.axhline(y=0.5, linestyle='--')
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
@@ -177,8 +181,8 @@ class behav:
         plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         counts2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count().values
-        for i, p in enumerate(ax2.patches):
-            ax2.annotate(str(counts2[i]), (p.get_x() * 1.005, p.get_height() * 0.005))
+        for i, p in enumerate(counts2):
+            ax.text(i, 0, str(counts2[i]), ha='center', va='bottom')
         plt.tight_layout()
         plt.show()
         print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
@@ -191,24 +195,25 @@ class behav:
             plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
 
         YVARIABLE = 'early_nosepoke'
-        plot_frame['early_nosepoke'] = (plot_frame['response'] == 'early_np').astype(bool)
-        for i, v in enumerate(XVARIABLE):
-            for j, w in enumerate(plot_frame[v].unique()):
-                series = plot_frame[plot_frame[v] == w].groupby('day')[YVARIABLE].mean()
-                series.plot(kind='line', label=f'{w}')
-        plt.axhline(y=0.5, linestyle='--')
-        plt.ylim([0, 1])
-        plt.xlabel(XVARIABLE)
-        plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
-                  fontsize = 8)
-        plt.legend()
-        ticks = np.arange(len(day_list))
-        plt.xticks(ticks=ticks, labels=day_list, rotation=90)
-        plt.tight_layout()
-        plt.show()
-        print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
+        # plt.figure()
+        # for i, v in enumerate(XVARIABLE):
+        #     for j, w in enumerate(plot_frame[v].unique()):
+        #         series = plot_frame[plot_frame[v] == w].groupby('day')[YVARIABLE].mean()
+        #         series.plot(kind='line', label=f'{w}')
+        # plt.axhline(y=0.5, linestyle='--')
+        # plt.ylim([0, 1])
+        # plt.xlabel(XVARIABLE)
+        # plt.ylabel(YVARIABLE)
+        # plt.title(f'{YVARIABLE} by {XVARIABLE} for session {plot_frame["day"].unique()[0]}',
+        #           fontsize = 8)
+        # plt.legend()
+        # ticks = np.arange(len(day_list))
+        # plt.xticks(ticks=ticks, labels=day_list, rotation=90)
+        # plt.tight_layout()
+        # plt.show()
+        # print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
 
+        plt.figure()
         YVARIABLE = 'correct'
         Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
         for i, v in enumerate(XVARIABLE):
@@ -263,19 +268,73 @@ class behav:
         plt.show()
         print(correct.groupby(XVARIABLE)[YVARIABLE].count())
 
+def lemon_space_snr_bar():
+    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
+    #example.remove_remind_trials()
+
+    # example.variables()
+    XVARIABLE = ['spatial_config','snr']
+
+    start_site = 'LMD066Ta'
+    d=example.dataframe
+    d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-5,-10,-20,-30]))]
+    example.dataframe = d
+    days=d.loc[d['day']>=start_site,'day'].unique().tolist()
+    example.sample_plots(XVARIABLE, day_list=days)
+
+    # for day in days:
+    #     example.sample_plots(XVARIABLE, day_list=[day])
+
+    # d=example.dataframe
+    # d=d.loc[(d['early_nosepoke']==False) ]
+    # dday=d.groupby(['day','snr'])[['correct']].mean().reset_index()
+    # dday = dday.pivot(columns=['snr'], index=['day'], values=['correct'])
+    #
+    # plt.figure()
+    # dday.plot()
+
+def slippy_space_snr_bar():
+    example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
+    #example.remove_remind_trials()
+
+    # example.variables()
+    XVARIABLE = ['spatial_config','snr']
+
+    start_site = 'SLJ057Ta'
+    d=example.dataframe
+    d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-5,-10,-15,-20,-30]))]
+    example.dataframe = d
+    days=d.loc[d['day']>=start_site,'day'].unique().tolist()
+    example.sample_plots(XVARIABLE, day_list=days)
+
+    for day in days:
+      example.sample_plots(XVARIABLE, day_list=[day])
+
+    #d=example.dataframe
+    #d=d.loc[(d['early_nosepoke']==False) ]
+    #dday=d.groupby(['day','snr'])[['correct']].mean().reset_index()
+    #dday = dday.pivot(columns=['snr'], index=['day'], values=['correct'])
+    #
+    # plt.figure()
+    # dday.plot()
+
+
 if __name__ == "__main__":
 
-#     #runclass NFB = 2afc, VOW = vowel
-    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks='')
+    example = behav('LMD', 'NFB', days='all', migrate_only=False, non_migrate_blocks=True)
+    lemon_space_snr_bar()
+
+    #runclass NFB = 2afc, VOW = vowel
     print(example.dataframe.shape)
     example.remove_remind_trials()
     print(example.dataframe.shape)
 
     # example.variables()
-    XVARIABLE = ['snr']
-    day_list = []
+    XVARIABLE = ['spatial_config','snr']
+
+    day_list = ['LMD072Ta']
 
     example.sample_plots(XVARIABLE, day_list)
-    example.perform_over_time(XVARIABLE, day_list)
+    #example.perform_over_time(XVARIABLE, day_list)
     # example.plot_trial_duration(XVARIABLE, day_list)
 

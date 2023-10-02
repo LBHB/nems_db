@@ -150,10 +150,10 @@ def adjust_didx(dlc, didx):
     x = x[np.isfinite(x)]
     y = y[np.isfinite(y)]
 
-    xnp = np.percentile(x, 15)
     ynp = np.percentile(y, 90)
-    xsp = np.percentile(x, 80)
+    xnp = np.percentile(x[(x>0.05) & (y>ynp)], 75)
     ysp = np.percentile(y, 15)
+    xsp = np.percentile(x[(y<ysp)], 50)
     xnp_=didx[0, -1, 0]
     ynp_=didx[0, -1, 1]
     xsp_=didx[2, -1, 0]
@@ -161,7 +161,7 @@ def adjust_didx(dlc, didx):
     didx_new = didx.copy()
     log.info(f"old (xnp,ynp): {xnp_:.3f},{ynp_:.3f} (xsp,ysp): {xsp_:.3f},{ysp_:.3f}")
     log.info(f"new (xnp,ynp): {xnp:.3f},{ynp:.3f} (xsp,ysp): {xsp:.3f},{ysp:.3f}")
-    didx_new[:,:,8:2] = (didx[:,:,8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
+    didx_new[:,:,0:8:2] = (didx[:,:,0:8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
     didx_new[:,:,1:8:2] = (didx[:,:,1:8:2]-ysp_)/(ynp_-ysp_)*(ynp-ysp)+ysp
 
     return didx_new
@@ -183,9 +183,9 @@ def movement_plot(rec):
         # compute distance and angle to each speaker
         # code pasted in from free_tools
         d1, theta1, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
         d2, theta2, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
         #log.info(f"{i} {didx[i,-1,:2]} d1={d1[0,-1]} th1= {d2[0,-1]}")
         plt.plot(didx_[i, -1, 2], didx_[i, -1, 3], "o", color='blue')
         plt.plot(didx_[i, -1, 0], didx_[i, -1, 1], "o", color='red')

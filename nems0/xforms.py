@@ -827,7 +827,7 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
     return {'figures': figures}
 
 
-def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
+def save_lite(modelspec=None, xfspec=None, log=None, figures=[], **ctx):
     from nems.tools import json
 
     if get_setting('USE_NEMS_BAPHY_API'):
@@ -847,13 +847,15 @@ def save_lite(modelspec=None, xfspec=None, log=None, **ctx):
     # call nems-lite JSON encoder
     data = json.nems_to_json(modelspec)
     save_resource(os.path.join(destination, 'modelspec.json'), data=data)
-    for number, figure in enumerate(ctx['figures']):
+    for number, figure in enumerate(figures):
         fig_uri = os.path.join(destination, 'figure.{:04d}.png'.format(number))
         #log.info('saving figure %d to %s', number, fig_uri)
         save_resource(fig_uri, data=figure)
 
-    save_resource(os.path.join(destination, 'log.txt'), data=log)
-    save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
+    if log is not None:
+        save_resource(os.path.join(destination, 'log.txt'), data=log)
+    if xfspec is not None:
+        save_resource(os.path.join(destination, 'xfspec.json'), json=xfspec)
     return destination
 
 

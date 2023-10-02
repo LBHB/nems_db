@@ -1,6 +1,7 @@
 
 import logging
 from os.path import basename, join
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import convolve2d, butter, sosfilt
@@ -22,6 +23,7 @@ from nems_lbhb.preprocessing import impute_multi
 from nems.layers import WeightChannels, FIR, LevelShift, \
     DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
 from nems import Model
+from nems.tools import json
 from nems.layers.base import Layer, Phi, Parameter
 from nems0.recording import load_recording
 import nems.visualization.model as nplt
@@ -30,6 +32,7 @@ from nems_lbhb.projects.freemoving.free_tools import stim_filt_hrtf, compute_d_t
     free_scatter_sum, dlc2dist
 from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
+from nems0 import xforms
 
 log = logging.getLogger(__name__)
 
@@ -206,8 +209,8 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     if dcount > 0:
         layers = [
             WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
-            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             WeightChannels(shape=(dlc_count, 1, dcount), input='dlc', output='space'),
+            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             FIR(shape=(dlc_memory, 1, dcount), input='space', output='space'),
             ConcatSignals(input=['prediction','space'], output='prediction'),
             RectifiedLinear(shape=(tcount,), input='prediction', output='prediction',
@@ -274,12 +277,16 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     model.meta['batch'] = rec.meta['batch']
     model.meta['modelname'] = model.name
     model.meta['cellids'] = est['resp'].chans
+    model.meta['cellid'] = siteid
     model.meta['r_test'] = cc[:, np.newaxis]
     model.meta['r_fit'] = fit_cc[:, np.newaxis]
     model.meta['r_floor'] = rf[:, np.newaxis]
 
     if save_to_db:
+        destination = xforms.save_lite(model)
+        model.meta['modelfile']= join(destination,'modelspec.json')
         db.save_results(model)
+
     return model
 
 
