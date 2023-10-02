@@ -121,15 +121,8 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
 
     return rec
 
-def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
-             acount=20, dcount=10, l2count=30, cost_function='squared_error',
-             save_to_db=False, **options):
-    """
-    special case: if dlc_memory=1 add a delay line with shuffled data to
-    the dlc signal to match the parameter count for dlc_memory=4
-    """
+def free_split_rec(rec, apply_hrtf=True):
 
-    siteid = rec.meta['siteid']
     if apply_hrtf:
         log.info('Applying HRTF')
         rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
@@ -145,7 +138,6 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     rec['stim'] = rec['stim'].normalize('minmax')
     rec['resp'] = rec['resp'].normalize('minmax')
 
-    cellids = rec['resp'].chans
     OLD_MASK = False
     if OLD_MASK:
         # epoch_regex = "^STIM_"
@@ -165,8 +157,24 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
         est = rec.copy()
         est = est.create_mask(~mask).and_mask(est['dlc_valid'].as_continuous()[0, :])
 
-    est = est.apply_mask()
-    val = val.apply_mask()
+    return {'est': est, 'val': val}
+
+
+def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
+             acount=20, dcount=10, l2count=30, cost_function='squared_error',
+             save_to_db=False, **options):
+    """
+    special case: if dlc_memory=1 add a delay line with shuffled data to
+    the dlc signal to match the parameter count for dlc_memory=4
+    """
+
+    siteid = rec.meta['siteid']
+    cellids = rec['resp'].chans
+    ctx = free_split_rec(rec, apply_hrtf=apply_hrtf)
+
+    est = ctx['est'].apply_mask()
+    val = ctx['val'].apply_mask()
+
     log.info(f"est resp: {est['resp'].shape} stim: {est['stim'].shape} dlc: {est['dlc'].shape}")
     log.info(f"val resp: {val['resp'].shape} stim: {val['stim'].shape} dlc: {val['dlc'].shape}")
     dlc_count = rec['dlc'].shape[0]
