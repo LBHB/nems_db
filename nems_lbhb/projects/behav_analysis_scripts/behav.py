@@ -12,13 +12,15 @@ plt.ion()
 #Class that contains dataframe for a single animal
 #with plotting and analysis functions
 class behav:
-    def __init__(self, animal, task, days='single', day=0, migrate_only=True):
+    def __init__(self, animal, task, days='single', day=0, migrate_only=True,
+                 non_migrate_blocks=''):
 
         self.animal = animal
         self.task = task
         self.days = days
         self.day = day
         self.migrate_only = migrate_only
+        self.non_migrate_blocks = non_migrate_blocks
         self.dataframe, self.all_data_extensive = self.import_data()
 
 
@@ -60,6 +62,12 @@ class behav:
             if self.task == 'NFB':
                 if self.migrate_only == True:
                     if 'migrate_trial' in d.columns:
+                        if self.non_migrate_blocks:
+                            if 1 in d['migrate_trial'].unique():
+                                valid = False
+                        elif self.non_migrate_blocks == False:
+                            if 1 not in d['migrate_trial'].unique():
+                                valid = False
                         d['trial_duration'] = d['response_start'] - d['np_start']
                         d['spatial_config'] = 'same'
                         d.loc[d['bg_channel'] == d['fg_channel'], 'spatial_config'] = 'diff'
@@ -67,7 +75,7 @@ class behav:
 
                         interesting_data = d[
                             ['trial_number', 'response', 'correct', 'response_time', 'hold_duration', 'snr',
-                             'spatial_config', 'migrate_trial', 'response_time', 'trial_duration']].copy()
+                             'spatial_config', 'migrate_trial', 'trial_duration']].copy()
                         interesting_data['parmfile'] = r['parmfile']
                         interesting_data['session_id'] = session_id
                         interesting_data['day'] = r['cellid']
@@ -111,7 +119,7 @@ class behav:
                 d['pitch'] = d['combined_stim'].apply(label_based_on_three_digit_number)
                 interesting_data = d[
                     ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
-                     'response_time', 'trial_duration']].copy()
+                     'trial_duration']].copy()
                 interesting_data['parmfile'] = r['parmfile']
                 interesting_data['session_id'] = session_id
                 interesting_data['day'] = r['cellid']
@@ -166,7 +174,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'Percent correct for session {Non_nose_poke["day"].unique()[0]} without early_nps',
+        plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         counts2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count().values
         for i, p in enumerate(ax2.patches):
@@ -211,7 +219,7 @@ class behav:
         plt.ylim([0, 1])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
-        plt.title(f'Percent correct for session {Non_nose_poke["day"].unique()[0]} without early_nps',
+        plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
@@ -220,13 +228,54 @@ class behav:
         plt.show()
         print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
 
+    def remove_remind_trials(self):
+        remind_trials = (self.dataframe['correct'].shift(1) == False) & (self.dataframe['response'].shift(1) != 'early_np')
+        self.dataframe = self.dataframe[~remind_trials]
+
+    def extract_post_migrate(self):
+        false_trial_indexes = self.dataframe['migrate_trial'] == True
+        false_shifted = false_trial_indexes.shift(-1, fill_value=False)
+        self.dataframe = self.dataframe[false_shifted]
+
+
+    def plot_trial_duration(self, XVARIABLE, day_list=[], kind='bar', YVARIABLE = 'trial_duration'):
+
+        if len(day_list) == 0:
+            plot_frame = self.dataframe.copy()
+        else:
+            plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
+
+        # Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
+        correct = plot_frame.loc[plot_frame['correct']]
+        series3 = correct.groupby(XVARIABLE)[YVARIABLE].mean()
+        ax2 = series3.plot(kind=kind)
+        plt.axhline(y=0.5, linestyle='--')
+        # plt.ylim([0, 1])
+        plt.ylim([0.8, 1.5])
+        plt.xlabel(XVARIABLE)
+        plt.ylabel(YVARIABLE)
+        plt.title(f'{YVARIABLE} for session {correct["day"].unique()[0]} without early_nps',
+                  fontsize = 8)
+        counts2 = correct.groupby(XVARIABLE)[YVARIABLE].count().values
+        for i, p in enumerate(ax2.patches):
+            ax2.annotate(str(counts2[i]), (p.get_x() * 1.005, p.get_height() * 1.005))
+        plt.tight_layout()
+        plt.show()
+        print(correct.groupby(XVARIABLE)[YVARIABLE].count())
+
 if __name__ == "__main__":
 
 #     #runclass NFB = 2afc, VOW = vowel
-    my_test = behav('SQD', 'VOW', days='all', migrate_only=False)
-    my_test.variables()
-    XVARIABLE = ['spatial_config']
-    day_list = ['SQD019Ta', 'SQD020Ta', 'SQD021Ta', 'SQD022Ta', 'SQD023Ta', 'SQD024Ta',
-                'SQD025Ta', 'SQD026Ta', 'SQD027Ta', 'SQD028Ta']
-    my_test.sample_plots(XVARIABLE, day_list, kind='bar')
-    my_test.perform_over_time(XVARIABLE, day_list)
+    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks='')
+    print(example.dataframe.shape)
+    example.remove_remind_trials()
+    print(example.dataframe.shape)
+
+    # example.variables()
+    XVARIABLE = ['snr']
+    day_list = []
+
+    example.sample_plots(XVARIABLE, day_list)
+    example.perform_over_time(XVARIABLE, day_list)
+    # example.plot_trial_duration(XVARIABLE, day_list)
+
