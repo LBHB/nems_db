@@ -92,6 +92,14 @@ if __name__ == '__main__':
     if 'QUEUEID' in os.environ:
         queueid = os.environ['QUEUEID']
         nems0.utils.progress_fun = nd.update_job_tick
+        if 'SLURM_JOB_ID' in os.environ:
+            jobid = os.environ['SLURM_JOB_ID']
+            nd.update_job_pid(jobid)
+            nd.update_startdate()
+            comment = ' '.join(sys.argv[1:])
+            update_comment = ['sacctmgr', '-i', 'modify', 'job', f'jobid={jobid}', 'set', f'Comment="{comment}"']
+            subprocess.run(update_comment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            log.info(f'Set comment string to: "{comment}"')
 
     else:
         queueid = 0

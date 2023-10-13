@@ -17,16 +17,16 @@ from nems0.utils import escaped_split, escaped_join
 from nems0 import db
 from nems0 import get_setting
 from nems0.xform_helper import _xform_exists, load_model_xform, fit_model_xform
-from nems0.registry import KeywordRegistry, xforms_lib, keyword_lib
-from nems0.plugins import (default_keywords, default_loaders,
-                          default_initializers, default_fitters)
-#from nems_lbhb import baphy_experiment
+from nems0.utils import smooth
+
 from nems_lbhb import baphy_io
 
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 from nems_lbhb.projects.olp.OLP_get_epochs import get_rec_epochs, get_stim_type, generate_cc_dataframe
 from nems_lbhb.projects.olp import OLP_get_epochs
+from nems_lbhb.gcmodel.figures.snr import compute_snr, compute_snr_multi
+
 
 log = logging.getLogger(__name__)
 
@@ -40,16 +40,48 @@ def add_noise(psth, reps=20, prat=1):
 
     return r.mean(axis=1)
 
-def fb_weights(rfg, rbg, rfgbg, spontbins=50):
-    spont = np.concatenate([rfg[:spontbins], rbg[:spontbins], rfgbg[:spontbins]]).mean()
-    rfg0 = rfg - spont
-    rbg0 = rbg - spont
-    rfgbg0 = rfgbg - spont
+def fb_weights(rfg,rbg,rfgbg, spontbins=50, smoothwin=None):
+
+    spont = np.concatenate([rfg[:spontbins],rbg[:spontbins],rfgbg[:spontbins]]).mean()
+    rfg0 = rfg[spontbins:]-spont
+    rbg0 = rbg[spontbins:]-spont
+    rfgbg0 = rfgbg[spontbins:]-spont
+    if smoothwin is not None:
+        rfg0 = smooth(rfg0, window_len=smoothwin, axis=0)
+        rbg0 = smooth(rbg0, window_len=smoothwin, axis=0)
+        rfgbg0 = smooth(rfgbg0, window_len=smoothwin, axis=0)
+
     y = rfgbg0 - rfg0 - rbg0
     weights2, residual_sum, rank, singular_values = np.linalg.lstsq(np.stack([rfg0, rbg0], axis=1), y, rcond=None)
-    # weights2, residual_sum, rank, singular_values = np.linalg.lstsq(np.stack([rfg0, rbg0], axis=1), rfgbg0, rcond=None)
 
-    return weights2 + 1
+    w = weights2 + 1
+    pred = rfg0*w[0] + rbg0*w[1]
+    if (pred.std()>0) and (y.std()>0):
+        r = np.corrcoef(pred,y)[0,1]
+    else:
+        r = 0
+    return w, r
+
+def stim_snr(resp, frac_total=True):
+    resp = resp.squeeze()
+    if len(resp.shape)!=2:
+        return np.nan
+
+    products = np.dot(resp, resp.T)
+    per_rep_snrs = []
+    for i, _ in enumerate(resp):
+        total_power = products[i, i]
+        signal_powers = np.delete(products[i], i)
+        if total_power == 0:
+            rep_snr=0
+        elif frac_total:
+            rep_snr = np.nanmean(signal_powers) / total_power
+        else:
+            rep_snr = np.nanmean(signal_powers / (total_power - signal_powers))
+
+        per_rep_snrs.append(rep_snr)
+
+    return np.nanmean(per_rep_snrs)
 
 
 def pred_comp(batch=341, modelnames=None):
@@ -57,13 +89,14 @@ def pred_comp(batch=341, modelnames=None):
         if batch == 341:
             modelnames = [
                 "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
-                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+                "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
             ]
         else:
             modelnames = [
                 "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
                 "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
             ]
+    print(modelnames)
     df = db.batch_comp(batch,modelnames, stat='r_ceiling', shortnames=['CNN','LN'])
     dftest = db.batch_comp(batch,modelnames, stat='r_test', shortnames=['CNN','LN'])
     dffloor = db.batch_comp(batch,modelnames, stat='r_floor', shortnames=['CNN','LN'])
@@ -72,14 +105,18 @@ def pred_comp(batch=341, modelnames=None):
     df['keepidx']=(df['LN_test']>df['LN_floor']) & (df['CNN_test']>df['CNN_floor'])
 
     d_ = df.loc[df['keepidx']]
-    f=plt.figure()
+    f=plt.figure(figsize=(4.5,2))
     ax=f.add_subplot(1,2,1)
-    ax.scatter(d_['LN'],d_['CNN'],s=3,color='black')
+    ax.scatter(d_['LN'],d_['CNN'],s=2,color='black')
     ax.plot([0,1],[0,1],'k--')
+    ax.set_xlabel('LN')
+    ax.set_ylabel('CNN')
 
     ax=f.add_subplot(1,4,3)
     sns.barplot(d_[['LN','CNN']], ax=ax)
-
+    ax.set_ylabel('Mean pred. corr.')
+    plt.tight_layout()
+    f.suptitle(f"Batch {batch} predictions")
     print(f"f.savefig('/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')")
     return f
 
@@ -153,8 +190,10 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         di = baphy_io.get_depth_info(siteid=siteid)
         df = df.merge(di, how='left', left_index=True, right_index=True)
     except:
+        df['cellid'] = df.index
         df['siteid'] = df['cellid'].apply(db.get_siteid)
         df['area'] = 'unknown'
+        df['iso'] = 0
     dfsite = df.loc[df['siteid']==siteid]
     print(dfsite.shape, dfsite['area'].unique(), dfsite.columns)
     
@@ -218,6 +257,8 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         cell_epoch_df[pre + 'bg'] = np.nan
         cell_epoch_df[pre + 'wfg'] = np.nan
         cell_epoch_df[pre + 'wbg'] = np.nan
+    cell_epoch_df['swfg'] = np.nan
+    cell_epoch_df['swbg'] = np.nan
     cell_epoch_df['rw0'] = np.nan
     cell_epoch_df['rwfg0'] = np.nan
     cell_epoch_df['rwbg0'] = np.nan
@@ -237,7 +278,7 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         spont = (rfgbg1[:sp].mean() + rfgbg2[:sp].mean()) / 2
 
         # weights0,_,_,_ = np.linalg.lstsq(np.stack([rfgbg1-spont, np.ones_like(rfgbg1)], axis=1), rfgbg2-spont, rcond=None)
-        weights0 = fb_weights(rfgbg1, np.ones_like(rfgbg1) * spont, rfgbg2, sp)
+        weights0, predxc = fb_weights(rfgbg1, np.ones_like(rfgbg1) * spont, rfgbg2, sp)
 
         # special 1/2 trials computation of FG/BG weights
         rfg = ctx['rec']['resp'].extract_channels([cellid]).extract_epoch(epoch_fg)[::2, :, :].mean(axis=0)[0, :] / r[
@@ -247,10 +288,15 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         rfgbg = ctx['rec']['resp'].extract_channels([cellid]).extract_epoch(epoch_fgbg)[::2, :, :].mean(axis=0)[0, :] / r[
             'cellstd']
 
-        weights2 = fb_weights(rfg, rbg, rfgbg, spontbins=sp)
+        weights2, predxc = fb_weights(rfg, rbg, rfgbg, spontbins=sp)
         cell_epoch_df.at[id, 'rwfg0'] = weights2[0]
         cell_epoch_df.at[id, 'rwbg0'] = weights2[1]
         cell_epoch_df.at[id, 'rw0'] = weights0[0]
+
+        sfg = ctx2['rec']['stim'].extract_epoch(epoch_fg)[0]
+        sbg = ctx2['rec']['stim'].extract_epoch(epoch_bg)[0]
+        sfgbg = ctx2['rec']['stim'].extract_epoch(epoch_fgbg)[0]
+        sweights, spredxc = fb_weights(sfg.flatten(), sbg.flatten(), sfgbg.flatten(), sp)
 
         for ii, pre, sig in zip(range(len(prefs)), prefs, sigs):
             rfg = sig.extract_channels([cellid]).extract_epoch(epoch_fg).mean(axis=0)[0, :] / r['cellstd']
@@ -263,12 +309,14 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
                 rfgbg = add_noise(rfgbg, reps=15)
 
             spont = (rfg[:sp].mean() + rbg[:sp].mean() + rfgbg[:sp].mean()) / 3
-            weights2 = fb_weights(rfg, rbg, rfgbg, sp)
+            weights2, predxc = fb_weights(rfg, rbg, rfgbg, sp)
 
             cell_epoch_df.at[id, pre + 'wfg'] = weights2[0]
             cell_epoch_df.at[id, pre + 'wbg'] = weights2[1]
             cell_epoch_df.at[id, pre + 'fg'] = rfg[sp:-sp].mean() - spont
             cell_epoch_df.at[id, pre + 'bg'] = rbg[sp:-sp].mean() - spont
+            cell_epoch_df.at[id, 'swfg'] = sweights[0]
+            cell_epoch_df.at[id, 'swbg'] = sweights[1]
 
     # link to area labels
     cell_epoch_df = cell_epoch_df.merge(dfsite[['area','iso','CNN','LN','CNN_floor','LN_floor']], how='left', left_on='cellid',
@@ -290,67 +338,95 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     return cell_epoch_df, rec, rec2
 
 
-def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0, exclude_low_pred=True):
+def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
+                   exclude_low_pred=True, fig_label=None, N=500, split_space=False):
     
     # original
     #minresp, mingain, maxgain = 0.05, 0, 2.0
-    
-    siteid = db.get_siteid(cell_epoch_df['cellid'].values[0])
+    if fig_label is None:
+        fig_label = db.get_siteid(cell_epoch_df['cellid'].values[0])
     area = ",".join(list(cell_epoch_df['area'].unique()))
     original_N = cell_epoch_df.shape[0]
 
-    cell_epoch_df = get_valid_olp_rows(cell_epoch_df, minresp=minresp, mingain=mingain, maxgain=maxgain, exclude_low_pred=False)
+    cell_epoch_df = get_valid_olp_rows(cell_epoch_df, minresp=minresp, mingain=mingain, maxgain=maxgain, exclude_low_pred=exclude_low_pred)
 
     rCC = cell_epoch_df['Binaural Type']=='BG Contra, FG Contra'
     rIC = cell_epoch_df['Binaural Type']=='BG Ipsi, FG Contra'
     labels=['BG Contra, FG Contra','BG Ipsi, FG Contra']
     print('valid n', cell_epoch_df.shape[0], 'out of', original_N, 'frac: ', np.round(cell_epoch_df.shape[0]/original_N,3))
     
-    if rIC.sum()==0:
-        rrset = [slice(None)]
-        figlabels = ['mono']
-    else:
+    if split_space and (rIC.sum()>0):
         rrset = [rCC, rIC]
         figlabels = ['CC', 'CI']
+    else:
+        rrset = [slice(None)]
+        figlabels = ['mono']
 
+    prefs = ['r', 's', 'p2', 'p1']
+    labels = ['Specgram', 'LN pred', 'CNN pred']
+    ccs=np.zeros((3,len(labels)))
     for rr, figlabel in zip(rrset, figlabels):
-        f, axs = plt.subplots(2, 3, figsize=(8, 6))
-        labels = ['CNN pred', 'LN pred']
-        prefs = ['r', 'p1', 'p2']
-        for pre, ax, label in zip(prefs[1:], axs, labels):
+        f, axs = plt.subplots(len(labels)+1, 3, figsize=(6, 2*(len(labels)+1)))
+        for row, (pre, ax, label) in enumerate(zip(prefs[1:], axs, labels)):
             ax[0].plot([0, 1], [0, 1], 'k--')
             ax[1].plot([0, 1], [0, 1], 'k--')
             ax[2].plot([-1.2, 1], [-1.2, 1], 'k--')
 
-            fr = cell_epoch_df.loc[rr, 'rwfg']
-            fp = cell_epoch_df.loc[rr, pre + 'wfg'] * cell_epoch_df.loc[rr, 'sf']
+            SCALE_DOWN=True
+            if SCALE_DOWN:
+                fr = cell_epoch_df.loc[rr, 'rwfg']
+                br = cell_epoch_df.loc[rr, 'rwbg']
+                fp = cell_epoch_df.loc[rr, pre + 'wfg'] * cell_epoch_df.loc[rr, 'sf']
+                bp = cell_epoch_df.loc[rr, pre + 'wbg'] * cell_epoch_df.loc[rr, 'sf']
+            else:
+                if type(rr) is slice:
+                    rr = (cell_epoch_df['sf']>0.2)
+                else:
+                    rr = rr & (cell_epoch_df['sf']>0.2)
+                fr = cell_epoch_df.loc[rr, 'rwfg'] / cell_epoch_df.loc[rr, 'sf']
+                br = cell_epoch_df.loc[rr, 'rwbg'] / cell_epoch_df.loc[rr, 'sf']
+                fp = cell_epoch_df.loc[rr, pre + 'wfg']
+                bp = cell_epoch_df.loc[rr, pre + 'wbg']
 
-            br = cell_epoch_df.loc[rr, 'rwbg']
-            bp = cell_epoch_df.loc[rr, pre + 'wbg'] * cell_epoch_df.loc[rr, 'sf']
 
             dr = fr - br
             dp = fp - bp
-            ax[0].scatter(fr, fp, s=2)
-            ax[0].set_title(f"r={np.corrcoef(fr, fp)[0, 1]:.3f} mse={np.std(fr-fp)/np.std(fr):.3f}")
+
+            ccs[0,row] = np.corrcoef(fr, fp)[0, 1]
+            ccs[1,row] = np.corrcoef(br, bp)[0, 1]
+            ccs[2,row] = np.corrcoef(dr, dp)[0, 1]
+
+            if len(fr)>N:
+                idx = np.linspace(0, len(fr)-1, N, dtype=int)
+            else:
+                idx = np.arange(len(fr)).astype(int)
+            ax[0].scatter(fr.iloc[idx], fp.iloc[idx], s=2)
+            ax[0].set_title(f"r={ccs[0,row]:.3f} mse={np.std(fr-fp)/np.std(fr):.3f}")
             ax[0].set_xlim([-0.1, 1.5])
             ax[0].set_ylim([-0.1, 1.5])
             ax[0].set_ylabel(label + ' w_fg')
             ax[0].set_xlabel(f'Actual w_fg ({fr.mean():.3f})')
 
-            ax[1].scatter(br, bp, s=2)
+            ax[1].scatter(br.iloc[idx], bp.iloc[idx], s=2)
             ax[1].set_xlim([-0.1, 1.5])
             ax[1].set_ylim([-0.1, 1.5])
-            ax[1].set_title(f"r={np.corrcoef(br, bp)[0, 1]:.3f} mse={np.std(br-bp)/np.std(br):.3f}")
+            ax[1].set_title(f"r={ccs[1,row]:.3f} mse={np.std(br-bp)/np.std(br):.3f}")
             ax[1].set_ylabel(label + ' w_bg')
             ax[1].set_xlabel(f'Actual w_bg ({br.mean():.3f})')
 
-            ax[2].scatter(dr, dp, s=2)
+            ax[2].scatter(dr.iloc[idx], dp.iloc[idx], s=2)
             ax[2].set_xlim([-1.2, 1])
             ax[2].set_ylim([-1.2, 1])
-            ax[2].set_title(f"r={np.corrcoef(dr, dp)[0, 1]:.3f} mse={np.std(dr-dp)/np.std(dr):.3f}")
+            #ax[2].set_title(f"r={np.corrcoef(dr, dp)[0, 1]:.3f} mse={np.std(dr-dp)/np.std(dr):.3f}")
+            ax[2].set_title(f"r={ccs[2,row]:.3f} mse={np.std(dr-dp):.3f}")
             ax[2].set_ylabel(f'{label} relative gain ({dp.mean():.3f})')
             ax[2].set_xlabel(f'Actual relative gain ({dr.mean():.3f})')
-        f.suptitle(f'{siteid} {figlabel} ({area})')
+
+        for col,lab in enumerate(['FG','BG','FG+BG']):
+            axs[-1,col].bar(labels, ccs[col,:])
+            axs[-1,col].set_title(lab)
+
+        f.suptitle(f'{fig_label} {figlabel} ({area})')
         plt.tight_layout()
     
     return f
@@ -360,12 +436,12 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
 
     prefs = ['r', 'p2', 'p1']
     labels = ['CNN pred', 'LN pred']
-    resp=rec['resp']
-    stim=rec['stim']
+    resp = rec['resp']
+    stim = rec['stim']
     sigs = [rec['resp'], rec2['pred'], rec['pred']]
 
-    ii=cell_epoch_df.loc[(cell_epoch_df['cellid']==cellid) &
-                      (cell_epoch_df['BG + FG']==estim)].index.values
+    ii = cell_epoch_df.loc[(cell_epoch_df['cellid']==cellid) &
+                           (cell_epoch_df['BG + FG']==estim)].index.values
 
     efg = cell_epoch_df.loc[ii, 'FG'].values[0]
     ebg = cell_epoch_df.loc[ii, 'BG'].values[0]
@@ -378,7 +454,7 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
     rbg = resp.extract_channels([cellid]).extract_epoch(ebg).mean(axis=0)[0, :]
     rfgbg = resp.extract_channels([cellid]).extract_epoch(efgbg).mean(axis=0)[0, :]
 
-    fs=rec['resp'].fs
+    fs = rec['resp'].fs
     sp = int(fs * 0.5)
     spont = (rfg[:sp].mean() + rbg[:sp].mean() + rfgbg[:sp].mean()) / 3
 
@@ -387,7 +463,7 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
     rfgbg0 = rfgbg - spont
     weights2, residual_sum, rank, singular_values = np.linalg.lstsq(np.stack([rfg0, rbg0], axis=1), rfgbg0, rcond=None)
     #print(np.round(weights2, 2))
-    weights2 = fb_weights(rfg, rbg, rfgbg, sp)
+    weights2, predxc = fb_weights(rfg, rbg, rfgbg, sp)
     #print(np.round(weights2, 2))
 
     imopts = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
@@ -420,7 +496,7 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
         rfg0 = rfg - spont
         rbg0 = rbg - spont
         rfgbg0 = rfgbg - spont
-        weights2 = fb_weights(rfg, rbg, rfgbg, sp)
+        weights2, predxc = fb_weights(rfg, rbg, rfgbg, sp)
 
         ax[kk + 1, 0].plot(rbg0)
         ax[kk + 1, 1].plot(rfg0)
@@ -428,31 +504,72 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
         ax[kk + 1, 2].plot((rfg0) * weights2[0] + (rbg0) * weights2[1],label='wsum')
         ax[kk + 1, 2].axhline(0, color='r', lw=0.5)
         ax[kk + 1, 2].set_title(f'{pre}wfg={weights2[0]:.2f} {pre}wbg={weights2[1]:.2f}', fontsize=10)
-    ax[1,2].legend(frameon=False)
+
+    ax[1, 2].legend(frameon=False)
     plt.tight_layout()
 
-if __name__ == '__main__':
-    batch = 341
-    siteids, cellids = db.get_batch_sites(batch=batch)
+def load_all_sites(batch=341, modelnames=None, area="A1", show_plots=False):
+    """
+    Load all models in batch and compute rel gain predictions
+    :param batch:
+    :param modelnames:
+    :param area:
+    :return:
+    """
+    siteids, cellids = db.get_batch_sites(batch=batch, area=area)
 
-    if batch == 341:
+    if (modelnames is None) and (batch == 341):
         modelnames = [
             "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
-            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
         ]
-    else:
+    elif (modelnames is None):
         modelnames = [
             "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
             "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
         ]
 
-    cid = 35
+    dfs = []
+    for cid, siteid in enumerate(siteids):
+        try:
+            cell_epoch_df, rec1, rec2 = compare_olp_preds(
+                siteid, batch=batch, modelnames=modelnames, verbose=False)
+            if show_plots:
+                plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.1, maxgain=1.1, exclude_low_pred=True)
+            dfs.append(cell_epoch_df)
+        except:
+            print('bad site', siteid)
+    df_all = pd.concat(dfs, ignore_index=True)
+    if show_plots:
+        plot_olp_preds(df_all, minresp=0.01, mingain=0.1, maxgain=1.1, exclude_low_pred=True)
+    return df_all
+
+def demo_site(batch=341, modelnames=None, cid=None, load_only=False):
+    siteids, cellids = db.get_batch_sites(batch=batch)
+
+    if (modelnames is None) and (batch == 341):
+        modelnames = [
+            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+        ]
+    elif (modelnames is None):
+        modelnames = [
+            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+        ]
+    if cid is None:
+        # cid = 35
+        # cid = 32
+        cid = 11
+
     siteid, cellid = siteids[cid], cellids[cid]
 
     cell_epoch_df, rec1, rec2 = compare_olp_preds(siteid, batch=batch, modelnames=modelnames,
                                                   verbose=False)
+    if load_only:
+        return cell_epoch_df
 
-    f = plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.01, maxgain=2.0, exclude_low_pred=True)
+    f = plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.1, maxgain=1.1, exclude_low_pred=True)
 
     d = get_valid_olp_rows(cell_epoch_df, minresp=0.1, mingain=0.1, maxgain=2.0, exclude_low_pred=False)
     d = d.loc[d['area'].isin(['A1','PEG'])]
@@ -467,282 +584,32 @@ if __name__ == '__main__':
         print(f"{cellid} {estim} FG/BG weights: actual: {r['rwfg']:.2f}/{r['rwbg']:.2f} CNN: {r['p1wfg']:.2f}/{r['p1wbg']:.2f} LN: {r['p2wfg']:.2f}/{r['p2wbg']:.2f}")
         olp_pred_example(cell_epoch_df, rec1, rec2, cellid, estim)
 
+    return cell_epoch_df
 
-batch = 341
-siteids = db.get_batch_sites(batch=batch)
-
-if batch == 341:
-    modelnames = [
-        "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
-        "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
-    ]
-
-siteid = 'PRN022a'
-cell_epoch_df, rec1, rec2 = compare_olp_preds(siteid, batch=batch, modelnames=modelnames,
-                                              verbose=False)
-d = get_valid_olp_rows(cell_epoch_df, minresp=0.1, mingain=0.1, maxgain=2.0, exclude_low_pred=False)
-d = d.loc[d['area'].isin(['A1', 'PEG'])]
-
-d_big_gain_diff = d.loc[(cell_epoch_df['rwfg'] < 0.35) & (cell_epoch_df['rwbg'] > 0.65)]
-dd = d_big_gain_diff[['BG + FG', 'cellid']]
-
-for ww in range(len(dd)):
-    estim, cellid = dd.iloc[ww]
-    olp_pred_example_greg(d, rec1, rec2, cellid, estim)
-
-
-
-# options
-siteid = 'PRN022a'
-cellid, estim = 'PRN022a-250-1', 'STIM_27Chainsaw-0-1_37WomanA-0-1'
-
-
-
-
-import joblib as jl
-path = '/auto/users/hamersky/OLP_models/today_model'
-ddd = jl.load(path)
-dff = ddd.loc[ddd['area'].isin(['A1'])]
-
-avgs = plot_olp_preds_summary(dff, minresp=0.01, mingain=0.03, maxgain=2.0, sitewise=False)
-
-def plot_olp_preds_summary(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0, sitewise=False):
-    area = ",".join(list(cell_epoch_df['area'].unique()))
-    original_N = cell_epoch_df.shape[0]
-    cell_epoch_df = get_valid_olp_rows(cell_epoch_df, minresp=minresp, mingain=mingain, maxgain=maxgain,
-                                       exclude_low_pred=False)
-
-    rCC = cell_epoch_df['Binaural Type'] == 'BG Contra, FG Contra'
-    rIC = cell_epoch_df['Binaural Type'] == 'BG Ipsi, FG Contra'
-    labels = ['BG Contra, FG Contra', 'BG Ipsi, FG Contra']
-    print('valid n', cell_epoch_df.shape[0], 'out of', original_N, 'frac: ',
-          np.round(cell_epoch_df.shape[0] / original_N, 3))
-
-    if rIC.sum() == 0:
-        rrset = [slice(None)]
-        figlabels = ['mono']
+if __name__ == '__main__':
+    batch = 341
+    area = "A1"
+    if batch == 341:
+        modelnames = [
+            #"gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            "gtgram.fs100.ch18-ld-norm-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            #"gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+            "gtgram.fs100.ch18-ld-norm-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
+        ]
     else:
-        rrset = [rCC, rIC]
-        figlabels = ['CC', 'CI']
+        modelnames = [
+            "gtgram.fs100.ch18.bin6-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            # "gtgram.fs100.ch18.bin6-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+            "gtgram.fs100.ch18.bin6-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-lvl.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
+        ]
+    # cell_epoch_df = demo_site(batch=batch, modelnames=None, load_only=True, cid=5)
+    # f = plot_olp_preds(cell_epoch_df, minresp=0.05, mingain=0.01, maxgain=1.1,
+    #                    exclude_low_pred=True, fig_label=area)
 
-    model_dict = {'p1': 'CNN', 'p2': 'LN'}
-    sites = cell_epoch_df.siteid.unique().tolist()
-    site_r_dict, site_br_dict, site_fr_dict = {}, {}, {}
-    for sid in sites:
-        site_df = cell_epoch_df.loc[cell_epoch_df.siteid==sid]
-        rr = rrset[0]
+    df_all = load_all_sites(batch=batch, modelnames=modelnames, area=area, show_plots=False)
+    f = plot_olp_preds(df_all, minresp=0.05, mingain=0.01, maxgain=1.1,
+                       exclude_low_pred=True, fig_label=area, split_space=False)
+    f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_relgain_comp_nolog.pdf')
 
-        r_df, br_df, fr_df = {}, {}, {}
-        for pre in prefs[1:]:
-            fr = site_df.loc[rr, 'rwfg']
-            fp = site_df.loc[rr, pre + 'wfg'] * site_df.loc[rr, 'sf']
-            br = site_df.loc[rr, 'rwbg']
-            bp = site_df.loc[rr, pre + 'wbg'] * site_df.loc[rr, 'sf']
-            dr = fr - br
-            dp = fp - bp
-            r_df[f'{model_dict[pre]}'] = np.corrcoef(dr, dp)[0, 1]
-            br_df[f'{model_dict[pre]}'] = np.corrcoef(br, bp)[0, 1]
-            fr_df[f'{model_dict[pre]}'] = np.corrcoef(fr, fp)[0, 1]
-
-        site_r_dict[sid] = (r_df['CNN'], r_df['LN'])
-        site_br_dict[sid] = (br_df['CNN'], br_df['LN'])
-        site_fr_dict[sid] = (fr_df['CNN'], fr_df['LN'])
-
-    fig, ax = plt.subplots(1, 2, figsize=(10,5))
-    ax[0].plot([0, 1], [0, 1], 'k--')
-
-    CNNs, LNs = [dd[0] for dd in site_r_dict.values()], [dd[1] for dd in site_r_dict.values()]
-    bCNNs, bLNs = [dd[0] for dd in site_br_dict.values()], [dd[1] for dd in site_br_dict.values()]
-    fCNNs, fLNs = [dd[0] for dd in site_fr_dict.values()], [dd[1] for dd in site_fr_dict.values()]
-
-    if sitewise:
-        LN_av, CNN_av = np.mean(LNs), np.mean(CNNs)
-        bLN_av, bCNN_av = np.mean(bLNs), np.mean(bCNNs)
-        fLN_av, fCNN_av = np.mean(fLNs), np.mean(fCNNs)
-
-    else:
-        rr = rrset[0]
-        r_dict, br_dict, fr_dict = {}, {}, {}
-        for pre in prefs[1:]:
-            fr = cell_epoch_df.loc[rr, 'rwfg']
-            fp = cell_epoch_df.loc[rr, pre + 'wfg'] * cell_epoch_df.loc[rr, 'sf']
-            br = cell_epoch_df.loc[rr, 'rwbg']
-            bp = cell_epoch_df.loc[rr, pre + 'wbg'] * cell_epoch_df.loc[rr, 'sf']
-            dr = fr - br
-            dp = fp - bp
-            r_dict[f'{model_dict[pre]}'] = np.corrcoef(dr, dp)[0, 1]
-            br_dict[f'{model_dict[pre]}'] = np.corrcoef(br, bp)[0, 1]
-            fr_dict[f'{model_dict[pre]}'] = np.corrcoef(fr, fp)[0, 1]
-
-        bLN_av, bCNN_av = br_dict['LN'], br_dict['CNN']
-        fLN_av, fCNN_av = fr_dict['LN'], fr_dict['CNN']
-        LN_av, CNN_av = r_dict['LN'], r_dict['CNN']
-
-    returns = {'RG': {'LN': LN_av, 'CNN': CNN_av}, 'wBG': {'LN': bLN_av, 'CNN': bCNN_av},
-               'wFG': {'LN': fLN_av, 'CNN': fCNN_av}}
-
-    ax[0].scatter(LNs, CNNs, s=20, color='dimgrey', label='Recording site')
-    ax[0].legend(fontsize=10)
-    ax[0].set_xlabel('LN Performance (r)', fontweight='bold', fontsize=12)
-    ax[0].set_ylabel('CNN Performance (r)', fontweight='bold', fontsize=12)
-    # ax[0].set_title(f"r={np.corrcoef(LNs, CNNs)[0, 1]:.3f}", fontweight='bold', fontsize=12)
-
-
-
-    pp = 1
-    ax[1].bar([1-0.2, pp+0.2], [bLN_av, bCNN_av], color=['goldenrod', 'darkgoldenrod'], width=0.4)
-    pp+=1
-    ax[1].bar([pp-0.2, pp+0.2], [fLN_av, fCNN_av], color=['goldenrod', 'darkgoldenrod'], width=0.4)
-    pp+=1.5
-    ax[1].bar([pp-0.2], [LN_av], color=['goldenrod'], width=0.4, label='LN')
-    ax[1].bar([pp+0.2], [CNN_av], color=['darkgoldenrod'], width=0.4, label='CNN')
-
-    ax[1].legend(fontsize=12)
-    ax[1].set_ylabel('Model Performance (r)', fontweight='bold', fontsize=12)
-    ax[1].set_xticks([1, 2, 3.5])
-    ax[1].set_xticklabels(['BG\nweight', 'FG\nweight', 'Relative\nGain'], fontsize=10, fontweight='bold')
-
-    plt.tight_layout()
-
-    return returns
-
-
-def olp_pred_example_greg(cell_epoch_df, rec, rec2, cellid, estim, linsum=True):
-    prefs = ['r', 'p2', 'p1']
-    labels = ['CNN pred', 'LN pred']
-    resp=rec['resp']
-    stim=rec['stim']
-    sigs = [rec['resp'], rec2['pred'], rec['pred']]
-
-    ii=cell_epoch_df.loc[(cell_epoch_df['cellid']==cellid) &
-                      (cell_epoch_df['BG + FG']==estim)].index.values
-
-    efg = cell_epoch_df.loc[ii, 'FG'].values[0]
-    ebg = cell_epoch_df.loc[ii, 'BG'].values[0]
-    efgbg = cell_epoch_df.loc[ii, 'BG + FG'].values[0]
-
-    kinds = ['BG:', 'FG:', 'Combo']
-    names = [estim.split('_')[1].split('-')[0][2:], estim.split('_')[2].split('-')[0][2:], '']
-
-    # weights,residual_sum,rank,singular_values = np.linalg.lstsq(np.stack([rfg, rbg, np.ones_like(rfg)], axis=1), rfgbg,rcond=None)
-    # print(np.round(weights,2))
-    rfg = resp.extract_channels([cellid]).extract_epoch(efg).mean(axis=0)[0, :]
-    rbg = resp.extract_channels([cellid]).extract_epoch(ebg).mean(axis=0)[0, :]
-    rfgbg = resp.extract_channels([cellid]).extract_epoch(efgbg).mean(axis=0)[0, :]
-
-    fs=rec['resp'].fs
-    sp = int(fs * 0.5)
-    spont = (rfg[:sp].mean() + rbg[:sp].mean() + rfgbg[:sp].mean()) / 3
-
-    rfg0 = rfg - spont
-    rbg0 = rbg - spont
-    rfgbg0 = rfgbg - spont
-    weights2, residual_sum, rank, singular_values = np.linalg.lstsq(np.stack([rfg0, rbg0], axis=1), rfgbg0, rcond=None)
-    #print(np.round(weights2, 2))
-    weights2 = fb_weights(rfg, rbg, rfgbg, sp)
-    #print(np.round(weights2, 2))
-
-    imopts = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
-
-    label_dict = {'r': '', 'p2': 'LN', 'p1': 'CNN'}
-    ylabel_dict = {'r': 'Actual\nResponse', 'p2': 'LN', 'p1': 'CNN'}
-
-    f = plt.figure(figsize=(12, 6))
-    psthBG = plt.subplot2grid((21, 18), (4, 0), rowspan=5, colspan=5)
-    LNpsthBG = plt.subplot2grid((21, 18), (10, 0), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-    CNNpsthBG = plt.subplot2grid((21, 18), (16, 0), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-
-    psthFG = plt.subplot2grid((21, 18), (4, 6), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-    LNpsthFG = plt.subplot2grid((21, 18), (10, 6), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-    CNNpsthFG = plt.subplot2grid((21, 18), (16, 6), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-
-    psthCM = plt.subplot2grid((21, 18), (4, 12), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-    LNpsthCM = plt.subplot2grid((21, 18), (10, 12), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-    CNNpsthCM = plt.subplot2grid((21, 18), (16, 12), rowspan=5, colspan=5, sharex=psthBG, sharey=psthBG)
-
-    specBG = plt.subplot2grid((21, 18), (0, 0), rowspan=2, colspan=5)
-    specFG = plt.subplot2grid((21, 18), (0, 6), rowspan=2, colspan=5)
-    specCM = plt.subplot2grid((21, 18), (0, 12), rowspan=2, colspan=5)
-
-    ax = [psthBG, psthFG, psthCM, LNpsthBG, LNpsthFG, LNpsthCM, CNNpsthBG, CNNpsthFG, CNNpsthCM,
-          specBG, specFG, specCM]
-
-    time = (np.arange(0, rfg0.shape[-1]) / 100) - 0.5
-
-    aa = 0
-    for kk, pre, sig in zip(range(len(sigs)), prefs, sigs):
-
-        rfg = sig.extract_channels([cellid]).extract_epoch(efg).mean(axis=0)[0, :]
-        rbg = sig.extract_channels([cellid]).extract_epoch(ebg).mean(axis=0)[0, :]
-        rfgbg = sig.extract_channels([cellid]).extract_epoch(efgbg).mean(axis=0)[0, :]
-
-        spont = (rfg[:sp].mean() + rbg[:sp].mean() + rfgbg[:sp].mean()) / 3
-        rfg0 = rfg - spont
-        rbg0 = rbg - spont
-        rfgbg0 = rfgbg - spont
-        weights2 = fb_weights(rfg, rbg, rfgbg, sp)
-
-        ax[aa].plot(time, rbg0, color='deepskyblue')
-        ax[aa+1].plot(time, rfg0, color='yellowgreen')
-        if linsum==True:
-            if aa == 0:
-                ymin, ymax = ax[aa].get_ylim()
-                ymin1, ymax1 = ax[aa + 1].get_ylim()
-                maxi = np.max([ymax, ymax1])
-            ax[aa+2].plot(time, (rbg0+rfg0), color='dimgray', ls='--', label='Linear Sum', lw=0.5)
-
-        ax[aa+2].plot(time, rfgbg0, color='dimgray', label='Actual Response')
-        ax[aa+2].plot(time, (rfg0) * weights2[0] + (rbg0) * weights2[1], color='orange', label='Weighted Pred')
-
-        ax[aa+2].axhline(0, color='r', lw=0.5)
-        # ax[aa+2].set_title(f'{pre}: wbg={weights2[1]:.2f}, wfg={weights2[0]:.2f}', fontsize=10, fontweight='bold')
-        if aa == 0:
-            ax[0].set_title(f'r: wbg={weights2[1]:.2f}, wfg={weights2[0]:.2f}', fontsize=10, fontweight='bold')
-        if aa == 3:
-            ax[1].set_title(f'LN: wbg={weights2[1]:.2f}, wfg={weights2[0]:.2f}', fontsize=10, fontweight='bold')
-        if aa == 6:
-            ax[2].set_title(f'CNN: wbg={weights2[1]:.2f}, wfg={weights2[0]:.2f}', fontsize=10, fontweight='bold')
-
-        if kk==(len(sigs) - 1):
-            ax[aa+1].set_xlabel('Time (s)', fontweight='bold', fontsize=12)
-
-        ax[aa].set_ylabel(f'{ylabel_dict[pre]}', fontweight='bold', fontsize=12)
-
-        aa+=3
-
-    ax[2].legend(frameon=False, fontsize=6)
-    ymin, ymax = ax[0].get_ylim()
-    for ee in range(len(sigs)*3):
-        ax[ee].vlines([0, 1], ymin, ymax, colors='black', linestyles=':', lw=0.75)
-    ax[0].set_ylim(ymin, ymax)
-    ax[0].set_xticks([0, 0.5, 1.0])
-    ax[0].set_xlim(-0.2, 1.3)
-
-    ymi, yma = ax[0].get_ylim()
-    ax[0].set_ylim(ymi, maxi)
-
-    sfg = stim.extract_epoch(efg).mean(axis=0)
-    sbg = stim.extract_epoch(ebg).mean(axis=0)
-    sfgbg = stim.extract_epoch(efgbg).mean(axis=0)
-
-    specs = [sbg, sfg, sfgbg]
-
-    cc = 0
-    for ee, spec in zip(range(-3,0,1), specs):
-
-        ax[ee].imshow(spec, aspect='auto', origin='lower', extent=[0, sbg.shape[1], 0, sbg.shape[0]],
-                     cmap='gray_r')
-        ax[ee].set_xticks([]), ax[ee].set_yticks([])
-        ax[ee].set_xticklabels([]), ax[ee].set_yticklabels([])
-        ax[ee].spines['top'].set_visible(False), ax[ee].spines['bottom'].set_visible(False)
-        ax[ee].spines['left'].set_visible(False), ax[ee].spines['right'].set_visible(False)
-        ax[ee].set_xlim(30, 180)
-        ax[ee].set_title(f"{kinds[cc]} {names[cc]}", rotation=0, fontweight='bold', fontsize=12)
-        cc+=1
-
-        ymin, ymax = ax[ee].get_ylim()
-        ax[ee].vlines([50, 150], ymin+0.1, ymax, color='black', lw=0.5)
-        ax[ee].hlines([ymin+0.1,ymax], 50, 150, color='black', lw=0.5)
-
-    f.suptitle(f'{cellid} -- {estim}')
-    f.tight_layout()
+    f=pred_comp(batch, modelnames)
+    f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')

@@ -70,12 +70,41 @@ weight_df = jl.load(path)
 # path = '/auto/users/hamersky/olp_analysis/2023-05-17_batch344_0-500_metrics' #full one with PRNB layers and paths
 # path = '/auto/users/hamersky/olp_analysis/2023-07-20_batch344_0-500_metrics' # full with new FR snr metric
 path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch344_0-500_metric'
+path = '/auto/users/hamersky/olp_analysis/2023-09-15_batch344_0-500_final'
 weight_df = jl.load(path)
 
 # This does what all those bs filters I clicked around and ran everytime I wanted to start something
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
 
 filt = ohel.get_olp_filter(weight_df, kind='sounds', metric=True)
+
+
+
+
+
+
+
+## 2023_01_03. This goes after I run the job and have a df.
+
+saved_paths = glob.glob(f"/auto/users/hamersky/cache_full/*")
+
+weight_df0 = []
+for path in saved_paths:
+    df = jl.load(path)
+    weight_df0.append(df)
+
+weight_df0 = pd.concat(weight_df0)
+ep_names = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df0.namesA, weight_df0.namesB)]
+weight_df0 = weight_df0.drop(columns=['namesA', 'namesB'])
+weight_df0['epoch'] = ep_names
+
+from datetime import date
+today = date.today()
+OLP_partialweights_db_path = \
+    f'/auto/users/hamersky/olp_analysis/{date.today()}_batch' \
+    f'{weight_df0.batch.unique()[0]}_{weight_df0.fit_segment.unique()[0]}_final'
+
+jl.dump(weight_df0, OLP_partialweights_db_path)
 
 
 
@@ -218,7 +247,7 @@ ax[0].
 ## Figure 4 ##
 #3A/B
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
-ofig.plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+stt = ofig.plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
                                  weight_lim=[-0.5, 2], summary=True, sep_hemi=False, sort_category=None,
                                  stat_plot='median', flanks=True)
 
@@ -439,9 +468,9 @@ ofig.summary_relative_gain_all_areas(bin_dff, kind_show=['11','21','12','22'], c
 # Filter by SNR
 filt = ohel.get_olp_filter(weight_df, kind='SNR', metric=False)
 
-snr_df = ohel.filter_across_condition(filt, synth_show=[0, 10], filt_kind='SNR', weight_lim=[-0.5, 2],
+snr_df = ohel.filter_across_condition(filt, synth_show=[0, 5, 10], filt_kind='SNR', weight_lim=[-0.5, 2],
                                  snr_threshold=0.12, r_cut=0.4, rel_cut=2.5, suffix=[''])
-ofig.summary_relative_gain_all_areas(snr_df, kind_show=[0, 10], category='SNR', mult_comp=1, statistic='paired')
+ofig.summary_relative_gain_all_areas(snr_df, kind_show=[0, 5, 10], category='SNR', mult_comp=1, statistic='independent')
 
 # ofig.plot_all_weight_comparisons(snr_df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
 #                                  weight_lim=[-0.5,2], summary=False, sep_hemi=False, sort_category='SNR')
@@ -479,8 +508,8 @@ ofig.r_weight_comp_distribution(filt, increment=0.2, snr_threshold =0.12, thresh
 
 #S3
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
-ofig.weights_supp_comp(filt, x='resp', area='A1', quads=3, thresh=None, snr_threshold=0.12, r_cut=None)
-ofig.weights_supp_comp(filt, x='resp', area='PEG', quads=3, thresh=None, snr_threshold=0.12, r_cut=None)
+ofig.weights_supp_comp(filt, x='resp', area='A1', quads=3, thresh=0.03, snr_threshold=0.12, r_cut=None)
+ofig.weights_supp_comp(filt, x='resp', area='PEG', quads=3, thresh=0.03, snr_threshold=0.12, r_cut=None)
 
 #S4
 # ofig.resp_weight_multi_scatter(filt, synth_kind=['N', 'A'], threshold=None, snr_threshold=0.12,

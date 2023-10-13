@@ -6,6 +6,8 @@ import sys
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+from scipy.ndimage import zoom
+
 import nems0.utils
 from nems0 import db
 import nems0.preprocessing as preproc
@@ -148,10 +150,10 @@ def adjust_didx(dlc, didx):
     x = x[np.isfinite(x)]
     y = y[np.isfinite(y)]
 
-    xnp = np.percentile(x, 15)
     ynp = np.percentile(y, 90)
-    xsp = np.percentile(x, 80)
+    xnp = np.percentile(x[(x>0.05) & (y>ynp)], 75)
     ysp = np.percentile(y, 15)
+    xsp = np.percentile(x[(y<ysp)], 50)
     xnp_=didx[0, -1, 0]
     ynp_=didx[0, -1, 1]
     xsp_=didx[2, -1, 0]
@@ -159,7 +161,7 @@ def adjust_didx(dlc, didx):
     didx_new = didx.copy()
     log.info(f"old (xnp,ynp): {xnp_:.3f},{ynp_:.3f} (xsp,ysp): {xsp_:.3f},{ysp_:.3f}")
     log.info(f"new (xnp,ynp): {xnp:.3f},{ynp:.3f} (xsp,ysp): {xsp:.3f},{ysp:.3f}")
-    didx_new[:,:,8:2] = (didx[:,:,8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
+    didx_new[:,:,0:8:2] = (didx[:,:,0:8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
     didx_new[:,:,1:8:2] = (didx[:,:,1:8:2]-ysp_)/(ynp_-ysp_)*(ynp-ysp)+ysp
 
     return didx_new
@@ -181,9 +183,9 @@ def movement_plot(rec):
         # compute distance and angle to each speaker
         # code pasted in from free_tools
         d1, theta1, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
         d2, theta2, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
         #log.info(f"{i} {didx[i,-1,:2]} d1={d1[0,-1]} th1= {d2[0,-1]}")
         plt.plot(didx_[i, -1, 2], didx_[i, -1, 3], "o", color='blue')
         plt.plot(didx_[i, -1, 0], didx_[i, -1, 1], "o", color='red')
@@ -200,7 +202,7 @@ def movement_plot(rec):
 ### DSTRF stuff
 ###
 
-def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_threshold=5):
+def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_threshold=5, reset_backend=False):
     """
     compute mean dSTRF for a single cell at standardized positions
     by "freezing" the DLC signal and computing the dSTRF for a bunch of stimuli
@@ -235,7 +237,7 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_thre
 
         for mi, m in enumerate(model_list):
             stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
-            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes)
+            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes, reset_backend=reset_backend)
 
             d = dstrf[di]['stim'][0, :, :, :]
 
@@ -247,32 +249,63 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_thre
                     log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
 
                 d = dstrf[di]['stim'][0, (e <= snr_threshold), :, :]
+                dstrf[di]['stim']=d[np.newaxis,:,:,:]
             mdstrf[mi, di, :, :] = d.mean(axis=0)
-            pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
+    
+            # svd attempting to make compatible with new format of compute_pcs
+            #pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
+            dpc = dtools.compute_dpcs(dstrf[di], pc_count=pc_count)
+            pc=dpc['stim']['pcs']
+            pc_mag=dpc['stim']['pc_mag']
+            
             pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
             pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
             pc_mag_all[mi, di, :] = pc_mag[:, 0]
     return mdstrf, pc1, pc2, pc_mag_all
 
 
-def dstrf_plots(rec, model_list, dstrf, out_channel):
+def dstrf_plots(rec, model_list, dstrf, out_channel, interpolation_factor=None, flip_time=True):
     cellid = rec['resp'].chans[out_channel]
+    fs = rec['resp'].fs
+    if interpolation_factor is not None:
+        fs=fs*interpolation_factor
+
     labels = ['HRTF+DLC', 'HRTF', 'DLC']
 
     f, ax = plt.subplots(len(model_list), dstrf.shape[1] + 1, figsize=(10, 8), sharex=True, sharey=True)
     for mi, m in enumerate(model_list):
         mmax = np.max(np.abs(dstrf[mi, :]))
         for di in range(dstrf.shape[1]):
-            ax[mi, di].imshow(dstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
-            ax[mi, di].axhline(17.5, color='k', ls='--', lw=0.5)
+            d = dstrf[mi, di]
+            if interpolation_factor is not None:
+                d=zoom(d, interpolation_factor)
+            if flip_time:
+                d=np.fliplr(d)
+            mm = int(d.shape[0]/2)
+            ax[mi, di].imshow(d[:mm,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, -0.5, mm-0.5], 
+                              vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            ax[mi, di].imshow(d[mm:,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, mm+0.5, mm*2 + 0.5], 
+                              vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            #ax[mi, di].imshow(dstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            ax[mi, di].axhline(mm, color='k', ls='--', lw=0.5)
             if mi == len(model_list) - 1:
                 ax[mi, di].set_xlabel(f"di={di}", fontsize=9)
 
         ax[mi, 0].text(0, 20, 'L')
         ax[mi, 0].text(0, 2, 'R')
-
-        ax[mi, -1].imshow(dstrf[mi, 2] - dstrf[mi, 0], vmin=-mmax, vmax=mmax, **imopts_dstrf)
-        ax[mi, -1].axhline(17.5, color='k', ls='--', lw=0.5)
+        
+        d = dstrf[mi, 2] - dstrf[mi, 0]
+        if interpolation_factor is not None:
+            d=zoom(d, interpolation_factor)
+        if flip_time:
+            d=np.fliplr(d)
+        mm = int(d.shape[0]/2)
+        ax[mi, -1].imshow(d[:mm,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, -0.5, mm-0.5], 
+                          vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        ax[mi, -1].imshow(d[mm:,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, mm+0.5, mm*2 + 0.5], 
+                          vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        #ax[mi, -1].imshow(dstrf[mi, 2] - dstrf[mi, 0], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        ax[mi, -1].axhline(mm, color='k', ls='--', lw=0.5)
         if mi == len(model_list) - 1:
             ax[mi, -1].set_xlabel(f"Front-back", fontsize=9)
 

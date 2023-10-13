@@ -1792,6 +1792,7 @@ def psi_parm_read(filepath):
             globalparams['Physiology'] = 'Yes -- Behavior'
         else:
             globalparams['Physiology'] = 'Yes -- Passive'
+        runclass=globalparams['runclass']
     else:
         log.info('***** Kludge alert!! Hard coding many baphy settings. *****')
         globalparams = {}
@@ -1824,30 +1825,61 @@ def psi_parm_read(filepath):
     if ('background_1_wav_sequence_level' in rparms.index):
         if rparms.background_1_wav_sequence_level > 0:
             FitBinaural, TestBinaural = 'Random', 'Random'
-
-    TrialObject = {1: {
-        'ReferenceClass': 'BigNat',
-        'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
-                                'PostStimSilence': poststimsilence,
-                                'SoundPath': rparms.background_wav_sequence_path,
-                                'Duration': rparms.background_wav_sequence_duration,
-                                'Normalization': rparms.background_wav_sequence_normalization ,
-                                'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
-                                'FitBinaural': FitBinaural,
-                                'TestBinaural': TestBinaural,
-                                'fit_range': rparms.background_wav_sequence_fit_range,
-                                'fit_reps': rparms.background_wav_sequence_fit_reps,
-                                'test_range': rparms.background_wav_sequence_test_range,
-                                'test_reps': rparms.background_wav_sequence_test_reps,
-                                'iti_duration': rparms.iti_duration,
-                            'Names': {},
-                            'descriptor': 'BigNat'
+    
+    if runclass=='NTD':
+        TrialObject = {1: {
+            'ReferenceClass': 'BigNat',
+            'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
+                                    'PostStimSilence': poststimsilence,
+                                    'SoundPath': rparms.background_wav_sequence_path,
+                                    'Duration': rparms.background_wav_sequence_duration,
+                                    'Normalization': rparms.background_wav_sequence_normalization ,
+                                    'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                    'FitBinaural': FitBinaural,
+                                    'TestBinaural': TestBinaural,
+                                    'fit_range': rparms.background_wav_sequence_fit_range,
+                                    'fit_reps': rparms.background_wav_sequence_fit_reps,
+                                    'test_range': rparms.background_wav_sequence_test_range,
+                                    'test_reps': rparms.background_wav_sequence_test_reps,
+                                    'iti_duration': rparms.iti_duration,
+                                'Names': {},
+                                'descriptor': 'BigNat'
+                                }},
+            'TargetClass': 'Tone',
+            'TargetHandle': {1:{ 'descriptor': 'Tone'
                             }},
-        'TargetClass': 'Tone',
-        'TargetHandle': {1:{ 'descriptor': 'Tone'
-                        }},
-        'OveralldB': rparms.background_wav_sequence_level}
-    }
+            'OveralldB': rparms.background_wav_sequence_level}
+        }
+    elif runclass=='NFB':
+        TrialObject = {1: {
+            'ReferenceClass': 'OverlappingPairs',
+            'ReferenceHandle': {1: {'BG_Folder': rparms.bg_path,
+                                    'FG_Folder': rparms.fg_path,
+                                    'Combos': rparms.combinations,
+                                    'Background': rparms.bg_fit_range,
+                                    'Foreground': rparms.fg_fit_range,
+                                    'PreStimSilence': rparms.target_delay,
+                                    'PostStimSilence': 0.5,
+                                    'SilenceOnset': 0.5,
+                                    'Duration': 4,
+                                    'RefRepCount': 1,
+                                    'SoundRepeats': 'No',
+                                    'Binaural': 'Yes',
+                                    'Synthetic': 'No',
+                                    'NormalizeRMS': rparms.bg_normalization,
+                                    'Ramp': 'Yes',
+                                    'SNR': rparms.fg_snr,
+                                    'Names': {},
+                                    'descriptor': 'OverlappingPairs',
+                                   }},
+            'TargetClass': 'FerretVocal',
+            'TargetHandle': {1: {'descriptor': 'FerretVocal'
+                            }},
+            'OveralldB': 65}
+                      }
+    else:
+        raise ValueError(f"runclass {runclass} not yet supported in psi_parm_read")
+        
     exptparams = {'runclass': runclass,
                   'StartTime': ctime.strftime("%H:%M:%S"),
                   'BehaveObjectClass': 'psi-go-nogo',
@@ -1940,7 +1972,16 @@ def psi_parm_read(filepath):
     #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
     #    exptevents.loc[exptevents['Trial']==r['Trial'],'end'] -= r['start']
 
-    tstart_events = exptevents.loc[exptevents['name']=='target_start'].reset_index(drop=True)
+    # name of events that signal the beginning of a trial, should be the same as len(T)
+    if runclass=='NTD':
+        tstring='target_start'
+    elif runclass=='NFB':
+        tstring='trial_start'
+    tstart_events = exptevents.loc[exptevents['name']==tstring].reset_index(drop=True)
+    try:
+        assert(len(T)==len(tstart_events))
+    except:
+        raise ValueError(f"Length of trial log events and '{tstring}' events does not match")
     tstart_events['name']='TRIALSTART'
     tstart_events['end'] = tstart_events['start']
     tstart_events['Info'] = ''
@@ -1950,46 +1991,68 @@ def psi_parm_read(filepath):
     tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
     tstop_events.loc[tstop_events.Trial==0,['Trial']] = Tlen
     tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
-
-    bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
-    bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
-
-    Names = []
-    for ee, r in bg_events.iterrows():
-        info = json.loads(r['Info'])
-        bin_match = bg_events1['start']==r['start']
-        if (bin_match.sum() > 0) & (TestBinaural != 'None'):
-            # code as a binaural signal
-            r2 = bg_events1.loc[bin_match].iloc[0]
-            info2 = json.loads(r2['Info'])
-            name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
-        else:
-            # single (monaural) signal
-            name = f'{info["metadata"]["filename"]}.wav'
-        Names.append(name)
-        bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
-        bg_events.loc[ee, 'Info'] = ''
-    Names = list(set(Names))
-    Names.sort()
-    TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
-
-    tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
-                                (exptevents['Trial']<=Tlen)].copy()
-    for ee, r in tar_events.iterrows():
-        trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
-        snr = trialinfo['snr']
-        target_freq = trialinfo['target_tone_frequency']
-        trial_type = trialinfo['trial_type']
-        if 'nogo' in trial_type:
-            name = f'Stim , {target_freq}+-InfdB , Catch'
-        else:
-            name = f'Stim , {target_freq}+{snr}dB , Target'
-        tar_events.loc[ee, 'name'] = name
-        tar_events.loc[ee, 'Info'] = ''
     
+    if runclass=='NTD':
+        bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+        bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
+
+        Names = []
+        for ee, r in bg_events.iterrows():
+            info = json.loads(r['Info'])
+            bin_match = bg_events1['start']==r['start']
+            if (bin_match.sum() > 0) & (TestBinaural != 'None'):
+                # code as a binaural signal
+                r2 = bg_events1.loc[bin_match].iloc[0]
+                info2 = json.loads(r2['Info'])
+                name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
+            else:
+                # single (monaural) signal
+                name = f'{info["metadata"]["filename"]}.wav'
+            Names.append(name)
+            bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
+            bg_events.loc[ee, 'Info'] = ''
+        Names = list(set(Names))
+        Names.sort()
+        TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+
+        tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
+                                    (exptevents['Trial']<=Tlen)].copy()
+        for ee, r in tar_events.iterrows():
+            trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
+            snr = trialinfo['snr']
+            target_freq = trialinfo['target_tone_frequency']
+            trial_type = trialinfo['trial_type']
+            if 'nogo' in trial_type:
+                name = f'Stim , {target_freq}+-InfdB , Catch'
+            else:
+                name = f'Stim , {target_freq}+{snr}dB , Target'
+            tar_events.loc[ee, 'name'] = name
+            tar_events.loc[ee, 'Info'] = ''
+
+        stimevents = pd.concat([bg_events, tar_events])
+        stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
+    elif runclass=='NFB':
+        stimevents = exptevents.loc[exptevents['name']=='trial_end'].copy()
+        trial_events = exptevents.loc[exptevents['name']=='trial_end'].copy()
+        
+        Names = []
+        for ee, r in stimevents.iterrows():
+            info = json.loads(r['Info'])
+            fg_name = f'{info["result"]["fg_name"]}'
+            bg_name = f'{info["result"]["bg_name"]}'
+            name = f"{fg_name.replace('.wav','')}:0.5:3.5:{info['result']['fg_channel']}+{bg_name.replace('.wav','')}:0:4:{info['result']['bg_channel']}"
+            stimevents.loc[ee, 'name'] = f'Stim , {name} , Target'
+            stimevents.loc[ee, 'start'] = info["result"]["trial_start"]
+            stimevents.loc[ee, 'end'] = info["result"]["trial_start"]+4
+            stimevents.loc[ee, 'Info'] = ''
+            
+            #if T.loc[ee,'score'] == 0:
+            #    trial_events.loc[ee, 
+        Names = list(set(Names))
+        Names.sort()
+        TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+        
     # add pre- and post- silences
-    stimevents = pd.concat([bg_events, tar_events])
-    stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
     prestimevents=stimevents.copy()
     starts = prestimevents['start'].copy()
     prestimevents['start'] = starts-prestimsilence
@@ -2002,7 +2065,7 @@ def psi_parm_read(filepath):
     poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
 
     trial_number = T['trial_number']
-    trialstarts = exptevents.loc[exptevents['name']=='target_start', 'start'].values
+    trialstarts = exptevents.loc[exptevents['name']==tstring, 'start'].values
     videostart = T['psivideo_frame_ts']
     videostart = videostart - videostart[0] + trialstarts[0]
     videoframes = T['psivideo_frames_written']
@@ -2012,15 +2075,21 @@ def psi_parm_read(filepath):
     videoevents = pd.DataFrame(d_)
 
     response_ts = T['response_ts']
-    response_outcome = T['score']
+    response_outcome = T['score'].copy()
+    response_name = T['response']
     response_name = response_outcome.apply(lambda x: f"LICK , {x}")
 
     d_ = {'start': response_ts, 'end': response_ts, 'name': response_name,
           'Trial': trial_number, 'Info': ''}
     responseevents = pd.DataFrame(d_)
     responseevents = responseevents.loc[np.isfinite(response_ts)]
+    if runclass=='NTD':
+        trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
+    elif runclass=='NFB':
+        response_outcome[response_name=='no_response']=-1
+        trial_names = {-1: "TIMEOUT_TRIAL", 0: "EARLY_TRIAL", 1: "INCORRECT_TRIAL", 2: "CORRECT_TRIAL"}
+        trial_outcomes = response_outcome.apply(lambda x: trial_names[x])
 
-    trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
     n_outcomes = len(trial_outcomes)
     d_ = {'start': tstart_events['start'][:n_outcomes],
           'end': tstop_events['start'][:n_outcomes],

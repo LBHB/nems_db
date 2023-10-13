@@ -25,7 +25,7 @@ import numpy as np
 import nems0.db as nd
 import nems0
 
-import nems_lbhb.motor.nems_dlc_settings as ds
+from nems_lbhb.motor.nems_dlc_settings import get_dlc_model, DEFAULT_DLC_MODEL
 
 import logging
 log = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ if __name__ == '__main__':
     if db_exists & queueid>0:
         log.info("Starting QUEUEID={}".format(queueid))
         nd.update_job_start(queueid)
+    log.info(f"LD_LIBRARY_PATH: {os.environ['LD_LIBRARY_PATH']}")
 
     # figure out filenames and paths to process
     video_file = sys.argv[1]
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         path_config = sys.argv[3]
     else:
-        path_config = ds.DEFAULT_DLC_MODEL
+        path_config = get_dlc_model(video_file)
 
     video_base = os.path.basename(video_file)
     if video_base.startswith('recording'):
@@ -112,7 +113,7 @@ if __name__ == '__main__':
             # Sort list of files based on last modification time in ascending order
             list_of_files = sorted( list_of_files,
                                     key = os.path.getmtime)
-
+            log.info(f"{path_sorted} {list_of_files}")
             os.system(f"ln -s {list_of_files[-1]} {a}")
 
     if 'video' in action_list:
