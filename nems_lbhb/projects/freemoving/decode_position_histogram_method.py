@@ -1121,7 +1121,7 @@ def trial_dvst_design_matrix(rec, tbinwidth=0.2, tbin_num=10, dbin_num=10):
     trial_time_bin_edges = np.concatenate((np.arange(-tartime*rasterfs, 0, int(tbinwidth*rasterfs)), np.arange(0, len(tarlickeps[0, 0, :]), int(tbinwidth*rasterfs))))
     if tbin_num:
         trial_time_bin_edges = trial_time_bin_edges[:10]
-    dist_bin_edges =
+    dist_bin_edges = []
     design_mat = []
 
     return design_mat

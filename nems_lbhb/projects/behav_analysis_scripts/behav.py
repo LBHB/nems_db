@@ -172,14 +172,18 @@ class behav:
         else:
             plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
 
+        # plot_frame = plot_frame.iloc[:100]
+
         if YVARIABLE=='correct':
             Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
+            # Non_nose_poke = plot_frame
         else:
             Non_nose_poke = plot_frame
 
         if not include_remind:
             Non_nose_poke = Non_nose_poke[Non_nose_poke['remind_trial'] == False]
 
+        Non_nose_poke = Non_nose_poke.iloc[-75:]
         series2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
 
         f,ax=plt.subplots()
@@ -295,6 +299,43 @@ class behav:
         plt.show()
         print(correct.groupby(XVARIABLE)[YVARIABLE].count())
 
+    def rolling_avg(self, XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct', include_remind=False):
+        if len(day_list) == 0:
+            plot_frame = self.dataframe.copy()
+        else:
+            plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
+
+
+        if YVARIABLE == 'correct':
+            Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
+            # Non_nose_poke = plot_frame
+        else:
+            Non_nose_poke = plot_frame
+
+        if not include_remind:
+            Non_nose_poke = Non_nose_poke[Non_nose_poke['remind_trial'] == False]
+
+        Non_nose_poke['rolling_avg'] = Non_nose_poke['correct'].rolling(20, min_periods=1).mean()
+        series2 = Non_nose_poke.groupby(XVARIABLE)['rolling_avg']
+
+        f, ax = plt.subplots()
+        series2.plot(kind='line', ax=ax)    # plt.axhline(y=0.5, linestyle='--')
+
+
+
+        plt.axhline(y=0.5, linestyle='--')
+        plt.ylim([0, 1])
+        plt.xlabel(XVARIABLE)
+        plt.ylabel(YVARIABLE)
+        plt.title(f'Rolling average of {YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
+                  fontsize=8)
+        counts2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count().values
+        for i, p in enumerate(counts2):
+            ax.text(i, 0, str(counts2[i]), ha='center', va='bottom')
+        plt.tight_layout()
+        plt.show()
+        print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
+
 def lemon_space_snr_bar():
     example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
     #example.remove_remind_trials()
@@ -407,6 +448,7 @@ def lemon_space_snr_subplots():
     # fig.suptitle('Performance across spatial condition (all), before migrate')
     fig.tight_layout()
     plt.show()
+
 def slippy_space_snr_subplots():
     plot_data = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
     df = plot_data.dataframe.copy()
@@ -518,22 +560,32 @@ if __name__ == "__main__":
     # slippy_space_snr_bar()
     # lemon_space_snr_subplots()
     # slippy_space_snr_subplots()
-    lemon_dlc_trace_plot()
+    # lemon_dlc_trace_plot()
 
 
 
-    # example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
+    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=False)
     # #runclass NFB = 2afc, VOW = vowel
     # print(example.dataframe.shape)
     # example.remove_remind_trials()
     # print(example.dataframe.shape)
     #
-    # # example.variables()
-    # XVARIABLE = ['spatial_config','snr']
+    example.variables()
+    XVARIABLE = ['day']
+    # YVARIABLE = 'early_nosepoke'
     #
-    # day_list = ['SLJ060Ta','SLJ061Ta','SLJ062Ta','SLJ063Ta']
+    # day_list = ['SLJ063Ta', 'SLJ064Ta']
     #
+    example.rolling_avg(XVARIABLE, day_list=['LMD074Ta'])
+    example.rolling_avg(XVARIABLE, day_list=['LMD073Ta'])
+
+
+    # example.sample_plots(XVARIABLE, day_list, YVARIABLE=YVARIABLE)
     # example.sample_plots(XVARIABLE, day_list)
+    # example.sample_plots(XVARIABLE, day_list=['SLJ064Ta'])
+
     # example.perform_over_time(XVARIABLE, day_list)
     # example.plot_trial_duration(XVARIABLE, day_list)
+    # example.plot_trial_duration(XVARIABLE, day_list=['SLJ064Ta'])
+
 
