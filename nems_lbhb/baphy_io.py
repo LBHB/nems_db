@@ -1780,7 +1780,7 @@ def psi_parm_read(filepath):
     root3, ferret = os.path.split(root2)
     parts = parmfile.split('_')
     siteid = parts[0][:-2]
-    runclass = parts[2];
+    runclass = parts[-2];
     ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
 
     if os.path.isfile(globalfile):

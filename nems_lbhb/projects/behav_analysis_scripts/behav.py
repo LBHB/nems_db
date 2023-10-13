@@ -68,6 +68,7 @@ class behav:
                         elif self.non_migrate_blocks == False:
                             if 1 not in d['migrate_trial'].unique():
                                 valid = False
+                        d['rt'] = d['response_ts']-d['trial_start']
                         d['trial_duration'] = d['response_start'] - d['np_start']
                         d['spatial_config'] = 'same'
                         d.loc[d['bg_channel'] == d['fg_channel'], 'spatial_config'] = 'diff'
@@ -75,7 +76,7 @@ class behav:
 
                         interesting_data = d[
                             ['trial_number', 'response', 'correct', 'response_time', 'hold_duration', 'snr',
-                             'np_start','response_start','spatial_config', 'migrate_trial', 'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                             'rt','np_start','response_start','spatial_config', 'migrate_trial', 'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
                         interesting_data['parmfile'] = r['parmfile']
                         interesting_data['session_id'] = session_id
                         interesting_data['day'] = r['cellid']
@@ -85,6 +86,7 @@ class behav:
                     if 'snr' in d.columns:
                         if 'migrate_trial' in d.columns:
                             valid = False
+                        d['rt'] = d['response_ts']-d['trial_start']
                         d['trial_duration'] = d['response_start'] - d['np_start']
                         d['spatial_config'] = 'same'
                         d.loc[d['bg_channel'] == d['fg_channel'], 'spatial_config'] = 'diff'
@@ -92,7 +94,7 @@ class behav:
 
                         interesting_data = d[
                             ['trial_number', 'response', 'correct', 'response_time', 'hold_duration', 'snr',
-                             'np_start','response_start','spatial_config', 'response_time', 'trial_duration', 'fg_i', 'bg_i']].copy()
+                             'rt','np_start','response_start','spatial_config', 'response_time', 'trial_duration', 'fg_i', 'bg_i']].copy()
                         interesting_data['parmfile'] = r['parmfile']
                         interesting_data['session_id'] = session_id
                         interesting_data['day'] = r['cellid']
@@ -345,7 +347,7 @@ def lemon_space_snr_bar():
 
     start_site = 'LMD066Ta'
     d=example.dataframe
-    d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-5,-10,-20,-30]))]
+    d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-10,-20,-30]))]
     example.dataframe = d
     days=d.loc[d['day']>=start_site,'day'].unique().tolist()
     example.sample_plots(XVARIABLE, day_list=days)
@@ -390,9 +392,9 @@ def lemon_space_snr_subplots():
     plot_data = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
     df = plot_data.dataframe.copy()
 
-    t = [-30, -20, -10, -5, 0, 100]
+    t = [-30, -20, -10, 0]
 
-    df = df[df['snr'] != -15]
+    df = df.loc[~df['snr'].isin([-15, -5])]
     snrs = df.snr.unique().tolist()
     snrs.sort()
     snr_mask = {ss: kk for kk, ss in enumerate(snrs)}
@@ -565,10 +567,10 @@ def lemon_dlc_trace_plot():
     psifile = [f'/auto/data/daq/LemonDisco/training2023/{parmfile}', ]
     ex = baphy_experiment.BAPHYExperiment(parmfile=psifile)
     rec = ex.get_recording(resp=False, stim=False, dlc=True, recache=False)
-    rec['dlc'].fs
+    fs = rec['dlc'].fs
     all_trials = rec['dlc'].extract_epoch("TRIAL")
-
-
+    if all_trials.shape[-1]/fs > 10:
+        all_trials = all_trials[:,:,:int(10*fs)]
     mask_migrate = (df['migrate_trial'] == 1) & (df['correct'] == True) & (df['response'] == 'spout_1')
     mask_nonmigrate = (df['migrate_trial'] == 0) & (df['correct'] == True) & (df['response'] == 'spout_1')
     mask_migrate2 = (df['migrate_trial'] == 1) & (df['correct'] == True) & (df['response'] == 'spout_2')
@@ -602,7 +604,7 @@ def lemon_dlc_trace_plot():
     h1 = plt.plot(tt, meanstartx * 2 - all_trials[mask_migrate2, 0, :T].T, color='green', lw=0.5)
 
     h3 = plt.plot(tt, all_trials[mask_migrate_err, 0, :T].T, color='lightgreen', lw=0.5)
-    h4 = plt.plot(all_trials[mask_nonmigrate_err, 0, :100].T, color='lightblue', lw=0.5)
+    h4 = plt.plot(tt[:100], all_trials[mask_nonmigrate_err, 0, :100].T, color='lightblue', lw=0.5)
 
     plt.legend((h1[0], h2[0]), ('migrate+correct', 'nonmigrate+correct', 'migrate+err', 'nonmigrate+err'))
     plt.xlabel('Time (sec)')
@@ -635,6 +637,7 @@ def slippy_dlc_trace_plot(parmfile = 'SlipperyJack_2023_10_03_NFB_1'):
         except:
             lick_event = np.nan
         my_trial_len = lick_event-trial_start_time
+        my_trial_len = r['rt']
         #my_trial_len = r['trial_duration'] # r['response_start'] - trial_epochs.loc[i,'start']
         if np.isfinite(my_trial_len):
             stopbin = int(my_trial_len*fs)
@@ -738,7 +741,9 @@ def lemon_dlc_rt_comparison():
     df_correct.loc[(df_correct['migrate_trial'] == True) & (df_correct['switch_trial'] == True), 'migrate_trial_type'] = 'Migrate indirect'
     df_correct.loc[(df_correct['migrate_trial'] == True) & (df_correct['switch_trial'] == False), 'migrate_trial_type'] = 'Migrate direct'
 
-    sns.stripplot(x='migrate_trial_type', y='response_time', data=df_correct, jitter=True, palette='Set2', size=6)
+    #YVARIABLE = 'response_time'
+    YVARIABLE = 'rt'
+    sns.stripplot(x='migrate_trial_type', y=YVARIABLE, data=df_correct, jitter=True, palette='Set2', size=6)
     plt.xlabel('Trial type')
     plt.ylabel('Response time (s)')
     plt.title(f'Response time for {parmfile}')
@@ -829,12 +834,13 @@ def day_range_comparison(XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct'
 
 
 if __name__ == "__main__":
+    print("running main")
     # lemon_space_snr_bar()
     # slippy_space_snr_bar()
-    # lemon_space_snr_subplots()
+    lemon_space_snr_subplots()
     # slippy_space_snr_subplots()
     # lemon_dlc_trace_plot()
-    lemon_dlc_rt_comparison()
+    # lemon_dlc_rt_comparison()
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_03_NFB_1')
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_04_NFB_1')
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_05_NFB_1')
