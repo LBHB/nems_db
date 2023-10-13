@@ -4,7 +4,6 @@ import sys
 import logging
 from pathlib import Path
 import subprocess
-log = logging.getLogger(__name__)
 
 from os.path import basename, join
 import matplotlib.pyplot as plt
@@ -30,12 +29,7 @@ from nems_lbhb.projects.freemoving.free_tools import compute_d_theta, \
 from nems_lbhb.projects.freemoving import free_model, free_vs_fixed_strfs
 from nems.tools import json
 
-signals_dir = Path(nems0.NEMS_PATH) / 'recordings'
-modelspecs_dir = Path(nems0.NEMS_PATH) / 'modelspecs'
-import importlib
-from nems_lbhb.projects.spatial import STRFfunction
-
-importlib.reload(STRFfunction)
+log = logging.getLogger(__name__)
 
 force_SDB = True
 try:
@@ -97,15 +91,58 @@ if __name__ == '__main__':
 
     dlc_chans = 8
     rasterfs = 50
-
+    cost_function = 'squared_error'
     parms = modelname.split("_")
     loadparms = parms[0].split('-')
-    loadops = {op.split(".")[0]: op.split(".")[1] for op in loadparms}
-    modelopts = {'dlc_memory': 4, 'acount': 12, 'dcount': 8, 'l2count': 24, 'cost_function': 'squared_error'}
+    loadops = {'apply_hrtf': True}
+    if len(parms)>2:
+        cost_function = parms[2]
 
-    rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs, dlc_chans=dlc_chans, compute_position=True)
+    for op in loadparms:
+        k = op.split(".")[0]
+        v = op.split(".")[1]
+        if k=='sh':
+            loadops['shuffle'] = v
+        elif k=='hrtf':
+            if v.lower()=='true':
+                loadops['apply_hrtf'] = True
+            elif v.lower()=='false':
+                loadops['apply_hrtf'] = False
+    log.info(f"site/bactch/model: {siteid}/{batch}/{modelname}")
+    log.info(f"{loadops}")
+    modelopts = {'dlc_memory': 4, 'acount': 12, 'dcount': 8, 'l2count': 24, 'cost_function': cost_function}
+
+    rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs,
+                                    dlc_chans=dlc_chans, compute_position=True)
 
     model = free_model.free_fit(rec, save_to_db=True, **loadops, **modelopts)
+
+    ctx = free_model.free_split_rec(rec, apply_hrtf=loadops['apply_hrtf'])
+    rec = ctx['rec']
+    est = ctx['est'].apply_mask()
+    val = ctx['val'].apply_mask()
+
+    pc_mags = []
+    mdstrfs = []
+    for out_channel in range(rec['resp'].shape[0]):
+        mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, [model], D=11, out_channel=out_channel, pc_count=5)
+        pc_mags.append(pc_mag)  # unit x model x didx x pc
+        mdstrfs.append(mdstrf)   # unit x model x didx x frequency x lag
+
+    pc_mags = np.stack(pc_mags, axis=0)
+    mdstrfs = np.stack(mdstrfs, axis=0)
+    # difference between front and back dstrfs
+    fbdiff = mdstrfs[:,:,2,:,:]-mdstrfs[:,:,0,:,:]
+    fbmod = fbdiff.std(axis=(2,3))/(mdstrfs[:,:,0,:,:].std(axis=(2,3))+mdstrfs[:,:,2,:,:].std(axis=(2,3)))*2
+    cellids = rec['resp'].chans
+    r_test = model.meta['r_test']
+    r_floor = model.meta['r_floor']
+
+    outpath = model.meta['modelpath']
+    dfile = os.path.join(outpath, 'dstrf.npz')
+    log.info(f"Saving dstrf data to {dfile}")
+    np.savez(dfile, pc_mags=pc_mags, mdstrfs=mdstrfs, fbmod=fbmod,
+             cellids=cellids, r_test=r_test, r_floor=r_floor, modelname=modelname)
 
     log.info("Done with fit.")
 
@@ -131,81 +168,9 @@ if __name__ == '__main__':
                 dst_loc = dst_prefix + '/queuelog/' + str(queueid)
                 save_resource(str(dst_loc), data=log_data)
 
-# code to support dumping figures
-#dt = datetime.date.today().strftime("%Y-%m-%d")
-#figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
-#os.makedirs(figpath, exist_ok=True)
-
-
-# tested sites
-siteid = 'PRN020a'
-siteid = 'PRN010a'
-siteid = 'PRN015a'
-siteid = 'PRN034a'
-siteid = 'PRN018a'
-siteid = 'PRN022a'
-siteid = 'PRN043a'
-siteid = 'PRN051a'
-
-# interesting sites
-siteid = 'PRN067a' # ok both
-siteid = 'PRN015a' # nice aud, single stream
-siteid = 'PRN047a' # some of everything.
-siteid = 'PRN074a' # ok both
-
-siteid = 'SLJ021a'
-siteid = 'PRN048a'  # some of everything.
-
-
-batch=348
-df = db.pd_query(f"SELECT DISTINCT modelname,modelfile FROM Results WHERE cellid like '{siteid}%' and batch={batch}")
-
-dlc_chans=8
-rasterfs=50
-batch=348
-rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs, dlc_chans=dlc_chans, compute_position=True)
-
-modelopts={'dlc_memory': 4, 'acount': 20, 'dcount': 10, 'l2count': 24, 'cost_function': 'squared_error'}
-model = free_model.free_fit(rec, shuffle='none', apply_hrtf=True, save_to_db=True, **modelopts)
-model2 = free_model.free_fit(rec, shuffle='none', apply_hrtf=False, save_to_db=True, **modelopts)
-
-for i,c in enumerate(model2.meta['cellids']):
-    print(f"{i}: {c} {model.meta['r_test'][i,0]:.3f} {model2.meta['r_test'][i,0]:.3f} {rec.meta['depth'][i]}")
-print(f"MEAN              {model.meta['r_test'].mean():.3f} {model2.meta['r_test'].mean():.3f}")
-
-# scatter plot of free-moving position with example positions highlighted
-f = free_vs_fixed_strfs.movement_plot(rec)
-
-ctx1=free_model.free_split_rec(rec, apply_hrtf=True)
-ctx2=free_model.free_split_rec(rec, apply_hrtf=False)
-est1 = ctx1['est'].apply_mask()
-est2 = ctx2['est'].apply_mask()
-
-# dSTRFS for interesting units: PRN048a-269-1, PRN048a-285-2
-#for out_channel in [20,22]:
-for out_channel in [6, 8, 5]:
-    cellid = rec['resp'].chans[out_channel]
-    mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, [model, model2], D=11, out_channel=out_channel)
-    f = free_vs_fixed_strfs.dstrf_plots(rec, [model, model2], mdstrf, out_channel)
-
-
-modelpath = model.meta['modelfile']
-modeltest = json.load_model(modelpath)
-dlc_count = rec['dlc'].shape[0]
-
-
-
-input = {'stim': val['stim'].as_continuous().T, 'dlc': val['dlc'].as_continuous().T[:, :dlc_count]}
-
-testpred = modeltest.predict(input)['prediction']
-origpred = model.predict(input)['prediction']
-
-plt.figure()
-plt.plot(testpred[:1000,6])
-plt.plot(origpred[:1000,6])
-
-f,ax=plt.subplots(2,1)
-ax[0].imshow(est1['stim']._data[:,:500])
-ax[1].imshow(est2['stim']._data[:,:500])
+    # code to support dumping figures
+    #dt = datetime.date.today().strftime("%Y-%m-%d")
+    #figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
+    #os.makedirs(figpath, exist_ok=True)
 
 
