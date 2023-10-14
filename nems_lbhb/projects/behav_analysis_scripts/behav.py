@@ -551,12 +551,11 @@ def slippy_space_snr_subplots():
 
 
 
-def lemon_dlc_trace_plot():
-    parmfile = 'LemonDisco_2023_10_05_NFB_2'
-    from nems0 import db
+def lemon_dlc_trace_plot(parmfile='LemonDisco_2023_10_05_NFB_2'):
+
     rawdata = db.pd_query(f"SELECT * FROM gDataRaw WHERE parmfile like '{parmfile}'")
     siteid = rawdata.iloc[0]['cellid']
-    siteid = 'LMD077Ta'
+    #siteid = 'LMD077Ta'
     behav_lmd = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=False)
 
     df = behav_lmd.dataframe.copy()
@@ -578,7 +577,6 @@ def lemon_dlc_trace_plot():
     mask_migrate_err = (df['migrate_trial'] == 1) & (df['correct'] == False) & (df['response'] == 'spout_2')
     mask_nonmigrate_err = (df['migrate_trial'] == 0) & (df['correct'] == False) & (df['response'] == 'spout_2')
 
-    # plot params
     font_size = 8
     params = {'legend.fontsize': font_size - 2,
               'figure.figsize': (8, 6),
@@ -593,23 +591,43 @@ def lemon_dlc_trace_plot():
     plt.rcParams.update(params)
 
 
-    plt.figure(figsize=(10, 5))
+    f=plt.figure(figsize=(3, 2))
 
-    T = 200
+    T = 300
     tt = np.arange(T) / rec['dlc'].fs
-    h2 = plt.plot(tt, all_trials[mask_nonmigrate, 0, :T].T, color='lightblue', lw=0.5)
-    h1 = plt.plot(tt, all_trials[mask_migrate, 0, :T].T, color='green', lw=0.5)
     meanstartx = np.mean(all_trials[:, 0, 0])
-    h2 = plt.plot(tt, meanstartx * 2 - all_trials[mask_nonmigrate2, 0, :T].T, color='lightblue', lw=0.5)
-    h1 = plt.plot(tt, meanstartx * 2 - all_trials[mask_migrate2, 0, :T].T, color='green', lw=0.5)
+    scaleby=1000
 
-    h3 = plt.plot(tt, all_trials[mask_migrate_err, 0, :T].T, color='lightgreen', lw=0.5)
-    h4 = plt.plot(tt[:100], all_trials[mask_nonmigrate_err, 0, :100].T, color='lightblue', lw=0.5)
+    h2 = plt.plot(tt, (all_trials[mask_nonmigrate, 0, :T].T-meanstartx)/scaleby, color='lightblue', lw=0.5)
+    h1 = plt.plot(tt, (all_trials[mask_migrate, 0, :T].T-meanstartx)/scaleby, color='green', lw=0.5)
+    h2 = plt.plot(tt, (meanstartx - all_trials[mask_nonmigrate2, 0, :T].T)/scaleby, color='lightblue', lw=0.5)
+    h1 = plt.plot(tt, (meanstartx - all_trials[mask_migrate2, 0, :T].T)/scaleby, color='green', lw=0.5)
 
-    plt.legend((h1[0], h2[0]), ('migrate+correct', 'nonmigrate+correct', 'migrate+err', 'nonmigrate+err'))
+    #h3 = plt.plot(tt, all_trials[mask_migrate_err, 0, :T].T, color='lightgreen', lw=0.5)
+    #h4 = plt.plot(tt[:100], all_trials[mask_nonmigrate_err, 0, :100].T, color='lightblue', lw=0.5)
+    for i,r in df.reset_index().iterrows():
+        my_trial_len = r['rt']
+        if np.isfinite(my_trial_len):
+            stopbin = int(my_trial_len*fs)
+            colors = {1: 'darkgreen', 0: 'blue'}
+
+            if r['correct']==False:
+                pass
+            else:
+                if r['response']=='spout_1':
+                    y = (all_trials[i,0,stopbin]-meanstartx)/scaleby
+                else:
+                    y = (meanstartx - all_trials[i,0,stopbin])/scaleby
+                plt.plot(tt[stopbin],y,'.', color=colors[r['migrate_trial']])
+
+
+    plt.legend((h1[0], h2[0]), ('Dynamic', 'Static', 'migrate+err', 'nonmigrate+err'),
+               frameon=False)
     plt.xlabel('Time (sec)')
-    plt.ylabel('Horizontal position (left -> right)')
-    plt.title('Target at right')
+    plt.ylabel('Horizontal position (L -> R)')
+    #plt.title('Target at right')
+    plt.tight_layout()
+    f.savefig(f'/home/svd/Documents/onedrive/proposals/r01_bcp/figures/raw/{siteid}_dlc_dynamic.pdf')
 
 def slippy_dlc_trace_plot(parmfile = 'SlipperyJack_2023_10_03_NFB_1'):
     from nems0 import db
@@ -837,9 +855,9 @@ if __name__ == "__main__":
     print("running main")
     # lemon_space_snr_bar()
     # slippy_space_snr_bar()
-    lemon_space_snr_subplots()
+    # lemon_space_snr_subplots()
     # slippy_space_snr_subplots()
-    # lemon_dlc_trace_plot()
+    lemon_dlc_trace_plot()
     # lemon_dlc_rt_comparison()
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_03_NFB_1')
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_04_NFB_1')
