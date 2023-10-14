@@ -8,6 +8,20 @@ from nems0 import db
 
 plt.ion()
 
+font_size = 8
+params = {'legend.fontsize': font_size - 2,
+          'figure.figsize': (8, 6),
+          'axes.labelsize': font_size,
+          'axes.titlesize': font_size,
+          'axes.spines.right': False,
+          'axes.spines.top': False,
+          'xtick.labelsize': font_size,
+          'ytick.labelsize': font_size,
+          'pdf.fonttype': 42,
+          'ps.fonttype': 42}
+
+plt.rcParams.update(params)
+
 
 #Class that contains dataframe for a single animal
 #with plotting and analysis functions
@@ -167,7 +181,8 @@ class behav:
         print(self.dataframe.columns)
         print(self.dataframe['day'].unique())
 
-    def sample_plots(self, XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct', include_remind = False):
+    def sample_plots(self, XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct', include_remind = False, only_0_db=False,
+                     figsize = None):
 
         if len(day_list) == 0:
             plot_frame = self.dataframe.copy()
@@ -186,9 +201,14 @@ class behav:
             Non_nose_poke = Non_nose_poke[Non_nose_poke['remind_trial'] == False]
 
         # Non_nose_poke = Non_nose_poke.iloc[-75:]
+        Non_nose_poke = Non_nose_poke[Non_nose_poke['response'] != 'early_np']
+
+        if only_0_db:
+            Non_nose_poke = Non_nose_poke[Non_nose_poke['snr'] == 0]
+
         series2 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
 
-        f,ax=plt.subplots()
+        f,ax=plt.subplots(figsize = figsize)
         series2.plot(kind=kind, ax=ax)
         # plt.axhline(y=0.5, linestyle='--')
         # plt.ylim([0, 1])
@@ -208,7 +228,7 @@ class behav:
         #series3 = Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].mean()
         #ax2 = series3.plot(kind=kind)
         plt.axhline(y=0.5, linestyle='--')
-        plt.ylim([0, 1])
+        plt.ylim([0.5, 1.5])
         plt.xlabel(XVARIABLE)
         plt.ylabel(YVARIABLE)
         plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
@@ -217,15 +237,27 @@ class behav:
         for i, p in enumerate(counts2):
             ax.text(i, 0, str(counts2[i]), ha='center', va='bottom')
         plt.tight_layout()
-        plt.show()
+        # plt.show()
         print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
 
-    def perform_over_time(self, XVARIABLE, YVARIABLE='correct', day_list=[], kind='bar'):
+        # import seaborn as sns
+        #
+        #
+        # Non_nose_poke = Non_nose_poke[Non_nose_poke['response'] != 'early_np']
+        # data = Non_nose_poke.groupby('day')[['migrate_trial', 'response_time']].mean().reset_index()
+        #
+        # sns.stripplot(x='migrate_trial', y=f'{YVARIABLE}', data=Non_nose_poke, hue='day', jitter=True, palette='Set2', size=6)
+        # plt.xlabel('Trial type')
+        # plt.ylabel('Response time (s)')
+        # # plt.title(f'Response time for {parmfile}')
+
+    def perform_over_time(self, XVARIABLE, YVARIABLE='correct', day_list=[], kind='bar', only_0_db=False):
 
         if len(day_list) == 0:
             plot_frame = self.dataframe.copy()
         else:
             plot_frame = self.dataframe[self.dataframe['day'].isin(day_list)].copy()
+
 
         # YVARIABLE = 'early_nosepoke'
         # plt.figure()
@@ -249,6 +281,9 @@ class behav:
         plt.figure()
         # YVARIABLE = 'correct'
         Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
+        Non_nose_poke = Non_nose_poke[Non_nose_poke['remind_trial'] == False]
+        if only_0_db:
+            Non_nose_poke = Non_nose_poke[Non_nose_poke['snr'] == 0]
         for i, v in enumerate(XVARIABLE):
             for j, w in enumerate(Non_nose_poke[v].unique()):
                 series = Non_nose_poke[Non_nose_poke[v] == w].groupby('day')[YVARIABLE].mean()
@@ -426,30 +461,51 @@ def lemon_space_snr_subplots():
     types = ['same', 'dichotic', 'diff']
     type_dict = {'same': 'ipsi', 'dichotic': 'diotic', 'diff': 'contra'}
     # perfect wonderful first working figure
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
+    fig, axes = plt.subplots(1, 4, figsize=(12, 4), sharey=True)
 
+    colors = ['black', 'blue', 'red']
+    i = 0
     for cc, (ax, tt) in enumerate(zip(axes, types)):
-        dff = df_good_days.loc[df_good_days['spatial_config'] == tt]
-        for cnt, day in enumerate(dff['day'].unique()):
-            series = dff[dff['day'] == day].groupby('snr_mask')['correct'].mean()
-            if len(series) > 2:
-                # series = series.reset_index()
-                # series_mask = np.isfinite(series.astype(np.double))
-                ax.plot(series, label=f'{day[3:6]}', color=cols[cnt], marker='.', ls='-', alpha=0.25)
-                ax.set_title(f'{type_dict[tt]}', fontweight='bold', fontsize=12)
-                if tt == 'same':
-                    ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
-                ax.set_xlabel('snr', fontweight='bold', fontsize=10)
-                ax.set_xticks(range(len(snrs)))
-                ax.set_xticklabels([int(dd) for dd in snrs])
-                # if cc == 0:
-                #     ax.legend()
-                #     ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
+        if i != 3:
+            dff = df_good_days.loc[df_good_days['spatial_config'] == tt]
+            for cnt, day in enumerate(dff['day'].unique()):
+                series = dff[dff['day'] == day].groupby('snr_mask')['correct'].mean()
+                if len(series) > 2:
+                    # series = series.reset_index()
+                    # series_mask = np.isfinite(series.astype(np.double))
+                    ax.plot(series, label=f'{day[3:6]}', color=cols[cnt], marker='.', ls='-', alpha=0.25)
+                    # ax.ylim([0, 1])
+                    ax.set_title(f'{type_dict[tt]}', fontweight='bold', fontsize=12)
+                    if tt == 'same':
+                        ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
+                    ax.set_xlabel('snr', fontweight='bold', fontsize=10)
+                    ax.set_xticks(range(len(snrs)))
+                    ax.set_xticklabels([int(dd) for dd in snrs])
+                    # if cc == 0:
+                    #     ax.legend()
+                    #     ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
 
-        mean_series = dff.groupby('snr_mask')['correct'].mean()
-        ax.plot(mean_series, label='mean', color='black', marker='o', ls='-')
+            mean_series = dff.groupby('snr_mask')['correct'].mean()
+            dff_days = dff.groupby(['day', 'snr_mask'])['correct'].mean()
+            sem_series = dff_days.groupby('snr_mask').sem()
+            ax.plot(mean_series.index, mean_series.values, color='black', marker='o', ls='-')
+            ax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color='black', marker='o', ls='-')
+            #
+            lastax = axes[3]
+            lastax.plot(mean_series.index, mean_series.values, color=colors[i], ls='-')
+            lastax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color=colors[i],
+                         ls='-')
 
+            lastax.set_xticks(range(len(snrs)))
+            lastax.set_xticklabels([int(dd) for dd in snrs])
+
+
+
+
+
+        i += 1
     # fig.suptitle('Performance across spatial condition (all), before migrate')
+    lastax.legend(frameon=False, loc='lower right')
     fig.tight_layout()
 
     font_size = 8
@@ -464,7 +520,7 @@ def lemon_space_snr_subplots():
               'pdf.fonttype': 42,
               'ps.fonttype': 42}
     plt.rcParams.update(params)
-    plt.savefig('/auto/users/sticknej/code/correlation/lemon_101323.pdf')
+    plt.savefig('/auto/users/sticknej/code/correlation/lemon_101323b.pdf')
     plt.show()
 
 def slippy_space_snr_subplots():
@@ -472,6 +528,9 @@ def slippy_space_snr_subplots():
     df = plot_data.dataframe.copy()
 
     t = [-30, -20, -10, -5, 0, 100]
+
+    df = df[df['snr'] != 5]
+    df = df[df['snr'] != 15]
 
     snrs = df.snr.unique().tolist()
     snrs.sort()
@@ -481,11 +540,13 @@ def slippy_space_snr_subplots():
     # day_list = ['LMD068Ta', 'LMD069Ta', 'LMD070Ta', 'LMD071Ta', 'LMD072Ta']
     # df = df[df['day'].isin(day_list)]
 
+
+    df = df[~df['day'].str.startswith('SLJ05')]
+    # df = df[~df['day'].isin(['SLJ064Ta', 'SLJ066Ta', 'SLJ068Ta'])]
     df = df[df['response'] != 'early_np']
     df = df[df['remind_trial'] == False]
 
-    df = df[df['snr'] != 5]
-    df = df[df['snr'] != 15]
+
 
     df['valid_day'] = True
     for cnt, day in enumerate(df['day'].unique()):
@@ -506,30 +567,50 @@ def slippy_space_snr_subplots():
     types = ['same', 'dichotic', 'diff']
     type_dict = {'same': 'ipsi', 'dichotic': 'diotic', 'diff': 'contra'}
     # perfect wonderful first working figure
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
+    fig, axes = plt.subplots(1, 4, figsize=(12, 4), sharey=True)
 
+    colors = ['black', 'blue', 'red']
+    i =0
     for cc, (ax, tt) in enumerate(zip(axes, types)):
-        dff = df_good_days.loc[df_good_days['spatial_config'] == tt]
-        for cnt, day in enumerate(dff['day'].unique()):
-            series = dff[dff['day'] == day].groupby('snr_mask')['correct'].mean()
-            if len(series) > 2:
-                # series = series.reset_index()
-                # series_mask = np.isfinite(series.astype(np.double))
-                ax.plot(series, label=f'{day[3:6]}', color=cols[cnt], marker='.', ls='-', alpha=0.25)
-                ax.set_title(f'{type_dict[tt]}', fontweight='bold', fontsize=12)
-                if tt == 'same':
-                    ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
-                ax.set_xlabel('snr', fontweight='bold', fontsize=10)
-                ax.set_xticks(range(len(snrs)))
-                ax.set_xticklabels([int(dd) for dd in snrs])
-                # if cc == 0:
-                #     ax.legend()
-                #     ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
+        if i != 3:
+            dff = df_good_days.loc[df_good_days['spatial_config'] == tt]
+            for cnt, day in enumerate(dff['day'].unique()):
+                series = dff[dff['day'] == day].groupby('snr_mask')['correct'].mean()
+                if len(series) > 2:
+                    # series = series.reset_index()
+                    # series_mask = np.isfinite(series.astype(np.double))
+                    ax.plot(series, label=f'{day[3:6]}', color=cols[cnt], marker='.', ls='-', alpha=0.25)
+                    ax.set_title(f'{type_dict[tt]}', fontweight='bold', fontsize=12)
+                    if tt == 'same':
+                        ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
+                    ax.set_xlabel('snr', fontweight='bold', fontsize=10)
+                    ax.set_xticks(range(len(snrs)))
+                    ax.set_xticklabels([int(dd) for dd in snrs])
+                    # if cc == 0:
+                    #     ax.legend()
+                    #     ax.set_ylabel('Percent correct', fontweight='bold', fontsize=10)
 
-        mean_series = dff.groupby('snr_mask')['correct'].mean()
-        ax.plot(mean_series, label='mean', color='black', marker='o', ls='-')
+            # mean_series = dff.groupby('day').mean().groupby('snr_mask')['correct'].mean()
+            dff_days = dff.groupby(['day', 'snr_mask'])['correct'].mean()
+            mean_series = dff_days.groupby('snr_mask').mean()
+            sem_series = dff_days.groupby('snr_mask').sem()
+            ax.plot(mean_series.index, mean_series.values, color='black', marker='o', ls='-')
+            ax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color='black',
+                        marker='o', ls='-')
+            #
+            lastax = axes[3]
+            lastax.plot(mean_series.index, mean_series.values, color=colors[i], ls='-')
+            lastax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color=colors[i],
+                            ls='-')
 
+            lastax.set_xticks(range(len(snrs)))
+            lastax.set_xticklabels([int(dd) for dd in snrs])
+
+
+
+        i += 1
     # fig.suptitle('Performance across spatial condition (all), before migrate')
+    lastax.legend(frameon=False, loc='lower right')
     fig.tight_layout()
 
     # plot params
@@ -546,7 +627,7 @@ def slippy_space_snr_subplots():
               'ps.fonttype': 42}
     plt.rcParams.update(params)
 
-    plt.savefig('/auto/users/sticknej/code/correlation/slippy_101323.pdf')
+    plt.savefig('/auto/users/sticknej/code/correlation/slippy_101323b.pdf')
     plt.show()
 
 
@@ -821,24 +902,91 @@ def day_range_comparison(XVARIABLE, day_list=[], kind='bar', YVARIABLE='correct'
     plt.show()
     print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
 
+def slippy_dcz_effect():
+    example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
+    XVARIABLE = ['day']
+    YVARIABLE = 'correct'
+    day_list3 = ['SLJ063Ta', 'SLJ064Ta', 'SLJ065Ta', 'SLJ066Ta', 'SLJ067Ta',  'SLJ068Ta', 'SLJ069Ta']
+    example.sample_plots(XVARIABLE, day_list3, YVARIABLE=YVARIABLE, only_0_db=True, figsize=[2,3])
+
+    font_size = 8
+    params = {'legend.fontsize': font_size - 2,
+              'figure.figsize': (8, 6),
+              'axes.labelsize': font_size,
+              'axes.titlesize': font_size,
+              'axes.spines.right': False,
+              'axes.spines.top': False,
+              'xtick.labelsize': font_size,
+              'ytick.labelsize': font_size,
+              'pdf.fonttype': 42,
+              'ps.fonttype': 42}
+    plt.rcParams.update(params)
+    plt.savefig('/auto/users/sticknej/code/correlation/slippy_101323c.pdf')
+    plt.show()
+
+
+def lemon_migrate_rt():
+    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=False)
+
+
+    df = example.dataframe.copy()
+    day_list = ['LMD074Ta', 'LMD075Ta', 'LMD076Ta', 'LMD077Ta', 'LMD078Ta',
+                'LMD079Ta', 'LMD080Ta', 'LMD081Ta', 'LMD082Ta', 'LMD083Ta']
+    df = df[df['day'].isin(day_list)]
+
+    df = df[df['response'] != 'early_np']
+    df = df[df['correct'] == True]
+
+    dff = df.groupby(['day', 'migrate_trial'])['rt'].mean().reset_index()
+    migrate_mean = df.groupby
+
+    import seaborn as sns
+
+    fig, ax = plt.subplots()
+    ax = sns.pointplot(x='migrate_trial', y='rt', data=dff, jitter=True, color='black', size=6)
+    ax = sns.stripplot(x='migrate_trial', y='rt', data=dff, jitter=True, palette='Set2', size=6)
+
+
+    df_mean = dff.groupby('migrate_trial')['rt'].mean()
+    df_sem = dff.groupby('migrate_trial')['rt'].sem()
 
 
 
+    font_size = 8
+    params = {'legend.fontsize': font_size - 2,
+              'figure.figsize': (8, 6),
+              'axes.labelsize': font_size,
+              'axes.titlesize': font_size,
+              'axes.spines.right': False,
+              'axes.spines.top': False,
+              'xtick.labelsize': font_size,
+              'ytick.labelsize': font_size,
+              'pdf.fonttype': 42,
+              'ps.fonttype': 42}
+    plt.rcParams.update(params)
 
+    ax.set_xticklabels(['Stationary', 'Dynamic'])
+    plt.xlabel('Trial type')
+    plt.ylabel('Reaction time (s)')
 
+    plt.savefig('/auto/users/sticknej/code/correlation/lemon_101323c.pdf')
 
-
-
+    plt.show()
 
 
 
 
 if __name__ == "__main__":
     print("running main")
+
     # lemon_space_snr_bar()
     # slippy_space_snr_bar()
-    lemon_space_snr_subplots()
+
+    # lemon_space_snr_subplots()
     # slippy_space_snr_subplots()
+    # slippy_dcz_effect()
+    lemon_migrate_rt()
+
     # lemon_dlc_trace_plot()
     # lemon_dlc_rt_comparison()
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_03_NFB_1')
@@ -847,33 +995,35 @@ if __name__ == "__main__":
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_06_NFB_1')
 
 
-    # example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=False)
+    # example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
     # # # #runclass NFB = 2afc, VOW = vowel
     # # #
     # # example.variables()
-    # XVARIABLE = ['migrate_trial']
-    # YVARIABLE = 'response_time'
-    # # # #
+    XVARIABLE = ['migrate_trial', 'day']
+    YVARIABLE = 'correct'
+    # # # # #
     # day_list1 = ['SLJ063Ta', 'SLJ065Ta', 'SLJ067Ta']
     # day_list2 = ['SLJ064Ta', 'SLJ066Ta', 'SLJ068Ta']
+    day_list3 = ['SLJ063Ta', 'SLJ064Ta', 'SLJ065Ta', 'SLJ066Ta', 'SLJ067Ta',  'SLJ068Ta',
+                 'SLJ069Ta', 'SLJ070Ta', 'SLJ071Ta', 'SLJ072Ta']
     # day_list = ['LMD074Ta', 'LMD075Ta', 'LMD076Ta', 'LMD077Ta', 'LMD078Ta',
     #             'LMD079Ta', 'LMD080Ta', 'LMD081Ta', 'LMD082Ta']
-    # day_list = ['LMD078Ta']
+    # day_list = ['LMD082Ta', 'LMD083Ta']
 
 
     # example.rolling_avg(XVARIABLE, day_list=['LMD074Ta'])
     # example.rolling_avg(XVARIABLE, day_list=['LMD073Ta'])
 
 
-    # example.sample_plots(XVARIABLE, day_list, YVARIABLE='response_time')
+    # example.sample_plots(XVARIABLE, day_list3, YVARIABLE=YVARIABLE)
     # example.sample_plots(XVARIABLE, day_list, YVARIABLE='hold_duration')
     # example.sample_plots(XVARIABLE, day_list, YVARIABLE='trial_duration')
-    # example.sample_plots(XVARIABLE, day_list1)
-    # example.sample_plots(XVARIABLE, day_list2)
+    # example.sample_plots(XVARIABLE, day_list1, YVARIABLE=YVARIABLE, only_0_db=True)
+    # example.sample_plots(XVARIABLE, day_list2, YVARIABLE=YVARIABLE, only_0_db=True)
 
     # example.sample_plots(XVARIABLE, day_list=['SLJ071Ta'], YVARIABLE='early_nosepoke')
 
-    # example.perform_over_time(XVARIABLE, YVARIABLE, day_list1)
+    # example.perform_over_time(XVARIABLE, YVARIABLE, day_list3, only_0_db=True)
     # example.perform_over_time(XVARIABLE, YVARIABLE, day_list2)
     # example.plot_trial_duration(XVARIABLE, day_list)
     # example.plot_trial_duration(XVARIABLE, day_list=['SLJ071Ta'], YVARIABLE='early_np')
