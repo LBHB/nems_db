@@ -461,11 +461,12 @@ def lemon_space_snr_subplots():
     types = ['same', 'dichotic', 'diff']
     type_dict = {'same': 'ipsi', 'dichotic': 'diotic', 'diff': 'contra'}
     # perfect wonderful first working figure
-    fig, axes = plt.subplots(1, 4, figsize=(12, 4), sharey=True)
-
+    fig, axes = plt.subplots(1, 4, figsize=(6, 2.5), sharey=True)
+    lastax = axes[-1]
+    
     colors = ['black', 'blue', 'red']
     i = 0
-    for cc, (ax, tt) in enumerate(zip(axes, types)):
+    for cc, (ax, tt) in enumerate(zip(axes[:3], types)):
         if i != 3:
             dff = df_good_days.loc[df_good_days['spatial_config'] == tt]
             for cnt, day in enumerate(dff['day'].unique()):
@@ -490,38 +491,26 @@ def lemon_space_snr_subplots():
             sem_series = dff_days.groupby('snr_mask').sem()
             ax.plot(mean_series.index, mean_series.values, color='black', marker='o', ls='-')
             ax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color='black', marker='o', ls='-')
+            ax.axhline(0.5,ls='--',lw=1)
+
             #
-            lastax = axes[3]
             lastax.plot(mean_series.index, mean_series.values, color=colors[i], ls='-')
             lastax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color=colors[i],
                          ls='-')
 
-            lastax.set_xticks(range(len(snrs)))
-            lastax.set_xticklabels([int(dd) for dd in snrs])
-
-
-
-
 
         i += 1
     # fig.suptitle('Performance across spatial condition (all), before migrate')
-    lastax.legend(frameon=False, loc='lower right')
+    lastax.axhline(0.5,ls='--',lw=1)
+    lastax.set_xticks(range(len(snrs)))
+    lastax.set_xticklabels([int(dd) for dd in snrs])
+    lastax.set_xlabel('FG SNR')
+    lastax.legend(frameon=False, loc='lower right', fontsize=8)
     fig.tight_layout()
 
-    font_size = 8
-    params = {'legend.fontsize': font_size - 2,
-              'figure.figsize': (8, 6),
-              'axes.labelsize': font_size,
-              'axes.titlesize': font_size,
-              'axes.spines.right': False,
-              'axes.spines.top': False,
-              'xtick.labelsize': font_size,
-              'ytick.labelsize': font_size,
-              'pdf.fonttype': 42,
-              'ps.fonttype': 42}
-    plt.rcParams.update(params)
-    plt.savefig('/auto/users/sticknej/code/correlation/lemon_101323b.pdf')
+    #plt.savefig('/auto/users/sticknej/code/correlation/lemon_101323b.pdf')
     plt.show()
+    return fig
 
 def slippy_space_snr_subplots():
     plot_data = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
@@ -540,12 +529,16 @@ def slippy_space_snr_subplots():
     # day_list = ['LMD068Ta', 'LMD069Ta', 'LMD070Ta', 'LMD071Ta', 'LMD072Ta']
     # df = df[df['day'].isin(day_list)]
 
-
-    df = df[~df['day'].str.startswith('SLJ05')]
-    # df = df[~df['day'].isin(['SLJ064Ta', 'SLJ066Ta', 'SLJ068Ta'])]
+    testdf = df[df['response'] != 'early_np']
+    testdf = testdf[testdf['remind_trial'] == False]
+    testdf = testdf.loc[(testdf.spatial_config=='diff') & (testdf.snr==0)].groupby('day').mean()['correct']
+    good_days=testdf.index[testdf>=0.80].to_list()
+    print(good_days)
+    df = df[df['day'].isin(good_days)]
+    #df = df[~df['day'].str.startswith('SLJ05')]
+    #df = df[~df['day'].isin(['SLJ064Ta', 'SLJ066Ta', 'SLJ068Ta'])]
     df = df[df['response'] != 'early_np']
     df = df[df['remind_trial'] == False]
-
 
 
     df['valid_day'] = True
@@ -553,7 +546,7 @@ def slippy_space_snr_subplots():
         valid = True
         tempdf = df[df['day'] == day].copy()
         for snr in tempdf['snr'].unique():
-            if len(tempdf[tempdf['snr'] == snr]) < 25:
+            if len(tempdf[tempdf['snr'] == snr]) < 20:
                 valid = False
         if valid == False:
             df.loc[df['day'] == day, 'valid_day'] = False
@@ -567,7 +560,7 @@ def slippy_space_snr_subplots():
     types = ['same', 'dichotic', 'diff']
     type_dict = {'same': 'ipsi', 'dichotic': 'diotic', 'diff': 'contra'}
     # perfect wonderful first working figure
-    fig, axes = plt.subplots(1, 4, figsize=(12, 4), sharey=True)
+    fig, axes = plt.subplots(1, 4, figsize=(6, 2.5), sharey=True)
 
     colors = ['black', 'blue', 'red']
     i =0
@@ -595,40 +588,28 @@ def slippy_space_snr_subplots():
             mean_series = dff_days.groupby('snr_mask').mean()
             sem_series = dff_days.groupby('snr_mask').sem()
             ax.plot(mean_series.index, mean_series.values, color='black', marker='o', ls='-')
-            ax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color='black',
-                        marker='o', ls='-')
+            ax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], 
+                        color='black', marker='o', ls='-')
+            ax.axhline(0.5,ls='--',lw=1)
+            
             #
             lastax = axes[3]
             lastax.plot(mean_series.index, mean_series.values, color=colors[i], ls='-')
             lastax.errorbar(x=mean_series.index, y=mean_series.values, yerr=sem_series, label=type_dict[types[i]], color=colors[i],
                             ls='-')
-
-            lastax.set_xticks(range(len(snrs)))
-            lastax.set_xticklabels([int(dd) for dd in snrs])
-
-
-
+            
         i += 1
     # fig.suptitle('Performance across spatial condition (all), before migrate')
-    lastax.legend(frameon=False, loc='lower right')
+    lastax.axhline(0.5,ls='--',lw=1)
+    lastax.set_xticks(range(len(snrs)))
+    lastax.set_xticklabels([int(dd) for dd in snrs])
+    lastax.set_xlabel('FG SNR')
+    lastax.legend(frameon=False, loc='lower right', fontsize=8)
     fig.tight_layout()
 
-    # plot params
-    font_size = 8
-    params = {'legend.fontsize': font_size - 2,
-              'figure.figsize': (8, 6),
-              'axes.labelsize': font_size,
-              'axes.titlesize': font_size,
-              'axes.spines.right': False,
-              'axes.spines.top': False,
-              'xtick.labelsize': font_size,
-              'ytick.labelsize': font_size,
-              'pdf.fonttype': 42,
-              'ps.fonttype': 42}
-    plt.rcParams.update(params)
-
-    plt.savefig('/auto/users/sticknej/code/correlation/slippy_101323b.pdf')
+    #plt.savefig('/auto/users/sticknej/code/correlation/slippy_101323b.pdf')
     plt.show()
+    return fig
 
 
 

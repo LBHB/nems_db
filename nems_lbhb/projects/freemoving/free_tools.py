@@ -195,7 +195,12 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
     L0, R0, c, A = load_hrtf(format=hrtf_format, fmin=f_min, fmax=f_max, num_freqs=channels)
 
     # assume dlc has already been imputed and normalized to (0,1)
-    dlc_data_imp = rec['dlc'][:, :]
+    if 'dlc' in rec.signals.keys():
+        dlc_data_imp = rec['dlc'][:, :]
+    else:
+        T=rec['resp'].shape[1]
+        dlc_data_imp = np.repeat(np.array([[0.5,0.0,0.5,0.1]]).T,T,axis=1)
+
     speaker1_x0y0 = 1.0, -0.8
     speaker2_x0y0 = 0.0, -0.8
 
@@ -234,6 +239,7 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
 
     binaural_stim = np.concatenate([r12,l12], axis=0)
     newrec = rec.copy()
+    newrec['stim'] = newrec['stim'].rasterize()
     newrec['stim'] = newrec['stim']._modified_copy(data=binaural_stim)
     newrec['disttheta'] = newrec['stim']._modified_copy(
         data=np.concatenate([d1,theta1,d2,theta2],axis=0),
