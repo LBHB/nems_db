@@ -1,4 +1,6 @@
 import os
+
+import matplotlib.colors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -361,8 +363,6 @@ def gen_corr_dataframe(sAA, sAB, sBB, nAA, nAB, nBB, slabels, bi_pairs, bi_snr, 
 
      return corr_dataframe
 
-# random number generator for permutation
-rng = np.random.default_rng()
 
 def subspace_matrices(respA, respB, source='largest', stim='both', svn=['signal', 'noise']):
      import random
@@ -511,12 +511,397 @@ def subspace_matrices(respA, respB, source='largest', stim='both', svn=['signal'
 
      return s1_mats, s1_inds, s1_chans, s2_mats, s2_inds, s2_chans, t_mats, t_inds, t_chans
 
+def subspace_plot_R01_layout(psthA, psthB, dfs, df_labels, parmfile_area, plot_type='internal', cmap_diverging = [], cmap_qualitative = []):
+     """
+     :param psthA: represenative psth for one probe
+     :param psthB: representative psth for another probe
+     :param dfs: list of dfs (signal vs noise or mono vs dichotic)
+     :param parmfile_area: dictionary of parmfiles and area for probe {A: 'A1', B: 'PEG'}
+     :param type: comparison to be made. 'internal': compare AA vs AB for each dataframe, 'external': compare df1 vs df2 AB
+     :param cmap_diverging: list of cmaps used to define colors for each dataframe. diverging used for compairing AA vs AB
+     :param cmap_qualitative: list of cmaps used to define colors for each dataframe. qualitative used for regional comparisons.
+     :return:
+     """
+     # pick color maps for plotting
+     if cmap_diverging:
+          diverging_cmaps = cmap_diverging
+     else:
+          diverging_cmaps = ['PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu', 'RdYlBu', 'RdYlGn', 'Spectral',
+                             'coolwarm', 'bwr', 'seismic']
+     if cmap_qualitative:
+          qualitative_cmaps = cmap_qualitative
+     else:
+          qualitative_cmaps = ['Paired', 'Accent', 'Dark2', 'Set1', 'tab10', 'tab20', 'tab20b','tab20c']
+     site_models = [model_name.split('_') for model_name in dfs[0]['model_names']]
+     siteids = list(set([siteid[0][4:] for siteid in site_models]))
+     ranks = list(set([int(siteid[1][4:]) for siteid in site_models]))
+     jackknifes = list(set([jack for jack in dfs[0]['jackknife']]))
+     if plot_type == 'internal':
+          f, ax = plt.subplot_mosaic(
+               [['.', 'B', 'C', 'D'], ['A1', 'B', 'C', 'D'], ['A2', 'B', 'C', 'D'], ['A3', 'B', 'C', 'D'],
+                ['.', 'B', 'C', 'D']], width_ratios=[1.5, 1, 1, 1], height_ratios=[1, 0.75, 0.75, 0.75, 1],
+               gridspec_kw={'hspace': 0.75, 'wspace': 0.75}, figsize=(8, 3.5))
+          imopts = {'origin': 'lower', 'aspect': 'auto', 'cmap': 'Greys'}
+          ax['A1'].imshow(stim_spec, **imopts, interpolation='gaussian')
+          ax['A2'].imshow(psthA, **imopts, interpolation='None', vmax=min_val)
+          ax['A3'].imshow(psthB, **imopts, interpolation='None', vmax=min_val)
+          ticks = np.arange(0, len(psthA[0, :]), 2 * rasterfs)
+          tick_labels = np.arange(0, len(psthA[0, :]) / rasterfs, 2 * 1)
+          ax['A3'].set_xticks(ticks)
+          ax['A3'].set_xticklabels(tick_labels)
+          ax['A1'].sharex(ax['A3'])
+          ax['A2'].sharex(ax['A3'])
+          plt.setp(ax['A1'].get_xticklabels(), visible=False)
+          plt.setp(ax['A2'].get_xticklabels(), visible=False)
+          ax['A3'].set_xlabel("time (s)")
+          ax['A1'].set_ylabel("channels")
+          ax['A2'].set_ylabel("trials")
+          ax['A3'].set_ylabel("trials")
+          ax['A1'].set_title(stim_epochs2[0], fontsize=6)
+          ax['A2'].set_title(good_A_chans[0], fontsize=6)
+          ax['A3'].set_title(good_B_chans[0], fontsize=6)
+          for df_num in range(len(dfs)):
+               df_label = df_labels[df_num]
+               site_performance_AA = []
+               site_area_AB = []
+               site_performance_AB = []
+               site_rank_performance_AA = []
+               site_rank_performance_AB = []
+               for siteid in siteids:
+                    site_area_AB.append(
+                         ['-'.join([area['A'], area['B']]) for parm, area in parmfile_area.items() if siteid in parm][0])
+                    site_df = dfs[df_num][dfs[df_num]['model_names'].str.contains(siteid)]
+                    mean_rank_performance_AA = []
+                    mean_rank_performance_AB = []
+                    rank_performance_AA = []
+                    rank_performance_AB = []
+                    for rank in ranks:
+                         if site_df['model_names'].str.contains('bilateral').values[0]:
+                              rank_AA_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AA')]
+                              rank_AB_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AB')]
+                              stim_type = 'bilateral'
+                         elif site_df['model_names'].str.contains('mono').values[0]:
+                              rank_AA_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
+                              rank_AB_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
+                              stim_type = 'mono'
+                         else:
+                              rank_AA_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
+                              rank_AB_df = site_df[site_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
+                              stim_type = ''
+                         mean_rank_performance_AA.append(np.nanmean(rank_AA_df['mean_model_performance']))
+                         mean_rank_performance_AB.append(np.nanmean(rank_AB_df['mean_model_performance']))
+                         rank_performance_AA.append(rank_AA_df['mean_model_performance'])
+                         rank_performance_AB.append(rank_AB_df['mean_model_performance'])
+                    site_performance_AA.append(mean_rank_performance_AA)
+                    site_performance_AB.append(mean_rank_performance_AB)
+                    site_rank_performance_AA.append(rank_performance_AA)
+                    site_rank_performance_AB.append(rank_performance_AB)
+               site_performance_AA = np.array(site_performance_AA)[:, :10]
+               site_performance_AB = np.array(site_performance_AB)[:, :10]
+               semAA = np.nanstd(site_performance_AA, axis=0, ddof=1) / np.sqrt(
+                    np.sum(~np.isnan(site_performance_AA), axis=0))
+               semAB = np.nanstd(site_performance_AB, axis=0, ddof=1) / np.sqrt(
+                    np.sum(~np.isnan(site_performance_AB), axis=0))
+               try:
+                    cmap = get_cmap(diverging_cmaps[df_num + 1])
+                    import matplotlib
+                    if type(cmap) == matplotlib.colors.LinearSegmentedColormap:
+                         AA_color = cmap(0)
+                         AB_color = cmap(256)
+                    else:
+                         raise ValueError("color map is not LinearSegmentedColormap")
+               except:
+                    print("cmap is not matplotlib colormap...trying color names")
+                    try:
+                         AA_color = diverging_cmaps[0 + df_num*2]
+                         AB_color = diverging_cmaps[1 + df_num*2]
+                    except:
+                         raise ValueError("Not enough colors listed. Check diverging cmap is linearsegementedcolormap or list of named colors")
+               ax['B'].plot(ranks[:10], site_performance_AA[:, :].mean(axis=0), color=AA_color, linewidth=3, label=f'within-{df_label}-{stim_type}')
+               ax['B'].plot(ranks[:10], site_performance_AB[:, :].mean(axis=0), color=AB_color, linewidth=3,
+                            label=f'between-{df_label}-{stim_type}')
+               ax['B'].fill_between(ranks[:10], site_performance_AA.mean(axis=0) - semAA,
+                                    site_performance_AA.mean(axis=0) + semAA, alpha=0.2, color=AA_color)
+               ax['B'].fill_between(ranks[:10], site_performance_AB.mean(axis=0) - semAB,
+                                    site_performance_AB.mean(axis=0) + semAB, alpha=0.2, color=AB_color)
+               ax['B'].set_ylabel('model performance')
+               ax['B'].set_xlabel('model rank')
+               ax['B'].legend()
+               ax['B'].set_box_aspect(1)
+
+               site_area_combos = set(site_area_AB)
+               site_dimensionality_AA = []
+               site_dimensionality_AB = []
+               cmap = get_cmap(qualitative_cmaps[df_num])
+               if cmap.N < 256:
+                    if cmap.N < len(site_area_combos):
+                         raise ValueError("Not enough colors in colormap for number of areas")
+                    else:
+                     area_colors = {aname: cmap(i) for i, aname in enumerate(site_area_combos)}
+               else:
+                    crange = np.linspace(0, 1, len(site_area_combos))
+                    area_colors = {aname: cmap(crange[i]) for i, aname in enumerate(site_area_combos)}
+               for sitenum in range(len(siteids)):
+                    site_rank_AA = np.array(site_rank_performance_AA[sitenum])
+                    site_rank_AB = np.array(site_rank_performance_AB[sitenum])
+                    semAA = np.nanstd(site_rank_AA, axis=1, ddof=1) / np.sqrt(
+                         np.sum(~np.isnan(site_rank_AA), axis=1))
+                    semAB = np.nanstd(site_rank_AB, axis=1, ddof=1) / np.sqrt(
+                         np.sum(~np.isnan(site_rank_AB), axis=1))
+                    semAA = semAA[:10]
+                    semAB = semAB[:10]
+                    site_dimensionality_AA.append(
+                         np.where(site_performance_AA[sitenum, :] > (site_performance_AA[sitenum, -1] - semAA[-1]))[0][
+                              0] + 1)
+                    site_dimensionality_AB.append(
+                         np.where(site_performance_AB[sitenum, :] > (site_performance_AB[sitenum, -1] - semAB[-1]))[0][
+                              0] + 1)
+               site_dimensionality_AA = np.array(site_dimensionality_AA)
+               site_dimensionality_AB = np.array(site_dimensionality_AB)
+               for area in site_area_combos:
+                    current_area = np.array([s_area == area for s_area in site_area_AB])
+                    area_color = [area_colors[area] for t in current_area if t == True]
+                    ax['C'].scatter(site_dimensionality_AA[current_area], site_dimensionality_AB[current_area], s=6,
+                                    c=area_color, label=f"{area}-{df_label}-{stim_type}")
+               ax['C'].legend()
+               lims = (0, 10)
+               ticks = np.arange(lims[0], lims[1], 2)
+               ax['C'].set_ylim(lims)
+               ax['C'].set_xlim(lims)
+               ax['C'].set_yticks(ticks)
+               ax['C'].set_xticks(ticks)
+               ax['C'].set_xlabel("predictive dimensions \n - within")
+               ax['C'].set_ylabel("predictive dimensions \n - between")
+               ax['C'].plot(np.arange(lims[0], lims[1] + 1, 1), np.arange(lims[0], lims[1] + 1, 1), '--', color='grey')
+               ax['C'].set_box_aspect(1)
+
+               # plot performance within vs between hemispheres for number of predictive dimensions
+               site_dim_performanceAA = np.array(
+                    [site_performance_AA[si, di] for si, di in enumerate([9 for i in site_dimensionality_AA])])
+               site_dim_performanceAB = np.array(
+                    [site_performance_AB[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB])])
+               # site_dim_performanceAB_s = np.array([site_performance_AB_s[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB_s])])
+               for area in site_area_combos:
+                    current_area = np.array([s_area == area for s_area in site_area_AB])
+                    area_color_n = [area_colors[area] for t in current_area if t == True]
+                    ax['D'].scatter(site_dim_performanceAA[current_area], site_dim_performanceAB[current_area], s=6,
+                                    c=area_color_n, label=f"{area}-{df_label}-{stim_type}")
+               max_perf = np.round(np.max(np.concatenate((site_dim_performanceAA, site_dim_performanceAB))), decimals=1)
+               dlims = (0, max_perf + 0.1)
+               dticks = np.arange(dlims[0], dlims[1] + 0.1, 0.2)
+               ax['D'].set_ylim(dlims)
+               ax['D'].set_xlim(dlims)
+               ax['D'].set_yticks(dticks)
+               ax['D'].set_xticks(dticks)
+               ax['D'].set_xlabel("performance \n - within")
+               ax['D'].set_ylabel("performance \n - between")
+               ax['D'].plot(np.arange(dlims[0], dlims[1] + 0.1, 0.1), np.arange(dlims[0], dlims[1] + 0.1, 0.1), '--',
+                            color='grey')
+               ax['D'].set_box_aspect(1)
+               plt.tight_layout()
+
+     elif plot_type == 'external':
+          if len(dfs) > 2:
+               raise ValueError("Number of dataframes for external comparison needs to be less than 2")
+          f, ax = plt.subplot_mosaic(
+               [['.', 'B', 'C', 'D'], ['A1', 'B', 'C', 'D'], ['A2', 'B', 'C', 'D'], ['A3', 'B', 'C', 'D'],
+                ['.', 'B', 'C', 'D']], width_ratios=[1.5, 1, 1, 1], height_ratios=[1, 0.75, 0.75, 0.75, 1],
+               gridspec_kw={'hspace': 0.75, 'wspace': 0.75}, figsize=(8, 3.5))
+          imopts = {'origin': 'lower', 'aspect': 'auto', 'cmap': 'Greys'}
+          ax['A1'].imshow(stim_spec, **imopts, interpolation='gaussian')
+          ax['A2'].imshow(psthA, **imopts, interpolation='None', vmax=min_val)
+          ax['A3'].imshow(psthB, **imopts, interpolation='None', vmax=min_val)
+          ticks = np.arange(0, len(psthA[0, :]), 2 * rasterfs)
+          tick_labels = np.arange(0, len(psthA[0, :]) / rasterfs, 2 * 1)
+          ax['A3'].set_xticks(ticks)
+          ax['A3'].set_xticklabels(tick_labels)
+          ax['A1'].sharex(ax['A3'])
+          ax['A2'].sharex(ax['A3'])
+          plt.setp(ax['A1'].get_xticklabels(), visible=False)
+          plt.setp(ax['A2'].get_xticklabels(), visible=False)
+          ax['A3'].set_xlabel("time (s)")
+          ax['A1'].set_ylabel("channels")
+          ax['A2'].set_ylabel("trials")
+          ax['A3'].set_ylabel("trials")
+          ax['A1'].set_title(stim_epochs2[0], fontsize=6)
+          ax['A2'].set_title(good_A_chans[0], fontsize=6)
+          ax['A3'].set_title(good_B_chans[0], fontsize=6)
+          site_performance_AA_1 = []
+          site_performance_AA_2 = []
+          site_area_AB = []
+          site_performance_AB_1 = []
+          site_performance_AB_2 = []
+          site_rank_performance_AA = []
+          site_rank_performance_AB = []
+          site_rank_performance_AA_s = []
+          site_rank_performance_AB_s = []
+          for siteid in siteids:
+               site_area_AB.append(
+                    ['-'.join([area['A'], area['B']]) for parm, area in parmfile_area.items() if
+                     siteid in parm][0])
+               site_df = dfs[df_num][dfs[df_num]['model_names'].str.contains(siteid)]
+               # site_signal_df = subspace_mono_df[subspace_mono_df['model_names'].str.contains(siteid)]
+               mean_rank_performance_AA_n = []
+               mean_rank_performance_AB_n = []
+               rank_performance_AA_n = []
+               rank_performance_AB_n = []
+               # mean_rank_performance_AA_s = []
+               # mean_rank_performance_AB_s = []
+               # rank_performance_AA_s = []
+               # rank_performance_AB_s = []
+
+               for rank in ranks:
+                    rank_AA_df_n = site_noise_df[
+                         site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
+                    rank_AB_df_n = site_noise_df[
+                         site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
+                    # rank_AA_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
+                    # rank_AB_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
+                    mean_rank_performance_AA_n.append(np.nanmean(rank_AA_df_n['mean_model_performance']))
+                    mean_rank_performance_AB_n.append(np.nanmean(rank_AB_df_n['mean_model_performance']))
+                    rank_performance_AA_n.append(rank_AA_df_n['mean_model_performance'])
+                    rank_performance_AB_n.append(rank_AB_df_n['mean_model_performance'])
+                    # mean_rank_performance_AA_s.append(np.nanmean(rank_AA_df_s['mean_model_performance']))
+                    # mean_rank_performance_AB_s.append(np.nanmean(rank_AB_df_s['mean_model_performance']))
+                    # rank_performance_AA_s.append(rank_AA_df_s['mean_model_performance'])
+                    # rank_performance_AB_s.append(rank_AB_df_s['mean_model_performance'])
+               site_performance_AA_n.append(mean_rank_performance_AA_n)
+               site_performance_AB_n.append(mean_rank_performance_AB_n)
+               site_rank_performance_AA.append(rank_performance_AA_n)
+               site_rank_performance_AB.append(rank_performance_AB_n)
+               # site_performance_AA_s.append(mean_rank_performance_AA_s)
+               # site_performance_AB_s.append(mean_rank_performance_AB_s)
+               # site_rank_performance_AA_s.append(rank_performance_AA_s)
+               # site_rank_performance_AB_s.append(rank_performance_AB_s)
+          site_performance_AA_n = np.array(site_performance_AA_n)[:, :10]
+          site_performance_AB_n = np.array(site_performance_AB_n)[:, :10]
+          # site_performance_AA_s = np.array(site_performance_AA_s)[:, :10]
+          # site_performance_AB_s = np.array(site_performance_AB_s)[:, :10]
+          semAA_n = np.nanstd(site_performance_AA_n, axis=0, ddof=1) / np.sqrt(
+               np.sum(~np.isnan(site_performance_AA_n), axis=0))
+          semAB_n = np.nanstd(site_performance_AB_n, axis=0, ddof=1) / np.sqrt(
+               np.sum(~np.isnan(site_performance_AB_n), axis=0))
+          # semAA_s = np.nanstd(site_performance_AA_s, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AA_s), axis=0))
+          # semAB_s = np.nanstd(site_performance_AB_s, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AB_s), axis=0))
+          ax['B'].plot(ranks[:10], site_performance_AA_n[:, :].mean(axis=0), color='red', linewidth=3,
+                       label='within-noise')
+          ax['B'].plot(ranks[:10], site_performance_AB_n[:, :].mean(axis=0), color='blue', linewidth=3,
+                       label='between-noise')
+          ax['B'].fill_between(ranks[:10], site_performance_AA_n.mean(axis=0) - semAA_n,
+                               site_performance_AA_n.mean(axis=0) + semAA_n, alpha=0.2, color='red')
+          ax['B'].fill_between(ranks[:10], site_performance_AB_n.mean(axis=0) - semAB_n,
+                               site_performance_AB_n.mean(axis=0) + semAB_n, alpha=0.2, color='blue')
+          # ax['B'].plot(ranks[:10], site_performance_AA_s[:, :].mean(axis=0), color='orange', linewidth=3, label='within-signal')
+          # ax['B'].plot(ranks[:10], site_performance_AB_s[:, :].mean(axis=0), color='cyan', linewidth=3, label='between-signal')
+          # ax['B'].fill_between(ranks[:10], site_performance_AA_s.mean(axis=0) - semAA_s, site_performance_AA_s.mean(axis=0) + semAA_s, alpha=0.2, color ='orange')
+          # ax['B'].fill_between(ranks[:10], site_performance_AB_s.mean(axis=0) - semAB_s, site_performance_AB_s.mean(axis=0) + semAB_s, alpha=0.2, color ='cyan')
+          ax['B'].set_ylabel('model performance')
+          ax['B'].set_xlabel('model rank')
+          ax['B'].legend()
+          ax['B'].set_box_aspect(1)
+
+          site_dimensionality_AA_n = []
+          site_dimensionality_AB_n = []
+          # site_dimensionality_AA_s = []
+          # site_dimensionality_AB_s = []
+
+          cmap = get_cmap('Dark2')
+          cmap = get_cmap('viridis')
+          crange = np.linspace(0, 1, 3)
+          cmap_s = get_cmap('Set2')
+          colors = cmap.colors
+          colors_s = cmap_s.colors
+          site_area_combos = set(site_area_AB)
+          area_colors = {'A1-A1': cmap(crange[0]), 'A1-PEG': cmap(crange[1]), 'PEG-PEG': cmap(crange[2]),
+                         'PEG-A1': colors[3]}
+          area_colors_s = {'A1-A1': colors_s[0], 'A1-PEG': colors_s[1], 'PEG-PEG': colors_s[2],
+                           'PEG-A1': colors_s[3]}
+          for sitenum in range(len(siteids)):
+               site_rank_AA = np.array(site_rank_performance_AA[sitenum])
+               site_rank_AB = np.array(site_rank_performance_AB[sitenum])
+               # site_rank_AA_s = np.array(site_rank_performance_AA_s[sitenum])
+               # site_rank_AB_s = np.array(site_rank_performance_AB_s[sitenum])
+               semAA_n = np.nanstd(site_rank_AA, axis=1, ddof=1) / np.sqrt(
+                    np.sum(~np.isnan(site_rank_AA), axis=1))
+               semAB_n = np.nanstd(site_rank_AB, axis=1, ddof=1) / np.sqrt(
+                    np.sum(~np.isnan(site_rank_AB), axis=1))
+               # semAA_s = np.nanstd(site_rank_AA_s, axis=1, ddof=1) / np.sqrt(
+               #      np.sum(~np.isnan(site_rank_AA_s), axis=1))
+               # semAB_s = np.nanstd(site_rank_AB_s, axis=1, ddof=1) / np.sqrt(
+               #      np.sum(~np.isnan(site_rank_AB_s), axis=1))
+               semAA_n = semAA_n[:10]
+               semAB_n = semAB_n[:10]
+               # semAA_s = semAA_s[:10]
+               # semAB_s = semAB_s[:10]
+               site_dimensionality_AA_n.append(
+                    np.where(site_performance_AA_n[sitenum, :] > (
+                                 site_performance_AA_n[sitenum, -1] - semAA_n[-1]))[0][
+                         0] + 1)
+               site_dimensionality_AB_n.append(
+                    np.where(site_performance_AB_n[sitenum, :] > (
+                                 site_performance_AB_n[sitenum, -1] - semAB_n[-1]))[0][
+                         0] + 1)
+               # site_dimensionality_AA_s.append(np.where(site_performance_AA_s[sitenum, :] > (site_performance_AA_s[sitenum, -1]-semAA_s[-1]))[0][0] + 1)
+               # site_dimensionality_AB_s.append(np.where(site_performance_AB_s[sitenum, :] > (site_performance_AB_s[sitenum, -1] - semAB_s[-1]))[0][0] + 1)
+
+          site_dimensionality_AA_n = np.array(site_dimensionality_AA_n)
+          site_dimensionality_AB_n = np.array(site_dimensionality_AB_n)
+          # site_dimensionality_AA_s = np.array(site_dimensionality_AA_s)
+          # site_dimensionality_AB_s = np.array(site_dimensionality_AB_s)
+          for area in site_area_combos:
+               current_area = np.array([s_area == area for s_area in site_area_AB])
+               area_color_n = [area_colors[area] for t in current_area if t == True]
+               # area_color_s = [area_colors_s[area] for t in current_area if t == True]
+               ax['C'].scatter(site_dimensionality_AA_n[current_area], site_dimensionality_AB_n[current_area],
+                               s=6,
+                               c=area_color_n, label=f"{area}-noise")
+               # ax['C'].scatter(site_dimensionality_AA_s[current_area], site_dimensionality_AB_s[current_area], s=6,
+               #                 c=area_color_s, label=f"{area}-signal")
+          ax['C'].legend()
+          lims = (0, 10)
+          ticks = np.arange(lims[0], lims[1], 2)
+          ax['C'].set_ylim(lims)
+          ax['C'].set_xlim(lims)
+          ax['C'].set_yticks(ticks)
+          ax['C'].set_xticks(ticks)
+          ax['C'].set_xlabel("predictive dimensions \n - within")
+          ax['C'].set_ylabel("predictive dimensions \n - between")
+          ax['C'].plot(np.arange(lims[0], lims[1] + 1, 1), np.arange(lims[0], lims[1] + 1, 1), '--',
+                       color='grey')
+          ax['C'].set_box_aspect(1)
+
+          # plot performance within vs between hemispheres for number of predictive dimensions
+          site_dim_performanceAA_n = np.array(
+               [site_performance_AA_n[si, di] for si, di in enumerate([9 for i in site_dimensionality_AA_n])])
+          site_dim_performanceAB_n = np.array(
+               [site_performance_AB_n[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB_n])])
+          # site_dim_performanceAB_s = np.array([site_performance_AB_s[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB_s])])
+          for area in site_area_combos:
+               current_area = np.array([s_area == area for s_area in site_area_AB])
+               area_color_n = [area_colors[area] for t in current_area if t == True]
+               ax['D'].scatter(site_dim_performanceAA_n[current_area], site_dim_performanceAB_n[current_area],
+                               s=6,
+                               c=area_color_n, label=area)
+          max_perf = np.round(np.max(np.concatenate((site_dim_performanceAA_n, site_dim_performanceAB_n))),
+                              decimals=1)
+          dlims = (0, max_perf + 0.1)
+          dticks = np.arange(dlims[0], dlims[1] + 0.1, 0.2)
+          ax['D'].set_ylim(dlims)
+          ax['D'].set_xlim(dlims)
+          ax['D'].set_yticks(dticks)
+          ax['D'].set_xticks(dticks)
+          ax['D'].set_xlabel("performance \n - within")
+          ax['D'].set_ylabel("performance \n - between")
+          ax['D'].plot(np.arange(dlims[0], dlims[1] + 0.1, 0.1), np.arange(dlims[0], dlims[1] + 0.1, 0.1),
+                       '--',
+                       color='grey')
+          ax['D'].set_box_aspect(1)
+          plt.tight_layout()
+
 ### crap code pulled from bilateral.py to get area and psth plots ###
 parmfile_area = {}
-parmfile_snr = {}
 badfiles = []
-for parmfile in BNT_regular_parmfiles:
-
+for parmfile in BNT_parmfiles:
      ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
      loadkey="psth.fs10"
      rasterfs = 10
@@ -549,15 +934,54 @@ for parmfile in BNT_regular_parmfiles:
          print(f"{parmfile} depth info not working?...skipping")
          badfiles.append(parmfile)
          continue
+parmfile_area_bnt = {}
+badfiles_bnt = []
+for parmfile in BNT_regular_parmfiles:
+     ex = baphy_experiment.BAPHYExperiment(parmfile=[parmfile])
+     loadkey="psth.fs10"
+     rasterfs = 10
+     rec = ex.get_recording(loadkey=loadkey)
+     # rec = ex.get_recording(loadkey=loadkey, stim='gtgram')
+     #.sortparameters.Kilosort_load_completed_job_params
 
+     resp=rec['resp'].rasterize()
+
+     # grab A1 units only
+     try:
+          siteid = parmfile[-17:-10]
+          depth_info = baphy_io.get_depth_info(siteid=siteid)
+          A1_units = depth_info.loc[depth_info.isin({'area':["A1", 'PEG']})['area']].index.tolist()
+          A_units = [unit for unit in A1_units if "-A-" in unit]
+          B_units = [unit for unit in A1_units if "-B-" in unit]
+          A_area = depth_info['area'][A_units[0]]
+          B_area = depth_info['area'][B_units[0]]
+          parmfile_area_bnt[parmfile] = {"A":A_area, "B":B_area}
+
+          A1_units = [unit[-8:] for unit in A1_units]
+          # grab unit names for all units in resp that have depth info in A1
+          A_chans = [chan for chan in resp.chans if '-A-' in chan if chan[-8:] in A1_units]
+          B_chans = [chan for chan in resp.chans if '-B-' in chan if chan[-8:] in A1_units]
+          # A_chans = [c for c in resp.chans if '-A-' in c]
+          # B_chans = [c for c in resp.chans if '-B-' in c]
+          respA = resp.extract_channels(A_chans)
+          respB = resp.extract_channels(B_chans)
+     except:
+         print(f"{parmfile} depth info not working?...skipping")
+         badfiles_bnt.append(parmfile)
+         continue
 # load dataframe
 subspace_noise_df = pd.read_pickle(data_save_path/'subspace_df.pkl')
 subspace_signal_df = pd.read_pickle(data_save_path/'subspace_df_signal.pkl')
-# dichotic binaural bnt
-subspace_bilateral_df = pd.read_pickle(data_save_path/'subspace_df_noise_bilateral.pkl')
-subspace_mono_df = pd.read_pickle(data_save_path/'subspace_df_noise_mono.pkl')
+# # dichotic binaural bnt
+# split bnt dataframes because code to save collapsed mono and bilateral stims together
+subspace_bnt_signal_df = pd.read_pickle(data_save_path/'subspace_df_signal_mono.pkl')
+subspace_signal_bi_df = subspace_bnt_signal_df[subspace_bnt_signal_df['stim'] == 'bilateral']
+subspace_signal_mono_df = subspace_bnt_signal_df[subspace_bnt_signal_df['stim'] == 'mono']
+subspace_bnt_noise_df = pd.read_pickle(data_save_path/'subspace_df_noise_mono.pkl')
+subspace_noise_bi_df = subspace_bnt_noise_df[subspace_bnt_noise_df['stim'] == 'bilateral']
+subspace_noise_mono_df = subspace_bnt_noise_df[subspace_bnt_noise_df['stim'] == 'mono']
 
-site_models = [model_name.split('_') for model_name in subspace_bilateral_df['model_names']]
+site_models = [model_name.split('_') for model_name in subspace_noise_df['model_names']]
 siteids = list(set([siteid[0][4:] for siteid in site_models]))
 ranks = list(set([int(siteid[1][4:]) for siteid in site_models]))
 jackknifes = list(set([jack for jack in subspace_noise_df['jackknife']]))
@@ -620,145 +1044,199 @@ min_val = np.min([np.min(psthA[np.nonzero(psthA)]), np.min(psthB[np.nonzero(psth
 max_val = np.max([psthA.max(), psthB.max()])
 stim_spec = stim._data[stim_epochs2[0]][:int(stim_chans/2), :]
 
+# test plotting functions
+dfs_bnt_signal = [subspace_signal_mono_df, subspace_signal_bi_df]
+dfs_bnt_noise = [subspace_noise_mono_df, subspace_noise_bi_df]
+mono_svn = [subspace_signal_mono_df, subspace_noise_mono_df]
+bi_svn = [subspace_signal_bi_df, subspace_noise_bi_df]
+
+# signal predictions mono vs bi
+subspace_plot_R01_layout(psthA, psthB, dfs_bnt_signal, ['signal', 'signal'], parmfile_area_bnt, plot_type='internal',
+                         cmap_diverging = ['blue', 'red', 'teal', 'salmon'], cmap_qualitative = ['viridis', 'Dark2'])
+# noise predictions mono vs bi
+subspace_plot_R01_layout(psthA, psthB, dfs_bnt_noise, ['noise', 'noise'], parmfile_area_bnt, plot_type='internal',
+                         cmap_diverging = ['blue', 'red', 'teal', 'salmon'], cmap_qualitative = ['viridis', 'Dark2'])
+# signal vs noise mono
+subspace_plot_R01_layout(psthA, psthB, mono_svn, ['signal', 'noise'], parmfile_area_bnt, plot_type='external',
+                         cmap_diverging = ['blue', 'red', 'teal', 'salmon'], cmap_qualitative = ['viridis', 'Dark2'])
+# signal vs noise bi
+subspace_plot_R01_layout(psthA, psthB, bi_svn, ['signal', 'noise'], parmfile_area_bnt, plot_type='external',
+                         cmap_diverging = ['blue', 'red', 'teal', 'salmon'], cmap_qualitative = ['viridis', 'Dark2'])
+
+
 ## plot for between signal vs noise
-# f, ax = plt.subplot_mosaic([['.', 'B', 'C', 'D'], ['A1', 'B', 'C', 'D'], ['A2', 'B', 'C', 'D'], ['A3', 'B', 'C', 'D'], ['.', 'B', 'C', 'D']], width_ratios=[1.5,1,1,1], height_ratios=[1, 0.75, 0.75, 0.75, 1], gridspec_kw={'hspace':0.75, 'wspace':0.75}, figsize=(8,3.5))
-# # gridspec_kw={'hspace':0.01, 'wspace':0.5}
-# imopts = {'origin': 'lower', 'aspect':'auto', 'cmap':'Greys'}
-# ax['A1'].imshow(stim_spec, **imopts, interpolation='gaussian')
-# ax['A2'].imshow(psthA, **imopts, interpolation='None', vmax=min_val)
-# ax['A3'].imshow(psthB, **imopts, interpolation='None', vmax=min_val)
-# ticks = np.arange(0, len(psthA[0, :]), 2*rasterfs)
-# tick_labels = np.arange(0, len(psthA[0, :])/rasterfs, 2*1)
-# # ax['A1'].set_xticks(ticks)
-# # ax['A1'].set_xticklabels(tick_labels)
-# # ax['A2'].set_xticks(ticks)
-# # ax['A2'].set_xticklabels(tick_labels)
-# ax['A3'].set_xticks(ticks)
-# ax['A3'].set_xticklabels(tick_labels)
-# # ax['A1'].get_shared_x_axes().joined(ax['A1'], ax['A3'])
-# # ax['A2'].get_shared_x_axes().joined(ax['A2'], ax['A3'])
-# ax['A1'].sharex(ax['A3'])
-# ax['A2'].sharex(ax['A3'])
-# plt.setp(ax['A1'].get_xticklabels(), visible=False)
-# plt.setp(ax['A2'].get_xticklabels(), visible=False)
-# ax['A3'].set_xlabel("time (s)")
-# ax['A1'].set_ylabel("channels")
-# ax['A2'].set_ylabel("trials")
-# ax['A3'].set_ylabel("trials")
-# ax['A1'].set_title(stim_epochs2[0], fontsize=6)
-# ax['A2'].set_title(good_A_chans[0], fontsize=6)
-# ax['A3'].set_title(good_B_chans[0], fontsize=6)
-#
-# site_performance_AA_n = []
+f, ax = plt.subplot_mosaic([['.', 'B', 'C', 'D'], ['A1', 'B', 'C', 'D'], ['A2', 'B', 'C', 'D'], ['A3', 'B', 'C', 'D'], ['.', 'B', 'C', 'D']], width_ratios=[1.5,1,1,1], height_ratios=[1, 0.75, 0.75, 0.75, 1], gridspec_kw={'hspace':0.75, 'wspace':0.75}, figsize=(8,3.5))
+# gridspec_kw={'hspace':0.01, 'wspace':0.5}
+imopts = {'origin': 'lower', 'aspect':'auto', 'cmap':'Greys'}
+ax['A1'].imshow(stim_spec, **imopts, interpolation='gaussian')
+ax['A2'].imshow(psthA, **imopts, interpolation='None', vmax=min_val)
+ax['A3'].imshow(psthB, **imopts, interpolation='None', vmax=min_val)
+ticks = np.arange(0, len(psthA[0, :]), 2*rasterfs)
+tick_labels = np.arange(0, len(psthA[0, :])/rasterfs, 2*1)
+# ax['A1'].set_xticks(ticks)
+# ax['A1'].set_xticklabels(tick_labels)
+# ax['A2'].set_xticks(ticks)
+# ax['A2'].set_xticklabels(tick_labels)
+ax['A3'].set_xticks(ticks)
+ax['A3'].set_xticklabels(tick_labels)
+# ax['A1'].get_shared_x_axes().joined(ax['A1'], ax['A3'])
+# ax['A2'].get_shared_x_axes().joined(ax['A2'], ax['A3'])
+ax['A1'].sharex(ax['A3'])
+ax['A2'].sharex(ax['A3'])
+plt.setp(ax['A1'].get_xticklabels(), visible=False)
+plt.setp(ax['A2'].get_xticklabels(), visible=False)
+ax['A3'].set_xlabel("time (s)")
+ax['A1'].set_ylabel("channels")
+ax['A2'].set_ylabel("trials")
+ax['A3'].set_ylabel("trials")
+ax['A1'].set_title(stim_epochs2[0], fontsize=6)
+ax['A2'].set_title(good_A_chans[0], fontsize=6)
+ax['A3'].set_title(good_B_chans[0], fontsize=6)
+
+site_performance_AA_n = []
 # site_performance_AA_s = []
-# site_area_AB = []
-# site_performance_AB_n = []
+site_area_AB = []
+site_performance_AB_n = []
 # site_performance_AB_s = []
-# for siteid in siteids:
-#      site_area_AB.append(['-'.join([area['A'], area['B']]) for parm, area in parmfile_area.items() if siteid in parm][0])
-#      site_noise_df = subspace_noise_df[subspace_noise_df['model_names'].str.contains(siteid)]
-#      site_signal_df = subspace_signal_df[subspace_noise_df['model_names'].str.contains(siteid)]
-#      mean_rank_performance_AA_n = []
-#      mean_rank_performance_AB_n = []
-#      mean_rank_performance_AA_s = []
-#      mean_rank_performance_AB_s = []
-#      for rank in ranks:
-#           rank_AA_df_n = site_noise_df[site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
-#           rank_AB_df_n = site_noise_df[site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
-#           rank_AA_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
-#           rank_AB_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
-#           mean_rank_performance_AA_n.append(np.nanmean(rank_AA_df_n['mean_model_performance']))
-#           mean_rank_performance_AB_n.append(np.nanmean(rank_AB_df_n['mean_model_performance']))
-#           mean_rank_performance_AA_s.append(np.nanmean(rank_AA_df_s['mean_model_performance']))
-#           mean_rank_performance_AB_s.append(np.nanmean(rank_AB_df_s['mean_model_performance']))
-#      site_performance_AA_n.append(mean_rank_performance_AA_n)
-#      site_performance_AB_n.append(mean_rank_performance_AB_n)
-#      site_performance_AA_s.append(mean_rank_performance_AA_s)
-#      site_performance_AB_s.append(mean_rank_performance_AB_s)
-# site_performance_AA_n = np.array(site_performance_AA_n)[:, :10]
-# site_performance_AB_n = np.array(site_performance_AB_n)[:, :10]
+site_rank_performance_AA = []
+site_rank_performance_AB = []
+# site_rank_performance_AA_s = []
+# site_rank_performance_AB_s = []
+for siteid in siteids:
+     site_area_AB.append(['-'.join([area['A'], area['B']]) for parm, area in parmfile_area.items() if siteid in parm][0])
+     site_noise_df = subspace_noise_df[subspace_noise_df['model_names'].str.contains(siteid)]
+     # site_signal_df = subspace_mono_df[subspace_mono_df['model_names'].str.contains(siteid)]
+     mean_rank_performance_AA_n = []
+     mean_rank_performance_AB_n = []
+     rank_performance_AA_n = []
+     rank_performance_AB_n = []
+     # mean_rank_performance_AA_s = []
+     # mean_rank_performance_AB_s = []
+     # rank_performance_AA_s = []
+     # rank_performance_AB_s = []
+
+     for rank in ranks:
+          rank_AA_df_n = site_noise_df[site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
+          rank_AB_df_n = site_noise_df[site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
+          # rank_AA_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
+          # rank_AB_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
+          mean_rank_performance_AA_n.append(np.nanmean(rank_AA_df_n['mean_model_performance']))
+          mean_rank_performance_AB_n.append(np.nanmean(rank_AB_df_n['mean_model_performance']))
+          rank_performance_AA_n.append(rank_AA_df_n['mean_model_performance'])
+          rank_performance_AB_n.append(rank_AB_df_n['mean_model_performance'])
+          # mean_rank_performance_AA_s.append(np.nanmean(rank_AA_df_s['mean_model_performance']))
+          # mean_rank_performance_AB_s.append(np.nanmean(rank_AB_df_s['mean_model_performance']))
+          # rank_performance_AA_s.append(rank_AA_df_s['mean_model_performance'])
+          # rank_performance_AB_s.append(rank_AB_df_s['mean_model_performance'])
+     site_performance_AA_n.append(mean_rank_performance_AA_n)
+     site_performance_AB_n.append(mean_rank_performance_AB_n)
+     site_rank_performance_AA.append(rank_performance_AA_n)
+     site_rank_performance_AB.append(rank_performance_AB_n)
+     # site_performance_AA_s.append(mean_rank_performance_AA_s)
+     # site_performance_AB_s.append(mean_rank_performance_AB_s)
+     # site_rank_performance_AA_s.append(rank_performance_AA_s)
+     # site_rank_performance_AB_s.append(rank_performance_AB_s)
+site_performance_AA_n = np.array(site_performance_AA_n)[:, :10]
+site_performance_AB_n = np.array(site_performance_AB_n)[:, :10]
 # site_performance_AA_s = np.array(site_performance_AA_s)[:, :10]
 # site_performance_AB_s = np.array(site_performance_AB_s)[:, :10]
-# semAA_n = np.nanstd(site_performance_AA_n, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AA_n), axis=0))
-# semAB_n = np.nanstd(site_performance_AB_n, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AB_n), axis=0))
+semAA_n = np.nanstd(site_performance_AA_n, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AA_n), axis=0))
+semAB_n = np.nanstd(site_performance_AB_n, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AB_n), axis=0))
 # semAA_s = np.nanstd(site_performance_AA_s, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AA_s), axis=0))
 # semAB_s = np.nanstd(site_performance_AB_s, axis=0, ddof=1) / np.sqrt(np.sum(~np.isnan(site_performance_AB_s), axis=0))
-# ax['B'].plot(ranks[:10], site_performance_AA_n[:, :].mean(axis=0), color='red', linewidth=3, label='within-noise')
-# ax['B'].plot(ranks[:10], site_performance_AB_n[:, :].mean(axis=0), color='blue', linewidth=3, label='between-noise')
-# ax['B'].fill_between(ranks[:10], site_performance_AA_n.mean(axis=0) - semAA_n, site_performance_AA_n.mean(axis=0) + semAA_n, alpha=0.2, color ='red')
-# ax['B'].fill_between(ranks[:10], site_performance_AB_n.mean(axis=0) - semAB_n, site_performance_AB_n.mean(axis=0) + semAB_n, alpha=0.2, color ='blue')
+ax['B'].plot(ranks[:10], site_performance_AA_n[:, :].mean(axis=0), color='red', linewidth=3, label='within-noise')
+ax['B'].plot(ranks[:10], site_performance_AB_n[:, :].mean(axis=0), color='blue', linewidth=3, label='between-noise')
+ax['B'].fill_between(ranks[:10], site_performance_AA_n.mean(axis=0) - semAA_n, site_performance_AA_n.mean(axis=0) + semAA_n, alpha=0.2, color ='red')
+ax['B'].fill_between(ranks[:10], site_performance_AB_n.mean(axis=0) - semAB_n, site_performance_AB_n.mean(axis=0) + semAB_n, alpha=0.2, color ='blue')
 # ax['B'].plot(ranks[:10], site_performance_AA_s[:, :].mean(axis=0), color='orange', linewidth=3, label='within-signal')
 # ax['B'].plot(ranks[:10], site_performance_AB_s[:, :].mean(axis=0), color='cyan', linewidth=3, label='between-signal')
 # ax['B'].fill_between(ranks[:10], site_performance_AA_s.mean(axis=0) - semAA_s, site_performance_AA_s.mean(axis=0) + semAA_s, alpha=0.2, color ='orange')
 # ax['B'].fill_between(ranks[:10], site_performance_AB_s.mean(axis=0) - semAB_s, site_performance_AB_s.mean(axis=0) + semAB_s, alpha=0.2, color ='cyan')
-# ax['B'].set_ylabel('model performance')
-# ax['B'].set_xlabel('model rank')
-# ax['B'].legend()
-# ax['B'].set_box_aspect(1)
-#
-# site_dimensionality_AA_n = []
-# site_dimensionality_AB_n = []
+ax['B'].set_ylabel('model performance')
+ax['B'].set_xlabel('model rank')
+ax['B'].legend()
+ax['B'].set_box_aspect(1)
+
+site_dimensionality_AA_n = []
+site_dimensionality_AB_n = []
 # site_dimensionality_AA_s = []
 # site_dimensionality_AB_s = []
-#
-# cmap = get_cmap('Dark2')
-# cmap_s = get_cmap('Set2')
-# colors = cmap.colors
-# colors_s = cmap_s.colors
-# site_area_combos = set(site_area_AB)
-# area_colors = {'A1-A1': colors[0], 'A1-PEG': colors[1], 'PEG-PEG': colors[2], 'PEG-A1': colors[3]}
-# area_colors_s = {'A1-A1': colors_s[0], 'A1-PEG': colors_s[1], 'PEG-PEG': colors_s[2], 'PEG-A1': colors_s[3]}
-# for sitenum in range(len(siteids)):
-#      site_dimensionality_AA_n.append(np.where(site_performance_AA_n[sitenum, :] > (site_performance_AA_n[sitenum, -1]-semAA_n[-1]))[0][0] + 1)
-#      site_dimensionality_AB_n.append(np.where(site_performance_AB_n[sitenum, :] > (site_performance_AB_n[sitenum, -1] - semAB_n[-1]))[0][0] + 1)
-#      site_dimensionality_AA_s.append(np.where(site_performance_AA_s[sitenum, :] > (site_performance_AA_s[sitenum, -1]-semAA_s[-1]))[0][0] + 1)
-#      site_dimensionality_AB_s.append(np.where(site_performance_AB_s[sitenum, :] > (site_performance_AB_s[sitenum, -1] - semAB_s[-1]))[0][0] + 1)
-#
-# site_dimensionality_AA_n = np.array(site_dimensionality_AA_n)
-# site_dimensionality_AB_n = np.array(site_dimensionality_AB_n)
+
+cmap = get_cmap('Dark2')
+cmap = get_cmap('viridis')
+crange = np.linspace(0,1,3)
+cmap_s = get_cmap('Set2')
+colors = cmap.colors
+colors_s = cmap_s.colors
+site_area_combos = set(site_area_AB)
+area_colors = {'A1-A1': cmap(crange[0]), 'A1-PEG': cmap(crange[1]), 'PEG-PEG': cmap(crange[2]), 'PEG-A1': colors[3]}
+area_colors_s = {'A1-A1': colors_s[0], 'A1-PEG': colors_s[1], 'PEG-PEG': colors_s[2], 'PEG-A1': colors_s[3]}
+for sitenum in range(len(siteids)):
+     site_rank_AA = np.array(site_rank_performance_AA[sitenum])
+     site_rank_AB = np.array(site_rank_performance_AB[sitenum])
+     # site_rank_AA_s = np.array(site_rank_performance_AA_s[sitenum])
+     # site_rank_AB_s = np.array(site_rank_performance_AB_s[sitenum])
+     semAA_n = np.nanstd(site_rank_AA, axis=1, ddof=1) / np.sqrt(
+          np.sum(~np.isnan(site_rank_AA), axis=1))
+     semAB_n = np.nanstd(site_rank_AB, axis=1, ddof=1) / np.sqrt(
+          np.sum(~np.isnan(site_rank_AB), axis=1))
+     # semAA_s = np.nanstd(site_rank_AA_s, axis=1, ddof=1) / np.sqrt(
+     #      np.sum(~np.isnan(site_rank_AA_s), axis=1))
+     # semAB_s = np.nanstd(site_rank_AB_s, axis=1, ddof=1) / np.sqrt(
+     #      np.sum(~np.isnan(site_rank_AB_s), axis=1))
+     semAA_n = semAA_n[:10]
+     semAB_n = semAB_n[:10]
+     # semAA_s = semAA_s[:10]
+     # semAB_s = semAB_s[:10]
+     site_dimensionality_AA_n.append(np.where(site_performance_AA_n[sitenum, :] > (site_performance_AA_n[sitenum, -1]-semAA_n[-1]))[0][0] + 1)
+     site_dimensionality_AB_n.append(np.where(site_performance_AB_n[sitenum, :] > (site_performance_AB_n[sitenum, -1] - semAB_n[-1]))[0][0] + 1)
+     # site_dimensionality_AA_s.append(np.where(site_performance_AA_s[sitenum, :] > (site_performance_AA_s[sitenum, -1]-semAA_s[-1]))[0][0] + 1)
+     # site_dimensionality_AB_s.append(np.where(site_performance_AB_s[sitenum, :] > (site_performance_AB_s[sitenum, -1] - semAB_s[-1]))[0][0] + 1)
+
+site_dimensionality_AA_n = np.array(site_dimensionality_AA_n)
+site_dimensionality_AB_n = np.array(site_dimensionality_AB_n)
 # site_dimensionality_AA_s = np.array(site_dimensionality_AA_s)
 # site_dimensionality_AB_s = np.array(site_dimensionality_AB_s)
-# for area in site_area_combos:
-#      current_area = np.array([s_area == area for s_area in site_area_AB])
-#      area_color_n = [area_colors[area] for t in current_area if t == True]
-#      area_color_s = [area_colors_s[area] for t in current_area if t == True]
-#      ax['C'].scatter(site_dimensionality_AA_n[current_area], site_dimensionality_AB_n[current_area], s=6,
-#                      c=area_color_n, label=f"{area}-noise")
-#      ax['C'].scatter(site_dimensionality_AA_s[current_area], site_dimensionality_AB_s[current_area], s=6,
-#                      c=area_color_s, label=f"{area}-signal")
-# ax['C'].legend()
-# lims = (0,8)
-# ticks = np.arange(lims[0], lims[1], 2)
-# ax['C'].set_ylim(lims)
-# ax['C'].set_xlim(lims)
-# ax['C'].set_yticks(ticks)
-# ax['C'].set_xticks(ticks)
-# ax['C'].set_xlabel("predictive dimensions \n - within")
-# ax['C'].set_ylabel("predictive dimensions \n - between")
-# ax['C'].plot(np.arange(lims[0], lims[1]+1, 1), np.arange(lims[0], lims[1]+1, 1), '--', color='grey')
-# ax['C'].set_box_aspect(1)
-#
-# # plot performance within vs between hemispheres for number of predictive dimensions
-# site_dim_performanceAA_n = np.array([site_performance_AA_n[si, di] for si, di in enumerate(site_dimensionality_AA_n)])
-# site_dim_performanceAB_n = np.array([site_performance_AB_n[si, di] for si, di in enumerate(site_dimensionality_AB_n)])
-# site_dim_performanceAB_s = np.array([site_performance_AB_s[si, di] for si, di in enumerate(site_dimensionality_AB_s)])
-# for area in site_area_combos:
-#      current_area = np.array([s_area == area for s_area in site_area_AB])
-#      area_color_n = [area_colors[area] for t in current_area if t == True]
-#      ax['D'].scatter(site_dim_performanceAB_n[current_area], site_dim_performanceAB_s[current_area], s=6, c=area_color_n, label=area)
-# max_perf = np.round(np.max(np.concatenate((site_dim_performanceAB_n, site_dim_performanceAB_s))), decimals=1)
-# dlims = (0,max_perf+0.1)
-# dticks = np.arange(dlims[0], dlims[1]+0.2, 0.2)
-# ax['D'].set_ylim(dlims)
-# ax['D'].set_xlim(dlims)
-# ax['D'].set_yticks(dticks)
-# ax['D'].set_xticks(dticks)
-# ax['D'].set_xlabel("performance \n - between - noise")
-# ax['D'].set_ylabel("performance \n - between - signal")
-# ax['D'].plot(np.arange(dlims[0], dlims[1]+0.1, 0.1), np.arange(dlims[0], dlims[1]+0.1, 0.1), '--', color='grey')
-# ax['D'].set_box_aspect(1)
-# ax['D'].legend()
-# plt.tight_layout()
+for area in site_area_combos:
+     current_area = np.array([s_area == area for s_area in site_area_AB])
+     area_color_n = [area_colors[area] for t in current_area if t == True]
+     # area_color_s = [area_colors_s[area] for t in current_area if t == True]
+     ax['C'].scatter(site_dimensionality_AA_n[current_area], site_dimensionality_AB_n[current_area], s=6,
+                     c=area_color_n, label=f"{area}-noise")
+     # ax['C'].scatter(site_dimensionality_AA_s[current_area], site_dimensionality_AB_s[current_area], s=6,
+     #                 c=area_color_s, label=f"{area}-signal")
+ax['C'].legend()
+lims = (0,10)
+ticks = np.arange(lims[0], lims[1], 2)
+ax['C'].set_ylim(lims)
+ax['C'].set_xlim(lims)
+ax['C'].set_yticks(ticks)
+ax['C'].set_xticks(ticks)
+ax['C'].set_xlabel("predictive dimensions \n - within")
+ax['C'].set_ylabel("predictive dimensions \n - between")
+ax['C'].plot(np.arange(lims[0], lims[1]+1, 1), np.arange(lims[0], lims[1]+1, 1), '--', color='grey')
+ax['C'].set_box_aspect(1)
+
+# plot performance within vs between hemispheres for number of predictive dimensions
+site_dim_performanceAA_n = np.array([site_performance_AA_n[si, di] for si, di in enumerate([9 for i in site_dimensionality_AA_n])])
+site_dim_performanceAB_n = np.array([site_performance_AB_n[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB_n])])
+# site_dim_performanceAB_s = np.array([site_performance_AB_s[si, di] for si, di in enumerate([9 for i in site_dimensionality_AB_s])])
+for area in site_area_combos:
+     current_area = np.array([s_area == area for s_area in site_area_AB])
+     area_color_n = [area_colors[area] for t in current_area if t == True]
+     ax['D'].scatter(site_dim_performanceAA_n[current_area], site_dim_performanceAB_n[current_area], s=6, c=area_color_n, label=area)
+max_perf = np.round(np.max(np.concatenate((site_dim_performanceAA_n, site_dim_performanceAB_n))), decimals=1)
+dlims = (0,max_perf+0.1)
+dticks = np.arange(dlims[0], dlims[1]+0.1, 0.2)
+ax['D'].set_ylim(dlims)
+ax['D'].set_xlim(dlims)
+ax['D'].set_yticks(dticks)
+ax['D'].set_xticks(dticks)
+ax['D'].set_xlabel("performance \n - within")
+ax['D'].set_ylabel("performance \n - between")
+ax['D'].plot(np.arange(dlims[0], dlims[1]+0.1, 0.1), np.arange(dlims[0], dlims[1]+0.1, 0.1), '--', color='grey')
+ax['D'].set_box_aspect(1)
+plt.tight_layout()
 
 # plot for diotic vs dichotic
 f, ax = plt.subplot_mosaic([['.', 'B', 'C', 'D'], ['A1', 'B', 'C', 'D'], ['A2', 'B', 'C', 'D'], ['A3', 'B', 'C', 'D'], ['.', 'B', 'C', 'D']], width_ratios=[1.5,1,1,1], height_ratios=[1, 0.75, 0.75, 0.75, 1], gridspec_kw={'hspace':0.75, 'wspace':0.75}, figsize=(8,3.5))
@@ -900,6 +1378,6 @@ ax['D'].set_box_aspect(1)
 plt.tight_layout()
 
 # plt.savefig(data_save_path/'subspace_fig.pdf', dpi=600, format='pdf')
-plt.savefig(data_save_path/'subspace_fig_signal.pdf', dpi=600, format='pdf')
+plt.savefig(data_save_path/'subspace_fig_noise_updated.pdf', dpi=600, format='pdf')
 bp = []
 
