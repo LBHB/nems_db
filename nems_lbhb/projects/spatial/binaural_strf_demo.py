@@ -50,8 +50,8 @@ loadkey = "gtgram.fs100.ch18.bin100"   # binaural allocentric
 #architecture = "full"
 architecture = "fullpop"
 
-time_lags = 16
-rank = 10
+time_lags = 20
+rank = 8
 
 recording_uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
 rec = recording.load_recording(recording_uri)
