@@ -24,12 +24,12 @@ GPU_job=True
 rank=8
 
 modelnames = [
-    f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}-fir.20x1x{rank}-wc.{rank}xR-dexp.R-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
+    f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}-fir.20x1x{rank}-wc.{rank}xR-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
 ]
 
 
 force_rerun = False
-run_in_lbhb = True
+run_in_lbhb = False
 
 if run_in_lbhb:
     # first models, run locally so that recordings get generated.
@@ -41,7 +41,7 @@ else:
     # exacloud
 
     # exacloud queue settings:
-    exa_executable_path = '/home/users/davids/anaconda3/envs/nems/bin/python'
+    exa_executable_path = '/home/users/davids/miniconda3/envs/nems/bin/python'
     exa_script_path = '/home/users/davids/nems_db/scripts/nems0_scripts/fit_single.py'
     ssh_key = '/home/svd/.ssh/id_rsa'
     user = "davids"
