@@ -1781,7 +1781,7 @@ def psi_parm_read(filepath):
     root3, ferret = os.path.split(root2)
     parts = parmfile.split('_')
     siteid = parts[0][:-2]
-    runclass = parts[2];
+    runclass = parts[-2];
     ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
 
     if os.path.isfile(globalfile):
@@ -1978,11 +1978,24 @@ def psi_parm_read(filepath):
         tstring='target_start'
     elif runclass=='NFB':
         tstring='trial_start'
+
     tstart_events = exptevents.loc[exptevents['name']==tstring].reset_index(drop=True)
     try:
         assert(len(T)==len(tstart_events))
     except:
+        log.info(f"Length of trial log events and '{tstring}' events does not match")
+        log.info("deleting dup trial numbers")
+        tstart_events['good']=True
+        for i in range(1,len(tstart_events)):
+            if tstart_events.loc[i,'Trial']==tstart_events.loc[i-1,'Trial']:
+                tstart_events.loc[i-1,'good']=False
+        tstart_events=tstart_events.loc[tstart_events['good']].reset_index(drop=True)
+        tstart_events.drop(columns=['good'], inplace=True)
+    try:
+        assert(len(T)==len(tstart_events))
+    except:
         raise ValueError(f"Length of trial log events and '{tstring}' events does not match")
+
     tstart_events['name']='TRIALSTART'
     tstart_events['end'] = tstart_events['start']
     tstart_events['Info'] = ''
@@ -3548,17 +3561,18 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
         elif (fill_invalid == 'interpolate'):
             invalid_onsets = np.where(np.diff(threshold_check.astype(int))==-1)[0]+1
             invalid_offsets = np.where(np.diff(threshold_check.astype(int))==1)[0]+1
-            if invalid_onsets[0] > invalid_offsets[0]:
-                invalid_onsets = np.concatenate(([0], invalid_onsets))
-            if invalid_onsets[-1] > invalid_offsets[-1]:
-                invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
-            for (a, b) in zip(invalid_onsets, invalid_offsets):
-                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
-                    x[a:b] = np.linspace(x[a-1], x[b], b-a)
-                    y[a:b] = np.linspace(y[a-1], y[b], b-a)
-                else:
-                    x[a:b] = np.nan
-                    y[a:b] = np.nan
+            if (len(invalid_onsets)>0) & (len(invalid_offsets)>0):
+                if invalid_onsets[0] > invalid_offsets[0]:
+                    invalid_onsets = np.concatenate(([0], invalid_onsets))
+                if invalid_onsets[-1] > invalid_offsets[-1]:
+                    invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
+                for (a, b) in zip(invalid_onsets, invalid_offsets):
+                    if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
+                        x[a:b] = np.linspace(x[a-1], x[b], b-a)
+                        y[a:b] = np.linspace(y[a-1], y[b], b-a)
+                    else:
+                        x[a:b] = np.nan
+                        y[a:b] = np.nan
 
         elif (fill_invalid == 'mean'):
             log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
@@ -4499,7 +4513,7 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=False):
+def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=True):
     """
     Return 1-D numpy array containing the mean sorted spike waveform
     :cellid: str
@@ -4614,7 +4628,7 @@ def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_
             pass
     if usespkfile is None:
         try:
-            log.info('looking in spike.mat files')
+            #log.info('looking in spike.mat files')
             mwf = usematfile()
         except:
             log.info('failed. looking in spike.npw files')
@@ -4714,7 +4728,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     #df_cell = df_cell.set_index('cellid')
     for c in df_cell.index:
         #print(c)
-        mwf = get_mean_spike_waveform(c, save_to_db=save_to_db)[:-1]
+        mwf = get_mean_spike_waveform(c)[:-1]
         mwf_len = len(mwf)
         fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
         mwf = fit2(np.linspace(0, mwf_len, 100))
@@ -4731,7 +4745,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
             # force 0 to be the mean of the positive waveform preceding the valley
             mi = np.argmax(mwf[:trough])
             if len(mwf[:mi]) == 0:
-                log.info(f'{c}: zero mwf mi')
+                #log.info(f'{c}: zero mwf mi')
                 baseline = 0
             else:
                 baseline = np.mean(mwf[:mi])

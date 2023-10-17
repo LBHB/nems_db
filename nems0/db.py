@@ -194,7 +194,7 @@ def sql_command(sql):
 def enqueue_models(celllist, batch, modellist, force_rerun=False,
                    user="nems", codeHash="master", jerbQuery='',
                    executable_path=None, script_path=None,
-                   priority=1, GPU_job=0, reserve_gb=0):
+                   priority=1, GPU_job=0, reserve_gb=0, linux_user='nems'):
     """Call enqueue_single_model for every combination of cellid and modelname
     contained in the user's selections.
 
@@ -251,7 +251,6 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
         user = user
     else:
         user = 'None'
-    linux_user = 'nems'
     allowqueuemaster = 1
     waitid = 0
     parmstring = ''
@@ -295,12 +294,12 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                 if complete == 1:
                     message = "Resetting existing queue entry for: %s\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', GPU_job='{}', user='{}' WHERE id={}".format(
-                        commandPrompt, GPU_job, user, queueid)
+                        commandPrompt, int(GPU_job), user, queueid)
                     r = conn.execute(text(sql))
 
                 elif complete == 2:
                     message = "Dead queue entry for: %s exists, resetting.\n" % note
-                    sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(GPU_job, queueid)
+                    sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(int(GPU_job), queueid)
                     r = conn.execute(text(sql))
 
                 else:  # complete in [-1, 0] -- already running or queued
@@ -326,7 +325,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                        " ({},'{}',{}," +\
                        "{},{},'{}',{},'{}'," +\
                        "'{}','{}',{},'{}',NOW())"
-                sql = sql.format(rundataid, commandPrompt, priority, GPU_job, reserve_gb,
+                sql = sql.format(rundataid, commandPrompt, priority, int(GPU_job), reserve_gb,
                                  parmstring, allowqueuemaster, user, linux_user,
                                  note, waitid, codeHash)
                 r = conn.execute(text(sql))

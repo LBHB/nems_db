@@ -882,6 +882,27 @@ def sm(load_key):
             {'signal': smooth_signal, 'epoch_regex': epoch_regex}]]
     return xfspec
 
+@xform()
+def hrtf(load_key):
+    """
+    Smooth a signal using preproc.smooth_epoch_segments
+    options:
+    pop : smooth population signal (default??)
+
+    """
+    options = load_key.split('.')[1:]
+    opts = {}
+    for op in options:
+        if op=='az':
+            opts['hrtf_format'] = 'az'
+        elif op.startswith('sm'):
+            opts['smooth_win']=float(op[2:])
+        else:
+            opts['signal'] = op
+
+    xfspec=[['nems_lbhb.projects.freemoving.free_tools.stim_filt_hrtf', opts]]
+    return xfspec
+
 
 @xform()
 def dec(kw):

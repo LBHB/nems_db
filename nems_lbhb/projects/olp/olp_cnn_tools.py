@@ -1,3 +1,15 @@
+"""
+author: SVD
+date: 10/12/23
+
+Analysis of CNN predictions of OLP relative gain
+Currently for preliminary data for R01 BCP proposal
+
+pred_comp() - prediction comparison scatter plot
+
+
+"""
+
 import numpy as np
 import os
 import io
@@ -9,6 +21,8 @@ import sys, importlib
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 import seaborn as sns
+from scipy.stats import wilcoxon, pearsonr
+
 
 import nems0.modelspec as ms
 import nems0.xforms as xforms
@@ -97,27 +111,36 @@ def pred_comp(batch=341, modelnames=None):
                 "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4",
             ]
     print(modelnames)
-    df = db.batch_comp(batch,modelnames, stat='r_ceiling', shortnames=['CNN','LN'])
-    dftest = db.batch_comp(batch,modelnames, stat='r_test', shortnames=['CNN','LN'])
-    dffloor = db.batch_comp(batch,modelnames, stat='r_floor', shortnames=['CNN','LN'])
-    df = df.merge(dftest, left_index=True, right_index=True, suffixes=['','_test'])
-    df = df.merge(dffloor, left_index=True, right_index=True, suffixes=['','_floor'])
-    df['keepidx']=(df['LN_test']>df['LN_floor']) & (df['CNN_test']>df['CNN_floor'])
+    df = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=["CNN", "LN"])
+    dfceil = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=["CNN", "LN"], stat='r_ceiling')
+    dffloor = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=["CNN", "LN"], stat='r_floor')
+    df = df.merge(dffloor, how='inner', left_index=True, right_index=True, suffixes=('', '_floor'))
+    df = df.merge(dfceil, how='inner', left_index=True, right_index=True, suffixes=('', '_ceil'))
+    df['goodidx'] = ((df['LN'] > df['LN_floor']) | (df['CNN'] > df['CNN_floor'])) & ~np.isnan(df['LN']) & ~np.isnan(
+        df['CNN'])
 
-    d_ = df.loc[df['keepidx']]
-    f=plt.figure(figsize=(4.5,2))
-    ax=f.add_subplot(1,2,1)
-    ax.scatter(d_['LN'],d_['CNN'],s=2,color='black')
-    ax.plot([0,1],[0,1],'k--')
-    ax.set_xlabel('LN')
-    ax.set_ylabel('CNN')
+    df_area = db.pd_query(f"select distinct sCellFile.cellid,sCellFile.area from sCellFile INNER JOIN sRunData on sCellFile.cellid=sRunData.cellid and sRunData.batch={batch}")
+    df = df.merge(df_area, how='inner', left_index=True, right_on='cellid', suffixes=('', '_area'))
+    df = df.loc[df.area.isin(['A1', 'PEG'])]
+    print(f"Good count: {df['goodidx'].sum()}/{len(df)} 'good' units")
+    d_ = df.loc[df['goodidx']]
+    [w, p] = wilcoxon(d_['LN'], d_['CNN'])
+
+    f = plt.figure(figsize=(3.5, 1.5))
+    ax = f.add_subplot(1,2,1)
+
+    df.loc[~df['goodidx']].plot.scatter(x='LN_ceil', y='CNN_ceil', s=2, ax=ax, color='gray')
+    df.loc[df['goodidx']].plot.scatter(x='LN_ceil', y='CNN_ceil', s=2, ax=ax, color='black')
+    ax.plot([0, 1], [0, 1], 'k--')
+    ax.set_xlabel(f"LN ({d_['LN_ceil'].mean():.3f})")
+    ax.set_ylabel(f"CNN ({d_['CNN_ceil'].mean():.3f})")
 
     ax=f.add_subplot(1,4,3)
-    sns.barplot(d_[['LN','CNN']], ax=ax)
+    sns.barplot(d_[['LN_ceil','CNN_ceil']], ax=ax)
+    ax.set_xticklabels(['LN','CNN'])
     ax.set_ylabel('Mean pred. corr.')
+    f.suptitle(f"{batch} n={len(d_)}/{len(df)} p={p:.3e}", fontsize=8)
     plt.tight_layout()
-    f.suptitle(f"Batch {batch} predictions")
-    print(f"f.savefig('/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')")
     return f
 
 def get_valid_olp_rows(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
@@ -208,7 +231,6 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         score='r_test'
         ax[0].plot(modelspec.meta[score], label=f"m1: {modelspec.meta[score].mean():.3f}")
         ax[0].plot(modelspec2.meta[score], label=f"m2: {modelspec2.meta[score].mean():.3f}")
-        ax[0].axvline(cid0, color='black', linestyle='--')
         ax[0].set_title(score);
         ax[0].set_xlabel('unit')
         ax[0].set_ylabel('pred xc')
@@ -216,7 +238,6 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
         score='r_fit'
         ax[1].plot(modelspec.meta[score], label=f"m1: {modelspec.meta[score].mean():.3f}")
         ax[1].plot(modelspec2.meta[score], label=f"m2: {modelspec2.meta[score].mean():.3f}")
-        ax[1].axvline(cid0, color='black', linestyle='--')
         ax[1].set_title(score);
         ax[1].legend(fontsize=8);
         f.suptitle(siteid);
@@ -335,7 +356,10 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     sf[sf<0.1]=0.1
     cell_epoch_df['sf']=sf
 
-    return cell_epoch_df, rec, rec2
+    if verbose:
+        return cell_epoch_df, ctx, ctx2
+    else:
+        return cell_epoch_df, rec, rec2
 
 
 def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
@@ -365,6 +389,7 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
     prefs = ['r', 's', 'p2', 'p1']
     labels = ['Specgram', 'LN pred', 'CNN pred']
     ccs=np.zeros((3,len(labels)))
+    ps=np.zeros((3,len(labels)))
     for rr, figlabel in zip(rrset, figlabels):
         f, axs = plt.subplots(len(labels)+1, 3, figsize=(6, 2*(len(labels)+1)))
         for row, (pre, ax, label) in enumerate(zip(prefs[1:], axs, labels)):
@@ -392,16 +417,16 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
             dr = fr - br
             dp = fp - bp
 
-            ccs[0,row] = np.corrcoef(fr, fp)[0, 1]
-            ccs[1,row] = np.corrcoef(br, bp)[0, 1]
-            ccs[2,row] = np.corrcoef(dr, dp)[0, 1]
+            ccs[0,row],ps[0,row] = pearsonr(fr, fp)
+            ccs[1,row],ps[1,row] = pearsonr(br, bp)
+            ccs[2,row],ps[2,row] = pearsonr(dr, dp)
 
             if len(fr)>N:
                 idx = np.linspace(0, len(fr)-1, N, dtype=int)
             else:
                 idx = np.arange(len(fr)).astype(int)
             ax[0].scatter(fr.iloc[idx], fp.iloc[idx], s=2)
-            ax[0].set_title(f"r={ccs[0,row]:.3f} mse={np.std(fr-fp)/np.std(fr):.3f}")
+            ax[0].set_title(f"r={ccs[0,row]:.3f} p={ps[0,row]:.2e} mse={np.std(fr-fp)/np.std(fr):.2f}")
             ax[0].set_xlim([-0.1, 1.5])
             ax[0].set_ylim([-0.1, 1.5])
             ax[0].set_ylabel(label + ' w_fg')
@@ -410,26 +435,51 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
             ax[1].scatter(br.iloc[idx], bp.iloc[idx], s=2)
             ax[1].set_xlim([-0.1, 1.5])
             ax[1].set_ylim([-0.1, 1.5])
-            ax[1].set_title(f"r={ccs[1,row]:.3f} mse={np.std(br-bp)/np.std(br):.3f}")
+            ax[1].set_title(f"r={ccs[1,row]:.3f} p={ps[1,row]:.2e} mse={np.std(br-bp)/np.std(br):.2f}")
             ax[1].set_ylabel(label + ' w_bg')
             ax[1].set_xlabel(f'Actual w_bg ({br.mean():.3f})')
 
-            ax[2].scatter(dr.iloc[idx], dp.iloc[idx], s=2)
+            ax[2].scatter(dr.iloc[idx], dp.iloc[idx], s=2, color='black')
             ax[2].set_xlim([-1.2, 1])
             ax[2].set_ylim([-1.2, 1])
-            #ax[2].set_title(f"r={np.corrcoef(dr, dp)[0, 1]:.3f} mse={np.std(dr-dp)/np.std(dr):.3f}")
-            ax[2].set_title(f"r={ccs[2,row]:.3f} mse={np.std(dr-dp):.3f}")
+            ax[2].set_title(f"r={ccs[2,row]:.3f} p={ps[2,row]:.2e} mse={np.std(dr-dp):.2f}")
             ax[2].set_ylabel(f'{label} relative gain ({dp.mean():.3f})')
             ax[2].set_xlabel(f'Actual relative gain ({dr.mean():.3f})')
 
         for col,lab in enumerate(['FG','BG','FG+BG']):
-            axs[-1,col].bar(labels, ccs[col,:])
-            axs[-1,col].set_title(lab)
+            axs[-1, col].bar(labels, ccs[col, :])
+            axs[-1, col].set_title(lab)
 
-        f.suptitle(f'{fig_label} {figlabel} ({area})')
+        fr = cell_epoch_df.loc[rr, 'rwfg']
+        br = cell_epoch_df.loc[rr, 'rwbg']
+        fp1 = cell_epoch_df.loc[rr, 'p1wfg'] * cell_epoch_df.loc[rr, 'sf']
+        bp1 = cell_epoch_df.loc[rr, 'p1wbg'] * cell_epoch_df.loc[rr, 'sf']
+        fp2 = cell_epoch_df.loc[rr, 'p2wfg'] * cell_epoch_df.loc[rr, 'sf']
+        bp2 = cell_epoch_df.loc[rr, 'p2wbg'] * cell_epoch_df.loc[rr, 'sf']
+        dr=fr-br
+        dp1=fp1-bp1
+        dp2=fp2-bp2
+        njacks=20
+        chunksize = int(np.ceil(len(dr) / njacks / 10))
+        chunkcount = int(np.ceil(len(dr) / chunksize / njacks))
+        idx = np.zeros((chunkcount, njacks, chunksize))
+        for jj in range(njacks):
+            idx[:, jj, :] = jj
+        idx = np.reshape(idx, [-1])[:len(dr)]
+        jc = np.zeros((njacks,2))
+        for jj in range(njacks):
+            ff = (idx != jj)
+            jc[jj,0] = np.corrcoef(dp1[ff], dr[ff])[0, 1]
+            jc[jj,1] = np.corrcoef(dp2[ff], dr[ff])[0, 1]
+
+        cc = np.nanmean(jc,axis=0)
+        ee = np.nanstd(jc,axis=0) * np.sqrt(njacks - 1)
+        print(cc,ee)
+        print(cc[0]-cc[1], ee[0]+ee[1])
+        f.suptitle(f"{fig_label} {figlabel} ({area}) (CNN: {cell_epoch_df['CNN'].mean():.3f}, LN: {cell_epoch_df['LN'].mean():.3f})")
         plt.tight_layout()
     
-    return f
+    return f,ccs
 
 
 def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
@@ -607,9 +657,9 @@ if __name__ == '__main__':
     #                    exclude_low_pred=True, fig_label=area)
 
     df_all = load_all_sites(batch=batch, modelnames=modelnames, area=area, show_plots=False)
-    f = plot_olp_preds(df_all, minresp=0.05, mingain=0.01, maxgain=1.1,
+    f,ccs = plot_olp_preds(df_all, minresp=0.05, mingain=0.01, maxgain=1.15,
                        exclude_low_pred=True, fig_label=area, split_space=False)
-    f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_relgain_comp_nolog.pdf')
+    #f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_relgain_comp_nolog.pdf')
 
     f=pred_comp(batch, modelnames)
-    f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')
+    #f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')

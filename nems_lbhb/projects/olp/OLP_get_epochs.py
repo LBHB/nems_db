@@ -35,7 +35,8 @@ def get_rec_epochs(parmfile=None, fs=100, rec=None):
 
     stim_epochs = [e for e in stim_epochs
                    if (not e.startswith("STIM_cat")) & (not e.startswith("STIM_00cat")) &
-                   (not e.startswith("STIM_NULL:1+cat")) & (not e.startswith("STIM_NULL:1+00cat"))]
+                   (not e.startswith("STIM_NULL:1+cat")) & (not e.startswith("STIM_NULL:1+00cat")) &
+                   (not "-0.24" in e)]
 
     twostims = [epo for epo in stim_epochs if 'null' not in epo]
 
