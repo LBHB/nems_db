@@ -16,7 +16,7 @@ from nems0 import recording
 from nems0.fitters.api import scipy_minimize
 from nems0.signal import RasterizedSignal
 import nems0.epoch as ep
-from nems import Model
+from nems.tools import json
 from nems.models import LN
 from nems_lbhb.projects.spatial.models import LN_Tiled_STRF
 
@@ -31,10 +31,14 @@ log = logging.getLogger(__name__)
 
 # testing binaural NAT with various model architectures.
 batch=338
-siteid="CLT041c"
-siteid="PRN021a"
-siteid="PRN031a"
+siteids,cellids=db.get_batch_sites(batch)
 
+siteid="CLT041c"
+siteid="PRN031a"
+siteid="PRN014b"
+siteid="CLT013a"
+siteid="SLJ021a"
+siteid="PRN021a"
 
 # uncomment one of these lines to choose a different stimulus representation
 #loadkey = "gtgram.fs100.ch18.bin10"   # binaural + HRTF
@@ -47,7 +51,7 @@ loadkey = "gtgram.fs100.ch18.bin100"   # binaural allocentric
 architecture = "fullpop"
 
 time_lags = 16
-rank = 6
+rank = 10
 
 recording_uri = generate_recording_uri(cellid=siteid, batch=batch, loadkey=loadkey)
 rec = recording.load_recording(recording_uri)
@@ -127,9 +131,31 @@ print(f"prediction correlation={np.round(r,2)}")
 
 
 # display fit result
-f1=strf.plot_strf(layer=1)
-f2=strf.plot_strf(labels=ctx['est']['resp'].chans)
+labels = [f"{c[8:]} {rr:.3f}" for c,rr in zip(ctx['est']['resp'].chans,r)]
 
-# f.savefig(f'/tmp/{cellid}_strf.jpg')
+f1=strf.plot_strf(layer=1, plot_nl=True)
+f2=strf.plot_strf(labels=labels)
+f2.suptitle(strf.modelname)
+
+s = strf.get_strf()
+hcontra = s[:18,:,:]
+hipsi = s[18:,:,:]
+hsum = (hcontra+hipsi).std(axis=(0,1)) #/ s.std(axis=(0,1))
+hdiff = (hcontra-hipsi).std(axis=(0,1)) #/ s.std(axis=(0,1))
+
+plt.figure()
+plt.scatter(hsum,hdiff)
+mm = np.max(np.concatenate((hsum,hdiff)))
+
+plt.plot([0,mm],[0,mm],'--')
+plt.xlabel('std(sum)')
+plt.ylabel('std(diff)')
+
+# save
+json.save_model(strf, f'/tmp/modelspec_{siteid}_popstrf.json')
+
+# load
+model = json.load_model(f'/tmp/modelspec_{siteid}_popstrf.json')
+
 
 
