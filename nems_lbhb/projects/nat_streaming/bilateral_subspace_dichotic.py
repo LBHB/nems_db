@@ -499,7 +499,6 @@ def subspace_matrices(respA, respB, source='largest', stim='both', svn=['signal'
 
 # create dataframe
 badfiles = []
-model_dataframes = []
 stims = ['bilateral', 'mono']
 for stim in stims:
      for parmfile in BNT_regular_parmfiles:
@@ -512,7 +511,6 @@ for stim in stims:
           resp=rec['resp'].rasterize()
 
           print(parmfile, resp.chans)
-
 
           # grab A1 units only
           try:
@@ -551,132 +549,142 @@ for stim in stims:
           respA_high = respA.extract_channels(list(compress(respA.chans, highA)))
           respB_high = respB.extract_channels(list(compress(respB.chans, highB)))
 
+          svn = ['noise', 'signal']
           s1, s1_inds, s1_chans, s2, s2_inds, s2_chans, t, t_inds, t_chans = subspace_matrices(respA, respB,
                                                                                                source='largest',
                                                                                                stim=stim,
-                                                                                               svn=['noise', 'signal'])
+                                                                                               svn=svn)
           # subspace analysis
-
-          cost_function = 'squared_error'
-          fitter = 'tf'
-
-          # input
-          X = s1[1]
-          # target same side
-          Y = s2[1]
-          # target opposite side
-          Y2 = t[1]
-
-          input_count = X.shape[1]
-          output_count = Y.shape[1]
-
-          # store model predictions and true data for each jackknife to plot performance
-          for i in range(12):
-               acount = i + 1  # rank of model
-               layers = [
-                    WeightChannels(shape=(input_count, acount), input='input', output='target'),
-                    WeightChannels(shape=(acount, output_count), input='target', output='target'),
-                    LevelShift(shape=(1, output_count), input='target', output='target'),
-               ]
+          for resptype in svn:
+               model_dataframes = []
+               cost_function = 'squared_error'
                fitter = 'tf'
-               fitter_options = {'cost_function': cost_function,  # 'nmse'
-                                 'early_stopping_tolerance': 1e-3,
-                                 'validation_split': 0,
-                                 'learning_rate': 1e-2, 'epochs': 3000
-                                 }
-               fitter_options2 = {'cost_function': cost_function,
-                                  'early_stopping_tolerance': 1e-4,
-                                  'validation_split': 0,
-                                  'learning_rate': 1e-3, 'epochs': 8000
-                                  }
 
-               model = Model(layers=layers)
-               model.name = f'Site{siteid}_Rank{acount}_{stim}'
-               model = model.sample_from_priors()
-               model = model.sample_from_priors()
-               print(f'Model: {model.name}')
+               if resptype == 'noise':
+                    # input
+                    X = s1[0]
+                    # target same side
+                    Y = s2[0]
+                    # target opposite side
+                    Y2 = t[0]
+               elif resptype == 'signal':
+                    # input
+                    X = s1[1]
+                    # target same side
+                    Y = s2[1]
+                    # target opposite side
+                    Y2 = t[1]
 
-               # only inlcude this if we add a nonlinearity at the output (Relu or Differenceofexp)
-               # log.info('Fit stage 1: without static output nonlinearity')
-               # model.layers[-1].skip_nonlinearity()
-               # model = model.fit(input=input, target=target, backend=fitter,
-               #                   fitter_options=fitter_options)
-               # model.layers[-1].unskip_nonlinearity()
-               # log.info('Fit stage 2: with static output nonlinearity')
+               input_count = X.shape[1]
+               output_count = Y.shape[1]
 
-               ###  do i need to fit a model before jackkniffing? ###
-               # model_AA = model.fit(input=X, target=Y, backend=fitter,
-               #                   verbose=0, fitter_options=fitter_options)
-               # model_AB = model.fit(input=X, target=Y2, backend=fitter,
-               #                   verbose=0, fitter_options=fitter_options)
-               jack_samples = 10
-               jackknife_iterator = JackknifeIterator(input=X, target=Y, samples=jack_samples, axis=0)
-               jackknife_iteratorAB = JackknifeIterator(input=X, target=Y2, samples=jack_samples, axis=0)
-               #
-               # jackknife_iterator.reset_iter()
-               # model_fit_list_AA=[]
-               # for j in jackknife_iterator:
-               #      model_fit_list_AA.append(model.fit(input=j['input'], target=j['target'], backend=fitter,
-               #                           verbose=0, fitter_options=fitter_options))
-               ###
+               # store model predictions and true data for each jackknife to plot performance
+               for i in range(12):
+                    acount = i + 1  # rank of model
+                    layers = [
+                         WeightChannels(shape=(input_count, acount), input='input', output='target'),
+                         WeightChannels(shape=(acount, output_count), input='target', output='target'),
+                         LevelShift(shape=(1, output_count), input='target', output='target'),
+                    ]
+                    fitter = 'tf'
+                    fitter_options = {'cost_function': cost_function,  # 'nmse'
+                                      'early_stopping_tolerance': 1e-3,
+                                      'validation_split': 0,
+                                      'learning_rate': 1e-2, 'epochs': 3000
+                                      }
+                    fitter_options2 = {'cost_function': cost_function,
+                                       'early_stopping_tolerance': 1e-4,
+                                       'validation_split': 0,
+                                       'learning_rate': 1e-3, 'epochs': 8000
+                                       }
 
-               # We can then fit this iterator directly and return a list of fitted model
-               # This will fit range(0, samples) models with given masks before returning a list of fitted models
-               jackknife_iterator.reset_iter()
-               model_fit_list_AA = jackknife_iterator.get_fitted_jackknifes(model, backend=fitter,
-                                                                            verbose=0, fitter_options=fitter_options2)
-               jackknife_inputs_AA = [jackknife_iterator.get_inverse_jackknife(X, jackknife_iterator.mask_list[j]) for j in
-                                      range(jack_samples)]
-               jackknife_targets_AA = [jackknife_iterator.get_inverse_jackknife(Y, jackknife_iterator.mask_list[j]) for j in
-                                       range(jack_samples)]
+                    model = Model(layers=layers)
+                    model.name = f'Site{siteid}_{resptype}_Rank{acount}_{stim}'
+                    model = model.sample_from_priors()
+                    model = model.sample_from_priors()
+                    print(f'Model: {model.name}')
 
-               jackknife_iteratorAB.reset_iter()
-               model_fit_list_AB = jackknife_iteratorAB.get_fitted_jackknifes(model, backend=fitter,
-                                                                              verbose=0, fitter_options=fitter_options2)
-               jackknife_inputs_AB = [jackknife_iteratorAB.get_inverse_jackknife(X, jackknife_iteratorAB.mask_list[j]) for j
-                                      in
-                                      range(jack_samples)]
-               jackknife_targets_AB = [jackknife_iterator.get_inverse_jackknife(Y2, jackknife_iteratorAB.mask_list[j]) for j
-                                       in
-                                       range(jack_samples)]
+                    # only inlcude this if we add a nonlinearity at the output (Relu or Differenceofexp)
+                    # log.info('Fit stage 1: without static output nonlinearity')
+                    # model.layers[-1].skip_nonlinearity()
+                    # model = model.fit(input=input, target=target, backend=fitter,
+                    #                   fitter_options=fitter_options)
+                    # model.layers[-1].unskip_nonlinearity()
+                    # log.info('Fit stage 2: with static output nonlinearity')
 
-               # test on inverse jackknifes and return predictions
-               jack_predicts_AA = []
-               jack_predicts_AB = []
-               for j in range(jack_samples):
-                    jack_predicts_AA.append(model_fit_list_AA[j].predict(jackknife_inputs_AA[j]))
-                    jack_predicts_AB.append(model_fit_list_AB[j].predict(jackknife_inputs_AB[j]))
+                    ###  do i need to fit a model before jackkniffing? ###
+                    # model_AA = model.fit(input=X, target=Y, backend=fitter,
+                    #                   verbose=0, fitter_options=fitter_options)
+                    # model_AB = model.fit(input=X, target=Y2, backend=fitter,
+                    #                   verbose=0, fitter_options=fitter_options)
+                    jack_samples = 10
+                    jackknife_iterator = JackknifeIterator(input=X, target=Y, samples=jack_samples, axis=0)
+                    jackknife_iteratorAB = JackknifeIterator(input=X, target=Y2, samples=jack_samples, axis=0)
+                    #
+                    # jackknife_iterator.reset_iter()
+                    # model_fit_list_AA=[]
+                    # for j in jackknife_iterator:
+                    #      model_fit_list_AA.append(model.fit(input=j['input'], target=j['target'], backend=fitter,
+                    #                           verbose=0, fitter_options=fitter_options))
+                    ###
 
-               # save models to /auto/users/wingertj/models
-               for j, mod in enumerate(model_fit_list_AA):
-                    save_model(mod, model_save_path / f"{mod.name}_AA_Jackknife{j+1}")
-               for j, mod in enumerate(model_fit_list_AB):
-                    save_model(mod, model_save_path / f"{mod.name}_AB_Jackknife{j+1}")
+                    # We can then fit this iterator directly and return a list of fitted model
+                    # This will fit range(0, samples) models with given masks before returning a list of fitted models
+                    jackknife_iterator.reset_iter()
+                    model_fit_list_AA = jackknife_iterator.get_fitted_jackknifes(model, backend=fitter,
+                                                                                 verbose=0, fitter_options=fitter_options2)
+                    jackknife_inputs_AA = [jackknife_iterator.get_inverse_jackknife(X, jackknife_iterator.mask_list[j]) for j in
+                                           range(jack_samples)]
+                    jackknife_targets_AA = [jackknife_iterator.get_inverse_jackknife(Y, jackknife_iterator.mask_list[j]) for j in
+                                            range(jack_samples)]
 
-               jack_cc_AA = []
-               jack_cc_AB = []
-               for j in range(jack_samples):
-                    jack_cc_AA.append(
-                         np.array([np.corrcoef(jack_predicts_AA[j][:, i], jackknife_targets_AA[j][:, i])[0, 1] for i in range(output_count)]))
-                    jack_cc_AB.append(
-                         np.array([np.corrcoef(jack_predicts_AB[j][:, i], jackknife_targets_AB[j][:, i])[0, 1] for i in range(output_count)]))
+                    jackknife_iteratorAB.reset_iter()
+                    model_fit_list_AB = jackknife_iteratorAB.get_fitted_jackknifes(model, backend=fitter,
+                                                                                   verbose=0, fitter_options=fitter_options2)
+                    jackknife_inputs_AB = [jackknife_iteratorAB.get_inverse_jackknife(X, jackknife_iteratorAB.mask_list[j]) for j
+                                           in
+                                           range(jack_samples)]
+                    jackknife_targets_AB = [jackknife_iterator.get_inverse_jackknife(Y2, jackknife_iteratorAB.mask_list[j]) for j
+                                            in
+                                            range(jack_samples)]
 
-               d = {
-                    'model_names': [f'{mod.name}_AA_Jackknife{j + 1}' for j, mod in enumerate(model_fit_list_AA)] + [f'{mod.name}_AB_Jackknife{j + 1}' for j, mod in enumerate(model_fit_list_AB)],
-                    'model_save_path': [model_save_path / f"{mod.name}_AA_Jackknife{j+1}" for j, mod in enumerate(model_fit_list_AA)] + [model_save_path / f"{mod.name}_AB_Jackknife{j+1}" for j, mod in enumerate(model_fit_list_AB)],
-                    'jackknife': [j+1 for j in range(jack_samples)] + [j+1 for j in range(jack_samples)],
-                    'mean_model_performance': [np.mean(jack_cc_AA[i]) for i in range(jack_samples)] + [np.mean(jack_cc_AB[i]) for i in range(jack_samples)],
-                    'cell_model_performance': jack_cc_AA + jack_cc_AB,
-                    'model_test_input': jackknife_inputs_AA + jackknife_inputs_AB,
-                    'model_test_targets': jackknife_targets_AA + jackknife_targets_AB,
-                    'model_test_predictions': jack_predicts_AA + jack_predicts_AB,
-                    'stim': [stim for j in range(jack_samples*2)]
-               }
-               rank_dataframe = pd.DataFrame(data=d)
-               model_dataframes.append(rank_dataframe)
+                    # test on inverse jackknifes and return predictions
+                    jack_predicts_AA = []
+                    jack_predicts_AB = []
+                    for j in range(jack_samples):
+                         jack_predicts_AA.append(model_fit_list_AA[j].predict(jackknife_inputs_AA[j]))
+                         jack_predicts_AB.append(model_fit_list_AB[j].predict(jackknife_inputs_AB[j]))
 
-     subspace_dataframe = pd.concat(model_dataframes)
-     subspace_dataframe.to_pickle(data_save_path/f'subspace_df_signal_{stim}.pkl')
+                    # save models to /auto/users/wingertj/models
+                    for j, mod in enumerate(model_fit_list_AA):
+                         save_model(mod, model_save_path / f"{mod.name}_AA_Jackknife{j+1}")
+                    for j, mod in enumerate(model_fit_list_AB):
+                         save_model(mod, model_save_path / f"{mod.name}_AB_Jackknife{j+1}")
+
+                    jack_cc_AA = []
+                    jack_cc_AB = []
+                    for j in range(jack_samples):
+                         jack_cc_AA.append(
+                              np.array([np.corrcoef(jack_predicts_AA[j][:, i], jackknife_targets_AA[j][:, i])[0, 1] for i in range(output_count)]))
+                         jack_cc_AB.append(
+                              np.array([np.corrcoef(jack_predicts_AB[j][:, i], jackknife_targets_AB[j][:, i])[0, 1] for i in range(output_count)]))
+
+                    d = {
+                         'model_names': [f'{mod.name}_AA_Jackknife{j + 1}' for j, mod in enumerate(model_fit_list_AA)] + [f'{mod.name}_AB_Jackknife{j + 1}' for j, mod in enumerate(model_fit_list_AB)],
+                         'model_save_path': [model_save_path / f"{mod.name}_AA_Jackknife{j+1}" for j, mod in enumerate(model_fit_list_AA)] + [model_save_path / f"{mod.name}_AB_Jackknife{j+1}" for j, mod in enumerate(model_fit_list_AB)],
+                         'jackknife': [j+1 for j in range(jack_samples)] + [j+1 for j in range(jack_samples)],
+                         'mean_model_performance': [np.mean(jack_cc_AA[i]) for i in range(jack_samples)] + [np.mean(jack_cc_AB[i]) for i in range(jack_samples)],
+                         'cell_model_performance': jack_cc_AA + jack_cc_AB,
+                         'model_test_input': jackknife_inputs_AA + jackknife_inputs_AB,
+                         'model_test_targets': jackknife_targets_AA + jackknife_targets_AB,
+                         'model_test_predictions': jack_predicts_AA + jack_predicts_AB,
+                         'stim': [stim for j in range(jack_samples*2)]
+                    }
+                    rank_dataframe = pd.DataFrame(data=d)
+                    model_dataframes.append(rank_dataframe)
+
+               subspace_dataframe = pd.concat(model_dataframes)
+               subspace_dataframe.to_pickle(data_save_path/f'subspace_df_{siteid}_{resptype}_{stim}.pkl')
 
 
 # cost_function='squared_error'

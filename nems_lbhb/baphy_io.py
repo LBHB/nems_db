@@ -482,11 +482,12 @@ def continuous_data_unpacking(continuous_data):
     data = np.vstack(data)
     channels = np.concatenate(channels)
 
+    # kludge added to make format dictionary of lists which is used for multiple probes - JCW
     return {
-        'header': header,
-        'timestamps': timestamps,
-        'data': data,
-        'channels': channels,
+        'header': [header],
+        'timestamps': [timestamps],
+        'data': [data],
+        'channels': [channels],
     }
 
 
@@ -1220,7 +1221,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 chans = list(chans)
             idx = all_chans[chans].tolist()
             selected_data = np.take(data_files, idx)
-            recChans1 = [ch.split('CH')[1] for ch in recChans_list]
+            recChans1 = [int(ch.split('CH')[1]) for ch in recChans_list]
             selected_chans.append(np.take(recChans1, idx))
             # to make things match between neuropixels and UCLA(which already should be in the physical channel nums) remake the selected_chans with different name
             selected_chans_physical.append(selected_chans)
@@ -1249,7 +1250,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             if version[1] < 6:
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
-                timestamp0 = [int(data['timestamps'][i][0] / int(data['header']['sampleRate']) * rasterfs for i in range(len(data['timestamps'])))]
+                timestamp0 = [int(data['timestamps'][i][0] / int(data['header'][i]['sampleRate']) * rasterfs for i in range(len(data['timestamps'])))]
 
             elif version[1] >=6:
                 data = load_openephys(tmppath, dtype='continuous')
@@ -1281,7 +1282,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 log.info('no CH in filename, loading without it')
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_data_unpacking(data)
-        timestamp0 = [int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)]
+        timestamp0 = [int(data['timestamps'][i][0] / int(data['header'][i]['sampleRate']) * rasterfs) for i in range(len(data['timestamps']))]
 
     log.info(f'timestamp0 is {timestamp0}')
 
