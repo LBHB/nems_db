@@ -182,15 +182,15 @@ def free_scatter_sum(rec):
 
     return f
 
-def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
-                   f_min=200, f_max=20000, channels=None):
+def stim_filt_hrtf(rec, signal='stim', hrtf_format='az', smooth_win=2,
+                   f_min=200, f_max=20000, channels=None, **ctx):
 
     # require (stacked) binaural stim
     if channels is None:
-        channels = int(rec['stim'].shape[0]/2)
-    rasterfs = rec['stim'].fs
-    stimcount = int(rec['stim'].shape[0]/channels)
-    log.info(f"HRTF: stim is {channels} x {stimcount}")
+        channels = int(rec[signal].shape[0]/2)
+    rasterfs = rec[signal].fs
+    stimcount = int(rec[signal].shape[0]/channels)
+    log.info(f"HRTF: {signal} is {channels} x {stimcount}")
 
     L0, R0, c, A = load_hrtf(format=hrtf_format, fmin=f_min, fmax=f_max, num_freqs=channels)
 
@@ -223,9 +223,9 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
     gainl1 = g(theta1)[:, 0, :] + gaind1
     gainl2 = g(theta2)[:, 0, :] + gaind2
 
-    s1 = rec['stim'].as_continuous()[:channels, :]
+    s1 = rec[signal].as_continuous()[:channels, :]
     if stimcount>1:
-        s2 = rec['stim'].as_continuous()[channels:, :]
+        s2 = rec[signal].as_continuous()[channels:, :]
     else:
         s2 = np.zeros_like(s1)
 
@@ -239,9 +239,9 @@ def stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
 
     binaural_stim = np.concatenate([r12,l12], axis=0)
     newrec = rec.copy()
-    newrec['stim'] = newrec['stim'].rasterize()
-    newrec['stim'] = newrec['stim']._modified_copy(data=binaural_stim)
-    newrec['disttheta'] = newrec['stim']._modified_copy(
+    newrec[signal] = newrec[signal].rasterize()
+    newrec[signal] = newrec[signal]._modified_copy(data=binaural_stim)
+    newrec['disttheta'] = newrec[signal]._modified_copy(
         data=np.concatenate([d1,theta1,d2,theta2],axis=0),
         chans=['d1','theta1','d2','theta2'])
     return {'rec': newrec}

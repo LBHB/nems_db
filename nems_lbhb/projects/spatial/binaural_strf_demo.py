@@ -33,12 +33,12 @@ log = logging.getLogger(__name__)
 batch=338
 siteids,cellids=db.get_batch_sites(batch)
 
-siteid="CLT041c"
 siteid="PRN031a"
 siteid="PRN014b"
 siteid="CLT013a"
 siteid="SLJ021a"
 siteid="PRN021a"
+siteid="CLT041c"
 
 # uncomment one of these lines to choose a different stimulus representation
 #loadkey = "gtgram.fs100.ch18.bin10"   # binaural + HRTF
@@ -135,7 +135,6 @@ labels = [f"{c[8:]} {rr:.3f}" for c,rr in zip(ctx['est']['resp'].chans,r)]
 
 f1=strf.plot_strf(layer=1, plot_nl=True)
 f2=strf.plot_strf(labels=labels)
-f2.suptitle(strf.modelname)
 
 s = strf.get_strf()
 hcontra = s[:18,:,:]
@@ -150,6 +149,7 @@ mm = np.max(np.concatenate((hsum,hdiff)))
 plt.plot([0,mm],[0,mm],'--')
 plt.xlabel('std(sum)')
 plt.ylabel('std(diff)')
+plt.title(strf.name)
 
 # save
 json.save_model(strf, f'/tmp/modelspec_{siteid}_popstrf.json')
