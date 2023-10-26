@@ -34,6 +34,8 @@ import glob
 import nems0.epoch as ep
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+import itertools
+
 
 
 def plot_synthetic_weights(weight_df, plotA='weightsA', plotB='weightsB', areas=None, thresh=0.03, quads=3,
@@ -1839,6 +1841,7 @@ def synthetic_sound_metric_scatters(filt, x_metrics, x_labels=None, synth_show=[
     '''2023_07_27. Reworked osyn.sound_metric_scatter_combined() so that the rows are the different areas and the
     columns are the metrics you give it.'''
     areas = filt.area.unique().tolist()
+    filt = filt.drop(labels='fit_segment', axis=1)
 
     area_sound_dict = {}
     for aa in areas:
@@ -1850,7 +1853,7 @@ def synthetic_sound_metric_scatters(filt, x_metrics, x_labels=None, synth_show=[
     ylim_max = np.max([sound_df[f'BG_rel_gain_avg{suffix}'].max(), sound_df[f'FG_rel_gain_avg{suffix}'].max()])
     ylim_min = np.min([sound_df[f'BG_rel_gain_avg{suffix}'].min(), sound_df[f'FG_rel_gain_avg{suffix}'].min()])
 
-    fig, axes = plt.subplots(len(areas), len(x_metrics), figsize=(len(x_metrics) *4, len(areas) *5), sharey=True, sharex='col')
+    fig, axes = plt.subplots(len(areas), len(x_metrics), figsize=(len(x_metrics) *3, len(areas) *5), sharey='row', sharex='col')
     ax = axes.ravel()
 
     count = 0

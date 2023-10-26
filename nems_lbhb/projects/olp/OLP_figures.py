@@ -448,7 +448,8 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
     specB = plt.subplot2grid((18, 3), (2, 0), rowspan=2, colspan=6)
     ax = [specA, specB, psth]
 
-    tags = ['Background (BG)', 'Foreground (FG)', 'BG+FG Combo']
+    # tags = ['Background (BG)', 'Foreground (FG)', 'BG+FG Combo']
+    tags = ['BG', 'FG', 'BG+FG']
     colors = ['deepskyblue','yellowgreen','dimgray']
 
     #Get this particular row out for some stuff down the road
@@ -493,18 +494,19 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
     # Plot the linear sum line
     if sigma:
         ax[2].plot(time, sf.gaussian_filter1d(ls * rec['resp'].fs, sigma), color='dimgray',
-                ls='--', label='Linear Sum')
+                ls='--', label='Lin. Sum')
     if not sigma:
-        ax[2].plot(time, ls * rec['resp'].fs, color='dimgray', ls='--', label='Linear Sum')
+        ax[2].plot(time, ls * rec['resp'].fs, color='dimgray', ls='--', label='Lin. Sum')
     ax[2].set_xlim(-0.2, (dur + 0.3))        # arbitrary window I think is nice
     ymin, ymax = ax[2].get_ylim()
 
-    ax[2].set_ylabel('spk/s', fontweight='bold', size=10)
-    ax[2].legend(loc='upper right', fontsize=6)
+    ax[2].set_ylabel('spk/s', fontweight='bold', size=12)
+    ax[2].legend(loc='upper right', fontsize=8)
     ax[2].vlines([0, dur], ymin, ymax, colors='black', linestyles=':')
     ax[2].set_ylim(ymin, ymax)
-    ax[2].set_xlabel('Time (s)', fontweight='bold', size=10)
+    ax[2].set_xlabel('Time (s)', fontweight='bold', size=12)
     ax[2].spines['top'].set_visible(True), ax[2].spines['right'].set_visible(True)
+    ax[2].set_xticks([0, 0.5, 1])
     # ax[2].vlines(params['SilenceOnset'], ymax * .9, ymax, colors='black', linestyles='-', lw=0.25)
 
     if title:
@@ -539,7 +541,7 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
     ax[0].spines['top'].set_visible(False), ax[0].spines['bottom'].set_visible(False)
     ax[0].spines['left'].set_visible(False), ax[0].spines['right'].set_visible(False)
     ax[0].set_ylabel(f"BG: {row.BG}", rotation=0, fontweight='bold',
-                     size=8, labelpad=-35)
+                     size=12, labelpad=-25)
 
     sfs, W = wavfile.read(fg_path)
     spec = gtgram(W, sfs, 0.02, 0.01, 48, 100, 24000)
@@ -551,7 +553,7 @@ def psths_with_specs(df, cellid, bg, fg, batch=340, bin_kind='11', synth_kind='N
     ax[1].spines['top'].set_visible(False), ax[1].spines['bottom'].set_visible(False)
     ax[1].spines['left'].set_visible(False), ax[1].spines['right'].set_visible(False)
     ax[1].set_ylabel(f"FG: {row.FG}", rotation=0, fontweight='bold',
-                     size=8, labelpad=-35)
+                     size=12, labelpad=-25)
 
     # This just makes boxes around only the important part of the spec axis. So it all lines up.
     ymin, ymax = ax[1].get_ylim()
@@ -697,7 +699,7 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
 
         epochs.append('Linear Sum')
 
-        fig, axes = plt.subplots(figsize=(9, 12))
+        fig, axes = plt.subplots(figsize=(9, 6))
         BGheat = plt.subplot2grid((11, 6), (0, 0), rowspan=2, colspan=5)
         FGheat = plt.subplot2grid((11, 6), (2, 0), rowspan=2, colspan=5)
         lsheat = plt.subplot2grid((11, 6), (4, 0), rowspan=2, colspan=5)
@@ -727,6 +729,7 @@ def response_heatmaps_comparison(df, site, bg, fg, cellid=None, batch=340, bin_k
 
         # ax[2].set_xlabel('Time (s)', fontweight='bold', fontsize=9)
         ax[0].set_xticks([]), ax[1].set_xticks([]), ax[2].set_xticks([])
+        ax[3].set_xticks([0, 0.5, 1])
         # Add the colorbar to the axis to the right of these, the diff will get separate cbar
         fig.colorbar(dd, ax=ax[4], aspect=10)
         ax[4].spines['top'].set_visible(False), ax[4].spines['right'].set_visible(False)
@@ -880,7 +883,10 @@ def snr_weight_scatter(filt, ycol='weightsB-weightsA', fr_met='snr', threshold=N
         filt = filt.dropna(axis=0, subset='r')
         filt = filt.loc[filt.r >= r_thresh]
 
-    area_df = filt.loc[filt.area == area]
+    if area:
+        area_df = filt.loc[filt.area == area]
+    else:
+        area_df = filt
 
     if len(ycol.split('-')) == 2:
         one, two = ycol.split('-')
@@ -890,16 +896,28 @@ def snr_weight_scatter(filt, ycol='weightsB-weightsA', fr_met='snr', threshold=N
         area_df['fg_snr-bg_snr'] = area_df['fg_snr'] - area_df['bg_snr']
         xcol= [fr_met]
         colss= {'A1': 'violet', 'PEG': 'coral'}
+        colss = ['violet', 'coral']
         cols = [colss[area]]
-        fig, axes = plt.subplots(1, 1, figsize=(4, 4))
-        axes = [axes]
+        if area:
+            fig, axes = plt.subplots(1, 1, figsize=(4, 4))
+            axes = [axes]
+        else:
+            fig, axes = plt.subplots(1, 2, figsize=(6,6))
+
     else:
         xcol = [f'bg_{fr_met}', f'fg_{fr_met}']
         cols = ['deepskyblue', 'yellowgreen']
         fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True)
 
+    if area:
+        area = [area]
+    else:
+        area = area_df.area.unique().to_list()
+
     for ax, xc, col in zip(axes, xcol, cols):
-        sb.scatterplot(x=xc, y=ycol, data=area_df, ax=ax, s=3, color=col)
+
+        to_plot = area_df.iloc[::10,:]
+        sb.scatterplot(x=xc, y=ycol, data=to_plot, ax=ax, s=3, color=col)
 
         X, Y = area_df[xc], area_df[ycol]
         reg = stats.linregress(X, Y)
@@ -920,8 +938,79 @@ def snr_weight_scatter(filt, ycol='weightsB-weightsA', fr_met='snr', threshold=N
     else:
         axes[0].set_ylabel(ycol, fontsize=12, fontweight='bold')
 
+    # ax.set_aspect('equal')
 
     fig.suptitle(f'{area}: n={len(area_df)}', fontsize=12, fontweight='bold')
+    fig.tight_layout()
+
+
+def snr_weight_scatter_multi_area(filt, ycol='weightsB-weightsA', fr_met='snr', threshold=None, rel_cut=2.5,
+                       snr_threshold=0.12, quads=3, r_thresh=0.4, weight_lims=[-0.5, 2]):
+    '''2023_07_31. Takes a dataframe, filters it, plots the fr/SNR metric against a column you give it.
+    If you want it to subtract weightsA from weightsB just put it in like the default and it deals with it.'''
+    if threshold:
+        filt, _ = ohel.quadrants_by_FR(filt, threshold=threshold, quad_return=quads)
+    if snr_threshold:
+        filt = filt.loc[(filt.bg_snr >= snr_threshold) & (filt.fg_snr >= snr_threshold)]
+    if rel_cut:
+        filt = filt.loc[(filt[f'FG_rel_gain'] <= rel_cut) & (filt[f'FG_rel_gain'] >= -rel_cut)]
+    if weight_lims:
+        filt = filt.loc[((filt[f'weightsA'] >= weight_lims[0]) & (filt[f'weightsA'] <= weight_lims[1])) &
+                        ((filt[f'weightsB'] >= weight_lims[0]) & (filt[f'weightsB'] <= weight_lims[1]))]
+    if r_thresh:
+        filt = filt.dropna(axis=0, subset='r')
+        filt = filt.loc[filt.r >= r_thresh]
+
+    areas = filt.area.unique().tolist()
+    areas.sort()
+
+    if len(ycol.split('-')) == 2:
+        one, two = ycol.split('-')
+        filt[ycol] = (filt[one] - filt[two]).copy()
+
+    if fr_met == 'fg_snr-bg_snr':
+        filt['fg_snr-bg_snr'] = filt['fg_snr'] - filt['bg_snr']
+        xcol = fr_met
+        colss = {'A1': 'violet', 'PEG': 'coral'}
+        # colss = ['violet', 'coral']
+        # cols = [colss[area]]
+        fig, axes = plt.subplots(1, 2, figsize=(6, 6), sharex=True, sharey=True)
+
+    else:
+        xcol = [f'bg_{fr_met}', f'fg_{fr_met}']
+        cols = ['deepskyblue', 'yellowgreen']
+        fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True)
+
+    for ax, ar in zip(axes, areas):
+        area_df = filt.loc[filt.area==ar]
+        to_plot = area_df.iloc[::5, :]
+        sb.scatterplot(x=xcol, y=ycol, data=to_plot, ax=ax, s=3, color=colss[ar])
+
+        X, Y = area_df[xcol], area_df[ycol]
+        reg = stats.linregress(X, Y)
+        x = np.asarray(ax.get_xlim())
+        y = reg.slope * x + reg.intercept
+        ax.plot(x, y, color='dimgrey', label=f"slope: {reg.slope:.3f}\n"
+                                             f"coef: {reg.rvalue:.3f}\n"
+                                             f"p = {reg.pvalue:.3f}")
+        ax.legend()
+
+        ax.set_title(f'{ar}: n={len(area_df)}', fontsize=12, fontweight='bold')
+
+        if fr_met == 'fg_snr-bg_snr':
+            ax.set_xlabel('FG snr - BG snr', fontsize=12, fontweight='bold')
+        else:
+            ax.set_xlabel(xcol, fontsize=12, fontweight='bold')
+
+    if ycol == 'weightsB-weightsA':
+        axes[0].set_ylabel('FG weight - BG weight', fontsize=12, fontweight='bold')
+    else:
+        axes[0].set_ylabel(ycol, fontsize=12, fontweight='bold')
+
+    axes[0].set_ylim(-1.5, 1.5)
+    # ax.set_aspect('equal')
+
+
     fig.tight_layout()
 
 
@@ -995,6 +1084,30 @@ def plot_single_relative_gain_hist(df, threshold=0.05, quad_return=3, synth_kind
     fig.tight_layout()
 
 
+def sound_stat_violin(df, mets, met_labels):
+    '''2023_07_03. Quickly made this as an alternative and more concise version of the sound stat bar plot.
+    This just makes a violin plot of the given statistics you ask for. Make sure you also provide a
+    corresponding list of how you want them to be labeled. DF you pass is the straight df you load
+    and the bad sounds will get taken out in the function and the sound_df generated.'''
+    bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock
+    df = df.loc[df['BG'].apply(lambda x: x not in bads)]
+    df = df.loc[df['FG'].apply(lambda x: x not in bads)]
+    filt = ohel.get_olp_filter(df, kind='sounds', metric=True)
+    sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=False)
+    sounds = sound_df.loc[sound_df.synth_kind=='N']
+
+    fig, ax = plt.subplots(1, len(mets), figsize=(len(mets)*3,4))
+    for cnt, mt in enumerate(mets):
+        sb.violinplot(data=sounds, x="type", y=mt, ax=ax[cnt])
+        ax[cnt].set_xlabel('')
+        ax[cnt].set_xticklabels(sound_df.type.unique().tolist(), fontweight='bold', fontsize=10)
+        ax[cnt].set_ylabel(met_labels[cnt], fontweight='bold', fontsize=10)
+
+        tt = stats.ttest_ind(sounds.loc[sounds.type=='BG'][mt], sounds.loc[sounds.type=='FG'][mt]).pvalue
+        ax[cnt].set_title(f"p={np.around(tt, 5)}")
+    fig.tight_layout()
+
+
 def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1', threshold=0.03,
                          jitter=[0.25,0.2,0.03], snr_threshold=0.12,
                          quad_return=3, metric_filter=None, synth_kind='N', bin_kind='11',
@@ -1051,7 +1164,7 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
     quad['Vocalization'] = quad['Vocalization'].map(markers)
 
     # fig, axes = plt.subplots(1, len(x_metrics), figsize=(len(x_metrics)*5, 6))
-    fig, axes = plt.subplots(1, len(x_metrics), figsize=(10, 5))
+    fig, axes = plt.subplots(1, len(x_metrics), figsize=(8, 5), sharey=True)
 
     for cnt, (ax, met) in enumerate(zip(axes, x_metrics)):
         # Add a column that is the data for that metric, but jittered, for viewability
@@ -1216,7 +1329,7 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
     ymin, ymax = ax.get_ylim()
     xmin, xmax = ax.get_xlim()
     mini, maxi = np.min([ymin, xmin]), np.max([ymax, xmax])
-    ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
+    # ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
 
     Y, X = weight_df.avg_weight, weight_df.avg_supp
     reg = stats.linregress(X, Y)
@@ -1234,9 +1347,153 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
     fig.tight_layout()
 
 
+def all_filter_stats(dff, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0.4, increment=0.2,
+                fr_thresh=0.01, xx='resp'):
+    '''2023_09_28. This is a summary of ofig.snr_scatter(), ofig.r_weight_comp_distribution(), and
+    ofig.weights_supp_comp() for the manuscript.'''
+    areas = dff.area.unique().tolist()
+
+    f = plt.figure(figsize=(12, 8))
+    a1snr = plt.subplot2grid((10, 22), (0, 0), rowspan=5, colspan=5)
+    a1r = plt.subplot2grid((10, 22), (0, 6), rowspan=5, colspan=6)
+    a1rsum = plt.subplot2grid((10, 22), (0, 13), rowspan=5, colspan=2)
+    a1supp = plt.subplot2grid((10, 22), (0, 17), rowspan=5, colspan=5)
+
+    pegsnr = plt.subplot2grid((11, 22), (6, 0), rowspan=5, colspan=5, sharex=a1snr, sharey=a1snr)
+    pegr = plt.subplot2grid((11, 22), (6, 6), rowspan=5, colspan=6)#, sharex=a1r, sharey=a1r)
+    pegrsum = plt.subplot2grid((11, 22), (6, 13), rowspan=5, colspan=2)
+    pegsupp = plt.subplot2grid((11, 22), (6, 17), rowspan=5, colspan=5, sharex=a1supp, sharey=a1supp)
+    ax = [a1snr, a1r, a1rsum, a1supp, pegsnr, pegr, pegrsum, pegsupp]
+    aa=0
+    for AR in areas:
+
+        df = dff.loc[dff.area==AR]
+
+        # fig, ax = plt.subplots(1, 4, figsize=(12,4))
+        to_scatter = df.iloc[::5, :]
+
+        ax[aa].scatter(x=to_scatter[xcol], y=to_scatter[ycol], color='dimgrey', s=1)
+
+        ax[aa].set_xlabel('BG snr', fontsize=8, fontweight='bold')
+        ax[aa].set_ylabel('FG snr', fontsize=8, fontweight='bold')
+        xmin, xmax = ax[aa].get_xlim()
+        ymin, ymax = ax[aa].get_ylim()
+        ax[aa].vlines([snr_thresh], 0, ymax, colors='black', linestyles=':', lw=1)
+        ax[aa].hlines([snr_thresh], 0, xmax, colors='black', linestyles=':', lw=1)
+        ax[aa].set_xlim(0, xmax), ax[aa].set_ylim(0, ymax)
+        size = len(df)
+        snr3 = len(df.loc[(df.bg_snr >= snr_thresh) & (df.fg_snr >= snr_thresh)]) / size * 100
+        snr5 = len(df.loc[(df.bg_snr < snr_thresh) & (df.fg_snr < snr_thresh)]) / size * 100
+        snr2 = len(df.loc[(df.bg_snr < snr_thresh) & (df.fg_snr >= snr_thresh)]) / size * 100
+        snr6 = len(df.loc[(df.bg_snr >= snr_thresh) & (df.fg_snr < snr_thresh)]) / size * 100
+        ax[aa].set_title(f'{df.area.unique()[0]}: thresh={snr_thresh}, n={len(df)}\nAbove: {np.around(snr3,1)}%, Below: {np.around(snr5,1)}%\n'
+                        f'FG Only: {np.around(snr2,1)}%, BG only: {np.around(snr6,2)}%', fontsize=10, fontweight='bold')
+        ax[aa].set_aspect('equal')
+
+        aa+=1
+
+        snr_filt = df.loc[(df.bg_snr >= snr_thresh) & (df.fg_snr >= snr_thresh)]
+
+        incs = np.arange(0, 1, increment)
+        plots = len(incs)
+
+        inc_lims = np.append(incs, 1)
+        off = 0.2
+        totals, total, maxs, stat_dict = {}, 0, [], {}
+        for cnt, inc in enumerate(list(incs)):
+            r_df = snr_filt.dropna(axis=0, subset='r')
+            r_df = r_df.loc[(r_df.r >= inc) & (r_df.r < inc_lims[cnt+1])]
+
+            BG1, FG1 = np.mean(r_df.weightsA), np.mean(r_df.weightsB)
+            BG1sem, FG1sem = stats.sem(r_df.weightsA), stats.sem(r_df.weightsB)
+            ttest1 = stats.ttest_ind(r_df.weightsA, r_df.weightsB)
+
+            ax[aa].bar(cnt-off, BG1, yerr=BG1sem, color='deepskyblue', width=off*2)
+            ax[aa].bar(cnt+off, FG1, yerr=FG1sem, color='yellowgreen', width=off*2)
+
+            bin_name = f"r={np.around(inc, 1)}-{np.around(inc_lims[cnt + 1], 1)}"
+            print(bin_name)
+            totals[bin_name] = len(r_df)
+            total += len(r_df)
+            stat_dict[bin_name] = ttest1.pvalue
+
+        ax[aa].set_xticks(np.arange(0,len(incs)))
+        ax[aa].set_xticklabels([f'{dd}\nn={ee}\n%={np.around((ee/total)*100, 1)}\np={np.around(stat_dict[dd],4)}'
+                               for (dd, ee) in totals.items()], fontsize=5)
+        ax[aa].set_aspect('auto')
+        ax[aa].set_ylabel('Mean Weight', fontweight='bold', fontsize=10)
+
+        aa+=1
+
+        from matplotlib import cm
+        greys = cm.get_cmap('inferno', 12)
+        cols = greys(np.linspace(0, 0.9, len(incs))).tolist()
+        # cols.reverse()
+
+        percents = [(pp/total)*100 for pp in totals.values()]
+        names = [lbl for lbl in list(totals.keys())]
+
+        for cc in range(len(names)):
+            bottom = np.sum(percents[cc+1:])
+            ax[aa].bar('total', height=percents[cc], bottom=bottom, color=cols[cc],
+                         width=1, label=names[cc])#, edgecolor='white')
+
+        ax[aa].legend(names, bbox_to_anchor=(0.8,1.025), loc="upper left")
+        ax[aa].set_ylabel('Percent', fontweight='bold', fontsize=10)
+        ax[aa].set_xticks([])
+        ax[aa].set_xlim(-1,1)
+        # ax[2].set_title(f'snr>={snr_threshold}\nn={total}', fontsize=7)
+
+        aa+=1
+
+        if AR=='A1':
+            col = 'violet' #'indigo'
+        elif AR=='PEG':
+            col = 'coral' #'maroon'
+
+        full_filt, _ = ohel.quadrants_by_FR(snr_filt, threshold=fr_thresh, quad_return=3)
+        full_filt = full_filt.dropna(axis=0, subset='r')
+        full_filt = full_filt.loc[full_filt.r >= r_cut]
+
+        full_filt['avg_weight'] = (full_filt.weightsA + full_filt.weightsB) / 2
+        if xx=='supp':
+            fxull_filt['avg_supp'] = (-full_filt['supp']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
+            xlabel = '(LS - rAB) / rA+rB'
+        elif xx=='resp':
+            full_filt['avg_supp'] = (full_filt['combo_FR']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
+            xlabel = 'rAB / (rA + rB)'
+            # weight_df = weight_df.loc[(weight_df.avg_supp >= 0) & (weight_df.avg_supp <= 2)]
+
+        plot_filt = full_filt.iloc[::3,:]
+
+        # from scipy.stats import pearsonr
+        # corr, pp = pearsonr(quad.avg_supp, quad.avg_weight)
+        ax[aa].scatter(x=plot_filt.avg_supp, y=plot_filt.avg_weight, s=1, color=col)
+        ax[aa].set_xlabel(xlabel, fontweight='bold', fontsize=10)
+        ax[aa].set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
+        # ax.plot([0,1], [0,1], color='black')
+        ymin, ymax = ax[aa].get_ylim()
+        xmin, xmax = ax[aa].get_xlim()
+        mini, maxi = np.min([ymin, xmin]), np.max([ymax, xmax])
+        # ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
+
+        Y, X = full_filt.avg_weight, full_filt.avg_supp
+        reg = stats.linregress(X, Y)
+        x = np.asarray(ax[aa].get_xlim())
+        x = np.asarray([x[0]+0.05, x[1]-0.05])
+        y = reg.slope * x + reg.intercept
+        ax[aa].plot(x, y, color='black', label=f"coef: {reg.rvalue:.3f}\n"
+                                              f"p = {reg.pvalue:.3f}")
+        ax[aa].legend()
+
+        aa+=1
+
+    f.tight_layout()
+
+
 def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
                                 weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None,
-                                stat_plot='median', flanks=False):
+                                stat_plot='median', flanks=False, stat_kind='paired', uniform_animal=False):
     '''2022_11_08. Made for SFN/APAN poster panel 4, it displays the different fit epochs across a dataframe labeled
     with multiple different animals. FR and R I used for the poster was 0.03 and 0.6. Strict_r basically should always
     stay True at this point'''
@@ -1255,11 +1512,14 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
             # df['animal'] = df['Vocalization'].map(voc_labels)
         else:
             df['animal'] = [cc.split('_')[0] for cc in df['animal']]
-            colors = ['mediumorchid', 'darkorange', 'limegreen', 'blue', 'goldenrod', 'pink']
+            if uniform_animal==True:
+                colors = ['darkgrey', 'darkgrey', 'darkgrey', 'darkgrey', 'darkgrey', 'darkgrey']
+            else:
+                colors = ['mediumorchid', 'darkorange', 'limegreen', 'blue', 'goldenrod', 'pink']
 
 
     # This can be mushed into one liners using list comprehension and show_suffixes
-    if fr_thresh:
+    if fr_thresh and not snr_threshold:
         quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
                                & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
 
@@ -1270,7 +1530,7 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
                        & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
         print("FR thresh did happen")
 
-    elif snr_threshold:
+    elif snr_threshold and not fr_thresh:
         print("FR thresh didn't happen")
         quad3 = df.loc[(df.bg_snr_start >= snr_threshold) & (df.fg_snr_start >= snr_threshold)
                        & (df.bg_snr_end >= snr_threshold) & (df.fg_snr_end >= snr_threshold)]
@@ -1280,6 +1540,19 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
 
         quad6 = df.loc[(df.bg_snr_start > snr_threshold) & (df.fg_snr_start < snr_threshold)
                        & (df.bg_snr_end > snr_threshold) & (df.fg_snr_end < snr_threshold)]
+    elif snr_threshold and fr_thresh:
+        quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                               & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+        quad3 = quad3.loc[(quad3.bg_snr_start >= snr_threshold) & (quad3.fg_snr_start >= snr_threshold)
+                       & (quad3.bg_snr_end >= snr_threshold) & (quad3.fg_snr_end >= snr_threshold)]
+        quad2 = df.loc[(np.abs(df.bg_FR_start) <= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                       & (np.abs(df.bg_FR_end) <= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+        quad6 = df.loc[(df.bg_FR_start >= fr_thresh) & (np.abs(df.fg_FR_start) <= fr_thresh)
+                       & (df.bg_FR_end >= fr_thresh) & (np.abs(df.fg_FR_end) <= fr_thresh)]
+        quad2 = quad2.loc[(quad2.bg_snr_start < snr_threshold) & (quad2.fg_snr_start > snr_threshold)
+                       & (quad2.bg_snr_end < snr_threshold) & (quad2.fg_snr_end > snr_threshold)]
+        quad6 = quad6.loc[(quad6.bg_snr_start > snr_threshold) & (quad6.fg_snr_start < snr_threshold)
+                       & (quad6.bg_snr_end > snr_threshold) & (quad6.fg_snr_end < snr_threshold)]
     else:
         raise ValueError('Need a threshold for this one, either FR or snr.')
 
@@ -1312,7 +1585,7 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
         if strict_r == True:
             filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
         else:
-            filt = area_df.loc[area_df[f"r{ss}"] >= r_thresh]
+            filt = area_df.loc[area_df["r"] >= r_thresh]
 
         if summary == True:
             alph = 0.35
@@ -1347,10 +1620,18 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
 
             ax[num].legend(fontsize=8, loc='upper right')
 
-        BGsBGe = stats.ttest_ind(filt['weightsA_start'], filt['weightsA_end'])
-        FGsFGe = stats.ttest_ind(filt['weightsB_start'], filt['weightsB_end'])
-        BGsFGs = stats.ttest_ind(filt['weightsA_start'], filt['weightsB_start'])
-        BGeFGe = stats.ttest_ind(filt['weightsA_end'], filt['weightsB_end'])
+
+        if stat_kind=='independent':
+            BGsBGe = stats.ttest_ind(filt['weightsA_start'], filt['weightsA_end'])
+            FGsFGe = stats.ttest_ind(filt['weightsB_start'], filt['weightsB_end'])
+            BGsFGs = stats.ttest_ind(filt['weightsA_start'], filt['weightsB_start'])
+            BGeFGe = stats.ttest_ind(filt['weightsA_end'], filt['weightsB_end'])
+
+        if stat_kind=='paired':
+            BGsBGe = stats.wilcoxon(filt['weightsA_start'], filt['weightsA_end'])
+            FGsFGe = stats.wilcoxon(filt['weightsB_start'], filt['weightsB_end'])
+            BGsFGs = stats.wilcoxon(filt['weightsA_start'], filt['weightsB_start'])
+            BGeFGe = stats.wilcoxon(filt['weightsA_end'], filt['weightsB_end'])
 
         tts = {f"BGsBGe_{aa}": BGsBGe.pvalue, f"FGsFGe_{aa}": FGsFGe.pvalue,
                f"BGsFGs_{aa}": BGsFGs.pvalue, f"BGeFGe_{aa}": BGeFGe.pvalue}
@@ -1461,7 +1742,7 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
                  f"strict_r={strict_r}", fontweight='bold', fontsize=10)
     fig.tight_layout()
 
-    fig, axes = plt.subplots(2, 2, figsize=(13, 6), sharey=True)
+    fig, axes = plt.subplots(2, 2, figsize=(7, 6), sharey=True)
     ax = np.ravel(axes, 'F')
 
     edges = np.arange(-1, 2, .05)
@@ -1650,6 +1931,7 @@ def plot_PSTH_example_progression(batch, cellid, bg, fg, bin_kind='11', synth_ki
     lin = plt.subplot2grid((14, 10), (5, 0), rowspan=4, colspan=10, sharey=iso)
     com = plt.subplot2grid((14, 10), (10, 0), rowspan=4, colspan=10, sharey=iso)
     ax = [iso, lin, com]
+
 
     tags = ['Background (BG)', 'Foreground (FG)', 'BG+FG Combo', 'Linear Sum']
     colors = ['deepskyblue','yellowgreen','dimgray', 'dimgray']
@@ -2379,11 +2661,11 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     nb = nb / nb.sum() * 100
     ax[0].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
     ax[0].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
-    ax[0].legend(('Background', 'Foreground'), fontsize=12, prop=dict(weight='bold'), labelspacing=0.25)
+    ax[0].legend(('BG', 'FG'), fontsize=14, prop=dict(weight='bold'), labelspacing=0.25)
 
-    ax[0].set_ylabel('Percentage of cells', fontweight='bold', fontsize=10)
-    ax[0].set_title(f"{area}, BG+/FG+, n={len(to_plot)}", fontweight='bold', fontsize=10)
-    ax[0].set_xlabel("Weight", fontweight='bold', fontsize=10)
+    ax[0].set_ylabel('Percentage of cells', fontweight='bold', fontsize=12)
+    ax[0].set_title(f"{area}, BG+/FG+, n={len(to_plot)}", fontweight='bold', fontsize=12)
+    ax[0].set_xlabel("Weight", fontweight='bold', fontsize=12)
     ax[0].tick_params(axis='both', which='major', labelsize=8)
     ymin, ymax = ax[0].get_ylim()
 
@@ -2409,14 +2691,14 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
         ax[1].scatter(x=['BG', 'FG'], y=[bg_m, fg_m], color=['deepskyblue', 'yellowgreen'])
         ax[1].errorbar(x=['BG', 'FG'], y=[bg-M, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
 
-    ax[1].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=10)
-    ax[1].set_xticklabels(['BG','FG'], fontsize=8, fontweight='bold')
+    ax[1].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=12)
+    ax[1].set_xticklabels(['BG','FG'], fontsize=10, fontweight='bold')
     ax[1].tick_params(axis='y', which='major', labelsize=8)
     if ttest1.pvalue < 0.001:
         title = 'p<0.001'
     else:
         title = f"{ttest1.pvalue:.3f}"
-    ax[1].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}", fontsize=8)
+    ax[1].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}", fontsize=10)
 
 
     rel_weight = (to_plot.weightsB - to_plot.weightsA) / (to_plot.weightsB + to_plot.weightsA)
@@ -2439,13 +2721,13 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     ax[2].hist(xa[:-1], xa, weights=aa, histtype='step', color='tomato', fill=True)
     ax[2].hist(xb[:-1], xb, weights=bb, histtype='step', color='dodgerblue', fill=True)
 
-    ax[2].legend(('FG Suppressed', 'FG Enhanced'), fontsize=12, prop=dict(weight='bold'), labelspacing=0.25)
-    ax[2].set_ylabel('Percentage of cells', fontweight='bold', fontsize=10)
-    ax[2].set_xlabel("Relative Gain (RG)", fontweight='bold', fontsize=10)
+    ax[2].legend(('FG Suppressed', 'FG Enhanced'), fontsize=14, prop=dict(weight='bold'), labelspacing=0.25)
+    ax[2].set_ylabel('Percentage of cells', fontweight='bold', fontsize=12)
+    ax[2].set_xlabel("Relative Gain (RG)", fontweight='bold', fontsize=12)
     if threshold:
-        ax[2].set_title(f"r >= {r_cut}, FR_thresh >= {threshold}\n% suppressed: {percent_supp}", fontsize=8)
+        ax[2].set_title(f"r >= {r_cut}, FR_thresh >= {threshold}\n% suppressed: {percent_supp}", fontsize=10)
     elif snr_threshold:
-        ax[2].set_title(f"r >= {r_cut}, snr_thresh >= {snr_threshold}\n% suppressed: {percent_supp}", fontsize=8)
+        ax[2].set_title(f"r >= {r_cut}, snr_thresh >= {snr_threshold}\n% suppressed: {percent_supp}", fontsize=10)
     ax[2].set_xlim(-1.75,1.75)
 
     ax[3].scatter(x=to_plot.weightsA[::2], y=to_plot.weightsB[::2], s=0.75, color='dimgrey')
@@ -2454,8 +2736,8 @@ def weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=No
     little, big = np.min([xmin, ymin]), np.max([xmax, ymax])
     ax[3].set_ylim(-0.3, 1.5), ax[3].set_xlim(-0.3, 1.5)
     ax[3].set_yticks([0,0.5,1,1.5]), ax[3].set_xticks([0,0.5,1,1.5])
-    ax[3].set_xlabel('Background Weight', fontsize=10, fontweight='bold')
-    ax[3].set_ylabel('Foreground Weight', fontsize=10, fontweight='bold')
+    ax[3].set_xlabel('BG Weight', fontsize=12, fontweight='bold')
+    ax[3].set_ylabel('FG Weight', fontsize=12, fontweight='bold')
 
 
 def r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshold=0.03, area='A1'):
@@ -2674,7 +2956,13 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area
 
         BG1, FG1 = np.median(area_df.weightsA), np.median(area_df.weightsB)
         BG1sem, FG1sem = stats.sem(area_df.weightsA), stats.sem(area_df.weightsB)
+
+        BG1, BG1sem = jack_mean_err(to_plot.weightsA, do_median=True)
+        FG1, FG1sem = jack_mean_err(to_plot.weightsB, do_median=True)
+
         ttest1 = stats.ttest_ind(area_df.weightsA, area_df.weightsB)
+        ttest1 = stats.wilcoxon(area_df.weightsA, area_df.weightsB)
+
 
         if count == 0:
             ax.bar(cnt-0.2, BG1, yerr=BG1sem, color='deepskyblue', width=0.4, label='Background')
@@ -2707,8 +2995,9 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area
     else:
         ax.set_title(f"{title_list}", fontsize=10)
 
+
 def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], category='kind', mult_comp=3,
-                                    statistic='paired', secondary_area_name='PEG'):
+                                    statistic='paired', secondary_area_name='PEG', group_by_area=True):
     '''2023_07_25. Takes a dataframe that has been filtered using ohel.filter_across_condition() and a list of
     conditions to plot and will make a summary horizontal bar plot of the average relative gains. Use
     mult_comp not being default 1 if you want to make multiple comparisons in each area.'''
@@ -2721,6 +3010,9 @@ def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], categ
         areas.sort(reverse=True)
     else:
         areas.sort()
+
+    if group_by_area==True:
+        areas.sort(reverse=True)
     area_dicts = {dd:filt.loc[filt.area==dd] for dd in areas}
     synth_dicts = [{f'{ar}_{syn}':area_dicts[ar].loc[area_dicts[ar][category] == syn] for syn in kind_show} for ar in areas]
 
@@ -2744,8 +3036,174 @@ def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], categ
                                                           sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
                 elif statistic=='independent':
                     stat_dict[f'{ar}_{ss}'] = stats.mannwhitneyu(sd[f'{ar}_{one}']['FG_rel_gain'],
+                                                              sd[f'{ar}_{two}']['FG_rel_gain'],
+                                                                 nan_policy='omit').pvalue * mult_comp
+
+    kind_show.reverse()
+
+    if category=='kind':
+        kind_dict = {'11': 'BG Contra\nFG Contra', '12': 'BG Contra\nFG Ipsi', '21': 'BG Ipsi\nFG Contra',
+                     '22': 'BG Ipsi\nFG Ipsi'}
+        ylabels = [kind_dict[kk] for kk in kind_show]
+    elif category=='layer':
+        kind_dict = {'13': 'Layer 13', '44': 'Layer 44', '56': 'Layer 56', 'NA': 'Undefined'}
+        ylabels = [kind_dict[kk] for kk in kind_show]
+    elif category=='SNR':
+        kind_dict = {0: '0db', 5: '-5db', 10: '-10db'}
+        ylabels = [kind_dict[kk] for kk in kind_show]
+    elif category=='marmoset':
+        ylabels = []
+    else:
+        ylabels = kind_show
+
+    # fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+    fig, ax = plt.subplots(1, 1, figsize=(len(kind_show)*2, 6))
+    # fig, ax = plt.subplots(1, 1, figsize=(7, 6))
+
+    if group_by_area==False:
+        y_pos_list, a1_tots, peg_tots = [], {}, {}
+        for cnt, ss in enumerate(kind_show):
+            y_pos = cnt+1
+            if cnt==0:
+                ax.barh(y=y_pos+0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
+                        linestyle='None', height=0.4, label=f"A1, n={len(synth_dicts[0][f'A1_{ss}'])}")
+                ax.barh(y=y_pos-0.2, width=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), color='coral',
+                        linestyle='None', height=0.4, label=f"{secondary_area_name}, n={len(synth_dicts[1][f'{secondary_area_name}_{ss}'])}")
+            else:
+                ax.barh(y=y_pos + 0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
+                        linestyle='None', height=0.4)
+                ax.barh(y=y_pos - 0.2, width=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), color='coral',
+                        linestyle='None', height=0.4)
+            ax.errorbar(y=y_pos+0.2, x=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                        xerr=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+            ax.errorbar(y=y_pos-0.2, x=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                        xerr=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+
+            a1_tots[ss], peg_tots[ss] = len(synth_dicts[0][f'A1_{ss}']), len(synth_dicts[1][f'{secondary_area_name}_{ss}'])
+
+            ax.legend(fontsize=10)
+            y_pos_list.append(y_pos)
+            print(f"{synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean()}")
+
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position("right")
+        ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+        ax.set_yticks(y_pos_list)
+        ax.set_yticklabels(ylabels, fontsize=10, fontweight='bold')
+
+        ax.tick_params(axis='x', labelsize=10)
+        ax.set_xlabel("Relative Gain", fontsize=12, fontweight='bold')
+
+    else:
+        ceil = int(np.ceil(len(kind_show) / 2))
+        spacing, width, ar_space = 0.01, 0.1, 0.25
+        diff = spacing + width
+        max = diff * (ceil - 1)
+        positions = [np.around(-max + i * diff, 2) for i in range(len(kind_show))]
+
+        # fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+        y_pos_list, label_list = [], []
+        colors = {'A1': 'violet', 'PEG': 'coral'}
+        for cnt, ss in enumerate(areas):
+            dic = area_dicts[ss]
+            y_pos = (max * 2 + ar_space) * cnt
+            for yy, an in zip(positions, kind_show):
+                an_dict = dic.loc[dic[category] == an]
+
+                ax.barh(y=y_pos + yy, width=an_dict['FG_rel_gain'].mean(), color=colors[ss],
+                        linestyle='None', height=width, label=f"{an}, n={len(an_dict[f'FG_rel_gain'])}")
+                ax.errorbar(y=y_pos + yy, x=an_dict['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                            xerr=an_dict['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+
+                y_pos_list.append(np.around(y_pos + yy, 2))
+                label_list.append(f"{an}, n={len(an_dict['FG_rel_gain'])}")
+
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position("right")
+        ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+        ax.set_yticks(y_pos_list)
+        ax.set_yticklabels(label_list, fontsize=10, fontweight='bold')
+
+        ax.tick_params(axis='x', labelsize=10)
+        ax.set_xlabel("Relative Gain", fontsize=12, fontweight='bold')
+
+
+    if statistic=='independent' and group_by_area==False:
+        legend_labels_a1 = [f'{lay}: n={tot}' for lay, tot in a1_tots.items()]
+        legend_labels_peg = [f'{lay}: n={tot}' for lay, tot in peg_tots.items()]
+        legend_labels_a1.append('A1'), legend_labels_peg.append('PEG')
+        legend_labels_a1.reverse()
+        legend_labels_peg.reverse()
+        lab_a1, lab_peg = '\n'.join(legend_labels_a1), '\n'.join(legend_labels_peg)
+        ax.legend(labels=[lab_a1, lab_peg])
+    if category=='SNR':
+        ax.set_ylabel('BG db relative to FG', fontsize=12, fontweight='bold')
+
+    # ax.set_title(f"{ss} Ref: {weight_df0.filt_by.unique()[0]} - n={len(C)}", fontsize=10, fontweight='bold')
+    fig.tight_layout()
+    if mult_comp:
+        return stat_dict
+
+
+def summary_relative_gain_combine_areas(filt, kind_show=['11','12','21','22'], category='kind', mult_comp=3,
+                                    statistic='paired'):
+    '''2023_09_26. Same as the standard relative gain plots but combines A1 and PEG for stephen's grant.'''
+
+    # Grab the areas that are present in the dataframe, separate the dataframe by area, and make a list of
+    # dictionaries of each synth condition in synth_show for each area
+
+    filt.area = 'All'
+    areas = filt.area.unique().tolist()
+    if category=='marmoset':
+        areas.sort(reverse=True)
+    else:
+        areas.sort()
+    area_dicts = {dd:filt.loc[filt.area==dd] for dd in areas}
+    synth_dicts = [{f'{ar}_{syn}':area_dicts[ar].loc[area_dicts[ar][category] == syn] for syn in kind_show} for ar in areas]
+
+    # Get all comparisons possible given the synth_show parameter
+    if isinstance(kind_show[0], str):
+        c = list(itertools.combinations(kind_show, 2))
+    elif isinstance(kind_show[0], int):
+        kind_strings = [str(dd) for dd in kind_show]
+        c = list(itertools.combinations(kind_strings, 2))
+    stat_combos = ['_'.join(dd) for dd in c]
+
+    # Calculate individual stats for each synthetic combination and area and make one big dict to return
+    if mult_comp and category!='SNR':
+        stat_dict = {}
+        for cnt, ar in enumerate(areas):
+            sd = synth_dicts[cnt]
+            for ss in stat_combos:
+                one, two = ss.split('_')[0], ss.split('_')[1]
+                if statistic=='paired':
+                    stat_dict[f'{ar}_{ss}'] = stats.wilcoxon(sd[f'{ar}_{one}']['FG_rel_gain'],
+                                                          sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
+                elif statistic=='independent':
+                    stat_dict[f'{ar}_{ss}'] = stats.mannwhitneyu(sd[f'{ar}_{one}']['FG_rel_gain'],
                                                               sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
 
+    if category=='SNR':
+        stat_dict = {}
+        for cnt, ar in enumerate(areas):
+            sd = synth_dicts[cnt]
+            for ss in stat_combos:
+                one, two = ss.split('_')[0], ss.split('_')[1]
+                if ss != '0_10':
+                    first = sd[f'{ar}_{one}'].loc[sd[f'{ar}_{one}'].animal=='SLJ']
+                    second = sd[f'{ar}_{two}'].loc[sd[f'{ar}_{two}'].animal=='SLJ']
+                    stat_dict[f'{ar}_{ss}'] = stats.wilcoxon(first['FG_rel_gain'],
+                                                             second['FG_rel_gain']).pvalue * mult_comp
+                else:
+                    if statistic == 'paired':
+                        stat_dict[f'{ar}_{ss}'] = stats.wilcoxon(sd[f'{ar}_{one}']['FG_rel_gain'],
+                                                             sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
+                    elif statistic == 'independent':
+                        stat_dict[f'{ar}_{ss}'] = stats.mannwhitneyu(sd[f'{ar}_{one}']['FG_rel_gain'],
+                                                                 sd[f'{ar}_{two}']['FG_rel_gain']).pvalue * mult_comp
     kind_show.reverse()
 
     if category=='kind':
@@ -2770,21 +3228,15 @@ def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], categ
     for cnt, ss in enumerate(kind_show):
         y_pos = cnt+1
         if cnt==0:
-            ax.barh(y=y_pos+0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
-                    linestyle='None', height=0.4, label=f"A1, n={len(synth_dicts[0][f'A1_{ss}'])}")
-            ax.barh(y=y_pos-0.2, width=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), color='coral',
-                    linestyle='None', height=0.4, label=f"{secondary_area_name}, n={len(synth_dicts[1][f'{secondary_area_name}_{ss}'])}")
+            ax.barh(y=y_pos, width=synth_dicts[0][f'All_{ss}']['FG_rel_gain'].mean(), color='violet',
+                    linestyle='None', height=0.5, label=f"n={len(synth_dicts[0][f'All_{ss}'])}")
         else:
-            ax.barh(y=y_pos + 0.2, width=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), color='violet',
-                    linestyle='None', height=0.4)
-            ax.barh(y=y_pos - 0.2, width=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), color='coral',
-                    linestyle='None', height=0.4)
-        ax.errorbar(y=y_pos+0.2, x=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
-                    xerr=synth_dicts[0][f'A1_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
-        ax.errorbar(y=y_pos-0.2, x=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
-                    xerr=synth_dicts[1][f'{secondary_area_name}_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+            ax.barh(y=y_pos, width=synth_dicts[0][f'All_{ss}']['FG_rel_gain'].mean(), color='violet',
+                    linestyle='None', height=0.5)
+        ax.errorbar(y=y_pos, x=synth_dicts[0][f'All_{ss}']['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                    xerr=synth_dicts[0][f'All_{ss}']['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
 
-        a1_tots[ss], peg_tots[ss] = len(synth_dicts[0][f'A1_{ss}']), len(synth_dicts[1][f'{secondary_area_name}_{ss}'])
+        a1_tots[ss]= len(synth_dicts[0][f'All_{ss}'])
 
         ax.legend(fontsize=10)
         y_pos_list.append(y_pos)
@@ -2799,10 +3251,10 @@ def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], categ
     ax.tick_params(axis='x', labelsize=10)
     ax.set_xlabel("Relative Gain", fontsize=12, fontweight='bold')
 
-    if statistic=='independent':
+    if statistic=='independent' or category=='SNR':
         legend_labels_a1 = [f'{lay}: n={tot}' for lay, tot in a1_tots.items()]
         legend_labels_peg = [f'{lay}: n={tot}' for lay, tot in peg_tots.items()]
-        legend_labels_a1.append('A1'), legend_labels_peg.append('PEG')
+        legend_labels_a1.append('All')
         legend_labels_a1.reverse()
         legend_labels_peg.reverse()
         lab_a1, lab_peg = '\n'.join(legend_labels_a1), '\n'.join(legend_labels_peg)
@@ -3152,7 +3604,7 @@ def example_dynamic_psth(df, cellid, bg, fg, dyn='fh', smooth=True, sigma=1):
     ax[-1].set_xlim(-0.2, 1.3)
 
 
-def plot_dynamic_row_psth(area_df, ii, smooth=True, sigma=1):
+def plot_dynamic_row_psth(area_df, ii, dyn, smooth=True, sigma=1):
     row = area_df.iloc[ii]
 
     if dyn == 'fh':
@@ -3298,3 +3750,228 @@ def plot_dynamic_errors(full_df, dyn_kind='all', snr_threshold=0.12):
     fig.tight_layout()
 
     return time_dict
+
+
+def summary_relative_gain_all_areas_by_animal(weight_df):
+    '''2023_09_22. Shows relative gain for the two areas divided by each animal'''
+    filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
+    areas = filt.area.unique().tolist()
+    areas.sort(reverse=True)
+
+    area_dicts = {dd:filt.loc[filt.area==dd] for dd in areas}
+
+    animals = filt.animal.unique().tolist()
+    animals.sort(reverse=True)
+
+    ceil = int(np.ceil(len(animals) / 2))
+    spacing, width, ar_space = 0.01, 0.1, 0.25
+    diff = spacing + width
+    max = diff * (ceil-1)
+    positions = [np.around(-max+i*diff,2) for i in range(len(animals))]
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+    y_pos_list, label_list = [], []
+    colors = {'A1': 'violet', 'PEG': 'coral'}
+    for cnt, ss in enumerate(areas):
+        dic = area_dicts[ss]
+        y_pos = (max*2+ar_space)*cnt
+        for yy, an in zip(positions, animals):
+            an_dict = dic.loc[dic.animal==an]
+
+            ax.barh(y=y_pos+yy, width=an_dict['FG_rel_gain'].mean(), color=colors[ss],
+                    linestyle='None', height=width, label=f"{an}, n={len(an_dict[f'FG_rel_gain'])}")
+            ax.errorbar(y=y_pos+yy, x=an_dict['FG_rel_gain'].mean(), elinewidth=2, capsize=4,
+                        xerr=an_dict['FG_rel_gain'].sem(), color='black', linestyle='None', yerr=None)
+
+            y_pos_list.append(np.around(y_pos+yy, 2))
+            label_list.append(f"{an}, n={len(an_dict['FG_rel_gain'])}")
+
+        # ax.legend(fontsize=10)
+        # y_pos_list.append(y_pos)
+
+    ax.yaxis.tick_right()
+    ax.yaxis.set_label_position("right")
+    ax.spines['left'].set_visible(False), ax.spines['right'].set_visible(True)
+
+    ax.set_yticks(y_pos_list)
+    ax.set_yticklabels(label_list, fontsize=10, fontweight='bold')
+
+    ax.tick_params(axis='x', labelsize=10)
+    ax.set_xlabel("Relative Gain", fontsize=12, fontweight='bold')
+
+    fig.tight_layout()
+
+
+def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', secondary='PEG'):
+    '''2023_09_22. Plots the same as this function without manuscript on it, but it plots just what I want to show
+    for the figure, whcih is A1 hist, bar, rel gain, PEG bar, rel gain'''
+
+    if secondary:
+        f = plt.figure(figsize=(15, 6))
+        hist = plt.subplot2grid((10, 34), (0, 0), rowspan=5, colspan=8)
+        mean = plt.subplot2grid((10, 34), (0, 10), rowspan=5, colspan=2)
+        relhist = plt.subplot2grid((10, 34), (0, 14), rowspan=5, colspan=7)
+        meanpeg = plt.subplot2grid((10, 34), (0, 23), rowspan=5, colspan=2, sharey=mean)
+        relhistpeg = plt.subplot2grid((10, 34), (0, 27), rowspan=5, colspan=7, sharey=relhist)
+        ax = [hist, mean, relhist, meanpeg, relhistpeg]
+        to_plot = filt.loc[filt.area=='A1']
+        areas = ['A1', secondary]
+
+    else:
+        f = plt.figure(figsize=(15, 6))
+        hist = plt.subplot2grid((10, 34), (0, 0), rowspan=5, colspan=8)
+        mean = plt.subplot2grid((10, 34), (0, 10), rowspan=5, colspan=2)
+        relhist = plt.subplot2grid((10, 34), (0, 14), rowspan=5, colspan=7)
+        ax = [hist, mean, relhist]
+        to_plot = filt.loc[filt.area=='AC']
+        areas = ['AC']
+
+    edges = np.arange(-0.3, 1.5, .05)
+    na, xa = np.histogram(to_plot.weightsA, bins=edges)
+    na = na / na.sum() * 100
+    nb, xb = np.histogram(to_plot.weightsB, bins=edges)
+    nb = nb / nb.sum() * 100
+    ax[0].hist(xa[:-1], xa, weights=na, histtype='step', color='deepskyblue', linewidth=2)
+    ax[0].hist(xb[:-1], xb, weights=nb, histtype='step', color='yellowgreen', linewidth=2)
+    ax[0].legend(('BG', 'FG'), fontsize=14, prop=dict(weight='bold'), labelspacing=0.25)
+
+    ax[0].set_ylabel('Percent of\nneuron/stimulus pairs', fontweight='bold', fontsize=12)
+    ax[0].set_title(f"A1, BG+/FG+, n={len(to_plot)}", fontweight='bold', fontsize=12)
+    ax[0].set_xlabel("Weight", fontweight='bold', fontsize=12)
+    ax[0].tick_params(axis='both', which='major', labelsize=8)
+    ymin, ymax = ax[0].get_ylim()
+
+
+    for aaa, ar in enumerate(areas):
+        if aaa==0:
+            ee = 1
+        else:
+            ee = 3
+        to_plot = filt.loc[filt.area==ar]
+
+        if stat_plot=='mean':
+            bg_m, bg_m = np.mean(to_plot.weightsA), np.mean(to_plot.weightsB)
+            bg_se, fg_se = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
+            label = 'Mean'
+        elif stat_plot=='median':
+            bg_m, bg_se = jack_mean_err(to_plot.weightsA, do_median=True)
+            fg_m, fg_se = jack_mean_err(to_plot.weightsB, do_median=True)
+            label = 'Median'
+
+        ttest1 = stats.ttest_ind(to_plot.weightsA, to_plot.weightsB)
+        ttest2 = stats.wilcoxon(to_plot.weightsA, to_plot.weightsB)
+
+        if bar:
+            ax[ee].bar("BG", bg_m, yerr=bg_se, color='deepskyblue')
+            ax[ee].bar("FG", fg_m, yerr=fg_se, color='yellowgreen')
+
+        else:
+            ax[ee].bar("BG", bg_m, yerr=bg_se, color='white')
+            ax[ee].bar("FG", fg_m, yerr=fg_se, color='white')
+
+            ax[ee].scatter(x=['BG', 'FG'], y=[bg_m, fg_m], color=['deepskyblue', 'yellowgreen'])
+            ax[ee].errorbar(x=['BG', 'FG'], y=[bg-M, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+
+        ax[ee].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=12)
+        ax[ee].set_xticklabels(['BG','FG'], fontsize=10, fontweight='bold')
+        ax[ee].tick_params(axis='y', which='major', labelsize=8)
+        if ttest1.pvalue < 0.001:
+            title = 'p<0.001'
+        else:
+            title = f"{ttest1.pvalue:.3f}"
+        ax[ee].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}", fontsize=10)
+
+
+        rel_weight = (to_plot.weightsB - to_plot.weightsA) / (to_plot.weightsB + to_plot.weightsA)
+        supps = [cc for cc in rel_weight if cc < 0]
+        percent_supp = np.around((len(supps) / len(rel_weight)) * 100, 1)
+        # Filter dataframe to get rid of the couple with super weird, big or small weights
+        rel = rel_weight.loc[rel_weight <= 2.5]
+        rel = rel.loc[rel >= -2.5]
+
+        ttt = stats.ttest_1samp(rel, 0)
+        print(f"RG is {ttt.pvalue} relative to 0.")
+
+        sups = [cc for cc in rel if cc < 0]
+        enhs = [cc for cc in rel if cc >= 0]
+
+        sup_edges = np.arange(-2.4, 0.1, .1)
+        enh_edges = np.arange(0, 2.5, .1)
+        na, xa = np.histogram(sups, bins=sup_edges)
+        nb, xb = np.histogram(enhs, bins=enh_edges)
+        aa = na / (na.sum() + nb.sum()) * 100
+        bb = nb / (na.sum() + nb.sum()) * 100
+
+        ax[ee+1].hist(xa[:-1], xa, weights=aa, histtype='step', color='tomato', fill=True)
+        ax[ee+1].hist(xb[:-1], xb, weights=bb, histtype='step', color='dodgerblue', fill=True)
+
+        ax[ee+1].legend(('FG Suppressed', 'FG Enhanced'), fontsize=14, prop=dict(weight='bold'), labelspacing=0.25)
+        ax[ee+1].set_ylabel('Percent of\nneuron/stimulus pairs', fontweight='bold', fontsize=12)
+        ax[ee+1].set_xlabel("Relative Gain (RG)", fontweight='bold', fontsize=12)
+        ax[ee+1].set_title(f"% suppressed: {percent_supp}", fontsize=10)
+        ax[ee+1].set_xlim(-1.75,1.75)
+
+    f.tight_layout()
+
+
+def weight_summary_histograms_flanks(filt, snr_threshold=0.12, stat_plot='median', bar=True):
+    '''2023_07_14. Makes the complement to 2B and 2C, but this time uses the weights when units only are responsive
+    to BG or FG alone.'''
+    quad2 = filt.loc[(filt.bg_snr < snr_threshold) & (filt.fg_snr> snr_threshold)]
+
+    quad6 = filt.loc[(filt.bg_snr > snr_threshold) & (filt.fg_snr < snr_threshold)]
+
+    title_thresh = f'snr >= {snr_threshold}'
+
+    # area_df2, area_df6 = quad2.loc[quad2.area==area], quad6.loc[quad6.area==area]
+
+    # if r_cut:
+    #     area_df2, area_df6 = area_df2.dropna(axis=0, subset='r'), area_df6.dropna(axis=0, subset='r')
+    #     area_df2, area_df6 = area_df2.loc[area_df2.r >= r_cut], area_df6.loc[area_df6.r >= r_cut]
+
+    f = plt.figure(figsize=(15, 6))
+    hist = plt.subplot2grid((10, 34), (0, 0), rowspan=5, colspan=8)
+    mean = plt.subplot2grid((10, 34), (0, 10), rowspan=5, colspan=2)
+    relhist = plt.subplot2grid((10, 34), (0, 14), rowspan=5, colspan=7)
+    meanpeg = plt.subplot2grid((10, 34), (0, 23), rowspan=5, colspan=2, sharey=mean)
+    relhistpeg = plt.subplot2grid((10, 34), (0, 27), rowspan=5, colspan=7, sharey=relhist)
+    ax = [mean, meanpeg]
+    areas = ['A1', 'PEG']
+
+    for aaa, ar in enumerate(areas):
+        to_plot_bg = quad6.loc[quad6.area==ar]
+        to_plot_fg = quad2.loc[quad2.area==ar]
+
+        if stat_plot=='mean':
+            bg_m, bg_m = np.mean(to_plot.weightsA), np.mean(to_plot.weightsB)
+            bg_se, fg_se = stats.sem(to_plot.weightsA), stats.sem(to_plot.weightsB)
+            label = 'Mean'
+            raise ValueError('Need to fix this, got lazy cause probably will not use')
+        elif stat_plot=='median':
+            bg_m, bg_se = jack_mean_err(to_plot_bg.weightsA, do_median=True)
+            fg_m, fg_se = jack_mean_err(to_plot_fg.weightsB, do_median=True)
+            label = 'Median'
+
+        ttest1 = stats.ttest_ind(to_plot_bg.weightsA, to_plot_fg.weightsB, nan_policy='omit')
+
+        if bar:
+            ax[aaa].bar("BG", bg_m, yerr=bg_se, color='deepskyblue')
+            ax[aaa].bar("FG", fg_m, yerr=fg_se, color='yellowgreen')
+
+        else:
+            ax[aaa].bar("BG", bg_m, yerr=bg_se, color='white')
+            ax[aaa].bar("FG", fg_m, yerr=fg_se, color='white')
+
+            ax[aaa].scatter(x=['BG', 'FG'], y=[bg_m, fg_m], color=['deepskyblue', 'yellowgreen'])
+            ax[aaa].errorbar(x=['BG', 'FG'], y=[bg_m, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+
+        ax[aaa].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=12)
+        ax[aaa].set_xticklabels(['BG','FG'], fontsize=10, fontweight='bold')
+        ax[aaa].tick_params(axis='y', which='major', labelsize=8)
+        if ttest1.pvalue < 0.001:
+            title = 'p<0.001'
+        else:
+            title = f"{ttest1.pvalue:.3f}"
+        ax[aaa].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}\n"
+                          f"BG: n={len(to_plot_bg)}\nFG: n={len(to_plot_fg)}", fontsize=10)
