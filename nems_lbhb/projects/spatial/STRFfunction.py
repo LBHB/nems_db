@@ -19,7 +19,7 @@ import nems0.epoch as ep
 from nems import Model
 from nems.models import LN
 from nems_lbhb.projects.spatial.models import LN_Tiled_STRF
-from nems0 import get_setting
+from nems0 import get_setting, utils
 import json
 
 from nems.visualization.model import plot_nl
@@ -110,7 +110,7 @@ def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid
             strf_base = LN.LN_STRF(time_lags, input_channels, rank=rank, gaussian=False, fs=ctx['est']['resp'].fs) 
         
         strf = strf_base.fit_LBHB(X_est, Y_est) 
-
+        utils.progress_fun()
 
         predict = strf.predict(X_val, batch_size=None)
         r=correlation(predict, Y_val)
@@ -147,7 +147,7 @@ def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid
 
         
         
-        strflist.append(strf)
+        #strflist.append(strf)
         cell_list.append(cellid)
         
     return rlist, strflist, r, strf, ctx, cell_list

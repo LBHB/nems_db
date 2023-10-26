@@ -1,6 +1,7 @@
 
 import logging
 from os.path import basename, join
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import convolve2d, butter, sosfilt
@@ -22,6 +23,7 @@ from nems_lbhb.preprocessing import impute_multi
 from nems.layers import WeightChannels, FIR, LevelShift, \
     DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
 from nems import Model
+from nems.tools import json
 from nems.layers.base import Layer, Phi, Parameter
 from nems0.recording import load_recording
 import nems.visualization.model as nplt
@@ -30,6 +32,9 @@ from nems_lbhb.projects.freemoving.free_tools import stim_filt_hrtf, compute_d_t
     free_scatter_sum, dlc2dist
 from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
+from nems0 import xforms
+from nems.preprocessing import (
+    indices_by_fraction, split_at_indices, JackknifeIterator)
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +58,9 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         a1cellids = df_siteinfo.loc[(df_siteinfo['area']=='A1') | (df_siteinfo['area']=='BS') |
                                     (df_siteinfo['area']=='PEG')].index.to_list()
     except:
-        df = db.pd_query(f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'")
-        a1cellids = df['cellid'].to_list()
+        df_siteinfo = db.pd_query(f"SELECT DISTINCT cellid,area FROM sCellFile WHERE cellid like '{siteid}%%'" +
+                         " AND area in ('A1','PEG','AC','BS')")
+        a1cellids = df_siteinfo['cellid'].to_list()
 
     if cellid is not None:
         a1cellids=[cellid]
@@ -113,20 +119,13 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         #rec.meta['sw'] = np.array([df_siteinfo.loc[c, 'sw'] for c in cellids])
         rec.meta['sw'] = np.ones(len(cellids)) * 1
     except:
-        rec.meta['depth'] = np.array([float(c.split("-")[1]) for c in cellids])
+        rec.meta['depth'] = np.array([float(c.split("-")[-2]) for c in cellids])
         rec.meta['sw'] = np.ones(len(cellids)) * 100
 
     return rec
 
-def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
-             acount=20, dcount=10, l2count=30, cost_function='squared_error',
-             save_to_db=False, **options):
-    """
-    special case: if dlc_memory=1 add a delay line with shuffled data to
-    the dlc signal to match the parameter count for dlc_memory=4
-    """
+def free_split_rec(rec, apply_hrtf=True):
 
-    siteid = rec.meta['siteid']
     if apply_hrtf:
         log.info('Applying HRTF')
         rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
@@ -142,7 +141,6 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     rec['stim'] = rec['stim'].normalize('minmax')
     rec['resp'] = rec['resp'].normalize('minmax')
 
-    cellids = rec['resp'].chans
     OLD_MASK = False
     if OLD_MASK:
         # epoch_regex = "^STIM_"
@@ -162,12 +160,35 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
         est = rec.copy()
         est = est.create_mask(~mask).and_mask(est['dlc_valid'].as_continuous()[0, :])
 
-    est = est.apply_mask()
-    val = val.apply_mask()
+    return {'rec': rec, 'est': est, 'val': val}
+
+
+def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
+             acount=20, dcount=10, l2count=30, cost_function='squared_error',
+             save_to_db=False, jack_count=None, **options):
+    """
+    special case: if dlc_memory=1 add a delay line with shuffled data to
+    the dlc signal to match the parameter count for dlc_memory=4
+    """
+
+    siteid = rec.meta['siteid']
+    cellids = rec['resp'].chans
+    log.info("Splitting rec into est, val")
+    ctx = free_split_rec(rec, apply_hrtf=apply_hrtf)
+
+    rec = ctx['rec']
+    est = ctx['est'].apply_mask()
+    val = ctx['val'].apply_mask()
+
     log.info(f"est resp: {est['resp'].shape} stim: {est['stim'].shape} dlc: {est['dlc'].shape}")
     log.info(f"val resp: {val['resp'].shape} stim: {val['stim'].shape} dlc: {val['dlc'].shape}")
     dlc_count = rec['dlc'].shape[0]
-
+    
+    if jack_count is not None:
+        # undo est/val breakdown so that full dataset can be jackknifed
+        est = rec
+        val = rec
+        
     if shuffle=='none':
         input = {'stim': est['stim'].as_continuous().T, 'dlc': est['dlc'].as_continuous().T[:, :dlc_count]}
         test_input = {'stim': val['stim'].as_continuous().T, 'dlc': val['dlc'].as_continuous().T[:, :dlc_count]}
@@ -198,7 +219,7 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
 
     tcount = acount+dcount
     cellcount = len(cellids)
-    input_count = rec['stim'].shape[0]
+    input_count = est['stim'].shape[0]
     dlc_count = input['dlc'].shape[1]
 
     modelstring = f"wc.Nx1x{acount}-fir.8x1x{acount}-wc.Dx1x{dcount}.dlc-fir.{dlc_memory}x1x{dcount}.dlc-concat.space-relu.{tcount}.f" +\
@@ -206,8 +227,8 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     if dcount > 0:
         layers = [
             WeightChannels(shape=(input_count, 1, acount), input='stim', output='prediction'),
-            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             WeightChannels(shape=(dlc_count, 1, dcount), input='dlc', output='space'),
+            FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             FIR(shape=(dlc_memory, 1, dcount), input='space', output='space'),
             ConcatSignals(input=['prediction','space'], output='prediction'),
             RectifiedLinear(shape=(tcount,), input='prediction', output='prediction',
@@ -244,23 +265,30 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     model.name = f'sh.{shuffle}-hrtf.{apply_hrtf}_{modelstring}_{cost_function.replace("_","")}'
     model = model.sample_from_priors()
     model = model.sample_from_priors()
+    model = model.sample_from_priors()
     log.info(f'Site: {siteid}')
     log.info(f'Model: {model.name}')
 
-    log.info('Fit stage 1: without static output nonlinearity')
-    model.layers[-1].skip_nonlinearity()
-    model = model.fit(input=input, target=target, backend=fitter,
-                      fitter_options=fitter_options)
-    model.layers[-1].unskip_nonlinearity()
-    log.info('Fit stage 2: with static output nonlinearity')
-    model = model.fit(input=input, target=target, backend=fitter,
-                      verbose=0, fitter_options=fitter_options2)
 
-    fit_pred = model.predict(input=input)
-    prediction = model.predict(input=test_input)
-    if type(prediction) is dict:
-        fit_pred = fit_pred['prediction']
-        prediction = prediction['prediction']
+    if jack_count is not None:
+        fit_set = JackknifeIterator(input, target=target, samples=jack_count, axis=0)
+        # to do ... get this to work 
+        
+    else:
+        log.info('Fit stage 1: without static output nonlinearity')
+        model.layers[-1].skip_nonlinearity()
+        model = model.fit(input=input, target=target, backend=fitter,
+                          fitter_options=fitter_options)
+        model.layers[-1].unskip_nonlinearity()
+        log.info('Fit stage 2: with static output nonlinearity')
+        model = model.fit(input=input, target=target, backend=fitter,
+                          verbose=0, fitter_options=fitter_options2)
+
+        fit_pred = model.predict(input=input)
+        prediction = model.predict(input=test_input)
+        if type(prediction) is dict:
+            fit_pred = fit_pred['prediction']
+            prediction = prediction['prediction']
 
     fit_cc = np.array([np.corrcoef(fit_pred[:, i], target[:, i])[0, 1] for i in range(cellcount)])
     cc = np.array([np.corrcoef(prediction[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
@@ -274,12 +302,18 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     model.meta['batch'] = rec.meta['batch']
     model.meta['modelname'] = model.name
     model.meta['cellids'] = est['resp'].chans
+    model.meta['cellid'] = siteid
     model.meta['r_test'] = cc[:, np.newaxis]
     model.meta['r_fit'] = fit_cc[:, np.newaxis]
     model.meta['r_floor'] = rf[:, np.newaxis]
 
     if save_to_db:
+        log.info('Saving to disk and db')
+        destination = xforms.save_lite(model)
+        model.meta['modelfile'] = join(destination,'modelspec.json')
+        model.meta['modelpath'] = destination
         db.save_results(model)
+
     return model
 
 

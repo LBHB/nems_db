@@ -16,11 +16,14 @@ from nems0.utils import smooth
 
 import nems0.plots.api as nplt
 
+animal="PRN"
+animal="SLJ"
+
 sql = "SELECT sCellFile.*, gSingleRaw.isolation, gPenetration.well, gPenetration.pendate" +\
        " FROM sCellFile INNER JOIN gCellMaster ON sCellFile.masterid=gCellMaster.id" +\
        " INNER JOIN gPenetration ON gCellMaster.penid=gPenetration.id" +\
        " INNER JOIN gSingleRaw ON sCellFile.singlerawid=gSingleRaw.id" +\
-       " WHERE sCellFile.cellid like 'PRN%%' order by cellid"
+       f" WHERE sCellFile.cellid like '{animal}%%' order by cellid"
 df_cell = db.pd_query(sql)
 
 datestr0 = df_cell.loc[0,'pendate']
@@ -66,9 +69,9 @@ d1.columns=cols
 d2.columns=cols
 d = pd.concat([d0, d1, d2], ignore_index=True)
 
-f,ax=plt.subplots(1,1)
+f,ax=plt.subplots(1,1,figsize=(8,4))
 sns.scatterplot(data=d, x='Day', y='N units', hue='Well', style='Type', palette='deep', ax=ax)
-ax.set_title('Prince cell census')
+ax.set_title(f'{animal} cell census')
 for i,r in df_site.iterrows():
-    ax.text(r.day, r.N, i, fontsize=7, rotation=90, va='bottom', ha='center')
+    ax.text(r.day, r.N, i, fontsize=10, rotation=90, va='bottom', ha='center')
 

@@ -18,6 +18,7 @@ siteid='PRN050a'
 siteid='PRN057a'
 siteid='CLT047c'
 siteid='TNC047a'
+siteid='PRN048a'
 siteid='PRN064a'
 
 d_raw = db.pd_query(f"SELECT * FROM gDataRaw where cellid like '{siteid}%%' AND runclass='BNB' AND not(bad) AND not(isnull(depthinfo))")
@@ -61,23 +62,23 @@ left_csd, power, freqs, windowtime, rasterfs, column_xy_sorted, column_xy, chann
 
 s = slice(52,95)
 s = slice(0,None)
-csd_crop=left_csd[s,80:]
-power_crop = power[s,:]
-chans = column_xy_sorted[s]
+csd_crop=left_csd[0][s,80:]
+power_crop = power[0][s,:]
+chans = column_xy_sorted[0][s]
 
-depths0 = np.array([float(column_xy[c][1]) for c in chans])
+depths0 = np.array([float(column_xy[0][c][1]) for c in chans])
 channums = np.array(chans).astype(int)
 
 dmin, dmax = df_siteinfo['depth'].min(), df_siteinfo['depth'].max()
 cmin, cmax = df_siteinfo['channel'].max(), df_siteinfo['channel'].min()
 
-d0max = float(channel_xy[str(cmax)][1])
-d0min = float(channel_xy[str(cmin)][1])
+d0max = float(channel_xy[0][str(cmax)][1])
+d0min = float(channel_xy[0][str(cmin)][1])
 
 
 
 # position of one column on probe (tip = 0)
-all_depths0 = np.array([float(column_xy[c][1]) for c in column_xy_sorted])
+all_depths0 = np.array([float(column_xy[0][c][1]) for c in column_xy_sorted[0]])
 
 c34_depth0 = all_depths0[int(np.round(landmarks['3/4']))]
 depths = -depths0 + c34_depth0
@@ -91,11 +92,11 @@ f,ax = plt.subplots(1, 2, sharey=True)
 ax[0].imshow(csd_crop, origin='lower', aspect='auto', extent=[-0.1, 0.5, depths[0], depths[-1] ])
 for i,r in df_siteinfo.iterrows():
     if r['index'] in highlight_cellids:
-        ax[0].plot(0.3+np.random.randn(1)/15, r['depths_rel34'], 'w.')
+        ax[0].plot(0.3+np.random.randn(1)/25, r['depths_rel34'], 'w.')
     elif r['area'] in ['A1','PEG','BS']:
-        ax[0].plot(0.3+np.random.randn(1)/15, r['depths_rel34'], 'k.')
+        ax[0].plot(0.3+np.random.randn(1)/25, r['depths_rel34'], 'k.')
     else:
-        ax[0].plot(0.3+np.random.randn(1)/15, r['depths_rel34'], '.', color='darkred')
+        ax[0].plot(0.3+np.random.randn(1)/25, r['depths_rel34'], '.', color='darkred')
 ax[0].set_ylabel('Depth from L3/4')
 ax[0].set_title(f"{siteid} - CSD")
 
@@ -111,7 +112,8 @@ for k,v in landmark_depths.items():
         ax[1].text(0,v,k,color='r', ha='right',va='center')
 
 dt = datetime.date.today().strftime("%Y-%m-%d")
-figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
+#figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
+figpath = '/home/svd/Documents/onedrive/presentations/rochester_2023/eps/'
 os.makedirs(figpath, exist_ok=True)
 
 f.savefig(f'{figpath}depth_map_{siteid}.pdf')
