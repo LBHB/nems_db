@@ -61,4 +61,3 @@ for cellid in cellids0[0:10]:
 
     f.suptitle(ctx['modelspec'].name[:35])
 
-

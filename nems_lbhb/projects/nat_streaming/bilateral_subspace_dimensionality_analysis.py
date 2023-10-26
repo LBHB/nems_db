@@ -731,52 +731,65 @@ def subspace_plot_R01_layout(psthA, psthB, dfs, df_labels, parmfile_area, plot_t
           site_area_AB = []
           site_performance_AB_1 = []
           site_performance_AB_2 = []
-          site_rank_performance_AA = []
-          site_rank_performance_AB = []
-          site_rank_performance_AA_s = []
-          site_rank_performance_AB_s = []
+          site_rank_performance_AA_1 = []
+          site_rank_performance_AB_1 = []
+          site_rank_performance_AA_2 = []
+          site_rank_performance_AB_2 = []
           for siteid in siteids:
                site_area_AB.append(
                     ['-'.join([area['A'], area['B']]) for parm, area in parmfile_area.items() if
                      siteid in parm][0])
-               site_df = dfs[df_num][dfs[df_num]['model_names'].str.contains(siteid)]
-               # site_signal_df = subspace_mono_df[subspace_mono_df['model_names'].str.contains(siteid)]
-               mean_rank_performance_AA_n = []
-               mean_rank_performance_AB_n = []
-               rank_performance_AA_n = []
-               rank_performance_AB_n = []
-               # mean_rank_performance_AA_s = []
-               # mean_rank_performance_AB_s = []
-               # rank_performance_AA_s = []
-               # rank_performance_AB_s = []
+               site_df_1 = dfs[0][dfs[0]['model_names'].str.contains(siteid)]
+               site_df_2 = dfs[1][dfs[1]['model_names'].str.contains(siteid)]
+               mean_rank_performance_AA_1 = []
+               mean_rank_performance_AB_1 = []
+               rank_performance_AA_1 = []
+               rank_performance_AB_1 = []
+               mean_rank_performance_AA_2 = []
+               mean_rank_performance_AB_2 = []
+               rank_performance_AA_2 = []
+               rank_performance_AB_2 = []
 
                for rank in ranks:
-                    rank_AA_df_n = site_noise_df[
-                         site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AA')]
-                    rank_AB_df_n = site_noise_df[
-                         site_noise_df['model_names'].str.contains(f'Rank{str(rank)}_AB')]
-                    # rank_AA_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
-                    # rank_AB_df_s = site_signal_df[site_signal_df['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
-                    mean_rank_performance_AA_n.append(np.nanmean(rank_AA_df_n['mean_model_performance']))
-                    mean_rank_performance_AB_n.append(np.nanmean(rank_AB_df_n['mean_model_performance']))
-                    rank_performance_AA_n.append(rank_AA_df_n['mean_model_performance'])
-                    rank_performance_AB_n.append(rank_AB_df_n['mean_model_performance'])
-                    # mean_rank_performance_AA_s.append(np.nanmean(rank_AA_df_s['mean_model_performance']))
-                    # mean_rank_performance_AB_s.append(np.nanmean(rank_AB_df_s['mean_model_performance']))
-                    # rank_performance_AA_s.append(rank_AA_df_s['mean_model_performance'])
-                    # rank_performance_AB_s.append(rank_AB_df_s['mean_model_performance'])
-               site_performance_AA_n.append(mean_rank_performance_AA_n)
-               site_performance_AB_n.append(mean_rank_performance_AB_n)
-               site_rank_performance_AA.append(rank_performance_AA_n)
-               site_rank_performance_AB.append(rank_performance_AB_n)
-               # site_performance_AA_s.append(mean_rank_performance_AA_s)
-               # site_performance_AB_s.append(mean_rank_performance_AB_s)
-               # site_rank_performance_AA_s.append(rank_performance_AA_s)
-               # site_rank_performance_AB_s.append(rank_performance_AB_s)
-          site_performance_AA_n = np.array(site_performance_AA_n)[:, :10]
-          site_performance_AB_n = np.array(site_performance_AB_n)[:, :10]
-          # site_performance_AA_s = np.array(site_performance_AA_s)[:, :10]
-          # site_performance_AB_s = np.array(site_performance_AB_s)[:, :10]
+                    if site_df_1['model_names'].str.contains('bilateral').values[0]:
+                         rank_AA_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AA')]
+                         rank_AB_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AB')]
+                         rank_AA_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AA')]
+                         rank_AB_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_bilateral_AB')]
+                         stim_type = 'bilateral'
+                    elif site_df_1['model_names'].str.contains('mono').values[0]:
+                         rank_AA_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
+                         rank_AB_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
+                         rank_AA_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_mono_AA')]
+                         rank_AB_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_mono_AB')]
+                         stim_type = 'mono'
+                    else:
+                         rank_AA_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_AA')]
+                         rank_AB_df_1 = site_df_1[site_df_1['model_names'].str.contains(f'Rank{str(rank)}_AB')]
+                         rank_AA_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_AA')]
+                         rank_AB_df_2 = site_df_2[site_df_2['model_names'].str.contains(f'Rank{str(rank)}_AB')]
+                         stim_type = ''
+
+                    mean_rank_performance_AA_1.append(np.nanmean(rank_AA_df_1['mean_model_performance']))
+                    mean_rank_performance_AB_1.append(np.nanmean(rank_AB_df_1['mean_model_performance']))
+                    rank_performance_AA_1.append(rank_AA_df_1['mean_model_performance'])
+                    rank_performance_AB_1.append(rank_AB_df_1['mean_model_performance'])
+                    mean_rank_performance_AA_2.append(np.nanmean(rank_AA_df_2['mean_model_performance']))
+                    mean_rank_performance_AB_2.append(np.nanmean(rank_AB_df_2['mean_model_performance']))
+                    rank_performance_AA_2.append(rank_AA_df_2['mean_model_performance'])
+                    rank_performance_AB_2.append(rank_AB_df_2['mean_model_performance'])
+               site_performance_AA_1.append(mean_rank_performance_AA_1)
+               site_performance_AB_1.append(mean_rank_performance_AB_1)
+               site_rank_performance_AA_1.append(rank_performance_AA_1)
+               site_rank_performance_AB_1.append(rank_performance_AB_1)
+               site_performance_AA_2.append(mean_rank_performance_AA_2)
+               site_performance_AB_2.append(mean_rank_performance_AB_2)
+               site_rank_performance_AA_2.append(rank_performance_AA_2)
+               site_rank_performance_AB_2.append(rank_performance_AB_2)
+          site_performance_AA_1 = np.array(site_performance_AA_1)[:, :10]
+          site_performance_AB_1 = np.array(site_performance_AB_1)[:, :10]
+          site_performance_AA_2 = np.array(site_performance_AA_2)[:, :10]
+          site_performance_AB_2 = np.array(site_performance_AB_2)[:, :10]
           semAA_n = np.nanstd(site_performance_AA_n, axis=0, ddof=1) / np.sqrt(
                np.sum(~np.isnan(site_performance_AA_n), axis=0))
           semAB_n = np.nanstd(site_performance_AB_n, axis=0, ddof=1) / np.sqrt(
