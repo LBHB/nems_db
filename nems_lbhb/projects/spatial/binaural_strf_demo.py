@@ -96,4 +96,3 @@ import seaborn as sns
 
 f,ax=plt.subplots()
 sns.scatterplot(d.loc[good], x='R20', y='R20l2', ax=ax)
-
