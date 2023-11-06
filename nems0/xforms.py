@@ -495,9 +495,11 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
     return {'modelspec': modelspec}
 
 
-def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
+def fit_lite(modelspec=None, est=None, modelspec_list=None,
+             input_name='stim', output_name='resp', IsReload=False,
              cost_function='nmse', learning_rate=1e-3, tolerance=1e-4, max_iter=5000, backend='scipy',
              validation_split=0.0, early_stopping_patience=150, early_stopping_delay=100, rand_count=1,
+             jackknife_count=0,
              initialize_nl=False, freeze_layers=None, shuffle_batches=False, skip_init=False, **context):
     """
     fit_wrapper modified to work with nems-lite
@@ -523,6 +525,9 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
 
     if (modelspec is None) or (est is None):
         raise ValueError("Inputs modelspec and est required")
+
+    from nems.preprocessing import JackknifeIterator
+    from nems.models.dataset import DataSet
 
     # convert signal matrices to nems-lite format
     if backend == 'scipy':
@@ -586,6 +591,13 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         # Y_est = np.expand_dims(Y_est, axis=0)
         # if S_est is not None:
         #    S_est = np.expand_dims(S_est, axis=0)
+
+        if jackknife_count>0:
+            fit_set = JackknifeIterator(X_est, target=Y_est, state=S_est,
+                                        samples=jackknife_count, axis=0)
+            log.info(f"Jackknifes: {jackknife_count}")
+        else:
+            fit_set = DataSet(X_est, state=S_est, target=Y_est)
         log.info(f"Dataset size X_est: {X_est.shape} Y_est: {Y_est.shape}")
         batch_size = None #  X_est.shape[0]  # or None or bigger?
         log.info(f"Batch size: {batch_size}")
@@ -632,29 +644,45 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
             for mi, m in enumerate(modelspec_copies):
                 log.info(f'** ({backend}) Fitting without NL - initialization {mi+1}/{rand_count} ...')
 
-                m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
-                          freeze_layers=freeze_layers, fitter_options=fitter_options,
-                          batch_size=batch_size, verbose=1)
+                if jackknife_count<=1:
+                    m = m.fit(input=fit_set.inputs, target=fit_set.targets, state=fit_set.state, backend=backend,
+                              freeze_layers=freeze_layers, fitter_options=fitter_options,
+                              batch_size=batch_size, verbose=1, progress_fun=progress_fun)
+                    m.layers[-1].unskip_nonlinearity()
+                    # special case - set initial conditions for NL layer parameters
+                    m = init.init_nl_lite(m, X_est, Y_est)
+                    # idea (bad one?) to only fit static NL?
+                    # for i in range(len(m.layers) - 1):
+                    #    m.layers[i].freeze_parameters()
+                    log.info(f'** ({backend}) Fitting with NL - initialization {mi + 1}/{rand_count} ...')
+                    modelspec_copies[mi] = m.fit(
+                        input=X_est, target=Y_est, state=S_est, backend=backend,
+                        freeze_layers=freeze_layers, fitter_options=fitter_options,
+                        batch_size=batch_size, verbose=0, progress_fun=progress_fun)
 
-                progress_fun()
-                m.layers[-1].unskip_nonlinearity()
-                # idea (bad one?) to only fit static NL?
-                #for i in range(len(m.layers) - 1):
-                #    m.layers[i].freeze_parameters()
+                    E[mi] = modelspec_copies[mi].results.final_error
+                    E0[mi] = modelspec_copies[mi].results.initial_error[0]
+                else:
+                    model_fit_list = fit_set.get_fitted_jackknifes(
+                        m, backend=backend,
+                        freeze_layers=freeze_layers, fitter_options=fitter_options,
+                        batch_size=batch_size, verbose=1, progress_fun=progress_fun)
+                    for i, d in enumerate(fit_set):
+                        m = model_fit_list[i]
+                        m.layers[-1].unskip_nonlinearity()
+                        model_fit_list[i] = init.init_nl_lite(m, d.inputs['input'], d.targets['target'])
 
-                # special case - set initial conditions for NL layer parameters
-                m = init.init_nl_lite(m, X_est, Y_est)
+                    log.info(f'** ({backend}) Fitting with NL - jacks {jackknife_count} initialization {mi + 1}/{rand_count} ...')
 
-                log.info(f'** ({backend}) Fitting with NL - initialization {mi+1}/{rand_count} ...')
-                modelspec_copies[mi] = m.fit(
-                    input=X_est, target=Y_est, state=S_est, backend=backend,
-                    freeze_layers=freeze_layers, fitter_options=fitter_options,
-                    batch_size=batch_size, verbose=0)
+                    model_fit_list = fit_set.get_fitted_jackknifes(
+                        model_fit_list, backend=backend,
+                        freeze_layers=freeze_layers, fitter_options=fitter_options,
+                        batch_size=batch_size, verbose=1, progress_fun=progress_fun)
 
-                progress_fun()
+                    modelspec_copies[mi] = model_fit_list
 
-                E[mi] = modelspec_copies[mi].results.final_error
-                E0[mi] = modelspec_copies[mi].results.initial_error[0]
+                    E[mi] = modelspec_copies[mi][0].results.final_error
+                    E0[mi] = modelspec_copies[mi][0].results.initial_error[0]
 
             if rand_count > 1:
                 best_i = np.argmin(E)
@@ -662,18 +690,35 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
                 modelspec = modelspec_copies[best_i]
             else:
                 modelspec = modelspec_copies[0]
+            if jackknife_count>1:
+                modelspec_list = modelspec
+                modelspec = modelspec_list[0]
 
             # is this necessary for anything?
             for i in range(len(modelspec.layers)):
                 modelspec.layers[i].unfreeze_parameters()
 
         else:
-            log.info('Using inherited model parameters')
             log.info(f'({backend}) Fitting all layers (lr={learning_rate} tol={tolerance:.3e}) ...')
-            modelspec = modelspec.fit(
-                input=X_est, target=Y_est, state=S_est, backend=backend,
-                freeze_layers=freeze_layers, fitter_options=fitter_options, batch_size=batch_size)
-            progress_fun()
+            if jackknife_count<=1:
+
+                log.info('Using inherited model parameters')
+                modelspec = modelspec.fit(
+                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    freeze_layers=freeze_layers, fitter_options=fitter_options,
+                    batch_size=batch_size, progress_fun=progress_fun)
+            else:
+                if modelspec_list is not None:
+                    log.info(f'Jackknifes {jackknife_count} starting with list')
+                    modelspec = modelspec_list
+                else:
+                    log.info(f'Jackknifes {jackknife_count} starting single init model')
+
+                modelspec_list = fit_set.get_fitted_jackknifes(
+                    modelspec, backend=backend,
+                    freeze_layers=freeze_layers, fitter_options=fitter_options,
+                    batch_size=batch_size, verbose=1, progress_fun=progress_fun)
+                modelspec = modelspec_list[0]
 
         postphi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         modelspec.meta['prephi'] = prephi
@@ -681,8 +726,16 @@ def fit_lite(modelspec=None, est=None, input_name='stim', output_name='resp', Is
         modelspec.meta['n_parms'] = modelspec.results.n_parameters
         
         modelspec.backend = None
+        if jackknife_count > 1:
+            for j, m in enumerate(modelspec_list):
+                m.backend = None
+                m.meta.update(modelspec.meta)
+            return {'modelspec': modelspec, 'modelspec_list': modelspec_list,
+                    'jackknifed_fit': True
+                    }
+        else:
+            return {'modelspec': modelspec}
 
-    return {'modelspec': modelspec}
 
 
 def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
@@ -778,7 +831,10 @@ def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='
     return {'modelspec': modelspec}
 
 
-def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsReload=False, **context):
+def predict_lite(modelspec, est, val,
+                 input_name='stim', output_name='resp',
+                 jackknifed_fit=False, modelspec_list=None,
+                 IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
     X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
@@ -795,7 +851,15 @@ def predict_lite(modelspec, est, val, input_name='stim', output_name='resp', IsR
     prediction = modelspec.predict(X_val, state=S_val)
     val['pred']=val[output_name]._modified_copy(data=prediction.T)
 
-    return {'val': val, 'est': est}
+    if modelspec_list is not None:
+        j_prediction = []
+        for i,m in enumerate(modelspec_list):
+            if val.view_count>1:
+                val.view_idx=i
+                X_val = np.moveaxis(val[input_name].as_continuous(), -1, 0)
+                S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
+            j_prediction.append(m.predict(X_val, state=S_val).T)
+    return {'val': val, 'est': est,'j_prediction': j_prediction}
 
 def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=False,
               figures=None, figures_to_load=None, **context):
@@ -1125,7 +1189,7 @@ def sev(kw):
         xfspec.append(['nems0.xforms.average_away_stim_occurrences', parms])
     return xfspec
 
-def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, keepfrac=1, **context):
+def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, filemask=None, keepfrac=1, **context):
 
     if rec_list is None:
         rec_list = [rec]
@@ -1137,7 +1201,8 @@ def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, keepfra
     val_list = []
 
     for rec in rec_list:
-        est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex, keepfrac=keepfrac, **context)
+        est, val = rec.split_using_epoch_occurrence_counts(
+            epoch_regex=epoch_regex, keepfrac=keepfrac, filemask=filemask, **context)
         est_list.append(est)
         val_list.append(val)
 
@@ -1148,7 +1213,6 @@ def split_by_occurrence_counts(rec, epoch_regex='^STIM_', rec_list=None, keepfra
 
     if context.get('selection', '') in ['mono','bin','match']:
         c['eval_binaural'] = True
-
     return c
 
 @xform()

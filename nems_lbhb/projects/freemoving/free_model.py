@@ -33,8 +33,7 @@ from nems_lbhb.projects.freemoving.free_tools import stim_filt_hrtf, compute_d_t
 from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
 from nems0 import xforms
-from nems.preprocessing import (
-    indices_by_fraction, split_at_indices, JackknifeIterator)
+from nems.preprocessing import (indices_by_fraction, split_at_indices, JackknifeIterator)
 
 log = logging.getLogger(__name__)
 
@@ -186,9 +185,10 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     
     if jack_count is not None:
         # undo est/val breakdown so that full dataset can be jackknifed
-        est = rec
-        val = rec
-        
+
+        est = rec.create_mask(rec['dlc_valid'].as_continuous()[0, :]).apply_mask()
+        val = rec.create_mask(rec['dlc_valid'].as_continuous()[0, :]).apply_mask()
+
     if shuffle=='none':
         input = {'stim': est['stim'].as_continuous().T, 'dlc': est['dlc'].as_continuous().T[:, :dlc_count]}
         test_input = {'stim': val['stim'].as_continuous().T, 'dlc': val['dlc'].as_continuous().T[:, :dlc_count]}
@@ -273,7 +273,25 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
     if jack_count is not None:
         fit_set = JackknifeIterator(input, target=target, samples=jack_count, axis=0)
         # to do ... get this to work 
-        
+        log.info('Fit stage 1: without static output nonlinearity')
+        model.layers[-1].skip_nonlinearity()
+        model_fit_list = fit_set.get_fitted_jackknifes(model, backend=fitter,
+                          fitter_options=fitter_options)
+
+        for model in model_fit_list:
+            model.layers[-1].unskip_nonlinearity()
+
+        log.info('Fit stage 2: with static output nonlinearity')
+        model_fit_list = fit_set.get_fitted_jackknifes(model_fit_list, backend=fitter,
+                          fitter_options=fitter_options)
+
+        # predict responses for each jk validation set and recombine into
+        # a single prediction that matches the size of the orginal target
+        dpred = fit_set.get_predicted_jackknifes(model_fit_list)
+        prediction = dpred['prediction']
+        model = model_fit_list[0]
+        fit_pred = model.predict(input=input)['prediction']
+
     else:
         log.info('Fit stage 1: without static output nonlinearity')
         model.layers[-1].skip_nonlinearity()
@@ -289,6 +307,9 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
         if type(prediction) is dict:
             fit_pred = fit_pred['prediction']
             prediction = prediction['prediction']
+
+    est['pred']=est['resp']._modified_copy(data=fit_pred.T)
+    val['pred']=val['resp']._modified_copy(data=prediction.T)
 
     fit_cc = np.array([np.corrcoef(fit_pred[:, i], target[:, i])[0, 1] for i in range(cellcount)])
     cc = np.array([np.corrcoef(prediction[:, i], test_target[:, i])[0, 1] for i in range(cellcount)])
@@ -314,7 +335,14 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
         model.meta['modelpath'] = destination
         db.save_results(model)
 
-    return model
+    ctx = {'rec': rec, 'est': est, 'val': val, 'modelspec': model}
+    if jack_count is not None:
+        for i,m in enumerate(model_list):
+            m.meta.update(model.meta)
+            m.meta['jack_index']=i
+        ctx['model_list'] = model_fit_list
+    return ctx
+
 
 
 def compare_models(rec, model1, model2):
