@@ -133,9 +133,16 @@ class behav:
                 d['combined_stim'] = d['s1_name']
                 d.loc[d['s1_name'].isna(), 'combined_stim'] = d['s2_name']
                 d['pitch'] = d['combined_stim'].apply(label_based_on_three_digit_number)
-                interesting_data = d[
-                    ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
-                     'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                try:
+                    interesting_data = d[
+                        ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
+                         'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                except:
+                    print('no fg_i, bg_i found')
+                    interesting_data = d[
+                        ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
+                         'trial_duration', 'trial_is_repeat']].copy()
+
                 interesting_data['parmfile'] = r['parmfile']
                 interesting_data['session_id'] = session_id
                 interesting_data['day'] = r['cellid']
