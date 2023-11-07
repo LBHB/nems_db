@@ -138,7 +138,6 @@ class behav:
                         ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
                          'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
                 except:
-                    print('no fg_i, bg_i found')
                     interesting_data = d[
                         ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
                          'trial_duration', 'trial_is_repeat']].copy()
@@ -261,6 +260,7 @@ class behav:
 
     def perform_over_time(self, XVARIABLE, YVARIABLE='correct', day_list=[], kind='bar', only_0_db=False):
 
+        YVARIABLE = YVARIABLE
         if len(day_list) == 0:
             plot_frame = self.dataframe.copy()
         else:
