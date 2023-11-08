@@ -104,4 +104,52 @@ def save_pred_signal(**ctx):
     return ctx
 
 
+def dstrf_pca(rec, est, val, modelspec, model_list=None,
+              D=15, timestep=3 **ctx)
+
+    if model_list is None:
+        model_list = [modelspec]
+    cellids = rec['resp'].chans
+
+    t_indexes = np.arange(time_step, val['stim'].shape[1], timestep)
+    log.info(f"Computing dSTRF at {len(t_indexes)} timepoints,timestep={timestep}")
+
+    out_channels = np.arange(len(cellids))
+    stim = {'input': val['stim'].as_continuous().T}
+    dstrfs = []
+    for mi, m in enumerate(model_list):
+        d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
+        dstrfs.append(d['input'])
+
+    dstrf = np.stack(dstrfs, axis=1)
+    s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
+    dstrf /= s
+    dstrf /= np.max(np.abs(dstrf)) * 0.9
+
+    mdstrf = dstrf.mean(axis=1, keepdims=True)
+    sdstrf = dstrf.std(axis=1, keepdims=True)
+    sdstrf[sdstrf == 0] = 1
+    mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
+
+    mdstrf /= np.max(np.abs(mdstrf)) * 0.9
+    mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
+    pc_count = 7
+    dpc, dpc_mag = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count)
+    dpcz, dpc_magz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count)
+
+    imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+              'interpolation': 'none'}
+    imoptsz = {'cmap': 'bwr', 'origin': 'lower',
+               'interpolation': 'none'}
+    # plt.close('all')
+    f, ax = plt.subplots(len(out_channels), pc_count, figsize=(pc_count, len(out_channels)), sharex=True, sharey=True)
+    f2, ax2 = plt.subplots(len(out_channels), pc_count, figsize=(pc_count, len(out_channels)), sharex=True, sharey=True)
+    for oi, oc in enumerate(out_channels):
+        for di in range(pc_count):
+            d = dpc[oi, di]
+            d = d / np.max(np.abs(d)) / dpc_mag[0, oi] * dpc_mag[di, oi]
+            ax[oi, di].imshow(d, **imopts)
+            d = dpcz[oi, di]
+            d = d / np.max(np.abs(d)) / dpc_magz[0, oi] * dpc_magz[di, oi]
+            ax2[oi, di].imshow(d, **imopts)
 

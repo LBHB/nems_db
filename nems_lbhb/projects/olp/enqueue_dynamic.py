@@ -11,7 +11,8 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script_dynami
 
 # 2023_07_03.
 # path = '/auto/users/hamersky/olp_analysis/2023-05-17_batch344_0-500_metrics' #full one with PRNB layers and paths
-path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch344_0-500_metric'
+# path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch344_0-500_metric'
+path = '/auto/users/hamersky/olp_analysis/2023-09-21_batch344_0-500_final'
 weight_df = jl.load(path)
 
 batch = int(weight_df.batch.unique()[0])

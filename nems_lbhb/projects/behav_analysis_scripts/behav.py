@@ -6,21 +6,21 @@ import pandas as pd
 
 from nems0 import db
 
-plt.ion()
-
-font_size = 8
-params = {'legend.fontsize': font_size - 2,
-          'figure.figsize': (8, 6),
-          'axes.labelsize': font_size,
-          'axes.titlesize': font_size,
-          'axes.spines.right': False,
-          'axes.spines.top': False,
-          'xtick.labelsize': font_size,
-          'ytick.labelsize': font_size,
-          'pdf.fonttype': 42,
-          'ps.fonttype': 42}
-
-plt.rcParams.update(params)
+# plt.ion()
+#
+# font_size = 8
+# params = {'legend.fontsize': font_size - 2,
+#           'figure.figsize': (8, 6),
+#           'axes.labelsize': font_size,
+#           'axes.titlesize': font_size,
+#           'axes.spines.right': False,
+#           'axes.spines.top': False,
+#           'xtick.labelsize': font_size,
+#           'ytick.labelsize': font_size,
+#           'pdf.fonttype': 42,
+#           'ps.fonttype': 42}
+#
+# plt.rcParams.update(params)
 
 
 #Class that contains dataframe for a single animal
@@ -39,7 +39,7 @@ class behav:
 
 
     def import_data(self):
-        sql = f"SELECT * FROM gDataRaw WHERE runclass = '{self.task}' AND cellid like '{self.animal}%' AND training=1 AND bad=0 order by id"
+        sql = f"SELECT * FROM gDataRaw WHERE runclass = '{self.task}' AND cellid like '{self.animal}%' AND bad=0 order by id"
 
         d_rawfiles = db.pd_query(sql)
 
@@ -133,9 +133,15 @@ class behav:
                 d['combined_stim'] = d['s1_name']
                 d.loc[d['s1_name'].isna(), 'combined_stim'] = d['s2_name']
                 d['pitch'] = d['combined_stim'].apply(label_based_on_three_digit_number)
-                interesting_data = d[
-                    ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
-                     'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                try:
+                    interesting_data = d[
+                        ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
+                         'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                except:
+                    interesting_data = d[
+                        ['trial_number', 'response', 'correct', 'response_time', 'snr', 'spatial_config', 'pitch',
+                         'trial_duration', 'trial_is_repeat']].copy()
+
                 interesting_data['parmfile'] = r['parmfile']
                 interesting_data['session_id'] = session_id
                 interesting_data['day'] = r['cellid']
@@ -250,9 +256,11 @@ class behav:
         # plt.xlabel('Trial type')
         # plt.ylabel('Response time (s)')
         # # plt.title(f'Response time for {parmfile}')
+        return f
 
     def perform_over_time(self, XVARIABLE, YVARIABLE='correct', day_list=[], kind='bar', only_0_db=False):
 
+        YVARIABLE = YVARIABLE
         if len(day_list) == 0:
             plot_frame = self.dataframe.copy()
         else:
@@ -278,7 +286,7 @@ class behav:
         # plt.show()
         # print(plot_frame.groupby(XVARIABLE)[YVARIABLE].count())
 
-        plt.figure()
+        f,ax = plt.subplots()
         # YVARIABLE = 'correct'
         Non_nose_poke = plot_frame.loc[(plot_frame['early_nosepoke'] == False)]
         Non_nose_poke = Non_nose_poke[Non_nose_poke['remind_trial'] == False]
@@ -287,19 +295,21 @@ class behav:
         for i, v in enumerate(XVARIABLE):
             for j, w in enumerate(Non_nose_poke[v].unique()):
                 series = Non_nose_poke[Non_nose_poke[v] == w].groupby('day')[YVARIABLE].mean()
-                series.plot(kind='line', label=f'{w}')
-        plt.axhline(y=0.5, linestyle='--')
-        plt.ylim([0, 1])
-        plt.xlabel(XVARIABLE)
-        plt.ylabel(YVARIABLE)
-        plt.title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
+                series.plot(kind='line', label=f'{w}', ax=ax)
+                print(series)
+        ax.axhline(y=0.5, linestyle='--')
+        ax.set_ylim([0, 1])
+        ax.set_xlabel(XVARIABLE)
+        ax.set_ylabel(YVARIABLE)
+        ax.set_title(f'{YVARIABLE} for session {Non_nose_poke["day"].unique()[0]} without early_nps',
                   fontsize = 8)
         plt.legend()
         ticks = np.arange(len(day_list))
-        plt.xticks(ticks=ticks, labels=day_list, rotation=90)
-        plt.tight_layout()
-        plt.show()
+        ax.set_xticks(ticks=ticks, labels=day_list, rotation=90)
+        f.tight_layout()
+        #plt.show()
         print(Non_nose_poke.groupby(XVARIABLE)[YVARIABLE].count())
+        return f
 
     def remove_remind_trials(self):
         remind_trials = (self.dataframe['correct'].shift(1) == False) & (self.dataframe['response'].shift(1) != 'early_np')
@@ -385,7 +395,7 @@ def lemon_space_snr_bar():
     d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-10,-20,-30]))]
     example.dataframe = d
     days=d.loc[d['day']>=start_site,'day'].unique().tolist()
-    example.sample_plots(XVARIABLE, day_list=days)
+    f = example.sample_plots(XVARIABLE, day_list=days)
 
     # for day in days:
     #     example.sample_plots(XVARIABLE, day_list=[day])
@@ -397,6 +407,7 @@ def lemon_space_snr_bar():
     #
     # plt.figure()
     # dday.plot()
+    return f
 
 def slippy_space_snr_bar():
     example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
@@ -410,10 +421,10 @@ def slippy_space_snr_bar():
     d = d.loc[(d['day']>=start_site) & (d['snr'].isin([0,-5,-10,-15,-20,-30]))]
     example.dataframe = d
     days=d.loc[d['day']>=start_site,'day'].unique().tolist()
-    example.sample_plots(XVARIABLE, day_list=days)
+    f=example.sample_plots(XVARIABLE, day_list=days)
 
-    for day in days:
-      example.sample_plots(XVARIABLE, day_list=[day])
+    #for day in days:
+    #  example.sample_plots(XVARIABLE, day_list=[day])
 
     #d=example.dataframe
     #d=d.loc[(d['early_nosepoke']==False) ]
@@ -422,6 +433,7 @@ def slippy_space_snr_bar():
     #
     # plt.figure()
     # dday.plot()
+    return f
 
 def lemon_space_snr_subplots():
     plot_data = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)

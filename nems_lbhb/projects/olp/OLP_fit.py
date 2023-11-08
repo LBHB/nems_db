@@ -2664,7 +2664,7 @@ def calc_dyn_metrics(batch, cellid=None, parmfile=None):
     cell_df = pd.DataFrame(cell_df)
     cell_df['parmfile'], cell_df['cellid'] = parmfile, cellid
 
-    OLP_dyn_db_path = f"/auto/users/hamersky/cache_dyn_no_spont/{cellid}-{parmfile.split('/')[-1][:-2]}"  # weight + corr
+    OLP_dyn_db_path = f"/auto/users/hamersky/cache_dyn_final/{cellid}-{parmfile.split('/')[-1][:-2]}"  # weight + corr
     os.makedirs(os.path.dirname(OLP_dyn_db_path), exist_ok=True)
 
     jl.dump(cell_df, OLP_dyn_db_path)

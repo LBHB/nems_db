@@ -1012,29 +1012,6 @@ def plot_sound_stats(sound_df, metrics, labels=None, synth_kind=None, lines=None
         return stat
 
 
-def sound_stat_violin(df, mets, met_labels):
-    '''2023_07_03. Quickly made this as an alternative and more concise version of the sound stat bar plot.
-    This just makes a violin plot of the given statistics you ask for. Make sure you also provide a
-    corresponding list of how you want them to be labeled. DF you pass is the straight df you load
-    and the bad sounds will get taken out in the function and the sound_df generated.'''
-    bads = ['CashRegister', 'Heels', 'Castinets', 'Dice']  # RMS Power Woodblock
-    df = df.loc[df['BG'].apply(lambda x: x not in bads)]
-    df = df.loc[df['FG'].apply(lambda x: x not in bads)]
-    sound_df = ohel.get_sound_statistics_from_df(df, percent_lims=[15,85], append=False)
-    sounds = sound_df.loc[sound_df.synth_kind=='N']
-
-    fig, ax = plt.subplots(1, len(mets), figsize=(len(mets)*3,4))
-    for cnt, mt in enumerate(mets):
-        sn.violinplot(data=sounds, x="type", y=mt, ax=ax[cnt])
-        ax[cnt].set_xlabel('')
-        ax[cnt].set_xticklabels(sound_df.type.unique().tolist(), fontweight='bold', fontsize=10)
-        ax[cnt].set_ylabel(met_labels[cnt], fontweight='bold', fontsize=10)
-
-        tt = stats.ttest_ind(sounds.loc[sounds.type=='BG'][mt], sounds.loc[sounds.type=='FG'][mt]).pvalue
-        ax[cnt].set_title(f"p={np.around(tt, 5)}")
-    fig.tight_layout()
-
-
 def add_sound_stats(weight_df, sound_df):
     '''Only for use with get_sound_statistics_full (above). It separately takes the sound_df created by
     that function and adds it to your data table (weight_df). Largely DEFUNCT by get_sound_statistics_from_df
@@ -1160,6 +1137,8 @@ def get_sound_statistics_from_df(df, percent_lims=[15, 85], area=None, append=Tr
             paths = [list(synth_df.loc[synth_df[f'{ll}_filt_name']==dd][f'{ll}_path'])[0] for dd in mean_df[f'{ll}_short_name']]
             # paths = list(synth_df[f'{ll}_path'].unique())
             names = [bb.split('/')[-1].split('.')[0] for bb in paths]
+            # if syn != 'N':
+            #     names = [dd[:-2] for dd in names]
             flt_names = [dd[2:].replace(' ', '') for dd in names]
             flt_names = [dd.replace('_', '') for dd in flt_names]
 
@@ -1940,7 +1919,7 @@ def plot_spike_width_distributions(filt, split_critter=None, line=0.375):
     filtt = filtt.drop_duplicates('cellid')
 
     little, big = filtt.spike_width.min(), filtt.spike_width.max()
-    edges = np.arange(0, np.around(big, 1), .005)
+    edges = np.arange(0, np.around(big, 1), .001)
 
     if split_critter:
         lonely_ferret = filtt.loc[filtt.animal==split_critter]
@@ -1966,7 +1945,8 @@ def plot_spike_width_distributions(filt, split_critter=None, line=0.375):
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
         na, xa = np.histogram(filtt['spike_width'], bins=edges)
         na = na / na.sum() * 100
-        ax.hist(xa[:-1], xa, weights=na, histtype='step', color='dimgrey', linewidth=2)
+        ax.bar(xa[:-1], na, width=0.03, color='dimgrey')
+        ax.hist(xa[:-1], xa, weights=na, histtype='step', color='dimgrey', fill=True)
         ax.set_xlabel('Spike Width', fontsize=10, fontweight='bold')
         ymin, ymax = ax.get_ylim()
         ax.vlines([line], 0, ymax, colors='black', linestyles=':', lw=1)
@@ -2171,6 +2151,10 @@ def get_olp_filter(weight_df, kind='vanilla', metric=False):
         filt = filt.loc[filt.SNR == 0]
         filt = filt.loc[((filt.synth_kind=='A') & (filt.olp_type!='synthetic')) |
                         ((filt.synth_kind=='N') & (filt.olp_type=='synthetic'))]
+    elif kind == 'marmoset':
+        filt = filt.loc[filt.dyn_kind == 'ff']
+        filt = filt.loc[filt.kind == '11']
+        filt = filt.loc[filt.SNR == 0]
 
     # sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=False)
     # bad_dict = ohel.plot_sound_stats(sound_df, ['max_power', 'RMS_power'], labels=['Max Power', 'RMS Power'],
