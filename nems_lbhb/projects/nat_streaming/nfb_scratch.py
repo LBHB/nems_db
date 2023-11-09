@@ -31,9 +31,9 @@ from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_de
 #os.makedirs(figpath, exist_ok=True)
 
 # tested sites
-siteid="LMD004a"
+siteid="LMD008a"
 batch=349
-rasterfs = 20
+rasterfs = 50
 PreStimSilence = 1.0
 
 if 0:
@@ -133,7 +133,7 @@ cidlist = np.arange(len(resp.chans))
 cellcount = len(cidlist)
 rows=int(np.ceil(np.sqrt(cellcount)))
 cols= int(np.ceil(cellcount/rows))
-f,ax=plt.subplots(rows,cols)
+f,ax=plt.subplots(rows,cols, sharex=True, sharey=True)
 ax=ax.flatten()
 r = d.loc[4]
 print(r.fg)
@@ -145,14 +145,15 @@ for i,a in enumerate(ax[:cellcount]):
     rbg = resp.extract_epoch(r['bg'])[:,cid,:T].mean(axis=0)
     rfgbg = resp.extract_epoch(r['fgbg'])[:,cid,:T].mean(axis=0)
     tt = np.arange(len(rfg))/rasterfs - PreStimSilence
-    a.plot(tt,smooth(rfg,smwin),lw=lw, label='fg', color=colors[1])
-    a.plot(tt,smooth(rbg,smwin),lw=lw,label='bg', color=colors[0])
-    a.plot(tt,smooth(rfgbg,smwin),lw=lw,label='fg+bg', color=colors[2])
+    mm = np.max(np.concatenate([rfg, rbg, rfgbg]))
+    a.plot(tt,smooth(rfg/mm,smwin),lw=lw, label='fg', color=colors[1])
+    a.plot(tt,smooth(rbg/mm,smwin),lw=lw,label='bg', color=colors[0])
+    a.plot(tt,smooth(rfgbg/mm,smwin),lw=lw,label='fg+bg', color=colors[2])
     a.set_title(f"CH {cid}", fontsize=7)
 a.legend(frameon=False)
 plt.tight_layout()
 
-cid=19
+cid=36
 #cols=int(np.ceil(np.sqrt(triadcount)))
 cols=4
 rows= int(np.ceil(triadcount/cols))
@@ -180,3 +181,26 @@ ax[i*2].legend()
 f.suptitle(f"{cid} {resp.chans[cid]}")
 plt.tight_layout()
 
+cchisnr = (d.fc==1) & (d.bc==1) & (d.snr==0)
+dcch = d.loc[cchisnr].reset_index()
+f,ax=plt.subplots(2,len(dcch))
+lateonset=int((PreStimSilence+0.2)*rasterfs)
+
+for i,r in dcch.iterrows():
+    efg=r['fg']
+    ebg=r['bg']
+    rfgp=resp.extract_epoch(efg, mask=rec['mask_passive']).mean(axis=0)
+    rbgp=resp.extract_epoch(ebg, mask=rec['mask_passive']).mean(axis=0)
+    rfga=resp.extract_epoch(efg, mask=rec['mask_active'], allow_empty=True).mean(axis=0)
+    rbga=resp.extract_epoch(ebg, mask=rec['mask_active'], allow_empty=True).mean(axis=0)
+    ax[0,i].plot(rfgp.mean(axis=0))
+    ax[0,i].plot(rfga.mean(axis=0))
+    ax[0,i].set_title(r['f'])
+    ax[0,i].axvline(x=lateonset, ls='--')
+    ax[1,i].plot(rbgp.mean(axis=0))
+    ax[1,i].plot(rbga.mean(axis=0))
+    ax[1,i].set_title(r['b'])
+    ax[1,i].axvline(x=lateonset, ls='--')
+
+i=0
+ef=dcch.loc[0]

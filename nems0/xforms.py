@@ -891,8 +891,11 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
     return {'figures': figures}
 
 
-def save_lite(modelspec=None, xfspec=None, log=None, figures=[], **ctx):
+def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False, **ctx):
     from nems.tools import json
+
+    if IsReload:
+        return modelspec.meta['modelpath']
 
     if get_setting('USE_NEMS_BAPHY_API'):
         prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'

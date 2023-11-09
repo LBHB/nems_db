@@ -1,11 +1,15 @@
 # LBHB-specific post-processors
 # WARNING: Changes to ctx made by functions in this file won't get saved whenthe model is run by fit_model_xform
 import logging
+import numpy as np
+import matplotlib.pyplot as plt
 
 import nems0.db as nd
 import nems0.xforms
 
 import nems_lbhb.projects.nat_pup_decoding.do_decoding as decoding
+from nems.tools import dstrf as dtools
+from nems0.utils import shrinkage
 
 log = logging.getLogger(__name__)
 
@@ -104,20 +108,27 @@ def save_pred_signal(**ctx):
     return ctx
 
 
-def dstrf_pca(rec, est, val, modelspec, model_list=None,
-              D=15, timestep=3 **ctx)
+def dstrf_pca(rec, est, val, modelspec, modelspec_list=None,
+              D=15, timestep=3, pc_count=7, IsReload=False, **ctx):
 
-    if model_list is None:
-        model_list = [modelspec]
-    cellids = rec['resp'].chans
+    if IsReload:
+        # load dstrf data saved in modelpath
 
-    t_indexes = np.arange(time_step, val['stim'].shape[1], timestep)
+        return
+
+    if modelspec_list is None:
+        modelspec_list = [modelspec]
+    cellids = val['resp'].chans
+
+    t_indexes = np.arange(timestep, val['stim'].shape[1], timestep)
+    t_indexes = t_indexes[t_indexes>D]
     log.info(f"Computing dSTRF at {len(t_indexes)} timepoints,timestep={timestep}")
 
     out_channels = np.arange(len(cellids))
+
     stim = {'input': val['stim'].as_continuous().T}
     dstrfs = []
-    for mi, m in enumerate(model_list):
+    for mi, m in enumerate(modelspec_list):
         d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
         dstrfs.append(d['input'])
 
@@ -133,7 +144,7 @@ def dstrf_pca(rec, est, val, modelspec, model_list=None,
 
     mdstrf /= np.max(np.abs(mdstrf)) * 0.9
     mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
-    pc_count = 7
+
     dpc, dpc_mag = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count)
     dpcz, dpc_magz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count)
 
@@ -153,3 +164,8 @@ def dstrf_pca(rec, est, val, modelspec, model_list=None,
             d = d / np.max(np.abs(d)) / dpc_magz[0, oi] * dpc_magz[di, oi]
             ax2[oi, di].imshow(d, **imopts)
 
+    modelpath = modelspec.meta['modelpath']
+
+    return {'dpc': dpc, 'dpc_mag': dpc_mag, 'mdstrf': mdstrf,
+            'dpcz': dpcz, 'dpcz_mag': dpcz_mag, 'mzdstrf': mdstrf,
+            }
