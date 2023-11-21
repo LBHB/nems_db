@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_restful import Api
 from nems_baphy.api import BaphyInterface, GetRecording, UploadResults, UploadQueueLog, GetDaq
+from nems_baphy.plot import Plot
 from nems_db.util import ensure_env_vars
 from nems0 import get_settings, get_setting
 
@@ -52,5 +53,7 @@ api.add_resource(UploadResults,
 api.add_resource(UploadQueueLog,
                  '/queuelog/<string:queueid>',
                  resource_class_kwargs={})
+
+api.add_resource(Plot, '/plot/<string:plottype>', resource_class_kwargs={})
 
 app.run(port=int(creds['NEMS_BAPHY_API_PORT']), host=creds['NEMS_BAPHY_API_HOST'])

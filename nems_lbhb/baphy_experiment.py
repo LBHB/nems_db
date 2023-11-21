@@ -1626,6 +1626,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
         behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
         epochs.append(behavior_epochs)
     elif exptparams['BehaveObjectClass'] in ['psi-go-nogo']:
+        behavior = True
         behavior_epochs = exptevents.loc[
             (exptevents.name.str.endswith('_TRIAL') |
              exptevents.name.str.startswith('LICK'))

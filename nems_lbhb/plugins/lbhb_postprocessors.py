@@ -115,10 +115,11 @@ def dstrf(loadkey):
     """
     Run Decoding Analysis
     """
-    return [['nems0.xforms.predict', {}],
-            ['nems0.xforms.add_summary_statistics', {}],
-            ['nems0.xforms.plot_summary', {}],
-            ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
+    #return [['nems0.xforms.predict', {}],
+    #        ['nems0.xforms.add_summary_statistics', {}],
+    #        ['nems0.xforms.plot_summary', {}],
+    #        ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
+    return [['nems_lbhb.postprocessing.dstrf_pca']]
 
     return xfspec
 

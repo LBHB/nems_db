@@ -62,8 +62,9 @@ rasterfs=50
 #ANALYSIS = 'fit'
 #ANALYSIS = 'dstrf example'
 #ANALYSIS = 'scratch'
-ANALYSIS='movement diagram'
+#ANALYSIS='movement diagram'
 #ANALYSIS= 'pop stats'
+ANALYSIS = 'scratchfit'
 
 cost_function='nmse'
 #cost_function='squarederror'
@@ -367,4 +368,39 @@ elif ANALYSIS=='scratch':
     res = np.load(dfile)
     print(pc_mags.std(), res['pc_mags'].std(), (pc_mags-res['pc_mags']).std())
 
+elif ANALYSIS=='scratchfit':
+    rec = free_model.load_free_data(siteid, batch=batch, rasterfs=rasterfs, dlc_chans=dlc_chans, compute_position=True)
+    modelopts={'dlc_memory': 4, 'acount': 12, 'dcount': 8, 'l2count': 24, 'cost_function': 'squared_error'}
+    modelopts={'dlc_memory': 4, 'acount': 12, 'dcount': 8, 'l2count': 24, 'cost_function': 'nmse'}
 
+    loadops = {'shuffle': 'none', 'apply_hrtf': True}
+    ctx = free_model.free_fit(rec, save_to_db=False, jack_count=5, **loadops, **modelopts)
+
+    rec = ctx['rec']
+    est = ctx['est']
+    val = ctx['val']
+    model = ctx['modelspec']
+    model_list = ctx['model_list']
+    cellids = rec['resp'].chans
+
+    pc_mags = []
+    mdstrfs = []
+    for out_channel in range(rec['resp'].shape[0]):
+        mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, model_list, D=11, out_channel=out_channel, pc_count=5)
+        pc_mags.append(pc_mag)  # unit x model x didx x pc
+        mdstrfs.append(mdstrf)   # unit x model x didx x frequency x lag
+
+    labels = [f"J{i}" for i in range(len(model_list))]
+    f = free_vs_fixed_strfs.dstrf_plots(model_list, mdstrfs[out_channel], out_channel, interpolation_factor=2, cellid=cellids[out_channel], fs=50, labels=labels)
+
+    pc_mags = np.stack(pc_mags, axis=0)
+    mdstrfs = np.stack(mdstrfs, axis=0)
+    # difference between front and back dstrfs
+    fbdiff = mdstrfs[:,:,2,:,:]-mdstrfs[:,:,0,:,:]
+    fbmod = fbdiff.std(axis=(2,3))/(mdstrfs[:,:,0,:,:].std(axis=(2,3))+mdstrfs[:,:,2,:,:].std(axis=(2,3)))*2
+    cellids = rec['resp'].chans
+    r_test = model.meta['r_test']
+    r_floor = model.meta['r_floor']
+
+    outpath = model.meta['modelpath']
+    dfile = os.path.join(outpath, 'dstrf.npz')

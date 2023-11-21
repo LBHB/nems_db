@@ -17,34 +17,55 @@
 
 import deeplabcut
 
-experimenter="svd"
+experimenter = "svd"
 
 #name = 'free_training'  # implant but no chimneys
 name = 'two_chimney'  # dual recording setup
+name = 'two_chimney2'  # dual recording setup - take 2
+#name = 'two_chimney_LMD'  # dual recording setup
 
-# create a new project
-# for original project creation
-videos = ['/auto/data/dlc/videos/SLJ010a04_a_NTD.avi',
-          '/auto/data/dlc/videos/SLJ032a10_a_NTD.avi']
-path_config_file = deeplabcut.create_new_project(
-   name, experimenter,
-   videos,
-   working_directory='/auto/data/dlc/',
-   copy_videos=True,
-   multianimal=False,
-)
+create_new = False
 
-# set up for fitting/refining
-if name=='free_training':
+if create_new:
+    # create a new project
+    # for original project creation
+    path = '/auto/data/dlc/two_chimney-svd-2023-09-28/'
+    videos = [path + 'videos/SLJ010a04_a_NTD.avi',
+              path + 'videos/SLJ032a10_a_NTD.avi',
+              path + 'videos/LMD004a00_a_NFB.avi',
+              path + 'videos/LMD005a10_a_NFB.avi']
+    path_config_file = deeplabcut.create_new_project(
+       name, experimenter,
+       videos,
+       working_directory='/auto/data/dlc/',
+       copy_videos=True,
+       multianimal=False,
+    )
+
+elif name=='free_training':
+    # set up for fitting/refining
 
     # implant but no chimneys
     path='/auto/data/dlc/free_train-svd-2023-09-26/'
     videos = [path+'videos/SlipperyJack_2023_08_02_NTD_1.avi',
               path+'videos/LemonDisco_2023_09_07_NFB_2.avi']
-else:
+    elif name == 'two_chimney':
     path = '/auto/data/dlc/two_chimney-svd-2023-09-28/'
-    videos = [path+'videos/SLJ010a04_a_NTD.avi',
-              path+'videos/SLJ032a10_a_NTD.avi']
+    videos = [path + 'videos/SLJ010a04_a_NTD.avi',
+              path + 'videos/SLJ032a10_a_NTD.avi',
+              path + 'videos/LMD004a00_a_NFB.avi',
+              path + 'videos/LMD005a10_a_NFB.avi']
+elif name == 'two_chimney2':
+    path = '/auto/data/dlc/two_chimney2-svd-2023-11-03/'
+    videos = [path + 'videos/SLJ010a04_a_NTD.avi',
+              path + 'videos/SLJ032a10_a_NTD.avi',
+              path + 'videos/LMD004a00_a_NFB.avi',
+              path + 'videos/LMD005a10_a_NFB.avi']
+else:
+    path = '/auto/data/dlc/two_chimney-LMD-2023-11-01/'
+    videos = [path+'videos/LMD004a00_a_NFB.avi',
+              path+'videos/LMD005a10_a_NFB.avi']
+    videos = [path+'videos/LMD004a00_a_NFB.avi']
 
 path_config_file = path + 'config.yaml'
 
@@ -58,7 +79,7 @@ deeplabcut.label_frames(path_config_file)
 
 deeplabcut.create_training_dataset(path_config_file, augmenter_type='imgaug')
 deeplabcut.train_network(path_config_file, shuffle=1, max_snapshots_to_keep=5, 
-                         autotune=False, displayiters=100, saveiters=5000, maxiters=30000, allow_growth=True)
+                         autotune=False, displayiters=100, saveiters=10000, maxiters=60000, allow_growth=True)
 
 deeplabcut.evaluate_network(path_config_file, plotting=True)
 
@@ -66,14 +87,14 @@ deeplabcut.analyze_videos(path_config_file, videos, videotype='.avi')
 
 deeplabcut.create_labeled_video(path_config_file, videos)
 
-deeplabcut.extract_outlier_frames(path_config_file, videos) #pass a specific video
+deeplabcut.extract_outlier_frames(path_config_file, videos)  #pass a specific video
 
 deeplabcut.refine_labels(path_config_file)
 deeplabcut.merge_datasets(path_config_file)
 deeplabcut.create_training_dataset(path_config_file, augmenter_type='imgaug')
 # edit init_weights in pose_cfg.yaml to point to checkpoint from previous fit
 deeplabcut.train_network(path_config_file, shuffle=1, max_snapshots_to_keep=5,
-                         autotune=False, displayiters=100, saveiters=5000, maxiters=30000, allow_growth=True)
+                         autotune=False, displayiters=100, saveiters=5000, maxiters=50000, allow_growth=True)
 
 
 

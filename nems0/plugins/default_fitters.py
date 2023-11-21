@@ -910,7 +910,9 @@ def _parse_options(fitkey, **default_options):
             else:
                 options['learning_rate'] = 10 ** -float(learning_rate)
         elif op.startswith('es'):
-            options['validation_split'] = float(op[2:])/100
+            options['validation_split'] = float(op[2:]) / 100
+        elif op.startswith('jk'):
+            options['jackknife_count'] = int(op[2:])
     return options
 
 

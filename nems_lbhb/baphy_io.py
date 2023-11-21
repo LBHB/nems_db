@@ -2054,12 +2054,37 @@ def psi_parm_read(filepath):
             info = json.loads(r['Info'])
             fg_name = f'{info["result"]["fg_name"]}'
             bg_name = f'{info["result"]["bg_name"]}'
-            name = f"{fg_name.replace('.wav','')}:0.5:3.5:{info['result']['fg_channel']}+{bg_name.replace('.wav','')}:0:4:{info['result']['bg_channel']}"
-            stimevents.loc[ee, 'name'] = f'Stim , {name} , Target'
-            stimevents.loc[ee, 'start'] = info["result"]["trial_start"]
-            stimevents.loc[ee, 'end'] = info["result"]["trial_start"]+4
+            snr = info["result"]['snr']
+            fg_channel = info['result']['fg_channel']+1
+            bg_channel = info['result']['bg_channel']+1
+            target_delay=info['result']['target_delay']
+            fg_duration=info['result']['fg_duration']
+            bg_duration=info['result']['bg_duration']
+            #prestimsilence=info['result']['np_duration']
+            #poststimsilence=0.5
+            prestimsilence=1.0  # match OLP passives
+            poststimsilence=1.0
+            target_off=target_delay+fg_duration
+            if snr<50:
+                bg_str = f"{bg_name.replace('.wav','')}-0-{bg_duration}-{bg_channel}"
+            else:
+                bg_str = 'null'
+                snr-=100
+            if snr<0:
+                s_snr=f"n{np.abs(snr):.0f}"
+            else:
+                s_snr=f"{np.abs(snr):.0f}"
+            if snr<-50:
+                fg_str='null'
+            else:
+                #fg_str=f"{fg_name.replace('.wav','')}-{target_delay}-{target_off}-{fg_channel}-{s_snr}dB"
+                fg_str = f"{fg_name.replace('.wav', '')}-{0}-{bg_duration}-{fg_channel}-{s_snr}dB"
+            name = f"{bg_str}_{fg_str}"
+            stimevents.loc[ee, 'name'] = f'Stim , {name} , Reference'
+            stimevents.loc[ee, 'start'] = info["result"]["trial_start"]-prestimsilence
+            stimevents.loc[ee, 'end'] = info["result"]["trial_start"]+bg_duration+poststimsilence
             stimevents.loc[ee, 'Info'] = ''
-            
+            Names.append(name)
             #if T.loc[ee,'score'] == 0:
             #    trial_events.loc[ee, 
         Names = list(set(Names))
@@ -2069,13 +2094,13 @@ def psi_parm_read(filepath):
     # add pre- and post- silences
     prestimevents=stimevents.copy()
     starts = prestimevents['start'].copy()
-    prestimevents['start'] = starts-prestimsilence
-    prestimevents['end'] = starts
+    prestimevents['start'] = starts
+    prestimevents['end'] = starts+prestimsilence
     prestimevents['name'] = prestimevents['name'].str.replace('Stim ,','PreStimSilence ,')
     poststimevents = stimevents.copy()
     stops = poststimevents['end'].copy()
-    poststimevents['start'] = stops
-    poststimevents['end'] = stops+poststimsilence
+    poststimevents['start'] = stops-poststimsilence
+    poststimevents['end'] = stops
     poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
 
     trial_number = T['trial_number']

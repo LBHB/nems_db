@@ -21,10 +21,10 @@ executable_path = '/home/svd/bin/miniconda3/envs/nems2/bin/python'
 script_path = '/auto/users/svd/python/nems_db/scripts/nems0_scripts/fit_single.py'
 GPU_job=True
 
-rank=8
+rank=20
 
 modelnames = [
-    f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}-fir.20x1x{rank}-wc.{rank}xR-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
+    f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}.l2-fir.20x1x{rank}-wc.{rank}xR.l2-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
 ]
 
 
