@@ -153,7 +153,7 @@ for i,a in enumerate(ax[:cellcount]):
 a.legend(frameon=False)
 plt.tight_layout()
 
-cid=36
+cid=52
 #cols=int(np.ceil(np.sqrt(triadcount)))
 cols=4
 rows= int(np.ceil(triadcount/cols))

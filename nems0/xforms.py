@@ -645,7 +645,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 log.info(f'** ({backend}) Fitting without NL - initialization {mi+1}/{rand_count} ...')
 
                 if jackknife_count<=1:
-                    m = m.fit(input=fit_set.inputs, target=fit_set.targets, state=fit_set.state, backend=backend,
+                    m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
                               freeze_layers=freeze_layers, fitter_options=fitter_options,
                               batch_size=batch_size, verbose=1, progress_fun=progress_fun)
                     m.layers[-1].unskip_nonlinearity()
@@ -859,7 +859,10 @@ def predict_lite(modelspec, est, val,
                 X_val = np.moveaxis(val[input_name].as_continuous(), -1, 0)
                 S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
             j_prediction.append(m.predict(X_val, state=S_val).T)
-    return {'val': val, 'est': est,'j_prediction': j_prediction}
+        return {'val': val, 'est': est, 'j_prediction': j_prediction}
+    else:
+        return {'val': val, 'est': est}
+
 
 def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=False,
               figures=None, figures_to_load=None, **context):
