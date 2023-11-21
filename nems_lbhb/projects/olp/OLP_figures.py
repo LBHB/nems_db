@@ -1027,7 +1027,9 @@ def snr_weight_scatter_all_areas(filt):
 
     for ax, ar, col in zip(axes, areas, cols):
         area_df = filt.loc[filt.area==ar]
-        sb.scatterplot(x=fr_met, y=ycol, data=area_df, ax=ax, s=3, color=col)
+        size = len(area_df)
+        area_df = area_df.iloc[::5, :]
+        sb.scatterplot(x=fr_met, y=ycol, data=area_df, ax=ax, s=15, color=col)
 
         X, Y = area_df[fr_met], area_df[ycol]
         reg = stats.linregress(X, Y)
@@ -1036,10 +1038,12 @@ def snr_weight_scatter_all_areas(filt):
         ax.plot(x, y, color='dimgrey', label=f"slope: {reg.slope:.3f}\n"
                                                  f"coef: {reg.rvalue:.3f}\n"
                                                  f"p = {reg.pvalue:.3f}")
+        print(f'{ar} --- {met}_slope: {reg.slope}, {met}_r: {reg.rvalue}, {met}_p: {reg.pvalue}')
+
         ax.legend()
 
         ax.set_xlabel('FG snr - BG snr', fontsize=12, fontweight='bold')
-        ax.set_title(f'{ar}: n={len(area_df)}', fontsize=12, fontweight='bold')
+        ax.set_title(f'{ar}: n={size}', fontsize=12, fontweight='bold')
 
     axes[0].set_ylabel('FG weight - BG weight', fontsize=12, fontweight='bold')
     fig.tight_layout()
@@ -1166,6 +1170,7 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
     # fig, axes = plt.subplots(1, len(x_metrics), figsize=(len(x_metrics)*5, 6))
     fig, axes = plt.subplots(1, len(x_metrics), figsize=(8, 5), sharey=True)
 
+    stat_dict = []
     for cnt, (ax, met) in enumerate(zip(axes, x_metrics)):
         # Add a column that is the data for that metric, but jittered, for viewability
         if mean==False:
@@ -1221,6 +1226,8 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
                                                  f"coef: {reg.rvalue:.3f}\n"
                                                  f"p = {reg.pvalue:.3f}")
         ax.legend()
+        stat = {f'{met}_slope': reg.slope, f'{met}_r': reg.rvalue, f'{met}_p': reg.pvalue}
+        stat_dict.append(stat)
 
     if threshold:
         fig.suptitle(f"{area} - {synth_kind} - r >= {r_cut} - FR_thresh >= {threshold} "
@@ -1229,7 +1236,7 @@ def sound_metric_scatter(df, x_metrics, y_metric, x_labels, suffix='', area='A1'
         fig.suptitle(f"{area} - {synth_kind} - r >= {r_cut} - snr >= {snr_threshold} "
                      f"- {title_text}", fontweight='bold', fontsize=10)
 
-    return quad
+    return quad, stat_dict
 
 
 def scatter_model_accuracy(df, stat='FG_rel_gain', bin_kind='11', synth_kind='N', threshold=0.03):
@@ -1338,9 +1345,7 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
     y = reg.slope * x + reg.intercept
     ax.plot(x, y, color='black', label=f"coef: {reg.rvalue:.3f}\n"
                                           f"p = {reg.pvalue:.3f}")
-    # ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
-    #                                       f"coef: {reg.rvalue:.3f}\n"
-    #                                       f"p = {reg.pvalue:.3f}")
+    print(f"slope: {reg.slope}\nr: {reg.rvalue}\np: {reg.pvalue}")
     ax.legend()
 
     ax.set_title(f'{area} - snr >= {snr_threshold} -  fr >= {thresh} - r >= {r_cut}\nn={weight_df.shape[0]}\n', fontsize=10, fontweight='bold')
@@ -1657,6 +1662,15 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
                 fg_m_end_summary, fg_se_end_summary = jack_mean_err(filt.weightsB_end, do_median=True)
                 stat_label = 'Median'
 
+            filt['weightsA_diff'] = filt.weightsA_end - filt.weightsA_start
+            filt['weightsB_diff'] = filt.weightsB_end - filt.weightsB_start
+            # filt['RG_BG_diff'] = filt.BG_rel_gain_end - filt.BG_rel_gain_start
+            # filt['RG_FG_diff'] = filt.FG_rel_gain_end - filt.FG_rel_gain_start
+            weights_diff = stats.wilcoxon(filt['weightsA_diff'], filt['weightsB_diff'], nan_policy='omit')
+            RG_diff = stats.wilcoxon(filt['FG_rel_gain_start'], filt['FG_rel_gain_end'], nan_policy='omit')
+            aas = {f'weights_diff_{aa}': weights_diff.pvalue, f'RG_diff_{aa}': RG_diff.pvalue}
+            stat_list.append(aas)
+
             ax[num].scatter(x=['BG_start', 'BG_end'], y=[bg_m_start_summary, bg_m_end_summary],
                             label=f'Total (n={len(filt)})', color='black')
             ax[num].scatter(x=['FG_start', 'FG_end'], y=[fg_m_start_summary, fg_m_end_summary], color='black')
@@ -1780,6 +1794,129 @@ def plot_all_weight_comparisons(df, fr_thresh=None, snr_threshold=0.12, r_thresh
         # ax[axn].set_xlabel("Mean Weight", fontweight='bold', fontsize=14)
 
         axn += 1
+    fig.tight_layout()
+
+    return stat_list
+
+
+def plot_all_weight_comparisons_RG(df, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+                                weight_lim=[-0.5,2], summary=True, sep_hemi=False, sort_category=None,
+                                uniform_animal=True):
+    '''2023_11_02. Basically the same function as without the _RG, but changed it so it plots the data as
+    RG rather than weights. Use for manuscript.'''
+    areas = list(df.area.unique())
+    areas.sort()
+
+    if sep_hemi == True:
+        colors = ['mediumorchid', 'darkorange', 'orangered', 'green', 'yellow', 'blue']
+    else:
+        if sort_category:
+            colors = ['red', 'navy', 'orange', 'limegreen', 'magenta', 'teal']
+            df = df.copy()
+            df['animal'] = df[sort_category]
+
+            # voc_labels = {'Yes': 'Vocalization', 'No': 'Non-vocalization'}
+            # df['animal'] = df['Vocalization'].map(voc_labels)
+        else:
+            df['animal'] = [cc.split('_')[0] for cc in df['animal']]
+            if uniform_animal==True:
+                colors = ['darkgrey', 'darkgrey', 'darkgrey', 'darkgrey', 'darkgrey', 'darkgrey']
+            else:
+                colors = ['mediumorchid', 'darkorange', 'limegreen', 'blue', 'goldenrod', 'pink']
+
+    # This can be mushed into one liners using list comprehension and show_suffixes
+    if fr_thresh and not snr_threshold:
+        quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                               & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+        print("FR thresh did happen")
+
+    elif snr_threshold and not fr_thresh:
+        print("FR thresh didn't happen")
+        quad3 = df.loc[(df.bg_snr_start >= snr_threshold) & (df.fg_snr_start >= snr_threshold)
+                       & (df.bg_snr_end >= snr_threshold) & (df.fg_snr_end >= snr_threshold)]
+
+    elif snr_threshold and fr_thresh:
+        quad3 = df.loc[(df.bg_FR_start >= fr_thresh) & (df.fg_FR_start >= fr_thresh)
+                               & (df.bg_FR_end >= fr_thresh) & (df.fg_FR_end >= fr_thresh)]
+        quad3 = quad3.loc[(quad3.bg_snr_start >= snr_threshold) & (quad3.fg_snr_start >= snr_threshold)
+                       & (quad3.bg_snr_end >= snr_threshold) & (quad3.fg_snr_end >= snr_threshold)]
+    else:
+        raise ValueError('Need a threshold for this one, either FR or snr.')
+
+    if weight_lim:
+        quad3 = quad3.loc[((quad3[f'weightsA_start'] >= weight_lim[0]) & (quad3[f'weightsA_start'] <= weight_lim[1])) &
+                          ((quad3[f'weightsB_start'] >= weight_lim[0]) & (quad3[f'weightsB_start'] <= weight_lim[1])) &
+                          ((quad3[f'weightsA_end'] >= weight_lim[0]) & (quad3[f'weightsA_end'] <= weight_lim[1])) &
+                          ((quad3[f'weightsB_end'] >= weight_lim[0]) & (quad3[f'weightsB_end'] <= weight_lim[1]))]
+
+    fig, ax = plt.subplots(1, 1, figsize=(3.5, 6), sharey=True)
+    # ax = np.ravel(ax)
+
+    plus = 0.45
+    filt_list, tick_list = [], []
+    for num, aa in enumerate(areas):
+        area_df = quad3.loc[quad3.area==aa]
+        if strict_r == True:
+            filt = area_df.loc[(area_df['r_start'] >= r_thresh) & (area_df['r_end'] >= r_thresh)]
+        else:
+            filt = area_df.loc[area_df["r"] >= r_thresh]
+
+        if summary == True:
+            alph = 0.35
+        else:
+            alph = 1
+
+        sort_animals = list(filt.animal.unique())
+        sort_animals.sort()
+        for ee, an in enumerate(sort_animals):
+            animal_df = filt.loc[filt.animal == an]
+
+            m_start, m_end = np.mean(animal_df.FG_rel_gain_start), np.mean(animal_df.FG_rel_gain_end)
+            se_start, se_end = stats.sem(animal_df.FG_rel_gain_start), stats.sem(animal_df.FG_rel_gain_end)
+            if uniform_animal==True:
+                ax.scatter(x=[num, num+plus], y=[m_start, m_end], color=colors[ee], alpha=alph)
+            else:
+                ax.scatter(x=[num, num+plus], y=[m_start, m_end],
+                                label=f'{an} (n={len(animal_df)})', color=colors[ee], alpha=alph)
+                ax.legend(fontsize=8, loc='upper right')
+
+            ax.errorbar(x=[num, num+plus], y=[m_start, m_end], yerr=[se_start, se_end],
+                            xerr=None, color=colors[ee], alpha=alph)
+
+        filt_list.append(filt)
+        ax.tick_params(axis='both', which='major', labelsize=10)
+
+        tick_list.append(num)
+        tick_list.append(num+plus)
+
+        if summary == True:
+            m_start_summary, m_end_summary = np.mean(filt.FG_rel_gain_start), np.mean(filt.FG_rel_gain_end)
+            se_start_summary, se_end_summary = stats.sem(filt.FG_rel_gain_start), stats.sem(filt.FG_rel_gain_end)
+
+            ax.scatter(x=[num, num+plus], y=[m_start_summary, m_end_summary],
+                            label=f'Total (n={len(filt)})', color='black')
+            ax.errorbar(x=[num, num+plus], y=[m_start_summary, m_end_summary],
+                             yerr=[se_start_summary, se_end_summary], xerr=None, color='black')
+
+            ax.legend(fontsize=8, loc='upper right')
+
+    ax.set_ylabel(f'Relative gain', fontsize=14, fontweight='bold')
+    ax.set_xticks(tick_list)
+    ax.set_xticklabels([f'A1\nStart', f'A1\nEnd', 'PEG\nStart', 'PEG\nEnd'], fontsize=12, fontweight='bold')
+
+    a1, peg = filt_list[0], filt_list[1]
+    start = stats.mannwhitneyu(a1.FG_rel_gain_start, peg.FG_rel_gain_start)
+    end = stats.mannwhitneyu(a1.FG_rel_gain_end, peg.FG_rel_gain_end)
+    a1['RG_diff'] = a1.FG_rel_gain_end - a1.FG_rel_gain_start
+    peg['RG_diff'] = peg.FG_rel_gain_end - peg.FG_rel_gain_start
+    diff = stats.mannwhitneyu(a1.RG_diff, peg.RG_diff)
+    a1 = stats.wilcoxon(a1.FG_rel_gain_start, a1.FG_rel_gain_end)
+    peg = stats.wilcoxon(peg.FG_rel_gain_start, peg.FG_rel_gain_end)
+
+    stat_list = {'start': start.pvalue, 'end': end.pvalue, 'diff': diff.pvalue, 'a1': a1.pvalue, 'peg': peg.pvalue}
+
+    # fig.suptitle(f"r >= {r_thresh}, FR >= {fr_thresh}, snr >= {snr_threshold}, "
+    #              f"strict_r={strict_r}", fontweight='bold', fontsize=10)
     fig.tight_layout()
 
     return stat_list
@@ -2758,13 +2895,14 @@ def r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshol
 
     inc_lims = np.append(incs, 1)
     totals, total, maxs = {}, 0, []
+    stat_list = []
     for cnt, inc in enumerate(list(incs)):
         r_df = area_df.dropna(axis=0, subset='r')
         r_df = r_df.loc[(r_df.r >= inc) & (r_df.r < inc_lims[cnt+1])]
 
         BG1, FG1 = np.mean(r_df.weightsA), np.mean(r_df.weightsB)
         BG1sem, FG1sem = stats.sem(r_df.weightsA), stats.sem(r_df.weightsB)
-        ttest1 = stats.ttest_ind(r_df.weightsA, r_df.weightsB)
+        ttest1 = stats.wilcoxon(r_df.weightsA, r_df.weightsB)
 
         # ax[1].bar("BG", BG1, yerr=BG1sem, color='white')
         # ax[1].bar("FG", FG1, yerr=FG1sem, color='white')
@@ -2784,6 +2922,8 @@ def r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshol
         bin_name = f"r={np.around(inc, 1)}-{np.around(inc_lims[cnt + 1], 1)}"
         totals[bin_name] = len(r_df)
         total += len(r_df)
+
+        stat_list.append({f'{inc}': ttest1.pvalue})
 
         if ttest1.pvalue < 0.001:
             title = 'p<0.001'
@@ -2818,6 +2958,7 @@ def r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshol
     ax[-1].set_title(f'snr>={snr_threshold}\nn={total}', fontsize=7)
 
     fig.tight_layout()
+    return stat_list
 
 
 def weight_summary_histograms_flanks(filt, snr_threshold=0.12, fr_thresh=0.03, r_cut=None, area='A1'):
@@ -2950,17 +3091,18 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area
     fig, ax = plt.subplots(1, 1, figsize=(areas*2, 6))
 
     count, cc, totals, titles = 0, [], {}, []
+    stat_list = []
     for ar in list(filt[category].unique()):
         cnt = count + 1
         area_df = to_plot.loc[to_plot[category]==ar]
 
-        BG1, FG1 = np.median(area_df.weightsA), np.median(area_df.weightsB)
-        BG1sem, FG1sem = stats.sem(area_df.weightsA), stats.sem(area_df.weightsB)
+        # BG1, FG1 = np.median(area_df.weightsA), np.median(area_df.weightsB)
+        # BG1sem, FG1sem = stats.sem(area_df.weightsA), stats.sem(area_df.weightsB)
 
-        BG1, BG1sem = jack_mean_err(to_plot.weightsA, do_median=True)
-        FG1, FG1sem = jack_mean_err(to_plot.weightsB, do_median=True)
+        BG1, BG1sem = jack_mean_err(area_df.weightsA, do_median=True)
+        FG1, FG1sem = jack_mean_err(area_df.weightsB, do_median=True)
 
-        ttest1 = stats.ttest_ind(area_df.weightsA, area_df.weightsB)
+        # ttest1 = stats.ttest_ind(area_df.weightsA, area_df.weightsB)
         ttest1 = stats.wilcoxon(area_df.weightsA, area_df.weightsB)
 
 
@@ -2980,6 +3122,7 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area
 
         little_title = f"{ar[0]} - BG: {np.around(BG1,2)}, FG: {np.around(FG1,2)}, {title}"
         titles.append(little_title)
+        stat_list.append({f'{ar}': ttest1.pvalue})
 
         count += 1
 
@@ -2994,6 +3137,7 @@ def metric_weight_bars(filt, threshold=None, snr_threshold=0.12, r_cut=0.4, area
         ax.set_title(f"{area}\n{title_list}", fontsize=10)
     else:
         ax.set_title(f"{title_list}", fontsize=10)
+    return stat_list
 
 
 def summary_relative_gain_all_areas(filt, kind_show=['11','12','21','22'], category='kind', mult_comp=3,
@@ -3385,11 +3529,15 @@ def plot_spectral_overlap_scatter(filt, area='A1', y_metric='rel_gain'):
     ax.plot(x, y, color='darkgrey', label=f"slope: {reg.slope:.3f}\n"
                                           f"coef: {reg.rvalue:.3f}\n"
                                           f"p = {reg.pvalue:.3f}", zorder=2)
+    stat = {f'overlap_slope': reg.slope, f'overlap_r': reg.rvalue, f'overlap_p': reg.pvalue}
+
     ax.legend()
     ax.set_xlabel('Spectral Overlap (%)', fontsize=10, fontweight='bold')
     ax.set_ylabel('Relative Gain', fontsize=10, fontweight='bold')
     ax.set_title(dff.area.unique()[0], loc='left', fontsize=12, fontweight='bold')
     fig.tight_layout()
+
+    return stat
 
 
 def plot_big_sound_stat_regression_same_plot(filt, xvar=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
@@ -3528,6 +3676,8 @@ def plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidt
         ax.set_xticklabels(labs, fontweight='bold', fontsize=10, rotation=60)
         ax.legend()
     f.tight_layout()
+
+    return a1, peg
 
 
 def example_dynamic_psth(df, cellid, bg, fg, dyn='fh', smooth=True, sigma=1):
@@ -3842,7 +3992,7 @@ def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', sec
     ax[0].tick_params(axis='both', which='major', labelsize=8)
     ymin, ymax = ax[0].get_ylim()
 
-
+    stat_dict = {}
     for aaa, ar in enumerate(areas):
         if aaa==0:
             ee = 1
@@ -3861,6 +4011,8 @@ def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', sec
 
         ttest1 = stats.ttest_ind(to_plot.weightsA, to_plot.weightsB)
         ttest2 = stats.wilcoxon(to_plot.weightsA, to_plot.weightsB)
+        stat_dict[f'{ar}_bar'] = ttest2.pvalue
+        print(ttest2.pvalue)
 
         if bar:
             ax[ee].bar("BG", bg_m, yerr=bg_se, color='deepskyblue')
@@ -3871,15 +4023,15 @@ def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', sec
             ax[ee].bar("FG", fg_m, yerr=fg_se, color='white')
 
             ax[ee].scatter(x=['BG', 'FG'], y=[bg_m, fg_m], color=['deepskyblue', 'yellowgreen'])
-            ax[ee].errorbar(x=['BG', 'FG'], y=[bg-M, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
+            ax[ee].errorbar(x=['BG', 'FG'], y=[bg_m, fg_m], yerr=[bg_se, fg_se], ls='none')#, color=['deepskyblue', 'yellowgreen'])
 
         ax[ee].set_ylabel(f'{label} Weight', fontweight='bold', fontsize=12)
         ax[ee].set_xticklabels(['BG','FG'], fontsize=10, fontweight='bold')
         ax[ee].tick_params(axis='y', which='major', labelsize=8)
-        if ttest1.pvalue < 0.001:
+        if ttest2.pvalue < 0.001:
             title = 'p<0.001'
         else:
-            title = f"{ttest1.pvalue:.3f}"
+            title = f"{ttest2.pvalue:.3f}"
         ax[ee].set_title(f"BG: {np.around(bg_m,2)}, FG: {np.around(fg_m,2)}\n{title}", fontsize=10)
 
 
@@ -3891,6 +4043,7 @@ def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', sec
         rel = rel.loc[rel >= -2.5]
 
         ttt = stats.ttest_1samp(rel, 0)
+        stat_dict[f'{ar}_hist'] = ttt.pvalue
         print(f"RG is {ttt.pvalue} relative to 0.")
 
         sups = [cc for cc in rel if cc < 0]
@@ -3913,6 +4066,7 @@ def weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', sec
         ax[ee+1].set_xlim(-1.75,1.75)
 
     f.tight_layout()
+    return stat_dict
 
 
 def weight_summary_histograms_flanks(filt, snr_threshold=0.12, stat_plot='median', bar=True):
@@ -3953,7 +4107,8 @@ def weight_summary_histograms_flanks(filt, snr_threshold=0.12, stat_plot='median
             fg_m, fg_se = jack_mean_err(to_plot_fg.weightsB, do_median=True)
             label = 'Median'
 
-        ttest1 = stats.ttest_ind(to_plot_bg.weightsA, to_plot_fg.weightsB, nan_policy='omit')
+        ttest1 = stats.mannwhitneyu(to_plot_bg.weightsA, to_plot_fg.weightsB, nan_policy='omit')
+        print(f"{ar} p : {ttest1.pvalue}")
 
         if bar:
             ax[aaa].bar("BG", bg_m, yerr=bg_se, color='deepskyblue')
