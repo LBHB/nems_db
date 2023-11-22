@@ -216,7 +216,7 @@ ofig.weight_summary_histograms(filt, threshold=None, snr_threshold=0.12, r_cut=0
 
 
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
-ofig.weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median')
+stat_dict = ofig.weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median')
 
 
 #Summary of animals
@@ -264,6 +264,10 @@ stt = ofig.plot_all_weight_comparisons(filt, fr_thresh=None, snr_threshold=0.12,
                                  weight_lim=[-0.5, 2], summary=True, sep_hemi=False, sort_category=None,
                                  stat_plot='median', flanks=False, stat_kind='paired', uniform_animal=False)
 
+stt = ofig.plot_all_weight_comparisons_RG(filt, fr_thresh=None, snr_threshold=0.12, r_thresh=0.4, strict_r=True,
+                                 weight_lim=[-0.5, 2], summary=True, sep_hemi=False, sort_category=None,
+                                 uniform_animal=True)
+
 # 3A Relative gain intro
 # ofig.plot_single_relative_gain_hist(filt, threshold=0.03, r_cut=0.06)
 
@@ -276,16 +280,16 @@ sound_df = ohel.get_sound_statistics_from_df(filt, percent_lims=[15,85], append=
 sound_df = ohel.label_vocalization(sound_df, species='sounds')
 ohel.plot_sound_stats(sound_df, ['Fcorr', 'Tstationary', 'bandwidth'],
                  labels=['Frequency Correlation', 'Temporal Non-stationarity', 'Bandwidth (octaves)'],
-                 synth_kind=None, sort=False)
+                 synth_kind=None, sort=True)
 
 # 5C sound stats with rel gain
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
 
-ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
+_, stt = ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
                           ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
                           area='A1', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind=None,
                           r_cut=0.4, jitter=None, mean=True, vocalization=True)
-ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
+_, stt = ofig.sound_metric_scatter(filt, ['Fcorr', 'Tstationary', 'bandwidth'], 'BG_rel_gain',
                           ['Spectral\nCorrelation', 'Temporal\nNon-Stationariness', 'Bandwidth'], suffix='',
                           area='PEG', metric_filter=2.5, snr_threshold=0.12, threshold=None, synth_kind=None,
                           r_cut=0.4, jitter=None, mean=True, vocalization=True)
@@ -322,7 +326,7 @@ ofig.summary_relative_gain_all_areas(filtt, kind_show=['Ferret\nVocalization', '
 
 
 #5E Regression
-ofig.plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
+a1, peg = ofig.plot_big_sound_stat_regression(filt, xvar=['Fcorr', 'Tstationary', 'bandwidth', 'snr', 'spectral_overlap'],
                                     cat='Vocalization', omit='C(Vocalization)[T.3]')
 
 #Trying multiple regression with shuffling
@@ -452,7 +456,7 @@ filt = filt.loc[filt['FG'].apply(lambda x: x not in bads)]
 
 quiet = filt.loc[filt.noisy!='Yes']
 filt = ohel.df_filters(filt, snr_threshold=0.12, rel_cut=2.5, r_cut=0.4, weight_lim=[-0.5, 2])
-ofig.weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', secondary=None)
+stt = ofig.weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median', secondary=None)
 
 
 
@@ -575,10 +579,12 @@ filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
 ofig.all_filter_stats(filt, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0.4, increment=0.2,
                  fr_thresh=0.01, xx='resp')
 
+ofig.r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshold=None, area='A1')
+ofig.r_weight_comp_distribution(filt, increment=0.2, snr_threshold=0.12, threshold=None, area='PEG')
+
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
 ofig.weights_supp_comp(filt, x='resp', area='A1', quads=3, thresh=0.01, snr_threshold=0.12, r_cut=0.4)
 ofig.weights_supp_comp(filt, x='resp', area='PEG', quads=3, thresh=0.01, snr_threshold=0.12, r_cut=0.4)
-
 
 
 
