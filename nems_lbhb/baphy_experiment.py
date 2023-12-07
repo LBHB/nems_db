@@ -495,7 +495,7 @@ class BAPHYExperiment:
         kwargs.update({'version': 'BAPHYExperiment.3'}) # version 3 added pupil extras to recording signals
 
         # add parmfiles / cells_to_load list - these are unique ids for the recording
-        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'mfiles': [str(i) for i in self.parmfile.replace('.m','')]})
         kwargs.update({'cell_list': self.cells_to_load})
 
         # add batch to cache recording in the correct location
