@@ -2044,9 +2044,10 @@ def mask_est_val_for_jackknife_by_time(rec, modelspec=None,
 
     return est, val, modelspec_out
 
-def shuffle(sigs, recs=['est','val'], ** context):  
+def shuffle(sigs, recs=['est','val'], **context):
     for r in recs:
         for i,sig in enumerate(sigs):
+            log.info(f"Shuffling context[{r}][{sig}]")
             context[r][sig]=context[r][sig].shuffle_time(rand_seed=i,mask=context[r]['mask'])
     
     return context

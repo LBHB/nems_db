@@ -867,6 +867,8 @@ def _parse_options(fitkey, **default_options):
             options['backend'] = 'scipy'
         elif op == 'init':
             options['initialize_nl'] = True
+        elif op == 'cont':
+            options['epoch_name'] = ''
         elif op.startswith('lf'):
             loss_type = op[2:]
             if loss_type == 'se':

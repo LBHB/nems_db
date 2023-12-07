@@ -476,7 +476,9 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
                        **context):
     """NEMS-LITE specific model initialization"""
     from nems import Model
-    if not IsReload:
+    if IsReload:
+        modelspec = context['modelspec']
+    else:
         if meta is None:
             meta = {}
         keywordstring0 = keywordstring
@@ -489,17 +491,41 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         modelspec.meta['keywordstring'] = keywordstring0
         cellid = meta.get('cellid', 'NAT4v2')
         modelspec.name = f"{cellid}/{meta['batch']}/{meta['modelname']}"
-    else:
-        modelspec = context['modelspec']
 
     return {'modelspec': modelspec}
 
+
+def lite_input_dict(modelspec, rec, epoch_name="", add_batch_dim=False,
+                    input_name='stim', output_name='resp'):
+
+    all_inputs, all_outputs = modelspec.get_io_names()
+    existing_inputs = [i for i in all_inputs if i in rec.signals.keys()]
+    if ('state' in rec.signals.keys()) and ('state' not in existing_inputs):
+        existing_inputs.append('state')
+
+    if len(epoch_name) > 0:
+        # generate batches with epoch
+        X = {'input': np.moveaxis(rec.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)}
+        for i in existing_inputs:
+            X[i] = np.moveaxis(rec.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
+        Y = np.moveaxis(rec.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
+    else:
+        # single batch/epoch -- good for behavior data
+        X = {'input': np.moveaxis(rec.apply_mask()[input_name].as_continuous(), -1, 0)}
+        for i in existing_inputs:
+            X[i] = np.moveaxis(rec.apply_mask()[i].as_continuous(), -1, 0)
+        Y = np.moveaxis(rec.apply_mask()[output_name].as_continuous(), -1, 0)
+        if add_batch_dim:
+            X = {k: v[np.newaxis, :, :] for k, v in X.items()}
+            Y = Y[np.newaxis, :, :]
+
+    return X, Y
 
 def fit_lite(modelspec=None, est=None, modelspec_list=None,
              input_name='stim', output_name='resp', IsReload=False,
              cost_function='nmse', learning_rate=1e-3, tolerance=1e-4, max_iter=5000, backend='scipy',
              validation_split=0.0, early_stopping_patience=150, early_stopping_delay=100, rand_count=1,
-             jackknife_count=0,
+             jackknife_count=0, epoch_name="REFERENCE",
              initialize_nl=False, freeze_layers=None, shuffle_batches=False, skip_init=False, **context):
     """
     fit_wrapper modified to work with nems-lite
@@ -574,23 +600,15 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
 
     elif backend == 'tf':
         # convert signal matrices to nems-lite format
-        X_est = np.moveaxis(est.apply_mask()[input_name].extract_epoch("REFERENCE"), -1, 1)
-        Y_est = np.moveaxis(est.apply_mask()[output_name].extract_epoch("REFERENCE"), -1, 1)
-        #X_est = np.moveaxis(est.apply_mask()[input_name].as_continuous(), -1, 0)[np.newaxis,:,:]
-        #Y_est = np.moveaxis(est.apply_mask()[output_name].as_continuous(), -1, 0)[np.newaxis,:,:]
+        X_est, Y_est = lite_input_dict(modelspec, est, epoch_name=epoch_name, add_batch_dim=True)
+
         if False:
             log.info("adding a tiny bit of noise to X_est")
             X_est = X_est + np.random.randn(*X_est.shape) / 10000
-
+        S_est=None
         if 'state' in est.signals.keys():
-            S_est = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
+            X_est['state'] = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
             #S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)[np.newaxis,:,:]
-        else:
-            S_est = None
-        # X_est = np.expand_dims(X_est, axis=0)
-        # Y_est = np.expand_dims(Y_est, axis=0)
-        # if S_est is not None:
-        #    S_est = np.expand_dims(S_est, axis=0)
 
         if jackknife_count>0:
             fit_set = JackknifeIterator(X_est, target=Y_est, state=S_est,
@@ -598,7 +616,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
             log.info(f"Jackknifes: {jackknife_count}")
         else:
             fit_set = DataSet(X_est, state=S_est, target=Y_est)
-        log.info(f"Dataset size X_est: {X_est.shape} Y_est: {Y_est.shape}")
+        log.info(f"Dataset size X_est: {X_est['input'].shape} Y_est: {Y_est.shape}")
         batch_size = None #  X_est.shape[0]  # or None or bigger?
         log.info(f"Batch size: {batch_size}")
 
@@ -737,11 +755,10 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
             return {'modelspec': modelspec}
 
 
-
 def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='resp', IsReload=False,
              cost_function='nmse', learning_rate=1e-3, tolerance=1e-5, max_iter=100, backend='scipy',
              validation_split=0.0, early_stopping_patience=20, early_stopping_delay=100,
-             chop_layers=2,
+             chop_layers=2, epoch_name="REFERENCE",
              **context):
     """
     Wrapper to loop through all jackknifes, fits and output slices (if/when >1 of any)
@@ -837,19 +854,34 @@ def predict_lite(modelspec, est, val,
                  IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
-    X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
-    X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
-    if 'state' in est.signals.keys():
-        S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
-        S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
-    else:
-        S_est = None
-        S_val = None
+    # single batch/epoch -- good for behavior data
+    X_est, Y_est = lite_input_dict(modelspec, est, epoch_name="")
+    X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
 
-    prediction = modelspec.predict(X_est, state=S_est)
-    est['pred']=est[output_name]._modified_copy(data=prediction.T)
+    #X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
+    #X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
+    #if 'state' in est.signals.keys():
+    #    S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
+    #    S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
+    #else:
+    S_est = None
+    S_val = None
+
+    fit_pred = modelspec.predict(X_est, state=S_est)
     prediction = modelspec.predict(X_val, state=S_val)
-    val['pred']=val[output_name]._modified_copy(data=prediction.T)
+    if type(prediction) is dict:
+        fit_pred = fit_pred['output']
+        prediction = prediction['output']
+    edata = np.zeros(est['resp'].shape) * np.nan
+    vdata = np.zeros(val['resp'].shape) * np.nan
+    if 'mask' in est.signals.keys():
+        edata[:,est['mask']._data[0,:].astype(bool)]=fit_pred.T
+        vdata[:, val['mask']._data[0,:]] = prediction.T
+    else:
+        edata = fit_pred.T
+        vdata = prediction.T
+    est['pred']=est[output_name]._modified_copy(data=edata)
+    val['pred']=val[output_name]._modified_copy(data=vdata)
 
     if modelspec_list is not None:
         j_prediction = []
@@ -876,12 +908,14 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
         return {'figures': figures}
 
     # convert signal matrices to nems-lite format
-    X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
-    Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
-    if 'state' in val.signals.keys():
-        S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
-    else:
-        S_val = None
+    X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
+    S_val=None
+    #X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
+    #Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
+    #if 'state' in val.signals.keys():
+    #    S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
+    #else:
+    #    S_val = None
     from nems.visualization import model
     fig = model.plot_model(
         modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)

@@ -37,7 +37,7 @@ def fill_keyword_string_values(keyword_string,
     for kw in keywords:
 
         shared = True
-        if (kw.startswith("fir.Nx") or kw.startswith("wc.Nx")) and \
+        if (kw.startswith("fir.Nx") or kw.startswith("wc.Nx") or kw.startswith("wcst.Nx") or kw.startswith("wch.Nx")) and \
                 (_rec is not None):
             N = _rec[input_name].nchans
             kw_old = kw

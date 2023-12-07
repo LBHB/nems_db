@@ -34,11 +34,32 @@ from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
 from nems0 import xforms
 from nems.preprocessing import (indices_by_fraction, split_at_indices, JackknifeIterator)
+from nems0.registry import xform, scan_for_kw_defs
+from nems_lbhb.plugins.lbhb_loaders import _load_dict
 
 log = logging.getLogger(__name__)
 
+@xform()
+def free(loadkey, cellid=None, batch=None, siteid=None, **options):
+    d = _load_dict(loadkey, cellid, batch)
+    d['siteid']=cellid
+    del d['cellid']
+    xfspec = [['nems_lbhb.projects.freemoving.free_model.load_free_data', d]]
+    return xfspec
+
+@xform()
+def fev(keyword):
+    ops = keyword.split('.')[1:]
+    d={}
+    if 'hrtf' in ops:
+        d['apply_hrtf']=True
+
+    xfspec = [['nems_lbhb.projects.freemoving.free_model.free_split_rec', d]]
+    return xfspec
+
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
-                   recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False, **options):
+                   recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False,
+                   meta=None, **context):
 
     sitenum = int(siteid[3:6])
     if batch==347:
@@ -61,8 +82,8 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
                          " AND area in ('A1','PEG','AC','BS')")
         a1cellids = df_siteinfo['cellid'].to_list()
 
-    if cellid is not None:
-        a1cellids=[cellid]
+    #if cellid is not None:
+    #    a1cellids=[cellid]
     """
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
     dparm = db.pd_query(sql)
@@ -100,6 +121,7 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         # get angle to each speaker and scale -1 to 1
         theta = rec2['disttheta'].as_continuous()[[1, 3], :] / 180
         chans = rec['dlc'].chans + ['th1','th2']
+        rec['disttheta']=rec2['disttheta']
         d = np.concatenate((rec['dlc']._data, theta), axis=0)
         rec['dlc']=rec['dlc']._modified_copy(data=d, chans=chans)
 
@@ -120,10 +142,13 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     except:
         rec.meta['depth'] = np.array([float(c.split("-")[-2]) for c in cellids])
         rec.meta['sw'] = np.ones(len(cellids)) * 100
+    if meta is None:
+        meta={}
+    meta['cellids']=cellids
+    meta['siteid']=siteid
+    return {'rec': rec, 'meta': meta}
 
-    return rec
-
-def free_split_rec(rec, apply_hrtf=True):
+def free_split_rec(rec, apply_hrtf=True, **context):
 
     if apply_hrtf:
         log.info('Applying HRTF')
@@ -135,10 +160,10 @@ def free_split_rec(rec, apply_hrtf=True):
         rec['stim'] = rec['stim'].concatenate_channels([rec['stim'], stim2])
 
     # log compress and normalize stim
-    fn = lambda x: _dlog(x, -1)
-    rec['stim'] = rec['stim'].transform(fn, 'stim')
-    rec['stim'] = rec['stim'].normalize('minmax')
-    rec['resp'] = rec['resp'].normalize('minmax')
+    #fn = lambda x: _dlog(x, -1)
+    #rec['stim'] = rec['stim'].transform(fn, 'stim')
+    #rec['stim'] = rec['stim'].normalize('minmax')
+    #rec['resp'] = rec['resp'].normalize('minmax')
 
     OLD_MASK = False
     if OLD_MASK:
