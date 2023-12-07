@@ -37,7 +37,73 @@ from nems.preprocessing import (indices_by_fraction, split_at_indices, Jackknife
 from nems0.registry import xform, scan_for_kw_defs
 from nems_lbhb.plugins.lbhb_loaders import _load_dict
 
+from nems.registry import layer, keyword_lib
+from nems0.registry import xform, scan_for_kw_defs
+
 log = logging.getLogger(__name__)
+
+@layer('wcdl')
+def wcdl(keyword):
+    k = keyword.replace('wcdl','wc')
+    wc = keyword_lib[k]
+    options = keyword.split('.')
+    if 'i' in options:
+        wc.input = 'dlc'
+    else:
+        wc.input = 'hrtf'
+    wc.output = 'hrtf'
+    return wc
+
+@layer('firdl')
+def firdl(keyword):
+    k = keyword.replace('firdl','fir')
+    fir = keyword_lib[k]
+    fir.input = 'hrtf'
+    fir.output = 'hrtf'
+    return fir
+
+@layer('wcst')
+def wcst(keyword):
+    k = keyword.replace('wcst','wc')
+    wc = keyword_lib[k]
+    options = keyword.split('.')
+    if 'i' in options:
+        wc.input = 'input'
+    else:
+        wc.input = 'stim'
+    wc.output = 'stim'
+    return wc
+
+@layer('first')
+def first(keyword):
+    k = keyword.replace('first','fir')
+    fir = keyword_lib[k]
+    fir.input = 'stim'
+    fir.output = 'stim'
+    return fir
+
+@layer('wch')
+def wch(keyword):
+    k = keyword.replace('wch','wc')
+    wc = keyword_lib[k]
+    wc.input = 'hstim'
+    return wc
+
+@layer('relud')
+def relud(keyword):
+    k = keyword.replace('relud','relu')
+    relu = keyword_lib[k]
+    relu.input = 'hrtf'
+    relu.output = 'hrtf'
+    return relu
+
+@layer('sigd')
+def sigd(keyword):
+    k = keyword.replace('sigd','sig')
+    sig = keyword_lib[k]
+    sig.input = 'hrtf'
+    sig.output = 'hrtf'
+    return sig
 
 @xform()
 def free(loadkey, cellid=None, batch=None, siteid=None, **options):

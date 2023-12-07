@@ -38,71 +38,7 @@ from nems0 import xform_helper, xforms, db
 log = logging.getLogger(__name__)
 
 from nems0.registry import xform, scan_for_kw_defs
-from nems.registry import layer, keyword_lib
 from nems.layers.tools import require_shape, pop_shape
-
-@layer('wcdl')
-def from_keyword(keyword):
-    k = keyword.replace('wcdl','wc')
-    wc = keyword_lib[k]
-    options = keyword.split('.')
-    if 'i' in options:
-        wc.input = 'dlc'
-    else:
-        wc.input = 'hrtf'
-    wc.output = 'hrtf'
-    return wc
-
-@layer('firdl')
-def from_keyword(keyword):
-    k = keyword.replace('firdl','fir')
-    fir = keyword_lib[k]
-    fir.input = 'hrtf'
-    fir.output = 'hrtf'
-    return fir
-
-@layer('wcst')
-def from_keyword(keyword):
-    k = keyword.replace('wcst','wc')
-    wc = keyword_lib[k]
-    options = keyword.split('.')
-    if 'i' in options:
-        wc.input = 'input'
-    else:
-        wc.input = 'stim'
-    wc.output = 'stim'
-    return wc
-
-@layer('first')
-def from_keyword(keyword):
-    k = keyword.replace('first','fir')
-    fir = keyword_lib[k]
-    fir.input = 'stim'
-    fir.output = 'stim'
-    return fir
-
-@layer('wch')
-def from_keyword(keyword):
-    k = keyword.replace('wch','wc')
-    wc = keyword_lib[k]
-    wc.input = 'hstim'
-    return wc
-
-@layer('relud')
-def from_keyword2(keyword):
-    k = keyword.replace('relud','relu')
-    relu = keyword_lib[k]
-    relu.input = 'hrtf'
-    relu.output = 'hrtf'
-    return relu
-
-@layer('sigd')
-def from_keyword2(keyword):
-    k = keyword.replace('sigd','sig')
-    sig = keyword_lib[k]
-    sig.input = 'hrtf'
-    sig.output = 'hrtf'
-    return sig
 
 siteid='PRN048a'
 cellid=siteid
