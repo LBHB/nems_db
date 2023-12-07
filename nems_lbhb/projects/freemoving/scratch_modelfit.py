@@ -41,6 +41,7 @@ from nems0.registry import xform, scan_for_kw_defs
 from nems.layers.tools import require_shape, pop_shape
 
 siteid='PRN048a'
+siteid='PRN009a'
 cellid=siteid
 rasterfs = 50
 batch=348
@@ -66,7 +67,7 @@ else:
     aud_kw = f'wch.Nx1x{strf_channels}-fir.10x1x{strf_channels}-relu.{strf_channels}.o.s-wc.{strf_channels}x1x{l2count}-fir.10x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
     model_kw = hrtf_kw + '-' + aud_kw
 
-load_kw = "free.fs100.ch18-norm.l1-fev-shuf.dlc"
+load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev-shuf.dlc"
 fit_kw = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4"
 
 modelname = "_".join([load_kw,model_kw,fit_kw])

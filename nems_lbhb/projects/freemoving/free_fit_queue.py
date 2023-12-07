@@ -27,6 +27,7 @@ modelnames = ['sh.none-hrtf.True__nmse',
 dlc_count=10
 dlc1 = 40
 strf_channels=20
+rasterfs = 50
 
 dlc_memory=4
 acount=20
@@ -46,7 +47,7 @@ else:
     model_kw = hrtf_kw + '-' + aud_kw
 
 #load_kw = "free.fs100.ch18-norm.l1-fev-shuf.dlc"
-load_kw = "free.fs100.ch18-norm.l1-fev"
+load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev"
 fit_kw = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4"
 
 modelname = "_".join([load_kw,model_kw,fit_kw])
