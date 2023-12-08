@@ -4,21 +4,12 @@ from os.path import basename, join
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import convolve2d, butter, sosfilt
-import pandas as pd
-from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 
 from nems0 import db
-import nems0.epoch as ep
-import nems0.preprocessing as preproc
 from nems0.utils import smooth
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_depth_info
-from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
 from nems.layers import WeightChannels, FIR, LevelShift, \
     DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
