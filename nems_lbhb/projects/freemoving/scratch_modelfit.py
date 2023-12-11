@@ -3,34 +3,6 @@ import logging
 import os
 import io
 
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.signal import convolve2d, butter, sosfilt
-import pandas as pd
-from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-
-from nems0 import db
-import nems0.epoch as ep
-from nems0.utils import smooth
-from nems_lbhb.xform_wrappers import generate_recording_uri
-from nems_lbhb.baphy_experiment import BAPHYExperiment
-from nems_lbhb.baphy_io import load_continuous_openephys
-from nems_lbhb.plots import plot_waveforms_64D
-from nems_lbhb.preprocessing import impute_multi
-from nems.layers import WeightChannels, FIR, LevelShift, \
-    DoubleExponential, RectifiedLinear, Sigmoid, ConcatSignals, \
-    MultiplySignals, MultiplyByExp, WeightGaussianExpand
-from nems import Model
-from nems.layers.base import Layer, Phi, Parameter
-import nems.visualization.model as nplt
-#import nems0.plots.api as nplt
-from nems_lbhb.projects.freemoving import free_model, free_tools
-from nems0.modules.nonlinearity import _dlog
-from nems0.epoch import epoch_names_matching
-from nems0.xform_helper import fit_model_xform
 from nems0.utils import escaped_split, escaped_join, get_setting
 from nems0.registry import KeywordRegistry, xforms_lib
 from nems0 import xform_helper, xforms, db
@@ -40,11 +12,11 @@ log = logging.getLogger(__name__)
 from nems0.registry import xform, scan_for_kw_defs
 from nems.layers.tools import require_shape, pop_shape
 
-siteid='PRN048a'
-siteid='PRN009a'
-cellid=siteid
+siteid = 'PRN048a'
+#siteid='PRN009a'
+cellid = siteid
 rasterfs = 50
-batch=348
+batch = 348
 
 dlc_count=10
 dlc1 = 40
@@ -57,20 +29,34 @@ l2count=30
 tcount=acount+dcount
 input_count = 36
 
-old_model = True
-if old_model:
-    sep_kw = f'wcst.Nx1x{acount}.i-wcdl.{dlc_count}x1x{dcount}.i-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}-cat-relu.{tcount}.o.s'
-    aud_kw = f'wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
-    model_kw = sep_kw + '-' + aud_kw
-else:
-    hrtf_kw = f'wcdl.{dlc_count}x{dlc1}.i-relud.{dlc1}.o.s-wcdl.{dlc1}x10-relud.10.o.s-wcdl.10x5-relud.5.o.s-wcdl.5x{input_count}-sigd.{input_count}.s.g-mult'
-    aud_kw = f'wch.Nx1x{strf_channels}-fir.10x1x{strf_channels}-relu.{strf_channels}.o.s-wc.{strf_channels}x1x{l2count}-fir.10x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
-    model_kw = hrtf_kw + '-' + aud_kw
+sep_kw = f'wcst.Nx1x{acount}.i-wcdl.{dlc_count}x1x{dcount}.i-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}-cat-relu.{tcount}.o.s'
+aud_kw = f'wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
+model_kw_old = sep_kw + '-' + aud_kw
 
-load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev-shuf.dlc"
+hrtf_kw = f'wcdl.{dlc_count}x{dlc1}.i-relud.{dlc1}.o.s-wcdl.{dlc1}x10-relud.10.o.s-wcdl.10x5-relud.5.o.s-wcdl.5x{input_count}-sigd.{input_count}.s.g-mult'
+aud_kw = f'wch.Nx1x{strf_channels}-fir.10x1x{strf_channels}-relu.{strf_channels}.o.s-wc.{strf_channels}x1x{l2count}-fir.10x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
+model_kw_new = hrtf_kw + '-' + aud_kw
+
+load_kw_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev-shuf.dlc"
+load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev"
+load_kw_hrtf = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf"
+load_kw_hrtf_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf-shuf.dlc"
 fit_kw = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4"
 
-modelname = "_".join([load_kw,model_kw,fit_kw])
+load_kw_jk = f"free.fs{rasterfs}.ch18-norm.l1-fev.jk5"
+fit_kw_jk = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4.t3"
+
+modelnames=["_".join([load_kw,model_kw_old,fit_kw]),
+            "_".join([load_kw,model_kw_new,fit_kw]),
+            "_".join([load_kw_shuff, model_kw_old, fit_kw]),
+            "_".join([load_kw_shuff, model_kw_new, fit_kw]),
+            "_".join([load_kw_hrtf, model_kw_old, fit_kw]),
+            "_".join([load_kw_hrtf_shuff, model_kw_old, fit_kw]),
+            "_".join([load_kw_jk, model_kw_new, fit_kw_jk]),
+            ]
+shortnames = ['old dlc','new full','old no dlc', 'new no dlc', 'old hrtf+dlc','old hrtf','new jk test']
+
+modelname = modelnames[-1]
 
 
 autoPlot = True
@@ -211,8 +197,96 @@ for xfa in xfspec:
     """
 
 log.info('test fit complete')
-raise ValueError('stopping before old code')
 
+raise ValueError('stopping')
+from nems_lbhb.projects.freemoving import free_model, free_vs_fixed_strfs
+import importlib
+import numpy as np
+
+importlib.reload(free_vs_fixed_strfs)
+
+rec=ctx['val'].apply_mask()
+modelspec_list=ctx['modelspec_list']
+
+model_list = ctx['modelspec_list']
+time_step=85
+D=11
+pc_count=5
+reset_backend=False
+
+
+pc_mags = []
+mdstrfs = []
+for model in modelspec_list:
+    _pc_mags = []
+    _mdstrfs = []
+    for out_channel in range(rec['resp'].shape[0]):
+        mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, [model], D=11, out_channel=out_channel, pc_count=5)
+        _pc_mags.append(pc_mag)  # unit x model x didx x pc
+        _mdstrfs.append(mdstrf)  # unit x model x didx x frequency x lag
+    pc_mags.append(_pc_mags)
+    mdstrfs.append(_mdstrfs)
+
+"""
+t_indexes = np.arange(time_step, rec['stim'].shape[1], time_step)
+dlc = rec['dlc'].as_continuous().T
+log.info(f"Computing dSTRF at {len(t_indexes)} timepoints, {dlc.shape[1]} DLC channels, t_step={time_step}")
+if rec.meta['batch'] in [346, 347]:
+    dicount = didx.shape[0]
+else:
+    dicount = 4
+
+dstrf = {}
+mdstrf = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+pc1 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+pc2 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
+pc_mag_all = np.zeros((len(model_list), dicount, pc_count))
+
+for di in range(dicount):
+    dlc1 = dlc.copy()
+    dcount = dlc1.shape[1]
+    didx_ = free_vs_fixed_strfs.adjust_didx(dlc, free_vs_fixed_strfs.didx)
+    # didx_ = didx
+
+    for t in t_indexes:
+        dlc1[(t - didx_.shape[1] + 1):(t + 1), :] = didx_[di, :, :dcount]
+    log.info(f"DLC values: {np.round(free_vs_fixed_strfs.didx[di, -1, :dcount], 3)}")
+    # log.info(f'di={di} Applying HRTF for frozen DLC coordinates')
+    # rec2 = rec.copy()
+    # rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
+    # rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
+    #                                 f_min=200, f_max=20000, channels=18)['rec']
+
+    for mi, m in enumerate(model_list):
+        stim = {'input': rec['stim'].as_continuous().T, 'dlc': dlc1}
+        dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes, reset_backend=reset_backend)
+
+        d = dstrf[di]['input'][0, :, :, :]
+
+        if snr_threshold is not None:
+            d = np.reshape(d, (d.shape[0], d.shape[1] * d.shape[2]))
+            md = d.mean(axis=0, keepdims=True)
+            e = np.std(d - md, axis=1) / np.std(md)
+            if (e > snr_threshold).sum() > 0:
+                log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
+
+            d = dstrf[di]['input'][0, (e <= snr_threshold), :, :]
+            dstrf[di]['input'] = d[np.newaxis, :, :, :]
+        mdstrf[mi, di, :, :] = d.mean(axis=0)
+
+        # svd attempting to make compatible with new format of compute_pcs
+        try:
+            if (d.size > 0) and (d.std() > 0):
+                # pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
+                dpc = dtools.compute_dpcs(dstrf[di], pc_count=pc_count)
+                pc = dpc['input']['pcs']
+                pc_mag = dpc['input']['pc_mag']
+
+                pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
+                pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
+                pc_mag_all[mi, di, :] = pc_mag[:, 0]
+        except:
+            log.info('FAILED TO COMPUTE PCS. SETTING TO ZERO.')
 
 
 savefile =fit_model_xform(siteid, batch, modelname, saveInDB=True)
@@ -393,3 +467,4 @@ ax.set_title(f"pred cc={cc[i]:.3f}")
 plt.tight_layout()
 
 
+"""

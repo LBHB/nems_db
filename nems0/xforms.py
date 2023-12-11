@@ -605,17 +605,13 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
         if False:
             log.info("adding a tiny bit of noise to X_est")
             X_est = X_est + np.random.randn(*X_est.shape) / 10000
-        S_est=None
-        if 'state' in est.signals.keys():
-            X_est['state'] = np.moveaxis(est.apply_mask()['state'].extract_epoch("REFERENCE"), -1, 1)
-            #S_est = np.moveaxis(est.apply_mask()['state'].as_continuous(), -1, 0)[np.newaxis,:,:]
-
         if jackknife_count>0:
-            fit_set = JackknifeIterator(X_est, target=Y_est, state=S_est,
-                                        samples=jackknife_count, axis=0)
+            ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
+            fit_set = JackknifeIterator(X_est, target=Y_est,
+                                        samples=jackknife_count, axis=ja)
             log.info(f"Jackknifes: {jackknife_count}")
         else:
-            fit_set = DataSet(X_est, state=S_est, target=Y_est)
+            fit_set = DataSet(X_est, target=Y_est)
         log.info(f"Dataset size X_est: {X_est['input'].shape} Y_est: {Y_est.shape}")
         batch_size = None #  X_est.shape[0]  # or None or bigger?
         log.info(f"Batch size: {batch_size}")
@@ -662,8 +658,8 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
             for mi, m in enumerate(modelspec_copies):
                 log.info(f'** ({backend}) Fitting without NL - initialization {mi+1}/{rand_count} ...')
 
-                if jackknife_count<=1:
-                    m = m.fit(input=X_est, target=Y_est, state=S_est, backend=backend,
+                if jackknife_count <= 1:
+                    m = m.fit(input=X_est, target=Y_est, backend=backend,
                               freeze_layers=freeze_layers, fitter_options=fitter_options,
                               batch_size=batch_size, verbose=1, progress_fun=progress_fun)
                     m.layers[-1].unskip_nonlinearity()
@@ -674,7 +670,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                     #    m.layers[i].freeze_parameters()
                     log.info(f'** ({backend}) Fitting with NL - initialization {mi + 1}/{rand_count} ...')
                     modelspec_copies[mi] = m.fit(
-                        input=X_est, target=Y_est, state=S_est, backend=backend,
+                        input=X_est, target=Y_est, backend=backend,
                         freeze_layers=freeze_layers, fitter_options=fitter_options,
                         batch_size=batch_size, verbose=0, progress_fun=progress_fun)
 
@@ -722,7 +718,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
 
                 log.info('Using inherited model parameters')
                 modelspec = modelspec.fit(
-                    input=X_est, target=Y_est, state=S_est, backend=backend,
+                    input=X_est, target=Y_est, backend=backend,
                     freeze_layers=freeze_layers, fitter_options=fitter_options,
                     batch_size=batch_size, progress_fun=progress_fun)
             else:
@@ -850,7 +846,7 @@ def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='
 
 def predict_lite(modelspec, est, val,
                  input_name='stim', output_name='resp',
-                 jackknifed_fit=False, modelspec_list=None,
+                 jackknife_count=0, modelspec_list=None,
                  IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
@@ -858,50 +854,61 @@ def predict_lite(modelspec, est, val,
     X_est, Y_est = lite_input_dict(modelspec, est, epoch_name="")
     X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
 
-    #X_est = np.moveaxis(est[input_name].as_continuous(),-1, 0)
-    #X_val = np.moveaxis(val[input_name].as_continuous(),-1, 0)
-    #if 'state' in est.signals.keys():
-    #    S_est = np.moveaxis(est['state'].as_continuous(),-1, 0)
-    #    S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
-    #else:
-    S_est = None
-    S_val = None
-
-    fit_pred = modelspec.predict(X_est, state=S_est)
-    prediction = modelspec.predict(X_val, state=S_val)
+    fit_pred = modelspec.predict(X_est)
+    prediction = modelspec.predict(X_val)
     if type(prediction) is dict:
         fit_pred = fit_pred['output']
         prediction = prediction['output']
     edata = np.zeros(est['resp'].shape) * np.nan
     vdata = np.zeros(val['resp'].shape) * np.nan
     if 'mask' in est.signals.keys():
-        edata[:,est['mask']._data[0,:].astype(bool)]=fit_pred.T
-        vdata[:, val['mask']._data[0,:]] = prediction.T
+        edata[:, est['mask']._data[0,:].astype(bool)]=fit_pred.T
+        vdata[:, val['mask']._data[0,:].astype(bool)] = prediction.T
     else:
         edata = fit_pred.T
         vdata = prediction.T
     est['pred']=est[output_name]._modified_copy(data=edata)
     val['pred']=val[output_name]._modified_copy(data=vdata)
 
-    if modelspec_list is not None:
-        j_prediction = []
-        for i,m in enumerate(modelspec_list):
-            if val.view_count>1:
-                val.view_idx=i
-                X_val = np.moveaxis(val[input_name].as_continuous(), -1, 0)
-                S_val = np.moveaxis(val['state'].as_continuous(),-1, 0)
-            j_prediction.append(m.predict(X_val, state=S_val).T)
-        return {'val': val, 'est': est, 'j_prediction': j_prediction}
-    else:
-        return {'val': val, 'est': est}
+    if jackknife_count>0:
+        from nems.preprocessing import JackknifeIterator
+        from nems.models.dataset import DataSet
+
+        ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
+        test_set = JackknifeIterator(X_est, target=Y_est,
+                                    samples=jackknife_count, axis=ja)
+        log.info(f"Jackknifes: {jackknife_count}")
+        dataset = test_set.get_predicted_jackknifes(modelspec_list)
+
+        try:
+            m = val['mask'].as_continuous()[0,:]
+        except:
+            m = np.ones(val[output_name].shape[-1], dtype=bool)
+
+        s = list(dataset['output'].T.shape)[:-1]+[len(m)]
+        d = np.zeros(s)
+        d[:,m] = dataset['output'].T
+        val['pred'] = val[output_name]._modified_copy(data=d)
+        est['pred'] = est[output_name]._modified_copy(data=d)
+
+        for k,v in dataset.items():
+            if k not in ['output','target']:
+                s = list(v.T.shape)[:-1] + [len(m)]
+                d = np.zeros(s)
+                d[:, m] = v.T
+                val[k] = val[output_name]._modified_copy(data=d)
+                est[k] = est[output_name]._modified_copy(data=d)
+
+    return {'val': val, 'est': est}
 
 
 def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=False,
               figures=None, figures_to_load=None, **context):
 
+    from nems.visualization import model
+
     if figures is None:
         figures = []
-
     if IsReload:
         if figures_to_load is not None:
             figures.extend([load_resource(f) for f in figures_to_load])
@@ -909,16 +916,9 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
 
     # convert signal matrices to nems-lite format
     X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
-    S_val=None
-    #X_val = np.moveaxis(val.apply_mask()[input_name].as_continuous(),-1, 0)
-    #Y_val = np.moveaxis(val.apply_mask()[output_name].as_continuous(),-1, 0)
-    #if 'state' in val.signals.keys():
-    #    S_val = np.moveaxis(val.apply_mask()['state'].as_continuous(),-1, 0)
-    #else:
-    #    S_val = None
-    from nems.visualization import model
     fig = model.plot_model(
-        modelspec, X_val, target=Y_val, state=S_val, sampling_rate=val[output_name].fs)
+        modelspec, X_val, target=Y_val, sampling_rate=val[output_name].fs)
+
     if fig is not None:
         # Needed to make into a Bytes because you can't deepcopy figures!
         figures.append(nplt.fig2BytesIO(fig))
@@ -1821,7 +1821,6 @@ def save_recordings(modelspec, est, val, **context):
 
 def predict(modelspec, est, val, est_list=None, val_list=None, jackknifed_fit=False,
             use_mask=True, **context):
-    # modelspecs = metrics.add_summary_statistics(est, val, modelspecs)
     # TODO: Add statistics to metadata of every modelspec
     if (val_list is None):
         est, val = analysis.api.generate_prediction(est, val, modelspec, jackknifed_fit=jackknifed_fit, use_mask=use_mask)

@@ -11,6 +11,7 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 batch = 348
 siteids, cellids = db.get_batch_sites(batch)
+#siteids=['PRN048a']
 
 executable_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/bash_fit_wrapper'
 #script_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/free_moving_fit_script.py'
@@ -36,22 +37,28 @@ l2count=30
 tcount=acount+dcount
 input_count = 36
 
-old_model = True
-if old_model:
-    sep_kw = f'wcst.Nx1x{acount}.i-wcdl.{dlc_count}x1x{dcount}.i-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}-cat-relu.{tcount}.o.s'
-    aud_kw = f'wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
-    model_kw = sep_kw + '-' + aud_kw
-else:
-    hrtf_kw = f'wcdl.{dlc_count}x{dlc1}.i-relud.{dlc1}.o.s-wcdl.{dlc1}x10-relud.10.o.s-wcdl.10x5-relud.5.o.s-wcdl.5x{input_count}-sigd.{input_count}.s.g-mult'
-    aud_kw = f'wch.Nx1x{strf_channels}-fir.10x1x{strf_channels}-relu.{strf_channels}.o.s-wc.{strf_channels}x1x{l2count}-fir.10x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
-    model_kw = hrtf_kw + '-' + aud_kw
 
-#load_kw = "free.fs100.ch18-norm.l1-fev-shuf.dlc"
+sep_kw = f'wcst.Nx1x{acount}.i-wcdl.{dlc_count}x1x{dcount}.i-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}-cat-relu.{tcount}.o.s'
+aud_kw = f'wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
+model_kw_old = sep_kw + '-' + aud_kw
+
+hrtf_kw = f'wcdl.{dlc_count}x{dlc1}.i-relud.{dlc1}.o.s-wcdl.{dlc1}x10-relud.10.o.s-wcdl.10x5-relud.5.o.s-wcdl.5x{input_count}-sigd.{input_count}.s.g-mult'
+aud_kw = f'wch.Nx1x{strf_channels}-fir.10x1x{strf_channels}-relu.{strf_channels}.o.s-wc.{strf_channels}x1x{l2count}-fir.10x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
+model_kw_new = hrtf_kw + '-' + aud_kw
+
+load_kw_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev-shuf.dlc"
 load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev"
+load_kw_hrtf = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf"
+load_kw_hrtf_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf-shuf.dlc"
 fit_kw = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4"
 
-modelname = "_".join([load_kw,model_kw,fit_kw])
-modelnames=[modelname]
+modelnames=["_".join([load_kw,model_kw_old,fit_kw]),
+            "_".join([load_kw,model_kw_new,fit_kw]),
+            "_".join([load_kw_shuff, model_kw_old, fit_kw]),
+            "_".join([load_kw_shuff, model_kw_new, fit_kw]),
+            "_".join([load_kw_hrtf, model_kw_old, fit_kw]),
+            "_".join([load_kw_hrtf_shuff, model_kw_old, fit_kw]),
+            ]
 
 force_rerun = False
 run_in_lbhb = False

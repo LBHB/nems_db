@@ -25,94 +25,13 @@ from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
 from nems0 import xforms
 from nems.preprocessing import (indices_by_fraction, split_at_indices, JackknifeIterator)
-from nems0.registry import xform, scan_for_kw_defs
-from nems_lbhb.plugins.lbhb_loaders import _load_dict
-
-from nems.registry import layer, keyword_lib
-from nems0.registry import xform, scan_for_kw_defs
+#from nems0.registry import xform, scan_for_kw_defs
+#from nems_lbhb.plugins.lbhb_loaders import _load_dict
+#from nems.registry import layer, keyword_lib
+#from nems0.registry import xform, scan_for_kw_defs
 
 log = logging.getLogger(__name__)
 
-@layer('wcdl')
-def wcdl(keyword):
-    k = keyword.replace('wcdl','wc')
-    wc = keyword_lib[k]
-    options = keyword.split('.')
-    if 'i' in options:
-        wc.input = 'dlc'
-    else:
-        wc.input = 'hrtf'
-    wc.output = 'hrtf'
-    return wc
-
-@layer('firdl')
-def firdl(keyword):
-    k = keyword.replace('firdl','fir')
-    fir = keyword_lib[k]
-    fir.input = 'hrtf'
-    fir.output = 'hrtf'
-    return fir
-
-@layer('wcst')
-def wcst(keyword):
-    k = keyword.replace('wcst','wc')
-    wc = keyword_lib[k]
-    options = keyword.split('.')
-    if 'i' in options:
-        wc.input = 'input'
-    else:
-        wc.input = 'stim'
-    wc.output = 'stim'
-    return wc
-
-@layer('first')
-def first(keyword):
-    k = keyword.replace('first','fir')
-    fir = keyword_lib[k]
-    fir.input = 'stim'
-    fir.output = 'stim'
-    return fir
-
-@layer('wch')
-def wch(keyword):
-    k = keyword.replace('wch','wc')
-    wc = keyword_lib[k]
-    wc.input = 'hstim'
-    return wc
-
-@layer('relud')
-def relud(keyword):
-    k = keyword.replace('relud','relu')
-    relu = keyword_lib[k]
-    relu.input = 'hrtf'
-    relu.output = 'hrtf'
-    return relu
-
-@layer('sigd')
-def sigd(keyword):
-    k = keyword.replace('sigd','sig')
-    sig = keyword_lib[k]
-    sig.input = 'hrtf'
-    sig.output = 'hrtf'
-    return sig
-
-@xform()
-def free(loadkey, cellid=None, batch=None, siteid=None, **options):
-    d = _load_dict(loadkey, cellid, batch)
-    d['siteid']=cellid
-    del d['cellid']
-    xfspec = [['nems_lbhb.projects.freemoving.free_model.load_free_data', d]]
-    return xfspec
-
-@xform()
-def fev(keyword):
-    ops = keyword.split('.')[1:]
-    d={}
-    if 'hrtf' in ops:
-        d['apply_hrtf']=True
-
-    xfspec = [['nems_lbhb.projects.freemoving.free_model.free_split_rec', d]]
-    return xfspec
 
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
                    recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False,
@@ -205,34 +124,41 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     meta['siteid']=siteid
     return {'rec': rec, 'meta': meta}
 
-def free_split_rec(rec, apply_hrtf=True, **context):
-
+def free_split_rec(rec, apply_hrtf=True, jackknife_count=None, **context):
+    """
+    function called by fev keyword now
+    :param rec:
+    :param apply_hrtf:
+    :param jackknife_count:
+    :param context:
+    :return:
+    """
     if apply_hrtf:
         log.info('Applying HRTF')
         rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
                              f_min=200, f_max=20000, channels=18)['rec']
-    elif rec['stim'].shape[0]==18:
+
+    elif rec['stim'].shape[0] == 18:
         log.info('Stacking on noise to control for HRTF')
         stim2 = rec['stim'].shuffle_time(rand_seed=500)
         rec['stim'] = rec['stim'].concatenate_channels([rec['stim'], stim2])
 
+    # this shoule be taken care of in previous keyword step
     # log compress and normalize stim
     #fn = lambda x: _dlog(x, -1)
     #rec['stim'] = rec['stim'].transform(fn, 'stim')
     #rec['stim'] = rec['stim'].normalize('minmax')
     #rec['resp'] = rec['resp'].normalize('minmax')
 
-    OLD_MASK = False
-    if OLD_MASK:
-        # epoch_regex = "^STIM_"
-        # est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
-        # est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
-        # val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
-        est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
-        val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
+    res = {'rec': rec}
 
-        est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
-        val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
+    if jackknife_count is not None:
+        # same as aev, but pass on jackknife_count to steer fitter
+        rec = rec.create_mask(rec['dlc_valid'].as_continuous()[0, :])
+        est = rec.copy()
+        val = rec.copy()
+
+        res['jackknife_count'] = jackknife_count
     else:
         val_epochs = epoch_names_matching(rec['resp'].epochs, "^STIM_00")
         val = rec.copy()
@@ -241,7 +167,11 @@ def free_split_rec(rec, apply_hrtf=True, **context):
         est = rec.copy()
         est = est.create_mask(~mask).and_mask(est['dlc_valid'].as_continuous()[0, :])
 
-    return {'rec': rec, 'est': est, 'val': val}
+    res['est'] = est
+    res['val'] = val
+
+    return res
+
 
 
 def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,

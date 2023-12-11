@@ -275,7 +275,7 @@ def movement_plot(rec, T1=260, T2=280, t_indexes=None):
 ###
 
 def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
-                    snr_threshold=5, pc_count=3, reset_backend=False):
+                    snr_threshold=5, pc_count=3, reset_backend=False, input_name = 'input'):
     """
     compute mean dSTRF for a single cell at standardized positions
     by "freezing" the DLC signal and computing the dSTRF for a bunch of stimuli
@@ -307,12 +307,11 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
         #rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
         #rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
         #                                 f_min=200, f_max=20000, channels=18)['rec']
-
         for mi, m in enumerate(model_list):
-            stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
+            stim = {input_name: rec['stim'].as_continuous().T, 'dlc': dlc1}
             dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes, reset_backend=reset_backend)
 
-            d = dstrf[di]['stim'][0, :, :, :]
+            d = dstrf[di][input_name][0, :, :, :]
 
             if snr_threshold is not None:
                 d = np.reshape(d, (d.shape[0], d.shape[1] * d.shape[2]))
@@ -321,8 +320,8 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
                 if (e > snr_threshold).sum() > 0:
                     log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
 
-                d = dstrf[di]['stim'][0, (e <= snr_threshold), :, :]
-                dstrf[di]['stim']=d[np.newaxis,:,:,:]
+                d = dstrf[di][input_name][0, (e <= snr_threshold), :, :]
+                dstrf[di][input_name]=d[np.newaxis,:,:,:]
             mdstrf[mi, di, :, :] = d.mean(axis=0)
     
             # svd attempting to make compatible with new format of compute_pcs
@@ -330,8 +329,8 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
                 if (d.size>0) and (d.std()>0):
                     #pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
                     dpc = dtools.compute_dpcs(dstrf[di], pc_count=pc_count)
-                    pc=dpc['stim']['pcs']
-                    pc_mag=dpc['stim']['pc_mag']
+                    pc=dpc[input_name]['pcs']
+                    pc_mag=dpc[input_name]['pc_mag']
 
                     pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
                     pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
