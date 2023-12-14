@@ -29,23 +29,25 @@ batch=322
 siteids, cellids = db.get_batch_sites(batch)
 
 modelnames = [
-    'gtgram.fs100.ch18.pop-loadpop-norm.l1-popev_conv2d.5x5x4.stack-relu.72.o.s-wc.72x1x90-fir.15x1x90-relu.90.o.s-wc.90x120-relu.120.o.s-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4',
-    'gtgram.fs100.ch32.pop-loadpop-norm.l1-popev_wc.32x1x70.g-fir.15x1x70-relu.70.o.s-wc.70x1x90-fir.10x1x90-relu.90.o.s-wc.90x120-relu.120.o.s-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4',
-    'gtgram.fs100.ch32.pop-loadpop-norm.l1-popev_wc.32x1x70.g-fir.15x1x70-relu.70-wc.70x1x90-fir.10x1x90-relu.90-wc.90x120-relu.120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4',
-    'gtgram.fs100.ch32.pop-loadpop-norm.l1-popev_wc.32x70.g-fir.1x15x70-relu.70.f-wc.70x90-fir.1x10x90-relu.90.f-wc.90x120-relu.120.f-wc.120xR-lvl.R-dexp.R_tfinit.n.lr1e3.et3.es20-newtf.n.lr1e4',
-]
+    'gtgram.fs100.ch18.pop-loadpop-norm.l1-popev_wc.18x1x70.g-fir.15x1x70-relu.70.o.s-wc.70x1x90-fir.10x1x90-relu.90.o.s-wc.90x120-relu.120.o.s-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4.json',
+    'gtgram.fs100.ch18.pop-loadpop-norm.l1-popev_wc.18x1x70.g-fir.15x1x70-relu.70-wc.70x1x90-fir.10x1x90-relu.90-wc.90x120-relu.120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4.json',
+    'gtgram.fs100.ch32.pop-loadpop-norm.l1-popev_wc.32x1x70.g-fir.15x1x70-relu.70.o.s-wc.70x1x90-fir.10x1x90-relu.90.o.s-wc.90x120-relu.120.o.s-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4.json',
+    'gtgram.fs100.ch32.pop-loadpop-norm.l1-popev_wc.32x1x70.g-fir.15x1x70-relu.70-wc.70x1x90-fir.10x1x90-relu.90-wc.90x120-relu.120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb10-lite.tf.lr1e4.json',
+    ]
 
 modelname=modelnames[1]
-modelspec = mapping.load_mapping_model(modelname=modelname)
-channels = modelspec.layers[0].shape[0]
+model='CNN-32'
+modelspec = mapping.load_mapping_model(name=model)
 
-wav = '/auto/users/svd/projects/snh_stimuli/naturalsound-iEEG-sanitized-mixtures/stim138_duck_quack.wav'
-wav = '/auto/users/svd/projects/snh_stimuli/naturalsound-iEEG-sanitized-mixtures/stim174_girl_speaking.wav'
 wav = '/auto/data/sounds/BigNat/v1/cat97_rec1_crickets_excerpt1.wav'
+wav = '/auto/users/svd/projects/snh_stimuli/naturalsound-iEEG-sanitized-mixtures/stim174_girl_speaking.wav'
+wav = '/auto/users/svd/projects/snh_stimuli/naturalsound-iEEG-sanitized-mixtures/stim138_duck_quack.wav'
+wav = '/auto/data/sounds/vocalizations/v2/ferretb3001R.wav'
 
-projection = mapping.project(modelspec, wav=wav, w=None, fs=None,
-                             raw_scale=250, OveralldB=65, verbose=True)
-
+projection, f = mapping.project(modelspec, wavfilename=wav, w=None, fs=None,
+                                raw_scale=250, OveralldB=65, verbose=True)
+outpath = '/home/svd/Documents/onedrive/presentations/zhejiang_2023/figs/'
+f.savefig(outpath+'project_ferret.pdf')
 """
 importlib.reload(mapping)
 
