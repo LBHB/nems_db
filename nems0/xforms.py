@@ -940,7 +940,8 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
     return {'figures': figures}
 
 
-def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False, **ctx):
+def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False,
+              modelspec_list=None, **ctx):
     from nems.tools import json
 
     if IsReload:
@@ -963,6 +964,11 @@ def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False,
     # call nems-lite JSON encoder
     data = json.nems_to_json(modelspec)
     save_resource(os.path.join(destination, 'modelspec.json'), data=data)
+    if modelspec_list is not None:
+        for i,m in enumerate(modelspec_list):
+            data = json.nems_to_json(m)
+            save_resource(os.path.join(destination, f'modelspec_list{i:04d}.json'), data=data)
+
     for number, figure in enumerate(figures):
         fig_uri = os.path.join(destination, 'figure.{:04d}.png'.format(number))
         #log.info('saving figure %d to %s', number, fig_uri)
@@ -2251,10 +2257,14 @@ def load_analysis(filepath, eval_model=True, only=None):
     is_nems_lite = any(['init_nems_keywords' in x[0] for x in xfspec])
 
     mspaths = []
+    mslistpaths = []
     figures_to_load = []
     logstring = ''
     for file in os.listdir(filepath):
-        if file.startswith("modelspec"):
+        log.info(file)
+        if file.startswith("modelspec_list"):
+            mslistpaths.append(_path_join(filepath, file))
+        elif file.startswith("modelspec"):
             mspaths.append(_path_join(filepath, file))
         elif file.startswith("figure"):
             figures_to_load.append(_path_join(filepath, file))
@@ -2263,10 +2273,15 @@ def load_analysis(filepath, eval_model=True, only=None):
             with open(logpath) as logfile:
                 logstring = logfile.read()
     mspaths.sort()  # make sure we're in alphanumeric order!
+    mslistpaths.sort()  # make sure we're in alphanumeric order!
 
     if is_nems_lite:
         from nems.tools.json import load_model
         ctx = {'modelspec': load_model(mspaths[0])}
+        if len(mslistpaths) > 0:
+            for m in mslistpaths:
+                print(m)
+            ctx['modelspec_list'] = [load_model(m) for m in mslistpaths]
     else:
         ctx = load_modelspecs([], uris=mspaths, IsReload=False)
     ctx['IsReload'] = True

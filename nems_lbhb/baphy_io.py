@@ -4738,7 +4738,6 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             dcell[c]['iso'] = df_iso.loc[c,'isolation']
         except:
             dcell[c]['iso'] = 0
-            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
 
     return pd.DataFrame(dcell).T
 
