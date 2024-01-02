@@ -953,7 +953,6 @@ def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False,
         prefix = get_setting('NEMS_RESULTS_DIR')
     batch = modelspec.meta.get('batch', 0)
     cellid = modelspec.meta.get('cellid', 'cell')
-    #basepath = os.path.join(prefix, 'nems-lite', str(batch), cellid)
     basepath = os.path.join(prefix, str(batch), cellid)
 
     # use nems-lite model path namer
