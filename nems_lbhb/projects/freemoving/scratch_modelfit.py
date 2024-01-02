@@ -210,10 +210,9 @@ modelspec_list=ctx['modelspec_list']
 
 model_list = ctx['modelspec_list']
 time_step=85
-D=11
+D=15
 pc_count=5
 reset_backend=False
-
 
 pc_mags = []
 mdstrfs = []
@@ -221,7 +220,9 @@ for model in modelspec_list:
     _pc_mags = []
     _mdstrfs = []
     for out_channel in range(rec['resp'].shape[0]):
-        mdstrf, pc1, pc2, pc_mag = free_vs_fixed_strfs.dstrf_snapshots(rec, [model], D=11, out_channel=out_channel, pc_count=5)
+        mdstrf, pc1, pc2, pc_mag = \
+        free_vs_fixed_strfs.dstrf_snapshots(rec, [model], D=D, time_step=time_step, 
+                                            out_channel=out_channel, pc_count=pc_count)
         _pc_mags.append(pc_mag)  # unit x model x didx x pc
         _mdstrfs.append(mdstrf)  # unit x model x didx x frequency x lag
     pc_mags.append(_pc_mags)

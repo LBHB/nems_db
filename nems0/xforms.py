@@ -603,15 +603,21 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
         X_est, Y_est = lite_input_dict(modelspec, est, epoch_name=epoch_name, add_batch_dim=True)
 
         if False:
-            log.info("adding a tiny bit of noise to X_est")
+            log.info("Adding a tiny bit of noise to X_est")
             X_est = X_est + np.random.randn(*X_est.shape) / 10000
+            
         if jackknife_count>0:
             ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
             fit_set = JackknifeIterator(X_est, target=Y_est,
                                         samples=jackknife_count, axis=ja)
             log.info(f"Jackknifes: {jackknife_count}")
+            E = np.zeros((rand_count, jackknife_count))
+            E0 = np.zeros((rand_count, jackknife_count))
         else:
             fit_set = DataSet(X_est, target=Y_est)
+            E = np.zeros(rand_count)
+            E0 = np.zeros(rand_count)
+            
         log.info(f"Dataset size X_est: {X_est['input'].shape} Y_est: {Y_est.shape}")
         batch_size = None #  X_est.shape[0]  # or None or bigger?
         log.info(f"Batch size: {batch_size}")
@@ -623,7 +629,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                           'learning_rate': learning_rate, 'epochs': max_iter,
                           'shuffle': shuffle_batches,
                           }
-        log.info(f"Learning rate: {learning_rate:.2e} Tol: {tolerance:.2e} Cost: {cost_function}")
+        log.info(f"LR: {learning_rate:.2e} Tol: {tolerance:.2e} Cost: {cost_function}")
 
         prephi = modelspec.layers[-1].get_parameter_values(as_dict=True)
         if initialize_nl:
@@ -636,7 +642,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
         else:
             fit_stage_1=False
         if fit_stage_1:
-            from nems.layers import ShortTermPlasticity
+            #from nems.layers import ShortTermPlasticity
             # for i, l in enumerate(modelspec.layers):
             #    if isinstance(l, ShortTermPlasticity):
             #        log.info(f'Freezing parameters for layer {i}: {l.name}')
@@ -653,8 +659,6 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 modelspec_copies = [modelspec.sample_from_priors()]
                 rand_count = 1
 
-            E = np.zeros(rand_count)
-            E0 = np.zeros(rand_count)
             for mi, m in enumerate(modelspec_copies):
                 log.info(f'** ({backend}) Fitting without NL - initialization {mi+1}/{rand_count} ...')
 
@@ -673,7 +677,6 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                         input=X_est, target=Y_est, backend=backend,
                         freeze_layers=freeze_layers, fitter_options=fitter_options,
                         batch_size=batch_size, verbose=0, progress_fun=progress_fun)
-
                     E[mi] = modelspec_copies[mi].results.final_error
                     E0[mi] = modelspec_copies[mi].results.initial_error[0]
                 else:
@@ -694,16 +697,24 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                         batch_size=batch_size, verbose=1, progress_fun=progress_fun)
 
                     modelspec_copies[mi] = model_fit_list
-
-                    E[mi] = modelspec_copies[mi][0].results.final_error
-                    E0[mi] = modelspec_copies[mi][0].results.initial_error[0]
+                    for ji, m in enumerate(model_fit_list):
+                        E[mi,ji] = m.results.final_error
+                        E0[mi,ji] = m.results.initial_error[0]
 
             if rand_count > 1:
-                best_i = np.argmin(E)
-                log.info(f'Init E: {E0}  Final E: {E} best={best_i} ({E[best_i]})')
-                modelspec = modelspec_copies[best_i]
+                if jackknife_count>1:
+                    best_i = np.argmin(E,axis=0)
+                    modelspec=[]
+                    for ji in range(jackknife_count):
+                        log.info(f'JK {ji}/{jackknife_count} Final E: {np.round(E[:,ji],4)} best={best_i[ji]} ({E[best_i[ji],ji]})')
+                        modelspec.append(modelspec_copies[best_i[ji]][ji])
+                else:
+                    best_i = np.argmin(E)
+                    log.info(f'Init E: {E0}  Final E: {E} best={best_i} ({E[best_i]})')
+                    modelspec = modelspec_copies[best_i]
             else:
                 modelspec = modelspec_copies[0]
+                
             if jackknife_count>1:
                 modelspec_list = modelspec
                 modelspec = modelspec_list[0]
@@ -892,7 +903,8 @@ def predict_lite(modelspec, est, val,
         est['pred'] = est[output_name]._modified_copy(data=d)
 
         for k,v in dataset.items():
-            if k not in ['output','target']:
+            if k not in ['output','target','stim','dlc']:
+                # don't overwrite signals from original recording (kludgy)
                 s = list(v.T.shape)[:-1] + [len(m)]
                 d = np.zeros(s)
                 d[:, m] = v.T

@@ -41,9 +41,12 @@ def wcdl(keyword):
         wc.input = 'dlc'
     else:
         wc.input = 'hrtf'
-    wc.output = 'hrtf'
+    if 's' in options:
+        wc.output = 'state'
+    else:
+        wc.output = 'hrtf'
     return wc
-
+    
 @layer('firdl')
 def firdl(keyword):
     k = keyword.replace('firdl','fir')
@@ -51,6 +54,56 @@ def firdl(keyword):
     fir.input = 'hrtf'
     fir.output = 'hrtf'
     return fir
+
+@layer('relud')
+def relud(keyword):
+    k = keyword.replace('relud','relu')
+    relu = keyword_lib[k]
+    relu.input = 'hrtf'
+    relu.output = 'hrtf'
+    return relu
+
+@layer('sigd')
+def sigd(keyword):
+    k = keyword.replace('sigd','sig')
+    sig = keyword_lib[k]
+    sig.input = 'hrtf'
+    sig.output = 'hrtf'
+    return sig
+
+@layer('wcs')
+def wcs(keyword):
+    k = keyword.replace('wcs','wc')
+    wc = keyword_lib[k]
+    options = keyword.split('.')
+    wc.input = 'state'
+    wc.output = 'state'
+    return wc
+    
+@layer('firs')
+def firs(keyword):
+    k = keyword.replace('firs','fir')
+    fir = keyword_lib[k]
+    fir.input = 'state'
+    fir.output = 'state'
+    return fir
+
+@layer('relus')
+def relus(keyword):
+    k = keyword.replace('relus','relu')
+    relu = keyword_lib[k]
+    relu.input = 'state'
+    relu.output = 'state'
+    return relu
+
+#@layer('stategaindl')
+#def from_keyword(keyword):
+#    """wrapper for stategain keyword, but make state input name 'dlc'
+#    """
+#    k = keyword.replace('stategaindl','stategain')
+#    sg = keyword_lib[k]
+#    sg.state_arg = 'hrtf'
+#    return sg
 
 @layer('wcst')
 def wcst(keyword):
@@ -79,26 +132,11 @@ def wch(keyword):
     wc.input = 'hstim'
     return wc
 
-@layer('relud')
-def relud(keyword):
-    k = keyword.replace('relud','relu')
-    relu = keyword_lib[k]
-    relu.input = 'hrtf'
-    relu.output = 'hrtf'
-    return relu
-
-@layer('sigd')
-def sigd(keyword):
-    k = keyword.replace('sigd','sig')
-    sig = keyword_lib[k]
-    sig.input = 'hrtf'
-    sig.output = 'hrtf'
-    return sig
-
 @xform()
 def free(loadkey, cellid=None, batch=None, siteid=None, **options):
     d = _load_dict(loadkey, cellid, batch)
     d['siteid']=cellid
+    d['compute_position']=True
     del d['cellid']
     xfspec = [['nems_lbhb.projects.freemoving.free_model.load_free_data', d]]
     return xfspec
