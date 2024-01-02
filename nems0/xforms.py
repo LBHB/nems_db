@@ -490,7 +490,9 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
         cellid = meta.get('cellid', 'NAT4v2')
-        modelspec.name = f"{cellid}/{meta['batch']}/{meta['modelname']}"
+
+        name = f"{cellid}/{meta['batch']}/{meta['modelname']}"
+        modelspec.name = name.replace(":","")
 
     return {'modelspec': modelspec}
 
