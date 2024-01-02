@@ -966,7 +966,7 @@ def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False,
     save_resource(os.path.join(destination, 'modelspec.json'), data=data)
     if modelspec_list is not None:
         for i,m in enumerate(modelspec_list):
-            log.info(f'Saving modelspec_list {i}')
+            #log.info(f'Saving modelspec_list {i}')
             data = json.nems_to_json(m)
             save_resource(os.path.join(destination, f'modelspec_list{i:04d}.json'), data=data)
 

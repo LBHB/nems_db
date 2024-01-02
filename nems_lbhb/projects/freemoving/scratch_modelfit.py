@@ -34,7 +34,7 @@ input_count = 36
 #sep_kw = f'wcst.Nx1x{acount}.i-wcdl.{dlc_count}x1x{dcount}.i-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}-cat-relu.{tcount}.o.s'
 #aud_kw = f'wc.{tcount}x1x{l2count}-fir.4x1x{l2count}-relu.{l2count}.o.s-wc.{l2count}xR-relu.R.o.s'
 ros="" # ros=".o.s" # ros=""
-reg=".l24"
+reg=".l2:4"
 #reg=""
 sep_kw = f'wcst.Nx1x{acount}.i{reg}-wcdl.{dlc_count}x1x{dcount}.i{reg}-first.8x1x{acount}-firdl.{dlc_memory}x1x{dcount}.nc1-cat-relu.{tcount}{ros}'
 aud_kw = f'wc.{tcount}x1x{l2count}{reg}-fir.4x1x{l2count}-relu.{l2count}{ros}-wc.{l2count}xR{reg}-relu.R.o.s'
@@ -94,7 +94,7 @@ shortnames = [
     'HRTF+Dsh sg',
 ]
 
-modelname = modelnames[1]
+modelname = modelnames[2]
 modelname2 = modelnames[2]
 for i,m in enumerate(modelnames):
     if m==modelname2:
