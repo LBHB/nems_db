@@ -432,7 +432,10 @@ def init_nl_lite(modelspec, X_est, Y_est):
     elif modelspec.layers[-1].name.startswith('dexp'):
         #pred = modelspec.predict(input=X_est, batch_size=batch_size)
         #pred = np.reshape(pred, (pred.shape[0] * pred.shape[1], pred.shape[2]))
-        resp = np.reshape(Y_est, (Y_est.shape[0] * Y_est.shape[1], Y_est.shape[2]))
+        if len(Y_est.shape)>2:
+            resp = np.reshape(Y_est, (Y_est.shape[0] * Y_est.shape[1], Y_est.shape[2]))
+        else:
+            resp=Y_est
 
         stdr = np.nanstd(resp, axis=0)
         base = np.mean(resp, axis=0) - stdr * 1

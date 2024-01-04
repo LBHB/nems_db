@@ -31,7 +31,7 @@ from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_de
 #os.makedirs(figpath, exist_ok=True)
 
 # tested sites
-siteid="LMD008a"
+siteid="LMD014a"
 batch=349
 rasterfs = 50
 PreStimSilence = 1.0
@@ -46,7 +46,7 @@ if 0:
 else:
     manager = BAPHYExperiment(batch=349, cellid=siteid)
 rec = manager.get_recording(**{'rasterfs': rasterfs, 'resp': True, 'stim': False},
-                            recache=True)
+                            recache=False)
 rec=rec.create_mask('ACTIVE_EXPERIMENT', mask_name='mask_active')
 rec=rec.create_mask('PASSIVE_EXPERIMENT', mask_name='mask_passive')
 
@@ -116,15 +116,88 @@ for i,f in enumerate(fg_unique):
                                   'fg': fg, 'bg': bg, 'fgbg': fgbg  }, index=[cc]))
             cc+=1
 d = pd.concat(triads)
+
+DROP_NO_ACTIVE=True
+REQUIRE_CC=True
+if DROP_NO_ACTIVE:
+    d['valid']=True
+    for i,r in d.iterrows():
+        for j,m in enumerate(['mask_passive','mask_active']):
+            try:
+                rfg = resp.extract_epoch(r['fg'], mask=rec[m])
+            except:
+                d.loc[i,'valid']=False
+        if REQUIRE_CC:
+            if (r.fc+r.bc)>2:
+                d.loc[i,'valid']=False
+    d=d.loc[d['valid']].reset_index(drop=True)
 triadcount=len(d)
 
-
-# plt.close('all')
+#plt.close('all')
 smwin=3
 T=int((PreStimSilence+2)*rasterfs)
+T0=int(PreStimSilence*rasterfs)
 lw=0.75
 pstr={1: 'C', 2: 'I'}
 colors = ['deepskyblue', 'yellowgreen', 'dimgray']
+
+f,ax = plt.subplots(1,3)
+snr = [[],[]]
+spont = [[],[]]
+rstd = [[],[]]
+for j,m in enumerate(['mask_passive','mask_active']):
+    rall = resp.extract_epoch('REFERENCE', mask=rec[m])[:, :, :T].mean(axis=0)
+    rall = rall-np.mean(rall[:,:T0], axis=1, keepdims=True)
+    ax[j].imshow(rall, aspect='auto', interpolation='none', origin='lower',
+                 cmap='bwr', vmin=-rall.max(), vmax=rall.max())
+    snr[j]=rall[:,T0:].std(axis=1)/rall[:,:T0].std(axis=1)
+    spont[j]=rall[:,:T0].mean(axis=1, keepdims=True)
+    rstd[j]=rall[:,T0:].std(axis=1, keepdims=True)
+    ax[j].set_title(f"{siteid} {m} meanresp")
+    ax[2].plot(snr[j],label=m)
+
+snr_threshold = 1.5
+ax[2].axhline(snr_threshold, ls='--', color='black', lw=lw, label='SNR thresh')
+ax[2].legend(frameon=False)
+
+goodcells = (snr[0]>snr_threshold) & (snr[1]>snr_threshold)
+ax[2].set_title(f"good cells {goodcells.sum()}/{len(goodcells)}")
+
+cols = 2
+rows = int(np.ceil(triadcount/cols))
+f,ax = plt.subplots(rows,cols*2, sharex=True, sharey=True)
+ax = ax.flatten()
+ncells = goodcells.sum()
+
+for i,r in d.iterrows():
+    for j,m in enumerate(['mask_passive','mask_active']):
+        try:
+            rfg = resp.extract_epoch(r['fg'], mask=rec[m])[:,goodcells,:T].mean(axis=0)
+            rbg = resp.extract_epoch(r['bg'], mask=rec[m])[:,goodcells,:T].mean(axis=0)
+            rfgbg = resp.extract_epoch(r['fgbg'], mask=rec[m])[:,goodcells,:T].mean(axis=0)
+            tt = np.arange(len(rfg))/rasterfs - PreStimSilence
+            prebins = (tt<0).sum()
+            rr = np.concatenate([(rfg-spont[j][goodcells,:])/rstd[j][goodcells,:],
+                                  (rbg-spont[j][goodcells,:])/rstd[j][goodcells,:],
+                                   (rfgbg-spont[j][goodcells,:])/rstd[j][goodcells,:]],axis=0)
+            vmax=rr.max()
+            vmin=-vmax
+            ax[i*2+j].imshow(rr, extent=[-1, 2, rr.shape[0],1], cmap='bwr', vmin=vmin, vmax=vmax)
+            ax[i*2+j].axhline(y=np.sum(goodcells),ls='--',lw=lw,color='gray')
+            ax[i*2+j].axhline(y=np.sum(goodcells)*2,ls='--',lw=lw,color='gray')
+        except:
+            ax[i*2+j].set_axis_off()
+    ax[i*2].set_title(f"{r.f[6:]} {r.b[10:16]} snr={r.snr},f={pstr[r.fc]},b={pstr[r.bc]} PAS")
+    ax[i * 2+1].set_title(f"ACT")
+ax[0].text(0.1-PreStimSilence,ncells/2,'FG')
+ax[0].text(0.1-PreStimSilence,ncells/2+ncells,'BG')
+ax[0].text(0.1-PreStimSilence,ncells/2+2*ncells,'FG+BG')
+f.suptitle(f"{siteid}")
+plt.tight_layout()
+
+raise ValueError('stopping')
+
+# plt.close('all')
 
 # interesting cids: LMD004a00_a_NFB - 59, 52, 68, 25
 #cidlist=[2,3,6,7,8,9,13,15,18,19,20,21,22,25,28,31,32,35,41,42,48,49,50,52,55,59,60,61,63,65 , 68,73,74,82,89]

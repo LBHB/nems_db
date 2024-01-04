@@ -422,6 +422,8 @@ def init_std_modelspec(modelspec, meta, area="A1", cellid=None, siteid=None, bat
 
     modelpath = json.generate_model_filepath(modelname=modelkw, basepath=basepath)
 
+    modelspec = json.l
+    return modelspec
 
 def pca_proj_layer(rec, modelspec, **ctx):
     from nems0.tf.cnnlink_new import fit_tf, fit_tf_init

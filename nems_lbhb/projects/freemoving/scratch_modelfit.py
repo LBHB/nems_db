@@ -3,6 +3,9 @@ import logging
 import os
 import io
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 from nems0.utils import escaped_split, escaped_join, get_setting
 from nems0.registry import KeywordRegistry, xforms_lib
 from nems0 import xform_helper, xforms, db
@@ -89,7 +92,7 @@ shortnames = [
     'HRTF+Dsh sg',
 ]
 
-modelname = modelnames[3]
+modelname = modelnames[4]
 modelname2 = modelnames[2]
 for i,m in enumerate(modelnames):
     if m==modelname2:
@@ -240,6 +243,7 @@ log.info('test fit complete')
 
 raise ValueError('stopping')
 
+import numpy as np
 from nems.visualization import model
 import importlib
 importlib.reload(model)
@@ -250,22 +254,72 @@ fig = model.plot_model(
     ctx['modelspec'], X_val, target=Y_val, sampling_rate=ctx['val']['resp'].fs)
 
 
-from nems0 import epoch as ep
-import matplotlib.pyplot as plt
-resp=ctx['rec']['resp']
-epochs = ep.epoch_names_matching(resp.epochs, "^TAR")
-i=resp.get_epoch_bounds('TARGET')
-i[:,0]-=0.5
-r=resp.extract_epoch(i)
-plt.figure()
-plt.imshow(r.mean(axis=0))
 
-
-from nems_lbhb.projects.freemoving import free_model, free_vs_fixed_strfs
+#plt.close('all')
+from nems_lbhb import postprocessing
 import importlib
-import numpy as np
+importlib.reload(postprocessing)
 
-importlib.reload(free_vs_fixed_strfs)
+out_channels=[54,55,56,57]
+res = postprocessing.dstrf_pca(D=10, timestep=23, pc_count=7, out_channels=out_channels, **ctx)
+
+from nems.layers import filter
+from nems import Model
+from nems.metrics import correlation
+from nems.preprocessing import split
+from nems.models.dataset import DataSet
+
+val=ctx['val'].apply_mask()
+resp=val['resp'].as_continuous()
+stim=val['stim'].as_continuous()
+
+f,ax=plt.subplots(len(out_channels),7, sharey='row')
+for oi,o in enumerate(out_channels):
+    dpcz = res['dpcz']
+    dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+    fir = filter.FIR(shape=dpcz.shape)
+    fir['coefficients'] = np.flip(dpcz,axis=0)
+    X = X_val['input']
+    Y = fir.evaluate(X)
+
+    r = resp[o]
+
+    for i in range(Y.shape[1]):
+        y=Y[:,i]
+        b=np.percentile(y,np.linspace(0,100,11))
+
+        #b=np.linspace(y.min(),y.max(),11)
+        mb = (b[:-1]+b[1:])/2
+        mr=[ np.mean(r[(y>=b[i]) & (y<b[i+1])]) for i in range(10) ]
+        me=[ np.std(r[(y>=b[i]) & (y<b[i+1])])/np.sqrt(np.sum((y>=b[i]) & (y<b[i+1]))) for i in range(10) ]
+        ax[oi,i].errorbar(mb,mr,me)
+    ax[oi,0].set_ylabel(val['resp'].chans[o])
+plt.tight_layout()
+
+keywordstring='wc.7x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
+lmodel0 = xforms.init_nems_keywords(keywordstring, meta=ctx['modelspec'].meta)['modelspec']
+lmodel0 = lmodel0.sample_from_priors()
+fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 100,
+                  'early_stopping_patience': 150,
+                  'early_stopping_tolerance': 1e-4,
+                  'learning_rate': 1e-4, 'epochs': 10000,
+                  }
+
+X_est=Y
+Y_est=r[:,np.newaxis]
+ja = int(Y_est.shape[0] <= 1)  # jk on axis with more than 1 value
+jackknife_count=6
+fit_set = split.JackknifeIterator(X_est, target=Y_est,
+                            samples=jackknife_count, axis=ja)
+lmodel = fit_set.get_fitted_jackknifes(
+    lmodel0, backend='tf', fitter_options=fitter_options)
+
+dataset = fit_set.get_predicted_jackknifes(lmodel)
+p=dataset['output']
+p0=lmodel0.predict(input=X_est)
+
+correlation(p0,r[:,np.newaxis]),correlation(p,Y_est)
+
 
 rec=ctx['val'].apply_mask()
 modelspec_list=ctx['modelspec_list']

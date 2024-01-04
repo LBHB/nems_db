@@ -115,11 +115,19 @@ def dstrf(loadkey):
     """
     Run Decoding Analysis
     """
-    #return [['nems0.xforms.predict', {}],
-    #        ['nems0.xforms.add_summary_statistics', {}],
-    #        ['nems0.xforms.plot_summary', {}],
-    #        ['nems_lbhb.analysis.pop_models.dstrf_analysis', {}]]
-    return [['nems_lbhb.postprocessing.dstrf_pca']]
+    parms = {}
+    options = loadkey.split(".")
+    for op in options[1:]:
+        if op.startswith('d'):
+            parms['D']=int(op[1:])
+        elif op.startswith('t'):
+            parms['timestep'] = int(op[1:])
+        elif op.startswith('p'):
+            parms['pc_count']=int(op[1:])
+        elif op.startswith('ss'):
+            parms['fit_ss_model']=True
+
+    return [['nems_lbhb.analysis.dstrf.dstrf_pca', parms]]
 
     return xfspec
 

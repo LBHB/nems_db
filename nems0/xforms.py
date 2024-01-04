@@ -602,7 +602,9 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
 
     elif backend == 'tf':
         # convert signal matrices to nems-lite format
-        X_est, Y_est = lite_input_dict(modelspec, est, epoch_name=epoch_name, add_batch_dim=True)
+        X_est, Y_est = lite_input_dict(modelspec, est, input_name=input_name,
+                                       output_name=output_name, epoch_name=epoch_name,
+                                       add_batch_dim=True)
 
         if False:
             log.info("Adding a tiny bit of noise to X_est")
@@ -859,13 +861,13 @@ def fit_lite_per_cell(modelspec=None, est=None, input_name='stim', output_name='
 
 def predict_lite(modelspec, est, val,
                  input_name='stim', output_name='resp',
-                 jackknife_count=0, modelspec_list=None,
+                 jackknifed_fit=False, modelspec_list=None,
                  IsReload=False, **context):
 
     # convert signal matrices to nems-lite format
     # single batch/epoch -- good for behavior data
-    X_est, Y_est = lite_input_dict(modelspec, est, epoch_name="")
-    X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
+    X_est, Y_est = lite_input_dict(modelspec, est, input_name=input_name, output_name=output_name, epoch_name="")
+    X_val, Y_val = lite_input_dict(modelspec, val, input_name=input_name, output_name=output_name, epoch_name="")
 
     fit_pred = modelspec.predict(X_est)
     prediction = modelspec.predict(X_val)
@@ -883,10 +885,11 @@ def predict_lite(modelspec, est, val,
     est['pred']=est[output_name]._modified_copy(data=edata)
     val['pred']=val[output_name]._modified_copy(data=vdata)
 
-    if jackknife_count>0:
+    if jackknifed_fit:
         from nems.preprocessing import JackknifeIterator
         from nems.models.dataset import DataSet
 
+        jackknife_count = len(modelspec_list)
         ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
         test_set = JackknifeIterator(X_est, target=Y_est,
                                     samples=jackknife_count, axis=ja)
@@ -894,15 +897,16 @@ def predict_lite(modelspec, est, val,
         dataset = test_set.get_predicted_jackknifes(modelspec_list)
 
         try:
-            m = val['mask'].as_continuous()[0,:]
+            m = est['mask'].as_continuous()[0,:]
         except:
-            m = np.ones(val[output_name].shape[-1], dtype=bool)
+            m = np.ones(est[output_name].shape[-1], dtype=bool)
 
         s = list(dataset['output'].T.shape)[:-1]+[len(m)]
         d = np.zeros(s)
         d[:,m] = dataset['output'].T
-        val['pred'] = val[output_name]._modified_copy(data=d)
         est['pred'] = est[output_name]._modified_copy(data=d)
+        if est['pred'].shape==val['pred'].shape:
+            val['pred'] = val[output_name]._modified_copy(data=d)
 
         for k,v in dataset.items():
             if k not in ['output','target','stim','dlc']:
@@ -910,8 +914,9 @@ def predict_lite(modelspec, est, val,
                 s = list(v.T.shape)[:-1] + [len(m)]
                 d = np.zeros(s)
                 d[:, m] = v.T
-                val[k] = val[output_name]._modified_copy(data=d)
                 est[k] = est[output_name]._modified_copy(data=d)
+                if est['pred'].shape == val['pred'].shape:
+                    val[k] = val[output_name]._modified_copy(data=d)
 
     return {'val': val, 'est': est}
 
@@ -929,7 +934,7 @@ def plot_lite(modelspec, val, input_name='stim', output_name='resp', IsReload=Fa
         return {'figures': figures}
 
     # convert signal matrices to nems-lite format
-    X_val, Y_val = lite_input_dict(modelspec, val, epoch_name="")
+    X_val, Y_val = lite_input_dict(modelspec, val, input_name=input_name, output_name=output_name, epoch_name="")
     fig = model.plot_model(
         modelspec, X_val, target=Y_val, sampling_rate=val[output_name].fs)
 
