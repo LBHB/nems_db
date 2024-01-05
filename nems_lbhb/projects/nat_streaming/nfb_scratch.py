@@ -30,8 +30,9 @@ from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_de
 #figpath = f'/auto/users/svd/docs/current/grant/r21_free_moving/eps/{dt}/'
 #os.makedirs(figpath, exist_ok=True)
 
+siteids, cellis = db.get_batch_sites(batch=349)
 # tested sites
-siteid="LMD014a"
+siteid="LMD013a"
 batch=349
 rasterfs = 50
 PreStimSilence = 1.0

@@ -22,7 +22,7 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
 
     if IsReload:
         # load dstrf data saved in modelpath
-        return
+        return {}
 
     r = est
 

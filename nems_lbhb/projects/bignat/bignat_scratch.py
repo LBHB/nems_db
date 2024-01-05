@@ -25,6 +25,8 @@ import nems_lbhb.plots as nplt
 
 log = logging.getLogger(__name__)
 
+use_saved_model=True
+
 batch=343
 
 siteids, cellids = db.get_batch_sites(batch)
@@ -38,146 +40,153 @@ modelnames = [
 ]
 shortnames = ['CNN 1d','LN','CNN single']
 modelname = modelnames[0]
-siteid = "PRN021a"
 siteid = "CLT028c"
-cellid=siteid
+siteid = "PRN021a"
+cellid = siteid
+
 for i,m in enumerate(modelnames):
     if m==modelname:
         print(f'* {i:2d} {shortnames[i]:12s}  {m}')
     else:
         print(f'  {i:2d} {shortnames[i]:12s}  {m}')
 
-autoPlot = True
-saveInDB = True
-browse_results = False
-saveFile = True
+if use_saved_model:
+    cellid = [c for c in cellids if c.startswith(siteid)][0]
 
-log.info('Initializing modelspec(s) for cell/batch %s/%d...', cellid, int(batch))
+    xfspec, ctx = xform_helper.load_model_xform(cellid=cellid, batch=batch, modelname=modelname, eval_model=True)
+else:
 
-# Segment modelname for meta information
-kws = modelname.split("_")
-modelspecname = "-".join(kws[1:-1])
-loadkey = kws[0]
-fitkey = kws[-1]
+    autoPlot = True
+    saveInDB = True
+    browse_results = False
+    saveFile = True
 
-meta = {'batch': batch, 'cellid': cellid, 'modelname': modelname,
-        'loader': loadkey, 'fitkey': fitkey, 'modelspecname': modelspecname,
-        'username': 'nems', 'labgroup': 'lbhb', 'public': 1,
-        'githash': os.environ.get('CODEHASH', ''),
-        'recording': loadkey}
+    log.info('Initializing modelspec(s) for cell/batch %s/%d...', cellid, int(batch))
 
-xforms_kwargs = {}
-xforms_init_context = {'cellid': cellid, 'batch': int(batch)}
-recording_uri = None
-kw_kwargs = {}
+    # Segment modelname for meta information
+    kws = modelname.split("_")
+    modelspecname = "-".join(kws[1:-1])
+    loadkey = kws[0]
+    fitkey = kws[-1]
 
-# equivalent of xform_helper.generate_xforms_spec():
+    meta = {'batch': batch, 'cellid': cellid, 'modelname': modelname,
+            'loader': loadkey, 'fitkey': fitkey, 'modelspecname': modelspecname,
+            'username': 'nems', 'labgroup': 'lbhb', 'public': 1,
+            'githash': os.environ.get('CODEHASH', ''),
+            'recording': loadkey}
 
-# parse modelname and assemble xfspecs for loader and fitter
-load_keywords, model_keywords, fit_keywords = escaped_split(modelname, '_')
+    xforms_kwargs = {}
+    xforms_init_context = {'cellid': cellid, 'batch': int(batch)}
+    recording_uri = None
+    kw_kwargs = {}
 
-# Generate the xfspec, which defines the sequence of events
-# to run through (like a packaged-up script)
-xfspec = []
+    # equivalent of xform_helper.generate_xforms_spec():
 
-# 0) set up initial context
-if xforms_init_context is None:
-    xforms_init_context = {}
-if kw_kwargs is not None:
-     xforms_init_context['kw_kwargs'] = kw_kwargs
-xforms_init_context['keywordstring'] = model_keywords
-xforms_init_context['meta'] = meta
-xfspec.append(['nems0.xforms.init_context', xforms_init_context])
-xforms_lib.kwargs = xforms_init_context.copy()
+    # parse modelname and assemble xfspecs for loader and fitter
+    load_keywords, model_keywords, fit_keywords = escaped_split(modelname, '_')
 
-# 1) Load the data
-xfspec.extend(xform_helper._parse_kw_string(load_keywords, xforms_lib))
+    # Generate the xfspec, which defines the sequence of events
+    # to run through (like a packaged-up script)
+    xfspec = []
 
-log.info("NEMS lite fork")
-# nems-lite fork
-xfspec.append(['nems0.xforms.init_nems_keywords', {}])
+    # 0) set up initial context
+    if xforms_init_context is None:
+        xforms_init_context = {}
+    if kw_kwargs is not None:
+         xforms_init_context['kw_kwargs'] = kw_kwargs
+    xforms_init_context['keywordstring'] = model_keywords
+    xforms_init_context['meta'] = meta
+    xfspec.append(['nems0.xforms.init_context', xforms_init_context])
+    xforms_lib.kwargs = xforms_init_context.copy()
 
-xfspec.extend(xform_helper._parse_kw_string(fit_keywords, xforms_lib))
-xfspec.append(['nems0.xforms.predict_lite', {}])
-xfspec.append(['nems0.xforms.add_summary_statistics', {}])
-xfspec.append(['nems0.xforms.plot_lite', {}])
+    # 1) Load the data
+    xfspec.extend(xform_helper._parse_kw_string(load_keywords, xforms_lib))
 
-# equivalent of xforms.evaluate():
+    log.info("NEMS lite fork")
+    # nems-lite fork
+    xfspec.append(['nems0.xforms.init_nems_keywords', {}])
 
-# Create a log stream set to the debug level; add it as a root log handler
-log_stream = io.StringIO()
-ch = logging.StreamHandler(log_stream)
-ch.setLevel(logging.DEBUG)
-fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-formatter = logging.Formatter(fmt)
-ch.setFormatter(formatter)
-rootlogger = logging.getLogger()
-rootlogger.addHandler(ch)
+    xfspec.extend(xform_helper._parse_kw_string(fit_keywords, xforms_lib))
+    xfspec.append(['nems0.xforms.predict_lite', {}])
+    xfspec.append(['nems0.xforms.add_summary_statistics', {}])
+    xfspec.append(['nems0.xforms.plot_lite', {}])
 
-ctx = {}
-for xfa in xfspec:
-    if not('postprocess' in xfa[0]):
-        ctx = xforms.evaluate_step(xfa, ctx)
+    # equivalent of xforms.evaluate():
 
-# Close the log, remove the handler, and add the 'log' string to context
-log.info('Done (re-)evaluating xforms.')
-ch.close()
-rootlogger.removeFilter(ch)
+    # Create a log stream set to the debug level; add it as a root log handler
+    log_stream = io.StringIO()
+    ch = logging.StreamHandler(log_stream)
+    ch.setLevel(logging.DEBUG)
+    fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    formatter = logging.Formatter(fmt)
+    ch.setFormatter(formatter)
+    rootlogger = logging.getLogger()
+    rootlogger.addHandler(ch)
 
-log_xf = log_stream.getvalue()
+    ctx = {}
+    for xfa in xfspec:
+        if not('postprocess' in xfa[0]):
+            ctx = xforms.evaluate_step(xfa, ctx)
 
-# save some extra metadata
-modelspec = ctx['modelspec']
+    # Close the log, remove the handler, and add the 'log' string to context
+    log.info('Done (re-)evaluating xforms.')
+    ch.close()
+    rootlogger.removeFilter(ch)
 
-if saveFile:
-    # save results
-    if get_setting('USE_NEMS_BAPHY_API'):
-        prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
-    else:
-        prefix = get_setting('NEMS_RESULTS_DIR')
+    log_xf = log_stream.getvalue()
 
-    if type(cellid) is list:
-        cell_name = cellid[0].split("-")[0]
-    else:
-        cell_name = cellid
+    # save some extra metadata
+    modelspec = ctx['modelspec']
 
-    if modelspec.meta.get('engine', 'nems0') == 'nems-lite':
-        xforms.save_lite(xfspec=xfspec, log=log_xf, **ctx)
-    else:
-        destination = os.path.join(prefix, str(batch), cell_name, modelspec.get_longname())
-
-        for cellidx in range(modelspec.cell_count):
-            modelspec.set_cell(cellidx)
-            modelspec.meta['modelpath'] = destination
-            modelspec.meta['figurefile'] = os.path.join(destination, 'figure.0000.png')
-        modelspec.set_cell(0)
-
-        log.info('Saving modelspec(s) to {0} ...'.format(destination))
-        if ctx.get('save_context', False):
-            ctx['log']=log_xf
-            save_data = xforms.save_context(destination,
-                                            ctx=ctx,
-                                            xfspec=xfspec)
+    if saveFile:
+        # save results
+        if get_setting('USE_NEMS_BAPHY_API'):
+            prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
         else:
-            save_data = xforms.save_analysis(destination,
-                                             recording=ctx.get('rec'),
-                                             modelspec=modelspec,
-                                             xfspec=xfspec,
-                                             figures=ctx.get('figures'),
-                                             log=log_xf,
-                                             update_meta=False)
+            prefix = get_setting('NEMS_RESULTS_DIR')
 
-if saveInDB:
-    # save performance and some other metadata in database Results table
-    modelspec.meta['extra_results']='test'
-    db.update_results_table(modelspec)
+        if type(cellid) is list:
+            cell_name = cellid[0].split("-")[0]
+        else:
+            cell_name = cellid
 
-for xfa in xfspec:
-    if 'postprocess' in xfa[0]:
-        log.info(f'Running postprocessing kw: {xfa[0]}')
-        ctx = xforms.evaluate_step(xfa, ctx)
+        if modelspec.meta.get('engine', 'nems0') == 'nems-lite':
+            xforms.save_lite(xfspec=xfspec, log=log_xf, **ctx)
+        else:
+            destination = os.path.join(prefix, str(batch), cell_name, modelspec.get_longname())
 
-log.info('Test fit complete')
+            for cellidx in range(modelspec.cell_count):
+                modelspec.set_cell(cellidx)
+                modelspec.meta['modelpath'] = destination
+                modelspec.meta['figurefile'] = os.path.join(destination, 'figure.0000.png')
+            modelspec.set_cell(0)
+
+            log.info('Saving modelspec(s) to {0} ...'.format(destination))
+            if ctx.get('save_context', False):
+                ctx['log']=log_xf
+                save_data = xforms.save_context(destination,
+                                                ctx=ctx,
+                                                xfspec=xfspec)
+            else:
+                save_data = xforms.save_analysis(destination,
+                                                 recording=ctx.get('rec'),
+                                                 modelspec=modelspec,
+                                                 xfspec=xfspec,
+                                                 figures=ctx.get('figures'),
+                                                 log=log_xf,
+                                                 update_meta=False)
+
+    if saveInDB:
+        # save performance and some other metadata in database Results table
+        modelspec.meta['extra_results']='test'
+        db.update_results_table(modelspec)
+
+    for xfa in xfspec:
+        if 'postprocess' in xfa[0]:
+            log.info(f'Running postprocessing kw: {xfa[0]}')
+            ctx = xforms.evaluate_step(xfa, ctx)
+
+    log.info('Test fit complete')
 
 for cid,cellid in enumerate(ctx['modelspec'].meta['cellids']):
     print(f"{cid:2d} {cellid} {ctx['modelspec'].meta['r_test'][cid,0]:.3f}")
@@ -344,10 +353,11 @@ for oi, o in enumerate(out_channels):
              f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
              f" {modelspec.meta['sspredxc'][oi]:.3f}")
 
+f,ax = plt.subplots()
 nplt.scatter_comp(modelspec.meta['r_test'][:,0],
                   modelspec.meta['sspredxc'],
-                  n1='CNN',n2='Subspace',hist_range=[0,1])
-
+                  n1='CNN',n2='Subspace',hist_range=[0,1], ax=ax)
+ax.set_title(siteid)
 
 raise ValueError('summary plots complete')
 
