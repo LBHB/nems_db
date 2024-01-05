@@ -37,7 +37,7 @@ def fill_keyword_string_values(keyword_string,
     for kw in keywords:
 
         shared = True
-        if (kw.startswith("fir.Nx") or kw.startswith("wc.Nx")) and \
+        if (kw.startswith("fir.Nx") or kw.startswith("wc.Nx") or kw.startswith("wcst.Nx") or kw.startswith("wch.Nx")) and \
                 (_rec is not None):
             N = _rec[input_name].nchans
             kw_old = kw
@@ -432,7 +432,10 @@ def init_nl_lite(modelspec, X_est, Y_est):
     elif modelspec.layers[-1].name.startswith('dexp'):
         #pred = modelspec.predict(input=X_est, batch_size=batch_size)
         #pred = np.reshape(pred, (pred.shape[0] * pred.shape[1], pred.shape[2]))
-        resp = np.reshape(Y_est, (Y_est.shape[0] * Y_est.shape[1], Y_est.shape[2]))
+        if len(Y_est.shape)>2:
+            resp = np.reshape(Y_est, (Y_est.shape[0] * Y_est.shape[1], Y_est.shape[2]))
+        else:
+            resp=Y_est
 
         stdr = np.nanstd(resp, axis=0)
         base = np.mean(resp, axis=0) - stdr * 1

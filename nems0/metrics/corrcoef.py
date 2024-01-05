@@ -134,8 +134,6 @@ def r_floor(result=None, X1mat=None, X2mat=None, pred_name='pred', resp_name='re
     r_floor = np.zeros(channel_count)
 
     for i in range(channel_count):
-        #import pdb
-        #pdb.set_trace()
         X1 = X1mat[i, :]
         X2 = X2mat[i, :]
 
@@ -151,12 +149,12 @@ def r_floor(result=None, X1mat=None, X2mat=None, pred_name='pred', resp_name='re
             n=len(X1)
 
         # compute cc for 1000 shuffles
-        rf = np.zeros([1000, 1])
+        rf = np.zeros([1000, 1]) * np.nan
         for rr in range(0, len(rf)):
             n1 = (np.random.rand(n) * len(X1)).astype(int)
             n2 = (np.random.rand(n) * len(X2)).astype(int)
-            rf[rr] = np.corrcoef(X1[n1], X2[n2])[0, 1]
-
+            if (X1[n1].std()>0) & (X2[n1].std()>0):
+                rf[rr] = np.corrcoef(X1[n1], X2[n2])[0, 1]
         rf = np.sort(rf[np.isfinite(rf)], 0)
         if len(rf):
             r_floor[i] = rf[int(len(rf) * 0.95)]

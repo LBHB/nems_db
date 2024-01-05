@@ -13,8 +13,6 @@
 
 
 """
-
-
 import deeplabcut
 
 experimenter = "svd"
@@ -23,6 +21,8 @@ experimenter = "svd"
 name = 'two_chimney'  # dual recording setup
 name = 'two_chimney2'  # dual recording setup - take 2
 #name = 'two_chimney_LMD'  # dual recording setup
+#name = 'right_chimney_PRN'  # right recording setup
+name = 'right_chimney_PRNfb'  # right recording setup
 
 create_new = False
 
@@ -34,6 +34,12 @@ if create_new:
               path + 'videos/SLJ032a10_a_NTD.avi',
               path + 'videos/LMD004a00_a_NFB.avi',
               path + 'videos/LMD005a10_a_NFB.avi']
+    # redoing PRN RH
+    vpath = '/auto/data/dlc/free_top_RH-jereme-2023-02-17/videos'
+    videos = [vpath + '/PRN044a02_a_NTD.avi',
+              vpath + '/PRN046a06_a_NTD.avi',
+              vpath + '/PRN047a06_a_NTD.avi'
+              ]
     path_config_file = deeplabcut.create_new_project(
        name, experimenter,
        videos,
@@ -49,7 +55,7 @@ elif name=='free_training':
     path='/auto/data/dlc/free_train-svd-2023-09-26/'
     videos = [path+'videos/SlipperyJack_2023_08_02_NTD_1.avi',
               path+'videos/LemonDisco_2023_09_07_NFB_2.avi']
-    elif name == 'two_chimney':
+elif name == 'two_chimney':
     path = '/auto/data/dlc/two_chimney-svd-2023-09-28/'
     videos = [path + 'videos/SLJ010a04_a_NTD.avi',
               path + 'videos/SLJ032a10_a_NTD.avi',
@@ -61,6 +67,17 @@ elif name == 'two_chimney2':
               path + 'videos/SLJ032a10_a_NTD.avi',
               path + 'videos/LMD004a00_a_NFB.avi',
               path + 'videos/LMD005a10_a_NFB.avi']
+    #videos = ['/auto/data/daq/SlipperyJack/SLJ019/SLJ019a05_a_NTD.avi']
+elif name == 'right_chimney_PRN':
+    path = '/auto/data/dlc/right_chimney_PRN-svd-2023-11-21/'
+    videos = [path + 'videos/PRN044a02_a_NTD.avi',
+              path + 'videos/PRN046a06_a_NTD.avi',
+              path + 'videos/PRN047a06_a_NTD.avi']
+elif name == 'right_chimney_PRNfb':
+    path = '/auto/data/dlc/right_chimney_PRNfb-svd-2023-11-30/'
+    videos = [path + 'videos/PRN044a02_a_NTD.avi',
+              path + 'videos/PRN046a06_a_NTD.avi',
+              path + 'videos/PRN047a06_a_NTD.avi']
 else:
     path = '/auto/data/dlc/two_chimney-LMD-2023-11-01/'
     videos = [path+'videos/LMD004a00_a_NFB.avi',
@@ -78,14 +95,14 @@ deeplabcut.extract_frames(path_config_file)
 deeplabcut.label_frames(path_config_file)
 
 deeplabcut.create_training_dataset(path_config_file, augmenter_type='imgaug')
-deeplabcut.train_network(path_config_file, shuffle=1, max_snapshots_to_keep=5, 
+deeplabcut.train_network(path_config_file, shuffle=1, max_snapshots_to_keep=5,
                          autotune=False, displayiters=100, saveiters=10000, maxiters=60000, allow_growth=True)
 
 deeplabcut.evaluate_network(path_config_file, plotting=True)
 
 deeplabcut.analyze_videos(path_config_file, videos, videotype='.avi')
 
-deeplabcut.create_labeled_video(path_config_file, videos)
+deeplabcut.create_labeled_video(path_config_file, videos, draw_skeleton=True)
 
 deeplabcut.extract_outlier_frames(path_config_file, videos)  #pass a specific video
 

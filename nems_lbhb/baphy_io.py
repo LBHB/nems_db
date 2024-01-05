@@ -1781,7 +1781,10 @@ def psi_parm_read(filepath):
     root3, ferret = os.path.split(root2)
     parts = parmfile.split('_')
     siteid = parts[0][:-2]
-    runclass = parts[-2];
+    if len(parts)==3:
+        runclass = parts[2]
+    else:
+        runclass = parts[-2]
     ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
 
     if os.path.isfile(globalfile):
@@ -4703,6 +4706,9 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     # backward compatibility: nest depth info under the default ProbeA
     if 'parmfile' in d.keys():
         d={'ProbeA': d.copy()}
+    sql = f"SELECT cellid,min(isolation) as isolation FROM gSingleRaw WHERE cellid like '{siteid}%'{rawstr} GROUP BY cellid"
+    df_iso = db.pd_query(sql).set_index('cellid')
+    
     dcell = {}
     for c in cellid:
         dcell[c] = {'siteid': siteid}
@@ -4729,11 +4735,9 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             dcell[c]['area'] = dcell[c]['layer']
 
         try:
-            sql=f"SELECT * FROM gSingleRaw WHERE cellid='{c}'" + rawstr
-            dcell[c]['iso'] = db.pd_query(sql).iloc[0]['isolation']
+            dcell[c]['iso'] = df_iso.loc[c,'isolation']
         except:
             dcell[c]['iso'] = 0
-            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
 
     return pd.DataFrame(dcell).T
 

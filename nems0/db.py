@@ -852,17 +852,8 @@ def fetch_meta_data(modelspec, r, attrs, cellid=None):
             default = ''
         else:
             default = 0.0
-        # TODO: hard coded fix for now to match up stack.meta names with
-        # results names.
-        # Either need to maintain hardcoded list of fields instead of pulling
-        # from Results, or keep meta names in fitter matched to columns
-        # some other way if naming rules change.
-        #if 'fit' in a:
-        #    k = a.replace('fit', 'est')
-        #elif 'test' in a:
-        #    k = a.replace('test', 'val')
-        #else:
-        #    k = a
+        # special function to select value from meta[a] that corresponds to the
+        # result for cellid--if a is an array
         v=_fetch_attr_value(modelspec, a, default, cellid)
         setattr(r, a, v)
         #log.info("modelspec: meta {0}={1}".format(a,v))

@@ -71,7 +71,10 @@ class behav:
             r = d_rawfiles.loc[session_id]
             path = os.path.join(r['resppath'], r['parmfile'])
             triallog = os.path.join(path, 'trial_log.csv')
-            d = pd.read_csv(triallog)
+            try:
+                d = pd.read_csv(triallog)
+            except:
+                print(f'No trial log found for session {session_id}')
 
             if self.task == 'NFB':
                 if self.migrate_only == True:
@@ -90,7 +93,8 @@ class behav:
 
                         interesting_data = d[
                             ['trial_number', 'response', 'correct', 'response_time', 'hold_duration', 'snr',
-                             'rt','np_start','response_start','spatial_config', 'migrate_trial', 'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat']].copy()
+                             'rt','np_start','response_start','spatial_config', 'migrate_trial', 'trial_duration', 'fg_i', 'bg_i', 'trial_is_repeat',
+                             'fg_name', 'bg_name']].copy()
                         interesting_data['parmfile'] = r['parmfile']
                         interesting_data['session_id'] = session_id
                         interesting_data['day'] = r['cellid']
@@ -108,7 +112,8 @@ class behav:
 
                         interesting_data = d[
                             ['trial_number', 'response', 'correct', 'response_time', 'hold_duration', 'snr',
-                             'rt','np_start','response_start','spatial_config', 'response_time', 'trial_duration', 'fg_i', 'bg_i']].copy()
+                             'rt','np_start','response_start','spatial_config', 'response_time', 'trial_duration', 'fg_i', 'bg_i',
+                             'fg_name', 'bg_name']].copy()
                         interesting_data['parmfile'] = r['parmfile']
                         interesting_data['session_id'] = session_id
                         interesting_data['day'] = r['cellid']
@@ -996,7 +1001,7 @@ if __name__ == "__main__":
     # lemon_space_snr_subplots()
     # slippy_space_snr_subplots()
     # slippy_dcz_effect()
-    lemon_migrate_rt()
+    # lemon_migrate_rt()
 
     # lemon_dlc_trace_plot()
     # lemon_dlc_rt_comparison()
@@ -1006,27 +1011,27 @@ if __name__ == "__main__":
     # slippy_dlc_trace_plot('SlipperyJack_2023_10_06_NFB_1')
 
 
-    # example = behav('SLJ', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
+    example = behav('LMD', 'NFB', days='all', migrate_only=True, non_migrate_blocks=True)
     # # # #runclass NFB = 2afc, VOW = vowel
     # # #
     # # example.variables()
-    XVARIABLE = ['migrate_trial', 'day']
+    XVARIABLE = ['fg_name']
     YVARIABLE = 'correct'
     # # # # #
     # day_list1 = ['SLJ063Ta', 'SLJ065Ta', 'SLJ067Ta']
     # day_list2 = ['SLJ064Ta', 'SLJ066Ta', 'SLJ068Ta']
-    day_list3 = ['SLJ063Ta', 'SLJ064Ta', 'SLJ065Ta', 'SLJ066Ta', 'SLJ067Ta',  'SLJ068Ta',
-                 'SLJ069Ta', 'SLJ070Ta', 'SLJ071Ta', 'SLJ072Ta']
+    # day_list3 = ['SLJ063Ta', 'SLJ064Ta', 'SLJ065Ta', 'SLJ066Ta', 'SLJ067Ta',  'SLJ068Ta',
+    #              'SLJ069Ta', 'SLJ070Ta', 'SLJ071Ta', 'SLJ072Ta']
     # day_list = ['LMD074Ta', 'LMD075Ta', 'LMD076Ta', 'LMD077Ta', 'LMD078Ta',
     #             'LMD079Ta', 'LMD080Ta', 'LMD081Ta', 'LMD082Ta']
-    # day_list = ['LMD082Ta', 'LMD083Ta']
+    day_list = ['LMD082Ta']
 
 
     # example.rolling_avg(XVARIABLE, day_list=['LMD074Ta'])
     # example.rolling_avg(XVARIABLE, day_list=['LMD073Ta'])
 
 
-    # example.sample_plots(XVARIABLE, day_list3, YVARIABLE=YVARIABLE)
+    example.sample_plots(XVARIABLE, day_list, YVARIABLE=YVARIABLE)
     # example.sample_plots(XVARIABLE, day_list, YVARIABLE='hold_duration')
     # example.sample_plots(XVARIABLE, day_list, YVARIABLE='trial_duration')
     # example.sample_plots(XVARIABLE, day_list1, YVARIABLE=YVARIABLE, only_0_db=True)

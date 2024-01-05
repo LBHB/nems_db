@@ -202,13 +202,13 @@ def lvnoise(kw):
             ['nems0.preprocessing.add_noise_signal', {'noise_name': "lv", 'ref_signal': "state"}]]
 
 @xform()
-def shuf(load_key):
-    options = load_key.split('.')[1:]
+def shuf(kw):
+    options = kw.split('.')[1:]
     shuf_sigs=[]
     shuf_recs = ['est','val']
     for op in options:
         if op == 'st':
             shuf_sigs.append('state')
         else:
-            raise ValueError('Unknown shuf keyword option {}'.format(op))
+            shuf_sigs.append(op)
     return [['nems0.preprocessing.shuffle',{'sigs':shuf_sigs,'recs':shuf_recs}]]

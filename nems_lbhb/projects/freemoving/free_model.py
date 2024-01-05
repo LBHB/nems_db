@@ -4,21 +4,12 @@ from os.path import basename, join
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import convolve2d, butter, sosfilt
-import pandas as pd
-from scipy.interpolate import LinearNDInterpolator
-from scipy.ndimage import gaussian_filter
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 
 from nems0 import db
-import nems0.epoch as ep
-import nems0.preprocessing as preproc
 from nems0.utils import smooth
 from nems_lbhb.xform_wrappers import generate_recording_uri
 from nems_lbhb.baphy_experiment import BAPHYExperiment
 from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_depth_info
-from nems_lbhb.plots import plot_waveforms_64D
 from nems_lbhb.preprocessing import impute_multi
 from nems.layers import WeightChannels, FIR, LevelShift, \
     DoubleExponential, RectifiedLinear, ConcatSignals, WeightChannelsGaussian
@@ -34,11 +25,18 @@ from nems0.epoch import epoch_names_matching
 from nems0.metrics.api import r_floor
 from nems0 import xforms
 from nems.preprocessing import (indices_by_fraction, split_at_indices, JackknifeIterator)
+#from nems0.registry import xform, scan_for_kw_defs
+#from nems_lbhb.plugins.lbhb_loaders import _load_dict
+#from nems.registry import layer, keyword_lib
+#from nems0.registry import xform, scan_for_kw_defs
 
 log = logging.getLogger(__name__)
 
+
+
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
-                   recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False, **options):
+                   recache=False, dlc_chans=10, dlc_threshold=0.2, compute_position=False,
+                   meta=None, **context):
 
     sitenum = int(siteid[3:6])
     if batch==347:
@@ -61,8 +59,8 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
                          " AND area in ('A1','PEG','AC','BS')")
         a1cellids = df_siteinfo['cellid'].to_list()
 
-    if cellid is not None:
-        a1cellids=[cellid]
+    #if cellid is not None:
+    #    a1cellids=[cellid]
     """
     sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
     dparm = db.pd_query(sql)
@@ -100,6 +98,7 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         # get angle to each speaker and scale -1 to 1
         theta = rec2['disttheta'].as_continuous()[[1, 3], :] / 180
         chans = rec['dlc'].chans + ['th1','th2']
+        rec['disttheta']=rec2['disttheta']
         d = np.concatenate((rec['dlc']._data, theta), axis=0)
         rec['dlc']=rec['dlc']._modified_copy(data=d, chans=chans)
 
@@ -120,37 +119,47 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
     except:
         rec.meta['depth'] = np.array([float(c.split("-")[-2]) for c in cellids])
         rec.meta['sw'] = np.ones(len(cellids)) * 100
+    if meta is None:
+        meta={}
+    meta['cellids']=cellids
+    meta['siteid']=siteid
+    return {'rec': rec, 'meta': meta}
 
-    return rec
-
-def free_split_rec(rec, apply_hrtf=True):
-
+def free_split_rec(rec, apply_hrtf=True, jackknife_count=None, **context):
+    """
+    function called by fev keyword now
+    :param rec:
+    :param apply_hrtf:
+    :param jackknife_count:
+    :param context:
+    :return:
+    """
     if apply_hrtf:
         log.info('Applying HRTF')
         rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
                              f_min=200, f_max=20000, channels=18)['rec']
-    elif rec['stim'].shape[0]==18:
+
+    elif rec['stim'].shape[0] == 18:
         log.info('Stacking on noise to control for HRTF')
         stim2 = rec['stim'].shuffle_time(rand_seed=500)
         rec['stim'] = rec['stim'].concatenate_channels([rec['stim'], stim2])
 
+    # this shoule be taken care of in previous keyword step
     # log compress and normalize stim
-    fn = lambda x: _dlog(x, -1)
-    rec['stim'] = rec['stim'].transform(fn, 'stim')
-    rec['stim'] = rec['stim'].normalize('minmax')
-    rec['resp'] = rec['resp'].normalize('minmax')
+    #fn = lambda x: _dlog(x, -1)
+    #rec['stim'] = rec['stim'].transform(fn, 'stim')
+    #rec['stim'] = rec['stim'].normalize('minmax')
+    #rec['resp'] = rec['resp'].normalize('minmax')
 
-    OLD_MASK = False
-    if OLD_MASK:
-        # epoch_regex = "^STIM_"
-        # est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
-        # est = preproc.average_away_epoch_occurrences(est, epoch_regex=epoch_regex)
-        # val = preproc.average_away_epoch_occurrences(val, epoch_regex=epoch_regex)
-        est = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=False)
-        val = rec.jackknife_mask_by_epoch(5, 0, 'REFERENCE', invert=True)
+    res = {'rec': rec}
 
-        est = est.and_mask(est['dlc_valid'].as_continuous()[0,:])
-        val = val.and_mask(val['dlc_valid'].as_continuous()[0,:])
+    if jackknife_count is not None:
+        # same as aev, but pass on jackknife_count to steer fitter
+        rec = rec.create_mask(rec['dlc_valid'].as_continuous()[0, :])
+        est = rec.copy()
+        val = rec.copy()
+
+        res['jackknife_count'] = jackknife_count
     else:
         val_epochs = epoch_names_matching(rec['resp'].epochs, "^STIM_00")
         val = rec.copy()
@@ -159,7 +168,11 @@ def free_split_rec(rec, apply_hrtf=True):
         est = rec.copy()
         est = est.create_mask(~mask).and_mask(est['dlc_valid'].as_continuous()[0, :])
 
-    return {'rec': rec, 'est': est, 'val': val}
+    res['est'] = est
+    res['val'] = val
+
+    return res
+
 
 
 def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,

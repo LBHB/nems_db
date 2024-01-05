@@ -210,7 +210,7 @@ def stim_filt_hrtf(rec, signal='stim', hrtf_format='az', smooth_win=2,
         dlc_data_imp, fs=rasterfs, smooth_win=smooth_win, ref_x0y0=speaker2_x0y0)
 
     # fall-off over distance
-    # -- currently fudged 5 db diff from front to back
+    # -- currently hard-coded 5 db difference from front to back
     dist_atten = 6
     log.info(f"Imposing distance attenuation={dist_atten} dB ")
     gaind1 = -(d1 - 1) * dist_atten
@@ -263,9 +263,10 @@ def load_hrtf(format='az', fmin=200, fmax=20000, num_freqs=18):
     """
 
     c = np.sort(centre_freqs(fmax*2, num_freqs, fmin, fmax))
-
+    #libpath = Path('/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/')
+    libpath = Path(os.path.dirname(__file__))
     if format == 'az':
-        filepath = Path(os.path.dirname(__file__)) / 'hrtf_az.csv'
+        filepath = libpath / 'hrtf_az.csv'
         arr = np.loadtxt(filepath, delimiter=",", dtype=float)
 
         A = np.unique(arr[:, 0])
@@ -291,7 +292,172 @@ def load_hrtf(format='az', fmin=200, fmax=20000, num_freqs=18):
         #f,ax=plt.subplots(1,2)
         #ax[0].imshow(L, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
         #ax[1].imshow(R, origin='lower', extent=[A[0],A[-1],F[0],F[-1]], aspect='auto')
+    elif format == 'az_el':
+        filepath = libpath / 'hrtf_az_el.csv'
+        arr = np.loadtxt(filepath, delimiter=",", dtype=float)
+        # D(cc,:) = [azimuths(a) elevations(e) f(fi) left_full(fi, a, e) right_full(fi,a,e)];
+        A = np.unique(arr[:, 0])
+        E = np.unique(arr[:, 1])
+        F = np.unique(arr[:, 2])
+        L = np.reshape(arr[:, 3], [len(E), len(A), len(F)])
+        R = np.reshape(arr[:, 4], [len(E), len(A), len(F)])
+        f = interpolate.interp1d(F, L, axis=2)
+        g = interpolate.interp1d(F, R, axis=2)
+        L0 = f(c)
+        R0 = g(c)
+
+        return L0,R0,c,A,E
     else:
-        raise ValueError(f'Only az HRTF currently supported')
+        raise ValueError(f'Only az or az_el HRTF currently supported')
 
     return L0, R0, c, A
+
+
+## Routines for az+el HRTF
+
+def rotate_via_numpy(xy, radians):
+    """Use numpy to build a rotation matrix and take the dot product."""
+    c, s = np.cos(radians), np.sin(radians)
+    j = np.matrix([[c, s], [-s, c]])
+    m = np.dot(j, xy)
+
+    return m
+
+def rotate_point_around_line(point, x1, x2, theta):
+    """
+    points, x1 and x2 are coordinates in 3D
+    theta is rotation angle in radians
+    """
+    
+    # Convert points to NumPy arrays
+    point = np.array(point)
+    x1 = np.array(x1)
+    x2 = np.array(x2)
+
+    # Calculate the rotation axis
+    rotation_axis = x2 - x1
+    rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
+
+    # Calculate the Rodrigues' rotation formula
+    cross_product = np.cross(rotation_axis, point)
+    rotated_point = (
+        point * np.cos(theta) +
+        np.cross(rotation_axis, point) * np.sin(theta) +
+        rotation_axis * np.dot(rotation_axis, point) * (1 - np.cos(theta))
+    )
+
+    return rotated_point
+
+def ptdist(x,y):
+    """
+    euclidean distance between vectors x and y
+    """
+    return np.sqrt(np.mean((x-y)**2))
+
+
+def get_animal_head_coordinates(animal='SLJ'):
+    
+    if animal=='PRN':
+        # PRN left chimney , coordinates from JW & JS
+        xyz=np.array([[ 0,    0, -53,  25],
+                      [-36.4, 0,  -5.4, -3],
+                      [-14,   0, 11.3,  -23]])
+        # PRN right chimney
+        xyz=np.array([[ 0,    0, 25,  -36],
+                      [-36.4, 0, -3,  1],
+                      [-14,   0,  -23, 11.3]])
+        xyz=np.array([[ 0,    0, 25,  -38],
+                      [-34.4, 0, -3,  2],
+                      [-14,   0,  -23, 11.3]])
+        xyz=np.array([[ 0,    0, 25,  -45],
+                      [-42, 0, -15,  -3],
+                      [0,   0,  -9, 30]])
+    elif animal == 'LMD':
+        # LMD
+        xyz=np.array([[0, 0, 52, -52],
+                      [-34, 0, -2.3, -2.3],
+                      [-17.25, 0, 18.75, 18.75]])
+    elif aniaml == 'SLJ':
+        # (x,y,z) x 4
+        # SLJ - 2 chimneys
+        xyz=np.array([[ 0,    0,  51.9, -53,],
+                      [-36.4, 0, -6.1,  -5.4],
+                      [-14,   0,  13.1, 11.3]])
+        animal="SLJ"
+    else:
+        raise ValueError(f"Unknown animal {animal}")
+        
+    return xyz
+
+
+def generate_tilt_yaw_lookup(animal='SLJ', tilts=None, yaws=None):
+    """
+    tilts - list or array in radians
+    yaws - list of array in radians
+    """
+    
+    if tilts is None:
+        tilts=np.arange(20,-32.5,-2.5)/180*np.pi
+    if yaws is None:
+        yaws=np.arange(-30,32.5,2.5)/180*np.pi
+    N=len(tilts)
+    N2=len(yaws)
+    print(f"tilts: {N} yaws: {N2}")
+    tt=np.zeros((N,N2))
+    yy=np.zeros((N,N2))
+    pp=np.zeros((N,N2,2,4))
+    xyz = get_animal_head_coordinates(animal)
+    
+    for i, tilt in enumerate(tilts):
+        for j, yaw in enumerate(yaws):
+            X=xyz.copy()
+            X=xyz.copy()
+
+            #X[1:,:] = rotate_via_numpy(X[1:,:],tilt)
+            #X[0::2,:] = rotate_via_numpy(X[0::2,:],-yaw)
+            X2=np.stack([rotate_point_around_line(X[:,i], [0,0,0], [1,0,0], -tilt) for i in range(4)], axis=1)
+            X3=np.stack([rotate_point_around_line(X2[:,i], X2[:,0], X2[:,1], -yaw) for i in range(4)], axis=1)
+
+            xy = -X3[:2,:]        
+            xy = xy / np.abs(xy[1,0])
+
+            pp[i,j] = xy
+            tt[i,j]=tilt/np.pi*180
+            yy[i,j]=yaw/np.pi*180
+
+    tilts=tt.flatten()
+    yaws=yy.flatten()
+    pp = np.reshape(pp, (-1, 2, 4))
+    
+    return tilts,yaws,pp
+
+def compute_rotations(dlc, tilts=None, yaws=None, pp=None, animal='SLJ'):
+    
+    if pp is None:
+        tilts,yaws,pp = generate_tilt_yaw_lookup(animal='SLJ', tilts=tilts, yaws=yaws)
+        
+    aty=np.zeros((3,dlc.shape[1]))
+    Emin=np.zeros(dlc.shape[1]) * np.nan
+    for i in range(dlc.shape[1]):
+        d = dlc[:,i]
+        x=d[0:8:2]
+        y=-d[1:8:2]
+
+        delta=[x[1]-x[0], y[1]-y[0]]
+        angle = np.arctan(delta[0]/delta[1])
+        if y[0]<y[1]:
+            angle=angle-np.pi
+        angle_save = (angle+np.pi) % (2*np.pi) - np.pi
+        xy = rotate_via_numpy(np.stack((x,y),axis=1).T, -angle)
+        xy-=xy[:,[1]]
+        xy = np.array(xy) / xy[1,0] # normed
+        d_ = xy
+        d_ = d_[np.newaxis,:,:].copy()
+        d = pp-d_
+
+        E=np.sum(d**2,axis=(1,2))
+        aa2 = np.argmin(E)
+        Emin[i]=E[aa2]
+        aty[:,i]=np.array([angle_save*180/np.pi, tilts[aa2],yaws[aa2]])
+
+    return aty, Emin

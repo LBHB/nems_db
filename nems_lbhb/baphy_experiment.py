@@ -495,7 +495,7 @@ class BAPHYExperiment:
         kwargs.update({'version': 'BAPHYExperiment.3'}) # version 3 added pupil extras to recording signals
 
         # add parmfiles / cells_to_load list - these are unique ids for the recording
-        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'mfiles': [str(i).replace('.m','') for i in self.parmfile]})
         kwargs.update({'cell_list': self.cells_to_load})
 
         # add batch to cache recording in the correct location
@@ -505,6 +505,7 @@ class BAPHYExperiment:
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
                 self.experiment[0][:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+        log.info(f"{kwargs}")
 
         use_API = get_setting('USE_NEMS_BAPHY_API')
 
