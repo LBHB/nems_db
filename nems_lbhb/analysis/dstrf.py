@@ -124,7 +124,9 @@ def subspace_model_fit(est, val, modelspec,
     sspredxc = np.zeros(len(out_channels))
     ss0predxc = np.zeros(len(out_channels))
     for oi, o in enumerate(out_channels):
-        keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
+        log.info(f"** Fitting SS model for cell {val['resp'].chans[o]}:")
+        #keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
+        keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-dexp.1'
         lmodel0 = xforms.init_nems_keywords(keywordstring, meta=modelspec.meta)['modelspec']
         lmodel0 = lmodel0.sample_from_priors()
         fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 100,
@@ -133,7 +135,7 @@ def subspace_model_fit(est, val, modelspec,
                           'learning_rate': 1e-3, 'epochs': 10000,
                           }
         fit_opts2 = fitter_options.copy()
-        fit_opts2['early_stopping_tolerance'] = 5e-4
+        fit_opts2['early_stopping_tolerance'] = 1e-4
         fit_opts2['learning_rate'] = 5e-4
 
         dpcz = modelspec.meta['dpc']

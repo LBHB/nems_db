@@ -23,8 +23,8 @@ modelnames = [
 ]
 shortnames = ['CNN 1d','LN','CNN single']
 
-modelnames = [modelnames[0]]
-siteids = ["PRN021a"]
+modelnames = [modelnames[1]]
+#siteids = ["CLT028c"]
 
 executable_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/bash_fit_wrapper'
 #script_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/free_moving_fit_script.py'
@@ -32,7 +32,7 @@ script_path = '/auto/users/svd/python/nems_db/scripts/fit_single.py'
 GPU_job=True
 
 force_rerun = False
-run_in_lbhb = True
+run_in_lbhb = False
 
 if run_in_lbhb:
     # first models, run locally so that recordings get generated.

@@ -2286,8 +2286,8 @@ def load_analysis(filepath, eval_model=True, only=None):
         from nems.tools.json import load_model
         ctx = {'modelspec': load_model(mspaths[0])}
         if len(mslistpaths) > 0:
-            for m in mslistpaths:
-                print(m)
+            #for m in mslistpaths:
+            #    print(m)
             ctx['modelspec_list'] = [load_model(m) for m in mslistpaths]
     else:
         ctx = load_modelspecs([], uris=mspaths, IsReload=False)

@@ -25,7 +25,7 @@ import nems_lbhb.plots as nplt
 
 log = logging.getLogger(__name__)
 
-use_saved_model=True
+use_saved_model=False
 
 batch=343
 
@@ -42,6 +42,7 @@ shortnames = ['CNN 1d','LN','CNN single']
 modelname = modelnames[0]
 siteid = "CLT028c"
 siteid = "PRN021a"
+siteid = "PRN007a"
 cellid = siteid
 
 for i,m in enumerate(modelnames):
