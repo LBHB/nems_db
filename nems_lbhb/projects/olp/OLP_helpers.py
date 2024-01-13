@@ -294,13 +294,19 @@ def label_pair_type(stim):
 
     return type_label
 
+
 def label_ep_type(ep_name):
-    '''Labels epochs that have one or two stimuli in it. First position refers to BG, second
+    '''2023_12_11. Added the little bit up front that accommodates the active epoch name type.
+    Labels epochs that have one or two stimuli in it. First position refers to BG, second
     to FG. 0 means null, 1 means primary speaker, 2 means secondary speaker'''
+    if ep_name[-2:] == 'dB':
+        ep_name_full = ep_name
+        ep_name = '-'.join(ep_name.split('-')[:-1])
+
     if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
         stim_type = None
-    elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
-        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
+    elif len(list(re.findall("_(null|\d{1}.*|\w{1}.*)_(null|\d{1}.*|\w{1}.*)", ep_name)[0])) == 2:
+        seps = list(re.findall("_(null|\d{1}.*|\w{1}.*)_(null|\d{1}.*|\w{1}.*)", ep_name)[0])
         if len(seps[0].split('-')) >= 4 or len(seps[1].split('-')) >= 4:
             if seps[0] != 'null' and seps[1] != 'null':
                 stim_type = seps[0].split('-')[3] + seps[1].split('-')[3]
@@ -2169,3 +2175,71 @@ def get_olp_filter(weight_df, kind='vanilla', metric=False):
         filt = df_filters(filt, snr_threshold=0.12, rel_cut=2.5, r_cut=0.4, weight_lim=[-0.5, 2])
 
     return filt
+
+
+def get_stim_epochs_behavior(stim_epochs):
+    '''2023_12_11. Taken from nfb_scratch, Stephen code that parses the stimuli format specific
+    to OLP/NFB.'''
+    dstim = pd.DataFrame({'epoch': stim_epochs, 'fg': '', 'bg': '', 'fgc': 0, 'bgc': 0, 'snr': 0})
+    for i, r in dstim.iterrows():
+        e = dstim.loc[i, 'epoch']
+        s = e.split('_')[1:]
+        b = s[0].split("-")
+        f = s[1].split("-")
+        if len(f) < 5:
+            s_snr = '0'
+        else:
+            s_snr = f[4][:-2]
+        if s_snr[0] == 'n':
+            snr = -float(s_snr[1:])
+        else:
+            snr = float(s_snr)
+
+        if (snr >= -50) & (f[0].upper() != 'NULL'):
+            dstim.loc[i, 'fg'] = f[0]
+            dstim.loc[i, 'fgc'] = int(f[3])
+        else:
+            dstim.loc[i, 'fg'] = 'NULL'
+            dstim.loc[i, 'fgc'] = 1
+        if (snr < 50) & (b[0].upper() != 'NULL'):
+            dstim.loc[i, 'bg'] = b[0]
+            dstim.loc[i, 'bgc'] = int(b[3])
+            dstim.loc[i, 'snr'] = snr
+        else:
+            dstim.loc[i, 'bg'] = 'NULL'
+            dstim.loc[i, 'bgc'] = 1
+            if snr > 50:
+                dstim.loc[i, 'snr'] = snr - 100
+            else:
+                dstim.loc[i, 'snr'] = snr
+
+    fg_unique = dstim['fg'].unique().tolist()
+    bg_unique = dstim['bg'].unique().tolist()
+    snr_unique = dstim['snr'].unique().tolist()
+    fg_unique.remove('NULL')
+    bg_unique.remove('NULL')
+    if -100 in snr_unique:
+        snr_unique.remove(-100)
+    fc = [1, 2]
+    bc = [1, 2]
+    conds = np.array(np.meshgrid(snr_unique, fc, bc)).T.reshape(-1, 3)
+
+    triads = []
+    cc = 0
+    for i, f in enumerate(fg_unique):
+        for j, b in enumerate(bg_unique):
+            for k, c in enumerate(conds):
+                print(f"{f} {b} {c}")
+                snr, fc, bc = c
+                fgbg = dstim.loc[(dstim.snr == snr) & (dstim.fgc == fc) & (dstim.bgc == bc) &
+                                 (dstim.fg == f) & (dstim.bg == b), 'epoch'].values[0]
+                fg = dstim.loc[(dstim.snr == snr) & (dstim.fgc == fc) &
+                               (dstim.fg == f) & (dstim.bg == 'NULL'), 'epoch'].values[0]
+                bg = dstim.loc[(dstim.bgc == bc) &
+                               (dstim.fg == 'NULL') & (dstim.bg == b), 'epoch'].values[0]
+                triads.append(pd.DataFrame({'f': f, 'b': b, 'snr': snr, 'fc': fc, 'bc': bc,
+                                            'fg': fg, 'bg': bg, 'fgbg': fgbg}, index=[cc]))
+                cc += 1
+    d = pd.concat(triads)
+
+    return d

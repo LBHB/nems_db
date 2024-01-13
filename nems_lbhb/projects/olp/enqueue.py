@@ -18,14 +18,16 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script.py'
 # batch=345  # stephen modelfits
 # batch =328  # marm
 batch = 344
+batch = 349 #Lemon behavior
 # cache_path = 'cache_marm'
 # cache_path = 'cache_snr'
-cache_path = 'cache_full'
+cache_path = 'cache_full_behavior'
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
-SLJ = [dd for dd in cell_list if dd[:3]=='SLJ']
+cell_list = cell_list[1:4]
+# SLJ = [dd for dd in cell_list if dd[:3]=='SLJ']
 # ss = SLJ[::50]
-cell_list = SLJ
+# cell_list = SLJ
 # cellid = 'SLJ002a-A-014-1'
 
 # cell_list = cell_list[111:119]
