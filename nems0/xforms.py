@@ -586,8 +586,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 E = np.array([m.results.final_error for m in modelspec_copies])
                 E0 = np.array([m.results.initial_error[0] for m in modelspec_copies])
                 best_i = np.argmax(E)
-                print(f'Init E: {E0}')
-                print(f'final E: {E} best={E[best_i]}')
+                log.info(f'Init E: {E0} Final E: {E} best={E[best_i]}')
                 modelspec=modelspec_copies[best_i]
             else:
                 log.info(f'({backend}) Fitting without NL ...')
@@ -2268,7 +2267,7 @@ def load_analysis(filepath, eval_model=True, only=None):
     figures_to_load = []
     logstring = ''
     for file in os.listdir(filepath):
-        log.info(file)
+        #log.info(file)
         if file.startswith("modelspec_list"):
             mslistpaths.append(_path_join(filepath, file))
         elif file.startswith("modelspec"):

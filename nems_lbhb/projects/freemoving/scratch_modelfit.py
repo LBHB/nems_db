@@ -15,9 +15,9 @@ log = logging.getLogger(__name__)
 from nems0.registry import xform, scan_for_kw_defs
 from nems.layers.tools import require_shape, pop_shape
 
-siteid = 'PRN048a'
 #siteid='PRN009a'
 siteid = 'SLJ033a'
+siteid = 'PRN048a'
 cellid = siteid
 rasterfs = 50
 batch = 348
@@ -57,11 +57,13 @@ load_kw_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev-shuf.dlc"
 load_kw = f"free.fs{rasterfs}.ch18-norm.l1-fev"
 load_kw_hrtf = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf"
 load_kw_hrtf_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf-shuf.dlc"
+load_kw_hrtfae_shuff = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtfae-shuf.dlc"
 
 jkn=6
 load_kw_jk = f"free.fs{rasterfs}.ch18-norm.l1-fev.jk{jkn}"
 load_kw_hrtf_jk = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf.jk{jkn}"
 load_kw_hrtf_shuff_jk = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtf.jk{jkn}-shuf.dlc"
+load_kw_hrtfae_shuff_jk = f"free.fs{rasterfs}.ch18-norm.l1-fev.hrtfae.jk{jkn}-shuf.dlc"
 
 rbn=3
 fit_kw = "lite.tf.cont.init.lr1e3.t3-lite.tf.cont.lr1e4"
@@ -74,10 +76,12 @@ modelnames=[
     "_".join([load_kw_hrtf_jk, model_kw_ln, fit_kw_jk]),
 #    "_".join([load_kw,model_kw_old,fit_kw]),
 #    "_".join([load_kw_shuff, model_kw_old, fit_kw]),
+    "_".join([load_kw_shuff_jk, model_kw_old, fit_kw_jk]),
     "_".join([load_kw_hrtf_jk, model_kw_old, fit_kw_jk]),
     "_".join([load_kw_hrtf_shuff_jk, model_kw_old, fit_kw_jk]),
     "_".join([load_kw_hrtf_jk, model_kw_sg, fit_kw_jk]),
     "_".join([load_kw_hrtf_shuff_jk, model_kw_sg, fit_kw_jk]),
+    "_".join([load_kw_hrtfae_shuff_jk, model_kw_old, fit_kw_jk]),
 ]
 shortnames = [
     #'HRTF+DLC new nojk',
@@ -90,9 +94,10 @@ shortnames = [
     'HRTF+Dsh old',
     'HRTF+DLC sg',
     'HRTF+Dsh sg',
+    'HRTFae+Dsh old',
 ]
 
-modelname = modelnames[4]
+modelname = modelnames[5]
 modelname2 = modelnames[2]
 for i,m in enumerate(modelnames):
     if m==modelname2:
@@ -242,6 +247,9 @@ for xfa in xfspec:
 log.info('test fit complete')
 
 raise ValueError('stopping')
+
+xf2, ctx2 = xform_helper.fit_model_xform(cellid=siteid, batch=batch, modelname=modelname2, returnModel=True)
+
 
 import numpy as np
 from nems.visualization import model

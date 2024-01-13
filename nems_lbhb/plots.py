@@ -417,7 +417,7 @@ def scatter_model_set(modelnames=[], batch=322, cellids=None, stat='r_test', sf=
 
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
-                 hist_range=[-1, 1], title=None,
+                 hist_range=[-1, 1], title=None, s=None,
                  highlight=None, scatter_only=True, ax=None):
     """
     beta1, beta2 are T x 1 vectors
@@ -454,7 +454,7 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
         fh = plt.figure()
         ax = plt.subplot(2, 2, 3)
 
-    s=None
+
     ax.scatter(beta1[outcells], beta2[outcells], s=s, marker='.', color='red')
     ax.scatter(beta1[set2], beta2[set2], s=s, marker='.', color='lightgray')
     ax.scatter(beta1[set1], beta2[set1], s=s, marker='.', color='black')

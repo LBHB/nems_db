@@ -148,6 +148,8 @@ def fev(keyword):
     for op in ops:
         if op=='hrtf':
             d['apply_hrtf']=True
+        elif op == 'hrtfae':
+            d['apply_hrtf'] = 'az_el'
         elif op.startswith('jk'):
             d['jackknife_count']=int(op[2:])
 

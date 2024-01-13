@@ -17,12 +17,16 @@ import deeplabcut
 
 experimenter = "svd"
 
-#name = 'free_training'  # implant but no chimneys
-name = 'two_chimney'  # dual recording setup
-name = 'two_chimney2'  # dual recording setup - take 2
+# these are all old models. DEFUNCT??
+#name = 'two_chimney'  # dual recording setup
+#name = 'two_chimney2'  # dual recording setup - take 2
 #name = 'two_chimney_LMD'  # dual recording setup
 #name = 'right_chimney_PRN'  # right recording setup
+
+#name = 'free_training'  # implant but no chimneys
 name = 'right_chimney_PRNfb'  # right recording setup
+name = 'left_chimney_PRNfb'  # left recording setup
+name = 'two_chimney3fb'  # dual recording setup - take 2
 
 create_new = False
 
@@ -39,6 +43,12 @@ if create_new:
     videos = [vpath + '/PRN044a02_a_NTD.avi',
               vpath + '/PRN046a06_a_NTD.avi',
               vpath + '/PRN047a06_a_NTD.avi'
+              ]
+    # redoing PRN LH
+    vpath = '/auto/data/dlc/free_top_2022_11/videos'
+    videos = [vpath + '/PRN011a01_a_NTD.avi',
+              vpath + '/PRN015a02_a_NTD.avi',
+              vpath + '/PRN017a01_a_NTD.avi'
               ]
     path_config_file = deeplabcut.create_new_project(
        name, experimenter,
@@ -78,11 +88,22 @@ elif name == 'right_chimney_PRNfb':
     videos = [path + 'videos/PRN044a02_a_NTD.avi',
               path + 'videos/PRN046a06_a_NTD.avi',
               path + 'videos/PRN047a06_a_NTD.avi']
-else:
+elif name=='two_chimney_LMD':
     path = '/auto/data/dlc/two_chimney-LMD-2023-11-01/'
     videos = [path+'videos/LMD004a00_a_NFB.avi',
               path+'videos/LMD005a10_a_NFB.avi']
     videos = [path+'videos/LMD004a00_a_NFB.avi']
+elif name == 'two_chimney3fb':
+    path = '/auto/data/dlc/two_chimney3fb-svd-2024-01-10/'
+    videos = [path + 'videos/SLJ010a04_a_NTD.avi',
+              path + 'videos/SLJ032a10_a_NTD.avi',
+              path + 'videos/LMD004a00_a_NFB.avi',
+              path + 'videos/LMD005a10_a_NFB.avi']
+elif name == 'left_chimney_PRNfb':
+    path = '/auto/data/dlc/left_chimney_PRNfb-svd-2024-01-11/'
+    videos = [path + 'videos/PRN011a01_a_NTD.avi',
+              path + 'videos/PRN015a02_a_NTD.avi',
+              path + 'videos/PRN017a01_a_NTD.avi']
 
 path_config_file = path + 'config.yaml'
 
@@ -102,7 +123,7 @@ deeplabcut.evaluate_network(path_config_file, plotting=True)
 
 deeplabcut.analyze_videos(path_config_file, videos, videotype='.avi')
 
-deeplabcut.create_labeled_video(path_config_file, videos, draw_skeleton=True)
+deeplabcut.create_labeled_video(path_config_file, videos, draw_skeleton=False)
 
 deeplabcut.extract_outlier_frames(path_config_file, videos)  #pass a specific video
 

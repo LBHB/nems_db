@@ -2498,11 +2498,12 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
             dstr += '-TOR'
 
     # include all parameter values, even defaults, in filename
-    fields = RefObject['UserDefinableFields']
+    # translated from baphy
+    fields = RefObject.get('UserDefinableFields', [])
     if options['stimfmt'] == 'envelope':
-        x_these_fields = ['F0s', 'ComponentsNumber'];
+        x_these_fields = ['F0s', 'ComponentsNumber']
     else:
-        x_these_fields = [];
+        x_these_fields = []
 
     for cnt1 in range(0, len(fields), 3):
         if RefObject[fields[cnt1]] == 0:

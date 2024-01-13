@@ -134,9 +134,13 @@ def free_split_rec(rec, apply_hrtf=True, jackknife_count=None, **context):
     :param context:
     :return:
     """
-    if apply_hrtf:
+    if apply_hrtf is not None:
+        if apply_hrtf in ['az', 'az_el']:
+            hrtf_format=apply_hrtf
+        else:
+            hrtf_format='az'
         log.info('Applying HRTF')
-        rec = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
+        rec = stim_filt_hrtf(rec, hrtf_format=hrtf_format, smooth_win=2,
                              f_min=200, f_max=20000, channels=18)['rec']
 
     elif rec['stim'].shape[0] == 18:
