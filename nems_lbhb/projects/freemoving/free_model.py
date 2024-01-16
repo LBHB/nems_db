@@ -93,6 +93,7 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
         rec['stim'] = rec['stim']._modified_copy(data=rec['stim']._data[:18, :])
 
     if compute_position:
+        log.info('Computing but not applying HRTF to compute positions')
         rec2 = stim_filt_hrtf(rec, hrtf_format='az', smooth_win=2,
                               f_min=200, f_max=20000, channels=18)['rec']
         # get angle to each speaker and scale -1 to 1
@@ -134,12 +135,14 @@ def free_split_rec(rec, apply_hrtf=True, jackknife_count=None, **context):
     :param context:
     :return:
     """
-    if apply_hrtf is not None:
+    if apply_hrtf is False:
+        log.info('No HRTF')
+    elif apply_hrtf is not None:
         if apply_hrtf in ['az', 'az_el']:
             hrtf_format=apply_hrtf
         else:
             hrtf_format='az'
-        log.info('Applying HRTF')
+        log.info(f'Applying HRTF fmt={hrtf_format}')
         rec = stim_filt_hrtf(rec, hrtf_format=hrtf_format, smooth_win=2,
                              f_min=200, f_max=20000, channels=18)['rec']
 
@@ -247,7 +250,8 @@ def free_fit(rec, shuffle="none", apply_hrtf=True, dlc_memory=4,
             WeightChannels(shape=(dlc_count, 1, dcount), input='dlc', output='space'),
             FIR(shape=(8, 1, acount), input='prediction', output='prediction'),
             FIR(shape=(dlc_memory, 1, dcount), input='space', output='space'),
-            ConcatSignals(input=['prediction','space'], output='prediction'),
+            ConcatSignals(input1='prediction',input2='space', output='prediction'),
+            #ConcatSignals(input=['prediction','space'], output='prediction'),
             RectifiedLinear(shape=(tcount,), input='prediction', output='prediction',
                             no_offset=True, no_shift=True),
             WeightChannels(shape=(tcount, 1, l2count), input='prediction', output='prediction'),

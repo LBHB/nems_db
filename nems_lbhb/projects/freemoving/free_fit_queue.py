@@ -10,6 +10,8 @@ from nems0 import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 batch = 348
+rasterfs = 50
+
 siteids, cellids = db.get_batch_sites(batch)
 #siteids=['PRN048a']
 
@@ -25,14 +27,13 @@ modelnames = ['sh.none-hrtf.True__nmse',
               'sh.stim-hrtf.True__nmse',
               ]
 
-dlc_count=10
+dlc_count=12
 dlc1 = 40
 strf_channels=20
-rasterfs = 50
 
-dlc_memory=4
-acount=20
-dcount=10
+dlc_memory=3
+acount=25
+dcount=12
 l2count=30
 tcount=acount+dcount
 input_count = 36
@@ -89,7 +90,7 @@ modelnames=[
 
 force_rerun = False
 run_in_lbhb = False
-mock_run = True
+mock_run = False
 
 if mock_run:
     shortnames = [
