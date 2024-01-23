@@ -10,6 +10,7 @@ from nems0 import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 batch = 338
+batch = 353
 siteids, cellids = db.get_batch_sites(batch)
 
 #enqueue_models(celllist, batch, modellist, force_rerun=False,

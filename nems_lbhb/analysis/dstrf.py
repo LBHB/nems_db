@@ -1,3 +1,11 @@
+"""
+nems_lbhb.analysis.dstrf - tools for generating/analyzing dstrfs
+
+dstrf_pca -
+subspace_model_fit -
+
+"""
+
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,6 +22,47 @@ from nems0 import xforms
 from nems0.initializers import init_nl_lite
 
 log = logging.getLogger(__name__)
+
+def compute_extract_dpc(modelspec_list, stim, D, out_channels, t_indexes, reset_backend):
+    dstrfs = []
+    for mi, m in enumerate(modelspec_list):
+        log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
+
+        d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
+        dstrfs.append(d['input'])
+
+    dstrf = np.stack(dstrfs, axis=1)
+    s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
+    dstrf /= s
+    dstrf /= np.max(np.abs(dstrf)) * 0.9
+
+    mdstrf = dstrf.mean(axis=1, keepdims=True)
+    sdstrf = dstrf.std(axis=1, keepdims=True)
+    sdstrf[sdstrf == 0] = 1
+    mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
+
+    mdstrf /= np.max(np.abs(mdstrf)) * 0.9
+    mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
+
+    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, as_dict=True)
+    dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, as_dict=True)
+
+    for oi, oc in enumerate(out_channels):
+        for di in range(pc_count):
+            if dz['input']['pcs'][oi, di].sum()<0:
+                dz['input']['pcs'][oi, di] = -dz['input']['pcs'][oi, di]
+                dz['input']['projection'][oi,:,di] = -dz['input']['projection'][oi,:,di]
+            if d['input']['pcs'][oi, di].sum()<0:
+                d['input']['pcs'][oi, di] = -d['input']['pcs'][oi, di]
+
+    dpc = d['input']['pcs']
+    dpc_mag = d['input']['pc_mag']
+    dpcz = dz['input']['pcs']
+    dpc_magz = dz['input']['pc_mag']
+    dproj = dz['input']['projection']
+    log.info(f"dproj.shape={dproj.shape}")
+    
+    
 
 def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=5, out_channels=None,

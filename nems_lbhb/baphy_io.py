@@ -4721,8 +4721,13 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             probeid = 'A'
         d_ = d['Probe'+probeid]
         if chstr not in d_['channel info'].keys():
-            print('subtracting 384')
-            chstr=f"{(int(chstr)-384)}"
+            if int(chstr)>384:
+                print('subtracting 384')
+                chstr=f"{(int(chstr)-384)}"
+            else:
+                print('adding 384')
+                chstr=f"{(int(chstr)+384)}"
+
         if len(d_['channel info'][chstr])==3:
             dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
         else:
@@ -4739,6 +4744,9 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             dcell[c]['iso'] = df_iso.loc[c,'isolation']
         except:
             dcell[c]['iso'] = 0
+        #else:
+        #    dcell[c]['layer']=''
+        #    dcell[c]['depth']=-1
 
     return pd.DataFrame(dcell).T
 
