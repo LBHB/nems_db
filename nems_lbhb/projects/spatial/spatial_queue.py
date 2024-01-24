@@ -9,7 +9,7 @@ import nems0.epoch as ep
 from nems0 import db
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
-batch = 338
+#batch = 338
 batch = 353
 siteids, cellids = db.get_batch_sites(batch)
 
@@ -24,9 +24,18 @@ GPU_job=True
 
 rank=20
 
-modelnames = [
-    f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}.l2-fir.20x1x{rank}-wc.{rank}xR.l2-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
-]
+if batch==338:
+    modelnames = [
+        f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}.l2-fir.20x1x{rank}-wc.{rank}xR.l2-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
+        f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_LNpop.20xNxRx{rank}.l2_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t4",
+    ]
+elif batch==353:
+    modelnames = [
+        f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_wc.Nx1x{rank}.l2-fir.20x1x{rank}-wc.{rank}xR.l2-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
+        f"gtgram.fs100.ch18.bin6-ld-norm.l1-sev_wc.Nx1x{rank}.l2-fir.20x1x{rank}-wc.{rank}xR.l2-dexp.R_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4",
+        f"gtgram.fs100.ch18.bin100-ld.pop-hrtf-norm.l1-sev_LNpop.20xNxRx{rank}.l2_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t4",
+        f"gtgram.fs100.ch18.bin6-ld-norm.l1-sev_LNpop.20xNxRx{rank}.l2_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t4",
+    ]
 
 
 force_rerun = False

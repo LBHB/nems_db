@@ -486,7 +486,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         log.info(f'modelspec: {keywordstring}')
         modelspec = Model.from_keywords(keywordstring)
         #modelspec = modelspec.sample_from_priors()
-        modelspec.meta = meta.copy()
+        modelspec.meta.update(meta.copy())
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
         cellid = meta.get('cellid', 'NAT4v2')
