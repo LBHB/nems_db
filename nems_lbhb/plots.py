@@ -417,8 +417,8 @@ def scatter_model_set(modelnames=[], batch=322, cellids=None, stat='r_test', sf=
 
 
 def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
-                 hist_range=[-1, 1], title='modelname/batch',
-                 highlight=None):
+                 hist_range=[-1, 1], title=None, s=None,
+                 highlight=None, scatter_only=True, ax=None):
     """
     beta1, beta2 are T x 1 vectors
     scatter plot comparing beta1 vs. beta2
@@ -445,21 +445,31 @@ def scatter_comp(beta1, beta2, n1='model1', n2='model2', hist_bins=20,
         set1 = np.logical_and(goodcells, (highlight))
         set2 = np.logical_and(goodcells, (1-highlight))
 
-    fh = plt.figure(figsize=(8, 6))
+    if ax is not None:
+        scatter_only=True
+        fh = ax.figure
+    elif scatter_only:
+        fh, ax = plt.subplots()
+    else:
+        fh = plt.figure()
+        ax = plt.subplot(2, 2, 3)
 
-    plt.subplot(2, 2, 3)
-    plt.plot(beta1[outcells], beta2[outcells], '.', color='red')
-    plt.plot(beta1[set2], beta2[set2], '.', color='lightgray')
-    plt.plot(beta1[set1], beta2[set1], 'k.')
-    plt.plot(np.array(hist_range), np.array([0, 0]), 'k--')
-    plt.plot(np.array([0, 0]), np.array(hist_range), 'k--')
-    plt.plot(np.array(hist_range), np.array(hist_range), 'k--')
-    plt.axis('equal')
-    plt.axis('tight')
 
-    plt.xlabel(n1)
-    plt.ylabel(n2)
-    plt.title(title)
+    ax.scatter(beta1[outcells], beta2[outcells], s=s, marker='.', color='red')
+    ax.scatter(beta1[set2], beta2[set2], s=s, marker='.', color='lightgray')
+    ax.scatter(beta1[set1], beta2[set1], s=s, marker='.', color='black')
+    ax.plot(np.array(hist_range), np.array([0, 0]), 'k--', lw=0.5)
+    ax.plot(np.array([0, 0]), np.array(hist_range), 'k--', lw=0.5)
+    ax.plot(np.array(hist_range), np.array(hist_range), 'k--', lw=0.5)
+    ax.axis('equal')
+    ax.axis('tight')
+
+    ax.set_xlabel(f"{n1} {np.mean(beta1[set1]):.3f}")
+    ax.set_ylabel(f"{n2} {np.mean(beta2[set1]):.3f}")
+    ax.set_title(title)
+
+    if scatter_only:
+        return fh
 
     plt.subplot(2, 2, 1)
     plt.hist([beta1[set1], beta1[set2]], bins=hist_bins, range=hist_range,

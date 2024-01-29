@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import convolve1d
 
 from . import get_setting
-#import nems
 
 log = logging.getLogger(__name__)
 

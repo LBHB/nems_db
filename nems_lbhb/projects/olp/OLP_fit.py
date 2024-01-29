@@ -1217,59 +1217,70 @@ def get_parm_data(cellid,runclassid=128):
     parmfiles = nd.pd_query(sql)
     parmfiles[['parmfile', 'run_kind', 'olp_type', 'RMS', 'ramp', 'SNR']] = ''
 
-    for i,r in parmfiles.iterrows():
-        ddata = nd.get_data_parms(rawid=r.rawid)
-        parmdict = {r_['name']: r_['value'].strip() if type(r_['value']) is str else r_['value'] for i_,r_ in ddata.iterrows()}
-        parmfiles.loc[i, 'parmfile'] = r['stimpath']+r['stimfile']
+    if runclassid==134:
+        for i, r in parmfiles.iterrows():
+            parmfiles.loc[i, 'run_kind'] = 'behavior'
+            parmfiles.loc[i, 'parmfile'] = r['stimpath']+r['stimfile']+'.m'
+            parmfiles.loc[i, 'olp_type'] = 'active'
 
-        if parmdict.get('Ref_BG_Folder', 'None') == 'None':
-            parmdict['Ref_BG_Folder'] = 'Background1'
+    if runclassid==128:
+        for i,r in parmfiles.iterrows():
+            ddata = nd.get_data_parms(rawid=r.rawid)
+            parmdict = {r_['name']: r_['value'].strip() if type(r_['value']) is str else r_['value'] for i_,r_ in ddata.iterrows()}
+            parmfiles.loc[i, 'parmfile'] = r['stimpath']+r['stimfile']
 
-        # Sort out if the run of OLP is a test, one of Stephen's (vowel), or a good. If good, get additional parameters for sorting.
-        if parmdict.get('Ref_Combos','No') == 'No':
-            parmfiles.loc[i,'run_kind'] = 'test'
-        elif parmdict['Ref_BG_Folder'] == 'Background4':
-            parmfiles.loc[i,'run_kind'] = 'vowel'
-        else:
-            parmfiles.loc[i,'run_kind']= 'real'
+            if parmdict.get('Ref_BG_Folder', 'None') == 'None':
+                parmdict['Ref_BG_Folder'] = 'Background1'
 
-            # If it is a real run of OLP, then figure out what type (basic, binaural, dynamic, synthetic) it is
-            if parmdict.get('Ref_Binaural', 'No') == 'Yes':
-                parmfiles.loc[i,'olp_type'] = 'binaural'
-            elif parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST-STM' or parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST':
-                parmfiles.loc[i,'olp_type'] = 'synthetic'
-            elif parmdict.get('Ref_Dynamic', 'No') == 'Yes':
-                parmfiles.loc[i,'olp_type'] = 'dynamic'
-            # This is before I add a dynamic parameter, back when dynamic was default, so if binaural and synthetic are set to
-            # No, or not yet added (default to No), then set the Dynamic parameter to a random value that indicates Yes
-            elif parmdict.get('Ref_Binaural', 'No') == 'No' and parmdict.get('Ref_Synthetic', 'No') == 'No' and parmdict.get('Ref_Dynamic', 'dne') == 'dne':
-                parmfiles.loc[i,'olp_type'] = 'dynamic'
-            # A situation after I've added the option to have dynamic but say No, which would make it the basic run
-            elif parmdict['Ref_Binaural'] == 'No' and parmdict['Ref_Synthetic'] == 'No' and parmdict['Ref_Dynamic'] == 'No':
-                parmfiles.loc[i,'olp_type'] = 'basic'
+            # Sort out if the run of OLP is a test, one of Stephen's (vowel), or a good. If good, get additional parameters for sorting.
+            if parmdict.get('Ref_Combos','No') == 'No':
+                parmfiles.loc[i,'run_kind'] = 'test'
+            elif parmdict['Ref_BG_Folder'] == 'Background4':
+                parmfiles.loc[i,'run_kind'] = 'vowel'
+            # elif parmdict['Ref_BG_Folder'] == 'Background5':
+            #     parmfiles.loc[i, 'run_kind'] = 'behavior'
             else:
-                raise ValueError(f"For {cellid}, {r['respfile']} none of your elifs to define 'olp_type' worked. "
-                                 f"You either forgot something or this file is weird, check it out.")
+                parmfiles.loc[i,'run_kind']= 'real'
 
-            # Determine if ramp was used or not
-            if parmdict.get('Ref_Ramp', 'No') == 'No':
-                parmfiles.loc[i,'ramp'] = 'No'
-            else:
-                parmfiles.loc[i, 'ramp'] = parmdict['Ref_Ramp']
+                # If it is a real run of OLP, then figure out what type (basic, binaural, dynamic, synthetic) it is
+                if parmdict.get('Ref_Binaural', 'No') == 'Yes':
+                    parmfiles.loc[i,'olp_type'] = 'binaural'
+                elif parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST-STM' or parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST':
+                    parmfiles.loc[i,'olp_type'] = 'synthetic'
+                elif parmdict.get('Ref_Dynamic', 'No') == 'Yes':
+                    parmfiles.loc[i,'olp_type'] = 'dynamic'
+                # This is before I add a dynamic parameter, back when dynamic was default, so if binaural and synthetic are set to
+                # No, or not yet added (default to No), then set the Dynamic parameter to a random value that indicates Yes
+                elif parmdict.get('Ref_Binaural', 'No') == 'No' and parmdict.get('Ref_Synthetic', 'No') == 'No' and parmdict.get('Ref_Dynamic', 'dne') == 'dne':
+                    parmfiles.loc[i,'olp_type'] = 'dynamic'
+                # A situation after I've added the option to have dynamic but say No, which would make it the basic run
+                elif parmdict['Ref_Binaural'] == 'No' and parmdict['Ref_Synthetic'] == 'No' and parmdict['Ref_Dynamic'] == 'No':
+                    parmfiles.loc[i,'olp_type'] = 'basic'
+                elif parmdict['Ref_BG_Folder'] == 'Background5':
+                    parmfiles.loc[i, 'olp_type'] = 'behavior'
+                else:
+                    raise ValueError(f"For {cellid}, {r['respfile']} none of your elifs to define 'olp_type' worked. "
+                                     f"You either forgot something or this file is weird, check it out.")
 
-            # Determine if RMS balancing was used
-            if parmdict.get('Ref_NormalizeRMS', 'No') == 'No':
-                parmfiles.loc[i,'RMS'] = 'No'
-            else:
-                # Even in the case of me choosing "Some", it only has an effect when synthetic is chosen, otherwise, the code
-                # just has everything RMS balanced.
-                parmfiles.loc[i, 'RMS'] = 'Yes'
+                # Determine if ramp was used or not
+                if parmdict.get('Ref_Ramp', 'No') == 'No':
+                    parmfiles.loc[i,'ramp'] = 'No'
+                else:
+                    parmfiles.loc[i, 'ramp'] = parmdict['Ref_Ramp']
 
-            # Determine if this is an SNR condition
-            if parmdict.get('Ref_SNR', 0) == 0:
-                parmfiles.loc[i,'SNR'] = 0
-            else:
-                parmfiles.loc[i, 'SNR'] = int(parmdict['Ref_SNR'])
+                # Determine if RMS balancing was used
+                if parmdict.get('Ref_NormalizeRMS', 'No') == 'No':
+                    parmfiles.loc[i,'RMS'] = 'No'
+                else:
+                    # Even in the case of me choosing "Some", it only has an effect when synthetic is chosen, otherwise, the code
+                    # just has everything RMS balanced.
+                    parmfiles.loc[i, 'RMS'] = 'Yes'
+
+                # Determine if this is an SNR condition
+                if parmdict.get('Ref_SNR', 0) == 0:
+                    parmfiles.loc[i,'SNR'] = 0
+                else:
+                    parmfiles.loc[i, 'SNR'] = int(parmdict['Ref_SNR'])
 
     return parmfiles
 
@@ -2087,7 +2098,10 @@ def compute_epoch_snr(ep_list):
     IN ORDER AB(combo), A(bg), B(fg).'''
     snr_list_AB_A_B = []
     for cnt, ep_r in enumerate(ep_list):
-        products = np.dot(ep_r[:, 0, :], ep_r[:, 0, :].T)
+        try:
+            products = np.dot(ep_r[:, 0, :], ep_r[:, 0, :].T)
+        except:
+            products = np.dot(ep_r[:, :], ep_r[:, :].T)
         per_rep_snrs = []
 
         for i, _ in enumerate(ep_r):
@@ -2126,7 +2140,7 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
     parms = get_parm_data(cellid, runclassid=128)
 
     # Filter out test or other OLPs that are not Greg's, then extract the respective parmfiles
-    real_olps = parms.loc[parms['run_kind'] == 'real'].reset_index(drop=True)
+    real_olps = parms.loc[(parms['run_kind'] == 'real') | (parms['run_kind'] == 'behavior')].reset_index(drop=True)
     olp_parms = real_olps['parmfile'].to_list()
 
     # If this isn't a cellid that has no real OLPs (shouldn't happen because of how we made the batch), then
@@ -2215,16 +2229,30 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                 fit_epochs, lbl_fn = ['N', 'C', 'T', 'S', 'U', 'M', 'A'], ohel.label_synth_type
             elif this_olp_kind == 'dynamic':
                 fit_epochs, lbl_fn = ['ff', 'fh', 'fn', 'hf', 'hh', 'hn', 'nf', 'nh'], ohel.label_dynamic_ep_type
+            elif this_olp_kind == 'behavior':
+                def label_stim(ep_name):
+                    if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
+                        type = None
+                    else:
+                        type = 'STIM'
+                    return type
+
+                fit_epochs, lbl_fn = ['STIM'], label_stim
             else:
                 fit_epochs, lbl_fn = ['N', 'C', 'T', 'S', 'U', 'M', 'A'], ohel.label_synth_type
 
             est_sub = None
 
+
+
             # Make dataframe of standin labels for each epoch and then get rid of the ones that aren't anything
             # we're interested in
             df0 = val['resp'].epochs.copy()
             df2 = val['resp'].epochs.copy()
-            df0['name'] = df0['name'].apply(lbl_fn)
+            if this_olp_kind != 'behavior':
+                df0['name'] = df0['name'].apply(lbl_fn)
+            else:
+                df0['name'] = df0['name'].apply(lbl_fn)
 
             df0 = df0.loc[df0['name'].notnull()]
             df3 = pd.concat([df0, df2])
@@ -2240,14 +2268,15 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
             print(f'calc weights {cellid}')
 
             # Find all stimulus epochs and create columns in a df that identify the individual sounds (or null)
-            epcs = val.epochs[val.epochs['name'].str.contains("_(null|\d{2}.*)_(null|\d{2}.*)", regex=True, na=False)].copy()
-            sepname = epcs['name'].apply(get_sep_stim_names)
-            epcs['nameA'] = [x[0] for x in sepname.values]
-            epcs['nameB'] = [x[1] for x in sepname.values]
+            if this_olp_kind != 'behavior':
+                epcs = val.epochs[val.epochs['name'].str.contains("_(null|\d{2}.*)_(null|\d{2}.*)", regex=True, na=False)].copy()
+                sepname = epcs['name'].apply(get_sep_stim_names)
+                epcs['nameA'] = [x[0] for x in sepname.values]
+                epcs['nameB'] = [x[1] for x in sepname.values]
 
-            # Find only epochs that have something, anything happening in BG and FG - should work for half stim too.
-            epcs_twostim = epcs[epcs['name'].str.contains("_(\d{2}.*)_(\d{2}.*)", regex=True, na=False)].copy()
-            ep_twostim = epcs_twostim.name.to_list()
+                # Find only epochs that have something, anything happening in BG and FG - should work for half stim too.
+                epcs_twostim = epcs[epcs['name'].str.contains("_(\d{2}.*)_(\d{2}.*)", regex=True, na=False)].copy()
+                ep_twostim = epcs_twostim.name.to_list()
 
             # Maybe make a separate function, came from calc_psth_metrics but stripped down, just takes the opportunity
             # to find some firing rate and other useful info for these epochs in this specific real OLP run
@@ -2513,6 +2542,571 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
                                                 (np.abs(weight_df[f'weightsA{ss}']) + np.abs(
                                                     weight_df[f'weightsB{ss}']))
 
+
+            # Merge the informational dataframe (cell_df) with the one with the data (weight_df)
+            merge = pd.merge(cell_df, weight_df, on="epoch")
+
+            merge.insert(loc=0, column='cellid', value=cellid)
+            merge['fit_segment'] = f"{int(snip[0] * 1000)}-{int((snip[0] + snip[1]) * 1000)}"
+            row = real_olps.iloc[cc]
+
+            merge['olp_type'], merge['RMS'], merge['ramp'], merge['SNR'] = row['olp_type'], row['RMS'], \
+                                                                           row['ramp'], row['SNR']
+
+            # Get animal
+            animal_name, exp = cellid[:3], int(cellid[3:6])
+            if animal_name == 'CLT':
+                if exp < 24:
+                    animal_name = animal_name + '_A'
+                else:
+                    animal_name = animal_name + '_B'
+            elif animal_name == 'PRN':
+                if exp < 40:
+                    animal_name = animal_name + '_A'
+                else:
+                    animal_name = animal_name + '_B'
+            merge['animal'] = animal_name
+
+            weight_df_list.append(merge)
+
+        final_weight_df = pd.concat(weight_df_list)
+
+        if modelname:
+            OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{modelname}/{cellid}'  # weight + corr
+        else:
+            OLP_partialweights_db_path = f'/auto/users/hamersky/{cache_path}/{cellid}'  # weight + corr
+
+        # OLP_partialweights_db_path = f'/auto/users/hamersky/cache/{cellid}_{real_olps.iloc[cc]["olp_type"]}'  # weight + corr
+        os.makedirs(os.path.dirname(OLP_partialweights_db_path), exist_ok=True)
+
+        jl.dump(final_weight_df, OLP_partialweights_db_path)
+
+        return final_weight_df, OLP_partialweights_db_path
+
+    else:
+        raise ValueError(f"{cellid} was found to have {len(real_olps)} real OLPs (not test or binaural fusion), "
+                         f"there is nothing to fit. But maybe check that is correct.")
+
+
+def get_parm_data_behavior(cellid, runclassid=128):
+    '''2023_04_04. Added by SVD and amended by GRH. Takes a given cellid and finds the parmfiles for OLP runs. It then uses
+    parameters of those files to label features of the parmfiles that will be useful later. Primarily, the goal is to get
+    the run_kind parameter which indicates which runs are tests vs real OLPs so that in the main function I can only load
+    the signal from the real OLPs'''
+    sql=f"SELECT * FROM sCellFile WHERE cellid='{cellid}' AND runclassid={runclassid}"
+    parmfiles = nd.pd_query(sql)
+    parmfiles[['parmfile', 'run_kind', 'olp_type', 'RMS', 'ramp', 'SNR', 'behavior_type']] = ''
+
+    if runclassid==134:
+        for i, r in parmfiles.iterrows():
+            parmfiles.loc[i, 'run_kind'] = 'behavior'
+            parmfiles.loc[i, 'parmfile'] = r['stimpath']+r['stimfile']+'.m'
+            parmfiles.loc[i, 'olp_type'] = 'binaural'
+            parmfiles.loc[i, 'behavior_type'] = 'active'
+
+    if runclassid==128:
+        for i,r in parmfiles.iterrows():
+            ddata = nd.get_data_parms(rawid=r.rawid)
+            parmdict = {r_['name']: r_['value'].strip() if type(r_['value']) is str else r_['value'] for i_,r_ in ddata.iterrows()}
+            parmfiles.loc[i, 'parmfile'] = r['stimpath']+r['stimfile']
+
+            if parmdict.get('Ref_BG_Folder', 'None') == 'None':
+                parmdict['Ref_BG_Folder'] = 'Background1'
+
+            # Sort out if the run of OLP is a test, one of Stephen's (vowel), or a good. If good, get additional parameters for sorting.
+            if parmdict.get('Ref_Combos','No') == 'No':
+                parmfiles.loc[i,'run_kind'] = 'test'
+            elif parmdict['Ref_BG_Folder'] == 'Background4':
+                parmfiles.loc[i,'run_kind'] = 'vowel'
+            elif parmdict['Ref_BG_Folder'] == 'Background5':
+                parmfiles.loc[i, 'run_kind'] = 'real'
+                if parmdict.get('Ref_Binaural', 'No') == 'Yes':
+                    parmfiles.loc[i,'olp_type'] = 'binaural'
+                else:
+                    parmfiles.loc[i, 'olp_type'] = 'passive'
+                parmfiles.loc[i, 'behavior_type'] = 'passive'
+
+            else:
+                parmfiles.loc[i,'run_kind']= 'real'
+
+                # If it is a real run of OLP, then figure out what type (basic, binaural, dynamic, synthetic) it is
+                if parmdict.get('Ref_Binaural', 'No') == 'Yes':
+                    parmfiles.loc[i,'olp_type'] = 'binaural'
+                elif parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST-STM' or parmdict.get('Ref_Synthetic', 'No') == 'C-T-S-ST':
+                    parmfiles.loc[i,'olp_type'] = 'synthetic'
+                elif parmdict.get('Ref_Dynamic', 'No') == 'Yes':
+                    parmfiles.loc[i,'olp_type'] = 'dynamic'
+                # This is before I add a dynamic parameter, back when dynamic was default, so if binaural and synthetic are set to
+                # No, or not yet added (default to No), then set the Dynamic parameter to a random value that indicates Yes
+                elif parmdict.get('Ref_Binaural', 'No') == 'No' and parmdict.get('Ref_Synthetic', 'No') == 'No' and parmdict.get('Ref_Dynamic', 'dne') == 'dne':
+                    parmfiles.loc[i,'olp_type'] = 'dynamic'
+                # A situation after I've added the option to have dynamic but say No, which would make it the basic run
+                elif parmdict['Ref_Binaural'] == 'No' and parmdict['Ref_Synthetic'] == 'No' and parmdict['Ref_Dynamic'] == 'No':
+                    parmfiles.loc[i,'olp_type'] = 'basic'
+                else:
+                    raise ValueError(f"For {cellid}, {r['respfile']} none of your elifs to define 'olp_type' worked. "
+                                     f"You either forgot something or this file is weird, check it out.")
+
+                # Determine if ramp was used or not
+                if parmdict.get('Ref_Ramp', 'No') == 'No':
+                    parmfiles.loc[i,'ramp'] = 'No'
+                else:
+                    parmfiles.loc[i, 'ramp'] = parmdict['Ref_Ramp']
+
+                # Determine if RMS balancing was used
+                if parmdict.get('Ref_NormalizeRMS', 'No') == 'No':
+                    parmfiles.loc[i,'RMS'] = 'No'
+                else:
+                    # Even in the case of me choosing "Some", it only has an effect when synthetic is chosen, otherwise, the code
+                    # just has everything RMS balanced.
+                    parmfiles.loc[i, 'RMS'] = 'Yes'
+
+                # Determine if this is an SNR condition
+                if parmdict.get('Ref_SNR', 0) == 0:
+                    parmfiles.loc[i,'SNR'] = 0
+                else:
+                    parmfiles.loc[i, 'SNR'] = int(parmdict['Ref_SNR'])
+
+    return parmfiles
+
+
+def OLP_fit_partial_weights_individual_behavior(cellid, batch, snip=None, pred=False, fs=100, modelname=None,
+                                       cache_path='cache_'):
+    '''2023_05_17. This is the good one that generates the complete df with all the info you want
+    2023_04_28. Modifying snip code I know works and adapting it to the individual.
+
+    2022_12_28. This is an updated version of the OLP_fit that allows you to either use the sound
+    envelope of the FG to fit the model (use threshold) or snip out different parts of the stimuli
+    to fit (use snip, [start, length] ie [0, 0.5] for 0-500, 500-1000, and whole thing to be fit
+    separately). Pred being toggled on only works if you are thusfar using batch 341 that has a
+    separate signal in rec called 'pred' that is Stephen using NAT/BNT data to fit OLP. Usually
+    leave fit_epos to syn, I think I have made it such that it doesn't matter which toggle that is
+    on. Also has the option to do some basic filtering of cell_list that comes from the batch, either
+    by animal or a certain experiment number. Note will simply add that string to the file that will
+    be saved by this function.'''
+
+    # Load a dataframe detailing the OLP runs present for this cellid as well as their parmfiles
+    parms_nfb = get_parm_data_behavior(cellid, runclassid=134)
+    parms = get_parm_data_behavior(cellid, runclassid=128)
+
+    # Filter out test or other OLPs that are not Greg's, then extract the respective parmfiles
+    real_olps = parms.loc[(parms['run_kind'] == 'real')].reset_index(drop=True)
+    olp_parms = real_olps['parmfile'].to_list()
+    nfb_parms = parms_nfb['parmfile'].to_list()
+    olp_parms =  nfb_parms + olp_parms
+    real_olps = pd.concat([parms_nfb, real_olps])
+
+    # If this isn't a cellid that has no real OLPs (shouldn't happen because of how we made the batch), then
+    # skip all the fitting and say so. The function wouldn't be able to handle having an empty parmfile list.
+    if len(olp_parms) > 0:
+        weight_df_list = []
+        for cc, pf in enumerate(olp_parms):
+            # Load the single run that you will be fitting this time
+            try:
+                manager = BAPHYExperiment(cellid=cellid, parmfile=[pf])
+            except:
+                manager = BAPHYExperiment(cellid=cellid, parmfile=pf)
+
+            # Getting area info. If the laminar analysis has been run it'll get the first, if not it'll fail
+            # and use the usual DB query to get area and manually label that there has been no laminar analysis
+            try:
+                area_info = baphy_io.get_depth_info(cellid=cellid)
+                layer, area = area_info['layer'].values[0], area_info['area'].values[0]
+            except:
+                area_info = db.pd_query(f"SELECT DISTINCT area FROM sCellFile where cellid like '{manager.siteid}%%'")
+                layer, area = 'NA', area_info['area'].iloc[0]
+
+            # Pred will only be true for that 341 batch Stephen made, I probably could take this out for now but
+            # leaving in because it works. The else will be vanilla record loading options.
+            if pred == True:
+                xf, ctx = load_model_xform(cellid=cellid, batch=batch, modelname=modelname)
+                rec = ctx['val']
+                rec['pred'].chans, rec['pred'].fs = rec['resp'].chans, fs
+                rec['pred'] = rec['pred'].extract_channels([cellid])
+                rec['resp'] = rec['resp'].extract_channels([cellid])
+            else:
+                options = {'rasterfs': 100,
+                           'stim': False,
+                           'resp': True}
+                rec = manager.get_recording(**options)
+
+            # Get details of that run from the inputted parameters and calculate a few things
+            expt_params = manager.get_baphy_exptparams()
+            ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
+            ref_handle = {key: val.strip() if type(val) is str else val for key, val in ref_handle.items()}
+
+            prebins, postbins = int(ref_handle['PreStimSilence'] * fs), int(ref_handle['PostStimSilence'] * fs)
+            durbins = int(ref_handle['Duration'] * fs)
+            trialbins, lenbins = durbins + postbins, prebins + postbins + durbins
+
+            # What segments of each trial to fit. In the case of a standard input [start, duration], this will
+            # automatically decide that that produces 4 unique fits that get defined here by some masks.
+            if snip:
+                start, dur = int(snip[0] * fs), int(snip[1] * fs)
+                prestimFalse = np.full((prebins,), False)
+                # poststimTrue = np.full((trialbins - len(env),), True)
+                poststimFalse = np.full((trialbins - durbins), False)
+                end = durbins - start - dur
+                goods = [False] * start + [True] * dur + [False] * end
+                bads = [not ll for ll in goods]
+
+                full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
+                goods = np.concatenate((prestimFalse, goods, poststimFalse))
+                bads = np.concatenate((prestimFalse, bads, poststimFalse))
+                full_nopost = np.concatenate((prestimFalse, np.full((durbins,), True), poststimFalse))
+                cut_list = [full, goods, bads, full_nopost]
+                cut_labels = ['', '_start', '_end', '_nopost']
+            else:
+                prestimFalse = np.full((prebins,), False)
+                full = np.concatenate((prestimFalse, np.full((trialbins,), True)))
+                cut_list, cut_labels = [full], ['']
+
+            rec['resp'].fs = fs
+            resp = copy.copy(rec['resp'].rasterize())
+
+            # Gather some stats on the recording, SR really is the only important one I think.
+            norm_spont, SR, STD = ohel.remove_spont_rate_std(resp)
+
+            val = rec.copy()
+            val['resp'] = val['resp'].rasterize()
+            val = preproc.average_away_epoch_occurrences(val, epoch_regex='^STIM_')
+
+            this_olp_kind = real_olps.iloc[cc].olp_type
+            if this_olp_kind == 'binaural':
+                fit_epochs, lbl_fn = ['10', '01', '20', '02', '11', '12', '21', '22'], ohel.label_ep_type
+            elif this_olp_kind == 'synthetic':
+                fit_epochs, lbl_fn = ['N', 'C', 'T', 'S', 'U', 'M', 'A'], ohel.label_synth_type
+            elif this_olp_kind == 'dynamic':
+                fit_epochs, lbl_fn = ['ff', 'fh', 'fn', 'hf', 'hh', 'hn', 'nf', 'nh'], ohel.label_dynamic_ep_type
+            else:
+                fit_epochs, lbl_fn = ['N', 'C', 'T', 'S', 'U', 'M', 'A'], ohel.label_synth_type
+
+            est_sub = None
+
+            # Make dataframe of standin labels for each epoch and then get rid of the ones that aren't anything
+            # we're interested in
+            df0 = val['resp'].epochs.copy()
+            df2 = val['resp'].epochs.copy()
+            df0['name'] = df0['name'].apply(lbl_fn)
+
+
+            df0 = df0.loc[df0['name'].notnull()]
+            df3 = pd.concat([df0, df2])
+
+            val['resp'].epochs = df3
+            val_sub = copy.deepcopy(val)
+            val_sub['resp'] = val_sub['resp'].select_epochs(fit_epochs)
+
+            val = val_sub
+            fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR / rec['resp'].fs)
+            val['resp'] = val['resp'].transform(fn)
+
+            print(f'calc weights {cellid}')
+
+            stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, 'STIM_')
+
+            if (real_olps.iloc[cc]['behavior_type'] == 'passive') | \
+                    (real_olps.iloc[cc]['behavior_type'] == 'active'):
+                d = ohel.get_stim_epochs_behavior(stim_epochs)
+                ep_twostim = d.fgbg.to_list()
+
+                epcs = val.epochs[
+                    val.epochs['name'].str.contains("STIM_", regex=True, na=False)].copy()
+                epcs = epcs[epcs['name'].isin(ep_twostim)]
+                sepname = epcs['name'].to_list()
+                epcs['nameA'] = [x.split('_')[1] for x in sepname]
+                epcs['nameB'] = [x.split('_')[2] for x in sepname]
+                epcs_twostim = epcs
+
+            else:
+                # Find all stimulus epochs and create columns in a df that identify the individual sounds (or null)
+                epcs = val.epochs[
+                    val.epochs['name'].str.contains("_(null|\d{2}.*)_(null|\d{2}.*)", regex=True, na=False)].copy()
+                sepname = epcs['name'].apply(get_sep_stim_names)
+                epcs['nameA'] = [x[0] for x in sepname.values]
+                epcs['nameB'] = [x[1] for x in sepname.values]
+
+                # Find only epochs that have something, anything happening in BG and FG - should work for half stim too.
+                epcs_twostim = epcs[epcs['name'].str.contains("_(\d{2}.*)_(\d{2}.*)", regex=True, na=False)].copy()
+                ep_twostim = epcs_twostim.name.to_list()
+
+            # Maybe make a separate function, came from calc_psth_metrics but stripped down, just takes the opportunity
+            # to find some firing rate and other useful info for these epochs in this specific real OLP run
+            cell_df = []
+            for cnt, stimmy in enumerate(ep_twostim):
+                # Label this particular epoch and get the sound components that make it up
+                # kind, synth_kind = ohel.label_pair_type(stimmy), ohel.label_synth_type(stimmy)
+                kind, synth_kind = ohel.label_ep_type(stimmy), 'N'
+                # dyn_kind = ohel.label_dynamic_ep_type(stimmy)
+                dyn_kind = 'ff'
+                if (real_olps.iloc[cc]['behavior_type'] == 'passive') | \
+                        (real_olps.iloc[cc]['behavior_type'] == 'active'):
+                    row = d.loc[d['fgbg'] == stimmy]
+                    Aepo, Bepo, = row.bg[0], row.fg[0]
+                    BG, FG = row.b[0], row.f[0]
+                    seps = [BG, FG]
+
+                else:
+                    seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", stimmy)[0])
+                    BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]
+
+                    # Come up with the corresponding null, or epochs that present each part of the two_stim stimmy
+                    Aepo, Bepo = 'STIM_' + seps[0] + '_null', 'STIM_null_' + seps[1]
+
+                rAB = resp.extract_epoch(stimmy)
+                rA, rB = resp.extract_epoch(Aepo), resp.extract_epoch(Bepo)
+
+                # ep_dicts = {'combo': rAB, 'bg': rA, 'fg': rB}
+                snr_list_AB_A_B = compute_epoch_snr([rAB, rA, rB])
+
+                # I'm smoothing before I calculate here, this could be a problem and you may want to change that
+                fn = lambda x: np.atleast_2d(sp.smooth(x.squeeze(), 3, 2) - SR)
+
+                # Get the smoothed response that had spont rate subtracted
+                rAsm = np.squeeze(np.apply_along_axis(fn, 2, rA))
+                rBsm = np.squeeze(np.apply_along_axis(fn, 2, rB))
+                rABsm = np.squeeze(np.apply_along_axis(fn, 2, rAB))
+
+                # Filter out the reponse for the stimulus ('_st') period - without pre/post - also has spont gone
+                if rAsm.ndim == 2:
+                    rA_st, rB_st = rAsm[:, prebins:-postbins], rBsm[:, prebins:-postbins]
+                    rAB_st = rABsm[:, prebins:-postbins]
+                else:
+                    rA_st, rB_st = rAsm[prebins:-postbins], rBsm[prebins:-postbins]
+                    rAB_st = rABsm[prebins:-postbins]
+
+                # Get the mean across trials for the full stimulus plus pre and post - spont already subtracted
+                rAm, rBm = np.nanmean(rAsm, axis=0), np.nanmean(rBsm, axis=0)
+                rABm = np.nanmean(rABsm, axis=0)
+
+                AcorAB = np.corrcoef(rAm, rABm)[0, 1]  # Corr between resp to A and resp to dual
+                BcorAB = np.corrcoef(rBm, rABm)[0, 1]  # Corr between resp to B and resp to dual
+
+                # Calculate the firing rate over the time of the stimulus presentation
+                A_FR, B_FR, AB_FR = np.nanmean(rA_st), np.nanmean(rB_st), np.nanmean(rAB_st)
+
+                # In most cases will be the same because snip is usually dividing the stimulus into first and
+                # second half, but in case not, the else statement just divides it halfway by default without snip
+                if snip:
+                    _start, _end = cut_list[cut_labels.index('_start')], cut_list[cut_labels.index('_end')]
+
+                else:
+                    _start = np.concatenate((np.full((prebins,), False), np.full((int(durbins / 2, )), True), \
+                                             np.full((int(durbins / 2, )), False), np.full((postbins,), False)))
+                    _end = np.concatenate((np.full((prebins,), False), np.full((int(durbins / 2, )), False), \
+                                           np.full((int(durbins / 2, )), True), np.full((postbins,), False)))
+
+                if rAsm.ndim == 2:
+                    A_FR_start = np.nanmean(np.nanmean(rAsm, axis=0)[_start])
+                    A_FR_end = np.nanmean(np.nanmean(rAsm, axis=0)[_end])
+                    B_FR_start = np.nanmean(np.nanmean(rBsm, axis=0)[_start])
+                    B_FR_end = np.nanmean(np.nanmean(rBsm, axis=0)[_end])
+                    AB_FR_start = np.nanmean(np.nanmean(rABsm, axis=0)[_start])
+                    AB_FR_end = np.nanmean(np.nanmean(rABsm, axis=0)[_end])
+
+                else:
+                    A_FR_start = np.nanmean([_start])
+                    A_FR_end = np.nanmean([_end])
+                    B_FR_start = np.nanmean([_start])
+                    B_FR_end = np.nanmean([_end])
+                    AB_FR_start = np.nanmean([_start])
+                    AB_FR_end = np.nanmean([_end])
+
+                # snr metric
+                if snip:
+                    _start_st, _end_st = cut_list[cut_labels.index('_start')], \
+                                         cut_list[cut_labels.index('_end')]
+                    goods = [False] * start + [True] * dur + [False] * end
+                    bads = [not ll for ll in goods]
+
+                    _start = np.concatenate((np.full((prebins,), True), goods, np.full((postbins,), False)))
+                    _end = np.concatenate((np.full((prebins,), True), bads, np.full((postbins,), True)))
+
+                else:
+                    _start_st = np.concatenate((np.full((prebins,), False), np.full((int(durbins / 2, )), True), \
+                                                np.full((int(durbins / 2, )), False), np.full((postbins,), False)))
+                    _end_st = np.concatenate((np.full((prebins,), False), np.full((int(durbins / 2, )), False), \
+                                              np.full((int(durbins / 2, )), True), np.full((postbins,), False)))
+
+                    _start = np.concatenate((np.full((prebins,), True), np.full((int(durbins / 2, )), True), \
+                                             np.full((int(durbins / 2, )), False), np.full((postbins,), False)))
+                    _end = np.concatenate((np.full((prebins,), True), np.full((int(durbins / 2, )), False), \
+                                           np.full((int(durbins / 2, )), True), np.full((postbins,), True)))
+
+                rA_start, rB_start, rAB_start = rA[:, :, _start], rB[:, :, _start], rAB[:, :, _start]
+                rA_end, rB_end, rAB_end = rA[:, :, _end], rB[:, :, _end], rAB[:, :, _end]
+                snr_list_AB_A_B_start = compute_epoch_snr([rAB_start, rA_start, rB_start])
+                snr_list_AB_A_B_end = compute_epoch_snr([rAB_end, rA_end, rB_end])
+
+                rA_start_st, rB_start_st, rAB_start_st = rA[:, :, _start_st], rB[:, :, _start_st], rAB[:, :, _start_st]
+                rA_end_st, rB_end_st, rAB_end_st = rA[:, :, _end_st], rB[:, :, _end_st], rAB[:, :, _end_st]
+                snr_list_AB_A_B_start_stim = compute_epoch_snr([rAB_start_st, rA_start_st, rB_start_st])
+                snr_list_AB_A_B_end_stim = compute_epoch_snr([rAB_end_st, rA_end_st, rB_end_st])
+
+                # Get some stuff for a dumb suppression metric
+                min_rep = np.min((rA.shape[0], rB.shape[0]))  # only will do something if SoundRepeats==Yes
+                if min_rep > 1:
+                    lin_resp = np.nanmean(rAsm[:min_rep, :] + rBsm[:min_rep, :], axis=0)
+                elif min_rep == 1:
+                    lin_resp = np.nanmean(rAsm[:] + rBsm[:], axis=0)
+                supp = np.nanmean(lin_resp - AB_FR)
+
+                AcorLin = np.corrcoef(rAm, lin_resp)[0, 1]  # Corr between resp to A and resp to lin
+                BcorLin = np.corrcoef(rBm, lin_resp)[0, 1]  # Corr between resp to B and resp to lin
+
+                Apref, Bpref = AcorAB - AcorLin, BcorAB - BcorLin
+                pref = Apref - Bpref
+
+                # 2023_05_16. Adding for getting the right paths for BG and FG for stats after
+                Sounds = ref_handle['SoundPairs']
+
+                # Get unique .wav file names for bg and fg
+                bg_files = list(np.unique([cc['bg_sound_name'] for cc in Sounds.values()]))
+                fg_files = list(np.unique([cc['fg_sound_name'] for cc in Sounds.values()]))
+
+                # Find, using the string index (in case of variety in spaces in names) to get the file extension
+                bg_ext = [dd for dd in bg_files if seps[0][:2] == dd[:2]][0]
+                fg_ext = [dd for dd in fg_files if seps[1][:2] == dd[:2]][0]
+
+                # Define the paths for each of the sounds for this run for summoning later
+                # If the synth is N or A, it is natural, do not go into synthetic folders
+                if ref_handle['BG_Folder'] == 'Background5':
+                    bg_path = f"{ref_handle['bg_SoundPath']}/{bg_ext}"
+                    fg_path = f"{ref_handle['fg_SoundPath']}/{fg_ext}"
+
+                elif synth_kind == 'A' or synth_kind == 'N':
+                    bg_path = f"/auto/users/hamersky{ref_handle['bg_SoundPath'][7:]}/{bg_ext}"
+                    fg_path = f"/auto/users/hamersky{ref_handle['fg_SoundPath'][7:]}/{fg_ext}"
+
+                else:
+                    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                                 'S': 'Spectral', 'C': 'Cochlear'}
+                    bg_path = glob.glob(f"/auto/users/hamersky{ref_handle['bg_SoundPath'][7:]}/"
+                                        f"{kind_dict[synth_kind]}/{bg_ext[:2]}*")[0]
+                    fg_path = glob.glob(f"/auto/users/hamersky{ref_handle['fg_SoundPath'][7:]}/"
+                                        f"{kind_dict[synth_kind]}/{fg_ext[:2]}*")[0]
+
+                cell_df.append({'epoch': stimmy,
+                                'kind': kind,
+                                'synth_kind': synth_kind,
+                                'dyn_kind': dyn_kind,
+                                'BG': BG,
+                                'FG': FG,
+                                'AcorAB': AcorAB,
+                                'BcorAB': BcorAB,
+                                'AcorLin': AcorLin,
+                                'BcorLin': BcorLin,
+                                'Apref': Apref,
+                                'Bpref': Bpref,
+                                'pref': pref,
+                                'combo_FR': AB_FR,
+                                'bg_FR': A_FR,
+                                'fg_FR': B_FR,
+                                'combo_snr': snr_list_AB_A_B[0],
+                                'bg_snr': snr_list_AB_A_B[1],
+                                'fg_snr': snr_list_AB_A_B[2],
+                                'combo_FR_start': AB_FR_start,
+                                'combo_FR_end': AB_FR_end,
+                                'bg_FR_start': A_FR_start,
+                                'fg_FR_start': B_FR_start,
+                                'bg_FR_end': A_FR_end,
+                                'fg_FR_end': B_FR_end,
+                                'combo_snr_start': snr_list_AB_A_B_start[0],
+                                'combo_snr_end': snr_list_AB_A_B_end[0],
+                                'bg_snr_start': snr_list_AB_A_B_start[1],
+                                'bg_snr_end': snr_list_AB_A_B_end[1],
+                                'fg_snr_start': snr_list_AB_A_B_start[2],
+                                'fg_snr_end': snr_list_AB_A_B_end[2],
+                                'combo_snr_start_stim': snr_list_AB_A_B_start_stim[0],
+                                'combo_snr_end_stim': snr_list_AB_A_B_end_stim[0],
+                                'bg_snr_start_stim': snr_list_AB_A_B_start_stim[1],
+                                'bg_snr_end_stim': snr_list_AB_A_B_end_stim[1],
+                                'fg_snr_start_stim': snr_list_AB_A_B_start_stim[2],
+                                'fg_snr_end_stim': snr_list_AB_A_B_end_stim[2],
+                                'supp': supp,
+                                'BG_path': bg_path,
+                                'FG_path': fg_path})
+            cell_df = pd.DataFrame(cell_df)
+            cell_df['SR'], cell_df['STD'], cell_df['batch'], cell_df['parmfile'] = SR, STD, batch, pf
+            cell_df.insert(loc=0, column='layer', value=layer)
+            cell_df.insert(loc=0, column='area', value=area)
+
+            # Making some lists of all the different name combinations for a given two stim epoch.
+            A, B, AB, sepnames = ([], [], [], [])  # re-defining sepname
+            for i in range(len(epcs_twostim)):
+                if any((epcs['nameA'] == epcs_twostim.iloc[i].nameA) & (epcs['nameB'] == 'null')) \
+                        and any((epcs['nameA'] == 'null') & (epcs['nameB'] == epcs_twostim.iloc[i].nameB)):
+                    A.append('STIM_' + epcs_twostim.iloc[i].nameA + '_null')
+                    B.append('STIM_null_' + epcs_twostim.iloc[i].nameB)
+                    AB.append(epcs_twostim['name'].iloc[i])
+                    sepnames.append(sepname.iloc[i])
+
+            # Preparing to calculate weights based on the number of different snip combinations it needs to fit
+            # It just needs to iterate through 'resp' in this case, if pred was on it'd have to add that signal
+            if snip:
+                subsets = len(cut_list)
+                cuts_info = {cut_labels[i]: cut_list[i] for i in range(len(cut_list))}
+                signames = ['resp'] * subsets
+                if pred == True:
+                    subsets = subsets * 2
+                    signames = signames + (['pred'] * len(signames))
+                    cut_labels = cut_labels + ([aa + '_pred' for aa in cut_labels])
+                    cut_list = cut_list * 2
+
+            # Set up the arrays that the fitting function will population. It is dimensions
+            # BG/FG (2) x number of twostim epochs x how many different fits based on snip
+            weights = np.zeros((2, len(AB), subsets))
+            Efit = np.zeros((5, len(AB), subsets))
+            nMSE = np.zeros((len(AB), subsets))
+            nf = np.zeros((len(AB), subsets))
+            r = np.zeros((len(AB), subsets))
+            cut_len = np.zeros((len(AB), subsets - 1))
+
+            # Goes through all two stim epochs and gets the matching null ones to run through the actual
+            # weight fitting function, which will then positionally populate assorted matrices
+            for i in range(len(AB)):
+                names = [[A[i]], [B[i]], [AB[i]]]
+                for ss, (cut, sig) in enumerate(zip(cut_list, signames)):
+                    weights[:, i, ss], Efit[:, i, ss], nMSE[i, ss], nf[i, ss], _, r[i, ss] = \
+                        calc_psth_weights_of_model_responses_list(val, names,
+                                                                  signame=sig, cuts=cut)
+                    if ss != 0:
+                        cut_len[i, ss - 1] = np.sum(cut)
+
+            # Makes a list of lists that iterates through the arrays you created, then flattens them in the next line
+            big_list = [[weights[0, :, ee], weights[1, :, ee], nMSE[:, ee], nf[:, ee], r[:, ee]] for ee in
+                        range(len(cut_list))]
+            flat_list = [item for sublist in big_list for item in sublist]
+            small_list = [epcs_twostim['nameA'].values, epcs_twostim['nameB'].values]
+            # Combines the lists into a format that is conducive to the dataframe format I want to make
+            bigger_list = small_list + flat_list
+            weight_df = pd.DataFrame(bigger_list)
+            weight_df = weight_df.T
+
+            # Automatically generates a list of column names based on the names of the subsets provided above
+            column_labels1 = ['namesA', 'namesB']
+            column_labels2 = [[f"weightsA{cl}", f"weightsB{cl}", f"nMSE{cl}", f"nf{cl}", f"r{cl}"] for cl in cut_labels]
+            column_labels_flat = [item for sublist in column_labels2 for item in sublist]
+            # column_labels = column_labels1 + column_labels_flat
+            # Renames the columns according to that list - should work for any scenario as long as you specific names above
+            weight_df.columns = column_labels1 + column_labels_flat
+
+            # Not sure why I need this, I guess some may not be floats, so just doing it
+            col_dict = {ii: float for ii in column_labels_flat}
+            weight_df = weight_df.astype(col_dict)
+
+            # Insert epoch column so you can merge weight_df and cell_df on this.
+            check_epochs = [f"STIM_{aa}_{bb}" for aa, bb in zip(weight_df.namesA, weight_df.namesB)]
+            weight_df.insert(loc=0, column='epoch', value=check_epochs)
+
+            # Add relative gain metric for all the fits
+            for ss in cut_labels:
+                weight_df[f'FG_rel_gain{ss}'] = (weight_df[f'weightsB{ss}'] - weight_df[f'weightsA{ss}']) / \
+                                                (np.abs(weight_df[f'weightsB{ss}']) + np.abs(
+                                                    weight_df[f'weightsA{ss}']))
+                weight_df[f'BG_rel_gain{ss}'] = (weight_df[f'weightsA{ss}'] - weight_df[f'weightsB{ss}']) / \
+                                                (np.abs(weight_df[f'weightsA{ss}']) + np.abs(
+                                                    weight_df[f'weightsB{ss}']))
 
             # Merge the informational dataframe (cell_df) with the one with the data (weight_df)
             merge = pd.merge(cell_df, weight_df, on="epoch")

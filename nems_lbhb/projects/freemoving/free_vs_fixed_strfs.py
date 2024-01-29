@@ -275,7 +275,7 @@ def movement_plot(rec, T1=260, T2=280, t_indexes=None):
 ###
 
 def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
-                    snr_threshold=5, pc_count=3, reset_backend=False):
+                    snr_threshold=5, pc_count=3, reset_backend=False, input_name = 'input', merge_models=None):
     """
     compute mean dSTRF for a single cell at standardized positions
     by "freezing" the DLC signal and computing the dSTRF for a bunch of stimuli
@@ -289,49 +289,72 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
         dicount=4
 
     dstrf = {}
-    mdstrf = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc1 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc2 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc_mag_all = np.zeros((len(model_list), dicount, pc_count))
+    if merge_models is None:
+        mcount=len(model_list)
+    else:
+        mcount=1
+        
+    mdstrf = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc1 = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc2 = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc_mag_all = np.zeros((mcount, dicount, pc_count))
     for di in range(dicount):
         dlc1 = dlc.copy()
-        dcount = dlc1.shape[1]
         didx_ = adjust_didx(dlc, didx)
         #didx_ = didx
+        dcount = np.min([dlc1.shape[1],didx_.shape[2]])
 
         for t in t_indexes:
-            dlc1[(t-didx_.shape[1]+1):(t+1), :] = didx_[di,:,:dcount]
+            dlc1[(t-didx_.shape[1]+1):(t+1), :dcount] = didx_[di,:,:dcount]
         log.info(f"DLC values: {np.round(didx[di,-1,:dcount],3)}")
-        #log.info(f'di={di} Applying HRTF for frozen DLC coordinates')
-        #rec2 = rec.copy()
-        #rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
-        #rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
-        #                                 f_min=200, f_max=20000, channels=18)['rec']
-
         for mi, m in enumerate(model_list):
-            stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
+            input_names = m.get_io_names()[0]
+            stim = {input_name: rec['stim'].as_continuous().T}
+            if 'dlc' in input_names:
+                stim['dlc'] = dlc1
             dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes, reset_backend=reset_backend)
 
-            d = dstrf[di]['stim'][0, :, :, :]
+            if mi==0:
+                d = np.zeros([len(model_list)] + list(dstrf[di][input_name].shape[1:]))
+            d[mi] = dstrf[di][input_name][0, :, :, :]
 
+        if merge_models is not None:
+            if merge_models=='mean':
+                d=d.mean(axis=0, keepdims=True)
+            elif isinstance(merge_models, float):
+                m0=np.nanmean(d)
+                s0=np.nanstd(d)
+                d=(d-d.mean(axis=(1,2,3), keepdims=True))/d.std(axis=(1,2,3), keepdims=True)
+                d=(d*s0)+m0
+                mdstrf_ = d.mean(axis=0,keepdims=True)
+                sdstrf_ = d.std(axis=0,keepdims=True)
+                sdstrf_[sdstrf_==0]=1
+
+                d = nems0.utils.shrinkage(mdstrf_, sdstrf_, sigrat=merge_models)
+
+            else:
+                raise ValueError(f"merge_models={merge_models} not supported by dstrf_snapshots")
+
+        for mi in range(mcount):
+            d_ = d[mi].copy()
+            print(di, mi, d_.shape, d_.std())
             if snr_threshold is not None:
-                d = np.reshape(d, (d.shape[0], d.shape[1] * d.shape[2]))
-                md = d.mean(axis=0, keepdims=True)
-                e = np.std(d - md, axis=1) / np.std(md)
+                d_ = np.reshape(d_, (d_.shape[0], d_.shape[1] * d_.shape[2]))
+                md = d_.mean(axis=0, keepdims=True)
+                e = np.std(d_ - md, axis=1) / np.std(md)
                 if (e > snr_threshold).sum() > 0:
-                    log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
+                    log.info(f"Removed {(e > snr_threshold).sum()}/{len(d_)} noisy dSTRFs for PCA calculation")
 
-                d = dstrf[di]['stim'][0, (e <= snr_threshold), :, :]
-                dstrf[di]['stim']=d[np.newaxis,:,:,:]
-            mdstrf[mi, di, :, :] = d.mean(axis=0)
-    
+                d_ = d[mi, (e <= snr_threshold), :, :]
+                #dstrf[di][input_name]=d_[np.newaxis,:,:,:]
+            mdstrf[mi, di, :, :] = d_.mean(axis=0)
             # svd attempting to make compatible with new format of compute_pcs
             try:
-                if (d.size>0) and (d.std()>0):
+                if (d_.size>0) and (d_.std()>0):
                     #pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
                     dpc = dtools.compute_dpcs(dstrf[di], pc_count=pc_count)
-                    pc=dpc['stim']['pcs']
-                    pc_mag=dpc['stim']['pc_mag']
+                    pc=dpc[input_name]['pcs']
+                    pc_mag=dpc[input_name]['pc_mag']
 
                     pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
                     pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
