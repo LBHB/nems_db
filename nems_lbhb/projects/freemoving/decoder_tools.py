@@ -181,7 +181,7 @@ def spatial_tc_2d(rec, occ_threshold=0.5, pix_bins=20):
 
     return tc, xy, xy_edges
 
-def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, pix_bins=20, binnums=[30, 20]):
+def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, pix_bins=20, binnums=[30, 20], zscore=True, joint=False):
     """
     jackknife data and compute 2d tuning curves fore each cell.
     Returns a dictionary of cell tuning curves with key == cellid for each jackknife.
@@ -222,9 +222,9 @@ def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, p
     for jack in range(jk_num):
         # ask about difference in mask by epoch vs mask by time
         if jk_type == 'time':
-            jrec = rec.jackknife_mask_by_time(jk_num, jack, invert=False)
+            jrec = rec.jackknife_mask_by_time(jk_num, jack, invert=True)
         elif jk_type == 'epoch':
-            jrec = rec.jackknife_mask_by_epoch(jk_num, jack, 'TRIAL', invert=False)
+            jrec = rec.jackknife_mask_by_epoch(jk_num, jack, 'TRIAL', invert=True)
         jrec = jrec.apply_mask()
         # assume DLC sig is ['dlc'] and index 2,3 corresponds to headpost x/y
         x = jrec['dlc'][2]
@@ -241,23 +241,29 @@ def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, p
             spk_hist, x_edges, y_edges = np.histogram2d(n_x_loc, n_y_loc, [xbins, ybins],)
             # divide the spike locations by the amount of time spent in each bin to get firing rate
             rate_bin = spk_hist/(occupancy/rec.meta['rasterfs'])
+            if zscore == True:
+                cmean, cstd = np.nanmean(rec['resp'][cellindex]), np.nanstd(rec['resp'][cellindex], ddof=1)
+                rate_bin = (rate_bin-cmean)/cstd
             # add the tc for each cell to the dictionary with key == cellid, also transpose xy to yx for visualization purposes
             tc[cellid] = rate_bin
+
+
 
         # threshold occupancy so only bins with at least half a second of data are included
         for cellid in rec['resp'].chans:
             tc[cellid][np.where(occupancy < occ_threshold*rec.meta['rasterfs'])] = np.nan
-
         tcs.append(tc)
 
+    debug = True
+    joint = False
     # determine consistency of each jackknifed tc
     for cellid in rec['resp'].chans:
         cell_tcs = np.concatenate([tc[cellid][:, :, np.newaxis] for tc in tcs], axis=2)
-        joint_mask = np.isnan(np.sum(cell_tcs, axis=2))
-        debug = True
 
-        for i in range(cell_tcs.shape[2]):
-            cell_tcs[:,:, i][joint_mask] = np.nan
+        if joint == True:
+            joint_mask = np.isnan(np.sum(cell_tcs, axis=2))
+            for i in range(cell_tcs.shape[2]):
+                cell_tcs[:,:, i][joint_mask] = np.nan
 
         bin_std = np.nanstd(cell_tcs, axis=2)
         bin_mean = np.nanmean(cell_tcs, axis=2)
@@ -711,7 +717,263 @@ def dist_tc(rec, epochs, hs_bins = 40, signal='dist', feature=0, ds_bins = 20, l
     # return both high sampling rate tuning curves and low sampling rate tuning curves and distance values
     return trial_dist_tc, bin_centers, low_dist_tc, low_dist_bin_centers
 
+def points_within_radius(points_list, target, radius):
+    import math
+    target_x, target_y = target
+    result = []
+
+    for point in points_list:
+        point_x, point_y = point
+
+        distance = math.sqrt((target_x - point_x) ** 2 + (target_y - point_y) ** 2)
+
+        if distance <= radius:
+            result.append(point)
+
+    return result
+
+# make function to create new signals for dlc values
+# def dlc_within_radius(rec, target='Trial', **kwargs):
+#
+#     # check for kwargs assign defaults
+#     if 'ref' in kwargs.keys():
+#         ref = kwargs['ref']
+#     else:
+#         ref = 'start'
+#     if 'radius' in kwargs.keys():
+#         radius = kwargs['radius']
+#     else:
+#         radius = 'auto'
+#     if 'signal' in kwargs.keys():
+#         signal = kwargs['signal']
+#     else:
+#         signal = 'dlc'
+#     if 'chan' in kwargs.keys():
+#         chans = kwargs['chan']
+#         if len(chans) > 2:
+#             raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
+#     else:
+#         chans = ['front_x', 'front_y']
+#
+#     dlc_chan = rec[f"{signal}"].extract_chans(chans)
+#
+#
+#     # grab the location of the target based on epochs
+#     if type(target) == str:
+#         print('Using epochs for target location.')
+#         e = rec[f"{signal}"].epochs
+#         tareps = e.loc[f"{target}"]
+#         for ep in tareps:
+#             if ref == 'start':
+#                 print("using start")
+#                 ep = dlc_chan.extract_epoch([:, :, 0]
+#             elif ref == 'stop':
+#                 print("using stop")
+#
+#     return points_within_radius(points_list, target_location, radius)
+
+
+import numpy as np
+def xy_plot_animation(x_data, y_data, fname, type='.mp4', **kwargs):
+    """
+    given a list of arrays for x and y data make a matplotlib animation (gif/mp4).
+
+    :param x_data: list of arrays for x postion
+    :param y_data: list of arrays for y postion
+    :param x_label: xlabel
+    :param y_label: ylabel
+    :return: animation saved to specified filepath
+    """
+    import numpy as np
+    import matplotlib
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FFMpegWriter, PillowWriter
+    import os
+    from matplotlib.pyplot import get_cmap
+    import datetime
+    import getpass
+
+
+    # check for some basic kwargs and set defaults
+    if 'dpi' in kwargs.keys():
+        dpi = kwargs['dpi']
+    else:
+        dpi = 100
+    if 'fps' in kwargs.keys():
+        fps = kwargs['fps']
+    else:
+        fps = 20
+    if 'ffmpeg_path' in kwargs.keys():
+        ffmpeg_path = kwargs['ffmpeg_path']
+        matplotlib.rcParams['animation.ffmpeg_path'] = ffmpeg_path
+    else:
+        ffmpeg_path = '/auto/users/wingertj/miniconda3/envs/nems_cpu/bin/ffmpeg'
+    if 'labels' in kwargs.keys():
+        labels = kwargs['labels']
+    else:
+        labels = [f"input{i}" for i in range(len(x_data))]
+    # initialize figure
+    fig, axs = plt.subplots(4,1)
+    gs = axs[2].get_gridspec()
+    # remove the underlying axes
+    for ax in axs[2:]:
+        ax.remove()
+    axbig = fig.add_subplot(gs[2:])
+    axs[0].get_shared_x_axes().join(axs[0], axs[1])
+
+    if 'cmap' in kwargs.keys():
+        cmap = kwargs['cmap']
+        c = get_cmap(cmap)
+    else:
+        c = get_cmap('viridis')
+    cspace = np.linspace(0, 1, len(x_data)+1)
+    x_artist_dict = {i: axs[0].plot([], [], markevery=[-1], marker='o',markerfacecolor='r', color=c(cspace[i]), label=labels[i])[0] for i in range(len(x_data))}
+    y_artist_dict = {i: axs[1].plot([], [], markevery=[-1], marker='o',markerfacecolor='r', color=c(cspace[i]))[0] for i in range(len(y_data))}
+    xy_artist_dict = {i: axbig.plot([], [], markevery=[-1], marker='o',markerfacecolor='r', color=c(cspace[i]))[0] for i in range(len(x_data))}
+
+    # get limits of data
+    x_max = max([np.nanmax(l) for l in x_data])
+    y_max = max([np.nanmax(l) for l in y_data])
+    x_min = min([np.nanmin(l) for l in x_data])
+    y_min = min([np.nanmin(l) for l in y_data])
+    axs[0].set_ylim(np.floor(x_min), np.ceil(x_max))
+    axs[1].set_ylim(np.floor(y_min), np.ceil(y_max))
+    axbig.set_xlim(np.floor(x_min), np.ceil(x_max))
+    axbig.set_ylim(np.floor(y_min), np.ceil(y_max))
+
+    # setup frame writer
+    vidname = fname.split('.')[0]
+    metadata = dict(title=vidname, artist=getpass.getuser(), date=datetime.datetime.now())
+    writer = FFMpegWriter(fps=fps, metadata=metadata)
+
+    pltime = np.linspace(0, len(x_data[0])/fps, len(x_data[0]))
+    # plot and write to file
+    window_size = 100
+    tick_num = 10
+    with writer.saving(fig, fname, dpi=dpi):
+        for i in range(len(x_data[0])):
+            if i < 100:
+                for j in range(len(x_data)):
+                    x_artist_dict[j].set_data(pltime[:i], x_data[j][:i])
+                    y_artist_dict[j].set_data(pltime[:i], y_data[j][:i])
+                    axs[0].set_xlim(0, pltime[window_size])
+                    axs[1].set_xlim(0, pltime[window_size])
+                    x_ticks = np.linspace(0, pltime[window_size], tick_num)
+                    axs[0].set_xticks(x_ticks)
+                    axs[1].set_xticks(x_ticks)
+                    xy_artist_dict[j].set_data(x_data[j][:i], y_data[j][:i])
+            else:
+                for j in range(len(x_data)):
+                    x_artist_dict[j].set_data(pltime[i-100:i], x_data[j][i-100:i])
+                    y_artist_dict[j].set_data(pltime[i-100:i], y_data[j][i-100:i])
+                    axs[0].set_xlim(pltime[i-100], pltime[i])
+                    axs[1].set_xlim(pltime[i-100], pltime[i])
+                    x_ticks = np.linspace(pltime[i-100], pltime[i], tick_num)
+                    axs[0].set_xticks(x_ticks)
+                    axs[1].set_xticks(x_ticks)
+                    xy_artist_dict[j].set_data(x_data[j][i-100:i], y_data[j][i-100:i])
+            axs[0].legend(loc='upper right')
+            axs[0].set_xticklabels([])
+            # axs[0].set_xlabel("time (s)")
+            axs[1].set_xlabel("time (s)")
+            axs[0].set_ylabel("X Pos\n(mean dev)")
+            axs[1].set_ylabel("Y Pos\n(mean dev)")
+            axbig.set_ylabel("Y Pos\n(mean dev)")
+            axbig.set_xlabel("X Pos\n(mean dev)")
+            fig.tight_layout()
+            writer.grab_frame()
+
+tx = np.array(np.linspace(100, 500, 200))
+ty = np.array(np.linspace(300, 600, 200))
+
+# make fake prediction data with jitter
+def jitter(coords: tuple):
+    import random
+    x, y = coords
+    # Add random noise in range -1 to 1
+    jittered_x, jittered_y = x + random.uniform(-1, 1), y + random.uniform(-1, 1)
+
+    return (jittered_x, jittered_y)
+
+pxy = [jitter((xt, yt)) for xt, yt in zip(tx, ty)]
+px = np.array([p[0] for p in pxy])
+py = np.array([p[1] for p in pxy])
+
+x_data = [tx, px]
+y_data = [ty, py]
+
+xy_plot_animation(x_data, y_data, fname = '/auto/users/wingertj/test.mp4', type='.mp4')
+
+
+
+
 def target_lickspout_epochs(rec, tartime=0.6):
+    import pandas as pd
+    # extract epochs between target onset -tar- and lickspout entry -lick- as well as catch onset and fa
+    e = rec['dlc'].epochs
+    tar = e['name'].str.startswith("TARGET")
+    lick = e['name'].str.startswith("LICK , HIT")
+    tareps = rec['dlc'].epochs.loc[tar]
+    lickeps = rec['dlc'].epochs.loc[lick]
+    catch = e['name'].str.startswith("CATCH")
+    FA = e['name'].str.startswith("LICK , FA")
+    catcheps = rec['dlc'].epochs.loc[catch]
+    faeps = rec['dlc'].epochs.loc[FA]
+
+    # get all snr targets
+    alltargetbool = e['name'].str.startswith("TAR")
+    alltargetepochs = rec['dlc'].epochs.loc[alltargetbool]
+
+    # for each lickspout entry, grab the preceding target timestamp (nosepoke signal is 0.6 ms prior)
+    tarlick = []
+    for ind in lickeps.index:
+        tarind = tareps.index[tareps.index < ind][-1]
+        licktime = lickeps[lickeps.index == ind]['start'].values[0]
+        targettime = tareps[tareps.index == tarind]['start'].values[0] - tartime
+        targetsnr = alltargetepochs[alltargetepochs.index == tarind - 1]['name'].values[0]
+        tarlick.append((targettime, licktime, targetsnr))
+    tarlick = pd.DataFrame(tarlick, columns=['start', 'end', 'name'])
+
+    # for each FA grab the precding catch timestamp (nosepoke signal is 0.6 ms prior - 0.1 hold plut 0.5 s onset delay)
+    catchfa = []
+    for ind in faeps.index:
+        catchind = catcheps.index[catcheps.index < ind][-1]
+        fatime = faeps[faeps.index == ind]['start'].values[0]
+        catchtime = catcheps[catcheps.index == catchind]['start'].values[0] - tartime
+        catchname = catcheps[catcheps.index == catchind]['name'].values[0]
+        catchfa.append((catchtime, fatime, catchname))
+    catchfa = pd.DataFrame(catchfa, columns=['start', 'end', 'name'])
+
+    # append hit and fa trials together and sort by trial type
+    hit_fa = [tarlick, catchfa]
+    hit_fa = pd.concat(hit_fa)
+    hit_fa_epochs = hit_fa.sort_values('start').reset_index()
+
+    # get unique snrs for plotting
+    tar_snrs = np.unique(hit_fa['name'].values)
+    #
+    # hit_fa_epochs = np.concatenate((hit_fa['start'].values[:, np.newaxis], hit_fa['end'].values[:, np.newaxis]), axis=1)
+
+    f, ax = plt.subplots(1,1)
+    route = False
+    for i in range(len(hit_fa_epochs)):
+        tx = rec['dlc'][0][int(hit_fa_epochs['start'][i] * rec.meta['rasterfs'])]
+        ty = rec['dlc'][1][int(hit_fa_epochs['start'][i] * rec.meta['rasterfs'])]
+        lx = rec['dlc'][0][int(hit_fa_epochs['end'][i] * rec.meta['rasterfs'])]
+        ly = rec['dlc'][1][int(hit_fa_epochs['end'][i] * rec.meta['rasterfs'])]
+        ax.scatter(tx, ty, color='red')
+        ax.scatter(lx, ly, color='blue')
+        if route == True:
+            for i in range(len(hit_fa_epochs)):
+                if i < len(hit_fa_epochs):
+                    rpx = rec['dlc'][0][int(hit_fa_epochs['end'][i] * rec.meta['rasterfs']):int(
+                        tarlick['start'][i + 1] * rec.meta['rasterfs'])]
+                    rpy = rec['dlc'][1][int(hit_fa_epochs['end'][i] * rec.meta['rasterfs']):int(
+                        tarlick['start'][i + 1] * rec.meta['rasterfs'])]
+                    ax.plot(rpx, rpy, color='green')
+    return hit_fa_epochs, tar_snrs
+
+def trials_to_path(rec, tartime=0.6):
     import pandas as pd
     # extract epochs between target onset -tar- and lickspout entry -lick- as well as catch onset and fa
     e = rec['dlc'].epochs

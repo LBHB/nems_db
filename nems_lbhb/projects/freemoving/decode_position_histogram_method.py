@@ -23,7 +23,7 @@ from nems.layers import WeightChannels, FIR, DoubleExponential, LevelShift, ReLU
 from nems.layers.base import Layer, Phi, Parameter
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
-from nems_lbhb.projects.freemoving.decoder_tools import spatial_tc_2d, dlc_to_tcpos, tc_stability, cell_spatial_info, decode2d_forloop, decode2d, dist_occ_hist, dist_tc, trial_2d_tc, target_lickspout_epochs, all_trials_plot, dvt_allcells_plot
+from nems_lbhb.projects.freemoving.decoder_tools import spatial_tc_2d, dlc_to_tcpos, trials_to_path, tc_stability, cell_spatial_info, decode2d_forloop, decode2d, dist_occ_hist, dist_tc, trial_2d_tc, target_lickspout_epochs, all_trials_plot, dvt_allcells_plot
 
 runclassid = 132
 rasterfs = 100
@@ -303,7 +303,7 @@ def trial_dvst_design_matrix(rec, tbinwidth=0.2, tbin_num=10, dbin_num=10):
     # create target to lickspout epochs - trials
     tartime=0.6
     rasterfs = rec.meta['rasterfs']
-    hit_fa_epochs, tar_snrs = target_lickspout_epochs(rec=rec, tartime=0.6)
+    hit_fa_epochs, tar_snrs = trials_to_path(rec=rec, tartime=0.6)
 
     # grab target onset and lick spout entry epochs - tarlick - and catch fa - catchfa - from resp, dlc, dist
     tarlickeps = (rec['resp'].extract_epoch(hit_fa_epochs))

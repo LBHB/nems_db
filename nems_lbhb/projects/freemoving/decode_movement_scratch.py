@@ -25,7 +25,7 @@ from nems_lbhb.projects.freemoving.free_tools import compute_d_theta, \
 from nems import Model
 from nems.layers import WeightChannels, FIR, DoubleExponential, LevelShift, ReLU
 from nems.layers.base import Layer, Phi, Parameter
-
+from decoder_tools import xy_plot_animation
 
 # if USE_DB:
 #     siteid = "PRN034a"
@@ -44,6 +44,7 @@ sql = f"SELECT distinct left(cellid,7) as siteid,stimpath,stimfile from sCellFil
 dallfiles = db.pd_query(sql)
 siteids = dallfiles['siteid'].unique().tolist()
 decoded_dfs = []
+siteids = ['PRN020a']
 for siteid in siteids:
     # siteid=siteids[0]
     sql = f"SELECT count(cellid) as cellcount,stimpath,stimfile from sCellFile where cellid like '{siteid}%%' AND runclassid={runclassid} AND area='A1' group by stimpath,stimfile"
@@ -64,13 +65,13 @@ for siteid in siteids:
         ex = BAPHYExperiment(parmfile=parmfile, cellid=cellids)
         print(ex.experiment, ex.openephys_folder, ex.openephys_tarfile, ex.openephys_tarfile_relpath)
 
-        recache = False
+        recache = True
 
         # load recording
         # rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
         #                        dlc=True, recache=recache, rasterfs=rasterfs,
         #                        dlc_threshold=0.2, fill_invalid='interpolate')
-        rec = ex.get_recording(resp=True, stim=True, stimfmt='gtgram',
+        rec = ex.get_recording(resp=True,
                                dlc=True, recache=recache, rasterfs=rasterfs,
                                dlc_threshold=0.2, fill_invalid='interpolate')
     except:
@@ -167,10 +168,10 @@ for siteid in siteids:
     e = ep_counts.idxmax()
     cellids = rec['resp'].chans
 
-    signames = ['resp', 'diff']
+    signames = ['resp']
     for signame in signames:
         #est, val = rec.split_using_epoch_occurrence_counts(epoch_regex=epoch_regex)
-        jackknifes = 10
+        jackknifes = 1
         for jack in range(jackknifes):
             # ask about difference in mask by epoch vs mask by time
             if signame == 'resp':
@@ -185,17 +186,17 @@ for siteid in siteids:
             r = val['resp'].extract_epoch(e)
             d = val['diff'].extract_epoch(e)
 
-            f,ax=plt.subplots(3,1)
-            # cid=96
-            cid = -1
-            ax[0].imshow(p[:,cid,:], aspect='auto', interpolation='none')
-            ax[1].imshow(r[:,cid,:], aspect='auto', interpolation='none')
-            ax[2].imshow(d[:,cid,:], aspect='auto', interpolation='none')
-
-            ax[0].set_title(f'psth {cellids[cid]} - {e}')
-            ax[1].set_title(f'single trial {cellids[cid]} - {e}')
-            ax[2].set_title(f'diff {cellids[cid]} - {e}')
-            plt.tight_layout()
+            # f,ax=plt.subplots(3,1)
+            # # cid=96
+            # cid = -1
+            # ax[0].imshow(p[:,cid,:], aspect='auto', interpolation='none')
+            # ax[1].imshow(r[:,cid,:], aspect='auto', interpolation='none')
+            # ax[2].imshow(d[:,cid,:], aspect='auto', interpolation='none')
+            #
+            # ax[0].set_title(f'psth {cellids[cid]} - {e}')
+            # ax[1].set_title(f'single trial {cellids[cid]} - {e}')
+            # ax[2].set_title(f'diff {cellids[cid]} - {e}')
+            # plt.tight_layout()
 
 
             # For a model that uses multiple inputs, we package the input data into
@@ -207,124 +208,134 @@ for siteid in siteids:
 
             # change 'diff' to 'resp' for non-PSTH subbed data
             input_sig_name = signame # 'resp'
-            target_sig_names = ['dist', 'dlc']
+            target_sig_names = ['dlc']
+            target_chans = ['front_x', 'front_y']
             for target_sig_name in target_sig_names:
                 # input = est[input_sig_name]._data.T
                 # target = est[target_sig_name]._data.T
                 # test_input = val[input_sig_name]._data.T
                 # test_target = val[target_sig_name]._data.T
                 for i, target_chan in enumerate(est[target_sig_name].chans):
-                    input = est[input_sig_name]._data.T
-                    target = est[target_sig_name]._data.T
-                    test_input = val[input_sig_name]._data.T
-                    test_target = val[target_sig_name]._data.T
+                    if target_chan in target_chans:
+                        input = est[input_sig_name]._data.T
+                        target = est[target_sig_name]._data.T
+                        test_input = val[input_sig_name]._data.T
+                        test_target = val[target_sig_name]._data.T
 
-                    targetchan=i # which channel of dist signal we're decoding
+                        targetchan=i # which channel of dist signal we're decoding
 
-                    # calculate timebins that are valid in decoded variable
-                    good_timebins = (np.isnan(target).sum(axis=1) == 0)
-                    good_test_timebins = (np.isnan(test_target).sum(axis=1) == 0)
+                        # calculate timebins that are valid in decoded variable
+                        good_timebins = (np.isnan(target).sum(axis=1) == 0)
+                        good_test_timebins = (np.isnan(test_target).sum(axis=1) == 0)
 
-                    # select only good timebins
-                    input = input[good_timebins,:]
-                    test_input = test_input[good_test_timebins,:]
+                        # select only good timebins
+                        input = input[good_timebins,:]
+                        test_input = test_input[good_test_timebins,:]
 
-                    target = target[good_timebins,targetchan][:,np.newaxis]
-                    test_target = test_target[good_test_timebins,targetchan][:,np.newaxis]
+                        target = target[good_timebins,targetchan][:,np.newaxis]
+                        test_target = test_target[good_test_timebins,targetchan][:,np.newaxis]
 
-                    # select subset of cells (this can be driven off the database)
-                    input = input[:, :]
-                    test_input = test_input[:, :]
+                        # select subset of cells (this can be driven off the database)
+                        input = input[:, :]
+                        test_input = test_input[:, :]
 
-                    m, s = target.mean(axis=0, keepdims=True), target.std(axis=0, keepdims=True)
-                    target = (target-m)/s
-                    test_target = (test_target-m)/s
+                        m, s = target.mean(axis=0, keepdims=True), target.std(axis=0, keepdims=True)
+                        target = (target-m)/s
+                        test_target = (test_target-m)/s
 
-                    cellcount = input.shape[1]
-                    dimcount = target.shape[1]
+                        cellcount = input.shape[1]
+                        dimcount = target.shape[1]
 
-                    layers = [
-                        WeightChannels(shape=(cellcount,1,5)),
-                        FIR(shape=(5,1,5)),
-                        ReLU(shape=(5,), no_shift=False, no_offset=False, no_gain=True),
-                        WeightChannels(shape=(5,5)),
-                        ReLU(shape=(5,), no_shift=False, no_offset=False, no_gain=True),
-                        WeightChannels(shape=(5,1)),
-                        DoubleExponential(shape=(dimcount,)),
-                    ]
-                        #LevelShift(shape=(dimcount,))
+                        layers = [
+                            WeightChannels(shape=(cellcount,1,5)),
+                            FIR(shape=(5,1,5)),
+                            ReLU(shape=(5,), no_shift=False, no_offset=False, no_gain=True),
+                            WeightChannels(shape=(5,5)),
+                            ReLU(shape=(5,), no_shift=False, no_offset=False, no_gain=True),
+                            WeightChannels(shape=(5,1)),
+                            DoubleExponential(shape=(dimcount,)),
+                        ]
+                            #LevelShift(shape=(dimcount,))
 
-                    model = Model(layers=layers)
-                    model = model.sample_from_priors()
-                    model = model.sample_from_priors()
+                        model = Model(layers=layers)
+                        model = model.sample_from_priors()
+                        model = model.sample_from_priors()
 
-                    tolerance = 1e-5
-                    max_iter = 200
+                        tolerance = 1e-5
+                        max_iter = 200
 
-                    use_tf = True
-                    if use_tf:
-                        input_ = np.expand_dims(input, axis=0)
-                        test_input_ = np.expand_dims(test_input, axis=0)
-                        target_ = np.expand_dims(target, axis=0)
+                        use_tf = True
+                        if use_tf:
+                            input_ = np.expand_dims(input, axis=0)
+                            test_input_ = np.expand_dims(test_input, axis=0)
+                            target_ = np.expand_dims(target, axis=0)
+                            test_target_ = np.expand_dims(test_target, axis=0)
 
-                        fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 10,
-                                          'early_stopping_patience': 5,
-                                          'early_stopping_tolerance': tolerance,
-                                          'learning_rate': 1e-2, 'epochs': max_iter,
-                                          }
-                        model = model.fit(input=input_, target=target_, backend='tf',
-                                          fitter_options=fitter_options, batch_size=None)
+                            fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 10,
+                                              'early_stopping_patience': 5,
+                                              'early_stopping_tolerance': tolerance,
+                                              'learning_rate': 1e-2, 'epochs': max_iter,
+                                              }
+                            model = model.fit(input=input_, target=target_, backend='tf',
+                                              fitter_options=fitter_options, batch_size=None)
 
-                        prediction = model.predict(input_, batch_size=None)[0,:,:]
-                        test_prediction = model.predict(test_input_, batch_size=None)[0,:,:]
+                            prediction = model.predict(input_, batch_size=None)[0,:,:]
+                            test_prediction = model.predict(test_input_, batch_size=None)[0,:,:]
 
-                        # f,ax=plt.subplots(1,2)
-                        # ax[0].scatter(prediction*s+m,target*s+m,s=1)
-                        ccf = np.corrcoef(prediction[:,0],target[:,0])[0,1]
-                        # ax[0].set_title(f'targetchan={rec[target_sig_name].chans[targetchan]}, cc={ccf:.3f}')
-                        # ax[1].scatter(test_prediction*s+m,test_target*s+m,s=1)
-                        cct = np.corrcoef(test_prediction[:,0],test_target[:,0])[0,1]
-                        # ax[1].set_title(f'TEST targetchan={rec[target_sig_name].chans[targetchan]}, cc={cct:.3f}')
-                        d = {
-                            'siteid': [siteid],
-                            'input signal': [signame],
-                            'target signal': [target_sig_name],
-                            'target channel': [target_chan],
-                            'jackknife': [jack],
-                            'test cc': [cct]
-                        }
-                        # decoded_df.append([siteid, target_sig_name, target_chan, targetchan, ccf, cct])
-                        # decoded_dict['target signal'] = target_sig_name
-                        # decoded_dict['target'] = target_chan
-                        # decoded_dict['target idx'] = targetchan
-                        # decoded_dict['cc_fit'] = ccf
-                        # decoded_dict['cc_test'] = cct
-                        tmpdf = pd.DataFrame.from_dict(data=d)
-                        decoded_dfs.append(tmpdf)
+                            # f,ax=plt.subplots(1,2)
+                            # ax[0].scatter(prediction*s+m,target*s+m,s=1)
+                            ccf = np.corrcoef(prediction[:,0],target[:,0])[0,1]
+                            # ax[0].set_title(f'targetchan={rec[target_sig_name].chans[targetchan]}, cc={ccf:.3f}')
+                            # ax[1].scatter(test_prediction*s+m,test_target*s+m,s=1)
+                            cct = np.corrcoef(test_prediction[:,0],test_target_[:,0])[0,1]
+                            # ax[1].set_title(f'TEST targetchan={rec[target_sig_name].chans[targetchan]}, cc={cct:.3f}')
+                            d = {
+                                'siteid': [siteid],
+                                'input signal': [signame],
+                                'test input': [test_input_],
+                                'test target': [test_target_],
+                                'test prediction': [test_prediction],
+                                'target signal': [target_sig_name],
+                                'target channel': [target_chan],
+                                'jackknife': [jack],
+                                'test cc': [cct],
+                                'model': [model]
+                            }
+                            # decoded_df.append([siteid, target_sig_name, target_chan, targetchan, ccf, cct])
+                            # decoded_dict['target signal'] = target_sig_name
+                            # decoded_dict['target'] = target_chan
+                            # decoded_dict['target idx'] = targetchan
+                            # decoded_dict['cc_fit'] = ccf
+                            # decoded_dict['cc_test'] = cct
+                            tmpdf = pd.DataFrame.from_dict(data=d)
+                            decoded_dfs.append(tmpdf)
 
-                        # f,ax=plt.subplots(1,1)
-                        # ax.scatter(test_prediction,test_target,s=1)
-                        # cc = np.corrcoef(test_prediction[:,0],test_target[:,0])[0,1]
-                        # ax.set_title(f'targetchan={rec["dist"].chans[targetchan]}, cc={cc:.3f}')
+                            # f,ax=plt.subplots(1,1)
+                            # ax.scatter(test_prediction,test_target,s=1)
+                            # cc = np.corrcoef(test_prediction[:,0],test_target[:,0])[0,1]
+                            # ax.set_title(f'targetchan={rec["dist"].chans[targetchan]}, cc={cc:.3f}')
+                        else:
+                            fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
+
+                            #model.layers[-1].skip_nonlinearity()
+                            #model=model.fit(input=input, target=target, fitter_options=fitter_options)
+
+                            #model.layers[-1].unskip_nonlinearity()
+
+                            model =model.fit(input=input, target=target, fitter_options=fitter_options)
+
+                            prediction = model.predict(input)
+
+
+                            f,ax=plt.subplots(1,1)
+                            ax.scatter(prediction,target,s=1)
+                            cc = np.corrcoef(prediction[:,0],target[:,0])[0,1]
+                            ax.set_title(f'targetchan={rec["dist"].chans[targetchan]}, cc={cc:.3f}')
                     else:
-                        fitter_options = {'cost_function': 'nmse', 'options': {'ftol': tolerance, 'gtol': tolerance/10, 'maxiter': max_iter}}
-
-                        #model.layers[-1].skip_nonlinearity()
-                        #model=model.fit(input=input, target=target, fitter_options=fitter_options)
-
-                        #model.layers[-1].unskip_nonlinearity()
-
-                        model =model.fit(input=input, target=target, fitter_options=fitter_options)
-
-                        prediction = model.predict(input)
-
-
-                        f,ax=plt.subplots(1,1)
-                        ax.scatter(prediction,target,s=1)
-                        cc = np.corrcoef(prediction[:,0],target[:,0])[0,1]
-                        ax.set_title(f'targetchan={rec["dist"].chans[targetchan]}, cc={cc:.3f}')
-
+                        continue
 decoded_df = pd.concat(decoded_dfs)
-decoded_df.to_pickle('/auto/users/wingertj/data/decoding_df.pkl')
+
+
+# decoded_df.to_pickle('/auto/users/wingertj/data/decoding_df.pkl')
 
 bp = []
