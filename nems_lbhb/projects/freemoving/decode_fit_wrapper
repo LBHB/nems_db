@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#source /home/wingertj/.bashrc
+. /auto/users/wingertj/miniconda3/etc/profile.d/conda.sh
+
+conda activate nems2
+
+python $*
+
+echo "Done"

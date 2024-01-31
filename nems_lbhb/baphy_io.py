@@ -1782,9 +1782,9 @@ def psi_parm_read(filepath):
     parts = parmfile.split('_')
     siteid = parts[0][:-2]
     if len(parts)==3:
-        runclass = parts[2]
+        runclass=parts[-1]
     else:
-        runclass = parts[-2]
+        runclass = parts[-2];
     ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
 
     if os.path.isfile(globalfile):
@@ -2498,12 +2498,11 @@ def baphy_stim_cachefile(exptparams, parmfilepath=None, **options):
             dstr += '-TOR'
 
     # include all parameter values, even defaults, in filename
-    # translated from baphy
-    fields = RefObject.get('UserDefinableFields', [])
+    fields = RefObject['UserDefinableFields']
     if options['stimfmt'] == 'envelope':
-        x_these_fields = ['F0s', 'ComponentsNumber']
+        x_these_fields = ['F0s', 'ComponentsNumber'];
     else:
-        x_these_fields = []
+        x_these_fields = [];
 
     for cnt1 in range(0, len(fields), 3):
         if RefObject[fields[cnt1]] == 0:
@@ -4707,9 +4706,6 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     # backward compatibility: nest depth info under the default ProbeA
     if 'parmfile' in d.keys():
         d={'ProbeA': d.copy()}
-    sql = f"SELECT cellid,min(isolation) as isolation FROM gSingleRaw WHERE cellid like '{siteid}%'{rawstr} GROUP BY cellid"
-    df_iso = db.pd_query(sql).set_index('cellid')
-    
     dcell = {}
     for c in cellid:
         dcell[c] = {'siteid': siteid}
@@ -4721,13 +4717,8 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             probeid = 'A'
         d_ = d['Probe'+probeid]
         if chstr not in d_['channel info'].keys():
-            if int(chstr)>384:
-                print('subtracting 384')
-                chstr=f"{(int(chstr)-384)}"
-            else:
-                print('adding 384')
-                chstr=f"{(int(chstr)+384)}"
-
+            print('subtracting 384')
+            chstr=f"{(int(chstr)-384)}"
         if len(d_['channel info'][chstr])==3:
             dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
         else:
@@ -4741,12 +4732,11 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             dcell[c]['area'] = dcell[c]['layer']
 
         try:
-            dcell[c]['iso'] = df_iso.loc[c,'isolation']
+            sql=f"SELECT * FROM gSingleRaw WHERE cellid='{c}'" + rawstr
+            dcell[c]['iso'] = db.pd_query(sql).iloc[0]['isolation']
         except:
             dcell[c]['iso'] = 0
-        #else:
-        #    dcell[c]['layer']=''
-        #    dcell[c]['depth']=-1
+            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
 
     return pd.DataFrame(dcell).T
 

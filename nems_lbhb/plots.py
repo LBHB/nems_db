@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import copy
 import pandas as pd
 import scipy.ndimage.filters as sf
-import seaborn as sns
+#import seaborn as sns
 import scipy.stats as st
 
 import nems0.plots.api as nplt
