@@ -11,6 +11,7 @@ from nems0.utils import escaped_split, escaped_join, get_setting
 from nems0.registry import KeywordRegistry, xforms_lib
 from nems0 import xform_helper, xforms, db
 
+from nems_lbhb.plots import histscatter2d, histmean2d
 from nems.layers import filter
 from nems import Model
 from nems.metrics import correlation
@@ -25,7 +26,7 @@ import nems_lbhb.plots as nplt
 
 log = logging.getLogger(__name__)
 
-use_saved_model=False
+use_saved_model=True
 
 batch=343
 
@@ -233,11 +234,11 @@ val=ctx['val'].apply_mask()
 stim=val['stim'].as_continuous()
 """
 
-def histmean2d(a,b,d, bins=10, ax=None):
+def histmean2dxx(a,b,d, bins=10, ax=None, ex_pct=0.05):
     # av = np.percentile(a, np.linspace(0, 100, bins+1))
     # bv = np.percentile(b, np.linspace(0, 100, bins+1))
-    ab = np.percentile(a, [0.1, 99.9])
-    bb = np.percentile(b, [0.1, 99.9])
+    ab = np.percentile(a, [ex_pct, 100-ex_pct])
+    bb = np.percentile(b, [ex_pct, 100-ex_pct])
     av = np.linspace(ab[0], ab[1], bins + 1)
     bv = np.linspace(bb[0], bb[1], bins + 1)
     ac = (av[:-1]+av[1:])/2
@@ -298,10 +299,116 @@ def histmean2d(a,b,d, bins=10, ax=None):
     ax.axvline(0, ls='--')
     return N
 
+def histscatter2dxx(a, b, d, N=1000, ax=None, spont=None, ex_pct=0.05):
+    ab = np.percentile(a, [ex_pct, 100 - ex_pct])
+    bb = np.percentile(b, [ex_pct, 100 - ex_pct])
+    keep = (a >= ab[0]) & (a <= ab[1]) & (b >= bb[0]) & (b <= bb[1])
+    a_ = a[keep]
+    b_ = b[keep]
+    d_ = d[keep]
+
+    if N < len(d_):
+        ii = np.round(np.linspace(0, len(d_) - 1, N)).astype('int')
+    else:
+        ii = np.arange(len(d_), dtype='int')
+
+    if ax is None:
+        f, ax = plt.subplots()
+
+    cmap = 'bwr'
+    cmap = 'viridis'
+    m = np.mean(d)
+    s = np.std(d)
+    vmin = 0
+    vmax = m + s * 2
+    s0 = np.argsort(d_[ii])
+    ii = ii[s0]
+    im = ax.scatter(a_[ii], b_[ii], c=d_[ii], s=1, cmap=cmap, vmin=vmin, vmax=vmax)
+    # ax.contour(ac, bc, N, [0.5], linewidths=0.5)
+    ax.axhline(0, ls='--', lw=0.75, color='black')
+    ax.axvline(0, ls='--', lw=0.75, color='black')
+    return N
+
+show_preds=True
+plot_stim=True
+use_val=True
+print_figs=False;
+
 oi, o = 20,20
 out_channels=np.arange(Y_est.shape[1])
+orange = [o for o in out_channels if modelspec.meta['r_test'][o, 0]>0.4]
+print(f"{len(orange)} hi-pred units")
+
+#plt.close('all')
+for oi in orange[:5]:  # [15,16,17,20]:
+    o = out_channels[oi]
+    cellid = ctx['est']['resp'].chans[o]
+    print(oi, cellid)
+    dpcz = modelspec.meta['dpc']
+    dpc_magz = modelspec.meta['dpc_mag']
+    dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+    fir = filter.FIR(shape=dpcz.shape)
+    fir['coefficients'] = np.flip(dpcz, axis=0)
+    if use_val:
+        X = np.concatenate([X_val['input'], X_est['input']], axis=0)
+        r = np.concatenate((Y_val[:, o], Y_est[:, o]))
+        pred = np.concatenate((ctx['val']['pred'].as_continuous().T[:, o],
+                               ctx['est']['pred'].as_continuous().T[:, o]))
+    else:
+        X = X_est['input']
+        r = Y_est[:, o]
+        pred = ctx['est']['pred'].as_continuous().T[:, o]
+    Y = fir.evaluate(X)
+
+    pcp = 3
+    imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+              'interpolation': 'none'}
+    if show_preds:
+        f, ax = plt.subplots(pcp, 3, figsize=(4.5, 4.5))
+    else:
+        f, ax = plt.subplots(pcp, 2, figsize=(3, 4.5))
+    for i in range(pcp):
+        d = modelspec.meta['dpc'][oi, i]
+        d = d / np.max(np.abs(d))  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+        if i == 0:
+            ax[i, 1].imshow(np.fliplr(d), **imopts)
+            ax[i, 1].set_ylabel(f'Dim {i + 1}')
+        else:
+            ax[i, 0].imshow(np.fliplr(d), **imopts)
+            ax[i, 0].set_ylabel(f'Dim {i + 1}')
+
+    ax[0, 0].plot(np.arange(1, dpc_magz.shape[0] + 1), dpc_magz[:, oi] / dpc_magz[:, oi].sum(), 'o-', markersize=3)
+    ax[0, 0].set_xlabel('PC dimension')
+    ax[0, 0].set_ylabel('Var. explained')
+    ax[0, 0].set_xticks(np.arange(1, dpc_magz.shape[0] + 1))
+    for j in range(1, pcp):
+        # N=histmean2d(Y[:,0],Y[:,j],r, bins=20, ax=ax[j,1], spont=spont[o], ex_pct=0.05)
+        N = histscatter2d(Y[:, 0], Y[:, j], r, N=1000, ax=ax[j, 1], ex_pct=0.05)
+        ax[j, 1].set_xlabel('Dim 1')
+        ax[j, 1].set_ylabel(f"Dim {j + 1}")
+        if show_preds:
+            # N=histmean2d(Y[:,0],Y[:,j],pred, bins=20, ax=ax[j,2], spont=spont[o], ex_pct=0.05)
+            N = histscatter2d(Y[:, 0], Y[:, j], pred, N=1000, ax=ax[j, 2], ex_pct=0.05)
+            ax[j, 2].set_xlabel('Dim 1')
+            ax[j, 2].set_ylabel(f"Dim {j + 1}")
+    ax[0, 0].set_title(cellid)
+    ax[0, 1].set_title(f"CNN: {ctx['modelspec'].meta['r_test'][o, 0]:.3f} SS: {modelspec.meta['sspredxc'][oi]:.3f}")
+
+    y = Y[:, 0]
+    b = np.linspace(y.min(), y.max(), 11)
+
+    # b=np.linspace(y.min(),y.max(),11)
+    mb = (b[:-1] + b[1:]) / 2
+    mr = [np.mean(r[(y >= b[i]) & (y < b[i + 1])]) for i in range(10)]
+    me = [np.std(r[(y >= b[i]) & (y < b[i + 1])]) / np.sqrt(np.sum((y >= b[i]) & (y < b[i + 1]))) for i in range(10)]
+    ax[0, 2].errorbar(mb, mr, me)
+    ax[0, 2].set_xlabel('Dim 1 projection')
+    ax[0, 2].set_ylabel('LN prediction')
+
+    plt.tight_layout()
+
 plt.close('all')
-for oi in range(15,20):
+for oi in orange:
     o=out_channels[oi]
     dpcz = modelspec.meta['dpc']
     dpc_magz = modelspec.meta['dpc_mag']
@@ -342,7 +449,8 @@ for oi in range(15,20):
     ax[0, -1].plot(dpc_magz[:, oi] / dpc_magz[:, oi].sum())
 
     for j in range(1,pcp):
-        N=histmean2d(Y[:,0],Y[:,j],r, bins=20, ax=ax[0,j])
+        #N=histmean2d(Y[:,0],Y[:,j],r, bins=20, ax=ax[0,j])
+        N = histscatter2d(Y[:, 0], Y[:, j], r, N=1000, ax=ax[0, j])
     ax[0,0].set_title(modelspec.meta['cellids'][o])
     ax[0,1].set_title(f" Orig : {ctx['modelspec'].meta['r_test'][o, 0]:.3f}")
     ax[0,2].set_title(f"  Subspace predxc: {modelspec.meta['sspredxc'][oi]:.3f}")

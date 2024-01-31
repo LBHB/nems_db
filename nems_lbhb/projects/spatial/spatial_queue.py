@@ -8,15 +8,15 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
 singlecell=True
 if singlecell:
-    batch1 = 353
-    batch2 = 338
-    modelnames = [
-        'gtgram.fs100.ch18.bin100-ld-hrtf-norm.l1-sev_LN.10xNx3_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t3e5',
-        ]
+    batch2 = 353
+    batch1 = 338
     modelnames2 = [
         'gtgram.fs100.ch18.bin6-ld-norm.l1-sev_LN.10xNx3_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t3e5',
         ]
-    cellids = db.get_batch_cells(batch1, as_list=True)
+    modelnames1 = [
+        'gtgram.fs100.ch18.bin100-ld-hrtf-norm.l1-sev_LN.10xNx3_lite.tf.init.lr1e3.t3.es20-lite.tf.lr1e4.t3e5',
+        ]
+    cellids = db.get_batch_cells(batch2, as_list=True)
 
     # exacloud queue settings:
     exa_executable_path = '/home/users/davids/miniconda3/envs/nems/bin/python'
