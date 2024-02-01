@@ -207,7 +207,7 @@ def state_tc_2d(resp=gain, signal=dlc, resp_chans=None, sig_chans=['front_x', 'f
     tc = {}
     if resp_chans == None:
         resp_chans = np.range(len(resp[:, 0]))
-        
+
     for cellindex, cellid in enumerate(resp_chans):
         # nasty way to unrasterize spikes and return a list of x/y positions for each spike
         n_x_loc = [item for sublist in [[xpos]*int(spk_cnt) for xpos, spk_cnt in zip(x, resp[cellindex, :]) if spk_cnt !=0] for item in sublist]
