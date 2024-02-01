@@ -21,9 +21,10 @@ modelnames=['free.fs50.ch18-norm.l1-fev.jk8_wc.Nx1x30-fir.10x1x30-wc.30xR-relu.R
             'free.fs50.ch18-norm.l1-fev.jk8_wcst.Nx1x25.i.l2:4-wcdl.12x1x12.i.l2:4-first.8x1x25-firdl.3x1x12.nc1-cat-relu.37-wc.37x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             'free.fs50.ch18-norm.l1-fev.hrtf.jk8_wcst.Nx1x25.i.l2:4-wcdl.12x1x12.i.l2:4-first.8x1x25-firdl.3x1x12.nc1-cat-relu.37-wc.37x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             'free.fs50.ch18-norm.l1-fev.hrtfae.jk8_wcst.Nx1x25.i.l2:4-wcdl.12x1x12.i.l2:4-first.8x1x25-firdl.3x1x12.nc1-cat-relu.37-wc.37x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
-            'free.fs50.ch18-norm.l1-fev.hrtf.jk8-shuf.dlc_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
-            'free.fs50.ch18-norm.l1-fev.jk8_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
-            'free.fs50.ch18-norm.l1-fev.hrtf.jk8_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
+            'free.fs50.ch18-norm.l1-fev.hrtf.jk6-shuf.dlc_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
+            'free.fs50.ch18-norm.l1-fev.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
+            'free.fs50.ch18-norm.l1-fev.hrtf.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
+            'free.fs50.ch18-norm.l1-fev.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4'
             'free.fs50.ch18-norm.l1-fev.jk8-shuf.stim_wcst.Nx1x25.i.l2:4-wcdl.12x1x12.i.l2:4-first.8x1x25-firdl.3x1x12.nc1-cat-relu.37-wc.37x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             ]
 shortnames=['NoH+LN','HRTF+LN','NoH+Dsh','HRTF+Dsh','HRTFae+Dsh',
@@ -40,6 +41,7 @@ dpred['siteid']=dpred['siteid'].apply(db.get_siteid)
 
 modelname0=modelnames[testids[0]]
 modelname=modelnames[testids[1]]
+shortname0=shortnames[testids[0]]
 shortname=shortnames[testids[1]]
 
 siteid='SLJ012a'
@@ -48,8 +50,13 @@ siteid='SLJ016a'
 siteid='PRN048a'
 
 siteids,cellids = db.get_batch_sites(batch)
+siteids=['PRN043a']
 for siteid in siteids:
-    cellid=[c for c in cellids if c.startswith(siteid)][0]
+    sql =f"SELECT cellid FROM Results WHERE cellid like '{siteid}%' AND batch={batch} AND modelname='{modelname}'"
+    #print(sql)
+    d=db.pd_query(sql)
+    cellid=d.iloc[0,0]
+    #cellid=[c for c in cellids if c.startswith(siteid)][0]
     print(siteid,cellid)
 
     xf0, ctx0 = xform_helper.load_model_xform(cellid=cellid, batch=batch, modelname=modelnames[testids[0]])
@@ -97,11 +104,6 @@ for siteid in siteids:
     for plot_var in ['space','vel']:
         for os in osteps:
             f, ax = plt.subplots(4,9, figsize=(16,6), sharex='row', sharey='row')
-            S=10
-            ax[0,0].invert_yaxis()
-            ax[1,0].invert_yaxis()
-            #ax[2,0].invert_yaxis()
-            #ax[3,0].invert_yaxis()
             for cid in range(9):
                 if cid+os<cellcount:
                     cidos = goodcells[cid + os]
@@ -111,21 +113,38 @@ for siteid in siteids:
                     ofs=ofs-ofs.mean()
                     r=Y_val[:,cidos]-pred0[:,cidos]
                     p=pred[:,cidos]-pred0[:,cidos]
+                    prat = p.std()/pred[:,cidos].std()
+                    if prat>=0.55:
+                        pscale=0.4
+                    elif prat<=.25:
+                        pscale=1.0
+                    else:
+                        pscale = 1.5-2*prat
+
+                    pmax = np.max(np.abs(p)) * pscale
+                    pmin = -pmax
+
+                    r=Y_val[:,cidos]
+                    p=pred[:,cidos]
+                    pmin=0
+
+                    cellid = modelspec.meta['cellids'][cidos]
+                    print(f"{cellid} {pmin:.3f}, {pmax:.3f} {prat:.3f} {pscale:.3f}")
 
                     if plot_var=='space':
-                        nplt.histmean2d(dlc[:,0],dlc[:,1],ofs, bins=30, ax=ax[0,cid], ex_pct=0.001, spont=0, vmin=-0.05,vmax=0.05, zerolines=False, minN=15)
-                        nplt.histmean2d(dlc[:,0],dlc[:,1],  g, bins=30, ax=ax[1,cid], ex_pct=0.001, spont=0, vmin=0.4, vmax=2.5, zerolines=False, minN=15)
-                        nplt.histmean2d(dlc[:,0],dlc[:,1],  r, bins=30, ax=ax[2,cid], ex_pct=0.001, spont=0, vmin=None,   vmax=None, zerolines=False, minN=15)
-                        nplt.histmean2d(dlc[:,0],dlc[:,1],  p, bins=30, ax=ax[3,cid], ex_pct=0.001, spont=0, vmin=None,   vmax=None, zerolines=False, minN=15)
+                        N=35
+                        nplt.histmean2d(dlc[:,0],dlc[:,1],ofs, bins=N, ax=ax[0,cid], ex_pct=0.001, spont=0, vmin=-0.05, vmax=0.05, zerolines=False, minN=15)
+                        nplt.histmean2d(dlc[:,0],dlc[:,1],  g, bins=N, ax=ax[1,cid], ex_pct=0.001, spont=0, vmin=0.4, vmax=2.5, zerolines=False, minN=15)
+                        nplt.histmean2d(dlc[:,0],dlc[:,1],  r, bins=N, ax=ax[2,cid], ex_pct=0.001, spont=0, vmin=pmin, vmax=pmax, zerolines=False, minN=15)
+                        nplt.histmean2d(dlc[:,0],dlc[:,1],  p, bins=N, ax=ax[3,cid], ex_pct=0.001, spont=0, vmin=pmin, vmax=pmax, zerolines=False, minN=15)
                     elif plot_var=='vel':
-                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],ofs, bins=20, ax=ax[0,cid], ex_pct=0.1, spont=0, vmin=-0.05,vmax=0.05, zerolines=False, minN=10)
-                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  g, bins=20, ax=ax[1,cid], ex_pct=0.1, spont=0, vmin=0.4, vmax=2.5, zerolines=False, minN=10)
-                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  r, bins=20, ax=ax[2,cid], ex_pct=0.1, spont=0, vmin=None,   vmax=None, zerolines=False, minN=10)
-                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  p, bins=20, ax=ax[3,cid], ex_pct=0.1, spont=0, vmin=None,   vmax=None, zerolines=False, minN=10)
+                        N=25
+                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],ofs, bins=N, ax=ax[0,cid], ex_pct=0.2, spont=0, vmin=-0.05, vmax=0.05, zerolines=False, minN=10)
+                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  g, bins=N, ax=ax[1,cid], ex_pct=0.2, spont=0, vmin=0.4, vmax=2.5, zerolines=False, minN=10)
+                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  r, bins=N, ax=ax[2,cid], ex_pct=0.2, spont=0, vmin=pmin, vmax=pmax, zerolines=False, minN=10)
+                        nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],  p, bins=N, ax=ax[3,cid], ex_pct=0.2, spont=0, vmin=pmin, vmax=pmax, zerolines=False, minN=10)
                     else:
                         print(f'invalid plot_var {plot_var}')
-                    #nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],ofs,bins=20, ax=ax[2,cid], ex_pct=0.1, spont=0, vmin=-0.1, vmax=0.1, zerolines=True, minN=5)
-                    #nplt.histmean2d(disttheta[:, 7], disttheta[:, 6],g, bins=20, ax=ax[3,cid], ex_pct=0.1, spont=0, vmin=0.4, vmax=2.5, zerolines=True, minN=5)
                     #nplt.histscatter2d(dlc[:,0],dlc[:,1],ofs,N=10000, ax=ax[0,cid], ex_pct=0.001, vmin=-0.1, vmax=0.1, zerolines=False)
                     #nplt.histscatter2d(dlc[:,0],dlc[:,1],g, N=10000, ax=ax[1,cid], ex_pct=0.001, vmin=0.5, vmax=2.0, zerolines=False)
                     #nplt.histscatter2d(dlc[:,0],dlc[:,1],r, N=10000, ax=ax[1,cid], ex_pct=0.001, vmin=0.0, vmax=0.8, zerolines=False)
@@ -151,7 +170,6 @@ for siteid in siteids:
                 ax[1, 0].set_ylim((yl[1], yl[0]))
                 ax[2, 0].set_ylim((yl[1], yl[0]))
                 ax[3, 0].set_ylim((yl[1], yl[0]))
-                pass
 
             outpath='/home/svd/Documents/onedrive/projects/free_moving/heatmaps/'
             outfile = f"{outpath}{siteid}-os{os}-{plot_var}.jpg"

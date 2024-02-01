@@ -2001,7 +2001,7 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
     if zerolines:
         ax.axhline(0, ls='--', lw=0.75, color='white')
         ax.axvline(0, ls='--', lw=0.75, color='white')
-    return N
+    return ac,bc,Z,N
 
 
 def histscatter2d(a, b, d, N=1000, ax=None, spont=None, ex_pct=0.05,
