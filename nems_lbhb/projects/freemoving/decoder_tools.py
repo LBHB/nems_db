@@ -137,30 +137,38 @@ def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
 
     return recs
 
-def spatial_tc_2d(rec, occ_threshold=0.5, pix_bins=20):
+def spatial_tc_2d(rec, occ_threshold=0.5, bin_width=20):
     # assume rasterized signals
-
+    # check and see if normalization is applied. Function currently only works for unnormalized rasterized signals
+    norm = rec['resp'].normalization
+    if norm == 'minmax':
+        resp = (rec['resp']._data.copy()*rec['resp'].norm_gain) + rec['resp'].norm_baseline
+    else:
+        resp = rec['resp']._data.copy()
     # assume DLC sig is ['dlc'] and index 2,3 corresponds to headpost x/y
-    x = rec['dlc'][2]
-    y = rec['dlc'][3]
+    x_ind = rec['dlc'].chans.index('front_x')
+    y_ind = rec['dlc'].chans.index('front_y')
+    x = rec['dlc'][x_ind]
+    y = rec['dlc'][y_ind]
+
     # how many bins? - 30x by 20y leads to about 20 square pixels per bin.
-    x_range = np.ptp(x[~np.isnan(x)])
-    y_range = np.ptp(y[~np.isnan(y)])
-
-    xbin_num = int(np.round(x_range/pix_bins))
-    ybin_num = int(np.round(y_range/pix_bins))
-
+    # x_range = np.ptp(x[~np.isnan(x)])
+    # y_range = np.ptp(y[~np.isnan(y)])
+    # xbin_num = int(np.round(x_range/bin_width))
+    # ybin_num = int(np.round(y_range/bin_width))
+    # xbins = np.linspace(np.nanmin(x), np.nanmax(x), xbin_num + 1)
+    # ybins = np.linspace(np.nanmin(y), np.nanmax(y), ybin_num + 1)
     # generate linearly spaced bins for 2d histogram
-    xbins = np.linspace(np.nanmin(x), np.nanmax(x), xbin_num + 1)
-    ybins = np.linspace(np.nanmin(y), np.nanmax(y), ybin_num + 1)
+    xbins = np.arange(np.nanmin(x), np.nanmax(x), bin_width)
+    ybins = np.arange(np.nanmin(y), np.nanmax(y), bin_width)
 
     # generate occupancy histogram - count of x/y occupancy samples - need to convert to time to get spike rate later
     occupancy, x_edges, y_edges = np.histogram2d(x, y, [xbins, ybins],)
     tc = {}
     for cellindex, cellid in enumerate(rec['resp'].chans):
         # nasty way to unrasterize spikes and return a list of x/y positions for each spike
-        n_x_loc = [item for sublist in [[xpos]*int(spk_cnt) for xpos, spk_cnt in zip(x, rec['resp'][cellindex]) if spk_cnt !=0] for item in sublist]
-        n_y_loc = [item for sublist in [[ypos]*int(spk_cnt) for ypos, spk_cnt in zip(y, rec['resp'][cellindex]) if spk_cnt !=0] for item in sublist]
+        n_x_loc = [item for sublist in [[xpos]*int(spk_cnt) for xpos, spk_cnt in zip(x, resp[cellindex, :]) if spk_cnt !=0] for item in sublist]
+        n_y_loc = [item for sublist in [[ypos]*int(spk_cnt) for ypos, spk_cnt in zip(y, resp[cellindex, :]) if spk_cnt !=0] for item in sublist]
         # create a 2d histogram of spike locations
         spk_hist, x_edges, y_edges = np.histogram2d(n_x_loc, n_y_loc, [xbins, ybins],)
         # divide the spike locations by the amount of time spent in each bin to get firing rate
@@ -171,6 +179,49 @@ def spatial_tc_2d(rec, occ_threshold=0.5, pix_bins=20):
     # threshold occupancy so only bins with at least half a second of data are included
     for cellid in rec['resp'].chans:
         tc[cellid][np.where(occupancy < occ_threshold*rec.meta['rasterfs'])] = np.nan
+
+    # get center position of each bin to be used in assigning x/y location
+    x_cent = xbins[0:-1] + np.diff(xbins)/2
+    y_cent = ybins[0:-1] + np.diff(ybins)/2
+    # make feature dictionary x/y with positions
+    xy = {'x':x_cent, 'y':y_cent}
+    xy_edges = {'x':x_edges, 'y':y_edges}
+
+    return tc, xy, xy_edges
+
+def state_tc_2d(resp=gain, signal=dlc, resp_chans=None, sig_chans=['front_x', 'front_y',], rasterfs=None, occ_threshold=0.5, bin_width =1/30):
+    # assume rasterized signals
+    # check and see if normalization is applied. Function currently only works for unnormalized rasterized signals
+
+    # assume DLC sig is ['dlc'] and index 2,3 corresponds to headpost x/y
+    x_ind = sig_chans.index('front_x')
+    y_ind = sig_chans.index('front_y')
+    x = signal[x_ind]
+    y = signal[y_ind]
+
+    xbins = np.arange(np.nanmin(x), np.nanmax(x), bin_width)
+    ybins = np.arange(np.nanmin(y), np.nanmax(y), bin_width)
+
+    # generate occupancy histogram - count of x/y occupancy samples - need to convert to time to get spike rate later
+    occupancy, x_edges, y_edges = np.histogram2d(x, y, [xbins, ybins],)
+    tc = {}
+    if resp_chans == None:
+        resp_chans = np.range(len(resp[:, 0]))
+        
+    for cellindex, cellid in enumerate(resp_chans):
+        # nasty way to unrasterize spikes and return a list of x/y positions for each spike
+        n_x_loc = [item for sublist in [[xpos]*int(spk_cnt) for xpos, spk_cnt in zip(x, resp[cellindex, :]) if spk_cnt !=0] for item in sublist]
+        n_y_loc = [item for sublist in [[ypos]*int(spk_cnt) for ypos, spk_cnt in zip(y, resp[cellindex, :]) if spk_cnt !=0] for item in sublist]
+        # create a 2d histogram of spike locations
+        spk_hist, x_edges, y_edges = np.histogram2d(n_x_loc, n_y_loc, [xbins, ybins],)
+        # divide the spike locations by the amount of time spent in each bin to get firing rate
+        rate_bin = spk_hist/(occupancy/rasterfs)
+        # add the tc for each cell to the dictionary with key == cellid, also transpose xy to yx for visualization purposes
+        tc[cellid] = rate_bin
+
+    # threshold occupancy so only bins with at least half a second of data are included
+    for cellid in resp_chans:
+        tc[cellid][np.where(occupancy < occ_threshold*rasterfs)] = np.nan
 
     # get center position of each bin to be used in assigning x/y location
     x_cent = xbins[0:-1] + np.diff(xbins)/2
@@ -773,7 +824,6 @@ def points_within_radius(points_list, target, radius):
 #     return points_within_radius(points_list, target_location, radius)
 
 
-import numpy as np
 def xy_plot_animation(x_data, y_data, fname, type='.mp4', **kwargs):
     """
     given a list of arrays for x and y data make a matplotlib animation (gif/mp4).
@@ -883,9 +933,6 @@ def xy_plot_animation(x_data, y_data, fname, type='.mp4', **kwargs):
             fig.tight_layout()
             writer.grab_frame()
 
-tx = np.array(np.linspace(100, 500, 200))
-ty = np.array(np.linspace(300, 600, 200))
-
 # make fake prediction data with jitter
 def jitter(coords: tuple):
     import random
@@ -894,18 +941,6 @@ def jitter(coords: tuple):
     jittered_x, jittered_y = x + random.uniform(-1, 1), y + random.uniform(-1, 1)
 
     return (jittered_x, jittered_y)
-
-pxy = [jitter((xt, yt)) for xt, yt in zip(tx, ty)]
-px = np.array([p[0] for p in pxy])
-py = np.array([p[1] for p in pxy])
-
-x_data = [tx, px]
-y_data = [ty, py]
-
-xy_plot_animation(x_data, y_data, fname = '/auto/users/wingertj/test.mp4', type='.mp4')
-
-
-
 
 def target_lickspout_epochs(rec, tartime=0.6):
     import pandas as pd
