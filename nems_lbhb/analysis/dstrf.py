@@ -66,11 +66,11 @@ def compute_extract_dpc(modelspec_list, stim, D, out_channels, t_indexes, reset_
 
 def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=5, out_channels=None,
-              figures=None, fit_ss_model=False, IsReload=False,
-              **ctx):
+              figures=None, fit_ss_model=False, first_lin=True,
+              IsReload=False, **ctx):
 
     if IsReload:
-        # load dstrf data saved in modelpath
+        # load dstrf data saved in modelpath.. or don't if not needed?
         return {}
 
     r = est
@@ -100,16 +100,18 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     dstrf /= np.max(np.abs(dstrf)) * 0.9
 
     mdstrf = dstrf.mean(axis=1, keepdims=True)
-    sdstrf = dstrf.std(axis=1, keepdims=True)
-    sdstrf[sdstrf == 0] = 1
-    mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
-
     mdstrf /= np.max(np.abs(mdstrf)) * 0.9
-    mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
+    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
 
-    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, as_dict=True)
-    dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, as_dict=True)
+    if len(modelspec_list)>1:
+        sdstrf = dstrf.std(axis=1, keepdims=True)
+        sdstrf[sdstrf == 0] = 1
+        mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
+        mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
 
+        dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
+    else:
+        dz = d
     dpc = d['input']['pcs']
     dpc_mag = d['input']['pc_mag']
     dpcz = dz['input']['pcs']

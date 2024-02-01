@@ -1938,11 +1938,11 @@ def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
     return ax
 
 
-def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05):
-    # av = np.percentile(a, np.linspace(0, 100, bins+1))
-    # bv = np.percentile(b, np.linspace(0, 100, bins+1))
-    ab = np.percentile(a, [ex_pct, 100-ex_pct])
-    bb = np.percentile(b, [ex_pct, 100-ex_pct])
+def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
+                  vmin=None, vmax=None, zerolines=True, minN=1):
+    keep = np.isfinite(a) & np.isfinite(b)
+    ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
+    bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
     av = np.linspace(ab[0], ab[1], bins + 1)
     bv = np.linspace(bb[0], bb[1], bins + 1)
     ac = (av[:-1]+av[1:])/2
@@ -1958,15 +1958,14 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05):
                 mmv[j_, i_] = np.nanmean(d[v_])
                 N[j_,i_] = v_.sum()
 
-
-    # find the zero bin:
-    zi = np.min(np.where(av>=0)[0])-1
-    zj = np.min(np.where(bv>=0)[0])-1
     if spont is None:
+        # find the zero bin:
+        zi = np.min(np.where(av >= 0)[0]) - 1
+        zj = np.min(np.where(bv >= 0)[0]) - 1
         spont = mmv[zj,zi]
     mmv -= spont
-
-    mmv[np.isnan(mmv)] = 0
+    mmv[N<minN]=np.nan
+    #mmv[np.isnan(mmv)] = 0
 
     if ax is None:
         f,ax = plt.subplots()
@@ -1990,20 +1989,26 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05):
 
     cmap='bwr'
     cmap='viridis'
-    vmin,vmax = -np.max(np.abs(Z)), np.max(np.abs(Z))
-
+    if (vmin is None) or (vmax is None):
+        zz=np.abs(Z).flatten()
+        zz=zz[np.isfinite(zz)]
+        vmin,vmax = np.percentile(zz, [1, 95])
+        #print(vmin,vmax)
     im = ax.imshow(Z, extent=[av[0], av[-1], bv[-1], bv[0]],
                    interpolation='none', aspect='auto', cmap=cmap,
                    vmin=vmin, vmax=vmax)
-    ax.contour(ac, bc, N, [0.5], linewidths=0.5)
-    ax.axhline(0, ls='--', lw=0.75, color='white')
-    ax.axvline(0, ls='--', lw=0.75, color='white')
+    #ax.contour(ac, bc, N, [minN-0.5], linewidths=0.5)
+    if zerolines:
+        ax.axhline(0, ls='--', lw=0.75, color='white')
+        ax.axvline(0, ls='--', lw=0.75, color='white')
     return N
 
 
-def histscatter2d(a, b, d, N=1000, ax=None, spont=None, ex_pct=0.05):
-    ab = np.percentile(a, [ex_pct, 100 - ex_pct])
-    bb = np.percentile(b, [ex_pct, 100 - ex_pct])
+def histscatter2d(a, b, d, N=1000, ax=None, spont=None, ex_pct=0.05,
+                  vmin=None, vmax=None, zerolines=True):
+    keep = np.isfinite(a) & np.isfinite(b)
+    ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
+    bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
     keep = (a >= ab[0]) & (a <= ab[1]) & (b >= bb[0]) & (b <= bb[1])
     a_ = a[keep]
     b_ = b[keep]
@@ -2021,12 +2026,19 @@ def histscatter2d(a, b, d, N=1000, ax=None, spont=None, ex_pct=0.05):
     cmap = 'viridis'
     m = np.mean(d)
     s = np.std(d)
-    vmin = 0
-    vmax = m + s * 2
-    s0 = np.argsort(d_[ii])
-    ii = ii[s0]
+    if vmin is None:
+        vmin = 0
+    if vmax is None:
+        vmax = m + s * 2
+    if vmax<=vmin:
+        vmin = np.min(d)
+        vmax = np.max(d)
+    #print(vmin, vmax, len(ii))
+    #s0 = np.argsort(d_[ii])
+    #ii = ii[s0]
     im = ax.scatter(a_[ii], b_[ii], c=d_[ii], s=1, cmap=cmap, vmin=vmin, vmax=vmax)
     # ax.contour(ac, bc, N, [0.5], linewidths=0.5)
-    ax.axhline(0, ls='--', lw=0.75, color='black')
-    ax.axvline(0, ls='--', lw=0.75, color='black')
+    if zerolines:
+        ax.axhline(0, ls='--', lw=0.75, color='black')
+        ax.axvline(0, ls='--', lw=0.75, color='black')
     return N

@@ -26,10 +26,9 @@ import nems_lbhb.plots as nplt
 
 log = logging.getLogger(__name__)
 
-use_saved_model=True
+use_saved_model = False
 
-batch=343
-
+batch = 343
 siteids, cellids = db.get_batch_sites(batch)
 
 load_kw = 'gtgram.fs100.ch18-ld-norm.l1-sev'
@@ -42,9 +41,13 @@ modelnames = [
 shortnames = ['CNN 1d','LN','CNN single']
 modelname = modelnames[0]
 siteid = "CLT028c"
-siteid = "PRN021a"
 siteid = "PRN007a"
+siteid = "PRN018a"
 cellid = siteid
+
+dpred = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=shortnames)
+dpred['siteid']=dpred.index
+dpred['siteid']=dpred['siteid'].apply(db.get_siteid)
 
 for i,m in enumerate(modelnames):
     if m==modelname:
@@ -359,17 +362,23 @@ for oi in orange[:5]:  # [15,16,17,20]:
         r = Y_est[:, o]
         pred = ctx['est']['pred'].as_continuous().T[:, o]
     Y = fir.evaluate(X)
+    for i in range(pc_count):
+        cc=np.corrcoef(Y[:,i],r)[0,1]
+        if cc<0:
+            Y[:,i]=-Y[:,i]
+            modelspec.meta['dpc'][oi, i] = -modelspec.meta['dpc'][oi, i]
 
     pcp = 3
     imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
               'interpolation': 'none'}
     if show_preds:
-        f, ax = plt.subplots(pcp, 3, figsize=(4.5, 4.5))
+        f, ax = plt.subplots(pcp, 4, figsize=(6, 4.5))
     else:
-        f, ax = plt.subplots(pcp, 2, figsize=(3, 4.5))
+        f, ax = plt.subplots(pcp, 3, figsize=(3, 4.5))
     for i in range(pcp):
         d = modelspec.meta['dpc'][oi, i]
         d = d / np.max(np.abs(d))  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+
         if i == 0:
             ax[i, 1].imshow(np.fliplr(d), **imopts)
             ax[i, 1].set_ylabel(f'Dim {i + 1}')
@@ -394,18 +403,44 @@ for oi in orange[:5]:  # [15,16,17,20]:
     ax[0, 0].set_title(cellid)
     ax[0, 1].set_title(f"CNN: {ctx['modelspec'].meta['r_test'][o, 0]:.3f} SS: {modelspec.meta['sspredxc'][oi]:.3f}")
 
-    y = Y[:, 0]
-    b = np.linspace(y.min(), y.max(), 11)
-
-    # b=np.linspace(y.min(),y.max(),11)
-    mb = (b[:-1] + b[1:]) / 2
-    mr = [np.mean(r[(y >= b[i]) & (y < b[i + 1])]) for i in range(10)]
-    me = [np.std(r[(y >= b[i]) & (y < b[i + 1])]) / np.sqrt(np.sum((y >= b[i]) & (y < b[i + 1]))) for i in range(10)]
-    ax[0, 2].errorbar(mb, mr, me)
-    ax[0, 2].set_xlabel('Dim 1 projection')
-    ax[0, 2].set_ylabel('LN prediction')
-
+    for pci in range(3):
+        y = Y[:, pci]
+        b = np.linspace(y.min(), y.max(), 11)
+        mb = (b[:-1] + b[1:]) / 2
+        mr = [np.mean(r[(y >= b[i]) & (y < b[i + 1])]) for i in range(10)]
+        me = [np.std(r[(y >= b[i]) & (y < b[i + 1])]) / np.sqrt(np.sum((y >= b[i]) & (y < b[i + 1]))) for i in range(10)]
+        ax[pci,3].errorbar(mb, mr, me)
+        ax[pci,3].set_xlabel(f'Dim {pci+1} proj')
+        ax[pci,3].set_ylabel('Mean prediction')
+    ax[0,2].set_axis_off()
     plt.tight_layout()
+
+log.info("Cellid        Orig  Subspace")
+for oi, o in enumerate(out_channels):
+    log.info(f"{modelspec.meta['cellids'][o]}" + \
+             f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
+             f" {modelspec.meta['sspredxc'][oi]:.3f}")
+
+f,ax = plt.subplots()
+nplt.scatter_comp(modelspec.meta['r_test'][:,0],
+                  modelspec.meta['sspredxc'],
+                  n1='CNN',n2='Subspace',hist_range=[0,1], ax=ax)
+ax.set_title(siteid)
+
+raise ValueError('summary plots complete')
+
+from nems_lbhb.analysis import dstrf
+import importlib
+importlib.reload(dstrf)
+
+dpcp={'D': 15, 'timestep': 243, 'pc_count': 5, 'fit_ss_model': True,
+      'first_lin': True}
+
+res = dstrf.dstrf_pca(ctx['est'], ctx['modelspec'], val=ctx['val'], **dpcp)
+
+
+
+
 
 plt.close('all')
 for oi in orange:
@@ -455,20 +490,6 @@ for oi in orange:
     ax[0,1].set_title(f" Orig : {ctx['modelspec'].meta['r_test'][o, 0]:.3f}")
     ax[0,2].set_title(f"  Subspace predxc: {modelspec.meta['sspredxc'][oi]:.3f}")
     plt.tight_layout()
-
-log.info("Cellid        Orig  Subspace")
-for oi, o in enumerate(out_channels):
-    log.info(f"{modelspec.meta['cellids'][o]}" + \
-             f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
-             f" {modelspec.meta['sspredxc'][oi]:.3f}")
-
-f,ax = plt.subplots()
-nplt.scatter_comp(modelspec.meta['r_test'][:,0],
-                  modelspec.meta['sspredxc'],
-                  n1='CNN',n2='Subspace',hist_range=[0,1], ax=ax)
-ax.set_title(siteid)
-
-raise ValueError('summary plots complete')
 
 # f, ax = plt.subplots(len(out_channels), pc_count, sharey='row')
 # for oi, o in enumerate(out_channels):

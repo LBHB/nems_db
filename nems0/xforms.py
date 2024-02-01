@@ -498,12 +498,13 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 
 def lite_input_dict(modelspec, rec, epoch_name="", add_batch_dim=False,
-                    input_name='stim', output_name='resp'):
+                    input_name='stim', output_name='resp', extra_signals=[]):
 
     all_inputs, all_outputs = modelspec.get_io_names()
     existing_inputs = [i for i in all_inputs if i in rec.signals.keys()]
     if ('state' in rec.signals.keys()) and ('state' not in existing_inputs):
         existing_inputs.append('state')
+    existing_inputs.extend(extra_signals)
 
     if len(epoch_name) > 0:
         # generate batches with epoch
