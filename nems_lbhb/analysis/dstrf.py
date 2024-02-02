@@ -155,6 +155,55 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
 
     return {'modelspec': modelspec, 'figures': figures}
 
+
+def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
+                        input_name='stim', ss_name='subspace', **ctx):
+
+    cellids = modelspec.meta['cellids']
+    if out_channels is None:
+        out_channels = np.arange(len(cellids))
+    if X is None:
+        recs = [(n,r) for n,r in zip(['rec', 'est','val'],[rec, est, val]) if r is not None]
+    else:
+        recs = [('raw', X)]
+    if X is None and (len(recs)==0):
+        raise ValueError("must provide either X input matrix or valid NEMS recording")
+    if 'dpc' not in modelspec.meta:
+        raise ValueError("modelspec missing dSTRF pcs, run nems_lbhb.analysis.dstrf.dstrf_pca first")
+
+    res ={}
+    for name, rec in recs:
+        log.info(f"** Recording {name}:")
+
+        if type(rec) is not np.ndarray:
+            inp = rec[input_name].as_continuous().T
+        else:
+            inp = rec
+
+        outs = []
+        res[name]=rec.copy()
+        for oi, o in enumerate(out_channels):
+            log.info(f"   Computing SS projection for {cellids[o]}:")
+
+            dpcz = modelspec.meta['dpc']
+            dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+            fir = filter.FIR(shape=dpcz.shape)
+            fir['coefficients'] = np.flip(dpcz, axis=0)
+
+            ss = fir.evaluate(inp)
+            outs.append(ss.T)
+
+        ssout = np.stack(outs,axis=0)
+
+        if name == 'raw':
+            return ssout
+
+        sig = res[name][input_name]._modified_copy(data=ssout, name=ss_name, chans=res[name]['resp'].chans)
+        res[name].signals[ss_name] = sig
+
+    return res
+
+
 def subspace_model_fit(est, val, modelspec,
               pc_count=5, out_channels=None,
               figures=None, fit_ss_model=False, IsReload=False, **ctx):

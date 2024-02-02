@@ -24,7 +24,7 @@ modelnames=['free.fs50.ch18-norm.l1-fev.jk8_wc.Nx1x30-fir.10x1x30-wc.30xR-relu.R
             'free.fs50.ch18-norm.l1-fev.hrtf.jk6-shuf.dlc_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             'free.fs50.ch18-norm.l1-fev.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             'free.fs50.ch18-norm.l1-fev.hrtf.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
-            'free.fs50.ch18-norm.l1-fev.jk6_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4'
+            'free.fs50.ch18-norm.l1-fev.jk8_wcdl.12x1x12.i.s.l2:4-firs.3x1x12.nc1-relus.12-wcs.12x12.l2:4-relus.12-wc.Nx1x25.i.l2:4-fir.8x1x25-relu.25-wc.25x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-stategain.13xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4'
             'free.fs50.ch18-norm.l1-fev.jk8-shuf.stim_wcst.Nx1x25.i.l2:4-wcdl.12x1x12.i.l2:4-first.8x1x25-firdl.3x1x12.nc1-cat-relu.37-wc.37x1x30.l2:4-fir.4x1x30-relu.30-wc.30xR.l2:4-relu.R.o.s_lite.tf.cont.init.lr1e3.t3.rb5-lite.tf.cont.lr1e4.t5e4',
             ]
 shortnames=['NoH+LN','HRTF+LN','NoH+Dsh','HRTF+Dsh','HRTFae+Dsh',
@@ -44,13 +44,15 @@ modelname=modelnames[testids[1]]
 shortname0=shortnames[testids[0]]
 shortname=shortnames[testids[1]]
 
+plot_raw = False  # if false otherwise plot error
+
 siteid='SLJ012a'
 siteid='PRN043a'
 siteid='SLJ016a'
 siteid='PRN048a'
 
 siteids,cellids = db.get_batch_sites(batch)
-siteids=['PRN043a']
+#siteids=['PRN043a']
 for siteid in siteids:
     sql =f"SELECT cellid FROM Results WHERE cellid like '{siteid}%' AND batch={batch} AND modelname='{modelname}'"
     #print(sql)
@@ -101,6 +103,7 @@ for siteid in siteids:
                  if modelspec.meta['r_test'][i,0]>0.11]
     cellcount=len(goodcells)
     osteps = np.arange(0,cellcount,9)
+
     for plot_var in ['space','vel']:
         for os in osteps:
             f, ax = plt.subplots(4,9, figsize=(16,6), sharex='row', sharey='row')
@@ -124,9 +127,11 @@ for siteid in siteids:
                     pmax = np.max(np.abs(p)) * pscale
                     pmin = -pmax
 
-                    r=Y_val[:,cidos]
-                    p=pred[:,cidos]
-                    pmin=0
+                    if plot_raw:
+                        r=Y_val[:,cidos]
+                        p=pred[:,cidos]
+                        pmin=0
+                        pmax *= 2
 
                     cellid = modelspec.meta['cellids'][cidos]
                     print(f"{cellid} {pmin:.3f}, {pmax:.3f} {prat:.3f} {pscale:.3f}")
@@ -159,11 +164,19 @@ for siteid in siteids:
                     ts = f"{cu} {dpred.loc[cellid,shortnames[testids[0]]]:.2f} v {dpred.loc[cellid,shortnames[testids[1]]]:.2f}"
                     ax[0, cid].set_title(ts)
 
-            ax[0,0].set_ylabel('pos/offset')
-            ax[1,0].set_ylabel('pos/gain')
-            ax[0,0].set_ylabel('vel/offset')
-            ax[1,0].set_ylabel('vel/gain')
+            if plot_var == 'space':
+                ax[0,0].set_ylabel('Position/offset')
+                ax[1,0].set_ylabel('Position/gain')
+                ax[2,0].set_ylabel('Position/actual')
+                ax[3,0].set_ylabel('Position/pred (m)')
+                ax[3,0].set_xlabel('Lateral m')
 
+            elif plot_var == 'vel':
+                ax[0,0].set_ylabel('Velocity/offset')
+                ax[1,0].set_ylabel('Velocity/gain')
+                ax[2,0].set_ylabel('Velocity/actual')
+                ax[3,0].set_ylabel('Velocity/predicted (Fwd m/s)')
+                ax[3,0].set_xlabel('Lateral m/s')
             yl = ax[0, 0].get_ylim()
             if (plot_var=='vel') & (yl[0]>yl[1]):
                 ax[0, 0].set_ylim((yl[1], yl[0]))

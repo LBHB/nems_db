@@ -26,13 +26,18 @@ import nems_lbhb.plots as nplt
 
 log = logging.getLogger(__name__)
 
-use_saved_model = False
+use_saved_model = True
 
 batch = 343
 siteids, cellids = db.get_batch_sites(batch)
 
 load_kw = 'gtgram.fs100.ch18-ld-norm.l1-sev'
-fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk3-lite.tf.lr1e4.t5e4-dstrf.d15.t43.p5.ss'
+
+# old pca -- standard variance across pcs.
+#fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk3-lite.tf.lr1e4.t5e4-dstrf.d15.t43.p5.ss'
+# pca with first_lin to capture linear term in first "PC"
+fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk3-lite.tf.lr1e4.t5e4-dstrf.d15.t47.p5.ss'
+
 modelnames = [
     f'{load_kw}_wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80.l2:4-fir.10x1x80-relu.80.f-wc.80x100.l2:4-relu.100.s-wc.100xR.l2:4-dexp.R_{fit_kw}',
     f'{load_kw}_wc.18x1x120.g-fir.25x1x120-wc.120xR.l2:4-dexp.R_{fit_kw}',
