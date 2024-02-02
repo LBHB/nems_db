@@ -2,6 +2,8 @@ import datetime
 import itertools
 import logging
 from contextlib import contextmanager
+from sqlalchemy import create_engine, desc, exc, text
+
 
 from nems0 import db
 
@@ -65,7 +67,7 @@ def enqueue_exacloud_script(
     output = False
 
     sql = 'SELECT * FROM tQueue WHERE allowqueuemaster=18 AND note="' + note + '"'
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     if r.rowcount > 0:
         # existing job, figure out what to do with it
 
@@ -76,12 +78,12 @@ def enqueue_exacloud_script(
             if complete == 1:
                 message = "Resetting existing queue entry for: %s\n" % note
                 sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
                 output = True
             elif complete == 2:
                 message = "Dead queue entry for: %s exists, resetting." % note
                 sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
                 output = True
 
             else:  # complete in [-1, 0] -- already running or queued
@@ -167,11 +169,11 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
         note = '/'.join([cell, b, model])
 
         sql = f"SELECT * FROM Results WHERE batch={b} and cellid='{cell}' and modelname='{model}'"
-        rres = conn.execute(sql)
+        rres = conn.execute(text(sql))
         add_counter=0
         if (rres.rowcount==0) | force_rerun:
             sql = 'SELECT * FROM tQueue WHERE allowqueuemaster=18 AND note="' + note +'"'
-            r = conn.execute(sql)
+            r = conn.execute(text(sql))
             if r.rowcount>0:
                 # existing job, figure out what to do with it
 
@@ -182,12 +184,12 @@ def enqueue_exacloud_models(cellist, batch, modellist, user, linux_user, executa
                     if complete == 1:
                         message = "Resetting existing queue entry for: %s\n" % note
                         sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
-                        r = conn.execute(sql)
+                        r = conn.execute(text(sql))
 
                     elif complete == 2:
                         message = "Dead queue entry for: %s exists, resetting." % note
                         sql = f"UPDATE tQueue SET complete=0, killnow=0, progname='{progname}', user='{user}', priority={priority} WHERE id={queueid}"
-                        r = conn.execute(sql)
+                        r = conn.execute(text(sql))
 
                     else:  # complete in [-1, 0] -- already running or queued
                         message = "Incomplete entry for: %s exists, skipping." % note
