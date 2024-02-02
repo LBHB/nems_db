@@ -154,7 +154,6 @@ class PupilBrowser:
         self.pupil_trace.draw()
         self.eye_movements.draw()
 
-
         # first make sure the tmp file doesn't exist for this user, just to avoid asking for overwrite permissions
         os.system(f"rm {tmp_frame_folder}frame1_{getpass.getuser()}.jpg")
 

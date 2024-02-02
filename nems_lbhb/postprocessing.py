@@ -1,6 +1,8 @@
 # LBHB-specific post-processors
-# WARNING: Changes to ctx made by functions in this file won't get saved whenthe model is run by fit_model_xform
+# WARNING: Changes to ctx made by functions in this file won't get saved when the model is run by fit_model_xform
 import logging
+import numpy as np
+import matplotlib.pyplot as plt
 
 import nems0.db as nd
 import nems0.xforms
@@ -8,7 +10,6 @@ import nems0.xforms
 import nems_lbhb.projects.nat_pup_decoding.do_decoding as decoding
 
 log = logging.getLogger(__name__)
-
 
 
 def add_summary_statistics_by_condition(**context):

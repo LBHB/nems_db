@@ -86,6 +86,7 @@ def write_batch_file(job_arguments,
             #f.write(f'module add /home/exacloud/software/modules/cuda/11.4.2\n')
             #f.write(f'module add /home/exacloud/software/modules/cudnn/8.2.4.15-11.4\n')
         else:
+            f.write(f'#SBATCH --partition=exacloud\n')
             f.write(f'#SBATCH --gres=disk:5\n')
 
         if exclude is not None:

@@ -18,10 +18,18 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script.py'
 # batch=345  # stephen modelfits
 # batch =328  # marm
 batch = 344
+batch = 349 #Lemon behavior
 # cache_path = 'cache_marm'
-cache_path = 'cache_snr'
+# cache_path = 'cache_snr'
+cache_path = 'cache_full_behavior'
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
+cell_list = cell_list[1:4]
+# SLJ = [dd for dd in cell_list if dd[:3]=='SLJ']
+# ss = SLJ[::50]
+# cell_list = SLJ
+# cellid = 'SLJ002a-A-014-1'
+
 # cell_list = cell_list[111:119]
 # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x70-fir.15x1x70-relu.70.f-wc.70x1x80-fir.10x1x80-relu.80.f-wc.80x100-relu.100-wc.100xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"
 # modelname = "gtgram.fs100.ch18-ld-norm.l1-sev.fOLP_wc.Nx1x120-fir.25x1x120-wc.120xR-dexp.R_lite.tf.init.lr1e3.t3.es20.rb5-lite.tf.lr1e4"

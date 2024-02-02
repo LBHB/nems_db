@@ -6,6 +6,8 @@ import sys
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+from scipy.ndimage import zoom
+
 import nems0.utils
 from nems0 import db
 import nems0.preprocessing as preproc
@@ -148,10 +150,10 @@ def adjust_didx(dlc, didx):
     x = x[np.isfinite(x)]
     y = y[np.isfinite(y)]
 
-    xnp = np.percentile(x, 15)
     ynp = np.percentile(y, 90)
-    xsp = np.percentile(x, 80)
+    xnp = np.percentile(x[(x>0.05) & (y>ynp)], 75)
     ysp = np.percentile(y, 15)
+    xsp = np.percentile(x[(y<ysp)], 50)
     xnp_=didx[0, -1, 0]
     ynp_=didx[0, -1, 1]
     xsp_=didx[2, -1, 0]
@@ -159,31 +161,39 @@ def adjust_didx(dlc, didx):
     didx_new = didx.copy()
     log.info(f"old (xnp,ynp): {xnp_:.3f},{ynp_:.3f} (xsp,ysp): {xsp_:.3f},{ysp_:.3f}")
     log.info(f"new (xnp,ynp): {xnp:.3f},{ynp:.3f} (xsp,ysp): {xsp:.3f},{ysp:.3f}")
-    didx_new[:,:,8:2] = (didx[:,:,8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
+    didx_new[:,:,0:8:2] = (didx[:,:,0:8:2]-xnp_)/(xsp_-xnp_)*(xsp-xnp)+xnp
     didx_new[:,:,1:8:2] = (didx[:,:,1:8:2]-ysp_)/(ynp_-ysp_)*(ynp-ysp)+ysp
 
     return didx_new
 
 
-def movement_plot(rec):
+def movement_plot(rec, T1=260, T2=280, t_indexes=None):
 
     speaker1_x0y0 = 1.0, -0.8
     speaker2_x0y0 = 0.0, -0.8
     fs = rec['dlc'].fs
     dlc = rec['dlc'].as_continuous().T
 
-    didx_ = adjust_didx(dlc, didx)
+    ctx = free_model.free_split_rec(rec, apply_hrtf=True)
+    rec2 = ctx['rec']
+    if t_indexes is None:
+        t_indexes=np.array([270.2, 272, 273, 274.94])
+    d_indexes=[13100, 13209, 13300, 13748]  #
+    d_indexes=(np.array(t_indexes)*fs).astype(int)
+    t1, t2 = int(T1*fs), int(T2*fs)
 
-    f = plt.figure()
+    didx_ = adjust_didx(dlc, didx)
+    #didx_ = didx
+
+    f1 = plt.figure()
     plt.scatter(dlc[::10, 0], dlc[::10, 1], s=2, color='lightgray')
     for i in range(len(didx_)):
-
         # compute distance and angle to each speaker
         # code pasted in from free_tools
         d1, theta1, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker1_x0y0)
         d2, theta2, vel, rvel, d_fwd, d_lat = free_tools.compute_d_theta(
-            didx[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
+            didx_[i].T, fs=fs, smooth_win=0.1, ref_x0y0=speaker2_x0y0)
         #log.info(f"{i} {didx[i,-1,:2]} d1={d1[0,-1]} th1= {d2[0,-1]}")
         plt.plot(didx_[i, -1, 2], didx_[i, -1, 3], "o", color='blue')
         plt.plot(didx_[i, -1, 0], didx_[i, -1, 1], "o", color='red')
@@ -193,14 +203,79 @@ def movement_plot(rec):
         plt.plot(didx_[i, -6:, 0], didx_[i, -6:, 1], color='darkblue', lw=1)
     plt.gca().invert_yaxis()
     plt.title(rec.meta['siteid'], fontsize=12)
-    return f
+
+    f2=plt.figure(figsize=(10,5))
+    ax=f2.add_subplot(1, 2, 1)
+    ax.scatter(dlc[::10, 0], dlc[::10, 1], s=2, color='lightgray')
+    ax.plot(dlc[t1:t2, 0], dlc[t1:t2,1], lw=0.5, color='gray')
+    ax.invert_yaxis()
+
+    ax1=f2.add_subplot(4,2,2)
+    ax1.plot(np.arange(t1, t2)/fs, dlc[t1:t2, 0:2])
+    ax1.legend(('Nose x', 'Nose y'), fontsize=8, frameon=False)
+    #ax1.invert_yaxis()
+    xl = ax1.get_xlim()
+    yl = ax1.get_ylim()
+
+    ax2=f2.add_subplot(4,2,4)
+    s_ = rec['stim']._data[:,t1:t2].copy()
+    s2_ = rec2['stim']._data[:,t1:t2].copy()
+    print(s_.max(),s2_.max())
+    e=rec['stim'].epochs
+    tarepochs=e.loc[e['name'].str.startswith("TAR_") & (e['start']>T1) & (e['end']<T2)]
+    for i,r in tarepochs.iterrows():
+        tar1,tar2 = int(r['start']*fs)-t1,int(r['end']*fs)-t1
+        print(tar1,tar2,s_.shape)
+        s_[5,tar1:tar2]+=0.1
+        s2_[5,tar1:tar2]+=0.25
+        s2_[5+18,tar1:tar2]+=0.25
+    s_max=s_.max()
+    s2_max=s2_.max()
+
+    ax2.imshow(s_[:18,:]**1.5, extent=[t1/fs, t2/fs, 18.5,0.5], cmap='gray_r', vmax=s_max*0.4)
+    ax2.imshow(s_[18:,:]**1.5, extent=[t1/fs, t2/fs, 37.5,19.5], cmap='gray_r', vmax=s_max*0.4)
+    ax2.set_ylabel('R speaker - L speaker')
+    ax2.set_xlim(xl)
+    ax2.set_ylim([0,38])
+
+    ax3=f2.add_subplot(4,2,6)
+    ax3.imshow(s2_[:18,:]**1.5, extent=[t1/fs, t2/fs, 18.5,0.5], cmap='gray_r', vmax=s2_max)
+    ax3.imshow(s2_[18:,:]**1.5, extent=[t1/fs, t2/fs, 37.5,19.5], cmap='gray_r', vmax=s2_max)
+    ax3.set_ylabel('R ear - L ear')
+    ax3.set_xlim(xl)
+    ax3.set_ylim([0,38])
+
+    ax4=f2.add_subplot(4,2,8)
+    r_ = rec2['resp']._data[:,t1:t2]
+    ax4.imshow(rec2['resp']._data[:,t1:t2], extent=[t1/fs, t2/fs, 0.5,rec2['resp'].shape[0]+0.5],
+               vmax=r_.max()*.75, cmap='gray_r')
+    ax4.set_xlabel('Time (s)')
+    ax4.set_ylabel('Unit')
+    ax4.set_xlim(xl)
+
+    for i, t in enumerate(d_indexes[:4]):
+        print(dlc[t,0],dlc[t,1])
+        ax.scatter(dlc[t,0],dlc[t,1],s=20, color='black')
+        ax.scatter(dlc[t,0],dlc[t,1],s=10, color='yellow')
+        ax.text(dlc[t,0]+0.02,dlc[t,1]-0.01,f"{i+1}",va='center',ha='left',fontsize=10)
+        ax1.axvline(t/fs, color='red', lw=1)
+        ax1.text(t/fs, yl[1]-0.05, f"{i+1}",va='bottom',ha='center',fontsize=10)
+        ax2.axvline(t / fs, color='red', lw=1)
+        ax3.axvline(t / fs, color='red', lw=1)
+    f2.suptitle(rec.meta['siteid'])
+
+    plt.tight_layout()
+
+    
+    return f1,f2
 
 
 ###
 ### DSTRF stuff
 ###
 
-def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_threshold=5):
+def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85,
+                    snr_threshold=5, pc_count=3, reset_backend=False, input_name = 'input', merge_models=None):
     """
     compute mean dSTRF for a single cell at standardized positions
     by "freezing" the DLC signal and computing the dSTRF for a bunch of stimuli
@@ -214,65 +289,128 @@ def dstrf_snapshots(rec, model_list, D=11, out_channel=0, time_step=85, snr_thre
         dicount=4
 
     dstrf = {}
-    mdstrf = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc1 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc2 = np.zeros((len(model_list), dicount, rec['stim'].shape[0], D))
-    pc_count=3
-    pc_mag_all = np.zeros((len(model_list), dicount, pc_count))
+    if merge_models is None:
+        mcount=len(model_list)
+    else:
+        mcount=1
+        
+    mdstrf = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc1 = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc2 = np.zeros((mcount, dicount, rec['stim'].shape[0], D))
+    pc_mag_all = np.zeros((mcount, dicount, pc_count))
     for di in range(dicount):
         dlc1 = dlc.copy()
-        dcount=dlc1.shape[1]
         didx_ = adjust_didx(dlc, didx)
+        #didx_ = didx
+        dcount = np.min([dlc1.shape[1],didx_.shape[2]])
 
         for t in t_indexes:
-            dlc1[(t-didx_.shape[1]+1):(t+1), :] = didx_[di,:,:dcount]
+            dlc1[(t-didx_.shape[1]+1):(t+1), :dcount] = didx_[di,:,:dcount]
         log.info(f"DLC values: {np.round(didx[di,-1,:dcount],3)}")
-        #log.info(f'di={di} Applying HRTF for frozen DLC coordinates')
-        #rec2 = rec.copy()
-        #rec2['dlc'] = rec2['dlc']._modified_copy(data=dlc1.T)
-        #rec2 = free_tools.stim_filt_hrtf(rec2, hrtf_format='az', smooth_win=2,
-        #                                 f_min=200, f_max=20000, channels=18)['rec']
-
         for mi, m in enumerate(model_list):
-            stim = {'stim': rec['stim'].as_continuous().T, 'dlc': dlc1}
-            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes)
+            input_names = m.get_io_names()[0]
+            stim = {input_name: rec['stim'].as_continuous().T}
+            if 'dlc' in input_names:
+                stim['dlc'] = dlc1
+            dstrf[di] = m.dstrf(stim, D=D, out_channels=[out_channel], t_indexes=t_indexes, reset_backend=reset_backend)
 
-            d = dstrf[di]['stim'][0, :, :, :]
+            if mi==0:
+                d = np.zeros([len(model_list)] + list(dstrf[di][input_name].shape[1:]))
+            d[mi] = dstrf[di][input_name][0, :, :, :]
 
+        if merge_models is not None:
+            if merge_models=='mean':
+                d=d.mean(axis=0, keepdims=True)
+            elif isinstance(merge_models, float):
+                m0=np.nanmean(d)
+                s0=np.nanstd(d)
+                d=(d-d.mean(axis=(1,2,3), keepdims=True))/d.std(axis=(1,2,3), keepdims=True)
+                d=(d*s0)+m0
+                mdstrf_ = d.mean(axis=0,keepdims=True)
+                sdstrf_ = d.std(axis=0,keepdims=True)
+                sdstrf_[sdstrf_==0]=1
+
+                d = nems0.utils.shrinkage(mdstrf_, sdstrf_, sigrat=merge_models)
+
+            else:
+                raise ValueError(f"merge_models={merge_models} not supported by dstrf_snapshots")
+
+        for mi in range(mcount):
+            d_ = d[mi].copy()
+            print(di, mi, d_.shape, d_.std())
             if snr_threshold is not None:
-                d = np.reshape(d, (d.shape[0], d.shape[1] * d.shape[2]))
-                md = d.mean(axis=0, keepdims=True)
-                e = np.std(d - md, axis=1) / np.std(md)
+                d_ = np.reshape(d_, (d_.shape[0], d_.shape[1] * d_.shape[2]))
+                md = d_.mean(axis=0, keepdims=True)
+                e = np.std(d_ - md, axis=1) / np.std(md)
                 if (e > snr_threshold).sum() > 0:
-                    log.info(f"Removed {(e > snr_threshold).sum()}/{len(d)} noisy dSTRFs for PCA calculation")
+                    log.info(f"Removed {(e > snr_threshold).sum()}/{len(d_)} noisy dSTRFs for PCA calculation")
 
-                d = dstrf[di]['stim'][0, (e <= snr_threshold), :, :]
-            mdstrf[mi, di, :, :] = d.mean(axis=0)
-            pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
-            pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
-            pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
-            pc_mag_all[mi, di, :] = pc_mag[:, 0]
+                d_ = d[mi, (e <= snr_threshold), :, :]
+                #dstrf[di][input_name]=d_[np.newaxis,:,:,:]
+            mdstrf[mi, di, :, :] = d_.mean(axis=0)
+            # svd attempting to make compatible with new format of compute_pcs
+            try:
+                if (d_.size>0) and (d_.std()>0):
+                    #pc, pc_mag = dtools.compute_dpcs(d[np.newaxis, :, :, :], pc_count=pc_count)
+                    dpc = dtools.compute_dpcs(dstrf[di], pc_count=pc_count)
+                    pc=dpc[input_name]['pcs']
+                    pc_mag=dpc[input_name]['pc_mag']
+
+                    pc1[mi, di, :, :] = pc[0, 0, :, :] * pc_mag[0, 0]
+                    pc2[mi, di, :, :] = pc[0, 1, :, :] * pc_mag[1, 0]
+                    pc_mag_all[mi, di, :] = pc_mag[:, 0]
+            except:
+                log.info('FAILED TO COMPUTE PCS. SETTING TO ZERO.')
     return mdstrf, pc1, pc2, pc_mag_all
 
 
-def dstrf_plots(rec, model_list, dstrf, out_channel):
-    cellid = rec['resp'].chans[out_channel]
-    labels = ['HRTF+DLC', 'HRTF', 'DLC']
+def dstrf_plots(model_list, dstrf, out_channel, rec=None, cellid='cell', fs=50, interpolation_factor=None, flip_time=True,
+                labels=None):
+    if rec is not None:
+        cellid = rec['resp'].chans[out_channel]
+        fs = rec['resp'].fs
+    if interpolation_factor is not None:
+        fs=fs*interpolation_factor
+
+    if labels is None:
+        labels = ['HRTF+DLC', 'HRTF', 'DLC']
 
     f, ax = plt.subplots(len(model_list), dstrf.shape[1] + 1, figsize=(10, 8), sharex=True, sharey=True)
     for mi, m in enumerate(model_list):
         mmax = np.max(np.abs(dstrf[mi, :]))
         for di in range(dstrf.shape[1]):
-            ax[mi, di].imshow(dstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
-            ax[mi, di].axhline(17.5, color='k', ls='--', lw=0.5)
+            d = dstrf[mi, di]
+            if interpolation_factor is not None:
+                d = zoom(np.concatenate([d, np.zeros([d.shape[0], 1])], axis=1), interpolation_factor)[:,1:-1]
+                #d=zoom(d, interpolation_factor, mode='constant')
+            if flip_time:
+                d=np.fliplr(d)
+            mm = int(d.shape[0]/2)
+            ax[mi, di].imshow(d[:mm,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, -0.5, mm-0.5], 
+                              vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            ax[mi, di].imshow(d[mm:,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, mm+0.5, mm*2 + 0.5], 
+                              vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            #ax[mi, di].imshow(dstrf[mi, di], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+            ax[mi, di].axhline(mm, color='k', ls='--', lw=0.5)
             if mi == len(model_list) - 1:
                 ax[mi, di].set_xlabel(f"di={di}", fontsize=9)
 
-        ax[mi, 0].text(0, 20, 'L')
         ax[mi, 0].text(0, 2, 'R')
-
-        ax[mi, -1].imshow(dstrf[mi, 2] - dstrf[mi, 0], vmin=-mmax, vmax=mmax, **imopts_dstrf)
-        ax[mi, -1].axhline(17.5, color='k', ls='--', lw=0.5)
+        ax[mi, 0].text(0, mm+2, 'L')
+        
+        d = dstrf[mi, 2] - dstrf[mi, 0]
+        if interpolation_factor is not None:
+            d=zoom(np.concatenate([d,np.zeros([d.shape[0],1])], axis=1), interpolation_factor)[:,1:-1]
+        if flip_time:
+            d=np.fliplr(d)
+        mm = int(d.shape[0]/2)
+        mmax *= 0.8
+        ax[mi, -1].imshow(d[:mm,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, -0.5, mm-0.5], 
+                          vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        ax[mi, -1].imshow(d[mm:,:], extent=[-0.5/fs, (d.shape[1]-0.5)/fs, mm+0.5, mm*2 + 0.5], 
+                          vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        #ax[mi, -1].imshow(dstrf[mi, 2] - dstrf[mi, 0], vmin=-mmax, vmax=mmax, **imopts_dstrf)
+        ax[mi, -1].axhline(mm, color='k', ls='--', lw=0.5)
         if mi == len(model_list) - 1:
             ax[mi, -1].set_xlabel(f"Front-back", fontsize=9)
 

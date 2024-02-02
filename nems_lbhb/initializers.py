@@ -30,7 +30,7 @@ from nems0 import xform_helper, xforms
 from nems0.uri import save_resource, load_resource
 from nems0.utils import get_default_savepath
 from nems.models.base import Model
-from nems.tools.json import load_model, nems_from_json
+from nems.tools.json import load_model, nems_from_json, generate_model_filepath
 
 log = logging.getLogger(__name__)
 
@@ -404,6 +404,26 @@ def initialize_with_prefit(modelspec, meta, area="A1", cellid=None, siteid=None,
 
     return new_ctx
 
+def init_std_modelspec(modelspec, meta, area="A1", cellid=None, siteid=None, batch=322, pre_batch=None,
+                       use_matched=False, use_simulated=False, use_full_model=False,
+                       prefit_type=None, freeze_early=True, IsReload=False, **ctx):
+
+    if IsReload:
+        return {}
+    modelkw=modelspec.name.split("_")[1]
+
+    if get_setting('USE_NEMS_BAPHY_API'):
+        prefix = 'http://'+get_setting('NEMS_BAPHY_API_HOST')+":"+str(get_setting('NEMS_BAPHY_API_PORT')) + '/results/'
+    else:
+        prefix = get_setting('NEMS_RESULTS_DIR')
+    batch = modelspec.meta.get('batch', 0)
+    cellid = 'prefit'
+    basepath = os.path.join(prefix, str(batch), cellid)
+
+    modelpath = json.generate_model_filepath(modelname=modelkw, basepath=basepath)
+
+    modelspec = json.l
+    return modelspec
 
 def pca_proj_layer(rec, modelspec, **ctx):
     from nems0.tf.cnnlink_new import fit_tf, fit_tf_init

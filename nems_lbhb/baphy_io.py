@@ -482,11 +482,12 @@ def continuous_data_unpacking(continuous_data):
     data = np.vstack(data)
     channels = np.concatenate(channels)
 
+    # kludge added to make format dictionary of lists which is used for multiple probes - JCW
     return {
-        'header': header,
-        'timestamps': timestamps,
-        'data': data,
-        'channels': channels,
+        'header': [header],
+        'timestamps': [timestamps],
+        'data': [data],
+        'channels': [channels],
     }
 
 
@@ -634,7 +635,7 @@ def load_trial_starts_openephys_master(openephys_folder):
             max_ts_diff = np.round(np.max(diff_matrix)*1000, decimals=2)
             import warnings
             warnings.warn("Number of probes is greater than 1. Only using timestamps from 1 probe. Max ts diff = " + str(max_ts_diff) + "ms")
-            if max_ts_diff > 2:
+            if max_ts_diff > 10:
                 raise ValueError("Probe ts difference is greater than 1ms. Difference might start impacting alignment")
         # now only finding timestamps for single stream, the changes in timestamp values between streams seems neglible
         ts = df.query("line == 1 and state == 1 and stream_type == 'LFP' and probe_name == 'ProbeA'")
@@ -1220,7 +1221,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 chans = list(chans)
             idx = all_chans[chans].tolist()
             selected_data = np.take(data_files, idx)
-            recChans1 = [ch.split('CH')[1] for ch in recChans_list]
+            recChans1 = [int(ch.split('CH')[1]) for ch in recChans_list]
             selected_chans.append(np.take(recChans1, idx))
             # to make things match between neuropixels and UCLA(which already should be in the physical channel nums) remake the selected_chans with different name
             selected_chans_physical.append(selected_chans)
@@ -1249,7 +1250,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
             if version[1] < 6:
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_binary_data_unpacking(data, version, mua=mua)
-                timestamp0 = [int(data['timestamps'][i][0] / int(data['header']['sampleRate']) * rasterfs for i in range(len(data['timestamps'])))]
+                timestamp0 = [int(data['timestamps'][i][0] / int(data['header'][i]['sampleRate']) * rasterfs for i in range(len(data['timestamps'])))]
 
             elif version[1] >=6:
                 data = load_openephys(tmppath, dtype='continuous')
@@ -1281,7 +1282,7 @@ def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_ta
                 log.info('no CH in filename, loading without it')
                 data = load_openephys_archived(tmppath, dtype='continuous')
                 data = continuous_data_unpacking(data)
-        timestamp0 = [int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)]
+        timestamp0 = [int(data['timestamps'][i][0] / int(data['header'][i]['sampleRate']) * rasterfs) for i in range(len(data['timestamps']))]
 
     log.info(f'timestamp0 is {timestamp0}')
 
@@ -1780,7 +1781,10 @@ def psi_parm_read(filepath):
     root3, ferret = os.path.split(root2)
     parts = parmfile.split('_')
     siteid = parts[0][:-2]
-    runclass = parts[2];
+    if len(parts)==3:
+        runclass=parts[-1]
+    else:
+        runclass = parts[-2];
     ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
 
     if os.path.isfile(globalfile):
@@ -1792,6 +1796,7 @@ def psi_parm_read(filepath):
             globalparams['Physiology'] = 'Yes -- Behavior'
         else:
             globalparams['Physiology'] = 'Yes -- Passive'
+        runclass=globalparams['runclass']
     else:
         log.info('***** Kludge alert!! Hard coding many baphy settings. *****')
         globalparams = {}
@@ -1824,30 +1829,61 @@ def psi_parm_read(filepath):
     if ('background_1_wav_sequence_level' in rparms.index):
         if rparms.background_1_wav_sequence_level > 0:
             FitBinaural, TestBinaural = 'Random', 'Random'
-
-    TrialObject = {1: {
-        'ReferenceClass': 'BigNat',
-        'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
-                                'PostStimSilence': poststimsilence,
-                                'SoundPath': rparms.background_wav_sequence_path,
-                                'Duration': rparms.background_wav_sequence_duration,
-                                'Normalization': rparms.background_wav_sequence_normalization ,
-                                'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
-                                'FitBinaural': FitBinaural,
-                                'TestBinaural': TestBinaural,
-                                'fit_range': rparms.background_wav_sequence_fit_range,
-                                'fit_reps': rparms.background_wav_sequence_fit_reps,
-                                'test_range': rparms.background_wav_sequence_test_range,
-                                'test_reps': rparms.background_wav_sequence_test_reps,
-                                'iti_duration': rparms.iti_duration,
-                            'Names': {},
-                            'descriptor': 'BigNat'
+    
+    if runclass=='NTD':
+        TrialObject = {1: {
+            'ReferenceClass': 'BigNat',
+            'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
+                                    'PostStimSilence': poststimsilence,
+                                    'SoundPath': rparms.background_wav_sequence_path,
+                                    'Duration': rparms.background_wav_sequence_duration,
+                                    'Normalization': rparms.background_wav_sequence_normalization ,
+                                    'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                    'FitBinaural': FitBinaural,
+                                    'TestBinaural': TestBinaural,
+                                    'fit_range': rparms.background_wav_sequence_fit_range,
+                                    'fit_reps': rparms.background_wav_sequence_fit_reps,
+                                    'test_range': rparms.background_wav_sequence_test_range,
+                                    'test_reps': rparms.background_wav_sequence_test_reps,
+                                    'iti_duration': rparms.iti_duration,
+                                'Names': {},
+                                'descriptor': 'BigNat'
+                                }},
+            'TargetClass': 'Tone',
+            'TargetHandle': {1:{ 'descriptor': 'Tone'
                             }},
-        'TargetClass': 'Tone',
-        'TargetHandle': {1:{ 'descriptor': 'Tone'
-                        }},
-        'OveralldB': rparms.background_wav_sequence_level}
-    }
+            'OveralldB': rparms.background_wav_sequence_level}
+        }
+    elif runclass=='NFB':
+        TrialObject = {1: {
+            'ReferenceClass': 'OverlappingPairs',
+            'ReferenceHandle': {1: {'BG_Folder': rparms.bg_path,
+                                    'FG_Folder': rparms.fg_path,
+                                    'Combos': rparms.combinations,
+                                    'Background': rparms.bg_fit_range,
+                                    'Foreground': rparms.fg_fit_range,
+                                    'PreStimSilence': rparms.target_delay,
+                                    'PostStimSilence': 0.5,
+                                    'SilenceOnset': 0.5,
+                                    'Duration': 4,
+                                    'RefRepCount': 1,
+                                    'SoundRepeats': 'No',
+                                    'Binaural': 'Yes',
+                                    'Synthetic': 'No',
+                                    'NormalizeRMS': rparms.bg_normalization,
+                                    'Ramp': 'Yes',
+                                    'SNR': rparms.fg_snr,
+                                    'Names': {},
+                                    'descriptor': 'OverlappingPairs',
+                                   }},
+            'TargetClass': 'FerretVocal',
+            'TargetHandle': {1: {'descriptor': 'FerretVocal'
+                            }},
+            'OveralldB': 65}
+                      }
+    else:
+        raise ValueError(f"runclass {runclass} not yet supported in psi_parm_read")
+        
     exptparams = {'runclass': runclass,
                   'StartTime': ctime.strftime("%H:%M:%S"),
                   'BehaveObjectClass': 'psi-go-nogo',
@@ -1940,7 +1976,29 @@ def psi_parm_read(filepath):
     #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
     #    exptevents.loc[exptevents['Trial']==r['Trial'],'end'] -= r['start']
 
-    tstart_events = exptevents.loc[exptevents['name']=='target_start'].reset_index(drop=True)
+    # name of events that signal the beginning of a trial, should be the same as len(T)
+    if runclass=='NTD':
+        tstring='target_start'
+    elif runclass=='NFB':
+        tstring='trial_start'
+
+    tstart_events = exptevents.loc[exptevents['name']==tstring].reset_index(drop=True)
+    try:
+        assert(len(T)==len(tstart_events))
+    except:
+        log.info(f"Length of trial log events and '{tstring}' events does not match")
+        log.info("deleting dup trial numbers")
+        tstart_events['good']=True
+        for i in range(1,len(tstart_events)):
+            if tstart_events.loc[i,'Trial']==tstart_events.loc[i-1,'Trial']:
+                tstart_events.loc[i-1,'good']=False
+        tstart_events=tstart_events.loc[tstart_events['good']].reset_index(drop=True)
+        tstart_events.drop(columns=['good'], inplace=True)
+    try:
+        assert(len(T)==len(tstart_events))
+    except:
+        raise ValueError(f"Length of trial log events and '{tstring}' events does not match")
+
     tstart_events['name']='TRIALSTART'
     tstart_events['end'] = tstart_events['start']
     tstart_events['Info'] = ''
@@ -1950,59 +2008,106 @@ def psi_parm_read(filepath):
     tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
     tstop_events.loc[tstop_events.Trial==0,['Trial']] = Tlen
     tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
-
-    bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
-    bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
-
-    Names = []
-    for ee, r in bg_events.iterrows():
-        info = json.loads(r['Info'])
-        bin_match = bg_events1['start']==r['start']
-        if (bin_match.sum() > 0) & (TestBinaural != 'None'):
-            # code as a binaural signal
-            r2 = bg_events1.loc[bin_match].iloc[0]
-            info2 = json.loads(r2['Info'])
-            name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
-        else:
-            # single (monaural) signal
-            name = f'{info["metadata"]["filename"]}.wav'
-        Names.append(name)
-        bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
-        bg_events.loc[ee, 'Info'] = ''
-    Names = list(set(Names))
-    Names.sort()
-    TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
-
-    tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
-                                (exptevents['Trial']<=Tlen)].copy()
-    for ee, r in tar_events.iterrows():
-        trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
-        snr = trialinfo['snr']
-        target_freq = trialinfo['target_tone_frequency']
-        trial_type = trialinfo['trial_type']
-        if 'nogo' in trial_type:
-            name = f'Stim , {target_freq}+-InfdB , Catch'
-        else:
-            name = f'Stim , {target_freq}+{snr}dB , Target'
-        tar_events.loc[ee, 'name'] = name
-        tar_events.loc[ee, 'Info'] = ''
     
+    if runclass=='NTD':
+        bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+        bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
+
+        Names = []
+        for ee, r in bg_events.iterrows():
+            info = json.loads(r['Info'])
+            bin_match = bg_events1['start']==r['start']
+            if (bin_match.sum() > 0) & (TestBinaural != 'None'):
+                # code as a binaural signal
+                r2 = bg_events1.loc[bin_match].iloc[0]
+                info2 = json.loads(r2['Info'])
+                name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
+            else:
+                # single (monaural) signal
+                name = f'{info["metadata"]["filename"]}.wav'
+            Names.append(name)
+            bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
+            bg_events.loc[ee, 'Info'] = ''
+        Names = list(set(Names))
+        Names.sort()
+        TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+
+        tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
+                                    (exptevents['Trial']<=Tlen)].copy()
+        for ee, r in tar_events.iterrows():
+            trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
+            snr = trialinfo['snr']
+            target_freq = trialinfo['target_tone_frequency']
+            trial_type = trialinfo['trial_type']
+            if 'nogo' in trial_type:
+                name = f'Stim , {target_freq}+-InfdB , Catch'
+            else:
+                name = f'Stim , {target_freq}+{snr}dB , Target'
+            tar_events.loc[ee, 'name'] = name
+            tar_events.loc[ee, 'Info'] = ''
+
+        stimevents = pd.concat([bg_events, tar_events])
+        stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
+    elif runclass=='NFB':
+        stimevents = exptevents.loc[exptevents['name']=='trial_end'].copy()
+        trial_events = exptevents.loc[exptevents['name']=='trial_end'].copy()
+        
+        Names = []
+        for ee, r in stimevents.iterrows():
+            info = json.loads(r['Info'])
+            fg_name = f'{info["result"]["fg_name"]}'
+            bg_name = f'{info["result"]["bg_name"]}'
+            snr = info["result"]['snr']
+            fg_channel = info['result']['fg_channel']+1
+            bg_channel = info['result']['bg_channel']+1
+            target_delay=info['result']['target_delay']
+            fg_duration=info['result']['fg_duration']
+            bg_duration=info['result']['bg_duration']
+            #prestimsilence=info['result']['np_duration']
+            #poststimsilence=0.5
+            prestimsilence=1.0  # match OLP passives
+            poststimsilence=1.0
+            target_off=target_delay+fg_duration
+            if snr<50:
+                bg_str = f"{bg_name.replace('.wav','')}-0-{bg_duration}-{bg_channel}"
+            else:
+                bg_str = 'null'
+                snr-=100
+            if snr<0:
+                s_snr=f"n{np.abs(snr):.0f}"
+            else:
+                s_snr=f"{np.abs(snr):.0f}"
+            if snr<-50:
+                fg_str='null'
+            else:
+                #fg_str=f"{fg_name.replace('.wav','')}-{target_delay}-{target_off}-{fg_channel}-{s_snr}dB"
+                fg_str = f"{fg_name.replace('.wav', '')}-{0}-{bg_duration}-{fg_channel}-{s_snr}dB"
+            name = f"{bg_str}_{fg_str}"
+            stimevents.loc[ee, 'name'] = f'Stim , {name} , Reference'
+            stimevents.loc[ee, 'start'] = info["result"]["trial_start"]-prestimsilence
+            stimevents.loc[ee, 'end'] = info["result"]["trial_start"]+bg_duration+poststimsilence
+            stimevents.loc[ee, 'Info'] = ''
+            Names.append(name)
+            #if T.loc[ee,'score'] == 0:
+            #    trial_events.loc[ee, 
+        Names = list(set(Names))
+        Names.sort()
+        TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+        
     # add pre- and post- silences
-    stimevents = pd.concat([bg_events, tar_events])
-    stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
     prestimevents=stimevents.copy()
     starts = prestimevents['start'].copy()
-    prestimevents['start'] = starts-prestimsilence
-    prestimevents['end'] = starts
+    prestimevents['start'] = starts
+    prestimevents['end'] = starts+prestimsilence
     prestimevents['name'] = prestimevents['name'].str.replace('Stim ,','PreStimSilence ,')
     poststimevents = stimevents.copy()
     stops = poststimevents['end'].copy()
-    poststimevents['start'] = stops
-    poststimevents['end'] = stops+poststimsilence
+    poststimevents['start'] = stops-poststimsilence
+    poststimevents['end'] = stops
     poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
 
     trial_number = T['trial_number']
-    trialstarts = exptevents.loc[exptevents['name']=='target_start', 'start'].values
+    trialstarts = exptevents.loc[exptevents['name']==tstring, 'start'].values
     videostart = T['psivideo_frame_ts']
     videostart = videostart - videostart[0] + trialstarts[0]
     videoframes = T['psivideo_frames_written']
@@ -2012,15 +2117,21 @@ def psi_parm_read(filepath):
     videoevents = pd.DataFrame(d_)
 
     response_ts = T['response_ts']
-    response_outcome = T['score']
+    response_outcome = T['score'].copy()
+    response_name = T['response']
     response_name = response_outcome.apply(lambda x: f"LICK , {x}")
 
     d_ = {'start': response_ts, 'end': response_ts, 'name': response_name,
           'Trial': trial_number, 'Info': ''}
     responseevents = pd.DataFrame(d_)
     responseevents = responseevents.loc[np.isfinite(response_ts)]
+    if runclass=='NTD':
+        trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
+    elif runclass=='NFB':
+        response_outcome[response_name=='no_response']=-1
+        trial_names = {-1: "TIMEOUT_TRIAL", 0: "EARLY_TRIAL", 1: "INCORRECT_TRIAL", 2: "CORRECT_TRIAL"}
+        trial_outcomes = response_outcome.apply(lambda x: trial_names[x])
 
-    trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
     n_outcomes = len(trial_outcomes)
     d_ = {'start': tstart_events['start'][:n_outcomes],
           'end': tstop_events['start'][:n_outcomes],
@@ -3478,17 +3589,18 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
         elif (fill_invalid == 'interpolate'):
             invalid_onsets = np.where(np.diff(threshold_check.astype(int))==-1)[0]+1
             invalid_offsets = np.where(np.diff(threshold_check.astype(int))==1)[0]+1
-            if invalid_onsets[0] > invalid_offsets[0]:
-                invalid_onsets = np.concatenate(([0], invalid_onsets))
-            if invalid_onsets[-1] > invalid_offsets[-1]:
-                invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
-            for (a, b) in zip(invalid_onsets, invalid_offsets):
-                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
-                    x[a:b] = np.linspace(x[a-1], x[b], b-a)
-                    y[a:b] = np.linspace(y[a-1], y[b], b-a)
-                else:
-                    x[a:b] = np.nan
-                    y[a:b] = np.nan
+            if (len(invalid_onsets)>0) & (len(invalid_offsets)>0):
+                if invalid_onsets[0] > invalid_offsets[0]:
+                    invalid_onsets = np.concatenate(([0], invalid_onsets))
+                if invalid_onsets[-1] > invalid_offsets[-1]:
+                    invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
+                for (a, b) in zip(invalid_onsets, invalid_offsets):
+                    if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap):
+                        x[a:b] = np.linspace(x[a-1], x[b], b-a)
+                        y[a:b] = np.linspace(y[a-1], y[b], b-a)
+                    else:
+                        x[a:b] = np.nan
+                        y[a:b] = np.nan
 
         elif (fill_invalid == 'mean'):
             log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
@@ -4429,7 +4541,7 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=False):
+def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=True):
     """
     Return 1-D numpy array containing the mean sorted spike waveform
     :cellid: str
@@ -4451,9 +4563,10 @@ def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_
 
     # new method
     def usematfile():
+        # parse cellid compatible with multi-probe recordings
         cparts = cellid.split("-")
-        chan = int(cparts[1])
-        unit = int(cparts[2])
+        chan = int(cparts[-2])
+        unit = int(cparts[-1])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
 
@@ -4543,7 +4656,7 @@ def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_
             pass
     if usespkfile is None:
         try:
-            log.info('looking in spike.mat files')
+            #log.info('looking in spike.mat files')
             mwf = usematfile()
         except:
             log.info('failed. looking in spike.npw files')
@@ -4643,7 +4756,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     #df_cell = df_cell.set_index('cellid')
     for c in df_cell.index:
         #print(c)
-        mwf = get_mean_spike_waveform(c, save_to_db=save_to_db)[:-1]
+        mwf = get_mean_spike_waveform(c)[:-1]
         mwf_len = len(mwf)
         fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
         mwf = fit2(np.linspace(0, mwf_len, 100))
@@ -4660,7 +4773,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
             # force 0 to be the mean of the positive waveform preceding the valley
             mi = np.argmax(mwf[:trough])
             if len(mwf[:mi]) == 0:
-                log.info(f'{c}: zero mwf mi')
+                #log.info(f'{c}: zero mwf mi')
                 baseline = 0
             else:
                 baseline = np.mean(mwf[:mi])
@@ -4680,7 +4793,7 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
 
     if save_to_db:
         df_cell['cellid'] = df_cell.index
-        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[1]))
+        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[-2]))
         a = list(df_cell['area'])
         if 'A1' in a:
             default_area='A1'

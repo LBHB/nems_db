@@ -176,8 +176,13 @@ class BAPHYExperiment:
                     self.siteid = cellid[:7]
                 else:
                     raise TypeError
-                self.channels_to_load = [int(c.split("-")[1]) for c in self.cells_to_load]
-                self.units_to_load = [int(c.split("-")[2]) for c in self.cells_to_load]
+                if len(cellid[0].split("-")) > 3:
+                    self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+                else:
+                    self.probe_ids_to_load = ['' for c in cellid]
+                self.probes_to_load = [str(c.split("-")[-3]) for c in self.cells_to_load]
+                self.channels_to_load = [int(c.split("-")[-2]) for c in self.cells_to_load]
+                self.units_to_load = [int(c.split("-")[-1]) for c in self.cells_to_load]
             else:
                 self.siteid = os.path.split(parmfile[0])[-1].split('-')[0]
                 self.cells_to_load = None
@@ -201,13 +206,18 @@ class BAPHYExperiment:
 
             self.cells_to_extract = cellid
             self.cells_to_load = cellid
-            self.channels_to_load = [int(c.split("-")[1]) for c in cellid]
-            self.units_to_load = [int(c.split("-")[2]) for c in cellid]
+            self.probes_to_load = [str(c.split("-")[-3]) for c in cellid]
+            self.channels_to_load = [int(c.split("-")[-2]) for c in cellid]
+            self.units_to_load = [int(c.split("-")[-1]) for c in cellid]
+            if len(cellid[0].split("-"))>3:
+                self.probe_ids_to_load = [c.split("-")[1] for c in cellid]
+            else:
+                self.probe_ids_to_load = ['' for c in cellid]
             self.siteid = cellid[0].split('-')[0]
 
         #if np.any([not p.exists() for p in self.parmfile]):
         #    raise IOError(f'Not all parmfiles in {self.parmfile} were found')
-        if len(self.parmfile)==0:
+        if len(self.parmfile) == 0:
             raise ValueError(f"No parmfiles for cell {self.cellid}, batch {self.batch}")
 
         # we cannot assume all parmfiles come from same folder/experiment (site+number)
@@ -485,7 +495,7 @@ class BAPHYExperiment:
         kwargs.update({'version': 'BAPHYExperiment.3'}) # version 3 added pupil extras to recording signals
 
         # add parmfiles / cells_to_load list - these are unique ids for the recording
-        kwargs.update({'mfiles': [str(i) for i in self.parmfile]})
+        kwargs.update({'mfiles': [str(i).replace('.m','') for i in self.parmfile]})
         kwargs.update({'cell_list': self.cells_to_load})
 
         # add batch to cache recording in the correct location
@@ -495,6 +505,7 @@ class BAPHYExperiment:
         # see if can load from cache, if not, call generate_recording
         data_file = recording_filename_hash(
                 self.experiment[0][:7], kwargs, uri_path=get_setting('NEMS_RECORDINGS_DIR'))
+        log.info(f"{kwargs}")
 
         use_API = get_setting('USE_NEMS_BAPHY_API')
 
@@ -1382,7 +1393,10 @@ class BAPHYExperiment:
                                 chan_unit_str = f'{self.probe_ids_to_load[i]}-{self.channels_to_load[i]:03d}-{self.units_to_load[i]}'
                             else:
                                 # Use channel_to_load and units_to_load
-                                chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
+                                try:
+                                    chan_unit_str = '{}-{:03d}-{}'.format(self.probes_to_load[i], self.channels_to_load[i], self.units_to_load[i])
+                                except:
+                                    chan_unit_str = '{:03d}-{}'.format(self.channels_to_load[i], self.units_to_load[i])
                         else:
                             # Use cells_to_load, strip out siteid
                             chan_unit_str = self.cells_to_load[i][self.cells_to_load[i].find('-') + 1:]
@@ -1613,6 +1627,7 @@ def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrial
         behavior_epochs = _make_behavior_epochs(exptevents, exptparams, **options)
         epochs.append(behavior_epochs)
     elif exptparams['BehaveObjectClass'] in ['psi-go-nogo']:
+        behavior = True
         behavior_epochs = exptevents.loc[
             (exptevents.name.str.endswith('_TRIAL') |
              exptevents.name.str.startswith('LICK'))

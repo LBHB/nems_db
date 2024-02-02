@@ -92,6 +92,14 @@ if __name__ == '__main__':
     if 'QUEUEID' in os.environ:
         queueid = os.environ['QUEUEID']
         nems0.utils.progress_fun = nd.update_job_tick
+        if 'SLURM_JOB_ID' in os.environ:
+            jobid = os.environ['SLURM_JOB_ID']
+            nd.update_job_pid(jobid)
+            nd.update_startdate()
+            comment = ' '.join(sys.argv[1:])
+            update_comment = ['sacctmgr', '-i', 'modify', 'job', f'jobid={jobid}', 'set', f'Comment="{comment}"']
+            subprocess.run(update_comment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            log.info(f'Set comment string to: "{comment}"')
 
     else:
         queueid = 0
@@ -106,6 +114,9 @@ if __name__ == '__main__':
         exit(-1)
 
     cellid = sys.argv[1]
+    siteid = cellid.split("-")[0]
+    if cellid == siteid:
+        cellid = None
     batch = 338
     #int(sys.argv[2])
     modelname = sys.argv[2]
@@ -116,8 +127,8 @@ if __name__ == '__main__':
     print('modelname', modelname)
     """
 
-    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(cellid,modelname,architecture)
-    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(cellid,modelname,cellnum,ctx, loadkey, architecture)
+    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture)
+    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum,ctx, loadkey, architecture, cellid=cellid)
 
     """
     log.info("Running xform_helper.fit_model_xform({0},{1},{2})".format(cellid, batch, modelname))
@@ -132,3 +143,18 @@ if __name__ == '__main__':
     if db_exists & bool(queueid):
         nd.update_job_complete(queueid)
     
+        if 'SLURM_JOB_ID' in os.environ:
+            # need to copy the job log over to the queue log dir
+            log_file_dir = Path.home() / 'job_history'
+            log_file = list(log_file_dir.glob(f'*jobid{os.environ["SLURM_JOB_ID"]}_log.out'))
+            if len(log_file) == 1:
+                log_file = log_file[0]
+                log.info(f'Found log file: "{str(log_file)}"')
+                log.info('Copying log file to queue log repo.')
+
+                with open(log_file, 'r') as f:
+                    log_data = f.read()
+
+                dst_prefix = r'http://' + get_setting('NEMS_BAPHY_API_HOST') + ":" + str(get_setting('NEMS_BAPHY_API_PORT'))
+                dst_loc = dst_prefix + '/queuelog/' + str(queueid)
+                save_resource(str(dst_loc), data=log_data)

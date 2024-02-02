@@ -115,7 +115,7 @@ def enqueue_exacloud_script(
         message = f"Added exacloud job: {note}{add_msg_str}"
         output = True
 
-    log.info(message)
+        log.info(message)
 
     with db_session() as session:
         session.add_all(queue_items)

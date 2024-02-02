@@ -194,7 +194,7 @@ def sql_command(sql):
 def enqueue_models(celllist, batch, modellist, force_rerun=False,
                    user="nems", codeHash="master", jerbQuery='',
                    executable_path=None, script_path=None,
-                   priority=1, GPU_job=0, reserve_gb=0):
+                   priority=1, GPU_job=0, reserve_gb=0, linux_user='nems'):
     """Call enqueue_single_model for every combination of cellid and modelname
     contained in the user's selections.
 
@@ -251,7 +251,6 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
         user = user
     else:
         user = 'None'
-    linux_user = 'nems'
     allowqueuemaster = 1
     waitid = 0
     parmstring = ''
@@ -295,12 +294,12 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                 if complete == 1:
                     message = "Resetting existing queue entry for: %s\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', GPU_job='{}', user='{}' WHERE id={}".format(
-                        commandPrompt, GPU_job, user, queueid)
+                        commandPrompt, int(GPU_job), user, queueid)
                     r = conn.execute(text(sql))
 
                 elif complete == 2:
                     message = "Dead queue entry for: %s exists, resetting.\n" % note
-                    sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(GPU_job, queueid)
+                    sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(int(GPU_job), queueid)
                     r = conn.execute(text(sql))
 
                 else:  # complete in [-1, 0] -- already running or queued
@@ -326,7 +325,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                        " ({},'{}',{}," +\
                        "{},{},'{}',{},'{}'," +\
                        "'{}','{}',{},'{}',NOW())"
-                sql = sql.format(rundataid, commandPrompt, priority, GPU_job, reserve_gb,
+                sql = sql.format(rundataid, commandPrompt, priority, int(GPU_job), reserve_gb,
                                  parmstring, allowqueuemaster, user, linux_user,
                                  note, waitid, codeHash)
                 r = conn.execute(text(sql))
@@ -853,17 +852,8 @@ def fetch_meta_data(modelspec, r, attrs, cellid=None):
             default = ''
         else:
             default = 0.0
-        # TODO: hard coded fix for now to match up stack.meta names with
-        # results names.
-        # Either need to maintain hardcoded list of fields instead of pulling
-        # from Results, or keep meta names in fitter matched to columns
-        # some other way if naming rules change.
-        #if 'fit' in a:
-        #    k = a.replace('fit', 'est')
-        #elif 'test' in a:
-        #    k = a.replace('test', 'val')
-        #else:
-        #    k = a
+        # special function to select value from meta[a] that corresponds to the
+        # result for cellid--if a is an array
         v=_fetch_attr_value(modelspec, a, default, cellid)
         setattr(r, a, v)
         #log.info("modelspec: meta {0}={1}".format(a,v))
@@ -991,7 +981,7 @@ def add_batch_data(cellid, batch, recording_uri_list):
     return True
 
 
-def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
+def get_batch_cells(batch=None, cellid=None, rawid=None, area=None, as_list=False):
     '''
     Retrieve a dataframe from Data containing all cellids in a batch.
 
@@ -1019,21 +1009,26 @@ def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
     #engine = Engine()
     SQL_ENGINE = get_setting('SQL_ENGINE')
     params = ()
-    sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
+    if area is None:
+        sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
+    else:
+        sql = f"SELECT DISTINCT Data.cellid,Data.batch FROM Data INNER JOIN sCellFile on Data.cellid=sCellFile.cellid WHERE area='{area}'"
+
     if batch is not None:
         sql += f" AND batch={batch}"
         #params = params+(batch,)
 
     if cellid is not None:
         if SQL_ENGINE == 'sqlite':
-            sql += " AND cellid like '%s'"
+            sql += " AND Data.cellid like '%s'"
         else:
-            sql += " AND cellid like %s"
+            sql += " AND Data.cellid like %s"
         params = params+(cellid+"%",)
 
     if rawid is not None:
-        sql+= " AND rawid = %d"
+        sql+= " AND Data.rawid = %d"
         params=params+(rawid,)
+
 
     #d = pd.read_sql(sql=sql, con=engine, params=params)
 
@@ -1231,14 +1226,14 @@ def get_batch_modelnames(batch, cellid_filter=None, modelname_filter=None, min_c
     return d
     
     
-def get_batch_sites(batch, modelname_filter=None):
+def get_batch_sites(batch, modelname_filter=None, area=None):
     """
     get all siteids and a representative cellid from each site in a batch
     :param batch: NEMS batch
     :return: (siteids, cellids) tuple lists of siteids and cellids
     """
     if modelname_filter is None:
-        d = get_batch_cells(batch=batch)
+        d = get_batch_cells(batch=batch, area=area)
     else:
         d = batch_comp(batch=batch, modelnames=[modelname_filter])
         d = d.reset_index()
@@ -1275,8 +1270,8 @@ def get_batch_sites(batch, modelname_filter=None):
 
     #sort siteids and cellids by siteids
     sorted_pairs = sorted(zip(siteids, cellids))
-    tuples = zip(*sorted_pairs)
-    siteids, cellids = [list(tuple) for tuple in tuples]
+    siteids = [p[0] for p in sorted_pairs]
+    cellids = [p[1] for p in sorted_pairs]
 
     return siteids, cellids
 

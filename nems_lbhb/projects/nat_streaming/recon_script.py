@@ -53,14 +53,19 @@ if os.uname()[1]=='agouti':
     cluster_count = 3
     #reverse_sites=True
 elif os.uname()[1] == 'manatee':
-    groupby = 'fgbg'
-    cluster_count = 4
+    batch=345
+    groupby = 'bg'
+    cluster_count = 3
+    reverse_sites = False
 elif os.uname()[1] == 'hyena':
     groupby = 'bg'
-    cluster_count = 4
+    cluster_count = 3
+    reverse_sites = False
 elif os.uname()[1] == 'capybara':
-    groupby = 'fgbg'
-    cluster_count=4
+    #groupby = 'fgbg'
+    batch=345
+    groupby = 'bg'
+    cluster_count = 3
 else:
     raise ValueError("Only runs on agouti, capybara, manatee")
 

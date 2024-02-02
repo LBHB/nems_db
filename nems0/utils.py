@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import convolve1d
 
 from . import get_setting
-#import nems
 
 log = logging.getLogger(__name__)
 
@@ -209,6 +208,7 @@ def shrinkage(mH, eH, sigrat=1, thresh=0):
     """
 
     smd = np.abs(mH) / (eH + np.finfo(float).eps * (eH == 0)) / sigrat
+    smd[mH==0]=1
 
     if thresh:
         hf = mH * (smd > 1)
