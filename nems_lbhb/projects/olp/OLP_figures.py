@@ -1353,7 +1353,7 @@ def weights_supp_comp(weight_df, x='resp', area='A1', quads=3, thresh=None, snr_
 
 
 def all_filter_stats(dff, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0.4, increment=0.2,
-                fr_thresh=0.01, xx='resp'):
+                fr_thresh=0.01, xx='resp', supp=True):
     '''2023_09_28. This is a summary of ofig.snr_scatter(), ofig.r_weight_comp_distribution(), and
     ofig.weights_supp_comp() for the manuscript.'''
     areas = dff.area.unique().tolist()
@@ -1387,10 +1387,10 @@ def all_filter_stats(dff, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0
         ax[aa].hlines([snr_thresh], 0, xmax, colors='black', linestyles=':', lw=1)
         ax[aa].set_xlim(0, xmax), ax[aa].set_ylim(0, ymax)
         size = len(df)
-        snr3 = len(df.loc[(df.bg_snr >= snr_thresh) & (df.fg_snr >= snr_thresh)]) / size * 100
-        snr5 = len(df.loc[(df.bg_snr < snr_thresh) & (df.fg_snr < snr_thresh)]) / size * 100
-        snr2 = len(df.loc[(df.bg_snr < snr_thresh) & (df.fg_snr >= snr_thresh)]) / size * 100
-        snr6 = len(df.loc[(df.bg_snr >= snr_thresh) & (df.fg_snr < snr_thresh)]) / size * 100
+        snr3 = len(df.loc[(df[xcol] >= snr_thresh) & (df[ycol] >= snr_thresh)]) / size * 100
+        snr5 = len(df.loc[(df[xcol] < snr_thresh) & (df[ycol] < snr_thresh)]) / size * 100
+        snr2 = len(df.loc[(df[xcol] < snr_thresh) & (df[ycol] >= snr_thresh)]) / size * 100
+        snr6 = len(df.loc[(df[xcol] >= snr_thresh) & (df[ycol] < snr_thresh)]) / size * 100
         ax[aa].set_title(f'{df.area.unique()[0]}: thresh={snr_thresh}, n={len(df)}\nAbove: {np.around(snr3,1)}%, Below: {np.around(snr5,1)}%\n'
                         f'FG Only: {np.around(snr2,1)}%, BG only: {np.around(snr6,2)}%', fontsize=10, fontweight='bold')
         ax[aa].set_aspect('equal')
@@ -1451,45 +1451,46 @@ def all_filter_stats(dff, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0
 
         aa+=1
 
-        if AR=='A1':
-            col = 'violet' #'indigo'
-        elif AR=='PEG':
-            col = 'coral' #'maroon'
+        if supp:
+            if AR=='A1':
+                col = 'violet' #'indigo'
+            elif AR=='PEG':
+                col = 'coral' #'maroon'
 
-        full_filt, _ = ohel.quadrants_by_FR(snr_filt, threshold=fr_thresh, quad_return=3)
-        full_filt = full_filt.dropna(axis=0, subset='r')
-        full_filt = full_filt.loc[full_filt.r >= r_cut]
+            full_filt, _ = ohel.quadrants_by_FR(snr_filt, threshold=fr_thresh, quad_return=3)
+            full_filt = full_filt.dropna(axis=0, subset='r')
+            full_filt = full_filt.loc[full_filt.r >= r_cut]
 
-        full_filt['avg_weight'] = (full_filt.weightsA + full_filt.weightsB) / 2
-        if xx=='supp':
-            fxull_filt['avg_supp'] = (-full_filt['supp']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
-            xlabel = '(LS - rAB) / rA+rB'
-        elif xx=='resp':
-            full_filt['avg_supp'] = (full_filt['combo_FR']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
-            xlabel = 'rAB / (rA + rB)'
-            # weight_df = weight_df.loc[(weight_df.avg_supp >= 0) & (weight_df.avg_supp <= 2)]
+            full_filt['avg_weight'] = (full_filt.weightsA + full_filt.weightsB) / 2
+            if xx=='supp':
+                fxull_filt['avg_supp'] = (-full_filt['supp']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
+                xlabel = '(LS - rAB) / rA+rB'
+            elif xx=='resp':
+                full_filt['avg_supp'] = (full_filt['combo_FR']) / (full_filt['bg_FR'] + full_filt['fg_FR'])
+                xlabel = 'rAB / (rA + rB)'
+                # weight_df = weight_df.loc[(weight_df.avg_supp >= 0) & (weight_df.avg_supp <= 2)]
 
-        plot_filt = full_filt.iloc[::3,:]
+            plot_filt = full_filt.iloc[::3,:]
 
-        # from scipy.stats import pearsonr
-        # corr, pp = pearsonr(quad.avg_supp, quad.avg_weight)
-        ax[aa].scatter(x=plot_filt.avg_supp, y=plot_filt.avg_weight, s=1, color=col)
-        ax[aa].set_xlabel(xlabel, fontweight='bold', fontsize=10)
-        ax[aa].set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
-        # ax.plot([0,1], [0,1], color='black')
-        ymin, ymax = ax[aa].get_ylim()
-        xmin, xmax = ax[aa].get_xlim()
-        mini, maxi = np.min([ymin, xmin]), np.max([ymax, xmax])
-        # ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
+            # from scipy.stats import pearsonr
+            # corr, pp = pearsonr(quad.avg_supp, quad.avg_weight)
+            ax[aa].scatter(x=plot_filt.avg_supp, y=plot_filt.avg_weight, s=1, color=col)
+            ax[aa].set_xlabel(xlabel, fontweight='bold', fontsize=10)
+            ax[aa].set_ylabel('Mean Weights (wFG+wBG)/2', fontsize=10, fontweight='bold')
+            # ax.plot([0,1], [0,1], color='black')
+            ymin, ymax = ax[aa].get_ylim()
+            xmin, xmax = ax[aa].get_xlim()
+            mini, maxi = np.min([ymin, xmin]), np.max([ymax, xmax])
+            # ax.set_ylim(-0.25, 1.25), ax.set_xlim(-0.25, 1.25)
 
-        Y, X = full_filt.avg_weight, full_filt.avg_supp
-        reg = stats.linregress(X, Y)
-        x = np.asarray(ax[aa].get_xlim())
-        x = np.asarray([x[0]+0.05, x[1]-0.05])
-        y = reg.slope * x + reg.intercept
-        ax[aa].plot(x, y, color='black', label=f"coef: {reg.rvalue:.3f}\n"
-                                              f"p = {reg.pvalue:.3f}")
-        ax[aa].legend()
+            Y, X = full_filt.avg_weight, full_filt.avg_supp
+            reg = stats.linregress(X, Y)
+            x = np.asarray(ax[aa].get_xlim())
+            x = np.asarray([x[0]+0.05, x[1]-0.05])
+            y = reg.slope * x + reg.intercept
+            ax[aa].plot(x, y, color='black', label=f"coef: {reg.rvalue:.3f}\n"
+                                                  f"p = {reg.pvalue:.3f}")
+            ax[aa].legend()
 
         aa+=1
 

@@ -1237,8 +1237,8 @@ def get_parm_data(cellid,runclassid=128):
                 parmfiles.loc[i,'run_kind'] = 'test'
             elif parmdict['Ref_BG_Folder'] == 'Background4':
                 parmfiles.loc[i,'run_kind'] = 'vowel'
-            # elif parmdict['Ref_BG_Folder'] == 'Background5':
-            #     parmfiles.loc[i, 'run_kind'] = 'behavior'
+            elif parmdict['Ref_BG_Folder'] == 'Background5':
+                parmfiles.loc[i, 'run_kind'] = 'behavior'
             else:
                 parmfiles.loc[i,'run_kind']= 'real'
 
@@ -1280,7 +1280,10 @@ def get_parm_data(cellid,runclassid=128):
                 if parmdict.get('Ref_SNR', 0) == 0:
                     parmfiles.loc[i,'SNR'] = 0
                 else:
-                    parmfiles.loc[i, 'SNR'] = int(parmdict['Ref_SNR'])
+                    try:
+                        parmfiles.loc[i, 'SNR'] = int(parmdict['Ref_SNR'])
+                    except:
+                        parmfiles.loc[i, 'SNR'] = 0
 
     return parmfiles
 
@@ -2140,7 +2143,7 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
     parms = get_parm_data(cellid, runclassid=128)
 
     # Filter out test or other OLPs that are not Greg's, then extract the respective parmfiles
-    real_olps = parms.loc[(parms['run_kind'] == 'real') | (parms['run_kind'] == 'behavior')].reset_index(drop=True)
+    real_olps = parms.loc[parms['run_kind'] == 'real'].reset_index(drop=True)
     olp_parms = real_olps['parmfile'].to_list()
 
     # If this isn't a cellid that has no real OLPs (shouldn't happen because of how we made the batch), then
@@ -2268,22 +2271,25 @@ def OLP_fit_partial_weights_individual(cellid, batch, snip=None, pred=False, fs=
             print(f'calc weights {cellid}')
 
             # Find all stimulus epochs and create columns in a df that identify the individual sounds (or null)
-            if this_olp_kind != 'behavior':
-                epcs = val.epochs[val.epochs['name'].str.contains("_(null|\d{2}.*)_(null|\d{2}.*)", regex=True, na=False)].copy()
-                sepname = epcs['name'].apply(get_sep_stim_names)
-                epcs['nameA'] = [x[0] for x in sepname.values]
-                epcs['nameB'] = [x[1] for x in sepname.values]
+            epcs = val.epochs[val.epochs['name'].str.contains("_(null|\d{2}.*)_(null|\d{2}.*)", regex=True, na=False)].copy()
+            sepname = epcs['name'].apply(get_sep_stim_names)
+            epcs['nameA'] = [x[0] for x in sepname.values]
+            epcs['nameB'] = [x[1] for x in sepname.values]
 
-                # Find only epochs that have something, anything happening in BG and FG - should work for half stim too.
-                epcs_twostim = epcs[epcs['name'].str.contains("_(\d{2}.*)_(\d{2}.*)", regex=True, na=False)].copy()
-                ep_twostim = epcs_twostim.name.to_list()
+            # Find only epochs that have something, anything happening in BG and FG - should work for half stim too.
+            epcs_twostim = epcs[epcs['name'].str.contains("_(\d{2}.*)_(\d{2}.*)", regex=True, na=False)].copy()
+            ep_twostim = epcs_twostim.name.to_list()
 
             # Maybe make a separate function, came from calc_psth_metrics but stripped down, just takes the opportunity
             # to find some firing rate and other useful info for these epochs in this specific real OLP run
             cell_df = []
             for cnt, stimmy in enumerate(ep_twostim):
                 # Label this particular epoch and get the sound components that make it up
-                kind, synth_kind = ohel.label_pair_type(stimmy), ohel.label_synth_type(stimmy)
+                kind = ohel.label_pair_type(stimmy)
+                if ref_handle['Synthetic'] == 'No':
+                    synth_kind = 'A'
+                else:
+                    synth_kind = ohel.label_synth_type(stimmy)
                 dyn_kind = ohel.label_dynamic_ep_type(stimmy)
                 seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", stimmy)[0])
                 BG, FG = seps[0].split('-')[0][2:], seps[1].split('-')[0][2:]

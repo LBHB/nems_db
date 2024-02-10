@@ -19,12 +19,13 @@ script_path = '/auto/users/hamersky/nems_db/nems_lbhb/projects/olp/script.py'
 # batch =328  # marm
 batch = 344
 batch = 349 #Lemon behavior
+batch = 352 # Lemon standard OLP
 # cache_path = 'cache_marm'
 # cache_path = 'cache_snr'
-cache_path = 'cache_full_behavior'
+cache_path = 'cache_OLP_LDO'
 cell_df = nd.get_batch_cells(batch)
 cell_list = cell_df['cellid'].tolist()
-cell_list = cell_list[1:4]
+# cell_list = cell_list[1:4]
 # SLJ = [dd for dd in cell_list if dd[:3]=='SLJ']
 # ss = SLJ[::50]
 # cell_list = SLJ
