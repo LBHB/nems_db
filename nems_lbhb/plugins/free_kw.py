@@ -145,9 +145,12 @@ def free(loadkey, cellid=None, batch=None, siteid=None, **options):
 def fev(keyword):
     ops = keyword.split('.')[1:]
     d={}
+    d['apply_hrtf']=False
     for op in ops:
         if op=='hrtf':
             d['apply_hrtf']=True
+        elif op == 'hrtfae':
+            d['apply_hrtf'] = 'az_el'
         elif op.startswith('jk'):
             d['jackknife_count']=int(op[2:])
 

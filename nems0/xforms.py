@@ -486,7 +486,7 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
         log.info(f'modelspec: {keywordstring}')
         modelspec = Model.from_keywords(keywordstring)
         #modelspec = modelspec.sample_from_priors()
-        modelspec.meta = meta.copy()
+        modelspec.meta.update(meta.copy())
         modelspec.meta['engine'] = 'nems-lite'
         modelspec.meta['keywordstring'] = keywordstring0
         cellid = meta.get('cellid', 'NAT4v2')
@@ -498,12 +498,13 @@ def init_nems_keywords(keywordstring, meta=None, IsReload=False,
 
 
 def lite_input_dict(modelspec, rec, epoch_name="", add_batch_dim=False,
-                    input_name='stim', output_name='resp'):
+                    input_name='stim', output_name='resp', extra_signals=[]):
 
     all_inputs, all_outputs = modelspec.get_io_names()
     existing_inputs = [i for i in all_inputs if i in rec.signals.keys()]
     if ('state' in rec.signals.keys()) and ('state' not in existing_inputs):
         existing_inputs.append('state')
+    existing_inputs.extend(extra_signals)
 
     if len(epoch_name) > 0:
         # generate batches with epoch
@@ -586,8 +587,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 E = np.array([m.results.final_error for m in modelspec_copies])
                 E0 = np.array([m.results.initial_error[0] for m in modelspec_copies])
                 best_i = np.argmax(E)
-                print(f'Init E: {E0}')
-                print(f'final E: {E} best={E[best_i]}')
+                log.info(f'Init E: {E0} Final E: {E} best={E[best_i]}')
                 modelspec=modelspec_copies[best_i]
             else:
                 log.info(f'({backend}) Fitting without NL ...')
@@ -2268,7 +2268,7 @@ def load_analysis(filepath, eval_model=True, only=None):
     figures_to_load = []
     logstring = ''
     for file in os.listdir(filepath):
-        log.info(file)
+        #log.info(file)
         if file.startswith("modelspec_list"):
             mslistpaths.append(_path_join(filepath, file))
         elif file.startswith("modelspec"):

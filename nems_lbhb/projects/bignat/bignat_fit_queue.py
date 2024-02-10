@@ -12,10 +12,11 @@ from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 batch=343
 siteids, cellids = db.get_batch_sites(batch)
 #siteids=['PRN048a']
+#siteids = ["CLT028c"]
 
 
 load_kw = 'gtgram.fs100.ch18-ld-norm.l1-sev'
-fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk3-lite.tf.lr1e4.t5e4-dstrf.d15.t43.p5.ss'
+fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk3-lite.tf.lr1e4.t5e4-dstrf.d15.t47.p5.ss'
 modelnames = [
     f'{load_kw}_wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80.l2:4-fir.10x1x80-relu.80.f-wc.80x100.l2:4-relu.100.s-wc.100xR.l2:4-dexp.R_{fit_kw}',
     f'{load_kw}_wc.18x1x120.g-fir.25x1x120-wc.120xR.l2:4-dexp.R_{fit_kw}',
@@ -24,7 +25,6 @@ modelnames = [
 shortnames = ['CNN 1d','LN','CNN single']
 
 modelnames = [modelnames[1]]
-#siteids = ["CLT028c"]
 
 executable_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/bash_fit_wrapper'
 #script_path = '/auto/users/svd/python/nems_db/nems_lbhb/projects/freemoving/free_moving_fit_script.py'

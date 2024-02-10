@@ -1,3 +1,11 @@
+"""
+nems_lbhb.analysis.dstrf - tools for generating/analyzing dstrfs
+
+dstrf_pca -
+subspace_model_fit -
+
+"""
+
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,13 +23,54 @@ from nems0.initializers import init_nl_lite
 
 log = logging.getLogger(__name__)
 
+def compute_extract_dpc(modelspec_list, stim, D, out_channels, t_indexes, reset_backend):
+    dstrfs = []
+    for mi, m in enumerate(modelspec_list):
+        log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
+
+        d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
+        dstrfs.append(d['input'])
+
+    dstrf = np.stack(dstrfs, axis=1)
+    s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
+    dstrf /= s
+    dstrf /= np.max(np.abs(dstrf)) * 0.9
+
+    mdstrf = dstrf.mean(axis=1, keepdims=True)
+    sdstrf = dstrf.std(axis=1, keepdims=True)
+    sdstrf[sdstrf == 0] = 1
+    mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
+
+    mdstrf /= np.max(np.abs(mdstrf)) * 0.9
+    mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
+
+    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, as_dict=True)
+    dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, as_dict=True)
+
+    for oi, oc in enumerate(out_channels):
+        for di in range(pc_count):
+            if dz['input']['pcs'][oi, di].sum()<0:
+                dz['input']['pcs'][oi, di] = -dz['input']['pcs'][oi, di]
+                dz['input']['projection'][oi,:,di] = -dz['input']['projection'][oi,:,di]
+            if d['input']['pcs'][oi, di].sum()<0:
+                d['input']['pcs'][oi, di] = -d['input']['pcs'][oi, di]
+
+    dpc = d['input']['pcs']
+    dpc_mag = d['input']['pc_mag']
+    dpcz = dz['input']['pcs']
+    dpc_magz = dz['input']['pc_mag']
+    dproj = dz['input']['projection']
+    log.info(f"dproj.shape={dproj.shape}")
+    
+    
+
 def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=5, out_channels=None,
-              figures=None, fit_ss_model=False, IsReload=False,
-              **ctx):
+              figures=None, fit_ss_model=False, first_lin=True,
+              IsReload=False, **ctx):
 
     if IsReload:
-        # load dstrf data saved in modelpath
+        # load dstrf data saved in modelpath.. or don't if not needed?
         return {}
 
     r = est
@@ -51,16 +100,18 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     dstrf /= np.max(np.abs(dstrf)) * 0.9
 
     mdstrf = dstrf.mean(axis=1, keepdims=True)
-    sdstrf = dstrf.std(axis=1, keepdims=True)
-    sdstrf[sdstrf == 0] = 1
-    mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
-
     mdstrf /= np.max(np.abs(mdstrf)) * 0.9
-    mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
+    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
 
-    d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, as_dict=True)
-    dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, as_dict=True)
+    if len(modelspec_list)>1:
+        sdstrf = dstrf.std(axis=1, keepdims=True)
+        sdstrf[sdstrf == 0] = 1
+        mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
+        mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
 
+        dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
+    else:
+        dz = d
     dpc = d['input']['pcs']
     dpc_mag = d['input']['pc_mag']
     dpcz = dz['input']['pcs']
@@ -103,6 +154,55 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
                            pc_count=pc_count, out_channels=out_channels)
 
     return {'modelspec': modelspec, 'figures': figures}
+
+
+def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
+                        input_name='stim', ss_name='subspace', **ctx):
+
+    cellids = modelspec.meta['cellids']
+    if out_channels is None:
+        out_channels = np.arange(len(cellids))
+    if X is None:
+        recs = [(n,r) for n,r in zip(['rec', 'est','val'],[rec, est, val]) if r is not None]
+    else:
+        recs = [('raw', X)]
+    if X is None and (len(recs)==0):
+        raise ValueError("must provide either X input matrix or valid NEMS recording")
+    if 'dpc' not in modelspec.meta:
+        raise ValueError("modelspec missing dSTRF pcs, run nems_lbhb.analysis.dstrf.dstrf_pca first")
+
+    res ={}
+    for name, rec in recs:
+        log.info(f"** Recording {name}:")
+
+        if type(rec) is not np.ndarray:
+            inp = rec[input_name].as_continuous().T
+        else:
+            inp = rec
+
+        outs = []
+        res[name]=rec.copy()
+        for oi, o in enumerate(out_channels):
+            log.info(f"   Computing SS projection for {cellids[o]}:")
+
+            dpcz = modelspec.meta['dpc']
+            dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+            fir = filter.FIR(shape=dpcz.shape)
+            fir['coefficients'] = np.flip(dpcz, axis=0)
+
+            ss = fir.evaluate(inp)
+            outs.append(ss.T)
+
+        ssout = np.stack(outs,axis=0)
+
+        if name == 'raw':
+            return ssout
+
+        sig = res[name][input_name]._modified_copy(data=ssout, name=ss_name, chans=res[name]['resp'].chans)
+        res[name].signals[ss_name] = sig
+
+    return res
+
 
 def subspace_model_fit(est, val, modelspec,
               pc_count=5, out_channels=None,
