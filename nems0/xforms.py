@@ -1234,6 +1234,8 @@ def sev(kw):
     for op in ops:
         if op=='seq':
             parms['epoch_regex'] = '^STIM_se'
+        elif op == 'a':
+            parms['est_all']=True
         elif op == 'cont':
             continuous = True
         elif op == 'mono':
