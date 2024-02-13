@@ -36,50 +36,14 @@ sb.color_palette('colorblind')
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'))
 fs = 100
 
-
-# Load your different, updated dataframes
-# path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_quarter_segments.h5'  # All quarter segments in one df
-# path = '/auto/users/hamersky/olp_analysis/ARM_Dynamic_OLP_segment0-500.h5' # ARM hopefully
-# path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_segment0-500.h5' #Vinaural half models
-# path = '/auto/users/hamersky/olp_analysis/Binaural_OLP_full_sound_stats.h5' #weight + corr
-# path = '/auto/users/hamersky/olp_analysis/Synthetic_Full.h5' # Still needs the CLT053 4 units
-# path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500.h5' # The half models, use this now
-# path = '/auto/users/hamersky/olp_analysis/a1_celldat1.h5'
-# path = '/auto/users/hamersky/olp_analysis/Synthetic_OLP_segment0-500_with_stats.h5' # The half models, use this now
-# weight_df = ofit.OLP_fit_weights(loadpath=path)
-# weight_df['batch'] = 340
-#
-#
-# # The thing I was working on in January with fit
-# path = '/auto/users/hamersky/olp_analysis/2023-01-12_Batch341_0-500_FULL'
-#
-#
-# #marms
-# path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch328_0-500_marm'
-# weight_df = jl.load(path)
-#
-#
-# #spikes path
-# filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
-# weight_dff = ohel.add_spike_widths(filt, save_name='ferrets_with_spikes3', cutoff={'SLJ': 0.35, 'PRN': 0.35, 'other': 0.375})
-# path = f'/auto/users/hamersky/olp_analysis/ferrets_with_spikes'
-# path = f'/auto/users/hamersky/olp_analysis/ferrets_with_spikes2'
-# path = f'/auto/users/hamersky/olp_analysis/ferrets_with_spikes3'
-# weight_df = jl.load(path)
-
-# 2023_05_02. Starting with Prince data too and new df structure
-# path = '/auto/users/hamersky/olp_analysis/2023-05-10_batch344_0-500_metrics' # Full one with updated PRNB layers
-# path = '/auto/users/hamersky/olp_analysis/2023-05-17_batch344_0-500_metrics' #full one with PRNB layers and paths
-# path = '/auto/users/hamersky/olp_analysis/2023-07-20_batch344_0-500_metrics' # full with new FR snr metric
-# path = '/auto/users/hamersky/olp_analysis/2023-07-21_batch344_0-500_metric'
-# path = '/auto/users/hamersky/olp_analysis/2023-09-15_batch344_0-500_final'
-# path = '/auto/users/hamersky/olp_analysis/2023-09-21_batch344_0-500_final'
+# big old naive dataset
 path = '/auto/users/hamersky/olp_analysis/2023-09-22_batch344_0-500_final'
 weight_df = jl.load(path)
 
+# 2024_02_08. Addresses 'look at naive data only for kit fg'
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
-kit_filt = filt.loc[(filt.FG=='KitWhine') | (filt.FG=='KitHigh')] #|
-                    #(filt.FG=='Kit_Whine') | (filt.FG=='Kit_High') | (filt.FG=='Kit_Low')]
+kit_filt = filt.loc[(filt.FG == 'KitWhine') | (filt.FG == 'KitHigh') |
+                    (filt.FG == 'Kit_Whine') | (filt.FG == 'Kit_High') | (filt.FG == 'Kit_Low')]
 stat_dict = ofig.weight_summary_histograms_manuscript(kit_filt, bar=True, stat_plot='median')
 
 filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
@@ -89,6 +53,39 @@ ofig.all_filter_stats(kit_filt, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r
                  fr_thresh=0.01, xx='resp')
 
 
+# "naive" comparison
+path = '/auto/users/hamersky/olp_analysis/2024-01-08_batch352_LEMON_OLP_standard'
+path = '/auto/users/hamersky/olp_analysis/2024-02-08_batch352_LEMON_OLP_standard'
+weight_df = jl.load(path)
+
+# All Lemon "naive" weights and inclusion criteria
+filt = get_olp_filter(weight_df, kind='vanilla', metric=True)
+stat_dict = ofig.weight_summary_histograms_manuscript(filt, bar=True, stat_plot='median')
+
+
+filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
+ofig.all_filter_stats(filt, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0.4, increment=0.2,
+                 fr_thresh=0.01, xx='resp')
+
+# FG specifics
+filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=True)
+ferret_filt = filt.loc[(filt.FG == 'FightSqueak')]
+ferret_filt = filt.loc[(filt.FG == 'Xylophone') | (filt.FG == 'WomanA')]
+ferret_filt = filt.loc[(filt.FG == 'ferretb2001R')]
+stat_dict = ofig.weight_summary_histograms_manuscript(ferret_filt, bar=True, stat_plot='median')
+
+filt = ohel.get_olp_filter(weight_df, kind='vanilla', metric=False)
+ferret_filt = filt.loc[(filt.FG == 'FightSqueak')]
+ferret_filt = filt.loc[(filt.FG == 'Xylophone') | (filt.FG == 'WomanA')]
+ferret_filt = filt.loc[(filt.FG == 'ferretb2001R')]
+ofig.all_filter_stats(ferret_filt, xcol='bg_snr', ycol='fg_snr', snr_thresh=0.12, r_cut=0.4, increment=0.2,
+                 fr_thresh=0.01, xx='resp')
+
+
+
+
+
+
 #behavior stuff 2024_03_01
 path = '/auto/users/hamersky/olp_analysis/2024-01-04_batch349_final_20pre' # isec fit, 0.2s prestim
 path = '/auto/users/hamersky/olp_analysis/2024-01-04_batch349_final' # 1sec fit, 0.5s prestim
@@ -96,10 +93,7 @@ path = '/auto/users/hamersky/olp_analysis/2024-01-05_batch349_200msto1200ms_fina
 path = '/auto/users/hamersky/olp_analysis/2024-02-08_batch349_20to120ms'
 weight_df = jl.load(path)
 
-# "naive" comparison
-path = '/auto/users/hamersky/olp_analysis/2024-01-08_batch352_LEMON_OLP_standard'
-path = '/auto/users/hamersky/olp_analysis/2024-02-08_batch352_LEMON_OLP_standard'
-weight_df = jl.load(path)
+
 
 #2024_02_08 fitting half weights
 filt = weight_df.loc[(weight_df.dyn_kind=='fh') | (weight_df.dyn_kind=='hf')]
