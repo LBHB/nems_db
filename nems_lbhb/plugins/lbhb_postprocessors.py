@@ -123,7 +123,9 @@ def dstrf(loadkey):
         elif op.startswith('t'):
             parms['timestep'] = int(op[1:])
         elif op.startswith('p'):
-            parms['pc_count']=int(op[1:])
+            parms['pc_count'] = int(op[1:])
+        elif op.startswith('nl'):
+            parms['first_lin'] = False
         elif op.startswith('ss'):
             parms['fit_ss_model']=True
 

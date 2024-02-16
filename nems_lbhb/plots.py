@@ -1939,7 +1939,7 @@ def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
 
 
 def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
-                  vmin=None, vmax=None, zerolines=True, minN=1):
+                  vmin=None, vmax=None, zerolines=True, minN=1, Z=None):
     keep = np.isfinite(a) & np.isfinite(b)
     ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
     bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
@@ -1950,42 +1950,42 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
 
     mmv = np.zeros((bins, bins)) * np.nan
     N = np.zeros((bins, bins))
+    if Z is None:
+        for i_, a_ in enumerate(av[:-1]):
+            for j_, b_ in enumerate(bv[:-1]):
+                v_ = (a >= a_) & (a < av[i_ + 1]) & (b >= b_) & (b < bv[j_ + 1]) & np.isfinite(d)
+                if (v_.sum() > 0):
+                    mmv[j_, i_] = np.nanmean(d[v_])
+                    N[j_,i_] = v_.sum()
 
-    for i_, a_ in enumerate(av[:-1]):
-        for j_, b_ in enumerate(bv[:-1]):
-            v_ = (a >= a_) & (a < av[i_ + 1]) & (b >= b_) & (b < bv[j_ + 1]) & np.isfinite(d)
-            if (v_.sum() > 0):
-                mmv[j_, i_] = np.nanmean(d[v_])
-                N[j_,i_] = v_.sum()
+        if spont is None:
+            # find the zero bin:
+            zi = np.min(np.where(av >= 0)[0]) - 1
+            zj = np.min(np.where(bv >= 0)[0]) - 1
+            spont = mmv[zj,zi]
+        mmv -= spont
+        mmv[N<minN]=np.nan
+        #mmv[np.isnan(mmv)] = 0
 
-    if spont is None:
-        # find the zero bin:
-        zi = np.min(np.where(av >= 0)[0]) - 1
-        zj = np.min(np.where(bv >= 0)[0]) - 1
-        spont = mmv[zj,zi]
-    mmv -= spont
-    mmv[N<minN]=np.nan
-    #mmv[np.isnan(mmv)] = 0
+        # option to interpolate (not used)
+        # x = (llv[:-1] + llv[1:]) / 2
+        # y = (ttv[:-1] + ttv[1:]) / 2
+        # X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
+        #
+        # valididx = np.isfinite(mm)
+        # interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
+        #                               mm[valididx], fill_value=np.nanmean(mm))
+
+        # plot heatmaps
+        Z = mmv
+        # Z = interp(X, Y)
+        # zsm = 0.5
+        # Zz = (Z == 0)
+        # Z = gaussian_filter(Z, [zsm, zsm])
+        # Z[Zz] = 0
 
     if ax is None:
         f,ax = plt.subplots()
-
-    # option to interpolate (not used)
-    # x = (llv[:-1] + llv[1:]) / 2
-    # y = (ttv[:-1] + ttv[1:]) / 2
-    # X, Y = np.meshgrid(x, y)  # 2D grid for interpolation
-    #
-    # valididx = np.isfinite(mm)
-    # interp = LinearNDInterpolator(list(zip(X[valididx], Y[valididx])),
-    #                               mm[valididx], fill_value=np.nanmean(mm))
-
-    # plot heatmaps
-    Z = mmv
-    # Z = interp(X, Y)
-    # zsm = 0.5
-    # Zz = (Z == 0)
-    # Z = gaussian_filter(Z, [zsm, zsm])
-    # Z[Zz] = 0
 
     cmap='bwr'
     cmap='viridis'
