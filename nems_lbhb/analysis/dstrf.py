@@ -16,7 +16,7 @@ from nems.tools import dstrf as dtools
 from nems.layers import filter
 from nems.metrics import correlation
 
-from nems0.utils import shrinkage
+from nems0.utils import shrinkage, smooth
 from nems0.plots.file import fig2BytesIO
 from nems0 import xforms
 from nems0.initializers import init_nl_lite
@@ -387,3 +387,137 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
             ax[pci, 3].set_ylim((ymin,ymax))
         ax[0,2].set_axis_off()
         plt.tight_layout()
+
+def plot_dpc_proj(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
+                   use_val=False, print_figs=False, T1=50, T2=250, **ctx):
+    if cell_list is None:
+        cell_list = ctx['cellids']
+    elif type(cell_list) is str:
+        cell_list = [cell_list]
+    if use_val:
+        rec=val
+    else:
+        rec=est
+
+    X_est, Y_est = xforms.lite_input_dict(modelspec, rec, epoch_name="")
+    fs=rec['resp'].fs
+
+    orange = [i for i,c in enumerate(rec['resp'].chans) if c in cell_list]
+    spont = np.zeros(len(rec['resp'].chans))
+
+    cnnPred = modelspec.predict(X_est)
+    if modelspec2 is not None:
+        lnstrf=LN.LNpop_get_strf(modelspec2)
+        lnPred = modelspec2.predict(X_est)
+    else:
+        lnstrf=None
+        lnPred=None
+
+    for oi, cellid in zip(orange,cell_list):
+        print(oi, cellid)
+        pcp = 2
+        rows = pcp+4
+        f = plt.figure(figsize=(8, rows))
+        gs = f.add_gridspec(rows, 10)
+        ax = np.zeros((rows-1, 3), dtype='O')
+        for r in range(rows-1):
+            for c in range(3):
+                if (c <= 1):
+                    ax[r, c] = f.add_subplot(gs[r, c])
+                elif (c > 1):
+                    ax[r, c] = f.add_subplot(gs[r, c:])
+        ax2 = np.zeros(10, dtype='O')
+        for c in range(10):
+            ax2[c] = f.add_subplot(gs[-1, c])
+
+        dpcz = modelspec.meta['dpc']
+        pc_count = dpcz.shape[1]
+        dpc_magz = modelspec.meta['dpc_mag']
+        dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+        fir = filter.FIR(shape=dpcz.shape)
+        fir['coefficients'] = np.flip(dpcz, axis=0)
+
+        pred = rec['pred'].as_continuous().T[:, oi]
+        X = rec['stim'].as_continuous().T
+        r = rec['resp'].as_continuous().T[:, oi]
+        if use_val:
+            pred2 = est['pred'].as_continuous().T[:, oi]
+            pred = np.concatenate([pred,pred2])
+            X2 = est['stim'].as_continuous().T
+            X = np.concatenate([X,X2], axis=0)
+            r2 = est['resp'].as_continuous().T[:, oi]
+            r = np.concatenate([r, r2])
+
+        Y = fir.evaluate(X)
+        for i in range(pc_count):
+            cc=np.corrcoef(Y[:,i],r)[0,1]
+            if cc < 0:
+                Y[:,i]=-Y[:,i]
+                modelspec.meta['dpc'][oi, i] = -modelspec.meta['dpc'][oi, i]
+
+        imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+                  'interpolation': 'none'}
+        trange=np.arange(T1,T2)/fs
+
+        ax[0, 0].plot(np.arange(1, dpc_magz.shape[0] + 1), dpc_magz[:, oi] / dpc_magz[:, oi].sum(), 'o-', markersize=3)
+        ax[0, 0].set_xlabel('PC dimension')
+        ax[0, 0].set_ylabel('Var. explained')
+        ax[0, 0].set_xticks(np.arange(1, dpc_magz.shape[0] + 1))
+        ax[0, 2].imshow(X[T1:T2, :].T, origin='lower', cmap='gray_r',
+                        extent=[trange[0],trange[-1],0,X.shape[1]])
+        for i in range(pcp):
+            d = modelspec.meta['dpc'][oi, i]
+            d = d / np.max(np.abs(d))  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+
+            ax[i+1, 0].imshow(np.fliplr(d), **imopts)
+            ax[i+1, 0].set_ylabel(f'Dim {i + 1}')
+            ax[i+1, 1].imshow(d, **imopts)
+
+            ax[i+1, 2].plot(trange,Y[T1:T2,i])
+            ax[i+1, 2].set_xlim(trange[0],trange[-1])
+
+        mm = Y_est[T1:T2, oi].max()
+        ax[-2, 2].plot(trange, smooth(Y_est[T1:T2, oi].T,7), 'k', lw=0.5)
+        ax[-2, 2].plot(trange,cnnPred[T1:T2, oi].T,color='purple')
+        ax[-2, 2].set_xlim(trange[0], trange[-1])
+        ax[-2, 2].text(trange[-1], mm, f"CNN: {modelspec.meta['r_test'][oi, 0]:.3f}", ha='right')
+
+        if (lnstrf is not None):
+            l = lnstrf[:,:,oi]
+            l /= np.abs(l).max()
+            ax[-1, 0].imshow(lnstrf[:,:15,oi], **imopts)
+            ax[-1, 1].imshow(np.fliplr(lnstrf[:,:15,oi]), **imopts)
+            ax[-1, 0].set_ylabel(f'LN STRF')
+
+            ax[-1, 2].plot(trange, smooth(Y_est[T1:T2, oi].T,7), 'k', lw=0.5)
+            ax[-1, 2].plot(trange, lnPred[T1:T2, oi].T,color='orange')
+            ax[-1, 2].text(trange[-1], mm, f"LN: {modelspec2.meta['r_test'][oi, 0]:.3f}", ha='right')
+            ax[-1, 2].set_xlim(trange[0], trange[-1])
+
+        ac,bc,Zresp,N=histmean2d(Y[:,0], Y[:,1], pred, bins=20, ax=ax[0, 1], spont=spont[oi], ex_pct=0.01)
+        T_set = np.arange(T1+10, T1+120, 10)
+        for c,a in enumerate(ax2):
+            t1, t2 = T_set[c], T_set[c+1]
+            ac, bc, Zresp, N = histmean2d(Y[:, 0], Y[:, 1], pred, bins=20, ax=a, spont=spont[oi], ex_pct=0.025, Z=Zresp)
+            a.plot(Y[T1:t2,0], Y[T1:t2,1], color='gray', lw=0.5)
+            a.plot(Y[t1:t2,0], Y[t1:t2,1], color='lightgray')
+            a.set_xlabel(f"{t1/fs:.1f}-{t2/fs:.1f} s", fontsize=8)
+        for c,a in enumerate(ax.flatten()):
+            if c<len(ax.flatten())-1:
+                a.set_xticklabels([])
+            else:
+                x=a.get_xticklabels()
+                a.set_xticklabels(x, fontsize=8)
+
+            a.set_yticklabels([])
+
+        yl=ax2[0].get_ylim()
+        xl=ax2[0].get_xlim()
+        for a in ax2.flatten():
+            a.set_xticklabels([])
+            a.set_yticklabels([])
+            #a.set_axis_off()
+            a.set_ylim(yl)
+            a.set_xlim(xl)
+        plt.tight_layout()
+    return f

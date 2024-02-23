@@ -4704,7 +4704,7 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
     d = json.loads(dinfo.loc[0,'depthinfo'])
 
     # backward compatibility: nest depth info under the default ProbeA
-    if 'parmfile' in d.keys():
+    if 'ProbeA' not in d.keys():
         d={'ProbeA': d.copy()}
     dcell = {}
     for c in cellid:
@@ -4717,8 +4717,15 @@ def get_depth_info(cellid=None, siteid=None, rawid=None):
             probeid = 'A'
         d_ = d['Probe'+probeid]
         if chstr not in d_['channel info'].keys():
-            print('subtracting 384')
+            #import pdb
+            #pdb.set_trace()
             chstr=f"{(int(chstr)-384)}"
+            if chstr not in d_['channel info'].keys():
+                chstr = f"{(int(chstr) + 384 + 384)}"
+                print('adding 384')
+            else:
+                print('subtracting 384')
+        dcell[c]['probechannel'] = chstr
         if len(d_['channel info'][chstr])==3:
             dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d_['channel info'][chstr]
         else:

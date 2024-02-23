@@ -63,14 +63,12 @@ def load_data(site,stim_format,architecture="LN_STRF"):
     
     return cellnum, rec, ctx, loadkey, siteid, siteids
 
-def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid=None):
-    batch = 338
+def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid=None, batch=338):
     epochs = ctx['est']['resp'].epochs
     stim_epochs = ep.epoch_names_matching(epochs, "^STIM_")
     mono_epochs = [e for e in stim_epochs if e.startswith("STIM_NULL") | e.endswith("NULL:2")]
     bin_epochs = [e for e in stim_epochs if (e.startswith("STIM_NULL") is False) & (e.endswith("NULL:2") is False)]
     val_epochs = ep.epoch_names_matching(ctx['val']['resp'].epochs, "^STIM_")
-
 
     rlist = []
     strflist = []
@@ -145,8 +143,6 @@ def fitSTRF(site,stim_format,cellnum, ctx,loadkey,architecture="LN_STRF", cellid
         data = nems_to_json(strf)
         save_resource(filepath, data=data)
 
-        
-        
         #strflist.append(strf)
         cell_list.append(cellid)
         

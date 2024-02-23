@@ -1994,7 +1994,7 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
         zz=zz[np.isfinite(zz)]
         vmin,vmax = np.percentile(zz, [1, 95])
         #print(vmin,vmax)
-    im = ax.imshow(Z, extent=[av[0], av[-1], bv[-1], bv[0]],
+    im = ax.imshow(np.flipud(Z), extent=[av[0], av[-1], bv[0], bv[-1]],
                    interpolation='none', aspect='auto', cmap=cmap,
                    vmin=vmin, vmax=vmax)
     #ax.contour(ac, bc, N, [minN-0.5], linewidths=0.5)
