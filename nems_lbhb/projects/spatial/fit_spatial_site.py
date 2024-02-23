@@ -119,7 +119,11 @@ if __name__ == '__main__':
         cellid = None
     modelname = sys.argv[2]
     architecture = sys.argv[3]
-    batch = int(sys.argv[4])
+    if len(sys.argv)>4:
+        batch = int(sys.argv[4])
+    else:
+        # default binaural bignat free-field
+        batch=338
     """
     print('cellid',cellid)
     print('batch', batch)

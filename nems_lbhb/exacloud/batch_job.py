@@ -62,7 +62,7 @@ def write_batch_file(job_arguments,
         f.write(f'#SBATCH --cpus-per-task=1\n')
         if use_gpu:
             if reserve_gb==0:
-                reserve_gb=48
+                reserve_gb=64
         else:
             if reserve_gb==0:
                 reserve_gb=8
