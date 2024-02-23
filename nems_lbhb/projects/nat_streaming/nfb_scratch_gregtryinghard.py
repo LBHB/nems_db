@@ -53,12 +53,12 @@ for site in sites:
 
         manager = BAPHYExperiment(parmfile=parmfiles[:1])
     else:
-        manager = BAPHYExperiment(batch=batch, cellid=site)
+        manager = BAPHYExperiment(batch=batch, cellid=cells[0])
 
     rec = manager.get_recording(**{'rasterfs': rasterfs, 'resp': True, 'stim': False},
                                 recache=False)
 
-    if (site == 'LMD002a') or (site == 'LMD007a'):
+    if (site == 'LMD002a') or (site == 'LMD007a') or (site == 'LMD047a'):
         stim_epochs = ep.epoch_names_matching(rec['resp'].epochs, '^STIM_')
         bg_uniques = list(set([ee.split('_')[1] for ee in stim_epochs if ee.split('_')[1] != 'null']))
         fg_uniques = list(set([ee.split('_')[2] for ee in stim_epochs if ee.split('_')[2] != 'null']))
@@ -215,7 +215,7 @@ for site in sites:
             for ss, (mask, sig) in enumerate(zip(mask_list, signames)):
                 weights[:, i, ss], Efit[:, i, ss], nMSE[i, ss], nf[i, ss], _, r[i, ss], cell_deef = \
                     calc_psth_weights_of_model_responses_list_behavior(val, names,
-                                                              signame=sig, maskname=mask)
+                                                              signame=sig, maskname=mask, start_bins=120, keep_bins=100)
                 stimmy_df.append(cell_deef)
             stim_df = pd.merge(stimmy_df[0], stimmy_df[1], on='fgbg')
             stim_dff = pd.concat([stim_dff, stim_df], axis=0)
@@ -283,7 +283,7 @@ for site in sites:
 
 
 def calc_psth_weights_of_model_responses_list_behavior(val, names, signame='resp',
-                                              get_nrmse_fn=False, maskname=None, start_bins=80, keep_bins=120):
+                                              get_nrmse_fn=False, maskname=None, start_bins=50, keep_bins=150):
     '''fdfa'''
     good_bins = keep_bins+start_bins
     sig1 = val[signame].extract_epoch(names[0][0], mask=val[maskname])[:, 0, start_bins:good_bins].mean(axis=0) #BG
@@ -341,11 +341,13 @@ def calc_psth_weights_of_model_responses_list_behavior(val, names, signame='resp
     rB = val[signame].extract_epoch(names[1][0], mask=val[maskname])[:, 0, start_bins:good_bins]  # FG
     rAB = val[signame].extract_epoch(names[2][0], mask=val[maskname])[:, 0, start_bins:good_bins]  # BGFG
     snr_list_AB_A_B = ofit.compute_epoch_snr([rAB, rA, rB])
-    cell_deef = {'fgbg': [names[2][0]],
+    cell_def = pd.DataFrame(data={'fgbg': [names[2][0]],
                  f'combo_snr{ml}': [snr_list_AB_A_B[0]],
                  f'bg_snr{ml}': [snr_list_AB_A_B[1]],
-                 f'fg_snr{ml}': [snr_list_AB_A_B[2]]}
-    cell_def = pd.DataFrame.from_dict(cell_deef)
+                 f'fg_snr{ml}': [snr_list_AB_A_B[2]],
+                 f'combo_psth{ml}': [sigO],
+                 f'bg_psth{ml}': [sig1],
+                 f'fg_psth{ml}': [sig2]})
 
     return weights, np.nan, min_nMSE, norm_factor, get_nrmse, r_weight_model, cell_def#, get_error
 
@@ -361,13 +363,18 @@ epoch = 'STIM_cat129rec1jackhammerexcerpt1-0-4-1_ferretb1001R-0-4-1-0dB'
 
 cellid = 'LMD014a-A-256-1'
 epoch = 'STIM_cat23rec1beesbuzzingexcerpt1-0-4-1_ferretb4004R-0-4-1-0dB'
-'
 
-rec, d = load_behavior_recording(cellid[:7])
-dff, val = get_cell_fit_info(rec, d, cellid, epoch)
-plot_active_passive_psth(dff, val, smooth=True)
+id = 0
+for id in range(len(cellepopairs)):
+    cellid, epoch = cellepopairs[id][0], cellepopairs[id][1]
+    try:
+        rec, d = load_behavior_recording(cellid[:7])
+        dff, val = get_cell_fit_info(rec, d, cellid, epoch)
+        plot_active_passive_psth(dff, val, smooth=True)
+    except:
+        print(f'ID #{id} did not work. {cellid}\n{epoch}')
 
-def plot_active_passive_psth(dff, val, smooth=True, keep_bins=200, rasterfs=100, prestimsil=1.0):
+def plot_active_passive_psth(dff, val, smooth=True, keep_bins=200, rasterfs=100, prestimsil=1.0, sigma=1):
     mask_list = list(val.signals.keys())[1:]
     mask_labels = ['_' + dd.split('_')[1] for dd in mask_list]
 
@@ -409,7 +416,7 @@ def plot_active_passive_psth(dff, val, smooth=True, keep_bins=200, rasterfs=100,
 
 
 
-def get_cell_fit_info(rec, d, cellid, epoch, keep_bins=200):
+def get_cell_fit_info(rec, d, cellid, epoch, start_bins=50, keep_bins=150):
     val = rec.copy()
     val['resp'] = val['resp'].extract_channels([cellid])
 
@@ -433,7 +440,8 @@ def get_cell_fit_info(rec, d, cellid, epoch, keep_bins=200):
     for ss, mask in enumerate(mask_list):
         weights[:, ss], _, _, _, _, r[ss], cell_deef = \
             calc_psth_weights_of_model_responses_list_behavior(val, names,
-                                                               signame='resp', maskname=mask, keep_bins=keep_bins)
+                                                               signame='resp', maskname=mask, start_bins=start_bins,
+                                                               keep_bins=keep_bins)
         stimmy_df.append(cell_deef)
 
     stim_df = pd.merge(stimmy_df[0], stimmy_df[1], on='fgbg')
@@ -451,8 +459,8 @@ def get_cell_fit_info(rec, d, cellid, epoch, keep_bins=200):
     weight_df.columns = [item for sublist in column_labels2 for item in sublist]
 
     # Not sure why I need this, I guess some may not be floats, so just doing it
-    col_dict = {ii: float for ii in column_labels_flat}
-    weight_df = weight_df.astype(col_dict)
+    # col_dict = {ii: float for ii in column_labels_flat}
+    # weight_df = weight_df.astype(col_dict)
 
     # Add relative gain metric for all the fits
     for ss in mask_labels:
@@ -482,7 +490,6 @@ def load_behavior_recording(siteid, batch=349, rasterfs=100):
 
     expt_params = manager.get_baphy_exptparams()
     ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
-    ref_handle = {key: vall.strip() if type(vall) is str else vall for key, vall in ref_handle.items()}
 
     stim_epochs=ep.epoch_names_matching(epochs, '^STIM_')
     dstim = pd.DataFrame({'epoch': stim_epochs, 'fg': '', 'bg': '', 'fgc': 0, 'bgc': 0, 'snr': 0})

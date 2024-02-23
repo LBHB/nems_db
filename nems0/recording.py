@@ -726,7 +726,7 @@ class Recording:
                                                               epochs_for_val))
 
     def split_using_epoch_occurrence_counts(self, epoch_regex=None, keepfrac=1, selection=None,
-                                            filemask=None, verbose=False, **context):
+                                            filemask=None, est_all=False, verbose=False, **context):
         """
         :param epoch_regex:
         :param keepfrac:
@@ -831,8 +831,10 @@ class Recording:
 
         if verbose:
             print(groups)
-
-        return self.split_by_epochs(lo_rep_epochs, hi_rep_epochs)
+        if est_all:
+            return self.split_by_epochs(lo_rep_epochs+hi_rep_epochs, hi_rep_epochs)
+        else:
+            return self.split_by_epochs(lo_rep_epochs, hi_rep_epochs)
 
     def get_epoch_indices(self, epoch_name, allow_partial_epochs=False):
 

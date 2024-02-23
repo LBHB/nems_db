@@ -32,7 +32,7 @@ from nems_lbhb.baphy_io import load_continuous_openephys, get_spike_info, get_de
 
 siteids, cellis = db.get_batch_sites(batch=349)
 # tested sites
-siteid="LMD021a"
+siteid="LMD008a"
 batch=349
 rasterfs = 50
 PreStimSilence = 1.0

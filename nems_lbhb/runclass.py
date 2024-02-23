@@ -387,7 +387,7 @@ def NAT_stim(exptevents, exptparams, stimfmt='gtgram', separate_files_only=False
         if 'BG_Folder' in ReferenceHandle.keys():
             bg_folder = ReferenceHandle['BG_Folder']
             fg_folder = ReferenceHandle['FG_Folder']
-
+            fg_folder = fg_folder.split(" ")[0]
             bg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{bg_folder}')
             fg_root = Path(f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/{fg_folder}')
 

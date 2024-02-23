@@ -192,8 +192,8 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     'rw0','rwfg0', 'rwbg0' : actual weights for 1/2 of the reps--used to calculate noise levels in actual response
     'reps', number of times fgbg stimulus was presented
     'sf', : How predicted weights should be scaled to account for noise affecting weights of actual response
-    'CNN', 'LN' : prediction correlation for each model
-    'CNN_floor', 'LN_floor' : noise floor on prediction (shuffled in time). "good" models have prediction correlation> noise floor
+    'CNN', 'LN' : prediction correlation for each model (r_test)
+    'CNN_floor', 'LN_floor' : r_floor on prediction (shuffled in time). "good" models have prediction correlation>noise floor
     
     """
     if modelnames is None:
@@ -350,7 +350,7 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     ww, residual_sum, rank, singular_values = np.linalg.lstsq(
         np.stack([d['rwbg0'],np.zeros_like(d['rwbg'])], axis=1),
                  d['rwbg'], rcond=None)
-    print(f"ratio wbg10 / wbg5: {ww[0]:.3f} const={ww[1]:.3f} rw0 mean: {cell_epoch_df['rw0'].mean():.3f}")
+    log.info(f"ratio wbg10 / wbg5: {ww[0]:.3f} const={ww[1]:.3f} rw0 mean: {cell_epoch_df['rw0'].mean():.3f}")
 
     sf = cell_epoch_df['rw0']*ww[0]
     sf[sf<0.1]=0.1
@@ -359,12 +359,16 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     if verbose:
         return cell_epoch_df, ctx, ctx2
     else:
-        return cell_epoch_df, rec, rec2
+        return cell_epoch_df, ctx, ctx2
 
 
 def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
                    exclude_low_pred=True, fig_label=None, N=500, split_space=False):
-    
+    """
+    returns:
+       f - figure handle
+       ccs - 3 x 3 correlation between stim [wfg, wbg, rdiff] X [specgram, ln, cnn]
+    """
     # original
     #minresp, mingain, maxgain = 0.05, 0, 2.0
     if fig_label is None:
@@ -376,7 +380,7 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
 
     rCC = cell_epoch_df['Binaural Type']=='BG Contra, FG Contra'
     rIC = cell_epoch_df['Binaural Type']=='BG Ipsi, FG Contra'
-    labels=['BG Contra, FG Contra','BG Ipsi, FG Contra']
+    #labels=['BG Contra, FG Contra','BG Ipsi, FG Contra']
     print('valid n', cell_epoch_df.shape[0], 'out of', original_N, 'frac: ', np.round(cell_epoch_df.shape[0]/original_N,3))
     
     if split_space and (rIC.sum()>0):
@@ -390,6 +394,12 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
     labels = ['Specgram', 'LN pred', 'CNN pred']
     ccs=np.zeros((3,len(labels)))
     ps=np.zeros((3,len(labels)))
+
+    if cell_epoch_df.shape[0]==0:
+        log.info('no valid results')
+        f = None
+        return f,ccs
+    
     for rr, figlabel in zip(rrset, figlabels):
         f, axs = plt.subplots(len(labels)+1, 3, figsize=(6, 2*(len(labels)+1)))
         for row, (pre, ax, label) in enumerate(zip(prefs[1:], axs, labels)):
@@ -412,7 +422,6 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
                 br = cell_epoch_df.loc[rr, 'rwbg'] / cell_epoch_df.loc[rr, 'sf']
                 fp = cell_epoch_df.loc[rr, pre + 'wfg']
                 bp = cell_epoch_df.loc[rr, pre + 'wbg']
-
 
             dr = fr - br
             dp = fp - bp
