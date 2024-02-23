@@ -23,7 +23,7 @@ from nems.layers import WeightChannels, FIR, DoubleExponential, LevelShift, ReLU
 from nems.layers.base import Layer, Phi, Parameter
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
-from nems_lbhb.projects.freemoving.decoder_tools import spatial_tc_2d, dlc_to_tcpos, trials_to_path, tc_stability, cell_spatial_info, decode2d_forloop, decode2d, dist_occ_hist, dist_tc, trial_2d_tc, target_lickspout_epochs, all_trials_plot, dvt_allcells_plot
+import nems_lbhb.projects.freemoving.decoder_tools as dec
 
 runclassid = 132
 rasterfs = 100
@@ -136,7 +136,7 @@ except:
 
 
 # get tc and xy pos for each cell
-tc, xy, xy_edges = spatial_tc_2d(rec)
+tc, xy, xy_edges = dec.spatial_tc_2d(rec)
 
 # convert dlc sig to nearest tc bins
 # def dlc_to_tcpos(rec, xy):
@@ -224,9 +224,9 @@ tc, xy, xy_edges = spatial_tc_2d(rec)
 #
 #     return tc_12cc, tc1, tc2
 
-cell_si = cell_spatial_info(rec, xy)
+cell_si = dec.cell_spatial_info(rec, xy)
 
-tc_12_cc, tc1, tc2 = tc_stability(rec, tc, xy)
+tc_12_cc, tc1, tc2 = dec.tc_stability(rec, tc, xy)
 
 # plot 3 most stable and 3 least stable cells
 
@@ -258,7 +258,7 @@ for i, cell in enumerate(best_3_si+worst_3_si):
     ax[i, 2].imshow(tc2[cell])
     ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
 
-xnew, ynew = dlc_to_tcpos(rec, xy)
+xnew, ynew = dec.dlc_to_tcpos(rec, xy)
 f, ax = plt.subplots(1,1)
 ax.plot(xnew[:1000], ynew[:1000])
 ax.plot(rec['dlc'][2][:1000], rec['dlc'][3][:1000])
@@ -283,30 +283,31 @@ ax.set_title("binned x vs actual x")
 # def dist_occ_hist(rec, epochs, signal='dist', feature=0, bins = 40):
 
 # for each cell generate a dist feature/firing rate tuning curve
-all_trials_plot(rec=rec, cells=best_3_ss, tartime=0.6, error='sem', tc2d=True)
-dvt_allcells_plot(rec=rec, tartime=0.6, error='sem')
-
-trial_tc = trial_2d_tc(rec=rec)
-
-f, ax = plt.subplots(6,4, layout='tight', figsize=(7,10))
-for i, cell in enumerate(best_3_ss+worst_3_ss):
-    ax[i, 0].imshow(tc[cell].T)
-    ax[i, 1].imshow(tc1[cell].T)
-    ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
-    ax[i, 2].imshow(tc2[cell].T)
-    ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
-    ax[i, 3].imshow(trial_tc[cell].T)
-    ax[i, 3].set_title(f"trial data only {cell}")
+# all_trials_plot(rec=rec, cells=best_3_ss, tartime=0.6, error='sem', tc2d=True)
+# dvt_allcells_plot(rec=rec, tartime=0.6, error='sem')
+#
+# trial_tc = trial_2d_tc(rec=rec)
+#
+# f, ax = plt.subplots(6,4, layout='tight', figsize=(7,10))
+# for i, cell in enumerate(best_3_ss+worst_3_ss):
+#     ax[i, 0].imshow(tc[cell].T)
+#     ax[i, 1].imshow(tc1[cell].T)
+#     ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#     ax[i, 2].imshow(tc2[cell].T)
+#     ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#     ax[i, 3].imshow(trial_tc[cell].T)
+#     ax[i, 3].set_title(f"trial data only {cell}")
 
 def trial_dvst_design_matrix(rec, tbinwidth=0.2, tbin_num=10, dbin_num=10):
     """create a design matrix with binary values for time from target onset, distance, velocity and an offset"""
     # create target to lickspout epochs - trials
     tartime=0.6
     rasterfs = rec.meta['rasterfs']
-    hit_fa_epochs, tar_snrs = trials_to_path(rec=rec, tartime=0.6)
+    dec.dlc_within_radius(rec, target='Trial')
+    hit_fa_epochs, tar_snrs = dec.trials_to_path(rec=rec, tartime=0.6)
 
     # grab target onset and lick spout entry epochs - tarlick - and catch fa - catchfa - from resp, dlc, dist
-    tarlickeps = (rec['resp'].extract_epoch(hit_fa_epochs))
+    tarlickeps = rec['resp'].extract_epoch([hit_fa_epochs['start'], hit_fa_epochs['end']])
     dlc_eps = (rec['dlc'].extract_epoch(hit_fa_epochs))
     dist_eps = (rec['dist'].extract_epoch(hit_fa_epochs))
     trial_time_bin_edges = np.concatenate((np.arange(-tartime*rasterfs, 0, int(tbinwidth*rasterfs)), np.arange(0, len(tarlickeps[0, 0, :]), int(tbinwidth*rasterfs))))
