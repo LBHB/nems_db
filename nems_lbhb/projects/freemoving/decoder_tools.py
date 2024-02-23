@@ -189,7 +189,7 @@ def spatial_tc_2d(rec, occ_threshold=0.5, bin_width=20):
 
     return tc, xy, xy_edges
 
-def state_tc_2d(resp=gain, signal=dlc, resp_chans=None, sig_chans=['front_x', 'front_y',], rasterfs=None, occ_threshold=0.5, bin_width =1/30):
+def state_tc_2d(resp=None, signal=None, resp_chans=None, sig_chans=['front_x', 'front_y',], rasterfs=None, occ_threshold=0.5, bin_width =1/30):
     # assume rasterized signals
     # check and see if normalization is applied. Function currently only works for unnormalized rasterized signals
 
@@ -779,49 +779,57 @@ def points_within_radius(points_list, target, radius):
         distance = math.sqrt((target_x - point_x) ** 2 + (target_y - point_y) ** 2)
 
         if distance <= radius:
-            result.append(point)
+            result.append(True)
+        else:
+            result.append(False)
 
     return result
 
 # make function to create new signals for dlc values
-# def dlc_within_radius(rec, target='Trial', **kwargs):
-#
-#     # check for kwargs assign defaults
-#     if 'ref' in kwargs.keys():
-#         ref = kwargs['ref']
-#     else:
-#         ref = 'start'
-#     if 'radius' in kwargs.keys():
-#         radius = kwargs['radius']
-#     else:
-#         radius = 'auto'
-#     if 'signal' in kwargs.keys():
-#         signal = kwargs['signal']
-#     else:
-#         signal = 'dlc'
-#     if 'chan' in kwargs.keys():
-#         chans = kwargs['chan']
-#         if len(chans) > 2:
-#             raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
-#     else:
-#         chans = ['front_x', 'front_y']
-#
-#     dlc_chan = rec[f"{signal}"].extract_chans(chans)
-#
-#
-#     # grab the location of the target based on epochs
-#     if type(target) == str:
-#         print('Using epochs for target location.')
-#         e = rec[f"{signal}"].epochs
-#         tareps = e.loc[f"{target}"]
-#         for ep in tareps:
-#             if ref == 'start':
-#                 print("using start")
-#                 ep = dlc_chan.extract_epoch([:, :, 0]
-#             elif ref == 'stop':
-#                 print("using stop")
-#
-#     return points_within_radius(points_list, target_location, radius)
+def dlc_within_radius(rec, target='Trial', **kwargs):
+
+    # check for kwargs assign defaults
+    if 'ref' in kwargs.keys():
+        ref = kwargs['ref']
+    else:
+        ref = 'start'
+    if 'radius' in kwargs.keys():
+        radius = kwargs['radius']
+    else:
+        radius = 'auto'
+    if 'signal' in kwargs.keys():
+        signal = kwargs['signal']
+    else:
+        signal = 'dlc'
+    if 'chan' in kwargs.keys():
+        chans = kwargs['chan']
+        if len(chans) > 2:
+            raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
+    else:
+        chans = ['front_x', 'front_y']
+
+    dlc_chan = rec[f"{signal}"].extract_channels(chans)
+
+    # grab the location of the target based on epochs
+    if type(target) == str:
+        print('Using epochs for target location.')
+        e = rec[f"{signal}"].epochs
+        tars = e['name'].str.startswith('TRIAL')
+        tareps = dlc_chan.epochs.loc[tars]
+        for ep in tareps.iterrows():
+            if ref == 'start':
+                print("using start")
+                tep = dlc_chan.extract_epochs(ep)
+                ep_points = tep[:, :, 0]
+                target_location = (np.mean(ep_points[0, :, 0]), np.mean(ep_points[0, :, -1]))
+            elif ref == 'stop':
+                print("using stop")
+                ep = dlc_chan.extract_epochs(tareps)
+                ep_points = ep[:, :, -1]
+                target_location = (np.mean(ep_points[0, :, 0]), np.mean(ep_points[0, :, -1]))
+
+
+    return points_within_radius(zip(dlc_chan[0, :], dlc_chan[1, :]), target_location, radius)
 
 
 def xy_plot_animation(x_data, y_data, fname, type='.mp4', **kwargs):
@@ -1063,8 +1071,8 @@ def trial_2d_tc(rec, tartime=0.6, pix_bins=20):
     hit_fa_epochs, tar_snrs = target_lickspout_epochs(rec=rec, tartime=0.6)
 
     # grab target onset and lick spout entry epochs - tarlick - and catch fa - catchfa - from resp, dlc, dist
-    tarlickeps = rec['resp'].extract_epoch(hit_fa_epochs)
-    dlc_eps = rec['dlc'].extract_epoch(hit_fa_epochs)
+    tarlickeps = rec['resp'].extract_epochs([hit_fa_epochs['start'].values,hit_fa_epochs['end'].values])
+    dlc_eps = rec['dlc'].extract_epochs(hit_fa_epochs)
 
     # trial xy
     trialx = dlc_eps[:, 2, :]
