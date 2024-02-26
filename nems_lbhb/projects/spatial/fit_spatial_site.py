@@ -130,8 +130,8 @@ if __name__ == '__main__':
     print('modelname', modelname)
     """
 
-    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture)
-    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum, ctx, loadkey, architecture, cellid=cellid)
+    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture,batch=batch)
+    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum, ctx, loadkey, architecture, cellid=cellid,batch=batch)
 
     """
     log.info("Running xform_helper.fit_model_xform({0},{1},{2})".format(cellid, batch, modelname))

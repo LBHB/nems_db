@@ -94,6 +94,9 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     if 'dlc' in r.signals.keys():
         stim['dlc']=r['dlc'].as_continuous().T
     dstrfs = []
+    if len(t_indexes)>5000:
+        log.info('Reducing t_indexes length to 5000')
+        t_indexes=t_indexes[:5000]
     for mi, m in enumerate(modelspec_list):
         log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
 
