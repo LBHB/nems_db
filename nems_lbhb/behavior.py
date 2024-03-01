@@ -25,6 +25,10 @@ def create_trial_labels(exptparams, exptevents):
             and deliver a reward. Posthoc behavior analysis will call this a FA, even though a reward was delivered.
             In this code, we take this conservative approach. We throw out all data following early licks (regardless of
             if they were detected by BehaviorControl or not)
+    NOTE: 2024.02.29 - Noted another weird rare edge case where baphy seems to have
+            missed a lick. In these cases, my code was calling these misses, even though a target was
+            never presented. Added an extra check for this so that now these should be called
+            false alarms.
     """
 
     all_trials = np.unique(exptevents['Trial'])
@@ -291,12 +295,17 @@ def create_trial_labels(exptparams, exptevents):
                         trial_outcome = 'CORRECT_REJECT_TRIAL'
                 else:
                     sID.append('NULL')
-
+            
                 rt.append(np.inf)
 
             if (trial_outcome is None) & (ev.name.str.contains('.*Stim.*', regex=True).sum()==0):
                 # early trial - sound shut off before sounds played
                 trial_outcome = 'EARLY_TRIAL'
+            
+            if (trial_outcome == "MISS_TRIAL") & ("MISS_TRIAL" not in sID) & (outcome=="OUTCOME,FALSEALARM"):
+                # this means that we're calling it a miss but never saw a target stimulus, somehow
+                # baphy called it a false alarm. So, I guess a lick was detected online and trial aborted
+                trial_outcome = "FALSE_ALARM_TRIAL"
                 
             ev.loc[ev.name==outcome, 'name'] = trial_outcome
             # and update the time to span whole trial
