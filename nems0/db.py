@@ -10,7 +10,7 @@ import shutil
 
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, desc, exc
+from sqlalchemy import create_engine, desc, exc, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.automap import automap_base
 import pandas.io.sql as psql
@@ -91,7 +91,7 @@ def sqlite_test():
 
     conn = sqlite3.connect(dbfilepath)
     sql = "SELECT name FROM sqlite_master WHERE type='table' and name like 'Results'"
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     d = r.fetchone()
 
     if d is None:
@@ -174,7 +174,7 @@ def pd_query(sql=None, params=None):
         d = pd.read_sql_query(sql=sql, con=engine)
     else:
         try:
-            d = pd.read_sql_query(sql=sql, con=engine, params=params)
+            d = pd.read_sql_query(sql=text(sql), con=engine.connect(), params=params)
         except exc.SQLAlchemyError as OpErr:
             if OpErr._message().count('Lost connection to MySQL server during query')>0:
                 log.warning('Lost connection to MySQL server during query, trying again.')
@@ -185,7 +185,7 @@ def pd_query(sql=None, params=None):
 def sql_command(sql):
     engine = Engine()
     conn = engine.connect()
-    conn.execute(sql)
+    conn.execute(text(sql))
 
 ###### Functions that access / manipulate the job queue. #######
 
@@ -281,7 +281,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
     for note, commandPrompt, combo in zip(notes, commandPrompts, combined):
 
         sql = 'SELECT * FROM tQueue WHERE note="' + note +'"'
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
 
         if r.rowcount>0:
             # existing job, figure out what to do with it
@@ -294,12 +294,12 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                     message = "Resetting existing queue entry for: %s\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, progname='{}', GPU_job='{}', user='{}' WHERE id={}".format(
                         commandPrompt, GPU_job, user, queueid)
-                    r = conn.execute(sql)
+                    r = conn.execute(text(sql))
 
                 elif complete == 2:
                     message = "Dead queue entry for: %s exists, resetting.\n" % note
                     sql = "UPDATE tQueue SET complete=0, killnow=0, GPU_job='{}' WHERE id={}".format(GPU_job, queueid)
-                    r = conn.execute(sql)
+                    r = conn.execute(text(sql))
 
                 else:  # complete in [-1, 0] -- already running or queued
                     message = "Incomplete entry for: %s exists, skipping.\n" % note
@@ -315,7 +315,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
 
         else:
             sql = f"SELECT * FROM Results WHERE batch={combo[1]} and cellid='{combo[0]}' and modelname='{combo[2]}'"
-            rres = conn.execute(sql)
+            rres = conn.execute(text(sql))
             if (rres.rowcount==0) | force_rerun:
                 # new job
                 sql = "INSERT INTO tQueue (rundataid,progname,priority," +\
@@ -327,7 +327,7 @@ def enqueue_models(celllist, batch, modellist, force_rerun=False,
                 sql = sql.format(rundataid, commandPrompt, priority, GPU_job, reserve_gb,
                                  parmstring, allowqueuemaster, user, linux_user,
                                  note, waitid, codeHash)
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
                 queueid = r.lastrowid
                 message = "Added new entry for: %s.\n"  % note
             else:
@@ -431,7 +431,7 @@ def add_job_to_queue(args, note, force_rerun=False,
 
     sql = 'SELECT * FROM tQueue WHERE note="' + note +'"'
 
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     if r.rowcount>0:
         # existing job, figure out what to do with it
 
@@ -443,15 +443,15 @@ def add_job_to_queue(args, note, force_rerun=False,
                 commandPrompt, user, queueid)
             if complete == 1:
                 message = "Resetting existing queue entry for: %s\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             elif complete == 2:
                 message = "Dead queue entry for: %s exists, resetting.\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             elif complete == 0:
                 message = "Updating unstarted entry for: %s.\n" % note
-                r = conn.execute(sql)
+                r = conn.execute(text(sql))
 
             else:  # complete in [-1] -- already running
                 message = "Incomplete entry for: %s exists, skipping.\n" % note
@@ -476,7 +476,7 @@ def add_job_to_queue(args, note, force_rerun=False,
         sql = sql.format(rundataid, commandPrompt, priority, reserve_gb,
                          parmstring, allowqueuemaster, user, linux_user,
                          note, waitid, codeHash, GPU_job)
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
         queueid = r.lastrowid
         message = "Added new entry for: %s.\n"  % note
 
@@ -551,7 +551,7 @@ def update_job_complete(queueid=None):
     engine = Engine()
     conn = engine.connect()
     sql = f"UPDATE tQueue SET complete=1 WHERE id={queueid}"
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
 
     return r
@@ -591,7 +591,7 @@ def update_job_start(queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET complete=-1,progress=1 WHERE id={}"
            .format(queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -611,7 +611,7 @@ def update_job_pid(pid, queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET pid={} WHERE id={}"
            .format(pid, queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -630,7 +630,7 @@ def update_startdate(queueid=None):
     engine = Engine()
     conn = engine.connect()
     sql = ("UPDATE tQueue SET startdate=CURRENT_TIMESTAMP() WHERE id={}").format(queueid)
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -650,7 +650,7 @@ def update_job_pid(pid, queueid=None):
     conn = engine.connect()
     sql = ("UPDATE tQueue SET pid={} WHERE id={}"
            .format(pid, queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     conn.close()
     return r
 
@@ -685,14 +685,14 @@ def update_job_tick(queueid=None):
         sql = ("UPDATE tComputer set load1={},load5={}+second(now())/6000,"+
                "load15={},pingcount=0 where name='{}'").format(
                        l1, l5, l15, hostname)
-        r = conn.execute(sql)
+        r = conn.execute(text(sql))
     except:
         pass
 
     # tick off progress, tell daemon that job is live
     sql = ("UPDATE tQueue SET progress=progress+1 WHERE id={}"
            .format(queueid))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
 
     conn.close()
 
@@ -753,9 +753,9 @@ def update_results_table(modelspec, preview=None,
     Batches = db_tables['Batches']
     session = Session()
     results_id = None
-
-    for cellidx in range(modelspec.cell_count):
-        modelspec.cell_index = cellidx
+    cell_count = 1
+    for cellidx in range(cell_count):
+        #modelspec.cell_index = cellidx
         cellids = modelspec.meta.get('cellids', [modelspec.meta.get('cellid','CELL')])
         if ('r_test' in modelspec.meta.keys()) and (len(modelspec.meta['r_test'])<len(cellids)):
             cellids=cellids[:len(modelspec.meta['r_test'])]
@@ -885,8 +885,10 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
                     v = modelspec.meta[k][i[0]]
                 else:
                     v = modelspec.meta[k][0]
+                    
             except BaseException:
                 v = modelspec.meta[k]
+
             finally:
                 try:
                     v = np.asscalar(v)
@@ -900,6 +902,8 @@ def _fetch_attr_value(modelspec, k, default=0.0, cellid=None):
             v = modelspec.meta[k]
     else:
         v = default
+    if isinstance(v, np.ndarray):
+        v = v.item()
 
     return v
 
@@ -1015,8 +1019,8 @@ def get_batch_cells(batch=None, cellid=None, rawid=None, as_list=False):
     params = ()
     sql = "SELECT DISTINCT cellid,batch FROM Data WHERE 1"
     if batch is not None:
-        sql += " AND batch=%s"
-        params = params+(batch,)
+        sql += f" AND batch={batch}"
+        #params = params+(batch,)
 
     if cellid is not None:
         if SQL_ENGINE == 'sqlite':
@@ -1047,10 +1051,11 @@ def get_batch_cell_data(batch=None, cellid=None, rawid=None, label=None):
     engine = Engine()
     # eg, sql="SELECT * from Data WHERE batch=301 and cellid="
     params = ()
+    #" AND substring(Data.cellid,1,locate('_',Data.cellid)-1)=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
     sql = ("SELECT DISTINCT Data.*,sCellFile.goodtrials" +
            " FROM Data LEFT JOIN sCellFile " +
            " ON (Data.rawid=sCellFile.rawid " +
-           " AND substring(Data.cellid,1,locate('_',Data.cellid)-1)=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
+           " AND Data.cellid=sCellFile.cellid)" +  # remove underscore and beyond from Data.cellid
            " WHERE 1")
     if batch is not None:
         sql += " AND Data.batch=%s"
@@ -1080,17 +1085,19 @@ def get_batch_cell_data(batch=None, cellid=None, rawid=None, label=None):
     return d
 
 
-def get_batches(name=None):
+def get_batches(name=None, verbose=True):
     # eg, sql="SELECT * from Batches WHERE batch=301"
-    engine = Engine()
     params = ()
     sql = "SELECT *,id as batch FROM sBatch WHERE 1"
     if name is not None:
         sql += " AND name like %s"
         params = params+("%"+name+"%",)
-    d = pd.read_sql(sql=sql, con=engine, params=params)
-
-    return d
+    d = pd_query(sql=sql, params=params)
+    if verbose:
+        for i, r in d.iterrows():
+            print(f"{r['batch']}: {r['name']} runclassid={r.runclassid}")
+    else:
+        return d
 
 
 def get_cell_files(cellid=None, runclass=None, rawid=None):
@@ -1189,6 +1196,11 @@ def get_data_parms(rawid=None, parmfile=None):
         pass
 
     d = pd.read_sql(sql=sql, con=engine)
+
+    # save all values of different datatypes into a single value column
+    d['value'] = d['value'].astype(object)
+    d.loc[d['datatype']==2,'value'] = d.loc[d['datatype']==2,'svalue']
+    d.loc[d['datatype'] == 1, 'value'] = d.loc[d['datatype']==1,'svalue'].apply(lambda x: eval(x.replace(' ',',')))
 
     return d
 
@@ -1601,7 +1613,7 @@ def save_recording_to_db(recfilepath, meta=None, user="nems", labgroup="",
           " ({},'{}','{}','{}','{}','{}','{}',{})"
     sql = sql.format(batch, hsh, meta_string, recfilepath, "recording",
                      user, labgroup, int(public))
-    r = conn.execute(sql)
+    r = conn.execute(text(sql))
     dataid = r.lastrowid
     log.info("Added new entry %d for: %s.", dataid, recfilepath)
 

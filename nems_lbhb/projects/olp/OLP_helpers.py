@@ -9,6 +9,9 @@ from nems0.analysis.gammatone.gtgram import gtgram
 from scipy.io import wavfile
 import glob
 import seaborn as sb
+import re
+import nems0.epoch as ep
+
 
 def manual_fix_units(cell_list):
     '''I don't know why these units are incorrectly saved. But it was just these two, add
@@ -34,15 +37,19 @@ def get_load_options(batch):
         options = {'rasterfs': 100,
                    'stim': False,
                    'resp': True}
+    # Maybe add this as the default? Could save time?
+    # options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+
     return options
 
 
 def remove_olp_test(rec):
     '''In some cases the olp test and real olp are sorted together and will both come up. The real one
     is always last of OLPs run. So take that one.'''
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
     if passive.shape[0] >= 2:
         # if OLP test was sorted in here as well, slice it out of the epochs and data
-        print(f"Multiple ({passive.shape[0]}) OLPs found in {cellid}")
+        print(f"Multiple ({passive.shape[0]}) OLPs found in")
         runs = passive.shape[0] - 1
         max_run = (passive['end'] - passive['start']).reset_index(drop=True).idxmax()
         if runs != max_run:
@@ -55,6 +62,47 @@ def remove_olp_test(rec):
         rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start, :].reset_index(drop=True)
         rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
         rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
+
+    return rec
+
+
+def remove_olp_test_nonOLP(rec):
+    '''2023_01_04. For the batch 341 that has the prediction. The signal has multiple files, including non-OLP ones
+    so I changed remove_olp_test to be flexible to pick only OLP and if there are multiple OLPs, only the second one.
+    In some cases the olp test and real olp are sorted together and will both come up. The real one
+    is always last of OLPs run. So take that one.'''
+    passive = rec['resp'].epochs[rec['resp'].epochs['name'] == 'PASSIVE_EXPERIMENT']
+    filenames = ep.epoch_names_matching(rec['resp'].epochs, 'FILE_')
+    file_ends = [aa.split('_')[-1] for aa in filenames]
+
+    if passive.shape[0] >= 2 and len(file_ends) > 1:
+        print(f"Multiple ({passive.shape[0]}) FILEs found in rec['resp'], {file_ends}.")
+        OLPs = [cc for cc, aa in enumerate(file_ends) if aa == 'OLP']
+        print(f"Index of OLP(s) are {OLPs}")
+        if len(OLPs) > 1:
+            print(f"There are {len(OLPs)} OLP files, keeping the second one, index {max(OLPs)}.")
+            OLP_idx = max(OLPs)
+            print(f"Keeping file filenames {filenames[OLP_idx]}")
+        elif len(OLPs) == 1:
+            print(f"There is only 1 OLP file, keeping index {max(OLPs)}")
+            OLP_idx = max(OLPs)
+            print(f"Keeping file filenames {filenames[OLP_idx]}")
+
+        good_start = passive.iloc[OLP_idx, 1]
+        good_end = passive.iloc[OLP_idx, 2]
+
+        rec['resp'].epochs = rec['resp'].epochs.loc[(rec['resp'].epochs['start'] < good_end) &
+                                                    (rec['resp'].epochs['start'] >= good_start)].reset_index(drop=True)
+        rec['resp']._data = {key: val[(val >= good_start) & (val < good_end)] - good_start for key, val in rec['resp']._data.items()}
+        rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
+        rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
+        #
+        #
+        # rec['resp']._data = {key: val[val >= good_start] - good_start for key, val in rec['resp']._data.items()}
+        # rec['resp'].epochs = rec['resp'].epochs.loc[rec['resp'].epochs['start'] >= good_start, :].reset_index(
+        #     drop=True)
+        # rec['resp'].epochs['start'] = rec['resp'].epochs['start'] - good_start
+        # rec['resp'].epochs['end'] = rec['resp'].epochs['end'] - good_start
 
     return rec
 
@@ -95,11 +143,19 @@ def get_expt_params(resp, manager, cellid):
     if len(expt_params) == 1:
         ref_handle = expt_params[0]['TrialObject'][1]['ReferenceHandle'][1]
     if len(expt_params) > 1:
-        ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+        expt_params = manager.get_baphy_exptparams()
+        whichparams = [aa for aa in range(len(expt_params)) if expt_params[aa]['runclass']=='OLP']
+        # You can ultimately make this so that ref_handle['Combos'] must == 'Manual' to ensure the second is the real one
+        if len(whichparams) == 1:
+            ref_handle = expt_params[whichparams[0]]['TrialObject'][1]['ReferenceHandle'][1]
+        else:
+            print(f"There are {len(whichparams)} OLPs for {cellid}, using the last one.")
+            ref_handle = expt_params[whichparams[-1]]['TrialObject'][1]['ReferenceHandle'][1]
 
     params['experiment'], params['fs'] = cellid.split('-')[0], resp.fs
     params['PreStimSilence'], params['PostStimSilence'] = ref_handle['PreStimSilence'], ref_handle['PostStimSilence']
-    params['Duration'], params['SilenceOnset'] = ref_handle['Duration'], ref_handle['SilenceOnset']
+    params['Duration'] = ref_handle['Duration']
+    params['SilenceOnset'] = ref_handle['SilenceOnset']
     params['max reps'] = e[e.name.str.startswith('STIM')].pivot_table(index=['name'], aggfunc='size').max()
     params['stim length'] = int(e.loc[e.name.str.startswith('REF')].iloc[0]['end']
                 - e.loc[e.name.str.startswith('REF')].iloc[0]['start'])
@@ -113,7 +169,8 @@ def get_expt_params(resp, manager, cellid):
                                     for s in range(len(soundies))]
     params['units'], params['response'] = resp.chans, resp
     params['rec'] = resp #could be rec, was using for PCA function, might need to fix with spont/std
-    params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+    ## Took this out for fitting ARM data, not sure why ref_handle for that experiment doesn't have BG_Folder ONLY
+    # params['bg_folder'], params['fg_folder'] = ref_handle['BG_Folder'], ref_handle['FG_Folder']
     if 'Binaural' in ref_handle.keys():
         params['Binaural'] = ref_handle['Binaural']
     else:
@@ -165,6 +222,25 @@ def path_tabor_get_epochs(stim_epochs, rec, resp, params):
     return stim_epochs, rec, resp
 
 
+def remove_clicks(w, max_threshold=15, verbose=False):
+    '''SVD made in 2022_09. Same as the matlab function when OLP is called, it takes the high power
+    clicks away from an RMS normalized signal and log scales things above the threshold.'''
+    w_clean = w
+
+    # log compress everything > 67% of max
+    crossover = 0.67 * max_threshold
+    ii = (w>crossover)
+    w_clean[ii] = crossover + np.log(w_clean[ii]-crossover+1);
+    jj = (w<-crossover)
+    w_clean[jj] = -crossover - np.log(-w_clean[jj]-crossover+1);
+
+    if verbose:
+       print(f'bins compressed down: {ii.sum()} up: {jj.sum()} max {np.abs(w).max():.2f}-->{np.abs(w_clean).max():.2f}')
+
+    return w_clean
+
+
+
 def calc_base_reliability(full_resp):
     '''Calculates a correlation coeffient, or how reliable the neuron response is by taking two
     subsamples across repetitions, and takes the mean across the repetitions.'''
@@ -212,8 +288,8 @@ def label_ep_type(ep_name):
     to FG. 0 means null, 1 means primary speaker, 2 means secondary speaker'''
     if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
         stim_type = None
-    elif len(ep_name.split('_')) == 3:
-        seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+    elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
         if len(seps[0].split('-')) >= 4 or len(seps[1].split('-')) >= 4:
             if seps[0] != 'null' and seps[1] != 'null':
                 stim_type = seps[0].split('-')[3] + seps[1].split('-')[3]
@@ -241,8 +317,10 @@ def label_synth_type(ep_name):
         modulation, A = Non-RMS normalized unsynethic'''
         if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
             synth_type = None
-        elif len(ep_name.split('_')) == 3:
-            seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        # elif len(ep_name.split('_')) == 3:
+        #     seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+            seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
             if len(seps[0].split('-')) >= 5 or len(seps[1].split('-')) >= 5:
                 if seps[0] != 'null':
                     synth_type = seps[0].split('-')[4]
@@ -257,6 +335,46 @@ def label_synth_type(ep_name):
             synth_type = None
 
         return synth_type
+
+
+def label_dynamic_ep_type(ep_name):
+    '''Labels epochs that have one or two stimuli in it according to its duration (dynamic stimuli.
+    First position refers to BG, second to FG. n means null, f means full length, h means half length'''
+    if len(ep_name.split('_')) == 1 or ep_name[:5] != 'STIM_':
+        stim_type = None
+    elif len(list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])) == 2:
+        seps = list(re.findall("_(null|\d{2}.*)_(null|\d{2}.*)", ep_name)[0])
+
+        if len(seps[0].split('-')) >= 2 or len(seps[1].split('-')) >= 2:
+            if seps[0] != 'null' and seps[1] != 'null':
+                if seps[0].split('-')[1] == '0':
+                    btype = 'f'
+                else:
+                    btype = 'h'
+                if seps[1].split('-')[1] == '0':
+                    ftype = 'f'
+                else:
+                    ftype = 'h'
+                stim_type = btype + ftype
+            else:
+                if seps[0] == 'null':
+                    if seps[1].split('-')[1] == '0':
+                        ftype = 'f'
+                    else:
+                        ftype = 'h'
+                    stim_type = 'n' + ftype
+                elif seps[1] == 'null':
+                    if seps[0].split('-')[1] == '0':
+                        btype = 'f'
+                    else:
+                        btype = 'h'
+                    stim_type = btype + 'n'
+    else:
+        stim_type = None
+        print(f"None of your labeling things worked for {ep_name}, you should look into that.")
+
+    return stim_type
+
 
 def add_stimtype_epochs(sig):
     '''Mostly unneeded, just replaces epochs with their type instead of just
@@ -392,6 +510,210 @@ def weight_hist(df, tag=None, y='cells', ax=None):
         ax.legend(('Background', 'Foreground'), fontsize=4)
 
 
+def get_sound_statistics_full(weight_df, cuts=None, fs=100):
+    '''Updated 2022_09_13. Added mean relative gain for each sound. The rel_gain is BG or FG
+    respectively.
+    Updated 2022_09_12. Now it can take a DF that has multiple synthetic conditions and pull
+    the stats for the synthetic sounds. The dataframe will label these by column synth_kind
+    and you should pull out them that way, because they all have the same name in the name
+    column. Additionally, RMS normalization stats were added in RMS_norm and max_norm powers.
+    5/12/22 Takes a cellid and batch and figures out all the sounds that were played
+    in that experiment and calculates some stastistics it plots side by side. Also outputs
+    those numbers in a cumbersome dataframe'''
+    lfreq, hfreq, bins = 100, 24000, 48
+    cid, btch = weight_df.cellid.iloc[0], weight_df.batch.iloc[0]
+    manager = BAPHYExperiment(cellid=cid, batch=btch)
+    expt_params = manager.get_baphy_exptparams()
+    ref_handle = expt_params[-1]['TrialObject'][1]['ReferenceHandle'][1]
+    BG_folder, FG_folder = ref_handle['BG_Folder'], ref_handle['FG_Folder']
+
+    bbs = list(set([bb.split('_')[1][:2] for bb in weight_df.epoch]))
+    ffs = list(set([ff.split('_')[2][:2] for ff in weight_df.epoch]))
+    bbs.sort(key=int), ffs.sort(key=int)
+
+    synths = list(weight_df.synth_kind.unique())
+    kind_dict = {'M': 'SpectrotemporalMod', 'U': 'Spectrotemporal', 'T': 'Temporal',
+                  'S': 'Spectral', 'C': 'Cochlear'}
+
+    # if 'N' in synths and 'A' in synths:
+    #     synths.remove('A')
+
+    syn_df = []
+    for syn in synths:
+        # This is getting the mean rel gain for each sound (FG rel gain for FGs, etc)
+        synth_df = weight_df.loc[weight_df.synth_kind==syn].copy()
+        bg_df = synth_df[['BG', 'BG_rel_gain']]
+        fg_df = synth_df[['FG', 'FG_rel_gain']]
+
+        bg_mean = bg_df.groupby(by='BG').agg(mean=('BG_rel_gain', np.mean)).reset_index().\
+            rename(columns={'BG': 'short_name'})
+        fg_mean = fg_df.groupby(by='FG').agg(mean=('FG_rel_gain', np.mean)).reset_index().\
+            rename(columns={'FG': 'short_name'})
+        mean_df = pd.concat([bg_mean, fg_mean])
+
+        # This is just loading the sounds and stuffs
+        if syn=='A' or syn=='N':
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{BG_folder}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                   f'{FG_folder}/{ff}*.wav'))[0] for ff in ffs]
+        else:
+            bg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                f'{BG_folder}/{kind_dict[syn]}/{bb}*.wav'))[0] for bb in bbs]
+            fg_paths = [glob.glob((f'/auto/users/hamersky/baphy/Config/lbhb/SoundObjects/@OverlappingPairs/'
+                                f'{FG_folder}/{kind_dict[syn]}/{ff}*.wav'))[0] for ff in ffs]
+
+        paths = bg_paths + fg_paths
+        bgname = [bb.split('/')[-1].split('.')[0] for bb in bg_paths]
+        fgname = [ff.split('/')[-1].split('.')[0] for ff in fg_paths]
+        names = bgname + fgname
+
+        Bs, Fs = ['BG'] * len(bgname), ['FG'] * len(fgname)
+        labels = Bs + Fs
+
+        sounds = []
+        means = np.empty((bins, len(names)))
+        means[:] = np.NaN
+        for cnt, sn, pth, ll in zip(range(len(labels)), names, paths, labels):
+            sfs, W = wavfile.read(pth)
+            spec = gtgram(W, sfs, 0.02, 0.01, bins, lfreq, hfreq)
+
+            # to measure rms power... for rms-normed signals:
+            rms_normed = np.std(remove_clicks(W / W.std(), 15))
+            # for max-normed signals:
+            max_normed = np.std(W / np.abs(W).max()) * 5
+
+            dev = np.std(spec, axis=1)
+
+            freq_dev = np.std(spec, axis=0)
+            freq_mean = np.nanmean(spec, axis=1)
+            x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+            csm = np.cumsum(freq_mean)
+            big = np.max(csm)
+
+            freq75 = x_freq[np.abs(csm - (big * 0.75)).argmin()]
+            freq25 = x_freq[np.abs(csm - (big * 0.25)).argmin()]
+            freq50 = x_freq[np.abs(csm - (big * 0.5)).argmin()]
+            bandw = np.log2(freq75 / freq25)
+
+            means[:, cnt] = freq_mean
+
+            # 2022_09_23 Adding power spectrum stats
+            temp = np.abs(np.fft.fft(spec, axis=1))
+            freq = np.abs(np.fft.fft(spec, axis=0))
+
+            temp_ps = np.sum(np.abs(np.fft.fft(spec, axis=1)), axis=0)[1:].std()
+            freq_ps = np.sum(np.abs(np.fft.fft(spec, axis=0)), axis=1)[1:].std()
+
+            sounds.append({'name': sn.split('_')[0],
+                           'type': ll,
+                           'synth_kind': syn,
+                           'Tstationary': np.nanmean(dev),
+                           'bandwidth': bandw,
+                           '75th': freq75,
+                           '25th': freq25,
+                           'center': freq50,
+                           'spec': spec,
+                           'mean_freq': freq_mean,
+                           'Fstationary_wrong': np.std(freq_mean),
+                           'Fstationary': np.nanmean(freq_dev),
+                           'RMS_norm_power': rms_normed,
+                           'max_norm_power': max_normed,
+                           'temp_ps': temp,
+                           'freq_ps': freq,
+                           'temp_ps_std': temp_ps,
+                           'freq_ps_std': freq_ps,
+                           'short_name': sn[2:].split('_')[0].replace(' ', '')})
+
+            if cuts:
+                one, two = spec[:, cuts[0]:int(cuts[1] * fs)], spec[:, int(cuts[1] * fs):]
+                t_dev_start, t_dev_end = np.std(one, axis=1), np.std(two, axis=1)
+                f_dev_start, f_dev_end = np.std(one, axis=0), np.std(two, axis=0)
+
+
+                freq_mean_start, freq_mean_end = np.nanmean(one, axis=1), np.nanmean(two, axis=1)
+                x_freq = np.logspace(np.log2(lfreq), np.log2(hfreq), num=bins, base=2)
+                csm_start, csm_end = np.cumsum(freq_mean_start), np.cumsum(freq_mean_end)
+                big_start, big_end = np.max(csm_start), np.max(csm_end)
+
+                freq75_start = x_freq[np.abs(csm_start - (big_start * 0.75)).argmin()]
+                freq25_start = x_freq[np.abs(csm_start - (big_start * 0.25)).argmin()]
+                bandw_start = np.log2(freq75_start / freq25_start)
+
+                freq75_end = x_freq[np.abs(csm_end - (big_end * 0.75)).argmin()]
+                freq25_end = x_freq[np.abs(csm_end - (big_end * 0.25)).argmin()]
+                bandw_end = np.log2(freq75_end / freq25_end)
+
+                sounds[cnt]['Tstationary_start'] = np.nanmean(t_dev_start)
+                sounds[cnt]['Tstationary_end'] = np.nanmean(t_dev_end)
+                sounds[cnt]['Fstationary_start'] = np.nanmean(f_dev_start)
+                sounds[cnt]['Fstationary_end'] = np.nanmean(f_dev_end)
+                sounds[cnt]['bandwidth_start'] = bandw_start
+                sounds[cnt]['bandwidth_end'] = bandw_end
+
+        sound_df = pd.DataFrame(sounds)
+        # Merge the relative gain data into the DF of sounds
+        sound_df = pd.merge(sound_df, mean_df, on='short_name').rename(columns={'mean': 'rel_gain'})
+
+        # Add mod spec calculations to sound_df, 2022_08_26
+        mods = np.empty((sound_df.iloc[0].spec.shape[0], sound_df.iloc[0].spec.shape[1],
+                         len(sound_df)))
+        mods[:] = np.NaN
+        mod_list = []
+        for cnt, ii in enumerate(sound_df.name):
+            row = sound_df.loc[sound_df.name == ii]
+            spec = row['spec'].values[0]
+            mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
+            mods[:, :, cnt] = mod
+            mod_list.append(mod)
+        avmod = np.nanmean(mods, axis=2)
+        norm_list = [aa - avmod for aa in mod_list]
+        avmod = avmod[:, :, np.newaxis]
+        normmod = mods - avmod
+        clow, chigh = np.min(normmod), np.max(normmod)
+        sound_df['modspec'] = mod_list
+        sound_df['normmod'] = norm_list
+        # selfsounds['normmod'] = norm_list
+
+        trimspec = [aa[24:, 30:69] for aa in sound_df['modspec']]
+        negs = [aa[:, :20] for aa in trimspec]
+        negs = [aa[:, ::-1] for aa in negs]
+        poss = [aa[:, -20:] for aa in trimspec]
+        trims = [(nn + pp) / 2 for (nn, pp) in zip(negs, poss)]
+        sound_df['trimspec'] = trims
+
+        # Collapses across each access
+        ots = [np.nanmean(aa, axis=0) for aa in trims]
+        ofs = [np.nanmean(aa, axis=1) for aa in trims]
+
+        tbins, fbins = 100, 48
+
+        wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1 / tbins))
+        wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1 / 6))
+
+        wt2 = wt[50:70]
+        wf2 = wf[24:]
+
+        cumwt = [np.cumsum(aa) / np.sum(aa) for aa in ots]
+        bigt = [np.max(aa) for aa in cumwt]
+        freq50t = [wt2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumwt, bigt)]
+
+        cumft = [np.cumsum(aa) / np.sum(aa) for aa in ofs]
+        bigf = [np.max(aa) for aa in cumft]
+        freq50f = [wf2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumft, bigf)]
+
+        sound_df['avgwt'], sound_df['avgft'] = ots, ofs
+        sound_df['cumwt'], sound_df['cumft'] = cumwt, cumft
+        sound_df['t50'], sound_df['f50'] = freq50t, freq50f
+        sound_df['meanT'], sound_df['meanF'] = ots, ofs
+        # End mod spec addition 2022_08_26
+        syn_df.append(sound_df)
+
+    main_df = pd.concat(syn_df)
+
+    return main_df
+
+
 def get_sound_statistics(weight_df, plot=True):
     '''5/12/22 Takes a cellid and batch and figures out all the sounds that were played
     in that experiment and calculates some stastistics it plots side by side. Also outputs
@@ -453,6 +775,59 @@ def get_sound_statistics(weight_df, plot=True):
 
     sound_df = pd.DataFrame(sounds)
 
+    # Add mod spec calculations to sound_df, 2022_08_26
+    mods = np.empty((sound_df.iloc[0].spec.shape[0], sound_df.iloc[0].spec.shape[1],
+                     len(sound_df)))
+    mods[:] = np.NaN
+    mod_list = []
+    for cnt, ii in enumerate(sound_df.name):
+        row = sound_df.loc[sound_df.name == ii]
+        spec = row['spec'].values[0]
+        mod = np.fft.fftshift(np.abs(np.fft.fft2(spec)))
+        mods[:, :, cnt] = mod
+        mod_list.append(mod)
+    avmod = np.nanmean(mods, axis=2)
+    norm_list = [aa - avmod for aa in mod_list]
+    avmod = avmod[:, :, np.newaxis]
+    normmod = mods - avmod
+    clow, chigh = np.min(normmod), np.max(normmod)
+    sound_df['modspec'] = mod_list
+    sound_df['normmod'] = norm_list
+    # selfsounds['normmod'] = norm_list
+
+    trimspec = [aa[24:, 30:69] for aa in sound_df['modspec']]
+    negs = [aa[:, :20] for aa in trimspec]
+    negs = [aa[:, ::-1] for aa in negs]
+    poss = [aa[:, -20:] for aa in trimspec]
+    trims = [(nn + pp) / 2 for (nn, pp) in zip(negs, poss)]
+    sound_df['trimspec'] = trims
+
+    # Collapses across each access
+    ots = [np.nanmean(aa, axis=0) for aa in trims]
+    ofs = [np.nanmean(aa, axis=1) for aa in trims]
+
+    tbins, fbins = 100, 48
+
+    wt = np.fft.fftshift(np.fft.fftfreq(tbins, 1 / tbins))
+    wf = np.fft.fftshift(np.fft.fftfreq(fbins, 1 / 6))
+
+    wt2 = wt[50:70]
+    wf2 = wf[24:]
+
+    cumwt = [np.cumsum(aa) / np.sum(aa) for aa in ots]
+    bigt = [np.max(aa) for aa in cumwt]
+    freq50t = [wt2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumwt, bigt)]
+
+    cumft = [np.cumsum(aa) / np.sum(aa) for aa in ofs]
+    bigf = [np.max(aa) for aa in cumft]
+    freq50f = [wf2[np.abs(cc - (bb * 0.5)).argmin()] for (cc, bb) in zip(cumft, bigf)]
+
+    sound_df['avgwt'], sound_df['avgft'] = ots, ofs
+    sound_df['cumwt'], sound_df['cumft'] = cumwt, cumft
+    sound_df['t50'], sound_df['f50'] = freq50t, freq50f
+    sound_df['meanT'], sound_df['meanF'] = ots, ofs
+    # End mod spec addition 2022_08_26
+
     # allmean = np.nanmean(means, axis=1, keepdims=True)
     # norm_mean = [aa / allmean for aa in sound_df.mean_freq]
     # freq_stationarity = [np.std(aa) for aa in allmean]
@@ -495,23 +870,112 @@ def get_sound_statistics(weight_df, plot=True):
     return sound_df
 
 
+def plot_sound_stats(sound_df, stats, labels=None, synth_kind='N', lines=None):
+    '''2022_09_14. This is a way to look at the sound stats (passed as a list) from a sound_df and compare them. But also, if you add
+    lines, a dictionary, which passes keys as those matching something found in stats, with a cutoff. That cut off will
+    be drawn as a line on that subplot for that stat and it will also tell you what sounds are below that threshold,
+    returning those sounds in a dictionary where the stat is a key and the values are a list of 'bad' sounds. Labels
+    are optional, passing it will look prettier than it defaulting the labels to what the sound stat in the df.'''
+    sound_df = sound_df.loc[sound_df.synth_kind == synth_kind]
+    sound_df.rename(columns={'std': 'Tstationary', 'freq_stationary': 'Fstationary', 'RMS_norm_power': 'RMS_power',
+                             'max_norm_power': 'max_power'}, inplace=True)
+    if isinstance(stats, list):
+        lens = len(stats)
+    elif isinstance(stats, str):
+        lens, stats = 1, [stats]
+
+    if lens <= 3:
+        hh, ww = 1, lens
+    else:
+        hh, ww = int(np.ceil(lens / 3)), 3
+    sound_df['Tstationary'] = [np.mean(aa) for aa in sound_df['Tstationary']]
+
+    fig, axes = plt.subplots(hh, ww, figsize=(ww * 5, hh * 5))
+    axes = np.ravel(axes)
+
+    bads = {}
+    for cnt, (ax, st) in enumerate(zip(axes, stats)):
+        sb.barplot(x='short_name', y=st,
+                   palette=["lightskyblue" if x == 'BG' else 'yellowgreen' for x in sound_df.type],
+                   data=sound_df, ci=68, ax=ax)
+        ax.set_xticklabels(sound_df.short_name, rotation=90, fontweight='bold', fontsize=7)
+        if labels:
+            ax.set_ylabel(labels[cnt], fontweight='bold', fontsize=12)
+        else:
+            ax.set_ylabel(stats[cnt], fontweight='bold', fontsize=12)
+        ax.spines['top'].set_visible(True), ax.spines['right'].set_visible(True)
+        ax.set(xlabel=None)
+
+        if st in lines.keys():
+            xmin, xmax = ax.get_xlim()
+            ax.hlines(lines[st], xmin=xmin, xmax=xmax, ls=':', color='black')
+            ax.set_xlim(xmin, xmax)
+            bad_df = sound_df.loc[sound_df[st] <= lines[st]]
+            bads[st] = bad_df.short_name.tolist()
+    axes[0].set_title(f"Synth: {synth_kind}", fontsize=10, fontweight='bold')
+    return bads
+
+
 def add_sound_stats(weight_df, sound_df):
+    '''Updated 2022_09_23. Added t50 and f50 and modspec stuff to weight_df
+    Updated 2022_09_13. Previously it just added the T, band, and F stats to the dataframe.
+    I updated it so that it takes synth kind into account when adding the statistics, and
+    also adds RMS and max power for the sounds.'''
     BGdf, FGdf = sound_df.loc[sound_df.type == 'BG'], sound_df.loc[sound_df.type == 'FG']
     BGmerge, FGmerge = pd.DataFrame(), pd.DataFrame()
     BGmerge['BG'] = [aa[2:].replace(' ', '') for aa in BGdf.name]
-    BGmerge['BG_Tstationary'] = [np.nanmean(aa) for aa in BGdf['std']]
+    BGmerge['BG_Tstationary'] = BGdf.Tstationary.tolist()
     BGmerge['BG_bandwidth'] = BGdf.bandwidth.tolist()
-    BGmerge['BG_Fstationary'] = BGdf.freq_stationary.tolist()
+    BGmerge['BG_Fstationary'] = BGdf.Fstationary.tolist()
+    BGmerge['BG_Tstationary_start'] = BGdf.Tstationary_start.tolist()
+    BGmerge['BG_bandwidth_start'] = BGdf.bandwidth_start.tolist()
+    BGmerge['BG_Fstationary_start'] = BGdf.Fstationary_start.tolist()
+    BGmerge['BG_Tstationary_end'] = BGdf.Tstationary_end.tolist()
+    BGmerge['BG_bandwidth_end'] = BGdf.bandwidth_end.tolist()
+    BGmerge['BG_Fstationary_end'] = BGdf.Fstationary_end.tolist()
+    BGmerge['BG_RMS_power'] = BGdf.RMS_norm_power.tolist()
+    BGmerge['BG_max_power'] = BGdf.max_norm_power.tolist()
+    BGmerge['BG_temp_ps'] = BGdf.temp_ps.tolist()
+    BGmerge['BG_temp_ps_std'] = BGdf.temp_ps_std.tolist()
+    BGmerge['BG_freq_ps'] = BGdf.freq_ps.tolist()
+    BGmerge['BG_freq_ps_std'] = BGdf.freq_ps_std.tolist()
+    # BGmerge['BG_avgwt'] = BGdf.avgwt.tolist()
+    # BGmerge['BG_avgft'] = BGdf.avgft.tolist()
+    # BGmerge['BG_cumwt'] = BGdf.cumwt.tolist()
+    # BGmerge['BG_cumft'] = BGdf.cumft.tolist()
+    BGmerge['BG_t50'] = BGdf.t50.tolist()
+    BGmerge['BG_f50'] = BGdf.f50.tolist()
+    BGmerge['synth_kind'] = BGdf.synth_kind.tolist()
 
     FGmerge['FG'] = [aa[2:].replace(' ', '') for aa in FGdf.name]
-    FGmerge['FG_Tstationary'] = [np.nanmean(aa) for aa in FGdf['std']]
+    FGmerge['FG_Tstationary'] = FGdf.Tstationary.tolist()
     FGmerge['FG_bandwidth'] = FGdf.bandwidth.tolist()
-    FGmerge['FG_Fstationary'] = FGdf.freq_stationary.tolist()
+    FGmerge['FG_Fstationary'] = FGdf.Fstationary.tolist()
+    FGmerge['FG_Tstationary_start'] = FGdf.Tstationary_start.tolist()
+    FGmerge['FG_bandwidth_start'] = FGdf.bandwidth_start.tolist()
+    FGmerge['FG_Fstationary_start'] = FGdf.Fstationary_start.tolist()
+    FGmerge['FG_Tstationary_end'] = FGdf.Tstationary_end.tolist()
+    FGmerge['FG_bandwidth_end'] = FGdf.bandwidth_end.tolist()
+    FGmerge['FG_Fstationary_end'] = FGdf.Fstationary_end.tolist()
+    FGmerge['FG_RMS_power'] = FGdf.RMS_norm_power.tolist()
+    FGmerge['FG_max_power'] = FGdf.max_norm_power.tolist()
+    FGmerge['FG_temp_ps'] = FGdf.temp_ps.tolist()
+    FGmerge['FG_temp_ps_std'] = FGdf.temp_ps_std.tolist()
+    FGmerge['FG_freq_ps'] = FGdf.freq_ps.tolist()
+    FGmerge['FG_freq_ps_std'] = FGdf.freq_ps_std.tolist()
+    # FGmerge['FG_avgwt'] = FGdf.avgwt.tolist()
+    # FGmerge['FG_avgft'] = FGdf.avgft.tolist()
+    # FGmerge['FG_cumwt'] = FGdf.cumwt.tolist()
+    # FGmerge['FG_cumft'] = FGdf.cumft.tolist()
+    FGmerge['FG_t50'] = FGdf.t50.tolist()
+    FGmerge['FG_f50'] = FGdf.f50.tolist()
+    FGmerge['synth_kind'] = FGdf.synth_kind.tolist()
 
-    weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG'], validate='m:1')
-    weight_df = pd.merge(right=FGmerge, left=weight_df, on=['FG'], validate='m:1')
+    weight_df = pd.merge(right=BGmerge, left=weight_df, on=['BG', 'synth_kind'], validate='m:1')
+    weight_df = pd.merge(right=FGmerge, left=weight_df, on=['FG', 'synth_kind'], validate='m:1')
 
     return weight_df
+
 
 
 def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
@@ -530,3 +994,179 @@ def plot_example_specs(sound_df, sound_idx, lfreq=100, hfreq=24000, bins=48):
         AX.set_ylabel("Frequency (Hz)", fontweight='bold', fontsize=8)
         AX.set_xlabel("Time (s)", fontweight='bold', fontsize=8)
         AX.set_title(f"{row.type}: {row['name'][2:]}", fontweight='bold', fontsize=10)
+
+
+def filter_weight_df(df, suffixes=['_end', '_start'], fr_thresh=0.03, r_thresh=0.6, quad_return=3, bin_kind='11', area=None,
+                     synth_kind='A', weight_lims=[-1, 2], bads=True, bad_filt={'RMS_power': 0.95, 'max_power': 0.3}):
+    '''2022_11_09. Takes a df of weights and you can specify a bunch of filters I commonly use and will apply them all
+    separately, which is nice because I've always done this as a clusterfuck.'''
+    if area:
+        df = df.loc[df.area==area]
+    if fr_thresh:
+        filt_labels = [[f"bg_FR{fl}", f"fg_FR{fl}"] for fl in suffixes]
+        for ff in filt_labels:
+            if quad_return == 3:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 2:
+                df = df.loc[(np.abs(df[ff[0]]) <= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 6:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (np.abs(df[ff[1]]) <= fr_thresh)]
+            else:
+                raise ValueError(f"quad_return parameter must be 3, 2, or 6, you gave {quat_return}.")
+    if r_thresh:
+        r_filt_labels = [[f"r{fl}", f"r{fl}"] for fl in suffixes]
+        for rf in r_filt_labels:
+            df = df.loc[(df[rf[0]] >= r_thresh) & (df[rf[1]] >= r_thresh)]
+    if bin_kind:
+        df = df.loc[df.kind==bin_kind]
+    if synth_kind:
+        df = df.loc[df.synth_kind==synth_kind]
+    if weight_lims:
+        if isinstance(weight_lims, int):
+            weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+        if len(weight_lims) == 2:
+            w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in suffixes]
+            for wf in w_filt_labels:
+                df = df.loc[(df[wf[0]] < weight_lims[1]) & (df[wf[0]] > weight_lims[0]) &
+                            (df[wf[1]] < weight_lims[1]) & (df[wf[1]] > weight_lims[0])]
+        else:
+            raise ValueError(f"You put '{weight_lims}' as your weight cuts, make it two values or a single int.")
+    if bads == True:
+        sound_df = get_sound_statistics_full(df)
+        if synth_kind == 'A':
+            stat = 'max_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['Max Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind=synth_kind)
+            bads = list(bad_dict[stat])
+        else:
+            stat = 'RMS_power'
+            bad_dict = plot_sound_stats(sound_df, [stat], labels=['RMS Power'],
+                                             lines={stat: bad_filt[stat]}, synth_kind='N')
+            bads = list(bad_dict[stat])
+        df = df.loc[df['BG'].apply(lambda x: x not in bads)]
+        df = df.loc[df['FG'].apply(lambda x: x not in bads)]
+
+    return df
+
+
+def filter_synth_df_by(df_full, use='N', suffixes=['', '_start', '_end'], fr_thresh=0.03, r_thresh=0.6,
+                       quad_return=3, bin_kind='11', weight_lims=[-1.5, 2.5], area=None):
+    '''2022_12_01. You give it a DF with many synthetic conditions, specify the one you want to be the condition
+    that is used as the filter for a variety of metrics and it returns the dataframe. Also can do area or not.'''
+    df_full = df_full.loc[df_full.kind==bin_kind]
+    df_full['filt_id'] = df_full.cellid + '-' + df_full.BG + '-' + df_full.FG
+
+    if area:
+        df_full = df_full.loc[df_full.area==area]
+
+    synths = list(df_full.synth_kind.unique())
+    synth_dfs = {x: df_full.loc[df_full.synth_kind==x].sort_values(by=['filt_id']).reset_index(drop=True) for x in synths}
+
+    df = synth_dfs[use]
+
+    if fr_thresh:
+        filt_labels = [[f"bg_FR{fl}", f"fg_FR{fl}"] for fl in suffixes]
+        for ff in filt_labels:
+            if quad_return == 3:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 2:
+                df = df.loc[(np.abs(df[ff[0]]) <= fr_thresh) & (df[ff[1]] >= fr_thresh)]
+            elif quad_return == 6:
+                df = df.loc[(df[ff[0]] >= fr_thresh) & (np.abs(df[ff[1]]) <= fr_thresh)]
+            else:
+                raise ValueError(f"quad_return parameter must be 3, 2, or 6, you gave {quad_return}.")
+    if r_thresh:
+        r_filt_labels = [[f"r{fl}", f"r{fl}"] for fl in suffixes]
+        for rf in r_filt_labels:
+            df = df.loc[(df[rf[0]] >= r_thresh) & (df[rf[1]] >= r_thresh)]
+
+    if weight_lims:
+        if isinstance(weight_lims, int):
+            weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+        if len(weight_lims) == 2:
+            w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in suffixes]
+            for wf in w_filt_labels:
+                df = df.loc[(df[wf[0]] < weight_lims[1]) & (df[wf[0]] > weight_lims[0]) &
+                            (df[wf[1]] < weight_lims[1]) & (df[wf[1]] > weight_lims[0])]
+
+    idxs = df.index.tolist()
+
+    dfs_filtered = [dd.loc[dd.index.isin(idxs)] for dd in synth_dfs.values()]
+
+    full_suffixes = ['', '_start', '_end']
+    bad_idxs = []
+    if weight_lims:
+        for ddf in dfs_filtered:
+            if isinstance(weight_lims, int):
+                weight_lims = [-np.abs(weight_lims), np.abs(weight_lims)]
+            if len(weight_lims) == 2:
+                w_filt_labels = [[f"weightsA{fl}", f"weightsB{fl}"] for fl in full_suffixes]
+                for wf in w_filt_labels:
+                    rejects = ddf.loc[(ddf[wf[0]] >= weight_lims[1]) | (ddf[wf[0]] <= weight_lims[0]) |
+                                (ddf[wf[1]] >= weight_lims[1]) | (ddf[wf[1]] <= weight_lims[0])]
+                    if len(rejects) > 0:
+                        reject_idxs = rejects.index.tolist()
+                        bad_idxs.append(reject_idxs)
+
+        flat_bads = list(set([y for x in bad_idxs for y in x]))
+
+        dfs_filtered = [dd.loc[~dd.index.isin(flat_bads)] for dd in dfs_filtered]
+
+
+    cells = [cc.cellid.tolist() for cc in dfs_filtered]
+    check = [True for aa in cells if cells[0] == aa]
+    if False in check:
+        raise ValueError("It's possible the orders of the dataframes are not the same and your indexing will be weird.")
+
+    big_df = pd.concat(dfs_filtered)
+
+    # This is just going to remove a few outlier weights, if you really want to be careful, make it extract that row from
+    # every synthetic type dataframe.
+
+
+    big_df['filt_by'] = use
+
+    return big_df
+
+
+def get_cut_info(df, prebins=50, postbins=50, trialbins=200, fs=100):
+    '''2023_01_03. Made this so that you can take a dataframe with no metrics and calculate the masks
+    for the assorted cut fits that were applied using the fit_segment parameter. I didn't want it to
+    have to load files again to get ref_handle, so the bins are input options. For OLP, they should
+    always be the defaults, so it shouldn't matter for this purpose.'''
+    start, dur = [int(int(aa) / 1000 * fs) for aa in (list(set(df.fit_segment))[0].split('-'))]
+    rs = [aa for aa in list(df.columns) if ('weightsA' in aa) and ('_pred' not in aa)]
+    cut_labels = [f"_{aa.split('_')[1]}" if len(aa.split('_'))==2 else '' for aa in rs]
+
+    antidur = trialbins - prebins - postbins - dur
+
+    full = [False] * prebins + [True] * dur + [True] * antidur + [True] * postbins
+    goods = [False] * prebins + [True] * dur + [False] * antidur + [False] * postbins
+    bads = [False] * prebins + [False] * dur + [True] * antidur + [False] * postbins
+    full_nopost = [False] * prebins + [True] * dur + [True] * antidur + [False] * postbins
+    cut_list = [full, goods, bads, full_nopost]
+
+    cuts_info = {cut_labels[i]: cut_list[i] for i in range(len(cut_list))}
+
+    return cuts_info
+
+
+def add_animal_name_col(df):
+    '''2023_01_12. Just takes a dataframe and decides what the animal ID was, useful for splitting based on animals.
+    You'll have to manually add dividers of _A and _B for different animals if trying to divide by hemispheres, which
+    are typically denoted by experiment number.'''
+    animals = []
+    cellids = df.cellid.tolist()
+    for id in cellids:
+        cell = id.split('-')[0]
+        animal = cell[:3]
+        exp = int(cell[3:6])
+        if animal == 'CLT':
+            if exp > 26:
+                animal = 'CLT_B'
+            else:
+                animal = 'CLT_A'
+        animals.append(animal)
+
+    df['animal'] = animals
+    return df

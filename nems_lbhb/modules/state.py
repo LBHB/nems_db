@@ -989,8 +989,10 @@ class lv_norm(NemsModule):
             # faster(?): compute all scaling terms then apply at once (outside of loop)
             sf = np.zeros_like(x)
             for l in range(d.shape[1]):
-                sf += (d[:,[l]] + g[:,[l]]*state[[l],:]) * lv[[l],:]
-            
+                # old way
+                sf += (d[:,[l]] + g[:,[l]] * state[[l], :]) * lv[[l], :]
+
+
             x *= np.exp(sf)
             return x
 
@@ -1081,11 +1083,14 @@ class indep_noise(NemsModule):
         set_bounds = False
         additive = True
         exclude_chans = None
+        poisson = False
         for o in options[2:]:
             if o == 'bound':
                 set_bounds = True
             elif o == 'g':
                 additive = False
+            elif o == 'p':
+                poisson = True
             elif o.startswith("sm"):
                 state = "state_mod"
             elif o.startswith("x"):
@@ -1098,7 +1103,9 @@ class indep_noise(NemsModule):
         # init gain/dc params
         mean_g = np.zeros([n_chans, n_states])
         sd_g = np.ones([n_chans, n_states])/10
-        if additive:
+        if poisson:
+            mean_g[:,0]=0.5
+        elif additive:
             mean_g[:,0]=0.5
         else:
             mean_g[:,0]=0.1
@@ -1109,6 +1116,7 @@ class indep_noise(NemsModule):
                           's': state,
                           'indep': 'indep',
                           'additive': additive,
+                          'poisson': poisson,
                           'n_inputs': n_chans,
                           'n_states': n_states,
                           'exclude_chans': exclude_chans},
@@ -1126,7 +1134,7 @@ class indep_noise(NemsModule):
 
         return indep_noise(**template)
 
-    def eval(self, rec, i, o, s, indep, g=None, additive=True, exclude_chans=None, **kw_args):
+    def eval(self, rec, i, o, s, indep, g=None, additive=True, exclude_chans=None, poisson=False, **kw_args):
         '''
         Parameters
         ----------
@@ -1146,12 +1154,20 @@ class indep_noise(NemsModule):
             state = state[keepidx, :]
         def fn_multiplicative(x):
             x = x * np.exp((g @ state[:g.shape[1],:]) * indep_noise)
+            if poisson:
+                x[x<0]=0
+                rng = np.random.default_rng(2021)
+                x = rng.poisson(x).astype(float) * 0.1 + x * 0.9
             return x
 
         def fn_additive(x):
             x = x + (g @ state[:g.shape[1],:]) * indep_noise
+            if poisson:
+                x[x<0]=0
+                rng = np.random.default_rng(2021)
+                x = rng.poisson(x).astype(float) * 0.1 + x * 0.9
             return x
-
+        
         if additive:
             return [rec[i].transform(fn_additive, o)]
         else:

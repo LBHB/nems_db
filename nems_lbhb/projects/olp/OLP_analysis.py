@@ -15,6 +15,11 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
+########## 2022_08_25 ######################################################################
+## I think this is all old code that is from the way I used to do things, likely none of it
+## is useful but I feel bad getting rid of it.
+############################################################################################
+
 def load_experiment_params(parmfile, rasterfs=100, sub_spont=True):
     """Given a parm file, or if I'm on my laptop, a saved experiment file, it will load the file
     and get relevant parameters about the experiment as well as sort out the sound indexes."""
@@ -1256,7 +1261,49 @@ def z_heatmaps_onepairs_figure(resp_idx, pair, response, params, tags=[],
     ax.set_ylabel('Neurons', fontweight='bold', fontsize=10)
 
 
+def z_heatmaps_onepairs(resp_idx, pair, response, params, sigma=None, arranged=False):
+    """Plots a two column figure of subplots, one for each sound pair, displaying a heat map
+    of the zscore for all the units. Moved here from scratch file 2022_08_25."""
+    zscore, z_params = olp.get_z(resp_idx, response, params)
 
+    if sigma is not None:
+        zscore = sf.gaussian_filter1d(zscore, sigma, axis=2)
+        zmin, zmax = np.min(np.min(zscore, axis=2)), np.max(np.max(zscore, axis=2))
+        abs_max = max(abs(zmin),zmax)
+    else:
+        zmin, zmax = np.min(np.min(zscore, axis=1)), np.max(np.max(zscore, axis=1))
+        abs_max = max(abs(zmin),zmax)
+
+    if arranged:
+        prebin = int(params['PreStimSilence'] * params['fs'])
+        postbin = int((params['stim length'] - params['PostStimSilence']) * params['fs'])
+        z_time_avg = np.nanmean(zscore[pair,:,prebin:postbin], axis=1)
+        idx = np.argsort(z_time_avg)
+        zscore = zscore[:, idx, :]
+
+    fig, ax = plt.subplots()
+
+    im = ax.imshow(zscore[pair, :, :], aspect='auto', cmap='RdBu_r',
+              extent=[-0.5, (zscore[pair, :, :].shape[1] / params['fs']) -
+                      0.5, zscore[pair, :, :].shape[0], 0], vmin=-abs_max, vmax=abs_max)
+    ax.set_title(f"Pair {pair}: BG {params['pairs'][pair][0]} - FG {params['pairs'][pair][1]}",
+                 fontweight='bold')
+    ymin, ymax = ax.get_ylim()
+    ax.vlines([0, params['Duration']], ymin, ymax, colors='black', linestyles='--', lw=1)
+    xmin, xmax = ax.get_xlim()
+    ax.set_xlim(xmin + 0.3, xmax - 0.2)
+    ax.set_xticks([0, 0.5, 1.0])
+
+    fig.subplots_adjust(right=0.8)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+    fig.colorbar(im, cax=cbar_ax)
+
+    # fig.text(0.5, 0.03, 'Time from onset (s)', ha='center', va='center', fontweight='bold')
+    fig.text(0.05, 0.5, 'Neurons', ha='center', va='center', rotation='vertical', fontweight='bold')
+
+    # fig.suptitle(f"Experiment {params['experiment']} - Combo Index {z_params['resp_idx']} - "
+    #              f"{z_params['idx_names']} - Sigma {sigma}\n"
+    #              f"{z_params['label']}", fontweight='bold')
 
 
 ##General load

@@ -1,4 +1,5 @@
 import os
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,8 +52,9 @@ def get_stim_type(ep_name):
     binaural_dict = {'11': 'BG Contra, FG Contra', '12': 'BG Contra, FG Ipsi',
                      '21': 'BG Ipsi, FG Contra', '22': 'BG Ipsi, FG Contra'}
 
-    if len(ep_name.split('_')) == 3 and ep_name[:5] == 'STIM_':
+    if len(ep_name.split('_')) >= 3 and ep_name[:5] == 'STIM_':
         seps = (ep_name.split('_')[1], ep_name.split('_')[2])
+        seps = re.findall('_(null|\d{2}.*)_(null|\d{2}.*)', ep_name)[0]
         bg_ep, fg_ep = f"STIM_{seps[0]}_null", f"STIM_null_{seps[1]}"
 
         #get synth type
@@ -126,20 +128,15 @@ def r_ceiling(ra,rb):
     else:
         return rceil
 
-if __name__ == '__main__':
-    parmfile = '/auto/data/daq/Clathrus/CLT039/CLT039c11_p_OLP.m'
-    parmfile = '/auto/data/daq/Clathrus/CLT040/CLT040c07_p_OLP.m'
-    parmfile = '/auto/data/daq/Clathrus/CLT041/CLT041c11_p_OLP.m'
-    basename = os.path.basename(parmfile)
-
-    manager = BAPHYExperiment(parmfile)
-    fs = 50
-    options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
-    rec = manager.get_recording(**options)
+def generate_cc_dataframe(rec, force_mua_only=False, rsignal='resp'):
 
     epoch_df = get_rec_epochs(rec=rec)
-    resp = rec['resp'].rasterize()
-    #resp = resp._modified_copy(data=resp._data.mean(axis=0,keepdims=True), chans=["MUA"])
+    resp = rec[rsignal].rasterize()
+    
+    if force_mua_only:
+        # look at MUA averaged across all units.
+        resp = resp._modified_copy(data=resp._data.mean(axis=0,keepdims=True), chans=["MUA"])
+
     stim = rec['stim'].rasterize()
 
     cols = ['BG', 'FG', 'BG + FG']
@@ -176,16 +173,136 @@ if __name__ == '__main__':
         ed['E']=np.sum(ed['cbb']+ed['cff'])>0
         dlist.append(ed)
     epoch_df_all = pd.concat(dlist).reset_index()
-
+    #cff - correlation of FG response and FG envelope. positive = E
+    # cbb - correlation of BG response and BG envelope
+    # summed correlation - overall E or I?
     epoch_df_all['cff+cbb'] = (epoch_df_all['cff']+epoch_df_all['cbb'])/2
+    # cff-cbb - does the neuron prefer fg or bg?
     epoch_df_all['cff-cbb'] = epoch_df_all['cff']-epoch_df_all['cbb']
+    # cc(FG,sum) - correlation of FG response alone with sum of response to FG and BG alone
+    #              aka, prediction with no nonlinearities
+    # cc(BG,sum) - correlation of BG response alone with sum of response to FG and BG alone
+    # (crfbf-crbbf) - difference, if >0, predicts response to Both will look more like FG alone
     epoch_df_all['(crfbf-crbbf)'] = (epoch_df_all['cc(FG,sum)']-epoch_df_all['cc(BG,sum)'])
+    #FG cc(both-sum) correlation of FG alone response with response to FG+BG, relative to linear prediction
+    #BG cc(both-sum) correlation of BG alone response with response to FG+BG. relative to linear prediction
+    # you can think of these values as corresponding to the gains from the regression model
     epoch_df_all['FG cc(both-sum)'] = (epoch_df_all['cc(FG,FGBG)']-epoch_df_all['cc(FG,sum)'])
     epoch_df_all['BG cc(both-sum)'] = (epoch_df_all['cc(BG,FGBG)']-epoch_df_all['cc(BG,sum)'])
+    # dd - difference between  FG cc(both-sum) and BG cc(both-sum). if >0, response to FG+BG looks more like
+    #      FG alone
     epoch_df_all['dd'] = (epoch_df_all['FG cc(both-sum)']-epoch_df_all['BG cc(both-sum)'])
+    # ddraw - difference in raw correlation between FG, FG+BG - BG along,FG+BG. Similiarly, if >0,
+    #         response to combination looks more like FG.
     epoch_df_all['ddraw'] = (epoch_df_all['cc(FG,FGBG)']-epoch_df_all['cc(BG,FGBG)'])
 
-    plt.close('all')
+    return epoch_df_all
+
+def examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types=None):
+    """
+    cellid='CLT047c-03-1'
+    epoch_fg='Gobble'
+    epoch_bg='Bees'
+    """
+
+    cols = ['BG', 'FG', 'BG + FG']
+    if types is None:
+        types = {'N': 'Natural RMS', 'U': 'Spectrotemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
+        # types = {'N': 'Natural RMS', 'U': 'Spectrotemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
+        # types ={'A': 'Natural max', 'N': 'Natural RMS', 'C': 'Cochlear', 'T': 'Temporal',
+        #         'S': 'Spectral', 'U': 'Spectrotemporal', 'M': 'SpectrotemporalMod',
+        #         }
+
+    f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)
+
+    for i, acol in enumerate(ax.T):
+        nat_epoch_df = epoch_df_all.loc[(epoch_df_all.cellid == cellid) &
+                                        epoch_df_all['BG + FG'].str.endswith(list(types.keys())[i]) &
+                                        epoch_df_all['BG'].str.contains(epoch_bg) &
+                                        epoch_df_all['FG'].str.contains(epoch_fg)
+                                        ].reset_index()
+        epochs = list(nat_epoch_df.iloc[0][cols])
+        for a, e, k in zip(acol, epochs, cols):
+            s = stim.extract_epoch(e)[0,0,:]
+            r = resp.extract_channels([cellid]).extract_epoch(e).mean(axis=0)[0,:]
+            a.plot(s)
+            a.plot(r)
+            a.set_ylabel(k)
+        acol[0].set_title(epochs[2])
+        acol[1].set_title(f"BG={nat_epoch_df.loc[0,'cc(BG,FGBG)']:.2f},FG={nat_epoch_df.loc[0,'cc(FG,FGBG)']:.2f}")
+        acol[2].set_title(f"BG={nat_epoch_df.loc[0,'BG cc(both-sum)']:.2f},FG={nat_epoch_df.loc[0,'FG cc(both-sum)']:.2f}")
+
+    plt.tight_layout()
+    return f
+
+def big_dataframe():
+    ##############################################
+    ###Little Greg add try to make big dataframe
+    import os
+    import copy
+    OLP_cc_df_path = '/auto/users/hamersky/olp_analysis/cc_synthetic.h5'
+    files = ['27c12', '28c22', '29c16', '30d19', '31c09', '32c12', '33c12', '34c10', '35c10', '36c11',
+             '37c09', '38a08', '39c11', '40c07', '41c11', '42a06', '43b07', '44d05', '45d07', '46d06',
+             '47c08', '48c07', '49c07', '50c07', '51c07', '52d05', '53a06']
+    parmfiles = [f'/auto/data/daq/Clathrus/CLT0{pp[:2]}/CLT0{pp}_p_OLP.m' for pp in files]
+
+    all_dfs = []
+    for parmfile in parmfiles:
+        basename = os.path.basename(parmfile)
+
+        manager = BAPHYExperiment(parmfile)
+        fs = 50
+        options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+        rec = manager.get_recording(**options)
+
+        force_mua_only=False
+        epoch_df_all = generate_cc_dataframe(rec, force_mua_only=force_mua_only)
+        all_dfs.append(epoch_df_all)
+    df = pd.concat(all_dfs)
+
+    os.makedirs(os.path.dirname(OLP_cc_df_path), exist_ok=True)
+    store = pd.HDFStore(OLP_cc_df_path)
+    df_store = copy.deepcopy(df)
+    store['df'] = df_store.copy()
+    store.close()
+
+    store = pd.HDFStore(OLP_cc_df_path)
+    df = store['df']
+    store.close()
+    
+    return df
+
+if __name__ == '__main__':
+    parmfile = '/auto/data/daq/Clathrus/CLT039/CLT039c11_p_OLP.m'
+    parmfile = '/auto/data/daq/Clathrus/CLT040/CLT040c07_p_OLP.m'
+    parmfile = '/auto/data/daq/Clathrus/CLT041/CLT041c11_p_OLP.m'
+    parmfile = '/auto/data/daq/Clathrus/CLT047/CLT047c08_p_OLP.m'
+    parmfile = '/auto/data/daq/Clathrus/CLT049/CLT049c07_p_OLP.m'
+    parmfile = '/auto/data/daq/Clathrus/CLT043/CLT043b07_p_OLP.m'
+    basename = os.path.basename(parmfile)
+
+    manager = BAPHYExperiment(parmfile)
+    fs = 50
+    options = {'rasterfs': fs, 'stim': True, 'stimfmt': 'lenv', 'resp': True, 'recache': False}
+    rec = manager.get_recording(**options)
+
+    force_mua_only=False
+    #Little Greg add try to make big dataframe
+    all_dfs = []
+    epoch_df_all = generate_cc_dataframe(rec, force_mua_only=force_mua_only)
+    all_dfs.append(epoch_df_all)
+    df = pd.concat(all_dfs)
+    ##Back to Stephen's
+    epoch_df_all = generate_cc_dataframe(rec, force_mua_only=force_mua_only)
+
+    if force_mua_only:
+        # look at MUA averaged across all units.
+        resp = resp._modified_copy(data=resp._data.mean(axis=0, keepdims=True), chans=["MUA"])
+    else:
+        resp = rec['resp'].rasterize()
+
+    stim = rec['stim'].rasterize()
+
     types = {'N': 'Natural RMS', 'U': 'Spectrotemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
     #types = {'N': 'Natural RMS', 'U': 'Spectrotemporal', 'S': 'Spectral', 'T': 'Temporal', 'C': 'Cochlear'}
     #types ={'A': 'Natural max', 'N': 'Natural RMS', 'C': 'Cochlear', 'T': 'Temporal',
@@ -196,7 +313,7 @@ if __name__ == '__main__':
 
     for t,ax in zip(types.keys(),axs.T):
         # both E
-        #nat_epoch_df = epoch_df_all.loc[(epoch_df_all['cff'] > 0.1) & (epoch_df_all['cbb'] > 0.1) & epoch_df_all['BG + FG'].str.endswith(t)].reset_index()
+        # nat_epoch_df = epoch_df_all.loc[(epoch_df_all['cff'] > 0.1) & (epoch_df_all['cbb'] > 0.1) & epoch_df_all['BG + FG'].str.endswith(t)].reset_index()
 
         # both I
         #nat_epoch_df = epoch_df_all.loc[(epoch_df_all['cff']<-0.1) & (epoch_df_all['cbb']<-0.1) & epoch_df_all['BG + FG'].str.endswith(t)].reset_index()
@@ -233,13 +350,22 @@ if __name__ == '__main__':
 
     c = 0
     cellid=resp.chans[c]
-    epoch_idx = 10
+    cellid='CLT047c-03-1'
+    epoch_fg='Gobble'
+    epoch_bg='Bees'
+    epoch_bg='RockTumble'
+    f = examine_cell_epoch(epoch_df_all, cellid, epoch_bg, epoch_fg, types)
+
+    """
     f, ax = plt.subplots(3, len(types), figsize=(12, 6), sharey=True)
 
     for i, acol in enumerate(ax.T):
         nat_epoch_df = epoch_df_all.loc[(epoch_df_all.cellid == cellid) &
-                                        epoch_df_all['BG + FG'].str.endswith(list(types.keys())[i])].reset_index()
-        epochs = list(nat_epoch_df.loc[epoch_idx, cols])
+                                        epoch_df_all['BG + FG'].str.endswith(list(types.keys())[i]) &
+                                        epoch_df_all['BG'].str.contains(epoch_bg) &
+                                        epoch_df_all['FG'].str.contains(epoch_fg)
+                                        ].reset_index()
+        epochs = list(nat_epoch_df.iloc[0][cols])
         for a, e, k in zip(acol, epochs, cols):
             s = stim.extract_epoch(e)[0,0,:]
             r = resp.extract_epoch(e).mean(axis=0)[c,:]
@@ -247,11 +373,11 @@ if __name__ == '__main__':
             a.plot(r)
             a.set_ylabel(k)
         acol[0].set_title(epochs[2])
-        acol[1].set_title(f"BG={nat_epoch_df.loc[epoch_idx,'cc(BG,FGBG)']:.2f},FG={nat_epoch_df.loc[epoch_idx,'cc(FG,FGBG)']:.2f}")
-        acol[2].set_title(f"BG={nat_epoch_df.loc[epoch_idx,'BG cc(both-sum)']:.2f},FG={nat_epoch_df.loc[epoch_idx,'FG cc(both-sum)']:.2f}")
+        acol[1].set_title(f"BG={nat_epoch_df.loc[0,'cc(BG,FGBG)']:.2f},FG={nat_epoch_df.loc[0,'cc(FG,FGBG)']:.2f}")
+        acol[2].set_title(f"BG={nat_epoch_df.loc[0,'BG cc(both-sum)']:.2f},FG={nat_epoch_df.loc[0,'FG cc(both-sum)']:.2f}")
 
     plt.tight_layout()
-
+    """
 
     f, axs = plt.subplots(4, len(types))
 

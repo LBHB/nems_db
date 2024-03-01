@@ -54,7 +54,7 @@ def generate_heldout_plots(batch, batch_name, sig_test_models=SIG_TEST_MODELS, a
 
     heldout_names = [n + ' held' for n in short_names]
     matched_names = [n + ' match' for n in short_names]
-    tests = [st.mannwhitneyu(r_ceilings[x], r_ceilings[y], alternative='two-sided')
+    tests = [st.wilcoxon(r_ceilings[x], r_ceilings[y], alternative='two-sided')
              for x, y in zip(heldout_names, matched_names)]
     median_diffs = [r_ceilings[y].median() - r_ceilings[x].median() for x, y in zip(heldout_names, matched_names)]
 

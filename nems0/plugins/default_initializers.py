@@ -155,6 +155,9 @@ def norm(kw):
     ops = kw.split('.')[1:]
     norm_method = 'minmax'
     log_compress = 'None'
+    stim_only = ('s' in ops)
+    resp_only = ('r' in ops)
+
     for op in ops:
         if op == 'ms':
             norm_method = 'meanstd'
@@ -163,15 +166,16 @@ def norm(kw):
         elif op == 'sp':
             norm_method = 'spont'
             resp_only = ('r' in ops)  # default !
+        elif op == 'sqrt':
+            norm_method = 'sqrt'
+            resp_only = True
+            stim_only = False
         elif op.startswith('ln'):
             log_compress = -int(op[2:])
         elif op.startswith('l'):
             log_compress = int(op[1:])
             if log_compress > 10:
                 log_compress = np.array([log_compress/10])
-
-    stim_only = ('s' in ops)
-    resp_only = ('r' in ops)
 
     if stim_only:
         return [['nems0.xforms.normalize_sig', {'sig': 'stim', 'norm_method': norm_method,

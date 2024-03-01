@@ -18,7 +18,7 @@ from nems0 import xforms
 from nems0 import recording
 from nems0.fitters.api import scipy_minimize
 from nems0.signal import RasterizedSignal
-from nems import Model
+from nems import Model, visualization
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +36,8 @@ modelspecs_dir = Path(nems0.NEMS_PATH) / 'modelspecs'
 
 # this section illustrates several alternative methods for loading,
 # each loading from a different file format
-#load_method = 1  # Traditional TAR010c NAT
-load_method = 3  # binaural NAT
+load_method = 1  # Traditional TAR010c NAT
+#load_method = 3  # binaural NAT
 
 if load_method==0:
     # download demo data
@@ -55,6 +55,7 @@ if load_method==0:
 
 elif load_method==1:
     # download demo data
+    print(f"loadmethod={load_method} : TAR010c-18-1.pkl")
     recording.get_demo_recordings(signals_dir)
 
     # method 1: load from a pkl datafile that contains full stim+response data
@@ -87,15 +88,18 @@ elif load_method==1:
                  X_val=X_val, Y_val=Y_val)
         d = np.load('/tmp/TAR010c-18-2.npz')
 
-    X_norm=X_est.max()
+    X_norm = X_est.max()
     X_est /= X_norm
     X_val /= X_norm
     
     #model = Model.from_keywords('wc.18x1.g-fir.15x1-dexp.1')
-    model = Model.from_keywords('wc.18x1x2-fir.15x1x2-relu.2-wc.2x1-dexp.1')
-    model = Model.from_keywords('wc.18x2-fir.15x2-dexp.1')
-    modelspec = 'wc.18x1-fir.15x1-dexp.1'
+    modelspec = 'wc.18x1-fir.15x1-stp.1x1-dexp.1'
+    modelspec = 'wc.18x1x2.g-fir.15x1x2-wc.2x1-dexp.1'
+    #modelspec = 'wc.18x2.g-fir.15x2-dexp.1'
 
+    #modelspec = 'wc.18x1-fir.15x1.s2-dexp.1'
+    #Y_est = Y_est[::2,:]
+    #Y_val = Y_val[::2,:]
 elif load_method==2:
     # download demo data
     recording.get_demo_recordings(signals_dir)
@@ -142,7 +146,7 @@ elif load_method==2:
             'resp': RasterizedSignal(fs, Y_val, 'resp', recname, chans=[cellid], epochs=epochs_val),
             'stim': RasterizedSignal(fs, X_val, 'stim', recname, epochs=epochs_val)}
     val = recording.Recording(val_signals)
-    modelspec = 'wc.18x1-fir.15x1-dexp.1'
+    modelspec = 'wc.18x2-fir.15x2-dexp.1'
 elif load_method == 3:
 
     # testing binaural NAT with various model architectures.
@@ -190,9 +194,11 @@ elif load_method == 3:
         Y_est = Y_est[:50000, :]
 
 model = Model.from_keywords(modelspec)
+model.set_dtype(np.float64)
 
 # Set initial values
 # quick & dirty, but may not work as desired
+model.sample_from_priors()
 model.sample_from_priors()
 
 # for wc.g models
@@ -224,39 +230,70 @@ model.sample_from_priors()
 # inputs (whereas `backend='tf'`, for example, would use `Layer.tf_layer`).
 # See `nems.models.base.Model.fit` for additional fitting options.
 
-if True:
-    fitter_options = {'cost_function': 'squared_error', 'early_stopping_delay': 100, 'early_stopping_patience': 10,
-                  'early_stopping_tolerance': 1e-3, 'validation_split': 0.0,
+backend='tf'
+split_batches = True
+if backend=='tf':
+    fitter_options = {'cost_function': 'squared_error', 'early_stopping_delay': 50, 'early_stopping_patience': 10,
+                  'early_stopping_tolerance': 1e-3, 'validation_split': 0.2,
                   'learning_rate': 5e-3, 'epochs': 2000}
+
+    if split_batches:
+        est_n = 90
+        x_bins_per_trial = int(X_est.shape[0]/est_n)
+        y_bins_per_trial = int(Y_est.shape[0]/est_n)
+        y = np.reshape(Y_est, [est_n, y_bins_per_trial, -1])
+        x = np.reshape(X_est, [est_n, x_bins_per_trial, -1])
+    else:
+        x = np.expand_dims(X_est, axis=0)
+        y = np.expand_dims(Y_est, axis=0)
 
     # Trying a TF fit:
     model.layers[-1].skip_nonlinearity()
-    model = model.fit(input=np.expand_dims(X_est, axis=0),
-              target=np.expand_dims(Y_est, axis=0), backend='tf',
-              fitter_options=fitter_options,
-              batch_size=None)
+    model = model.fit(input=x, target=y, backend='tf',
+              fitter_options=fitter_options, batch_size=None)
 
     model.layers[-1].unskip_nonlinearity()
-    model = model.fit(input=np.expand_dims(X_est, axis=0),
-              target=np.expand_dims(Y_est, axis=0), backend='tf',
-              fitter_options=fitter_options,
-              batch_size=None)
+    model = model.fit(input=x, target=y, backend='tf',
+              fitter_options=fitter_options, batch_size=None)
 
 else:
     print('Fitting without NL ...')
     model.layers[-1].skip_nonlinearity()
+    from nems.layers import ShortTermPlasticity
+    for i, l in enumerate(model.layers):
+        if isinstance(l, ShortTermPlasticity):
+            log.info(f'Freezing parameters for layer {i}: {l.name}')
+            model.layers[i].freeze_parameters()
+    tolerance = 1e-5
+    model = model.fit(input=X_est.astype(np.float32), target=Y_est.astype(np.float32), backend='scipy',
+              fitter_options={'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': 100}})
     model = model.fit(input=X_est, target=Y_est, backend='scipy',
-              fitter_options={'cost_function': 'nmse', 'options': {'maxiter': 50}})
+              fitter_options={'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': 100}})
 
     print('Now fitting with NL ...')
     model.layers[-1].unskip_nonlinearity()
+    for i, l in enumerate(model.layers):
+        model.layers[i].unfreeze_parameters()
+    tolerance = 1e-6
+
     model = model.fit(input=X_est, target=Y_est, backend='scipy',
-              fitter_options={'cost_function': 'nmse', 'options': {'maxiter': 100}})
+              fitter_options={'cost_function': 'nmse', 'options': {'ftol': tolerance, 'maxiter': 100}})
+
+visualization.model.plot_model_with_parameters(model, X_est, target=Y_est)
+visualization.model.plot_model_with_parameters(model, X_val, target=Y_val)
 
 # Predict the response to the stimulus spectrogram using the fitted model.
+d1=model.evaluate(X_val, n=1)['_last_output']
+d2=model.evaluate(X_val, n=2)['_last_output']
+plt.figure()
+plt.plot(d1)
+plt.plot(d2)
+
 prediction = model.predict(X_val)
 cc = np.corrcoef(prediction[:, 0], Y_val[:, 0])[0, 1]
+print("pred xc:", cc)
 
+"""
 wc = model.layers[0].coefficients
 fir = model.layers[1].coefficients
 
@@ -337,3 +374,4 @@ ax[5].plot(x4[:1000,:])
 ax[5].plot(Y_val[:1000,0])
 ax[5].set_ylabel('dexp output')
 
+"""

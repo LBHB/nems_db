@@ -182,6 +182,37 @@ def evs(loadkey):
 
     return xfspec
 
+@xform()
+def ststim(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+    xfspec = [['nems0.preprocessing.concatenate_input_channels',
+               {'input_signals': ['state'],
+                'input_name': 'stim'}, ['rec'], ['rec']]]
+    return xfspec
+
+@xform()
+def dlc(loadkey):
+    """
+    concatenate state channels onto stim signal using
+    concatenate_input_channels
+    """
+
+    options = {'sig': 'dlc'}
+
+    ops = loadkey.split(".")
+    for op in ops:
+        if op.isnumeric():
+            options['keep_dims'] = int(op)
+        elif op == 'nan':
+            options['empty_values'] = np.nan
+
+    xfspec = [['nems_lbhb.preprocessing.impute_multi', options]]
+
+    return xfspec
+
 
 @xform()
 def st(loadkey):
@@ -219,12 +250,20 @@ def st(loadkey):
             this_sig = ["pupil"]
         elif l.startswith("ppp"):
             this_sig = ["pupiln"]
+        elif l.startswith("dlc"):
+            this_sig = ["dlc"]
         elif l.startswith("dlp"):
             this_sig = ["dlc_pca"]
         elif l.startswith("pvp"):
             this_sig = ["pupil_dup"]
         elif l.startswith("pwp"):
             this_sig = ["pupil_dup2"]
+        elif l.startswith("dm"):
+            if len(l) == 2:
+                dummy_count = 1
+            else:
+                dummy_count = int(l[2])
+            this_sig = [f"dummy{i}" for i in range(dummy_count)]
         elif l.startswith("pxb"):
             this_sig = ["p_x_a"]
         elif l.startswith("pxf"):
@@ -845,6 +884,21 @@ def sm(load_key):
 
 
 @xform()
+def dec(kw):
+    options = kw.split('.')[1:]
+    strides = 1
+    signal = 'resp'
+    for op in options:
+        if op.startswith('s'):
+            strides = int(op[1:])
+        elif op.startswith('t'):
+            signal = op[1:]
+
+    xfspec=[['nems0.preprocessing.decimate_signal',
+            {'signal': signal, 'strides': strides}]]
+    return xfspec
+
+@xform()
 def rscsw(load_key, cellid, batch):
     """
     generate the signals for sliding window model. It's intended that these be
@@ -1030,17 +1084,26 @@ def shfcat(kw):
     format:
 
     e.g. shfcat.i.resp0.state.o.state
+    e.g. shfcat.i.resp0.state.o.state.mm
     meaning it takes stim and shuffles it (0), the state as is (no zero, no shuffle) and concatenate into a signal called
     state (overwriting the original on)
+    for the second example, a trailing pair of letters denote the normalization type applied over the whole output signal
     """
     # keyword arguments, state is default input and output if not specified
     raw_signals = re.findall('\.i\.(.*)\.o\.', kw)[0].split('.')
+    output_signal = re.findall('\.o\.(\w+)', kw)[0]
 
-    output_signal = re.findall('\.o\.(\w+)\Z', kw)[0]
+    norm_method = re.findall('(?<!\.o)\.(\w{2})\Z', kw) # matches to letters following a dot as long as there is no '.o' prior the dot
+    norm_method = norm_method[0] if norm_method else 'no' # default no normalization
 
     # parses the input signals. defining the action to do with each according to the code
     code_map = {'0': 'shuffle',
                 '1': 'roll'}
+
+    norm_map = {'no': 'none',
+                'mm': 'minmax',
+                'ms': 'meanstd',
+                'sp': 'spont'}
 
     input_signals = list()
     to_shuffle = list()
@@ -1056,6 +1119,7 @@ def shfcat(kw):
     return [['nems_lbhb.preprocessing.shuffle_and_concat_signals',
              {'signals': input_signals,
               'to_shuffle': to_shuffle,
-              'output_signal': output_signal},
+              'output_signal': output_signal,
+              'norm_method': norm_map[norm_method]},
              ['rec'], ['rec']
              ]]

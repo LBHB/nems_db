@@ -16,11 +16,13 @@ import re
 import os
 import os.path
 import pickle
+
+import pylab as pl
 import scipy.io
 import scipy.io as spio
 import scipy.ndimage.filters
 import scipy.signal
-from scipy.interpolate import interp1d
+from scipy import interpolate
 import numpy as np
 import collections
 import json
@@ -32,6 +34,7 @@ from math import isclose
 import copy
 from itertools import groupby, repeat, chain, product
 import h5py
+import shutil
 
 from nems_lbhb import OpenEphys as oe
 from nems_lbhb import SettingXML as oes
@@ -40,12 +43,22 @@ import matplotlib.pyplot as plt
 import nems0.signal
 import nems0.recording
 import nems0.db as db
+from nems0 import get_setting
 import nems0.epoch as ep
 from nems0.recording import Recording
 from nems0.recording import load_recording
 import nems_lbhb.behavior as behavior
 from nems_lbhb import runclass
+
 from nems0.uri import load_resource
+
+#from open_ephys.analysis import Session
+#from open_ephys.analysis.formats.helpers import load
+from open_ephys_archived.analysis import Session as Session_archived
+from open_ephys_archived.analysis.formats.helpers import load as load_archived
+import tarfile
+import re
+import gzip
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +68,6 @@ spk_subdir = 'sorted/'  # location of spk.mat files relative to parmfiles
 
 
 # =================================================================
-
 def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=None, baphy_legacy_format=False):
     '''
     Parameters
@@ -93,7 +105,386 @@ def baphy_align_time_openephys(events, timestamps, raw_rasterfs=30000, rasterfs=
 ###############################################################################
 # Openephys utility functions
 ###############################################################################
-def load_trial_starts_openephys(openephys_folder):
+
+def openephys_gui_version(openephys_folder):
+    settings_file = file_finder(openephys_folder, 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    version = np.array([int(num) for num in info['INFO']['VERSION'].split('.')])
+    return version
+
+def format_finder(openephys_folder):
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
+
+    session = Session(openephys_folder)
+    format = []
+    try:
+        for i in range(len(session.recordnodes)):
+            format.append(session.recordnodes[i].format)
+    except:
+        if len(session.recordings) > 0:
+            for i in range(len(session.recordings)):
+                format.append((session.recordings[i].format))
+        else:
+            format = ['openephys']
+    return format
+
+
+def file_finder(root_folder, filename):
+    """
+    little function to find the events folder under the different folder trees from different
+    versions of Open Ephys.
+    if its broken: Blame Jereme!
+    """
+    recording_root = Path(root_folder)
+    plist = list(recording_root.rglob(filename))
+    if len(plist) == 0:
+        raise IOError("requested file doesn't exist in given folder directory")
+    if len(plist) > 1:
+        log.info("more than 1 record node, reading the first one for metadata. Is the second node spikes?")
+    file = plist[0]
+    return file
+
+def load_openephys(openephys_folder, dtype = None):
+    """
+    loads data from open-ephys, binary, nwb, kwik formats given a directory if a newer file format is used. For older
+    file format versions, the old baphy_io continuous loader is used. If multiple record nodes are used, this
+    will check each record node for the specified data type. If multiple record nodes have the same data type, it
+    is assumed they contain different channel information and the data from each record node and the channel id lists
+    are concatenated (unlikely?). Will crash if more than one recording is identified within a record node.
+    
+    :param openephys_folder: recording directory
+    :param dtype: 'event', 'continuous', 'spike'
+    :return: list of data objects of the specified type - has methods for accessing data within object
+    
+    """
+    if dtype is None:
+        raise ValueError("Must specify a data type to load: events, continuous, spike, or header")
+    # create session object
+    from open_ephys.analysis import Session
+    from open_ephys.analysis.formats.helpers import load
+    
+    session = Session(openephys_folder)
+    data = []
+    data_format = []
+    # check if session has record nodes or not
+    try:
+        if session.recordnodes:
+            print(str(len(session.recordnodes)) + " record node(s) found")
+            for i in range(len(session.recordnodes)):
+                recordnode_id = Path(session.recordnodes[i].directory).stem
+                data_format.append(session.recordnodes[i].format)
+                recordings = session.recordnodes[i].recordings
+                if len(recordings) > 1:
+                    raise ValueError("number of recordings within record node is greater than 1 - usure how to handle")
+                for j in range(len(recordings)):
+                    recording = session.recordnodes[i].recordings[j]
+                    # load continuous, events, and or spikes from recording
+                    try:
+                        if dtype == 'continuous':
+                            data.append(recording.continuous)
+                        elif dtype == 'spikes':
+                            data.append(recording.spikes)
+                        elif dtype == 'events':
+                            data.append(recording.events)
+                        elif dtype == 'header':
+                            if data_format[i] == 'openephys' or data_format[i] == 'open-ephys':
+                                events_file = os.path.join(recording.directory, 'all_channels' + recording.experiment_id + ".events")
+                                timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                                data.append(header)
+                            elif data_format[i] == 'binary':
+                                print('record node format is binary...no header information')
+                                header = {}
+                                header['sampleRate'] = np.array([float(30000)])
+                                data.append(header)
+                    except:
+                        print("No " + dtype + "files found in record node " + recordnode_id)
+    except:
+        print("no record nodes found - trying to load recording info directly from session...")
+        recordings = session.recordings
+        if len(recordings) > 1:
+            raise ValueError("number of recordings is greater than 1 - usure how to handle")
+        elif len(recordings) == 0:
+            raise ValueError("number of recordings is 0 - Old OE file format?")
+        for i in range(len(recordings)):
+            recording = session.recordings[i]
+            # load continuous, events, and or spikes from recording
+            try:
+                if dtype == 'continuous':
+                    data.append(recording.continuous)
+                elif dtype == 'spikes':
+                    data.append(recording.spikes)
+                elif dtype == 'events':
+                    data.append(recording.events)
+                elif dtype == 'header':
+                    events_file = os.path.join(recording.directory,
+                                               'all_channels' + recording.experiment_id + ".events")
+                    timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                    data.append(header)
+            except:
+                raise Exception("No " + dtype + "files found in recording")
+    return data
+
+def load_openephys_archived(openephys_folder, dtype=None):
+    """
+    loads data from open-ephys, binary, nwb, kwik formats given a directory if a newer file format is used. For older
+    file format versions, the old baphy_io continuous loader is used. If multiple record nodes are used, this
+    will check each record node for the specified data type. If multiple record nodes have the same data type, it
+    is assumed they contain different channel information and the data from each record node and the channel id lists
+    are concatenated (unlikely?). Will crash if more than one recording is identified within a record node.
+
+    :param openephys_folder: recording directory
+    :param dtype: 'event', 'continuous', 'spike'
+    :return: list of data objects of the specified type - has methods for accessing data within object
+
+    """
+    if dtype is None:
+        raise ValueError("Must specify a data type to load: events, continuous, spike, or header")
+    # create session object
+    session = Session_archived(openephys_folder)
+    data = []
+    data_format = []
+    # check if session has record nodes or not
+    try:
+        if session.recordnodes:
+            print(str(len(session.recordnodes)) + " record node(s) found")
+            for i in range(len(session.recordnodes)):
+                recordnode_id = Path(session.recordnodes[i].directory).stem
+                data_format.append(session.recordnodes[i].format)
+                recordings = session.recordnodes[i].recordings
+                if len(recordings) > 1:
+                    raise ValueError("number of recordings within record node is greater than 1 - usure how to handle")
+                for j in range(len(recordings)):
+                    recording = session.recordnodes[i].recordings[j]
+                    # load continuous, events, and or spikes from recording
+                    try:
+                        if dtype == 'continuous':
+                            data.append(recording.continuous)
+                        elif dtype == 'spikes':
+                            data.append(recording.spikes)
+                        elif dtype == 'events':
+                            data.append(recording.events)
+                        elif dtype == 'header':
+                            if data_format[i] == 'openephys' or data_format[i] == 'open-ephys':
+                                events_file = os.path.join(recording.directory,
+                                                           'all_channels' + recording.experiment_id + ".events")
+                                timestamps, processor_id, state, channel, header = load_archived(events_file,
+                                                                                        recording.recording_index)
+                                data.append(header)
+                            elif data_format[i] == 'binary':
+                                print('record node format is binary...no header information')
+                                header = {}
+                                header['sampleRate'] = np.array([float(30000)])
+                                data.append(header)
+                    except:
+                        print("No " + dtype + "files found in record node " + recordnode_id)
+    except:
+        print("no record nodes found - trying to load recording info directly from session...")
+        recordings = session.recordings
+        if len(recordings) > 1:
+            raise ValueError("number of recordings is greater than 1 - usure how to handle")
+        elif len(recordings) == 0:
+            raise ValueError("number of recordings is 0 - Old OE file format?")
+        for i in range(len(recordings)):
+            recording = session.recordings[i]
+            # load continuous, events, and or spikes from recording
+            try:
+                if dtype == 'continuous':
+                    data.append(recording.continuous)
+                elif dtype == 'spikes':
+                    data.append(recording.spikes)
+                elif dtype == 'events':
+                    data.append(recording.events)
+                elif dtype == 'header':
+                    events_file = os.path.join(recording.directory,
+                                               'all_channels' + recording.experiment_id + ".events")
+                    timestamps, processor_id, state, channel, header = load(events_file, recording.recording_index)
+                    data.append(header)
+            except:
+                raise Exception("No " + dtype + "files found in recording")
+    return data
+
+def continuous_data_unpacking(continuous_data):
+    """
+    Unpacks continuous data objects returned in list format from load_openephys into a dictionary
+    with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
+    are the same across recording objects...which they should be unless something is weird about data streams sent
+    to different record nodes of the same type within a session?
+
+    :param continuous_data: list of objects from load_openephys with dtype = 'continuous'
+    :return: dictionary of header, timestamps, data, channels
+    """
+    data = []
+    channels = []
+    for i in range(len(continuous_data)):
+        if bool(continuous_data[i]):
+            data.append(continuous_data[i][0].samples.transpose())
+            channels.append(np.array(continuous_data[i][0].channels))
+        else:
+            continue
+            
+    # should be the same for all channels minus channel specific info in header which I don't think
+    # baphy experiment needs?
+    timestamps = continuous_data[i][0].timestamps
+    header = continuous_data[i][0].header
+    data = np.vstack(data)
+    channels = np.concatenate(channels)
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'channels': channels,
+    }
+
+
+def continuous_binary_data_unpacking(continuous_data, version, mua):
+    """
+    Unpacks continuous data objects returned in list format from load_openephys into a dictionary
+    with keys for 'header', 'data', 'timestamps', and 'channels'. Assumes all channels, timestamps, and header info
+    are the same across recording objects...which they should be unless something is weird about data streams sent
+    to different record nodes of the same type within a session?
+
+    :param continuous_data: list of objects from load_openephys with dtype = 'continuous'
+    :return: dictionary of header, timestamps, data, channels
+    """
+    data = []
+    channels = []
+    for i in range(len(continuous_data)):
+        if bool(continuous_data[i]):
+            try:
+                if version[1] < 6:
+                    channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][0])[0][0]
+                    if mua:
+                        if channel_type == 'AP' or channel_type == 'CH':
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                    else:
+                        if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                elif version[1] >= 6:
+                    channel_type = re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][0])[0][0]
+                    if mua:
+                        if channel_type == 'AP' or channel_type == 'CH':
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+                    else:
+                        if channel_type == 'LFP' or channel_type == 'CH' or channel_type == None:
+                            data.append(continuous_data[i][0].samples.transpose())
+                            # channels.append([int(ch.split('CH')[1]) for ch in np.array(continuous_data[i][0].metadata['names'])])
+                            channels.append(
+                                [int(re.findall(r'(\D+)(\d+)', continuous_data[i][0].metadata['channel_names'][ch])[0][1])
+                                 for ch in range(len(continuous_data[i][0].metadata['channel_names']))])
+                            timestamps = continuous_data[i][0].timestamps
+                            header = continuous_data[i][0].metadata
+                            header['sampleRate'] = header['sample_rate']
+                        else:
+                            continue
+            except:
+                continue
+
+    # should be the same for all channels minus channel specific info in header which I don't think
+    # baphy experiment needs?
+    # timestamps = continuous_data[0][0].timestamps
+    # header = continuous_data[0][0].metadata
+    # header['sampleRate'] = header['sample_rate']
+    data = np.vstack(data)
+    channels = np.concatenate(channels)
+
+    return {
+        'header': header,
+        'timestamps': timestamps,
+        'data': data,
+        'channels': channels,
+    }
+
+def load_trial_starts_openephys_master(openephys_folder):
+    '''
+    Load trial start times (seconds) from OpenEphys .events file after finding version of OpenEphys.
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    version = openephys_gui_version(openephys_folder)
+    # event_file = file_finder(openephys_folder, filename='all_channels.events')
+    if version[1] >= 6:
+        data = load_openephys(openephys_folder, dtype = 'events')
+        header = load_openephys(openephys_folder, dtype='header')[0]
+        df = data[0]
+        df.rename(columns={'timestamp':'timestamps'}, inplace=True)
+        df['stream_type'] = df['stream_name'].str.split('-').str[1]
+        #ts = df.query('(line == 1) & (state == 1)')
+        ts = df.query("line == 1 and state == 1 and stream_type == 'LFP'")
+        return ts['timestamps'].values
+
+    elif 6 > version[1] >= 5:
+        data = load_openephys_archived(openephys_folder, dtype = 'events')
+        header = load_openephys_archived(openephys_folder, dtype='header')[0]
+        df = data[0]
+        df.rename(columns={'timestamp':'timestamps'}, inplace=True)
+        ts = df.query('(channel == 1) & (state == 1)')
+        return (ts['timestamps'].values) / float(header['sampleRate'])
+
+    elif version[1] <= 4:
+        event_file = file_finder(openephys_folder, filename='all_channels.events')
+        data = oe.load(str(event_file))
+        header = data.pop('header')
+        df = pd.DataFrame(data)
+        ts = df.query('(channel == 0) & (eventType == 3) & (eventId == 1)')
+        return (ts['timestamps'].values) / float(header['sampleRate'])
+
+
+def load_sampling_rate_openephys(openephys_folder):
+    '''
+    Load sampling rate (samples/sec) from OpenEphys DIO
+
+    Parameters
+    ----------
+    openephys_folder : str or Path
+        Path to OpenEphys folder
+    '''
+    try:
+        event_file = file_finder(openephys_folder, filename='all_channels.events')
+        data = oe.load(str(event_file))
+    # hard coded for binary files without sampling rate info at this point - have sampling rate as value in database?
+    # or switch order of operations for loading continuous and extract temp data first prior to aligning where record
+    # node sampling rate information is available
+    except:
+        data = {}
+        header = {}
+        header['sampleRate'] = np.array([30000.])
+        data['header'] = header
+
+    return int(data['header']['sampleRate'])
+
+def old_load_trial_starts_openephys(openephys_folder):
     '''
     Load trial start times (seconds) from OpenEphys DIO
 
@@ -111,7 +502,7 @@ def load_trial_starts_openephys(openephys_folder):
     return (ts['timestamps'].values) / float(header['sampleRate'])
 
 
-def load_sampling_rate_openephys(openephys_folder):
+def old_load_sampling_rate_openephys(openephys_folder):
     '''
     Load sampling rate (samples/sec) from OpenEphys DIO
 
@@ -204,6 +595,705 @@ def load_continuous_openephys(fh):
         'record_number': record_number,
     }
 
+###############################################################################
+# continuous data extraction
+###############################################################################
+def gunzip(source, destination, buffer_size=200*1024*1024):
+    with gzip.open(source) as s:
+        with open(destination, 'wb') as d:
+            shutil.copyfileobj(s, d, buffer_size)
+
+def extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+    """
+    Should take a folder and extract the continuous data for open_ephys files and binary files that are tar or gzip compressed to local machine.
+    If recording is a neuropixel recording, only locally extract the LFP files which are smaller. Return parent of files, list of filenames, and list of filepaths.
+
+    :param version: Version of GUI that was used to record data
+    :param format: "open-ephys", "openephys", "binary"
+    :param experiment_openephys_folder:
+    :param experiment_openephys_tarfile:
+    :param experiment_openephys_tarfile_relpath:
+    :return:
+    """
+    # local copy path
+    tmppath = Path('/tmp/evpread/')
+    
+    # if file is tared
+    if not None in experiment_openephys_tarfile:
+        if version[1] < 6:
+            for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+                    zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+                # Use xml settings instead of the tar file. Much faster. Also, takes care
+                # of channel mapping (I think)
+                settings_file = file_finder(openephys_folder, 'settings.xml')
+                # If version is lower than 6 extract data using old method which requires mapping probe names to recorded names
+                # and allows for only extracting subset of channels
+                if version[1] < 6:
+                    recChans, _ = oes.GetRecChs(settings_file)
+                    connector = [i for i in recChans.keys()][0]
+                    # import pdb; pdb.set_trace()
+                    # handle channel remapping
+                    info = oes.XML2Dict(settings_file)
+                    mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+                    mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+                    for k in mapping_keys:
+                        ch_num = mapping[k].get('Number')
+                        if ch_num in recChans[connector]:
+                            # if info['INFO']['VERSION'] == '0.5.5.2':
+                            #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+                            # else:
+                            recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+            
+                    recChans = [recChans[connector][i]['name_mapped'] \
+                                for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+                    data_files = [connector + '_' + c + '.continuous' for c in recChans]
+                    all_chans = np.arange(len(data_files))
+            
+                    if type(chans) is tuple:
+                        chans = list(chans)
+            
+                    idx = all_chans[chans].tolist()
+                    selected_data = np.take(data_files, idx)
+                    
+                    continuous_data = []
+                    timestamp0 = []
+        
+                    # unzip tarfiles to temp local folder
+                    filename = selected_data[-1]
+                    full_filename = openephys_folder / filename
+                    if ~os.path.isfile(full_filename):
+                        # file doesn't exist (still zipped?) unzip to a local folder
+                        # tmppath = Path('/tmp/evpread/')
+                        newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+        
+                        test_filename = newpath / filename
+                        if os.path.isfile(test_filename):
+                            log.info(f"Local un-tar-ed copy exists in: {newpath}")
+                        else:
+                            log.info(f"Temp untaring raw data to {newpath}")
+                            os.umask(0)
+                            os.makedirs(tmppath, mode=0o777, exist_ok=True)
+                            # open file
+                            file = tarfile.open(tarfile_fullpath)
+                            # extracting file
+                            file.extractall(tmppath, numeric_owner=True)
+                            file.close()
+        
+                            for root, dirs, files in os.walk(tmppath):
+                                for d in dirs:
+                                    os.chmod(os.path.join(root, d), 0o777)
+                                for f in files:
+                                    os.chmod(os.path.join(root, f), 0o777)
+                        # point to the local folder
+                        openephys_folder = newpath
+    # if file is not tared is it gzipped?
+    elif None in experiment_openephys_tarfile:
+        log.info("No tarfiles...gzip?")
+        # find gz LFP files
+        # gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/continuous.dat.gz', recursive=True)
+        # for f in gz_file_paths:
+        #     if os.path.dirname(f).endswith('-LFP'):
+        #         gz_LFP_file = f
+        #         gz_LFP_filepath = os.path.dirname(f)
+        #     else:
+        #         continue
+        gz_file_paths = glob.glob(str(experiment_openephys_folder[0]) + '/**/*.gz', recursive=True)
+        for f in gz_file_paths:
+            if os.path.dirname(f).endswith('-LFP'):
+                if os.path.basename(f).split('.')[0] == 'continuous':
+                    gz_LFP_file = f
+                    gz_LFP_filepath = os.path.dirname(f)
+                elif os.path.basename(f).split('.')[0] == 'timestamps':
+                    gz_LFP_timestamps_file = f
+                    gz_LFP_timestamps_filepath = os.path.dirname(f)
+                elif os.path.basename(f).split('.')[0] == 'sample_numbers':
+                    gz_LFP_sample_numbers_file = f
+                    gz_LFP_sample_numbers_filepath = os.path.dirname(f)
+            else:
+                continue
+        # make a temp path that copies all non-gzipped files (new open-ephys loader detects record node paths/timestamps/etc. and crashes if path structure doesn't match)
+        gz_path_split = gz_LFP_file.split('/')
+        source = '/'.join(gz_path_split[:9])
+        tmp_destination = tmppath / '/'.join(gz_path_split[7:9])
+        shutil.copytree(source, tmp_destination, ignore=shutil.ignore_patterns('*.gz'), dirs_exist_ok=True)
+        
+        # make new file destination to unzip raw LFP data/timestamps/sample_numbers
+        tmp_gz_path = tmppath / '/'.join(gz_path_split[7:-1])
+        continuous_newfile = tmp_gz_path / 'continuous.dat'
+        ts_newfile = tmp_gz_path / 'timestamps.npy'
+        smp_num_newfile = tmp_gz_path / 'sample_numbers.npy'
+
+        #set write permissions to new temp folder
+        log.info(f"Temp unzipping raw data to {tmp_gz_path}")
+        os.umask(0)
+        os.makedirs(tmp_gz_path, mode=0o777, exist_ok=True)
+
+        # gunzip .gz files to new tmp destination
+        gunzip(gz_LFP_file, continuous_newfile)
+        gunzip(gz_LFP_timestamps_file, ts_newfile)
+        gunzip(gz_LFP_sample_numbers_file, smp_num_newfile)
+        for root, dirs, files in os.walk(tmp_destination):
+            for d in dirs:
+                os.chmod(os.path.join(root, d), 0o777)
+            for f in files:
+                os.chmod(os.path.join(root, f), 0o777)
+        # point to the local folder
+        openephys_folder = tmp_destination
+
+    return openephys_folder
+
+
+def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
+                            experiment_openephys_tarfile_relpath, local_copy_raw,
+                            chans, rasterfs=None, mua=None, rawlp=None, rawhp=None, muabp=None):
+    '''
+    WARNING: This is a beta method. The interface and return value may
+    change.
+    chans (list or numpy slice): which electrodes to load data from
+    '''
+    # get filenames (TODO: can this be sped up?)
+    # with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+    #    log.info("Finding filenames in tarfile...")
+    #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+    #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+
+    continuous_data_list = []
+    timestamp0_list = []
+
+    # check version and file format and grab recording settings
+    version = openephys_gui_version(experiment_openephys_folder[0])
+    format = format_finder(experiment_openephys_folder[0])
+    settings_file = file_finder(experiment_openephys_folder[0], 'settings.xml')
+    info = oes.XML2Dict(settings_file)
+    
+    # extract data to tmp local folder and return local folder path
+    tmppath = extract_local(version, format, chans, experiment_openephys_folder, experiment_openephys_tarfile,
+                            experiment_openephys_tarfile_relpath)
+    
+    # How to handle channel remapping...is very dependent on signal chain that was used. Quick hack to check if neuropixel recording else just assume channel map in OE is correct for older recordings
+    NPX = 'Sources/Neuropix-PXI'
+    NPX1 = 'Neuropix-PXI'
+    if (NPX in info['SIGNALCHAIN']['PROCESSOR'].keys()) or (NPX1 in info['SIGNALCHAIN']['PROCESSOR'].keys()):
+        if version[1] < 6:
+            # For neuropixels just process data in recorded channel order. Pull channel map info [X pos, Y pos]. Pass it out to baphy_experiment and let user decide how to sort.
+            # recorded channels
+            channel_info = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL']
+            channel_names = list(info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL_INFO']['CHANNEL'].keys())
+            channel_nums = [channel_info[ch]['number'] for ch in channel_names]
+            LFP_channel_names = [ch for ch in channel_names if ch[:3] == 'LFP']
+            LFP_channel_nums = [channel_info[ch]['number'] for ch in LFP_channel_names]
+            channel_state = info['SIGNALCHAIN']['PROCESSOR'][NPX]['CHANNEL']
+            enabled_LFP_channel_nums = [ch for ch in LFP_channel_nums if
+                                        channel_state[ch]['SELECTIONSTATE']['record'] == '1']
+            # LFP channel nums continue counting where AP left off..but xy pos only had 384 electrodes...subtract difference?
+            enabled_LFP_channel_names = ['CH' + str(int(ch) - 384) for ch in enabled_LFP_channel_nums]
+            electrode_xpos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            electrode_ypos = info['SIGNALCHAIN']['PROCESSOR'][NPX]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            if len(electrode_xpos) < 384:
+                raise ValueError(
+                    "OE GUI METADATA is missing neuropixels channel position data...hardcode the settings.xml")
+            enabled_LFP_xpos = {k: electrode_xpos[k] for k in enabled_LFP_channel_names if k in electrode_xpos}
+            enabled_LFP_ypos = {k: electrode_ypos[k] for k in enabled_LFP_channel_names if k in electrode_ypos}
+            if type(chans) is tuple:
+                chans = list(chans)
+            selected_chans = chans + 1
+            #given that all old probe recordings only used the first bank of electrodes...physical chan pos is selected
+            selected_chans_physical = selected_chans
+            selected_chans_xypos = {str(ch): [enabled_LFP_xpos['CH' + str(ch)], enabled_LFP_ypos['CH' + str(ch)]] for ch
+                                    in chans if 'CH' + str(ch) in electrode_xpos}
+
+        elif version[1] >= 6:
+
+            # sort channels and get x/y pos
+            channel_nums = list(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys())
+            channel_bank = [int(info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'][ch_key]) for ch_key in info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['CHANNELS'].keys()]
+            ch_prefix  = channel_nums[0][:2]
+            # get raw channel numbers in order to be used with bank info for physical channel assignment
+            oe_channel_nums_raw = [int(ch[2:]) for ch in channel_nums]
+            # correct for physical location by using channel bank
+            ch_nums_physical_corrected = np.array([ch + bnk*384 for (ch, bnk) in zip(oe_channel_nums_raw, channel_bank)])
+            # sort both raw channel nums and physical channel numbers based on order of raw to be in order of data loader 0-384
+            # oe_channel_nums = np.sort([int(ch[2:]) for ch in channel_nums])
+            zipped_oe_phys = zip(oe_channel_nums_raw, ch_nums_physical_corrected)
+            sorted_oe_phys = sorted(zipped_oe_phys)
+            sorted_oe_phys_tupes = zip(*sorted_oe_phys)
+            sorted_oe, sorted_physical = [np.array(tuple) for tuple in sorted_oe_phys_tupes]
+            # get keys in sorted order data will be loaded in
+            sorted_oe_keys = [ch_prefix + str(ch) for ch in sorted_oe]
+            # get channel xy pos in oe number scheme
+            ELECTRODE_XPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_XPOS']
+            ELECTRODE_YPOS = info['SIGNALCHAIN']['PROCESSOR'][NPX1]['EDITOR']['NP_PROBE']['ELECTRODE_YPOS']
+            # get channel xy pos for each channel in sorted order data will be loaded in - channel_nums_sorted
+            channel_xpos = [ELECTRODE_XPOS[ch] for ch in sorted_oe_keys]
+            channel_ypos = [ELECTRODE_YPOS[ch] for ch in sorted_oe_keys]
+            # for channel subset selection in baphy_experiment - get recording method (rawchans=)
+            all_chans = sorted_oe
+            if type(chans) is tuple:
+                chans = list(chans)
+            idx = all_chans[chans].tolist()
+            recChans1 = sorted_oe + 1
+            recChans_physical = sorted_physical + 1
+            selected_chans = np.take(recChans1, idx)
+            selected_chans_physical = np.take(recChans_physical, idx)
+            selected_chans_xpos = np.take(channel_xpos, idx)
+            selected_chans_ypos = np.take(channel_ypos, idx)
+            selected_chans_xypos = {str(ch):[selected_chans_xpos[i], selected_chans_ypos[i]] for (ch, i) in zip(selected_chans_physical, range(len(selected_chans_physical)))}
+            probe = ['NPX']
+    else:
+        for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+                zip(experiment_openephys_folder, experiment_openephys_tarfile,
+                    experiment_openephys_tarfile_relpath):
+            # Use xml settings instead of the tar file. Much faster. Also, takes care
+            # of channel mapping (I think)
+            settings_file = file_finder(openephys_folder, 'settings.xml')
+            # If version is lower than 6 extract data using old method which requires mapping probe names to recorded names
+            # and allows for only extracting subset of channels
+            recChans, _ = oes.GetRecChs(settings_file)
+            connector = [i for i in recChans.keys()][0]
+            # import pdb; pdb.set_trace()
+            # handle channel remapping
+            info = oes.XML2Dict(settings_file)
+            mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+            mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+            for k in mapping_keys:
+                if mapping[k].get('Enabled') == '1':
+                    ch_num = mapping[k].get('Number')
+                    if ch_num in recChans[connector]:
+                        # if info['INFO']['VERSION'] == '0.5.5.2':
+                        #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+                        # else:
+                        recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+
+            # list of recorded channel numbers in OE scheme
+            recChans_list = [recChans[connector][i]['name_mapped'] \
+                        for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+            # list of mapped channel numbers in probe scheme - assuming channel map used is correct
+            recChan_probe = [str(int(recChans[connector][i]['number'] )+1) \
+                        for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+            data_files = [connector + '_' + c + '.continuous' for c in recChans_list]
+            all_chans = np.arange(len(data_files))
+
+            # not a good directory to use for UCLA probe channel map...but couldn't find the original location
+            # need to find 128 channel directory. This assumes using UCLA 64D reversed. There is a 64D/M? recordings floating around.
+            # This should work for majority of cases and should be remedied if correct channel maps are found.
+            # In future may want to search channel map/probe location in db to find what type was used. Hack by looking at channel nums.
+
+            if len(all_chans) == 64:
+                chan_map_pd = pd.read_csv(
+                    '/auto/users/wingertj/code/csd_project/src/probe_specific/channel_map_64D_reverse.csv',
+                    delimiter=',', header=None, names=["channel number", "x", "y"])
+            elif len(all_chans) == 128:
+                pass
+            else:
+                raise ValueError("Unknown channel number: what probe is being used? add channel map")
+
+            all_chans_xy = {str(chan_map_pd['channel number'][i]): [str(chan_map_pd['x'][i]),str(chan_map_pd['y'][i])] for i in range(len(chan_map_pd))}
+
+            if type(chans) is tuple:
+                chans = list(chans)
+            idx = all_chans[chans].tolist()
+            selected_data = np.take(data_files, idx)
+            recChans1 = [ch.split('CH')[1] for ch in recChans_list]
+            selected_chans = np.take(recChans1, idx)
+            # to make things match between neuropixels and UCLA(which already should be in the physical channel nums) remake the selected_chans with different name
+            selected_chans_physical = selected_chans
+            selected_probe_chans = np.take(recChan_probe, idx)
+            selected_chans_xypos = {ch:all_chans_xy[ch] for ch in selected_probe_chans}
+            probe = ['UCLA']
+
+    selected_chans_physical_str = [str(ch) for ch in selected_chans_physical]
+
+    # create list of files found in temporary folder for open-ephys or binary format and check if selected channel files exist and load data. If binary and file exists just load data.
+    list_of_tmpfiles = []
+    list_of_tmpfilepaths = []
+    if format[0] == 'binary':
+        list_of_tmpfiles = glob.glob(str(tmppath) + '/**/*.dat', recursive=True)
+        for f in list_of_tmpfiles:
+            if os.path.basename(f).split('.')[0] == 'continuous':
+                list_of_tmpfilepaths.append(os.path.dirname(f))
+        try:
+            if version[1] < 6:
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_binary_data_unpacking(data, version, mua=mua)
+                timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+
+            elif version[1] >=6:
+                data = load_openephys(tmppath, dtype='continuous')
+                data = continuous_binary_data_unpacking(data, version, mua=mua)
+                timestamp0 = int(data['timestamps'][0] * rasterfs)
+        except:
+            raise IOError('loading binary data failed...still zipped?')
+
+    elif format[0] == 'open-ephys' or format[0] == 'openephys':
+        for root, dirs, files in os.walk(tmppath):
+            list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
+        for root, dirs, files in os.walk(tmppath):
+            list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
+        # check if all files are extracted and attempt to load data with new loader v0.1.3
+        try:
+            # check if files use CH naming as expected
+            if set(selected_data).issubset(list_of_tmpfiles):
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_data_unpacking(data)
+            else:
+                raise Exception(
+                    'Selected file names do not match temp file names: trying again after removing CH')
+            # remove CH from selected_data and check if files exist
+        except:
+            for i, selected_ch in enumerate(selected_data):
+                new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
+                selected_data[i] = new_filename
+            if set(selected_data).issubset(list_of_tmpfiles):
+                log.info('no CH in filename, loading without it')
+                data = load_openephys_archived(tmppath, dtype='continuous')
+                data = continuous_data_unpacking(data)
+        timestamp0 = int(data['timestamps'][0] / int(data['header']['sampleRate']) * rasterfs)
+
+    log.info(f'timestamp0 is {timestamp0}')
+
+    # remove temporary data
+    if os.path.exists(tmppath):
+        shutil.rmtree(tmppath)
+
+    # sort channels based on channel mapping
+    raw_chans = data['channels']
+    continuous_data = []
+    #timestamp0 = []
+    for selected_ch in selected_chans:
+        raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
+        temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
+        if mua is True:
+            # filter data within bandwidth
+            muabp = list(muabp)
+            sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+            d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+
+            # calculate number of bins to sum mua over for resampling
+            n = int(int(data['header']['sampleRate']) / rasterfs)
+            # if signal is not divisible by requested sample rate, remove remainder
+            d = d[:int(len(d) - len(d) % n)]
+            # resample mua as sum of higher sampling rate bins - mua power
+            d = np.sum(d.reshape(-1, n), axis=1)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rasterfs is None and rawlp is None and rawhp is None:
+            print("no parameters specified")
+            continuous_data.append(temp_data[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0])
+        elif rawlp is not None and rawhp is not None and rasterfs is not None:
+            print("bandpass filter and sample rate specified")
+            # filter data within bandwidth
+            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawlp is not None and rawhp is not None:
+            print("bandpass filter selected sample rate set to 4*Nyquist")
+            # filter data within bandwidth
+            sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+        elif rawlp is not None and rasterfs is not None:
+            # filter data within bandwidth
+            print("lowpass filter selected and sample rate specified")
+            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawhp is not None and rasterfs is not None:
+            # filter data within bandwidth
+            print("high pass filter selected and sample rate specified")
+            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
+                                      output='sos')
+            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+        elif rawlp is not None:
+            print("lowpass filter selected sample rate set to 4*Nyquist")
+            sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+            data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            resample_new_size = int(
+                np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+        elif rawhp is not None:
+            print("highpass filter selected sample rate not adjusted")
+            sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+            data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+            continuous_data.append(data['hpfiltered'][np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0])
+        else:
+            print("sample rate specified...downsampling data")
+            resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
+            d = scipy.signal.resample(temp_data, resample_new_size)
+            continuous_data.append(d[np.newaxis, :])
+            #timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+
+    continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+    timestamp0_list.append(timestamp0)
+
+    return continuous_data_list, timestamp0_list, selected_chans_xypos, selected_chans_physical_str, probe
+
+
+# def jcw_get_continuous_data(experiment_openephys_folder, experiment_openephys_tarfile,
+#                             experiment_openephys_tarfile_relpath, local_copy_raw,
+#                             chans, rasterfs=None, mua=None, rawlp=None, rawhp=None, muabp=None):
+#     '''
+#     WARNING: This is a beta method. The interface and return value may
+#     change.
+#     chans (list or numpy slice): which electrodes to load data from
+#     '''
+#     # get filenames (TODO: can this be sped up?)
+#     # with tarfile.open(self.openephys_tarfile, 'r:gz') as tar_fh:
+#     #    log.info("Finding filenames in tarfile...")
+#     #    filenames = [f.split('/')[-1] for f in tar_fh.getnames()]
+#     #    data_files = sorted([f for f in filenames if 'CH' in f], key=len)
+#
+#     continuous_data_list = []
+#     timestamp0_list = []
+#
+#     # check version and file format
+#     version = openephys_gui_version(experiment_openephys_folder[0])
+#     format = format_finder(experiment_openephys_folder[0])
+#
+#     # iterate through each openephys_folder
+#     for openephys_folder, tarfile_fullpath, tarfile_relpath in \
+#             zip(experiment_openephys_folder, experiment_openephys_tarfile, experiment_openephys_tarfile_relpath):
+#         # Use xml settings instead of the tar file. Much faster. Also, takes care
+#         # of channel mapping (I think)
+#         settings_file = file_finder(openephys_folder, 'settings.xml')
+#
+#         if version[1] < 6:
+#             recChans, _ = oes.GetRecChs(settings_file)
+#             connector = [i for i in recChans.keys()][0]
+#         # import pdb; pdb.set_trace()
+#         # handle channel remapping
+#         info = oes.XML2Dict(settings_file)
+#         mapping = info['SIGNALCHAIN']['PROCESSOR']['Filters/Channel Map']['EDITOR']
+#         mapping_keys = [k for k in mapping.keys() if 'CHANNEL' in k]
+#         for k in mapping_keys:
+#             ch_num = mapping[k].get('Number')
+#             if ch_num in recChans[connector]:
+#                 # if info['INFO']['VERSION'] == '0.5.5.2':
+#                 #   recChans[connector][ch_num]['name_mapped'] = mapping[k].get('Mapping')
+#                 # else:
+#                 recChans[connector][ch_num]['name_mapped'] = 'CH' + mapping[k].get('Mapping')
+#
+#         recChans = [recChans[connector][i]['name_mapped'] \
+#                     for i in recChans[connector].keys() if 'name_mapped' in recChans[connector][i].keys()]
+#         data_files = [connector + '_' + c + '.continuous' for c in recChans]
+#         all_chans = np.arange(len(data_files))
+#
+#         if type(chans) is tuple:
+#             chans = list(chans)
+#
+#         idx = all_chans[chans].tolist()
+#         selected_data = np.take(data_files, idx)
+#         continuous_data = []
+#         timestamp0 = []
+#
+#         # unzip tarfiles to temp local folder
+#         if local_copy_raw:
+#             filename = selected_data[-1]
+#             full_filename = openephys_folder / filename
+#             tmppath = Path('/tmp/evpread/')
+#             if ~os.path.isfile(full_filename):
+#                 # file doesn't exist (still zipped?) unzip to a local folder
+#                 # tmppath = Path('/tmp/evpread/')
+#                 newpath = tmppath / tarfile_fullpath.stem / openephys_folder.stem
+#
+#                 test_filename = newpath / filename
+#                 if os.path.isfile(test_filename):
+#                     log.info(f"Local un-tar-ed copy exists in: {newpath}")
+#                 else:
+#                     log.info(f"Temp untaring raw data to {newpath}")
+#                     os.umask(0)
+#                     os.makedirs(tmppath, mode=0o777, exist_ok=True)
+#                     # open file
+#                     file = tarfile.open(tarfile_fullpath)
+#                     # extracting file
+#                     file.extractall(tmppath, numeric_owner=True)
+#                     file.close()
+#
+#                     for root, dirs, files in os.walk(tmppath):
+#                         for d in dirs:
+#                             os.chmod(os.path.join(root, d), 0o777)
+#                         for f in files:
+#                             os.chmod(os.path.join(root, f), 0o777)
+#                 # point to the local folder
+#                 openephys_folder = newpath
+#
+#             # create list of files found in temporary folder for open-ephys or binary format
+#             list_of_tmpfiles = []
+#             list_of_tmpfilepaths = []
+#             if format[0] == 'binary':
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfiles = [fi for fi in files if fi.endswith(".dat")]
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".dat")]
+#                 try:
+#                     data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                     data = continuous_binary_data_unpacking(data, version, mua=mua)
+#                 except:
+#                     raise IOError('loading binary data failed...still zipped?')
+#
+#             elif format[0] == 'open-ephys' or format[0] == 'openephys':
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfiles = [fi for fi in files if fi.endswith(".continuous")]
+#                 for root, dirs, files in os.walk(openephys_folder):
+#                     list_of_tmpfilepaths = [os.path.join(root, fi) for fi in files if fi.endswith(".continuous")]
+#             # check if all files are extracted and attempt to load data with new loader v0.1.3
+#                 try:
+#                     # check if files use CH naming as expected
+#                     if set(selected_data).issubset(list_of_tmpfiles):
+#                         data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                         data = continuous_data_unpacking(data)
+#                     else:
+#                         raise Exception('Selected file names do not match temp file names: trying again after removing CH')
+#                     # remove CH from selected_data and check if files exist
+#                 except:
+#                     for i, selected_ch in enumerate(selected_data):
+#                         new_filename = selected_ch.split('_')[0] + '_' + selected_ch.split('_')[1][2:]
+#                         selected_data[i] = new_filename
+#                     if set(selected_data).issubset(list_of_tmpfiles):
+#                         log.info('no CH in filename, loading without it')
+#                         data = load_openephys_archived(openephys_folder, dtype='continuous')
+#                         data = continuous_data_unpacking(data)
+#
+#             # remove temporary data
+#             newpath = tmppath / tarfile_fullpath.stem
+#             if os.path.exists(newpath):
+#                 shutil.rmtree(newpath)
+#
+#             # sort channels based on channel mapping
+#             recChans1 = [ch.split('CH')[1] for ch in recChans]
+#             selected_chans = np.take(recChans1, idx)
+#             raw_chans = data['channels']
+#             for selected_ch in selected_chans:
+#                 raw_mapping_index = np.where(raw_chans == int(selected_ch))[0][0]
+#                 temp_data = data['data'][raw_chans == int(selected_ch), :].squeeze(axis=0)
+#                 if mua is not None:
+#                     # filter data within bandwidth
+#                     muabp = list(muabp)
+#                     sos = scipy.signal.butter(4, muabp, 'bandpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     d = abs(scipy.signal.sosfiltfilt(sos, temp_data))
+#
+#                     # calculate number of bins to sum mua over for resampling
+#                     n = int(int(data['header']['sampleRate']) / rasterfs)
+#                     # if signal is not divisible by requested sample rate, remove remainder
+#                     d = d[:int(len(d) - len(d) % n)]
+#                     # resample mua as sum of higher sampling rate bins - mua power
+#                     d = np.sum(d.reshape(-1, n), axis=1)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rasterfs is None and rawlp is None and rawhp is None:
+#                     print("no parameters specified")
+#                     continuous_data.append(temp_data[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0])
+#                 elif rawlp is not None and rawhp is not None and rasterfs is not None:
+#                     print("bandpass filter and sample rate specified")
+#                     # filter data within bandwidth
+#                     sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['bpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawlp is not None and rawhp is not None:
+#                     print("bandpass filter selected sample rate set to 4*Nyquist")
+#                     # filter data within bandwidth
+#                     sos = scipy.signal.butter(4, [rawhp, rawlp], 'bandpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['bpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['bpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['bpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+#                 elif rawlp is not None and rasterfs is not None:
+#                     # filter data within bandwidth
+#                     print("lowpass filter selected and sample rate specified")
+#                     sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['lpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawhp is not None and rasterfs is not None:
+#                     # filter data within bandwidth
+#                     print("high pass filter selected and sample rate specified")
+#                     sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']),
+#                                               output='sos')
+#                     data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['hpfiltered']) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['hpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#                 elif rawlp is not None:
+#                     print("lowpass filter selected sample rate set to 4*Nyquist")
+#                     sos = scipy.signal.butter(4, rawlp, 'lowpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     data['lpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     resample_new_size = int(
+#                         np.round(len(data['lpfiltered']) * rawlp * 4 / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(data['lpfiltered'], resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rawlp * 4 / int(data['header']['sampleRate']))
+#                 elif rawhp is not None:
+#                     print("highpass filter selected sample rate not adjusted")
+#                     sos = scipy.signal.butter(4, rawhp, 'highpass', fs=int(data['header']['sampleRate']), output='sos')
+#                     data['hpfiltered'] = scipy.signal.sosfiltfilt(sos, temp_data)
+#                     continuous_data.append(data['hpfiltered'][np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0])
+#                 else:
+#                     print("sample rate specified...downsampling data")
+#                     resample_new_size = int(np.round(len(temp_data) * rasterfs / int(data['header']['sampleRate'])))
+#                     d = scipy.signal.resample(temp_data, resample_new_size)
+#                     continuous_data.append(d[np.newaxis, :])
+#                     timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#         else:
+#             filename = selected_data[-1]
+#             with tarfile.open(tarfile_fullpath, 'r:gz') as tar_fh:
+#                 log.info("Extracting / loading %s...", filename)
+#                 full_filename = tarfile_relpath / filename
+#                 with tar_fh.extractfile(str(full_filename)) as fh:
+#                     data = load_continuous_openephys(fh)
+#                     if rasterfs is None:
+#                         continuous_data.append(data['data'][np.newaxis, :])
+#                         timestamp0.append(data['timestamps'][0])
+#                     else:
+#                         resample_new_size = int(
+#                             np.round(len(data['data']) * rasterfs / int(data['header']['sampleRate'])))
+#                         d = scipy.signal.resample(data['data'], resample_new_size)
+#                         continuous_data.append(d[np.newaxis, :])
+#                         timestamp0.append(data['timestamps'][0] * rasterfs / int(data['header']['sampleRate']))
+#
+#         continuous_data_list.append(np.concatenate(continuous_data, axis=0))
+#         timestamp0_list.append(timestamp0[0])
+#
+#     return continuous_data_list, timestamp0_list
+
 
 ###############################################################################
 # Unsorted functions
@@ -248,6 +1338,7 @@ def baphy_mat2py(s):
     s3 = re.sub(r';$', r'', s.rstrip())
     s3 = re.sub(r'%', r'#', s3)
     s3 = re.sub(r'\\', r'/', s3)
+    s3 = re.sub(r'\.wav[-_]', r'-',s3) # MLE 2019 05 29 kludge to avoid .wav file sufix to be considered as matlab struct.field
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)'", r"XX\g<1>'", s3)
     s3 = re.sub(r"\.([a-zA-Z0-9]+)\+", r"XX\g<1>+", s3)
@@ -304,9 +1395,316 @@ def baphy_mat2py(s):
 
     return s8
 
+def get_parmfile_format(parmfile):
+
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return 'baphy'
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if os.path.exists(asfile):
+        return 'baphy'
+    elif os.path.exists(aspath):
+        return 'psi'
+    else:
+        return None
+
+def adjust_parmfile_name(parmfile):
+
+    asfile = Path(parmfile).with_suffix('.m')
+    aspath = Path(parmfile).with_suffix('')
+    if get_setting('USE_NEMS_BAPHY_API'):
+        return asfile
+    elif os.path.exists(asfile):
+        return asfile
+    elif os.path.exists(aspath):
+        return aspath
+    else:
+        return None
+
+
+def psi_parm_read(filepath):
+    """
+    read parameter from psi datafolder. Relevant info in event_log.csv
+    and trial_log.csv
+    match spect of baphy loader:
+       exptevents.columns = ['name', 'start', 'end', 'Trial']
+    :param filepath:
+    :return:
+    """
+    eventfile = Path(filepath) / "event_log.csv"
+    trialfile = Path(filepath) / "trial_log.csv"
+    globalfile = Path(filepath) / "globalparams.json"
+
+    prestimsilence=0.0
+    poststimsilence=0.0
+
+    root1, parmfile = os.path.split(filepath)
+    root2, penname = os.path.split(root1)
+    root3, ferret = os.path.split(root2)
+    parts = parmfile.split('_')
+    siteid = parts[0][:-2]
+    runclass = parts[2];
+    ctime = datetime.datetime.fromtimestamp(os.path.getctime(filepath))
+
+    if os.path.isfile(globalfile):
+        with open(globalfile, 'r') as f:
+            globalparams = json.load(f)
+        globalparams['Tester'] = globalparams['experimenter']
+        globalparams['Ferret'] = globalparams['animal']
+        if globalparams['training']=='Physiology+behavior':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+    else:
+        log.info('***** Kludge alert!! Hard coding many baphy settings. *****')
+        globalparams = {}
+        globalparams['rawfilename'] = os.path.join(filepath, 'raw')
+        globalparams['Tester'] = 'jwingert'
+        globalparams['Ferret'] = 'Prince'
+        globalparams['runclass'] = runclass
+
+        if parts[2]=='a':
+            globalparams['Physiology'] = 'Yes -- Behavior'
+        else:
+            globalparams['Physiology'] = 'Yes -- Passive'
+        globalparams['SiteID'] = siteid
+
+    globalparams['HWSetup'] = 17
+    globalparams['date'] = ctime.strftime("%Y-%m-%d")
+    globalparams['SiteID'] = siteid
+    globalparams['HWparams'] = {'DAQSystem': 'Open-Ephys'}
+    globalparams['NumberOfElectrodes'] = 384
+    globalparams['stim_system'] = 'psi'
+    globalparams['Module'] = 'psi'
+    globalparams['ExperimentComplete'] = 1
+    globalparams['tempMfile'] = filepath
+
+    T = pd.read_csv(trialfile)
+    E = pd.read_csv(eventfile)
+    rparms = T.loc[0]
+
+    FitBinaural, TestBinaural = 'None', 'None'
+    if ('background_1_wav_sequence_level' in rparms.index):
+        if rparms.background_1_wav_sequence_level > 0:
+            FitBinaural, TestBinaural = 'Random', 'Random'
+
+    TrialObject = {1: {
+        'ReferenceClass': 'BigNat',
+        'ReferenceHandle': {1: {'PreStimSilence': prestimsilence,
+                                'PostStimSilence': poststimsilence,
+                                'SoundPath': rparms.background_wav_sequence_path,
+                                'Duration': rparms.background_wav_sequence_duration,
+                                'Normalization': rparms.background_wav_sequence_normalization ,
+                                'FixedAmpScale': rparms.background_wav_sequence_norm_fixed_scale ,
+                                'FitBinaural': FitBinaural,
+                                'TestBinaural': TestBinaural,
+                                'fit_range': rparms.background_wav_sequence_fit_range,
+                                'fit_reps': rparms.background_wav_sequence_fit_reps,
+                                'test_range': rparms.background_wav_sequence_test_range,
+                                'test_reps': rparms.background_wav_sequence_test_reps,
+                                'iti_duration': rparms.iti_duration,
+                            'Names': {},
+                            'descriptor': 'BigNat'
+                            }},
+        'TargetClass': 'Tone',
+        'TargetHandle': {1:{ 'descriptor': 'Tone'
+                        }},
+        'OveralldB': rparms.background_wav_sequence_level}
+    }
+    exptparams = {'runclass': runclass,
+                  'StartTime': ctime.strftime("%H:%M:%S"),
+                  'BehaveObjectClass': 'psi-go-nogo',
+                  'TrialObject': TrialObject,
+                  'TotalRepetitions': 1,
+                  'Repetition': 1,
+                  }
+
+    event_count = len(E)
+    cols = E.columns
+    if 'trial' in cols:
+        E['Trial'] = E['trial']
+        guess_trials = False
+    else:
+        E['Trial'] = 1
+        guess_trials = True
+    E['duration'] = 0
+    for ee, r in E.iterrows():
+        if str(r['info'])!='nan':
+            info = json.loads(r['info'])
+            if 'duration' in info.keys():
+                if ~np.isinf(info['duration']):
+                    E.loc[ee,'duration'] = info['duration']
+
+        if r['event'] == 'background_added':
+            E_pausenext = E.loc[(E.index>ee) & (E['event']=='background_paused') &
+                                (E['timestamp']<r['timestamp']+E.loc[ee,'duration'])]
+            if (len(E_pausenext)>0):
+                E.loc[ee, 'duration'] = E_pausenext['timestamp'].min()-E.loc[ee, 'timestamp']
+                #print(f"{E.loc[ee, 'timestamp']} {E.loc[ee, 'duration']}")
+                
+    E['start'] = E['timestamp']
+    E['end'] = E['start'] + E['duration']
+    E['name'] = E['event']
+    E['Info'] = E['info']
+    experiment_end = E.loc[E.event=='experiment_end','start'].max()
+    if experiment_end==0:
+        experiment_end = E.loc[E.event == 'trial_end', 'start'].max()
+
+    E.loc[E.end>experiment_end,'end']=experiment_end
+
+    E.loc[E['Info'].astype(str)=='nan','Info']=''
+    E.loc[E['Trial']==0,'Trial']=1
+    
+    exptevents=E.loc[E['duration']>=0,['start','end','name','Trial','Info']].reset_index(drop=True)
+    
+    if guess_trials:
+        start_events = exptevents.loc[exptevents['name']=='trial_start']
+        for ee in range(len(exptevents)):
+            tt=(start_events['start']<=exptevents.loc[ee,'start']).sum()
+            if tt>1:
+                exptevents.loc[ee,'Trial']=tt
+
+    if 'trial_number' not in T.columns:
+        T['trial_number']=np.arange(T.shape[0],dtype=int)+1
+    trialstarts = exptevents.loc[exptevents['name']=='trial_start',['Trial','start']].values
+    trialstarts2 = T[['trial_number', 'trial_start']].values
+    Tlen = trialstarts.shape[0]
+    if trialstarts2.shape[0]<trialstarts.shape[0]:
+        Tlen=trialstarts2.shape[0]
+        exptevents['old_trial']=exptevents['Trial'].copy()
+        exptevents['Trial'] = 0
+        for t in range(1,Tlen+1):
+            mm = np.argmin(np.abs(trialstarts[:,1]-trialstarts2[t-1,1]))
+            exptevents.loc[exptevents['old_trial']==(mm+1),'Trial']=t
+        for i,r in exptevents.loc[exptevents.Trial==0].iterrows():
+            try:
+                next_trial = trialstarts[trialstarts[:,1]>r['start'],0].min()
+            except:
+                next_trial = Tlen
+                pass
+            print(i, next_trial, r['start'],r['end'], r['name'], r['Info'])
+        log.info(f"Trial counts adjusted E: {trialstarts.shape[0]} to T: {trialstarts2.shape[0]} ")
+        exptevents = exptevents.drop(columns='old_trial')
+        #dmean=np.sum(np.abs(trialstarts[:Tlen,1]-trialstarts2[:Tlen,1]))
+        #if dmean > 0:
+        #    log.info(f"Trial counts E: {trialstarts.shape[0]} T: {trialstarts2.shape[0]} ")
+        #    log.info(f"WARNING!! Truncated start time diff: {dmean} sec")
+    elif trialstarts2.shape[0]>trialstarts.shape[0]:
+        raise ValueError("Trial log has more trials than event log???")
+
+    if (exptevents['Trial'] > Tlen).sum() > 0:
+        log.info('Removing events after last trial')
+    exptevents=exptevents.loc[(exptevents['Trial']<=Tlen) & (exptevents['Trial']>0)]
+
+    # DONT adjust timestamps to reference current trial rather than absolute
+    # target_events = exptevents.loc[exptevents['name']=='target_start'].copy()
+
+    #for ee, r in target_events.iterrows():
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'start'] -= r['start']
+    #    exptevents.loc[exptevents['Trial']==r['Trial'],'end'] -= r['start']
+
+    tstart_events = exptevents.loc[exptevents['name']=='target_start'].reset_index(drop=True)
+    tstart_events['name']='TRIALSTART'
+    tstart_events['end'] = tstart_events['start']
+    tstart_events['Info'] = ''
+    tstop_events = tstart_events.copy()
+    tstop_events['name'] = 'TRIALSTOP'
+    tstop_events['Trial'] -= 1
+    tstop_events.loc[tstop_events.Trial==0,['start','end']] = exptevents['end'].max()
+    tstop_events.loc[tstop_events.Trial==0,['Trial']] = Tlen
+    tstop_events = tstop_events.sort_values(by='start').reset_index(drop=True)
+
+    bg_events = exptevents.loc[exptevents['name']=='background_added'].copy()
+    bg_events1 = exptevents.loc[exptevents['name']=='background_1_added'].copy()
+
+    Names = []
+    for ee, r in bg_events.iterrows():
+        info = json.loads(r['Info'])
+        bin_match = bg_events1['start']==r['start']
+        if bin_match.sum() > 0:
+            # code as a binaural signal
+            r2 = bg_events1.loc[bin_match].iloc[0]
+            info2 = json.loads(r2['Info'])
+            name = f'{info["metadata"]["filename"]}.wav:1+{info2["metadata"]["filename"]}.wav:2'
+        else:
+            # single (monaural) signal
+            name = f'{info["metadata"]["filename"]}.wav'
+        Names.append(name)
+        bg_events.loc[ee, 'name'] = f'Stim , {name} , Reference'
+        bg_events.loc[ee, 'Info'] = ''
+    Names = list(set(Names))
+    Names.sort()
+    TrialObject[1]['ReferenceHandle'][1]['Names'] = Names
+
+    tar_events = exptevents.loc[(exptevents['name'] == 'target_start') &
+                                (exptevents['Trial']<=Tlen)].copy()
+    for ee, r in tar_events.iterrows():
+        trialinfo = T.loc[T['trial_number']==r['Trial']].iloc[0]
+        snr = trialinfo['snr']
+        target_freq = trialinfo['target_tone_frequency']
+        trial_type = trialinfo['trial_type']
+        if 'nogo' in trial_type:
+            name = f'Stim , {target_freq}+-InfdB , Catch'
+        else:
+            name = f'Stim , {target_freq}+{snr}dB , Target'
+        tar_events.loc[ee, 'name'] = name
+        tar_events.loc[ee, 'Info'] = ''
+    
+    # add pre- and post- silences
+    stimevents = pd.concat([bg_events, tar_events])
+    stimevents = stimevents.loc[stimevents.end>stimevents.start].copy()
+    prestimevents=stimevents.copy()
+    starts = prestimevents['start'].copy()
+    prestimevents['start'] = starts-prestimsilence
+    prestimevents['end'] = starts
+    prestimevents['name'] = prestimevents['name'].str.replace('Stim ,','PreStimSilence ,')
+    poststimevents = stimevents.copy()
+    stops = poststimevents['end'].copy()
+    poststimevents['start'] = stops
+    poststimevents['end'] = stops+poststimsilence
+    poststimevents['name'] = poststimevents['name'].str.replace('Stim ,', 'PostStimSilence ,')
+
+    trial_number = T['trial_number']
+    trialstarts = exptevents.loc[exptevents['name']=='target_start', 'start'].values
+    videostart = T['psivideo_frame_ts']
+    videostart = videostart - videostart[0] + trialstarts[0]
+    videoframes = T['psivideo_frames_written']
+    videoname = videoframes.apply(lambda x: f"PSIVIDEO,{x:.0f}")
+    d_ = {'start': videostart, 'end': videostart, 'name': videoname,
+          'Trial': trial_number, 'Info': ''}
+    videoevents = pd.DataFrame(d_)
+
+    response_ts = T['response_ts']
+    response_outcome = T['score']
+    response_name = response_outcome.apply(lambda x: f"LICK , {x}")
+
+    d_ = {'start': response_ts, 'end': response_ts, 'name': response_name,
+          'Trial': trial_number, 'Info': ''}
+    responseevents = pd.DataFrame(d_)
+    responseevents = responseevents.loc[np.isfinite(response_ts)]
+
+    trial_outcomes = response_outcome.apply(lambda x: f"{x}_TRIAL")
+    n_outcomes = len(trial_outcomes)
+    d_ = {'start': tstart_events['start'][:n_outcomes],
+          'end': tstop_events['start'][:n_outcomes],
+          'name': trial_outcomes, 'Trial': trial_number, 'Info': ''}
+    outcomeevents = pd.DataFrame(d_)
+
+    exptevents = pd.concat([exptevents, tstart_events, tstop_events, stimevents,
+                            prestimevents, poststimevents, videoevents,
+                            responseevents, outcomeevents], ignore_index=True)
+    exptevents = exptevents.sort_values(by=['Trial','start']).reset_index(drop=True)
+
+    globalparams['rawfilecount'] = Tlen
+
+    return globalparams, exptparams, exptevents
 
 def baphy_parm_read(filepath, evpread=True):
     log.info("Loading {0}".format(filepath))
+
+    if os.path.isdir(filepath):
+        return psi_parm_read(filepath)
+
     s = load_resource(str(filepath))
     if type(s) is str:
         s = s.split("\n")
@@ -550,6 +1948,8 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
             options.update({'runclass': 'VOC'})
         elif op == 'bin':
             options.update({'binaural': 'crude'})
+        elif op.startswith('bin'):
+            options.update({'binaural': float(op[3:]), 'binsplit': False})
 
     if 'stimfmt' not in options.keys():
         raise ValueError('Valid stim format (ozgf, gtgram, psth, parm, env, evt) not specified in loader=' + loader)
@@ -561,9 +1961,12 @@ def parse_loadkey(loadkey=None, batch=None, siteid=None, cellid=None,
         options['siteid'] = siteid
 
     if batch is not None:
-        options["batch"] = batch
-        if int(batch) in [263, 294]:
-            options["runclass"] = "VOC"
+        try:
+            options["batch"] = batch
+            if int(batch) in [263, 294]:
+                options["runclass"] = "VOC"
+        except:
+            options['batch'] = 0
 
     if cellid is not None:
         options["cellid"] = cellid
@@ -805,7 +2208,7 @@ def labeled_line_stim(exptparams, **options):
 
 def baphy_load_stim(exptparams, parmfilepath, epochs=None, **options):
 
-    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv']:
+    if options['stimfmt'] in ['gtgram', 'nenv', 'lenv', 'wav']:
         # &(exptparams['TrialObject'][1]['ReferenceClass'] == 'BigNat'):
 
         stim, tags, stimparam = runclass.NAT_stim(epochs, exptparams, **options)
@@ -1035,17 +2438,13 @@ def baphy_align_time_BAD(exptevents, sortinfo, spikefs, finalfs=0):
                 if chancount <= 8:
                     unit_names.append("{0}{1}".format(chan_names[c], u + 1))
                 else:
-                    unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                    unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                 spiketimes.append(unit_spike_events / spikefs)
 
     return exptevents, spiketimes, unit_names
 
 
-def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
-    # number of channels in recording (not all necessarily contain spikes)
-    chancount = len(sortinfo)
-    while chancount > 1 and sortinfo[chancount - 1].size == 0:
-        chancount -= 1
+def baphy_align_time(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortidx=0):
     # figure out how long each trial is by the time of the last spike count.
     # this method is a hack!
     # but since recordings are longer than the "official"
@@ -1054,10 +2453,21 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
 
     hit_trials = exptevents[exptevents.name == "BEHAVIOR,PUMPON,Pump"].Trial
     max_event_times = exptevents.groupby('Trial')['end'].max().values
-    # import pdb; pdb.set_trace()
+
+    # check to see if Trial starts are already non-zero (ie, psi-style, in abs trial time. 
+    # unlike baphy where trialstart is 0 for each trial)
+    TrialStart_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
+    )
     TrialLen_sec = np.array(
         exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
     )
+    if TrialStart_sec.sum()>0:
+        TrialLen_sec -= TrialStart_sec
+        offset_exists = True
+    else:
+        offset_exists = False
+
     if len(hit_trials):
         TrialLen_sec[hit_trials - 1] = max_event_times[hit_trials - 1]
 
@@ -1065,53 +2475,63 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
         (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
     )
 
-    for ch in range(0, chancount):
-        if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
-            s = sortinfo[ch][0][sortidx]['unitSpikes']
-            s = np.reshape(s, (-1, 1))
-            unitcount = s.shape[0]
-            for u in range(0, unitcount):
-                st = s[u, 0]
+    # number of channels in recording (not all necessarily contain spikes)
+    chancount = len(sortinfo)
+    while chancount > 1 and sortinfo[chancount - 1].size == 0:
+        chancount -= 1
+    if not offset_exists:
 
-                # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
-                for trialidx in range(1, TrialCount + 1):
-                    ff = (st[0, :] == trialidx)
-                    if np.sum(ff):
-                        utrial_spikefs = np.max(st[1, ff])
-                        TrialLen_spikefs[trialidx, 0] = np.max(
-                            [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
-                        )
+        # figure out offsets based on max spike time in each trial. Kind of backwards...
+        for ch in range(0, chancount):
+            if len(sortinfo[ch]) and len(sortinfo[ch][0]) >= sortidx + 1 and sortinfo[ch][0][sortidx].size:
+                s = sortinfo[ch][0][sortidx]['unitSpikes']
+                s = np.reshape(s, (-1, 1))
+                unitcount = s.shape[0]
+                for u in range(0, unitcount):
+                    st = s[u, 0]
 
-    # using the trial lengths, figure out adjustments to trial event times.
-    if finalfs:
-        log.info('rounding Trial offset spike times'
-                 ' to even number of rasterfs bins')
-        # print(TrialLen_spikefs)
-        TrialLen_spikefs = (
-                np.ceil(TrialLen_spikefs / spikefs * finalfs) / finalfs * spikefs
-        )
-        # TrialLen_spikefs = (
-        #        np.ceil(TrialLen_spikefs / spikefs*finalfs + 1) / finalfs*spikefs
-        #        )
-        # print(TrialLen_spikefs)
+                    # print('chan {0} unit {1}: {2} spikes'.format(c,u,st.shape[1]))
+                    for trialidx in range(1, TrialCount + 1):
+                        ff = (st[0, :] == trialidx)
+                        if np.sum(ff):
+                            utrial_spikefs = np.max(st[1, ff])
+                            TrialLen_spikefs[trialidx, 0] = np.max(
+                                [utrial_spikefs, TrialLen_spikefs[trialidx, 0]]
+                            )
 
-    Offset_spikefs = np.cumsum(TrialLen_spikefs)
-    Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
-    # adjust times in exptevents to approximate time since experiment started
-    # rather than time since trial started (native format)
-    for Trialidx in range(1, TrialCount + 1):
-        # print("Adjusting trial {0} by {1} sec"
-        #       .format(Trialidx,Offset_sec[Trialidx-1]))
-        ff = (exptevents['Trial'] == Trialidx)
-        exptevents.loc[ff, ['start', 'end']] = (
-                exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
-        )
+        # using the trial lengths, figure out adjustments to trial event times.
+        Offset_spikefs = np.cumsum(TrialLen_spikefs)
+        if finalfs:
+            log.info('Rounding trial start times to even number of rasterfs bins')
+            Offset_spikefs = np.ceil(Offset_spikefs / spikefs * finalfs) / finalfs * spikefs
+        Offset_sec = Offset_spikefs / spikefs  # how much to offset each trial
 
-        # ff = ((exptevents['Trial'] == Trialidx)
-        #       & (exptevents['end'] > Offset_sec[Trialidx]))
-        # badevents, = np.where(ff)
-        # print("{0} events past end of trial?".format(len(badevents)))
-        # exptevents.drop(badevents)
+        # adjust times in exptevents to approximate time since experiment started
+        # rather than time since trial started (native format)
+        for Trialidx in range(1, TrialCount + 1):
+            # print("Adjusting trial {0} by {1} sec"
+            #       .format(Trialidx,Offset_sec[Trialidx-1]))
+            ff = (exptevents['Trial'] == Trialidx)
+            exptevents.loc[ff, ['start', 'end']] = (
+                    exptevents.loc[ff, ['start', 'end']] + Offset_sec[Trialidx - 1]
+            )
+
+            # ff = ((exptevents['Trial'] == Trialidx)
+            #       & (exptevents['end'] > Offset_sec[Trialidx]))
+            # badevents, = np.where(ff)
+            # print("{0} events past end of trial?".format(len(badevents)))
+            # exptevents.drop(badevents)
+    else:
+        # offset_exists
+        ss = exptevents['start']
+        dd = exptevents['end'] - exptevents['start']
+        ss = np.ceil(ss*finalfs) / finalfs
+        dd = np.ceil(dd*finalfs) / finalfs
+        exptevents['start'] = ss
+        exptevents['end'] = ss + dd
+        
+        Offset_sec = np.array(exptevents.loc[exptevents['name'] == "TRIALSTART"]['start'])
+        Offset_spikefs = Offset_sec * spikefs
 
     log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
 
@@ -1163,7 +2583,7 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                         # unit_names.append("{0}{1}".format(chan_names[c], u+1))
                         unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
                     else:
-                        unit_names.append("{0:02d}-{1}".format(c + 1, u + 1))
+                        unit_names.append("{0:03d}-{1}".format(c + 1, u + 1))
                     spiketimes.append(unit_spike_events / spikefs)
 
                 # else:
@@ -1177,7 +2597,50 @@ def baphy_align_time(exptevents, sortinfo, spikefs, finalfs=0, sortidx=0):
                 #    else:
                 #        unit_names.append("{0:02d}-{1}".format(c+1, u+1))
                 #    spiketimes.append([])
+                
     return exptevents, spiketimes, unit_names
+
+
+def baphy_align_time_psi(exptevents, sortinfo=None, spikefs=30000, finalfs=0, sortidx=0):
+    # figure out how long each trial is by the time of the last spike count.
+    # this method is a hack!
+    # but since recordings are longer than the "official"
+    # trial end time reported by baphy, this method preserves extra spikes
+    TrialCount = int(np.max(exptevents['Trial']))
+    max_event_times = exptevents.groupby('Trial')['end'].max().values
+
+    # check to see if Trial starts are already non-zero (ie, psi-style, in abs trial time.
+    # unlike baphy where trialstart is 0 for each trial)
+    TrialStart_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTART"]['start']
+    )
+    TrialLen_sec = np.array(
+        exptevents.loc[exptevents['name'] == "TRIALSTOP"]['start']
+    )
+    if TrialStart_sec.sum() > 0:
+        TrialLen_sec -= TrialStart_sec
+        offset_exists = True
+    else:
+        offset_exists = False
+
+    TrialLen_spikefs = np.concatenate(
+        (np.zeros([1, 1]), TrialLen_sec[:, np.newaxis] * spikefs), axis=0
+    )
+
+    # offset_exists
+    ss = exptevents['start']
+    dd = exptevents['end'] - exptevents['start']
+    ss = np.ceil(ss * finalfs) / finalfs
+    dd = np.ceil(dd * finalfs) / finalfs
+    exptevents['start'] = ss
+    exptevents['end'] = ss + dd
+
+    Offset_sec = np.array(exptevents.loc[exptevents['name'] == "TRIALSTART"]['start'])
+    Offset_spikefs = Offset_sec * spikefs
+
+    log.info("{0} trials totaling {1:.2f} sec".format(TrialCount, Offset_sec[-1]))
+
+    return exptevents, [], []
 
 
 def baphy_align_time_baphyparm(exptevents, finalfs=0, **options):
@@ -1552,7 +3015,7 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
             )
             # print("{0} len(d)={1} len(ti)={2} fs={3}"
             #       .format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -1610,8 +3073,8 @@ def load_pupil_trace(pupilfilepath, exptevents=None, **options):
         return big_rs, strialidx
 
 
-def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
-                   verbose=False, rasterfs=30, dlc_threshold=-1, fill_invalid='mean',
+def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False,
+                   rasterfs=30, dlc_threshold=-1, fill_invalid='interpolate', max_gap=2,
                    **options):
     """
     returns big_rs which is pupil trace resampled to options['rasterfs']
@@ -1648,13 +3111,35 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
         y = dataframe[scorer][bp]['y'].values
         threshold_check = dataframe[scorer][bp]['likelihood'].values > dlc_threshold
         bad_frame_count = (~threshold_check).sum()
-        if fill_invalid == 'mean':
-            x[~threshold_check] = np.nanmean(x[threshold_check])
-            y[~threshold_check] = np.nanmean(y[threshold_check])
+        assume_videofs=30
+        if bad_frame_count==0:
+            pass
+            # no bad frames
+        elif (fill_invalid == 'interpolate'):
+            invalid_onsets = np.where(np.diff(threshold_check.astype(int))==-1)[0]+1
+            invalid_offsets = np.where(np.diff(threshold_check.astype(int))==1)[0]+1
+            if invalid_onsets[0] > invalid_offsets[0]:
+                invalid_onsets = np.concatenate(([0], invalid_onsets))
+            if invalid_onsets[-1] > invalid_offsets[-1]:
+                invalid_offsets = np.concatenate((invalid_offsets, [len(threshold_check)]))
+            for (a, b) in zip(invalid_onsets, invalid_offsets):
+                if (a > 0) & (b < len(x)) & ((b-a)/assume_videofs <= max_gap ):
+                    x[a:b] = np.linspace(x[a-1], x[b], b-a)
+                    y[a:b] = np.linspace(y[a - 1], y[b], b - a)
+                else:
+                    x[a:b] = np.nan
+                    y[a:b] = np.nan
 
-            if bad_frame_count > 0:
-                log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
-        else:
+        elif (fill_invalid == 'mean'):
+            log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+            if (fill_invalid == 'mean') & (bad_frame_count > 0) & (max_gap > 0):
+
+                x[~threshold_check] = np.nanmean(x[threshold_check])
+                y[~threshold_check] = np.nanmean(y[threshold_check])
+
+                if bad_frame_count > 0:
+                    log.info(f"{bp}: {bad_frame_count} bad samples, filling in with mean")
+        else: # nan
             x[~threshold_check] = np.nan
             y[~threshold_check] = np.nan
             if bad_frame_count > 0:
@@ -1686,41 +3171,76 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     # resample and remove dropped frames
 
     # find and parse lick trace events
-    pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    #pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
+    pp = exptevents['name'].str.startswith('LICK,')
+    if pp.sum() > 0:
+        # yes, there were LICK events, load baphy style
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 1])
+        firstframe = np.zeros([ntrials + 1])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'] - 1)
+            s = x['name'].split(",[")
+            p = eval("[" + s[1])
+            # print("{0} p=[{1}".format(i,s[1]))
+            timestamp[t] = p[0]
+            firstframe[t] = int(p[1])
 
-    trials = list(exptevents.loc[pp, 'Trial'])
-    ntrials = len(trials)
-    timestamp = np.zeros([ntrials + 1])
-    firstframe = np.zeros([ntrials + 1])
-    for i, x in exptevents.loc[pp].iterrows():
-        t = int(x['Trial'] - 1)
-        s = x['name'].split(",[")
+        pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
+        lastidx = np.argwhere(pp)[-1]
+
+        s = exptevents.iloc[lastidx[0]]['name'].split(",[")
         p = eval("[" + s[1])
-        # print("{0} p=[{1}".format(i,s[1]))
-        timestamp[t] = p[0]
-        firstframe[t] = int(p[1])
-    pp = ['LICKSTOP' in x['name'] for i, x in exptevents.iterrows()]
-    lastidx = np.argwhere(pp)[-1]
+        timestamp[-1] = p[0]
+        firstframe[-1] = int(p[1])
 
-    s = exptevents.iloc[lastidx[0]]['name'].split(",[")
-    p = eval("[" + s[1])
-    timestamp[-1] = p[0]
-    firstframe[-1] = int(p[1])
+        # align DLC signals with other events, probably by
+        # removing extra bins from between trials
+        ff = exptevents['name'].str.startswith('TRIALSTART')
+        start_events = exptevents.loc[ff, ['start']].reset_index()
+        start_events['StartBin'] = (
+            np.round(start_events['start'] * rasterfs)
+        ).astype(int)
+        start_e = list(start_events['StartBin'])
+        ff = (exptevents['name'] == 'TRIALSTOP')
+        stop_events = exptevents.loc[ff, ['start']].reset_index()
+        stop_events['StopBin'] = (
+            np.round(stop_events['start'] * rasterfs)
+        ).astype(int)
+        stop_e = list(stop_events['StopBin'])
 
-    # align DLC signals with other events, probably by
-    # removing extra bins from between trials
-    ff = exptevents['name'].str.startswith('TRIALSTART')
-    start_events = exptevents.loc[ff, ['start']].reset_index()
-    start_events['StartBin'] = (
-        np.round(start_events['start'] * rasterfs)
-    ).astype(int)
-    start_e = list(start_events['StartBin'])
-    ff = (exptevents['name'] == 'TRIALSTOP')
-    stop_events = exptevents.loc[ff, ['start']].reset_index()
-    stop_events['StopBin'] = (
-        np.round(stop_events['start'] * rasterfs)
-    ).astype(int)
-    stop_e = list(stop_events['StopBin'])
+    else:
+        # assume PSIVIDEO format instead
+        pp = exptevents['name'].str.startswith('PSIVIDEO')
+        trials = list(exptevents.loc[pp, 'Trial'])
+        ntrials = len(trials)
+        timestamp = np.zeros([ntrials + 2])
+        firstframe = np.zeros([ntrials + 2])
+        for i, x in exptevents.loc[pp].iterrows():
+            t = int(x['Trial'])
+            s = x['name'].split(",")
+
+            timestamp[t] = x['start']
+            firstframe[t] = int(s[1])
+            #print(f"Trial {t+1} time={timestamp[t]:.2f} frames={firstframe[t]:.0f}")
+        nominal_fr = int(np.round(firstframe[-2]/timestamp[-2]))
+        final_frames = data_array.shape[1]-firstframe[-2]
+        if final_frames<0:
+            log.info('TRUNCATED VIDEO?????? PADDING WITH NANS')
+            sh = (data_array.shape[0], int(firstframe[-2]-data_array.shape[1]+3))
+            data_array=np.concatenate((data_array, np.ones(sh)*np.nan),axis=1)
+            final_frames = data_array.shape[1]-firstframe[-2]
+
+        firstframe[-1] = data_array.shape[1]
+        timestamp[-1] = timestamp[-2]+final_frames/nominal_fr
+        start_e = (timestamp[:-1] * rasterfs).astype(int)
+        stop_e = (timestamp[1:] * rasterfs).astype(int)
+        if stop_e[0]==0:
+            start_e = start_e[1:]
+            stop_e = stop_e[1:]
+            timestamp = timestamp[1:]
+            firstframe = firstframe[1:]
 
     # calculate frame count and duration of each trial
     duration = np.diff(np.append(start_e, stop_e[-1]) / rasterfs)
@@ -1732,11 +3252,11 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
     for sigidx, signal in enumerate(l):
         extras = False
         # warp/resample each trial to compensate for dropped frames
-        strialidx = np.zeros([ntrials + 1])
+        strialidx = np.zeros([len(frame_count) + 1])
         # big_rs = np.array([[]])
-        all_fs = np.empty([ntrials])
+        all_fs = np.empty([len(frame_count)])
 
-        for ii in range(0, ntrials):
+        for ii in range(len(frame_count)):
             d = data_array[sigidx, int(firstframe[ii]):int(firstframe[ii] + frame_count[ii])]
 
             fs = frame_count[ii] / duration[ii]
@@ -1745,9 +3265,9 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False,
             ti = np.arange(
                 (1 / rasterfs) / 2, duration[ii] + (1 / rasterfs) / 2, 1 / rasterfs
             )
-            # print("{0} len(d)={1} len(ti)={2} fs={3}"
-            #       .format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            if (fs>35) | (fs<25):
+                print("{0} len(d)={1} len(ti)={2} fs={3}".format(ii,len(d),len(ti),fs))
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -1900,7 +3420,7 @@ def load_facepca_trace(facepcafilepath, exptevents=None, return_raw=False,
             )
             # print("{0} len(d)={1} len(ti)={2} fs={3}"
             #       .format(ii,len(d),len(ti),fs))
-            _f = interp1d(t, d, axis=0, fill_value="extrapolate")
+            _f = interpolate.interp1d(t, d, axis=0, fill_value="extrapolate")
             di = _f(ti)
             if ii == 0:
                 big_rs = di
@@ -2549,21 +4069,39 @@ def get_lick_events(evpfile, name='LICK'):
     return df
 
 
-def get_mean_spike_waveform(cellid, animal, usespkfile=False):
+def get_mean_spike_waveform(cellid, usespkfile=None, load_from_db=True, save_to_db=False):
     """
-    Return 1-D numpy array containing the mean sorted
-    spike waveform
+    Return 1-D numpy array containing the mean sorted spike waveform
+    :cellid: str
+    :usespkfile: Bool or None
+
+        1. The legacy one (usepkpfile==False), finds the phy generated npy files containing the waveforms
+        and mean waveforms for the classified clusters. This methods might fail when the Kilosort output has not cluste IDs
+        2. The new method (usespkfile==True), asumes there is a mean wavefomr in the sorted info generated when sort jobs
+        are finished and pushed to the database. This is a little circuitous since the phy npy waveforms are saved inside
+        matlab structs, that then have to be reloaded into python here...
+        This method is not backwards compatible, but it should hold consistency with ulterior analysis (?) and its the
+        preffered method
+
+        3. if  usespkfile is None, tries new then legacy approaches
+        2022-08-16 MLE.
     """
     if type(cellid) != str:
         raise ValueError("cellid must be string type")
 
-    if usespkfile:
+    # new method
+    def usematfile():
         cparts = cellid.split("-")
         chan = int(cparts[1])
         unit = int(cparts[2])
         sql = f"SELECT runclassid, path, respfile from sCellFile where cellid = '{cellid}'"
         d = db.pd_query(sql)
-        good_wf = False
+
+        if len(d) == 0:
+            # log.info(f"No files for {cellid}")
+            # mwf = np.array([])
+            raise RuntimeError(f"No files for {cellid}")
+
         for i in range(len(d)):
             spkfilepath = os.path.join(d['path'][i], d['respfile'][i])
             matdata = scipy.io.loadmat(spkfilepath, chars_as_strings=True)
@@ -2572,57 +4110,237 @@ def get_mean_spike_waveform(cellid, animal, usespkfile=False):
                 sortinfo = sortinfo.T
 
             try:
-                # import pdb;pdb.set_trace()
                 mwf = sortinfo[0][chan - 1][0][0].flatten()[unit - 1]['MeanWaveform'].squeeze()
-                if len(mwf) > 0:
-                    good_wf = True
-                    # log.info(f"Got Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
-
             except:
-                mwf = np.array([])
-                log.info(f"Can't get Mean Waveform for {cellid} {i} {d['respfile'][i]}")
-            if good_wf:
+                # log.info(f"Can't get Mean Waveform for {cellid} {i} {d['respfile'][i]}")
+                continue
+
+            if len(mwf) > 0:
+                # log.info(f"Good Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
                 break
-        if len(d) == 0:
-            log.info(f"No files for {cellid}")
-            mwf = np.array([])
-        elif not good_wf:
-            log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+            else:
+                log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+
+        else:
+            # log.info(f"Empty Mean Waveform for {cellid} {i} {d['respfile'][i]} len={len(mwf)}")
+            raise RuntimeError(f"Could not find a non Empty Mean Waveform across all {i} {cellid} files")
+
         return mwf
 
-    # get KS_cluster (if it exists... this is a new feature)
-    sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
-    kid = db.pd_query(sql).iloc[0][0]
+    # legacy method
+    def usenpyfile():
+        # get KS_cluster (if it exists... this is a new feature)
+        sql = f"SELECT kilosort_cluster_id from gSingleRaw where cellid = '{cellid}'"
+        kid = db.pd_query(sql).iloc[0][0]
 
-    # find phy results
-    site = cellid[:7]
-    path = f'/auto/data/daq/{animal}/{site[:-1]}/tmp/KiloSort/'
-    res_dirs = os.listdir(path)
-    res_dirs = [p for p in res_dirs if site in p]
-    results_dir = []
-    for r in res_dirs:
-        # find results dir with this cellid
-        rns = r.split(f'{site}_')[1].split('KiloSort')[0].split('_')[:-1]
-        rns = np.sort([int(r) for r in rns])
-        sql = f"SELECT stimfile from sCellFile WHERE cellid = '{cellid}'"
-        _rns = np.sort(db.pd_query(sql)['stimfile'].apply(lambda x: int(x.split(site)[1].split('_')[0])))
-        if np.all(_rns == rns):
-            results_dir = r
-    if results_dir == []:
-        raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
+        # find phy results
+        site = cellid.split('-')[0]
 
-    # get all waveforms for this sorted file
-    try:
-        w = np.load(path + results_dir + '/results/wft_mwf.npy')
-    except:
-        w = np.load(path + results_dir + '/results/mean_waveforms.npy')
-    clust_ids = pd.read_csv(path + results_dir + '/results/cluster_group.tsv', '\t').cluster_id
-    kidx = np.argwhere(clust_ids.values == kid)[0][0]
+        # finds the files associated with this sorted neuron. A single neuron might be present across experiments,
+        # so there can be multiple files, and we need to find the Kilosort run that encompases all of them
+        # e.g: [/auto/data/daq/Amanita/AMT020/AMT020a14_p_CPN.m , .../AMT020a15_p_CPN.m] -> ...
+        # ... /auto/data/daq/Amanita/AMT020/tmp/KiloSort/AMT020a_14_15_KiloSort2_minfr_goodchannels_to0
 
-    # get waveform
-    mwf = w[:, kidx]
+        sql = f"SELECT stimpath, stimfile from sCellFile where cellid = '{cellid}'"
+        cell_df = db.pd_query(sql)
+        stimpath = cell_df.stimpath.unique()
+        assert len(stimpath) == 1
+        path = Path(stimpath[0]) / 'tmp' / 'KiloSort'
+
+        # get the pair of numbers following the penetration, prior the underscore: AMT020a09_p_CPN.m -> 9
+        _rns = np.sort(cell_df.stimfile.str.extract(r'\D(\d{2})_').values.squeeze())
+        _rns = '_'.join([str(int(ii)) for ii in _rns])
+        sortpath = list(path.glob(f"{site}_{_rns}_KiloSort*"))
+
+        if len(sortpath) == 0:
+            raise ValueError(f"Couldn't find find directory for cellid: {cellid}")
+        elif len(sortpath) > 1:
+            raise ValueError(f"multiple paths for {cellid} sort, which one is correct?:\n"
+                             f"{list(sortpath)}")
+
+        sortpath = sortpath[0]
+
+        # get all waveforms for this sorted file
+        try:
+            w = np.load(sortpath / 'results' / 'wft_mwf.npy')
+        except:
+            w = np.load(sortpath / 'results' / 'mean_waveforms.npy')
+        clust_ids = pd.read_csv(sortpath / 'results' / 'cluster_group.tsv', sep='\t').cluster_id
+        kidx = np.argwhere(clust_ids.values == kid)[0][0]
+
+        # get waveform
+        mwf = w[:, kidx]
+        return mwf
+
+    if load_from_db:
+        try:
+            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
+            d=db.pd_query(sql)
+            if len(d)>0:
+                mwf=np.array(eval(d.loc[0,'mean_waveform']))
+                return mwf
+        except:
+            pass
+    if usespkfile is None:
+        try:
+            log.info('looking in spike.mat files')
+            mwf = usematfile()
+        except:
+            log.info('failed. looking in spike.npw files')
+            mwf = usenpyfile()
+    elif usespkfile is True:
+        mwf = usematfile()
+    elif usespkfile is False:
+        mwf = usenpyfile()
+    else:
+        raise ValueError(f'parameter usepkpfile has to be bool or None but is {usespkfile}')
+    if save_to_db:
+        s_mwf = ",".join([f"{x:.3f}" for x in mwf])
+        print("Mean waveform:", s_mwf)
+        sql = f"UPDATE gSingleCell set mean_waveform='[{s_mwf}]' WHERE cellid='{cellid}'"
+        db.sql_command(sql)
 
     return mwf
+
+def get_depth_info(cellid=None, siteid=None, rawid=None):
+    """
+    :param cellid:
+    :param siteid:
+    :param rawid:
+    :return:
+    """
+    if (cellid is not None):
+        if type(cellid) is str:
+            cellid = [cellid]
+        siteid = db.get_siteid(cellid[0])
+    else:
+        sql = f"SELECT DISTINCT cellid FROM sCellFile WHERE cellid like '{siteid}%%'"
+        cellid = list(db.pd_query(sql)['cellid'])
+
+    sql="SELECT * FROM gDataRaw WHERE not(isnull(depthinfo)) and depthinfo<>''"
+    if siteid is not None:
+        sql += f" AND cellid='{siteid}'"
+    if rawid is not None:
+        rawstr = f" AND rawid={rawid}"
+    else:
+        rawstr = ""
+    sql += rawstr
+    dinfo = db.pd_query(sql)
+    if len(dinfo)==0:
+        raise ValueError(f"No depthinfo for siteid {siteid}")
+    d = json.loads(dinfo.loc[0,'depthinfo'])
+
+    dcell = {}
+    for c in cellid:
+        dcell[c] = {'siteid': siteid}
+        chstr = str(int(c.split("-")[1]))
+        if len(d['channel info'][chstr])==3:
+            dcell[c]['layer'], dcell[c]['depth'], dcell[c]['depth0'] = d['channel info'][chstr]
+        else:
+            dcell[c]['layer'], dcell[c]['depth'] = d['channel info'][chstr]
+
+        if dcell[c]['layer'].isnumeric():
+            dcell[c]['area'] = d['site area']
+        else:
+            dcell[c]['area'] = dcell[c]['layer']
+
+        try:
+            sql=f"SELECT * FROM gSingleRaw WHERE cellid='{c}'" + rawstr
+            dcell[c]['iso'] = db.pd_query(sql).iloc[0]['isolation']
+        except:
+            dcell[c]['iso'] = 0
+            sql=f"SELECT * FROM gSingleCell WHERE cellid='{cellid}'"
+
+    return pd.DataFrame(dcell).T
+
+def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
+    """
+    :param cellid:
+    :param siteid:
+    :param rawid:
+    :return:
+    """
+    print(f"Compiling site info for {siteid}")
+    df_cell = get_depth_info(cellid=cellid, siteid=siteid, rawid=rawid)
+
+    df_cell[['sw','ptr','fwhm','mwf']] = np.nan
+    df_cell['mwf']=df_cell['mwf'].astype(object)
+    #df_cell = df_cell.reset_index()
+    #df_cell = df_cell.set_index('cellid')
+    for c in df_cell.index:
+        #print(c)
+        mwf = get_mean_spike_waveform(c, save_to_db=save_to_db)[:-1]
+        mwf_len = len(mwf)
+        fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
+        mwf = fit2(np.linspace(0, mwf_len, 100))
+        fs = 100 / (mwf_len / 30000)
+
+        mwf /= abs(mwf).max()
+        df_cell.at[c, 'mwf'] = mwf
+        if mwf[np.argmax(np.abs(mwf))] > 0:
+            mwf = -mwf
+        if mwf[np.argmax(np.abs(mwf))]<0:
+            trough = np.argmin(mwf[5:-5]) + 5
+            peak = np.argmax(mwf[trough:-5]) + trough
+
+            # force 0 to be the mean of the positive waveform preceding the valley
+            mi = np.argmax(mwf[:trough])
+            if len(mwf[:mi]) == 0:
+                log.info(f'{c}: zero mwf mi')
+                baseline = 0
+            else:
+                baseline = np.mean(mwf[:mi])
+            mwf -= baseline
+
+            df_cell.loc[c,'sw'] = (peak - trough) / fs * 1000 # ms
+
+            # get fwhm (of valley)
+            left = np.argmin(np.abs(mwf[:trough] - (mwf[trough] / 2)))
+            right = np.argmin(np.abs(mwf[trough:] - (mwf[trough] / 2))) + trough
+            df_cell.loc[c,'fwhm'] = right - left
+
+            if mwf[peak]<=0:
+                df_cell.loc[c,'ptr'] = 0
+            else:
+                df_cell.loc[c,'ptr'] = abs(mwf[peak]) / abs(mwf[trough])
+
+    if save_to_db:
+        df_cell['cellid'] = df_cell.index
+        df_cell['channum'] = df_cell['cellid'].apply(lambda x: int(x.split('-')[1]))
+        a = list(df_cell['area'])
+        if 'A1' in a:
+            default_area='A1'
+        elif 'PEG' in a:
+            default_area='PEG'
+        elif 'FC' in a:
+            default_area='FC'
+        elif 'BRD' in a:
+            default_area='BRD'
+        siteid=df_cell.iloc[0]['siteid']
+        sql = ("SELECT gPenetration.penname,gPenetration.numchans,gCellMaster.area FROM" +
+                " gPenetration INNER JOIN gCellMaster on gPenetration.id=gCellMaster.penid" +
+                f" WHERE gCellMaster.cellid='{siteid}'")
+        dp = db.pd_query(sql)
+        numchans = np.max([dp.loc[0,'numchans'], df_cell.channum.max()])
+        area_list = [''] * numchans
+        area_list[-1]=default_area
+        for i, r in df_cell.iterrows():
+            area_list[r['channum']-1] = r['area']
+        for i in range(numchans-2,-1,-1):
+            if area_list[i]=='':
+                area_list[i]=area_list[i+1]
+        area_string = ",".join(area_list)
+        if area_string!=dp.loc[0,'area']:
+            print('saving area labels back to sCellFile and gSingleCell')
+            sql = f"UPDATE gCellMaster set area='{area_string}' WHERE cellid='{siteid}'"
+            db.sql_command(sql)
+            for i, r in df_cell.iterrows():
+                sql = f"UPDATE gSingleCell SET area='{r.area}' WHERE cellid='{r.cellid}'"
+                db.sql_command(sql)
+                sql = f"UPDATE sCellFile SET area='{r.area}' WHERE cellid='{r.cellid}'"
+                db.sql_command(sql)
+
+    return df_cell
 
 
 def parse_cellid(options):
@@ -2657,7 +4375,7 @@ def parse_cellid(options):
     cells_to_extract = None
 
     if ((cellid is None) | (batch is None)) & (mfilename is None):
-        raise ValueError("must provide cellid and batch or mfilename")
+        raise ValueError("must provide cellid and batch, or mfilename")
 
     siteid = None
     cell_list = None

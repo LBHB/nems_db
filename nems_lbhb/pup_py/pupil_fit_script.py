@@ -6,7 +6,7 @@ import av
 import pickle
 import sys
 import os
-import nems
+import nems0
 
 import tensorflow as tf
 config = tf.ConfigProto()

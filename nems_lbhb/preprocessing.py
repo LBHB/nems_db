@@ -1467,7 +1467,7 @@ def stack_signal_as_delayed_lines(rec, signal, delay, duration, use_window_mean,
     return rec
 
 
-def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', **kwargs):
+def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', norm_method='none', **kwargs):
     """
     Takes a list of signals and booleans, shuffles (or not) each signal according to the boolean
     and stack the signals into a new one with the specified output_signal name
@@ -1477,48 +1477,29 @@ def shuffle_and_concat_signals(rec, signals, to_shuffle, output_signal='state', 
     concat_sig = list()
     channels = list()
     for ss, (sig, transf) in enumerate(zip(signals, to_shuffle)):
+        # kludge: fix random seed to index of state signal in list
+        # this avoids using the same seed for each shuffled signal
+        # but also makes shuffling reproducible
         if transf == 'shuffle':
-            # kludge: fix random seed to index of state signal in list
-            # this avoids using the same seed for each shuffled signal
-            # but also makes shuffling reproducible
             concat_sig.append(rec[sig].shuffle_time(rand_seed=ss,
                                                mask=rec['mask'])._data)
         elif transf == 'roll':
-            rand_seed = ss
-            mask = rec['mask']
-
-            x = rec[sig]._data.copy()  # Much faster
-            arr = np.arange(x.shape[1])
-            if mask is None:
-                arr0 = arr[np.isfinite(x[0, :])]
-            else:
-                arr0 = arr[mask.as_continuous()[0, :].astype(bool) & np.isfinite(x[0, :])]
-
-            # defines base roll size based on the total shape of the recording.
-            base_roll = int(arr0.shape[0]/7) # 1/7th is a luck number
-
-            save_state = np.random.get_state()
-            np.random.seed(rand_seed)
-
-            for i in range(x.shape[0]):
-                # rolls each channel independently between -1000 and 1000 samples
-                x[i, arr0] = np.roll(x[i, arr0], int(base_roll* 2 * np.random.random_sample() - base_roll))
-
-            # restore random state
-            np.random.set_state(save_state)
-
-            concat_sig.append(x)
+            concat_sig.append(rec[sig].randroll_time(rand_seed=ss,
+                                                     mask=rec['mask'])._data)
 
         elif transf == 'pass':
             concat_sig.append(rec[sig]._data)
         else:
-            raise ValueError(f"undefined transformation in to_shuffle: {transf}")
+            raise ValueError(f"undefined keyworkd in to_shuffle: {transf}")
 
         channels.extend(rec[sig].chans)
 
     out_arr = np.concatenate(concat_sig, axis=0)
 
-    rec[output_signal] = rec[signals[0]]._modified_copy(data=out_arr, chans=channels, name=output_signal)
+    s = rec[signals[0]]._modified_copy(data=out_arr, chans=channels, name=output_signal)
+    s = s.normalize(norm_method, b=None, g=None, mask=rec['mask'])
+
+    rec[output_signal] = s
     return rec
 
 if __name__ == '__main__':
@@ -1542,6 +1523,42 @@ if __name__ == '__main__':
     # print(ccc)
 
     pass
+
+def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
+                 empty_values=None, keep_dims=None, **ctx):
+    """
+    Fill in nan values using signals in other channels. Currently for inferring
+    missing values in DLC data
+    """
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer
+
+    if new_sig is None:
+        new_sig = sig
+
+    newrec = rec.copy()
+    data0 = rec[sig].rasterize().as_continuous()
+
+    imp = IterativeImputer(max_iter=10, random_state=0)
+    imp.fit(data0.T)
+    data_imp = imp.transform(data0.T).T
+    if empty_values is not None:
+        bad_values = np.isfinite(data0).sum(axis=0)==0
+        data_imp[:,bad_values] = empty_values
+    if keep_dims is not None:
+        data_imp = data_imp[:keep_dims,:]
+        new_chans = newrec[sig].chans[:keep_dims]
+    else:
+        new_chans = newrec[sig].chans
+
+    # normalize 0 to 1 - same scale for all channels
+    if norm:
+        data_imp -= np.nanmin(data_imp)
+        data_imp /= np.nanmax(data_imp)
+
+    newrec[new_sig] = newrec[sig]._modified_copy(data=data_imp, chans=new_chans)
+
+    return {'rec': newrec}
 
 
 

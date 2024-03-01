@@ -882,6 +882,8 @@ def _parse_options(fitkey, **default_options):
                 options['learning_rate'] = int(base) * 10 ** -int(exponent)
             else:
                 options['learning_rate'] = 10 ** -float(learning_rate)
+        elif op.startswith('es'):
+            options['validation_split'] = float(op[2:])/100
     return options
 
 

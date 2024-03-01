@@ -16,7 +16,7 @@ import nems_lbhb.xform_wrappers as nw  # wrappers for calling nems code with dat
 import nems0.recording as recording
 import nems0.plots.api as nplt
 import numpy as np
-import nems
+import nems0
 import nems0.preprocessing as preproc
 import nems0.metrics.api as nmet
 import nems0.xforms as xforms
@@ -42,7 +42,7 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=sb.color_palette('colorblind'
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 pd.options.display.float_format = '{:,.3f}'.format
-pd.set_option('precision', 3)
+# pd.set_option('precision', 3)
 pd.set_option('display.expand_frame_repr', False)
 
 #sys.path.insert(0, '/auto/users/luke/Code/Python/Utilities')

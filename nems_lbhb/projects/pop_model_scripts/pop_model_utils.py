@@ -155,6 +155,16 @@ ALL_FAMILY_MODELS = [
     f"{load_string_single}_wc.18x120.g-fir.1x25x120-wc.120xR-lvl.R-dexp.R_{fit_string_single}", # LN_pop
     f"{load_string_single}_wc.18x6.g-fir.1x25x6-relu.6.f-wc.6x1-lvl.1-dexp.1_{fit_string_dnn}"  # dnn1_single
 ]
+ALL_TRUNC_POP = [
+    f"{load_string_pop}_conv2d.10.8x3.rep3-wcn.R-lvl.R-dexp.R_{fit_string_pop_c2d}",  #c2d
+    f"{load_string_pop}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100xR-lvl.R-dexp.R_{fit_string_pop}", # c1d
+    f"{load_string_pop}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80xR-lvl.R-dexp.R_{fit_string_pop}", # c1dx2+d
+]
+ALL_TRUNC_MODELS = [
+    f"{load_string_single}_conv2d.10.8x3.rep3-wcn.R-lvl.R-dexp.R_{fit_string_single_c2d}",  #c2d
+    f"{load_string_single}_wc.18x100.g-fir.1x25x100-relu.100.f-wc.100xR-lvl.R-dexp.R_{fit_string_single}", # c1d
+    f"{load_string_single}_wc.18x70.g-fir.1x15x70-relu.70.f-wc.70x80-fir.1x10x80-relu.80.f-wc.80xR-lvl.R-dexp.R_{fit_string_single}", # c1dx2+d
+]
 
 shortnames = ['2D-CNN', '1D-CNN', '1Dx2-CNN', 'pop-LN', 'single-CNN']
 #shortnames=['conv2d', 'conv1d', 'conv1dx2', 'ln-pop', 'dnn-sing']
@@ -299,21 +309,22 @@ DOT_MARKERS = {#'conv1dx2': '^',
 MODELGROUPS = {}
 POP_MODELGROUPS = {}
 
+pareto_all=True
 # LN ###################################################################################################################
 params = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]#, 12, 14]
 MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 POP_MODELGROUPS['LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.{p}x25-lvl.1-dexp.1_{fit_string_nopre}' for p in params]
 
-# params = [2,3,4,5]
-# MODELGROUPS['stp'] = [f'{load_string_single}_wc.18xR.g-stp.R.q.s-fir.1x12xR-lvl.R-dexp.R_{fit_string_nopre}'] + \
-#     [f'{load_string_single}_wc.18x{p}R.g-stp.{p}R.q.s-fir.{p}x12xR-lvl.R-dexp.R_{fit_string_nopre}' for p in params]
-#
-# POP_MODELGROUPS['stp'] = MODELGROUPS['stp'].copy()
+params = [2,3,4,5]
+MODELGROUPS['stp'] = [f'{load_string_single}_wc.18xR.g-stp.R.q.s-fir.1x12xR-lvl.R-dexp.R_{fit_string_nopre}'] + \
+    [f'{load_string_single}_wc.18x{p}R.g-stp.{p}R.q.s-fir.{p}x12xR-lvl.R-dexp.R_{fit_string_nopre}' for p in params]
+POP_MODELGROUPS['stp'] = MODELGROUPS['stp'].copy()
 
-# LN_pop ###############################################################################################################
-params = [4, 6, 10, 14, 30, 42, 60, 80, 100, 120, 150, 175, 200, 250, 300]
-MODELGROUPS['pop-LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
-POP_MODELGROUPS['pop-LN'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
+if pareto_all:
+    # LN_pop ###############################################################################################################
+    params = [4, 6, 10, 14, 30, 42, 60, 80, 100, 120, 150, 175, 200, 250, 300]
+    MODELGROUPS['pop-LN'] = [f'{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_single}' for p in params]
+    POP_MODELGROUPS['pop-LN'] = [f'{load_string_pop}_wc.18x{p}.g-fir.1x25x{p}-wc.{p}xR-lvl.R-dexp.R_{fit_string_pop}' for p in params]
 
 
 # conv1d ###############################################################################################################
@@ -323,15 +334,16 @@ L1_L2 = [
     (60, 80), (80, 100), (100, 120), (120, 140),
     (140, 160), (170, 200), (200, 250), (230, 300)
 ]
-MODELGROUPS['1D-CNN'] = [
-    f"{load_string_single}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
-    + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_single}"
-    for layer1, layer2 in L1_L2
-]
-POP_MODELGROUPS['1D-CNN'] = [
-    f"{load_string_pop}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
-    + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_pop}"
-    for layer1, layer2 in L1_L2
+if pareto_all:
+    MODELGROUPS['1D-CNN'] = [
+        f"{load_string_single}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
+        + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_single}"
+        for layer1, layer2 in L1_L2
+    ]
+    POP_MODELGROUPS['1D-CNN'] = [
+        f"{load_string_pop}_wc.18x{layer1}.g-fir.1x25x{layer1}-relu.{layer1}.f-"
+        + f"wc.{layer1}x{layer2}-relu.{layer2}.f-wc.{layer2}xR-lvl.R-dexp.R_{fit_string_pop}"
+        for layer1, layer2 in L1_L2
 ]
 
 
@@ -476,19 +488,19 @@ POP_MODELGROUPS['2D-CNN'] = [
 # ]
 
 
-
-# dnn1_single ##########################################################################################################
-params = [2,3,4, 6, 9, 12, 15, 18]
-MODELGROUPS['single-CNN'] = [
-    f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_dnn}"
-    for p in params
-]
-POP_MODELGROUPS['single-CNN'] = [
-    f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_nopre}"
-    for p in params
-]
-# _single flag tells pareto plot function not to divide by cells per site
-# the double conv layer models were doing substantially worse per parameter for dnn1, so leaving them out for now.
+if pareto_all:
+    # dnn1_single ##########################################################################################################
+    params = [2,3,4, 6, 9, 12, 15, 18]
+    MODELGROUPS['single-CNN'] = [
+        f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_dnn}"
+        for p in params
+    ]
+    POP_MODELGROUPS['single-CNN'] = [
+        f"{load_string_single}_wc.18x{p}.g-fir.1x25x{p}-relu.{p}.f-wc.{p}x1-lvl.1-dexp.1_{fit_string_nopre}"
+        for p in params
+    ]
+    # _single flag tells pareto plot function not to divide by cells per site
+    # the double conv layer models were doing substantially worse per parameter for dnn1, so leaving them out for now.
 
 
 # heldout models #######################################################################################################
