@@ -102,10 +102,13 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
 
         d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
         dstrfs.append(d['input'])
-
+    
     dstrf = np.stack(dstrfs, axis=1)
-    s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
+    s = np.nanstd(dstrf, axis=(2, 3, 4), keepdims=True)
+    s[s==0]=1
     dstrf /= s
+    if np.sum(np.isnan(dstrf))>0:
+        log.info(f"nan values in dstrf: {np.sum(np.isnan(dstrf))}")
     dstrf /= np.max(np.abs(dstrf)) * 0.9
 
     mdstrf = dstrf.mean(axis=1, keepdims=True)
@@ -123,6 +126,8 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     else:
         dz = d
         m_ = mdstrf
+    del dstrfs
+    del dstrf
 
     # compute noise florr
     sh_mags = []
