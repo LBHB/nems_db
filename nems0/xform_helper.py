@@ -391,7 +391,7 @@ def find_model_xform_file(cellid, batch=271,
 
 def load_model_xform(cellid, batch=271,
         modelname="ozgf100ch18_wcg18x2_fir15x2_lvl1_dexp1_fit01",
-        eval_model=True, only=None, load_context=False):
+        eval_model=True, only=None, load_context=False, verbose=True):
     '''
     Load a model that was previously fit via fit_model_xforms
 
@@ -422,7 +422,7 @@ def load_model_xform(cellid, batch=271,
         raise NotImplementedError("need to use oxf library.")
         xfspec, ctx = oxf.load_analysis(uri, eval_model=eval_model)
     else:
-        xfspec, ctx = xforms.load_analysis(uri, eval_model=eval_model, only=only)
+        xfspec, ctx = xforms.load_analysis(uri, eval_model=eval_model, only=only, verbose=verbose)
     return xfspec, ctx
 
 

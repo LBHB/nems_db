@@ -174,11 +174,13 @@ if __name__ == '__main__':
     siteid="LMD047a"
 
     batch=343
-    siteids, cellids = db.get_batch_sites(batch)
-    for siteid in ['PRN018a']:
-        plot_depth_map(siteid, batch=batch)
+    #siteids, cellids = db.get_batch_sites(batch)
+    #for siteid in ['PRN018a']:
+    #    plot_depth_map(siteid, batch=batch)
 
     siteid="CLT033c"
     siteid='PRN018a'
     siteid="CLT040c"
-    #plot_depth_map(siteid, batch=batch)
+    siteid="PRN043a"
+    siteid="CLT047c"
+    plot_depth_map(siteid, batch=batch)

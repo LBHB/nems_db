@@ -70,15 +70,23 @@ def shuffle_along_axis(a, axis):
     return np.take_along_axis(a,idx,axis=axis)
 
 
-def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
-              D=15, timestep=3, pc_count=5, out_channels=None,
+def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
+              D=15, timestep=3, pc_count=10, max_frames=5000,
+              out_channels=None,
               figures=None, fit_ss_model=False, first_lin=True,
               IsReload=False, **ctx):
+    """xforms function
+    use modelspec or modelspec_list to compute dSTRFs from est recording (using nems.tools.dstrf)
+    then perform PCA on the collection of dSTRFs, save the top pc_count
+    if fit_ss_model, fit a DNN using the projection into the subspace for each neurons
+    save results in modelspec.meta
+    """
 
     if IsReload:
         # load dstrf data saved in modelpath.. or don't if not needed?
         return {}
-
+    if (est is None) or (modelspec is None):
+        raise ValueError("est and modelspec parameters required")
     r = est
 
     if modelspec_list is None:
@@ -89,14 +97,14 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     t_indexes = t_indexes[t_indexes>D]
     if out_channels is None:
         out_channels = np.arange(len(cellids))
-
+    cellcount=len(out_channels)
     stim = {'input': r['stim'].as_continuous().T}
     if 'dlc' in r.signals.keys():
         stim['dlc']=r['dlc'].as_continuous().T
     dstrfs = []
-    if len(t_indexes)>5000:
-        log.info('Reducing t_indexes length to 5000')
-        t_indexes=t_indexes[:5000]
+    if len(t_indexes)>max_frames:
+        log.info(f'Reducing t_indexes length to {max_frames}')
+        t_indexes=t_indexes[:max_frames]
     for mi, m in enumerate(modelspec_list):
         log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
 
@@ -124,7 +132,15 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
         dz = d
         m_ = mdstrf
 
-    # compute noise florr
+    # dpcs for all cells in site
+    T = len(t_indexes)
+    F = m_.shape[3]
+    U = m_.shape[4]
+    dstrf_all = np.reshape(m_,[1,cellcount*T,F,U])
+    dall = dtools.compute_dpcs(dstrf_all, pc_count=pc_count, snr_threshold=None,
+                               first_lin=False, as_dict=True)
+
+    # compute noise floor by measuring PCs with shuffled spectro-temporal parameters
     sh_mags = []
     N = 50
     for i in range(N):
@@ -141,6 +157,8 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     dpc_magz = dz['input']['pc_mag']
     dproj = dz['input']['projection']
     log.info(f"dproj.shape={dproj.shape}")
+
+    # flip signs to make avg of filters positive
     for oi, oc in enumerate(out_channels):
         for di in range(pc_count):
             if dpcz[oi, di].sum()<0:
@@ -171,6 +189,8 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
     modelspec.meta['dpc_mag']=dpc_magz
     modelspec.meta['dpc_mag_sh']=msh
     modelspec.meta['dpc_mag_e']=esh
+    modelspec.meta['dpc_all'] = dall['input']['pcs']
+    modelspec.meta['dpc_mag_all'] = dall['input']['pc_mag']
 
     if fit_ss_model:
         subspace_model_fit(est, val, modelspec,
@@ -180,7 +200,7 @@ def dstrf_pca(est, modelspec, val=None, modelspec_list=None,
 
 
 def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
-                        input_name='stim', ss_name='subspace', **ctx):
+                        input_name='stim', ss_name='subspace', verbose=True, **ctx):
 
     cellids = modelspec.meta['cellids']
     if out_channels is None:
@@ -196,7 +216,8 @@ def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None
 
     res ={}
     for name, rec in recs:
-        log.info(f"** Recording {name}:")
+        if verbose:
+            log.info(f"** Recording {name}:")
 
         if type(rec) is not np.ndarray:
             inp = rec[input_name].as_continuous().T
@@ -206,7 +227,8 @@ def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None
         outs = []
         res[name]=rec.copy()
         for oi, o in enumerate(out_channels):
-            log.info(f"   Computing SS projection for {cellids[o]}:")
+            if verbose:
+                log.info(f"   Computing SS projection for {cellids[o]}:")
 
             dpcz = modelspec.meta['dpc']
             dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
@@ -225,6 +247,26 @@ def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None
         res[name].signals[ss_name] = sig
 
     return res
+
+def project_model_to_ss(modelspec, X=None, rec=None, input_name='stim',
+                        cellid=None, invert=False):
+
+    if X is None:
+        inp = rec[input_name].as_continuous().T
+    else:
+        inp = X
+    if cellid is None:
+        oi = 0
+    else:
+        oi = [i for i,c in enumerate(modelspec.meta['cellids']) if c==cellid][0]
+    dpcz = modelspec.meta['dpc']
+    dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+    fir = filter.FIR(shape=dpcz.shape)
+    fir['coefficients'] = np.flip(dpcz, axis=0)
+    print(oi,cellid)
+    ss = fir.evaluate(inp)
+
+    return ss
 
 
 def subspace_model_fit(est, val, modelspec,

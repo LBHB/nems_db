@@ -66,7 +66,7 @@ def defxf(keyword, xformspec):
 
 
 
-def evaluate_step(xfa, context={}):
+def evaluate_step(xfa, context={}, verbose=True):
     """
     Take one step in evaluation of xforms sequence.
     :param xfa: list of 2 or 4 elements specifying function to be evaluated on this step
@@ -100,7 +100,8 @@ def evaluate_step(xfa, context={}):
     fn = lookup_fn_at(xf)
 
     # Run the xf
-    log.info('Evaluating: {}'.format(xf))
+    if verbose:
+        log.info('Evaluating: {}'.format(xf))
 
     # Check for collisions; more to avoid confusion than for correctness:
     # (except for init_context, which can update)
@@ -110,7 +111,7 @@ def evaluate_step(xfa, context={}):
     #            m = 'xf arg {} overlaps with context: {}'.format(k, xf)
     #            raise ValueError(m)
     for k in xfargs:
-        if k in context_in:
+        if (k in context_in):
             log.info('xf argument %s overlaps with existing context key: %s', k, xf)
 
     # Merge args into context, and make a deepcopy so that mutation
@@ -139,7 +140,7 @@ def evaluate_step(xfa, context={}):
     return context_out
 
 
-def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True):
+def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True, verbose=True):
     '''
     Similar to modelspec.evaluate, but for xformspecs, which is a list of
     2-element lists of function and keyword arguments dict. Each XFORM must
@@ -164,10 +165,11 @@ def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True):
     # Evaluate the xforms
     for xfa in xformspec[start:stop]:
         if not(skip_postprocess) or not('postprocess' in xfa[0]):
-            context = evaluate_step(xfa, context)
+            context = evaluate_step(xfa, context, verbose=verbose)
 
     # Close the log, remove the handler, and add the 'log' string to context
-    log.info('Done (re-)evaluating xforms.')
+    if verbose:
+        log.info('Done (re-)evaluating xforms.')
     ch.close()
     rootlogger.removeFilter(ch)
     logstring = log_stream.getvalue()
@@ -2242,7 +2244,7 @@ def load_context(filepath):
     return xfspec, ctx
 
 
-def load_analysis(filepath, eval_model=True, only=None):
+def load_analysis(filepath, eval_model=True, only=None, verbose=True):
     """
     load xforms spec and context dictionary for a model fit
     :param filepath: URI of saved xforms model
@@ -2252,7 +2254,9 @@ def load_analysis(filepath, eval_model=True, only=None):
     object, which gives more flexibility over what steps of the original xfspecs to run again.
     :return: (xfspec, ctx) tuple
     """
-    log.info('Loading xfspec and context from %s ...', filepath)
+    if verbose:
+        log.info('Loading xfspec and context from %s ...', filepath)
+        
     def _path_join(*args):
         if os.name == 'nt':
             # deal with problems on Windows OS
