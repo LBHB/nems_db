@@ -8,7 +8,9 @@ def image_pipe(e):
     # make instance of stitcher class
     ents = e[0]
     stitcher = e[1]
-    stitcher.set_images()
+    hist = ents['Histogram'].get()
+    chans = ents['Chans'].get()
+    stitcher.set_images(hist, chans)
 
     # update default output name and path
     update_defaults = ("Output name", "Output directory")
@@ -46,8 +48,8 @@ def image_pipe(e):
 
     return stitcher
 
-fields = ('Sigma', "Edge Threshold", "Contrast Threshold", "Output name", "Output directory")
-field_opts = {'Sigma': 1.9, 'Edge Threshold': 18, 'Contrast Threshold': 0.01, 'Output name': '', 'Output directory': ''}
+fields = ('Chans', 'Histogram', 'Sigma', "Edge Threshold", "Contrast Threshold", "Output name", "Output directory")
+field_opts = {'Chans':0, 'Histogram':'CLAHE', 'Sigma': 1.9, 'Edge Threshold': 18, 'Contrast Threshold': 0.01, 'Output name': '', 'Output directory': ''}
 def run_sift(e):
     ent = e[0]
     sift_opts = {"Sigma": float(ent['Sigma'].get()), "Edge Threshold": float(ent['Edge Threshold'].get()), "Contrast Threshold": float(ent['Contrast Threshold'].get())}

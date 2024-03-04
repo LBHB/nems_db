@@ -30,9 +30,9 @@ rasterfs = 100
 # sql = f"SELECT distinct stimpath,stimfile from sCellFile where cellid like '{siteid}%%' and runclassid={runclassid}"
 #dparm = db.pd_query(sql)
 
-sql = f"SELECT distinct left(cellid,7) as siteid,stimpath,stimfile from sCellFile where runclassid={runclassid}"
-dallfiles = db.pd_query(sql)
-siteids = dallfiles['siteid'].unique().tolist()
+# sql = f"SELECT distinct left(cellid,7) as siteid,stimpath,stimfile from sCellFile where runclassid={runclassid}"
+# dallfiles = db.pd_query(sql)
+# siteids = dallfiles['siteid'].unique().tolist()
 
 # hardcode siteid with lots of cells and movement
 siteid = 'PRN050a'
