@@ -119,15 +119,19 @@ if __name__ == '__main__':
         cellid = None
     modelname = sys.argv[2]
     architecture = sys.argv[3]
-    batch = int(sys.argv[4])
+    if len(sys.argv)>4:
+        batch = int(sys.argv[4])
+    else:
+        # default binaural bignat free-field
+        batch=338
     """
     print('cellid',cellid)
     print('batch', batch)
     print('modelname', modelname)
     """
 
-    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture)
-    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum, ctx, loadkey, architecture, cellid=cellid)
+    cellnum, rec, ctx, loadkey, siteid, siteids = STRFfunction.load_data(siteid,modelname,architecture,batch=batch)
+    rlist, strflist, r, strf, ctx, cell_list = STRFfunction.fitSTRF(siteid,modelname,cellnum, ctx, loadkey, architecture, cellid=cellid,batch=batch)
 
     """
     log.info("Running xform_helper.fit_model_xform({0},{1},{2})".format(cellid, batch, modelname))

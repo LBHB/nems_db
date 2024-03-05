@@ -37,9 +37,8 @@ modelspecs_dir = Path(nems0.NEMS_PATH) / 'modelspecs'
 
 
 
-def load_data(site,stim_format,architecture="LN_STRF"):
+def load_data(site,stim_format,architecture="LN_STRF", batch=338):
     siteid=site
-    batch=338
     siteids, cellids = db.get_batch_sites(batch)
     if stim_format in ['binaural_HRTF','gtgram.fs100.ch18.bin6']:
         loadkey = "gtgram.fs100.ch18.bin6"   
