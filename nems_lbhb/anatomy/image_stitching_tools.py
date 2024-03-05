@@ -5,6 +5,7 @@ from nems_lbhb import SettingXML as xml
 import xml.etree.ElementTree as ET
 import numpy as np
 import glob
+from czitools import metadata_tools as czimd
 import os
 from pathlib import Path
 import numpy as np
@@ -17,6 +18,8 @@ from matplotlib.widgets import RectangleSelector
 from functools import partial
 from tkinter import filedialog
 import random
+import tifffile as tif
+import json
 
 class image_stitcher:
     def __init__(self):
@@ -26,15 +29,17 @@ class image_stitcher:
         self.image2_metadata = None
         self.image1_metadata = None
 
-    def set_images(self):
+    def set_images(self, hist, chans):
+        self.hist = hist
+        self.chans = chans
         image_dir = filedialog.askdirectory()
         self.image_dir = image_dir
-        im1, czi1, metadata1, name1, im_path1 = open_image_selector(impath=self.image_dir)
+        im1, czi1, metadata1, name1, im_path1 = open_image_selector(impath=self.image_dir, hist=self.hist, chans=self.chans)
         self.image1 = im1.astype(dtype="uint8")
-        self.image1_metadata = {"czi": czi1, "metadata":metadata1, "name":name1, "path":im_path1}
-        im2, czi2, metadata2, name2, im_path2 = open_image_selector(impath=self.image_dir)
+        self.image1_metadata = {"czi": czi1, "metadata":metadata1, "name":name1, "path":im_path1, 'hist_method': hist, 'chans': chans}
+        im2, czi2, metadata2, name2, im_path2 = open_image_selector(impath=self.image_dir, hist=self.hist, chans=self.chans)
         self.image2 = im2.astype(dtype="uint8")
-        self.image2_metadata = {"czi": czi2, "metadata": metadata2, "name": name2, "path": im_path2}
+        self.image2_metadata = {"czi": czi2, "metadata": metadata2, "name": name2, "path": im_path2, 'hist_method': hist, 'chans': chans}
         self.aligned_rgb = None
         self.aligned_bgr = None
         self.aligned_name = "Stitched"
@@ -213,8 +218,25 @@ class image_stitcher:
         self.update_plots()
 
     def save_stitched(self, save_path, save_name):
-        imname = (Path(save_path)/save_name).as_posix()
-        cv2.imwrite(filename=imname, img=self.aligned_rgb)
+        if save_name.endswith('.tiff'):
+            imname = (Path(save_path) / save_name).as_posix()
+            data = self.aligned_rgb
+            if self.image1_metadata['metadata']:
+                source = self.image1_metadata['path']
+                xscale = self.image1_metadata['metadata'].scale.X
+                yscale = self.image1_metadata['metadata'].scale.Y
+            metadata = dict(metadata_source=source, xscale=xscale, yscale=yscale)
+            metadata = json.dumps(metadata)
+            tifffile.imsave(imname, data, description=metadata)
+
+            # with tifffile.TiffFile('microscope.tif') as tif:
+            #     data = tif.asarray()
+            #     metadata = tif[0].image_description
+            # metadata = json.loads(metadata.decode('utf-8'))
+            # print(data.shape, data.dtype, metadata['microscope'])
+        else:
+            imname = (Path(save_path)/save_name).as_posix()
+            cv2.imwrite(filename=imname, img=self.aligned_rgb)
 
 
 class DraggableScatter():
@@ -554,27 +576,61 @@ def sift_stitch(image1, image2, src_pts, dst_pts, borders, blend=False, debug=Fa
 
     return result_rgb, result1_extended
 
-def open_image_selector(impath):
-    imgpath = filedialog.askopenfilename(initialdir=impath, title="Select File",
-                                         filetypes=[("all files", "*.*")])
-    image_name = os.path.basename(imgpath)
-    # Do something with the selected file path, for example, print it
-    if image_name[-4:] == '.czi':
-        czi = cz.CziFile(imgpath)
-        metadata = czi.metadata()
-        img_sample = cz.imread(imgpath)
-        img_sample = np.squeeze(img_sample)
-        imstd = np.std(img_sample)
-        immean = np.mean(img_sample)
+def equalize_image(im, hist):
+    if hist == 'STD':
+        imstd = np.std(im)
+        immean = np.mean(im)
         f = interp1d((immean - 2 * imstd, immean + 2 * imstd), (0, 255), fill_value=(0, 255), bounds_error=False)
         # rescale image
-        shape = img_sample.shape
-        scaledim = f(img_sample.ravel()).reshape(shape)
+        shape = im.shape
+        scaledim = f(im.ravel()).reshape(shape)
+    elif hist == 'CLAHE':
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        scaledim = clahe.apply(im)
+    elif hist == 'Equalize':
+        scaledim = cv2.equalizeHist(im)
+
+    return scaledim
+
+def open_image_selector(impath, hist='Equalize', chans=0):
+    hist_types = ['Equalize', 'CLAHE', 'STD']
+    if ':' in chans:
+        start,stop = chans.split(':')
+        chans = range(int(start),int(stop))
     else:
-        image = cv2.imread(imgpath)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        scaledim = image
-        czi = None
-        metadata = None
+        chans = [int(ch) for ch in chans]
+    if hist in hist_types:
+        imgpath = filedialog.askopenfilename(initialdir=impath, title="Select File",
+                                             filetypes=[("all files", "*.*")])
+        image_name = os.path.basename(imgpath)
+        # Do something with the selected file path, for example, print it
+        if image_name[-4:] == '.czi':
+            czi = cz.CziFile(imgpath)
+            metadata = czimd.CziMetadata(imgpath)
+            img_sample = cz.imread(imgpath)
+            img_sample = img_sample[:, chans, :, :, :]
+            _, chan_num, x, y, _ = img_sample.shape
+            channels = []
+            for channel in range(chan_num):
+                channel_raster = img_sample[0, channel, :, :, 0]
+                channels.append(channel_raster)
+            if len(channels) > 1:
+                im = np.zeros((x,y, 3))
+                imchs = np.stack(channels, axis=2)
+                im[:, :, :chan_num] = imchs
+                im = im.astype(np.uint8)
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            else:
+                im = np.stack(channels, axis=2).astype(np.uint8)
+                im = np.squeeze(im, axis=2)
+            scaledim = equalize_image(im, hist)
+        else:
+            image = cv2.imread(imgpath, cv2.IMREAD_GRAYSCALE)
+            # image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            scaledim = image
+            czi = None
+            metadata = None
+    else:
+        raise ValueError('hist transformation type not recognized')
 
     return scaledim, czi, metadata, image_name, imgpath
