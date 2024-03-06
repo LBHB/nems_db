@@ -182,5 +182,5 @@ if __name__ == '__main__':
     siteid='PRN018a'
     siteid="CLT040c"
     siteid="PRN043a"
-    siteid="CLT047c"
+    siteid="LMD033a"
     plot_depth_map(siteid, batch=batch)
