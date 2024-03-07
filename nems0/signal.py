@@ -1021,7 +1021,9 @@ class SignalBase:
 
         ax.set_title(self.name)
 
-    def plot_epoch_avg(self, epoch="TRIAL", channel=None, norm=False, ax=None):
+    def plot_epoch_avg(self, epoch="TRIAL", channel=None, norm=False, ax=None,
+                       prestimsilence=0,
+                       **plotopts):
         import matplotlib.pyplot as plt
 
         e = np.nanmean(self.extract_epoch(epoch), axis=0)
@@ -1036,8 +1038,9 @@ class SignalBase:
         if ax is None:
             f, ax = plt.subplots()
         if e.shape[0] == 1:
-            ax.plot(e.T)
-            ax.set_xlabel(f'Bins from {epoch} onset')
+            tt=(np.arange(e.shape[1])/self.fs-prestimsilence)*1000
+            ax.plot(tt, e.T, **plotopts)
+            ax.set_xlabel(f'Time from {epoch} onset (ms)')
             ax.set_ylabel('Mean')
         else:
             if norm:
