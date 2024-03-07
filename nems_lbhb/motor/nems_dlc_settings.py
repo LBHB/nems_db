@@ -31,8 +31,8 @@ def get_dlc_model(avipath):
         #dlc_model = '/auto/data/dlc/right_chimney_PRN-svd-2023-11-21/config.yaml'
         # back of implant instead of rear headpost
         dlc_model = '/auto/data/dlc/right_chimney_PRNfb-svd-2023-11-30/config.yaml'
-    elif ('LemonDisco/training2023' in avipath) or \
-            ('SlipperyJack/training2023' in avipath):
+    elif ('LemonDisco/training' in avipath) or \
+            ('SlipperyJack/training' in avipath):
         # NO CHIMNEYS
         dlc_model = '/auto/data/dlc/free_train-svd-2023-09-26/config.yaml'
     elif ('SlipperyJack/SLJ' in avipath) or \

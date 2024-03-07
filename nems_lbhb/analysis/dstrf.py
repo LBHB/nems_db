@@ -73,7 +73,8 @@ def shuffle_along_axis(a, axis):
 def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=10, max_frames=5000,
               out_channels=None,
-              figures=None, fit_ss_model=False, first_lin=True,
+              figures=None, fit_ss_model=False, ss_pccount=5,
+              first_lin=True,
               IsReload=False, **ctx):
     """xforms function
     use modelspec or modelspec_list to compute dSTRFs from est recording (using nems.tools.dstrf)
@@ -116,35 +117,44 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     dstrf /= s
     dstrf /= np.max(np.abs(dstrf)) * 0.9
 
+    log.info("Averaging across jackknifes")
     mdstrf = dstrf.mean(axis=1, keepdims=True)
     mdstrf /= np.max(np.abs(mdstrf)) * 0.9
     d = dtools.compute_dpcs(mdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
 
     if len(modelspec_list)>1:
+        log.info("Shrinking across jackknifes")
         sdstrf = dstrf.std(axis=1, keepdims=True)
         sdstrf[sdstrf == 0] = 1
         mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
         mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
-        m_ = mzdstrf
+        mean_dstrf = mzdstrf
 
         dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
+        del sdstrf
+
     else:
         dz = d
-        m_ = mdstrf
+        mean_dstrf = mdstrf
+
+    del dstrf
+
+    log.info("Computing site-wide dPCs")
 
     # dpcs for all cells in site
     T = len(t_indexes)
-    F = m_.shape[3]
-    U = m_.shape[4]
-    dstrf_all = np.reshape(m_,[1,cellcount*T,F,U])
+    F = mean_dstrf.shape[3]
+    U = mean_dstrf.shape[4]
+    dstrf_all = np.reshape(mean_dstrf,[1,cellcount*T,F,U])
     dall = dtools.compute_dpcs(dstrf_all, pc_count=pc_count, snr_threshold=None,
                                first_lin=False, as_dict=True)
 
+    log.info("Computing dPC noise floor for each unit")
     # compute noise floor by measuring PCs with shuffled spectro-temporal parameters
     sh_mags = []
     N = 50
     for i in range(N):
-        m_ = shuffle_along_axis(mdstrf, axis=2)
+        m_ = shuffle_along_axis(mean_dstrf, axis=2)
         d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True, flip_sign=False)
         sh_mags.append(d_['input']['pc_mag'])
     sh_mags = np.stack(sh_mags, axis=2)
@@ -194,7 +204,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
 
     if fit_ss_model:
         subspace_model_fit(est, val, modelspec,
-                           pc_count=pc_count, out_channels=out_channels)
+                           pc_count=ss_pccount, out_channels=out_channels)
 
     return {'modelspec': modelspec, 'figures': figures}
 
@@ -277,8 +287,18 @@ def subspace_model_fit(est, val, modelspec,
         # load dstrf data saved in modelpath
         return
 
-    X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="")
-    X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="")
+    batch_size = None  # X_est.shape[0]  # or None or bigger?
+
+    try:
+        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="REFERENCE")
+        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="REFERENCE")
+    except:
+        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="")
+        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="")
+        X_est['input'] = X_est['input'][np.newaxis]
+        Y_est = Y_est[np.newaxis]
+        X_val['input'] = X_val['input'][np.newaxis]
+        Y_val = Y_val[np.newaxis]
     r = est
 
     cellids = r['resp'].chans
@@ -290,7 +310,7 @@ def subspace_model_fit(est, val, modelspec,
     ss0predxc = np.zeros(len(out_channels))
     for oi, o in enumerate(out_channels):
         log.info(f"** Fitting SS model for cell {val['resp'].chans[o]}:")
-        #keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
+        # keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
         keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-dexp.1'
         lmodel0 = xforms.init_nems_keywords(keywordstring, meta=modelspec.meta)['modelspec']
         lmodel0 = lmodel0.sample_from_priors()
@@ -303,26 +323,29 @@ def subspace_model_fit(est, val, modelspec,
         fit_opts2['early_stopping_tolerance'] = 1e-4
         fit_opts2['learning_rate'] = 5e-4
 
-        dpcz = modelspec.meta['dpc']
-        dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
-        fir = filter.FIR(shape=dpcz.shape)
-        fir['coefficients'] = np.flip(dpcz, axis=0)
-        X = fir.evaluate(X_est['input'])
-        Y = Y_est[:, [o]]
+        dpc = modelspec.meta['dpc'][o, :pc_count]
+        dpc = np.moveaxis(dpc, [0, 1, 2], [2, 1, 0])
+        fir = filter.FIR(shape=dpc.shape)
+        fir['coefficients'] = np.flip(dpc, axis=0)
+        X = np.stack([fir.evaluate(x) for x in X_est['input']], axis=0)
+        Y = Y_est[:, :, [o]]
 
         lmodel0.layers[-1].skip_nonlinearity()
-        lmodel = lmodel0.fit(input=X, target=Y, backend='tf', fitter_options=fitter_options)
+        lmodel = lmodel0.fit(input=X, target=Y, backend='tf',
+                             batch_size=batch_size, fitter_options=fitter_options)
         lmodel = init_nl_lite(lmodel, X, Y)
         lmodel.layers[-1].unskip_nonlinearity()
-        lmodel = lmodel.fit(input=X, target=Y, backend='tf', fitter_options=fit_opts2)
+        lmodel = lmodel.fit(input=X, target=Y, backend='tf',
+                            batch_size=batch_size, fitter_options=fit_opts2)
 
-        Xv = fir.evaluate(X_val['input'])
-        Yv = Y_val[:, [o]]
+        Xv = np.concatenate([fir.evaluate(x) for x in X_val['input']], axis=0)
+        Yv = np.reshape(Y_val[:, :, [o]], [-1, 1])
         p0 = lmodel0.predict(Xv)
         p = lmodel.predict(Xv)
         sspredxc[oi] = correlation(p, Yv)
         ss0predxc[oi] = correlation(p0, Yv)
         ssmodels.append(lmodel)
+
     modelspec.meta['sspredxc'] = sspredxc
 
     if 'r_test' in modelspec.meta.keys():
