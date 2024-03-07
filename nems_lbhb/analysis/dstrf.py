@@ -155,7 +155,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     N = 50
     for i in range(N):
         m_ = shuffle_along_axis(mean_dstrf, axis=2)
-        d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True, flip_sign=False)
+        d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin,
+                                 snr_threshold=None, as_dict=True, flip_sign=False)
         sh_mags.append(d_['input']['pc_mag'])
     sh_mags = np.stack(sh_mags, axis=2)
     msh = sh_mags.mean(axis=2)
