@@ -64,9 +64,9 @@ for os in np.arange(0, len(channels), 10, dtype=int):
                 rref = resp.extract_epoch(e)[:,cid,:].mean(axis=0)*resp.fs
                 rprobe = resp.extract_epoch(probe_epoch)[:,cid,:].mean(axis=0)*resp.fs
                 mses[i,channel] = np.std(rref-rprobe)/np.sqrt(np.mean(rprobe**2))
-                tt=np.arange(len(rref))/resp.fs*1000
-                ax[i,channel].plot(rref,color='gray',lw=0.5)
-                ax[i,channel].plot(rprobe,color='k',lw=0.5)
+                tt=(np.arange(len(rref))/resp.fs-0.1)*1000
+                ax[i,channel].plot(tt,rref,color='gray',lw=0.5)
+                ax[i,channel].plot(tt,rprobe,color='k',lw=0.5)
                 if channel==0:
                     ax[i,0].set_ylabel(short_titles[i], color='gray')
                 else:
@@ -83,6 +83,7 @@ for os in np.arange(0, len(channels), 10, dtype=int):
                 else:
                     col='gray'
                 ax[i,channel].text(0, yl[1], f"{mses[i,channel]:.2f}", fontsize=8, va='top', color=col)
+    ax[0,0].text(-250, yl[1], f"spk/s", fontsize=8, va='center', rotation=90)
 
     ax[-1,2].set_xlabel(f"Time (ms) - Probe (/ah/-/eh/) response in black")
     plt.tight_layout()
