@@ -1591,6 +1591,20 @@ class BAPHYExperiment:
         return [io.baphy_load_spike_data_raw(str(s)) for s in self.spikefile]
 
 
+##################### WRAPPERS #######################
+
+def load_training(parmfile, **recordingopts):
+
+    if type(parmfile) is not list:
+        parmfiles=[parmfile]
+    else:
+        parmfiles=parmfile
+
+    ex=BAPHYExperiment(parmfile=parmfiles)
+
+    rec = ex.get_recording(resp=False, stim=False, **recordingopts)
+
+
 # ==============  epoch manipulation functions  ================
 
 def baphy_events_to_epochs(exptevents, exptparams, globalparams, fidx, goodtrials=None, **options):

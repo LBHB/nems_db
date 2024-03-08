@@ -208,13 +208,51 @@ raise ValueError('stopping')
 
 import importlib
 from nems_lbhb.analysis import dstrf
-importlib.reload(dstrf)
 from nems.tools import dstrf as dtools
+importlib.reload(dstrf)
 
 ctx['IsReload']=False
-results = dstrf.subspace_model_fit(pc_count=5, **ctx)
+
+R=len(ctx['modelspec'].meta['cellids'])
+out_channels = np.arange(R)
 
 
+sspredxc=np.zeros((R,5))
+for pc_count in range(1,6):
+    results2 = dstrf.subspace_model_fit(pc_count=pc_count*2, use_dpc_all=True, **ctx)
+    sspredxc[:,pc_count-1]=results2['modelspec'].meta['sspredxc']
+
+plt.figure()
+plt.errorbar(np.arange(2,12,2),sspredxc.mean(axis=0),sspredxc.std(axis=0)/(sspredxc.shape[0]**0.5))
+plt.axhline(results['modelspec'].meta['sspredxc'].mean(), ls='--', color='r')
+
+results = dstrf.subspace_model_fit(pc_count=5, use_dpc_all=False, out_channels=[0,1], **ctx)
+sspredxc5 = results['modelspec'].meta['sspredxc'].copy()
+results = dstrf.subspace_model_fit(pc_count=8, use_dpc_all=False, out_channels=[0,1], **ctx)
+sspredxc8 = results['modelspec'].meta['sspredxc'].copy()
+
+
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.8, out_channels=out_channels, **ctx)
+sspredxc80 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count80 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.85, out_channels=out_channels, **ctx)
+sspredxc85 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count85 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.9, out_channels=out_channels, **ctx)
+sspredxc90 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count90 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.95, out_channels=out_channels, **ctx)
+sspredxc95 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count95 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.98, out_channels=out_channels, **ctx)
+sspredxc98 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count98 = results3['modelspec'].meta['sspc_count'].copy()
+
+ss2 = np.stack([sspredxc80,sspredxc85,sspredxc90,sspredxc95,sspredxc98])
+plt.figure()
+plt.plot(ss2.T)
+plt.legend(['80','85','90','95','98'])
+ss2.mean(axis=1)
 
 X_val, Y_val = xforms.lite_input_dict(ctx['modelspec'], ctx['val'], epoch_name="")
 X_est, Y_est = xforms.lite_input_dict(ctx['modelspec'], ctx['est'], epoch_name="")

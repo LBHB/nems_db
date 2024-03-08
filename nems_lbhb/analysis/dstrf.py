@@ -126,12 +126,15 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
         log.info("Shrinking across jackknifes")
         sdstrf = dstrf.std(axis=1, keepdims=True)
         sdstrf[sdstrf == 0] = 1
+
+        log.info("Calling shrinkage()")
         mzdstrf = shrinkage(mdstrf, sdstrf, sigrat=0.75)
         mzdstrf /= np.max(np.abs(mzdstrf)) * 0.9
         mean_dstrf = mzdstrf
-
-        dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
         del sdstrf
+
+        log.info("Calling compute_dpcs()")
+        dz = dtools.compute_dpcs(mzdstrf[:, 0], pc_count=pc_count, first_lin=first_lin, as_dict=True)
 
     else:
         dz = d
@@ -140,7 +143,6 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     del dstrf
 
     log.info("Computing site-wide dPCs")
-
     # dpcs for all cells in site
     T = len(t_indexes)
     F = mean_dstrf.shape[3]
@@ -208,6 +210,120 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
                            pc_count=ss_pccount, out_channels=out_channels)
 
     return {'modelspec': modelspec, 'figures': figures}
+
+def subspace_model_fit(est, val, modelspec,
+              pc_count=5, dpc_var=0.8, out_channels=None, use_dpc_all=False, single_fit=True,
+              figures=None, IsReload=False, **ctx):
+
+    if IsReload:
+        # load dstrf data saved in modelpath
+        return
+
+    batch_size = None  # X_est.shape[0]  # or None or bigger?
+
+    try:
+        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="REFERENCE")
+        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="REFERENCE")
+    except:
+        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="")
+        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="")
+        X_est['input'] = X_est['input'][np.newaxis]
+        Y_est = Y_est[np.newaxis]
+        X_val['input'] = X_val['input'][np.newaxis]
+        Y_val = Y_val[np.newaxis]
+
+    r = est
+    cellids = r['resp'].chans
+    if out_channels is None:
+        out_channels = np.arange(len(cellids))
+
+    ssmodels = []
+    sspredxc = np.zeros(len(out_channels))
+    sspc_count = np.zeros(len(out_channels))
+    ss0predxc = np.zeros(len(out_channels))
+
+    if use_dpc_all & single_fit:
+        out_channels=[out_channels]
+    else:
+        single_fit=False
+    for oi, o in enumerate(out_channels):
+        if single_fit:
+            R=len(o)
+            log.info(f"** Fitting SS model for {R} cells:")
+            y_select=o
+            pcc=pc_count
+            keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x30-relu.30.o.s-wc.30x{R}-dexp.{R}'
+        else:
+            R=1
+            log.info(f"** Fitting SS model for cell {val['resp'].chans[o]}:")
+            y_select=[o]
+            if pc_count is None:
+                dpc_mag = modelspec.meta['dpc_mag'][:, o] ** 2
+                dpc_mag = dpc_mag / dpc_mag.sum()
+                dsum = np.cumsum(dpc_mag)
+                pcc = int(np.min(np.where(dsum > dpc_var)[0]) + 1)
+                log.info(f'dpc_var={dpc_var}: pc_count={pcc}')
+            else:
+                pcc=pc_count
+            keywordstring = f'wc.{pcc}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-dexp.1'
+
+        lmodel0 = xforms.init_nems_keywords(keywordstring, meta=modelspec.meta)['modelspec']
+        lmodel0 = lmodel0.sample_from_priors()
+        fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 100,
+                          'early_stopping_patience': 150,
+                          'early_stopping_tolerance': 1e-3,
+                          'learning_rate': 1e-3, 'epochs': 10000,
+                          }
+        fit_opts2 = fitter_options.copy()
+        fit_opts2['early_stopping_tolerance'] = 1e-4
+        fit_opts2['learning_rate'] = 5e-4
+        if use_dpc_all:
+            dpc = modelspec.meta['dpc_all'][0, :pcc]
+            dpc = np.moveaxis(dpc, [0, 1, 2], [2, 1, 0])
+        else:
+            dpc = modelspec.meta['dpc'][o, :pcc]
+            dpc = np.moveaxis(dpc, [0, 1, 2], [2, 1, 0])
+        fir = filter.FIR(shape=dpc.shape)
+        fir['coefficients'] = np.flip(dpc, axis=0)
+        X = np.stack([fir.evaluate(x) for x in X_est['input']], axis=0)
+        Y = Y_est[:, :, y_select]
+
+        lmodel0.layers[-1].skip_nonlinearity()
+        lmodel = lmodel0.fit(input=X, target=Y, backend='tf',
+                             batch_size=batch_size, fitter_options=fitter_options)
+        lmodel = init_nl_lite(lmodel, X, Y)
+        lmodel.layers[-1].unskip_nonlinearity()
+        lmodel = lmodel.fit(input=X, target=Y, backend='tf',
+                            batch_size=batch_size, fitter_options=fit_opts2)
+
+        Xv = np.concatenate([fir.evaluate(x) for x in X_val['input']], axis=0)
+        Yv = np.reshape(Y_val[:, :, y_select], [-1, R])
+        p0 = lmodel0.predict(Xv)
+        p = lmodel.predict(Xv)
+        if single_fit:
+            for ii in range(R):
+                sspredxc[ii] = correlation(p[:, ii], Yv[:, ii])
+                ss0predxc[ii] = correlation(p0[:, ii], Yv[:, ii])
+                sspc_count[ii] = pcc
+        else:
+            sspredxc[oi] = correlation(p, Yv)
+            ss0predxc[oi] = correlation(p0, Yv)
+            sspc_count[oi] = pcc
+        ssmodels.append(lmodel)
+
+    modelspec.meta['sspredxc'] = sspredxc
+    modelspec.meta['sspc_count'] = sspc_count
+    if single_fit:
+        out_channels = out_channels[0]
+
+    if 'r_test' in modelspec.meta.keys():
+        log.info("Cellid        Orig  Subspace")
+        for oi, o in enumerate(out_channels):
+            log.info(f"{modelspec.meta['cellids'][o]}" + \
+                     f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
+                     f" {modelspec.meta['sspredxc'][oi]:.3f}")
+
+    return {'modelspec': modelspec}
 
 
 def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
@@ -280,83 +396,6 @@ def project_model_to_ss(modelspec, X=None, rec=None, input_name='stim',
     return ss
 
 
-def subspace_model_fit(est, val, modelspec,
-              pc_count=5, out_channels=None,
-              figures=None, fit_ss_model=False, IsReload=False, **ctx):
-
-    if IsReload:
-        # load dstrf data saved in modelpath
-        return
-
-    batch_size = None  # X_est.shape[0]  # or None or bigger?
-
-    try:
-        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="REFERENCE")
-        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="REFERENCE")
-    except:
-        X_est, Y_est = xforms.lite_input_dict(modelspec, est, epoch_name="")
-        X_val, Y_val = xforms.lite_input_dict(modelspec, val, epoch_name="")
-        X_est['input'] = X_est['input'][np.newaxis]
-        Y_est = Y_est[np.newaxis]
-        X_val['input'] = X_val['input'][np.newaxis]
-        Y_val = Y_val[np.newaxis]
-    r = est
-
-    cellids = r['resp'].chans
-    if out_channels is None:
-        out_channels = np.arange(len(cellids))
-
-    ssmodels = []
-    sspredxc = np.zeros(len(out_channels))
-    ss0predxc = np.zeros(len(out_channels))
-    for oi, o in enumerate(out_channels):
-        log.info(f"** Fitting SS model for cell {val['resp'].chans[o]}:")
-        # keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-relu.1.o.s'
-        keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-dexp.1'
-        lmodel0 = xforms.init_nems_keywords(keywordstring, meta=modelspec.meta)['modelspec']
-        lmodel0 = lmodel0.sample_from_priors()
-        fitter_options = {'cost_function': 'nmse', 'early_stopping_delay': 100,
-                          'early_stopping_patience': 150,
-                          'early_stopping_tolerance': 1e-3,
-                          'learning_rate': 1e-3, 'epochs': 10000,
-                          }
-        fit_opts2 = fitter_options.copy()
-        fit_opts2['early_stopping_tolerance'] = 1e-4
-        fit_opts2['learning_rate'] = 5e-4
-
-        dpc = modelspec.meta['dpc'][o, :pc_count]
-        dpc = np.moveaxis(dpc, [0, 1, 2], [2, 1, 0])
-        fir = filter.FIR(shape=dpc.shape)
-        fir['coefficients'] = np.flip(dpc, axis=0)
-        X = np.stack([fir.evaluate(x) for x in X_est['input']], axis=0)
-        Y = Y_est[:, :, [o]]
-
-        lmodel0.layers[-1].skip_nonlinearity()
-        lmodel = lmodel0.fit(input=X, target=Y, backend='tf',
-                             batch_size=batch_size, fitter_options=fitter_options)
-        lmodel = init_nl_lite(lmodel, X, Y)
-        lmodel.layers[-1].unskip_nonlinearity()
-        lmodel = lmodel.fit(input=X, target=Y, backend='tf',
-                            batch_size=batch_size, fitter_options=fit_opts2)
-
-        Xv = np.concatenate([fir.evaluate(x) for x in X_val['input']], axis=0)
-        Yv = np.reshape(Y_val[:, :, [o]], [-1, 1])
-        p0 = lmodel0.predict(Xv)
-        p = lmodel.predict(Xv)
-        sspredxc[oi] = correlation(p, Yv)
-        ss0predxc[oi] = correlation(p0, Yv)
-        ssmodels.append(lmodel)
-
-    modelspec.meta['sspredxc'] = sspredxc
-
-    if 'r_test' in modelspec.meta.keys():
-        log.info("Cellid        Orig  Subspace")
-        for oi, o in enumerate(out_channels):
-            log.info(f"{modelspec.meta['cellids'][o]}" + \
-                     f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
-                     f" {modelspec.meta['sspredxc'][oi]:.3f}")
-
-    return {'modelspec': modelspec}
 
 def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
                    use_val=False, print_figs=False, **ctx):
