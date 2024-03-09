@@ -71,7 +71,7 @@ def shuffle_along_axis(a, axis):
 
 
 def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
-              D=15, timestep=3, pc_count=10, max_frames=5000,
+              D=15, timestep=3, pc_count=10, max_frames=4000,
               out_channels=None,
               figures=None, fit_ss_model=False, ss_pccount=5,
               first_lin=True,
