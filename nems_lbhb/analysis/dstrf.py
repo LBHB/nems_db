@@ -111,6 +111,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
 
         d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
         dstrfs.append(d['input'])
+        # delete backend to prevent (potential?) copy error
+        m.dstrf_backend=None
 
     dstrf = np.stack(dstrfs, axis=1)
     s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
@@ -206,9 +208,13 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     modelspec.meta['dpc_mag_all'] = dall['input']['pc_mag']
 
     if fit_ss_model:
-        subspace_model_fit(est, val, modelspec,
+        d=subspace_model_fit(est, val, modelspec,
                            pc_count=ss_pccount, out_channels=out_channels)
+        modelspec=d['modelspec']
 
+    log.info("removing backends from modelspec")
+    modelspec.backend=None
+    modelspec.dstrf_backend=None
     return {'modelspec': modelspec, 'figures': figures}
 
 def subspace_model_fit(est, val, modelspec,
@@ -217,8 +223,7 @@ def subspace_model_fit(est, val, modelspec,
 
     if IsReload:
         # load dstrf data saved in modelpath
-        return
-            
+        return {'modelspec': modelspec}
     batch_size = None  # X_est.shape[0]  # or None or bigger?
 
     try:
