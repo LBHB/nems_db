@@ -1603,7 +1603,7 @@ def load_training(parmfile, **recordingopts):
     ex=BAPHYExperiment(parmfile=parmfiles)
 
     rec = ex.get_recording(resp=False, stim=False, **recordingopts)
-
+    return rec
 
 # ==============  epoch manipulation functions  ================
 

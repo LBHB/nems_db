@@ -552,7 +552,10 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
     :return: results = xforms context dictionary update
     """
     if IsReload:
-        return {}
+        if jackknife_count>0:
+            return {'jackknifed_fit': True, 'jackknife_count': jackknife_count}
+        else:
+            return {}
 
     if (modelspec is None) or (est is None):
         raise ValueError("Inputs modelspec and est required")
@@ -762,7 +765,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 m.backend = None
                 m.meta.update(modelspec.meta)
             return {'modelspec': modelspec, 'modelspec_list': modelspec_list,
-                    'jackknifed_fit': True
+                    'jackknifed_fit': True, 'jackknife_count': jackknife_count,
                     }
         else:
             return {'modelspec': modelspec}
