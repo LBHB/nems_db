@@ -113,8 +113,9 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
         dstrfs.append(d['input'])
         # delete backend to prevent (potential?) copy error
         m.dstrf_backend=None
-
+    
     dstrf = np.stack(dstrfs, axis=1)
+    del dstrfs
     s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
     dstrf /= s
     dstrf /= np.max(np.abs(dstrf)) * 0.9
