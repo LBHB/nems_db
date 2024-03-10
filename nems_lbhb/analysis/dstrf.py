@@ -73,7 +73,7 @@ def shuffle_along_axis(a, axis):
 def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=10, max_frames=4000,
               out_channels=None,
-              figures=None, fit_ss_model=False, ss_pccount=5,
+              figures=None, fit_ss_model=False, ss_pccount=5, ss_dpc_var=0.95,
               first_lin=True,
               IsReload=False, **ctx):
     """xforms function
@@ -209,8 +209,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     modelspec.meta['dpc_mag_all'] = dall['input']['pc_mag']
 
     if fit_ss_model:
-        d=subspace_model_fit(est, val, modelspec,
-                           pc_count=ss_pccount, out_channels=out_channels)
+        d=subspace_model_fit(est, val, modelspec, out_channels=out_channels,
+                           pc_count=ss_pccount, dpc_var=ss_dpc_var)
         modelspec=d['modelspec']
 
     log.info("removing backends from modelspec")
@@ -225,7 +225,6 @@ def subspace_model_fit(est, val, modelspec,
     if IsReload:
         # load dstrf data saved in modelpath
         return {'modelspec': modelspec}
-    modelspec=modelspec.copy()
     batch_size = None  # X_est.shape[0]  # or None or bigger?
 
     try:
@@ -262,10 +261,13 @@ def subspace_model_fit(est, val, modelspec,
             keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x30-relu.30.o.s-wc.30x{R}-dexp.{R}'
         else:
             R=1
-            log.info(f"** Fitting SS model for cell {val['resp'].chans[o]}:")
+            log.info(f"** Fitting SS model for cell {val['resp'].chans[o]} ({oi+1}/{len(out_channels)}):")
             y_select=[o]
             if pc_count is None:
-                dpc_mag = modelspec.meta['dpc_mag'][:, o] ** 2
+                if use_dpc_all:
+                    dpc_mag = modelspec.meta['dpc_mag_all'][:, 0] ** 2
+                else:
+                    dpc_mag = modelspec.meta['dpc_mag'][:, o] ** 2
                 dpc_mag = dpc_mag / dpc_mag.sum()
                 dsum = np.cumsum(dpc_mag)
                 pcc = int(np.min(np.where(dsum > dpc_var)[0]) + 1)
@@ -317,20 +319,21 @@ def subspace_model_fit(est, val, modelspec,
             ss0predxc[oi] = correlation(p0, Yv)
             sspc_count[oi] = pcc
         ssmodels.append(lmodel)
-
-    modelspec.meta['sspredxc'] = sspredxc
-    modelspec.meta['sspc_count'] = sspc_count
+        
     if single_fit:
         out_channels = out_channels[0]
 
-    if 'r_test' in modelspec.meta.keys():
+    newmodelspec=modelspec.copy()
+    newmodelspec.meta['sspredxc'] = sspredxc
+    newmodelspec.meta['sspc_count'] = sspc_count
+    if 'r_test' in newmodelspec.meta.keys():
         log.info("Cellid        Orig  Subspace")
         for oi, o in enumerate(out_channels):
-            log.info(f"{modelspec.meta['cellids'][o]}" + \
-                     f" {modelspec.meta['r_test'][o, 0]:.3f}" + \
-                     f" {modelspec.meta['sspredxc'][oi]:.3f}")
+            log.info(f"{newmodelspec.meta['cellids'][o]}" + \
+                     f" {newmodelspec.meta['r_test'][o, 0]:.3f}" + \
+                     f" {newmodelspec.meta['sspredxc'][oi]:.3f}")
 
-    return {'modelspec': modelspec}
+    return {'modelspec': newmodelspec}
 
 
 def project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,

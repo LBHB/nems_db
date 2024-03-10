@@ -216,7 +216,6 @@ ctx['IsReload']=False
 R=len(ctx['modelspec'].meta['cellids'])
 out_channels = np.arange(R)
 
-
 sspredxc=np.zeros((R,5))
 for pc_count in range(1,6):
     results2 = dstrf.subspace_model_fit(pc_count=pc_count*2, use_dpc_all=True, **ctx)
