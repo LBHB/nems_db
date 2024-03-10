@@ -106,11 +106,15 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
     if len(t_indexes)>max_frames:
         log.info(f'Reducing t_indexes length to {max_frames}')
         t_indexes=t_indexes[:max_frames]
+
+    tcount=len(t_indexes)
+    U = r['stim'].shape[0]
     for mi, m in enumerate(modelspec_list):
         log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
 
         d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
-        dstrfs.append(d[sig])
+        dstrfs.append(d[sig].astype(np.float32))  # to save memory
+        
         # delete backend to prevent (potential?) copy error
         m.dstrf_backend=None
     
@@ -174,14 +178,15 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
     dproj = dz[sig]['projection']
     log.info(f"dproj.shape={dproj.shape}")
 
+    # TAKEN CARE OF IN compute_dpcs?
     # flip signs to make avg of filters positive
-    for oi, oc in enumerate(out_channels):
-        for di in range(pc_count):
-            if dpcz[oi, di].sum()<0:
-                dpcz[oi, di] = -dpcz[oi, di]
-                dproj[oi,:,di] = -dproj[oi,:,di]
-            if dpc[oi, di].sum()<0:
-                dpc[oi, di] = -dpc[oi, di]
+    #for oi, oc in enumerate(out_channels):
+    #    for di in range(pc_count):
+    #        if dpcz[oi, di].sum()<0:
+    #            dpcz[oi, di] = -dpcz[oi, di]
+    #            dproj[oi,:,di] = -dproj[oi,:,di]
+    #        if dpc[oi, di].sum()<0:
+    #            dpc[oi, di] = -dpc[oi, di]
 
     imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower','interpolation': 'none'}
 
