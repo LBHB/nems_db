@@ -73,7 +73,7 @@ def shuffle_along_axis(a, axis):
 def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
               D=15, timestep=3, pc_count=10, max_frames=4000,
               out_channels=None,
-              figures=None, fit_ss_model=False, ss_pccount=5,
+              figures=None, fit_ss_model=False, ss_pccount=5, ss_dpc_var=0.95,
               first_lin=True,
               IsReload=False, **ctx):
     """xforms function
@@ -208,8 +208,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
     modelspec.meta['dpc_mag_all'] = dall['input']['pc_mag']
 
     if fit_ss_model:
-        d=subspace_model_fit(est, val, modelspec,
-                           pc_count=ss_pccount, out_channels=out_channels)
+        d=subspace_model_fit(est, val, modelspec, out_channels=out_channels,
+                           pc_count=ss_pccount, dpc_var=ss_dpc_var)
         modelspec=d['modelspec']
 
     log.info("removing backends from modelspec")
