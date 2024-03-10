@@ -70,7 +70,7 @@ def shuffle_along_axis(a, axis):
     return np.take_along_axis(a,idx,axis=axis)
 
 
-def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
+def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=None,
               D=15, timestep=3, pc_count=10, max_frames=4000,
               out_channels=None,
               figures=None, fit_ss_model=False, ss_pccount=5, ss_dpc_var=0.95,
@@ -110,7 +110,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
         log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
 
         d = m.dstrf(stim, D=D, out_channels=out_channels, t_indexes=t_indexes, reset_backend=False)
-        dstrfs.append(d['input'])
+        dstrfs.append(d[sig])
         # delete backend to prevent (potential?) copy error
         m.dstrf_backend=None
 
@@ -161,16 +161,16 @@ def dstrf_pca(est=None, modelspec=None, val=None, modelspec_list=None,
         m_ = shuffle_along_axis(mean_dstrf, axis=2)
         d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin,
                                  snr_threshold=None, as_dict=True, flip_sign=False)
-        sh_mags.append(d_['input']['pc_mag'])
+        sh_mags.append(d_[sig]['pc_mag'])
     sh_mags = np.stack(sh_mags, axis=2)
     msh = sh_mags.mean(axis=2)
     esh = sh_mags.std(axis=2)/(N**0.5)
 
-    dpc = d['input']['pcs']
-    dpc_mag = d['input']['pc_mag']
-    dpcz = dz['input']['pcs']
-    dpc_magz = dz['input']['pc_mag']
-    dproj = dz['input']['projection']
+    dpc = d[sig]['pcs']
+    dpc_mag = d[sig]['pc_mag']
+    dpcz = dz[sig]['pcs']
+    dpc_magz = dz[sig]['pc_mag']
+    dproj = dz[sig]['projection']
     log.info(f"dproj.shape={dproj.shape}")
 
     # flip signs to make avg of filters positive

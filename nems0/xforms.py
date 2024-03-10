@@ -116,11 +116,11 @@ def evaluate_step(xfa, context={}, verbose=True):
 
     # Merge args into context, and make a deepcopy so that mutation
     # inside xforms will not be propagated unless the arg is returned.
-    #args = copy.deepcopy(context_in)
-    args = {}
-    for k,v in context_in.items():
-        log.info(f"deep copying {k}")
-        args[k] = copy.deepcopy(v)
+    args = copy.deepcopy(context_in)
+    #args = {}
+    #for k,v in context_in.items():
+    #    log.info(f"deep copying {k}")
+    #    args[k] = copy.deepcopy(v)
 
     args.update(**xfargs)
     #merged_args = {**xfargs, **context_in}
