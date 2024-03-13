@@ -111,12 +111,13 @@ def evaluate_step(xfa, context={}, verbose=True):
     #            m = 'xf arg {} overlaps with context: {}'.format(k, xf)
     #            raise ValueError(m)
     for k in xfargs:
-        if (k in context_in):
+        if (k in context_in) and verbose:
             log.info('xf argument %s overlaps with existing context key: %s', k, xf)
 
     # Merge args into context, and make a deepcopy so that mutation
     # inside xforms will not be propagated unless the arg is returned.
     args = copy.deepcopy(context_in)
+    args['verbose'] = verbose
     #args = {}
     #for k,v in context_in.items():
     #    log.info(f"deep copying {k}")
@@ -313,8 +314,8 @@ def load_recordings(recording_uri_list=None, normalize=False, cellid=None,
     if normalize and 'stim' in rec.signals.keys():
         log.info('Normalizing stim')
         rec['stim'] = rec['stim'].rasterize().normalize('minmax')
-
-    log.info('Extracting cellid(s) {}'.format(cellid))
+    if context.get('verbose', True):
+        log.info('Extracting cellid(s) {}'.format(cellid))
     if (cellid is None) or (cellid in ['none', 'NAT3', 'NAT4', 'ALLCELLS']):
         # No cellid specified, use all channels
         channels = rec[output_name].chans
@@ -903,7 +904,7 @@ def predict_lite(modelspec, est, val,
         ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
         test_set = JackknifeIterator(X_est, target=Y_est,
                                     samples=jackknife_count, axis=ja)
-        log.info(f"Jackknifes: {jackknife_count}")
+        #log.info(f"Jackknifes: {jackknife_count}")
         dataset = test_set.get_predicted_jackknifes(modelspec_list)
 
         try:
@@ -1022,7 +1023,7 @@ def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
 
 
 def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
-                  chop_channels=0, **context):
+                  chop_channels=0, verbose=True, **context):
     """
     Normalize each channel of rec[sig] according to norm_method
     :param rec:  NEMS recording
@@ -1043,7 +1044,8 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
             newrec = r.copy()
             s = newrec[sig].rasterize()
             if norm_method=='sqrt':
-                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                if verbose:
+                    log.info(f'xforms.normalize_sig({norm_method}): {sig}')
                 newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
             else:
                 if log_compress != 'None':
@@ -1059,8 +1061,8 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
                     keepchans = newrec[sig].chans[-chop_channels:]
                     log.info(f'Keep chans: {keepchans}')
                     newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
-
-                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+                if verbose:
+                    log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
             
         if return_reclist:
             return {'rec': rec_list[0], 'rec_list': new_rec_list}
@@ -2314,7 +2316,7 @@ def load_analysis(filepath, eval_model=True, only=None, verbose=True):
         pass
 
     if eval_model:
-        ctx, log_xf = evaluate(xfspec, ctx)
+        ctx, log_xf = evaluate(xfspec, ctx, verbose=verbose)
     elif only is not None:
         # Useful for just loading the recording without doing
         # any subsequent evaluation.

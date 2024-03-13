@@ -611,8 +611,8 @@ def generate_stim_from_epochs(rec, new_signal_name='stim',
 
         sigs = []
         for e in epochs_to_extract:
-            log.info('Adding to %s: %s with shift = %d',
-                     new_signal_name, e, epoch_shift)
+            #log.info('Adding to %s: %s with shift = %d',
+            #         new_signal_name, e, epoch_shift)
             s = resp.epoch_to_signal(e, onsets_only=onsets_only, shift=epoch_shift)
             if epoch_shift:
                 s.chans[0] = "{}{:+d}".format(s.chans[0], epoch_shift)
@@ -621,8 +621,8 @@ def generate_stim_from_epochs(rec, new_signal_name='stim',
         if epoch2_regex is not None:
             epochs_to_extract = ep.epoch_names_matching(resp.epochs, epoch2_regex)
             for e in epochs_to_extract:
-                log.info('Adding to %s: %s with shift = %d',
-                         new_signal_name, e, epoch2_shift)
+                #log.info('Adding to %s: %s with shift = %d',
+                #         new_signal_name, e, epoch2_shift)
                 s = resp.epoch_to_signal(e, onsets_only=onsets_only,
                                          shift=epoch2_shift)
                 if epoch2_shuffle:

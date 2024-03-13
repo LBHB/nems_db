@@ -4754,6 +4754,8 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     :param rawid:
     :return:
     """
+    if siteid is None:
+        siteid = db.get_siteid(cellid)
     print(f"Compiling site info for {siteid}")
     df_cell = get_depth_info(cellid=cellid, siteid=siteid, rawid=rawid)
 
@@ -4761,42 +4763,58 @@ def get_spike_info(cellid=None, siteid=None, rawid=None, save_to_db=False):
     df_cell['mwf']=df_cell['mwf'].astype(object)
     #df_cell = df_cell.reset_index()
     #df_cell = df_cell.set_index('cellid')
+
+    sql = f"SELECT * FROM gSingleCell WHERE cellid like '{siteid}%'"
+    dsingle = db.pd_query(sql)
+    dsingle = dsingle.set_index('cellid')
     for c in df_cell.index:
+        found_sw = False
+        if c in dsingle.index:
+            try:
+                df_cell.loc[c, 'mwf'] = dsingle.loc[c,'mean_waveform']
+                dd = json.loads(dsingle.loc[c,'meta_data'])
+                df_cell.loc[c, 'sw'] = dd['wft_spike_width']
+                df_cell.loc[c, 'fwhm'] = 0
+                df_cell.loc[c, 'ptr'] = dd['wft_peak_trough_ratio']
+                found_sw=True
+            except:
+                pass
         #print(c)
-        mwf = get_mean_spike_waveform(c)[:-1]
-        mwf_len = len(mwf)
-        fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
-        mwf = fit2(np.linspace(0, mwf_len, 100))
-        fs = 100 / (mwf_len / 30000)
+        if found_sw==False:
+            mwf = get_mean_spike_waveform(c)[:-1]
+            mwf_len = len(mwf)
+            fit2 = interpolate.UnivariateSpline(np.arange(len(mwf)), mwf)
+            mwf = fit2(np.linspace(0, mwf_len, 100))
+            fs = 100 / (mwf_len / 30000)
 
-        mwf /= abs(mwf).max()
-        df_cell.at[c, 'mwf'] = mwf
-        if mwf[np.argmax(np.abs(mwf))] > 0:
-            mwf = -mwf
-        if mwf[np.argmax(np.abs(mwf))]<0:
-            trough = np.argmin(mwf[5:-5]) + 5
-            peak = np.argmax(mwf[trough:-5]) + trough
+            mwf /= abs(mwf).max()
+            df_cell.at[c, 'mwf'] = mwf
+            if mwf[np.argmax(np.abs(mwf))] > 0:
+                mwf = -mwf
+            if mwf[np.argmax(np.abs(mwf))]<0:
+                trough = np.argmin(mwf[5:-5]) + 5
+                peak = np.argmax(mwf[trough:-5]) + trough
 
-            # force 0 to be the mean of the positive waveform preceding the valley
-            mi = np.argmax(mwf[:trough])
-            if len(mwf[:mi]) == 0:
-                #log.info(f'{c}: zero mwf mi')
-                baseline = 0
-            else:
-                baseline = np.mean(mwf[:mi])
-            mwf -= baseline
+                # force 0 to be the mean of the positive waveform preceding the valley
+                mi = np.argmax(mwf[:trough])
+                if len(mwf[:mi]) == 0:
+                    #log.info(f'{c}: zero mwf mi')
+                    baseline = 0
+                else:
+                    baseline = np.mean(mwf[:mi])
+                mwf -= baseline
 
-            df_cell.loc[c,'sw'] = (peak - trough) / fs * 1000 # ms
+                df_cell.loc[c,'sw'] = (peak - trough) / fs * 1000 # ms
 
-            # get fwhm (of valley)
-            left = np.argmin(np.abs(mwf[:trough] - (mwf[trough] / 2)))
-            right = np.argmin(np.abs(mwf[trough:] - (mwf[trough] / 2))) + trough
-            df_cell.loc[c,'fwhm'] = right - left
+                # get fwhm (of valley)
+                left = np.argmin(np.abs(mwf[:trough] - (mwf[trough] / 2)))
+                right = np.argmin(np.abs(mwf[trough:] - (mwf[trough] / 2))) + trough
+                df_cell.loc[c,'fwhm'] = right - left
 
-            if mwf[peak]<=0:
-                df_cell.loc[c,'ptr'] = 0
-            else:
-                df_cell.loc[c,'ptr'] = abs(mwf[peak]) / abs(mwf[trough])
+                if mwf[peak]<=0:
+                    df_cell.loc[c,'ptr'] = 0
+                else:
+                    df_cell.loc[c,'ptr'] = abs(mwf[peak]) / abs(mwf[trough])
 
     if save_to_db:
         df_cell['cellid'] = df_cell.index

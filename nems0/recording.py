@@ -829,8 +829,8 @@ class Recording:
             log.info(f"keepfrac={keepfrac}, keeping {keep_count}/{lo_count} low-rep epochs")
             lo_rep_epochs = lo_rep_epochs[:keep_count]
 
-        if verbose:
-            print(groups)
+        #if verbose:
+        #    print(groups)
         if est_all:
             return self.split_by_epochs(lo_rep_epochs+hi_rep_epochs, hi_rep_epochs)
         else:
