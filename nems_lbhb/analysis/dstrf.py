@@ -379,7 +379,7 @@ def project_to_subspace(modelspec=None, X=None, out_channels=None, rec=None, est
         raise ValueError("must provide either X input matrix or valid NEMS recording")
     if 'dpc' not in modelspec.meta:
         raise ValueError("modelspec missing dSTRF pcs, run nems_lbhb.analysis.dstrf.dstrf_pca first")
-
+    log.info(f"{out_channels}")
     res = {}
     for name, rec in recs:
         if verbose:
@@ -392,7 +392,7 @@ def project_to_subspace(modelspec=None, X=None, out_channels=None, rec=None, est
 
         outs = []
         res[name]=rec.copy()
-        outcells=[c for i,c in enumerate(rec['resp'].chans) if i in out_channels]
+        outcells=[c for i,c in enumerate(modelspec.meta['cellids']) if i in out_channels]
         for oi, o in enumerate(out_channels):
             if verbose:
                 log.info(f"   Computing SS projection for {cellids[o]}:")
@@ -503,9 +503,9 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
         ax[0, 0].set_xlabel('PC dimension')
         ax[0, 0].set_ylabel('Var. explained')
         ax[0, 0].set_xticks(np.arange(1, dpc_magz.shape[0] + 1))
-        Zresp=None
-        Zpred=None
         for j in range(1, pcp):
+            Zresp = None
+            Zpred = None
             ac,bc,Zresp,N=histmean2d(Y[:,0],Y[:,j],r, bins=20, ax=ax[j,1], spont=spont[oi], ex_pct=0.025, Z=Zresp)
             #N = histscatter2d(Y[:, 0], Y[:, j], r, N=1000, ax=ax[j, 1], ex_pct=0.05)
             ax[j, 1].set_xlabel('Dim 1')
@@ -541,6 +541,7 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
             ax[pci, 3].set_ylim((ymin,ymax))
         ax[0,2].set_axis_off()
         plt.tight_layout()
+    return f
 
 def plot_dpc_proj(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
                    use_val=False, print_figs=False, T1=50, T2=250, **ctx):

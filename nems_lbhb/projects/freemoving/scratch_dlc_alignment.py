@@ -29,11 +29,12 @@ parmfile=['/auto/data/daq/Prince/PRN050/PRN050a02_a_NTD',
 siteid="PRN050a"
 
 batchid=349
+batchid=348
 siteids, cellids = db.get_batch_sites(batchid)
 
 #rec = load_training(parmfile, dlc=True)
 
-for siteid in siteids[:15]:
+for siteid in ["PRN075a"]: #siteids[16:17]:
     parmfile = siteid
     ex = BAPHYExperiment(batch=batchid, cellid=siteid)
     rec = ex.get_recording(resp=True, stim=False, dlc=True)
@@ -44,17 +45,19 @@ for siteid in siteids[:15]:
     epochs.loc[epochs.name.str.startswith("LICK")]
 
     labels = ['TRIAL','EARLY','INCORR','CORRECT']
-
+    vos=-0.5  # video offset?
+    preos=0.05
+    posos=0.05
     trial_starts = dlc.get_epoch_bounds('TRIAL')
-    peri_trials = np.stack([trial_starts[:,0]-0.1, trial_starts[:,0]+0.1], axis=1)
+    peri_trials = np.stack([trial_starts[:,0]-preos-vos, trial_starts[:,0]+posos-vos], axis=1)
     lick0 = dlc.get_epoch_bounds('LICK , 0')
-    peri_lick0 = np.stack([lick0[:,0]-0.1, lick0[:,0]+0.1], axis=1)
-    lick1 = dlc.get_epoch_bounds('LICK , 1')
-    #lick1 = dlc.get_epoch_bounds('LICK , FA')
-    peri_lick1 = np.stack([lick1[:,0]-0.1, lick1[:,0]+0.1], axis=1)
-    lick2 = dlc.get_epoch_bounds('LICK , 2')
-    #lick2 = dlc.get_epoch_bounds('LICK , HIT')
-    peri_lick2 = np.stack([lick2[:,0]-0.1, lick2[:,0]+0.1], axis=1)
+    peri_lick0 = np.stack([lick0[:,0]-preos-vos, lick0[:,0]+posos-vos], axis=1)
+    #lick1 = dlc.get_epoch_bounds('LICK , 1')
+    lick1 = dlc.get_epoch_bounds('LICK , FA')
+    peri_lick1 = np.stack([lick1[:,0]-preos-vos, lick1[:,0]+posos-vos], axis=1)
+    #lick2 = dlc.get_epoch_bounds('LICK , 2')
+    lick2 = dlc.get_epoch_bounds('LICK , HIT')
+    peri_lick2 = np.stack([lick2[:,0]-preos-vos, lick2[:,0]+posos-vos], axis=1)
 
     data = [peri_trials, peri_lick0, peri_lick1, peri_lick2]
     colors=['b','r','y','g']

@@ -2051,15 +2051,24 @@ def psi_parm_read(filepath):
     elif runclass=='NFB':
         stimevents = exptevents.loc[exptevents['name']=='trial_end'].copy()
         trial_events = exptevents.loc[exptevents['name']=='trial_end'].copy()
-        
+
+        # special case, flip channels for LMD RH recordings where primary was right speaker
+        if siteid.startswith("LMD04") or siteid.startswith("LMD05"):
+            flipchans=True
+        else:
+            flipchans=False
         Names = []
         for ee, r in stimevents.iterrows():
             info = json.loads(r['Info'])
             fg_name = f'{info["result"]["fg_name"]}'
             bg_name = f'{info["result"]["bg_name"]}'
             snr = info["result"]['snr']
-            fg_channel = info['result']['fg_channel']+1
-            bg_channel = info['result']['bg_channel']+1
+            if flipchans:
+                fg_channel = 2-info['result']['fg_channel']
+                bg_channel = 2-info['result']['bg_channel']
+            else:
+                fg_channel = info['result']['fg_channel']+1
+                bg_channel = info['result']['bg_channel']+1
             target_delay=info['result']['target_delay']
             fg_duration=info['result']['fg_duration']
             bg_duration=info['result']['bg_duration']
@@ -3646,6 +3655,7 @@ def load_dlc_trace(dlcfilepath, exptevents=None, return_raw=False, verbose=False
     #pp = ['LICK,' in x['name'] for i, x in exptevents.iterrows()]
     pp = exptevents['name'].str.startswith('LICK,')
     if pp.sum() > 0:
+        # this is baphy data
         # yes, there were LICK events, load baphy style
         trials = list(exptevents.loc[pp, 'Trial'])
         ntrials = len(trials)

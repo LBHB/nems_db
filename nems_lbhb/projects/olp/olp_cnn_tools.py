@@ -568,6 +568,7 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
 
     ax[1, 2].legend(frameon=False)
     plt.tight_layout()
+    return f
 
 def load_all_sites(batch=341, modelnames=None, area="A1", show_plots=False):
     """
@@ -680,10 +681,13 @@ if __name__ == '__main__':
 ### dSTRF functions
 def triplet_dpc_subspace(cell_epoch_df, dim1=0, dim2=1, show_pred=True,
                          modelspec=None, est=None, val=None, cellid=None,
-                         **context):
+                         triplet_idx=None, **context):
 
-    #show_epochs = 3
     fgbgepochs = cell_epoch_df['BG + FG'].unique().tolist()
+    if triplet_idx is None:
+        triplet_idx = np.arange(len(fgbgepochs))
+    else:
+        fgbgepochs = [fgbgepochs[i] for i in triplet_idx]
 
     cid = [i for i, c in enumerate(modelspec.meta['cellids']) if c == cellid][0]
     log.info(f"Cell {cellid} index is {cid}")
@@ -757,4 +761,37 @@ def triplet_dpc_subspace(cell_epoch_df, dim1=0, dim2=1, show_pred=True,
         ax[jj, 3].text(ax[0, 3].get_xlim()[0], ax[0, 3].get_ylim()[1], 'bg', va='top')
         ax[jj, 4].text(ax[0, 4].get_xlim()[0], ax[0, 4].get_ylim()[1], 'fgbg', va='top')
     ax[0, 0].set_title(cellid)
+    return f
 
+def triplet_stimuli(cell_epoch_df, rec=None, triplet_idx=None, **context):
+
+    fgbgepochs = cell_epoch_df['BG + FG'].unique().tolist()
+    if triplet_idx is None:
+        triplet_idx = np.arange(len(fgbgepochs))
+    else:
+        fgbgepochs = [fgbgepochs[i] for i in triplet_idx]
+
+    stim = rec['stim']
+
+    f, ax = plt.subplots(len(fgbgepochs), 3, figsize=(8, 1 * len(fgbgepochs)),
+                         sharex=True, sharey=True)
+    for jj, estim in enumerate(fgbgepochs):
+        ii = cell_epoch_df.loc[(cell_epoch_df['BG + FG'] == estim)].index.values[0]
+
+        efg = cell_epoch_df.loc[ii, 'FG']
+        ebg = cell_epoch_df.loc[ii, 'BG']
+        efgbg = cell_epoch_df.loc[ii, 'BG + FG']
+
+        sfg = stim.extract_epoch(efg).mean(axis=0)
+        sbg = stim.extract_epoch(ebg).mean(axis=0)
+        sfgbg = stim.extract_epoch(efgbg).mean(axis=0)
+
+        imopts = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
+        ax[jj, 0].imshow(sfg, **imopts)
+        ax[jj, 1].imshow(sbg, **imopts)
+        ax[jj, 2].imshow(sfgbg, **imopts)
+        ax[jj, 0].set_title(efg.replace("STIM_",""))
+        ax[jj, 1].set_title(ebg.replace("STIM_",""))
+
+    plt.tight_layout()
+    return f

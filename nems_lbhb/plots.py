@@ -1939,7 +1939,7 @@ def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
 
 
 def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
-                  vmin=None, vmax=None, zerolines=True, minN=1, Z=None):
+               cmap='viridis', vmin=None, vmax=None, zerolines=True, minN=1, Z=None):
     keep = np.isfinite(a) & np.isfinite(b)
     ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
     bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
@@ -1987,8 +1987,8 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
     if ax is None:
         f,ax = plt.subplots()
 
-    cmap='bwr'
-    cmap='viridis'
+    #cmap='bwr'
+    #cmap='viridis'
     if (vmin is None) or (vmax is None):
         zz=np.abs(Z).flatten()
         zz=zz[np.isfinite(zz)]
