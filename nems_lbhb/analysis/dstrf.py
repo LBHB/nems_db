@@ -218,7 +218,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
 
 def subspace_model_fit(est, val, modelspec,
               pc_count=5, dpc_var=0.8, out_channels=None, use_dpc_all=False, single_fit=True,
-              figures=None, IsReload=False, **ctx):
+              figures=None, IsReload=False, return_all=False, units_per_layer=15, **ctx):
 
     if IsReload:
         # load dstrf data saved in modelpath
@@ -256,7 +256,8 @@ def subspace_model_fit(est, val, modelspec,
             log.info(f"** Fitting SS model for {R} cells:")
             y_select=o
             pcc=pc_count
-            keywordstring = f'wc.{pc_count}x15-relu.15.o.s-wc.15x30-relu.30.o.s-wc.30x{R}-dexp.{R}'
+            u=units_per_layer
+            keywordstring = f'wc.{pc_count}x{u}-relu.{u}.s-wc.{u}x45-relu.45.s-wc.45x{R}-dexp.{R}'
         else:
             R=1
             log.info(f"** Fitting SS model for cell {val['resp'].chans[o]} ({oi+1}/{len(out_channels)}):")
@@ -272,7 +273,8 @@ def subspace_model_fit(est, val, modelspec,
                 log.info(f'dpc_var={dpc_var}: pc_count={pcc}')
             else:
                 pcc=pc_count
-            keywordstring = f'wc.{pcc}x15-relu.15.o.s-wc.15x15-relu.15.o.s-wc.15x1-dexp.1'
+            u=units_per_layer
+            keywordstring = f'wc.{pcc}x{u}-relu.{u}.s-wc.{u}x{u}-relu.{u}.s-wc.{u}x1-dexp.1'
 
         lmodel0 = xforms.init_nems_keywords(keywordstring, meta=modelspec.meta)['modelspec']
         lmodel0 = lmodel0.sample_from_priors()
@@ -316,6 +318,7 @@ def subspace_model_fit(est, val, modelspec,
             sspredxc[oi] = correlation(p, Yv)
             ss0predxc[oi] = correlation(p0, Yv)
             sspc_count[oi] = pcc
+        lmodel.backend=None
         ssmodels.append(lmodel)
         
     if single_fit:
@@ -330,8 +333,11 @@ def subspace_model_fit(est, val, modelspec,
             log.info(f"{newmodelspec.meta['cellids'][o]}" + \
                      f" {newmodelspec.meta['r_test'][o, 0]:.3f}" + \
                      f" {newmodelspec.meta['sspredxc'][oi]:.3f}")
-
-    return {'modelspec': newmodelspec}
+    if return_all:
+        return {'modelspec': newmodelspec, 'ssmodels': ssmodels}
+    else:        
+        return {'modelspec': newmodelspec}
+        
 
 def plot_dpcs(modelspec=None, out_channels=None, **ctx):
     dpcz = modelspec.meta['dpc']
@@ -366,11 +372,14 @@ def plot_dpcs(modelspec=None, out_channels=None, **ctx):
 
 
 def project_to_subspace(modelspec=None, X=None, out_channels=None, rec=None, est=None, val=None,
-                        input_name='stim', ss_name='subspace', verbose=True, **ctx):
+                        input_name='stim', use_dpc_all=False, ss_name='subspace', verbose=True, **ctx):
 
     cellids = modelspec.meta['cellids']
     if out_channels is None:
-        out_channels = np.arange(len(cellids))
+        if use_dpc_all:
+            out_channels=[0]
+        else:
+            out_channels = np.arange(len(cellids))
     if X is None:
         recs = [(n,r) for n,r in zip(['rec', 'est','val'],[rec, est, val]) if r is not None]
     else:
@@ -397,8 +406,12 @@ def project_to_subspace(modelspec=None, X=None, out_channels=None, rec=None, est
             if verbose:
                 log.info(f"   Computing SS projection for {cellids[o]}:")
 
-            dpcz = modelspec.meta['dpc']
-            dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, o]
+            if use_dpc_all:
+                dpcz = modelspec.meta['dpc_all']
+                dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, 0]
+            else:
+                dpcz = modelspec.meta['dpc']
+                dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, o]
             fir = filter.FIR(shape=dpcz.shape)
             fir['coefficients'] = np.flip(dpcz, axis=0)
 
@@ -542,6 +555,357 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
         ax[0,2].set_axis_off()
         plt.tight_layout()
     return f
+
+def plot_dpc_rows(modelspec=None, cell_list=None, modelspecln=None, use_val=False,
+                  est=None, val=None, maxrows=15, df=None, title=None, emax=100000, **ctx):
+    """ top 3 dPCs for cells in cell_list """
+    show_preds = True
+    if cell_list is None:
+        cell_list = modelspec.meta['cellids'][:4]
+    if title is None:
+        title=",".join(cell_list)
+    orange = [est['resp'].chans.index(c) for c in cell_list]
+    spont = modelspec.meta['spont_mean']
+
+    if modelspecln is not None:
+        from nems.models import LN
+        lnstrf = LN.LNpop_get_strf(modelspecln)
+    else:
+        lnstrf = None
+
+    X = np.concatenate([val['stim'].as_continuous().T,
+                        est['stim'].as_continuous().T[:emax,:]], axis=0)
+    Y = project_to_subspace(modelspec=modelspec, X=X, out_channels=orange,
+                            use_dpc_all=False, verbose=True)
+
+    dpc = modelspec.meta['dpc'].copy()
+    dpc_mag = modelspec.meta['dpc_mag'].copy()
+    dpc_mag_sh = modelspec.meta['dpc_mag_sh']
+    dpc_mag_e = modelspec.meta['dpc_mag_e']
+    pc_count = dpc.shape[1]
+
+    rows = np.min([len(orange), maxrows])
+    f = plt.figure(figsize=(9, rows * 1))
+    gs = f.add_gridspec(rows + 1, 10)
+    ax = np.zeros((rows + 1, 8), dtype='O')
+    for r in range(rows + 1):
+        for c in range(8):
+            if (c < 7) & (r > 0):
+                ax[r, c] = f.add_subplot(gs[r, c])
+            elif (c >= 7):
+                ax[r, c] = f.add_subplot(gs[r, c:])
+
+    # top row, just plot stim in one panel
+    T1 = 270
+    T2 = 470
+    ss = val['stim'].as_continuous()[:, T1:T2]
+    ax[0, -1].imshow(ss, aspect='auto', origin='lower', cmap='gray_r')
+    ax[0, -1].set_yticklabels([])
+    ax[0, -1].set_xticklabels([])
+
+    for j_, (oi, cellid) in enumerate(zip(orange[:rows], cell_list[:rows])):
+        j = j_ + 1
+        log.info(f"{j}/{rows} cid={oi} cellid={cellid}")
+
+        pred = np.concatenate([val['pred'].as_continuous()[oi,:],
+                               est['pred'].as_continuous()[oi, :emax]])
+        r = np.concatenate([val['resp'].as_continuous()[oi,:],
+                            est['resp'].as_continuous()[oi, :emax]])
+
+        pcp = 3
+        for i in range(pcp):
+            cc = np.corrcoef(Y[j_, i], r)[0, 1]
+            if cc < 0:
+                Y[j_, i] = -Y[j_, i]
+                dpc[oi, i] = -dpc[oi, i]
+        if (df is not None):
+            mwf = df.loc[cellid, 'mwf']
+            if df.loc[cellid, 'narrow']:
+                ax[j, 0].plot(mwf, 'r', lw=1)
+            else:
+                ax[j, 0].plot(mwf, 'gray', lw=0.5)
+            ax[j, 0].set_xticklabels([])
+            ax[j, 0].set_yticklabels([])
+            ax[j, 0].set_ylabel(f"{cellid}", fontsize=6)
+            if j==1:
+                ax[j, 0].set_title(title)
+        else:
+            ax[j, 0].set_axis_off()
+
+        dp = dpc_mag[:, oi] / dpc_mag[:, oi].sum()
+
+        ax[j, 1].plot(np.arange(1, len(dpc_mag) + 1), dp, 'o-', markersize=2)
+        if dpc_mag_sh is not None:
+            de = dpc_mag_e[:, oi] / dpc_mag_sh[:, oi].sum() * np.sqrt(50)
+            dsh = dpc_mag_sh[:, oi] / dpc_mag_sh[:, oi].sum()
+            for pp in range(1, pc_count):
+                de[pp:] = de[pp:] / dsh[pp:].sum() * (1 - dp[:pp].sum())
+                dsh[pp:] = dsh[pp:] / dsh[pp:].sum() * (1 - dp[:pp].sum())
+            ax[j, 1].errorbar(np.arange(1, len(dsh) + 1), dsh, de, color='gray', lw=0.5)
+        ax[j, 1].set_xticks(np.arange(1, pc_count + 1))
+        ax[j, 1].set_xticklabels([])
+        ax[j, 1].set_yticklabels([])
+        if (df is None):
+            ax[j, 1].set_ylabel(f"{cellid}", fontsize=6)
+
+        imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+                  'interpolation': 'none'}
+        ymin, ymax = 1, 0
+        for i in range(pcp):
+            d = dpc[oi, i]
+            d = d / np.max(np.abs(d)) * 1.25  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+            prat = dp[i] / dp[0]
+            d *= prat
+
+            ax[j, i + 2].imshow(np.fliplr(d), **imopts)
+            ax[j, i + 2].set_xticklabels([])
+            ax[j, i + 2].set_yticklabels([])
+
+        # PC0 vs. PC1 heatmap
+        Z = [None, None]
+        o1,o2 = 20, 60
+        for p2 in range(1,pcp):
+            _,_,Z[p2-1],_ = histmean2d(Y[j_, 0, :], Y[j_, p2, :], pred, bins=20, ax=ax[j, p2+4],
+                       cmap='summer', spont=spont[oi], ex_pct=0.025, minN=2)
+        zz = np.stack(Z).flatten()
+        zz = zz[np.isfinite(zz)]
+        vmin, vmax = np.percentile(zz, [5, 95])
+
+        for p2 in range(1, pcp):
+            histmean2d(Y[j_, 0, :], Y[j_, p2, :], pred, bins=20, ax=ax[j, p2 + 4],
+                       cmap='summer', spont=spont[oi], ex_pct=0.025, minN=2,
+                       vmin=vmin, vmax=vmax, Z=Z[p2-1])
+            ax[j, p2+4].plot(Y[j_, 0, (T1+o1):(T1+o2)], Y[j_, p2, (T1+o1):(T1+o2)], lw=0.5, color='k')
+            ax[j, p2+4].set_yticklabels([])
+            ax[j, p2+4].set_xticklabels([])
+
+        # snippet of resp/pred PSTH
+        rr = val['resp'].as_continuous()[oi, T1:T2]
+        pp = val['pred'].as_continuous()[oi, T1:T2]
+        pp = pp - pp.mean()
+        r0 = rr.mean()
+        pp = pp / pp.std() * (rr - r0).std()
+        pp = pp + r0
+        ax[j, -1].plot(pp, color='gray', lw=0.5)
+        ax[j, -1].plot(rr, color='black', lw=0.5)
+        ax[j, -1].set_yticklabels([])
+        ax[j, -1].set_xticklabels([])
+        ax[j, -1].set_xlim([0, T2 - T1])
+        ax[j, -1].axvline(o1, lw=0.5, color='red')
+        ax[j, -1].axvline(o2, lw=0.5, color='red')
+        yl = ax[j, -1].get_ylim()
+        depth = df.loc[cellid, 'depth']
+        sw = df.loc[cellid, 'sw']
+        ax[j, -1].text(0, yl[1], f"r={modelspec.meta['r_test'][oi, 0]:.3f} depth={depth} sw={sw:.2f}")
+
+    ax[1, 1].set_title(f'PC dimension')
+    for pci in range(pcp):
+        ax[1, pci + 2].set_title(f'Dim {pci + 1}')
+        if pci>0:
+           ax[1, pci + 4].set_title(f'Dim 1 v {pci+1}')
+    plt.tight_layout()
+    return f
+
+def compute_subspace_density(Y, d, bins=16, ex_pct=1):
+    a = Y[:, 0]
+    b = Y[:, 1]
+    c = Y[:, 2]
+
+    keep = np.isfinite(a) & np.isfinite(b) & np.isfinite(c)
+    ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
+    bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
+    cb = np.percentile(c[keep], [ex_pct, 100 - ex_pct])
+    av = np.linspace(ab[0], ab[1], bins + 1)
+    bv = np.linspace(bb[0], bb[1], bins + 1)
+    cv = np.linspace(cb[0], cb[1], bins + 1)
+
+    x, y, z = np.mgrid[ab[0]:ab[1]:(ab[1] - ab[0]) / (bins + 1),
+              bb[0]:bb[1]:(bb[1] - bb[0]) / (bins + 1),
+              cb[0]:cb[1]:(cb[1] - cb[0]) / (bins + 1)]
+
+    mmv = np.zeros((bins, bins, bins))
+    N = np.zeros_like(mmv, dtype=int)
+    for i_, (a1,a2) in enumerate(zip(av[:-1], av[1:])):
+        for j_, (b1,b2) in enumerate(zip(bv[:-1], bv[1:])):
+            for k_, (c1,c2) in enumerate(zip(cv[:-1], cv[1:])):
+                v_ = (a >= a1) & (a < a2) & (b >= b1) & (b < b2) & \
+                     (c >= c1) & (c < c2) & np.isfinite(d)
+                if (v_.sum() > 0):
+                    mmv[k_, j_, i_] = np.nanmean(d[v_])
+                    N[k_, j_, i_] = v_.sum()
+    return mmv, N
+
+def plot_subspace_density(mmv, level=0.5, ax=None, ci=0):
+
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    from skimage import measure
+    from scipy.ndimage import gaussian_filter
+
+    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                      '#f781bf', '#a65628', '#984ea3',
+                      '#999999', '#e41a1c', '#dede00']
+
+    if ax is None:
+        ax = plt.figure().add_subplot(1, 1, 1, projection='3d')
+
+    ds = gaussian_filter(mmv, 0.75)
+    ds = ds / ds.max()
+    ds = np.pad(ds, 1, constant_values=0)
+
+    verts, faces, normals, values = measure.marching_cubes(ds, level)
+
+    # Fancy indexing: `verts[faces]` to generate a collection of triangles
+    mesh = Poly3DCollection(verts[faces])
+    mesh.set(edgecolor=CB_color_cycle[ci], facecolor=CB_color_cycle[ci], linewidth=0.25, alpha=0.4)
+    ax.add_collection3d(mesh)
+    s = ds.shape
+    ax.set_xlim(0, s[0])  # a = 6 (times two for 2nd ellipsoid)
+    ax.set_ylim(0, s[1])  # b = 10
+    ax.set_zlim(0, s[2])  # c = 16
+    ax.view_init(elev=20, azim=-30, roll=0)
+    ax.set_xlabel('Dim 1')
+    ax.set_ylabel('Dim 2')
+    return ax
+
+def plot_dpc_space_3d(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
+                      use_val=False, print_figs=False, level=0.5, use_dpc_all=True, **ctx):
+
+    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                      '#f781bf', '#a65628', '#984ea3',
+                      '#999999', '#e41a1c', '#dede00']
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    from skimage import measure
+    from scipy.ndimage import gaussian_filter
+
+    if cell_list is None:
+        cell_list = [ctx['cellids'][0]]
+    elif type(cell_list) is str:
+        cell_list = [cell_list]
+    if use_val:
+        rec = val
+    else:
+        rec = est
+
+    orange = [i for i,c in enumerate(rec['resp'].chans) if c in cell_list]
+
+    if modelspec2 is not None:
+        lnstrf = LN.LNpop_get_strf(modelspec2)
+    else:
+        lnstrf = None
+    for oi, cellid in zip(orange, cell_list):
+        print(f"{oi} {cellid} dpc all={use_dpc_all}")
+        if use_dpc_all:
+            dpcz = modelspec.meta['dpc_all']
+            dpc_magz = modelspec.meta['dpc_mag_all']
+            dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, 0]
+        else:
+            dpcz = modelspec.meta['dpc']
+            dpc_magz = modelspec.meta['dpc_mag']
+            dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+
+        X = rec['stim'].as_continuous().T
+        Y = project_to_subspace(modelspec, X, out_channels=[oi], use_dpc_all=use_dpc_all)[0].T
+
+        pred = rec['pred'].as_continuous().T[:, oi]
+        r = rec['resp'].as_continuous().T[:, oi]
+
+        mmv, N = compute_subspace_density(Y, pred)
+
+        log.info(f'computing 3d subspace projection, level={level}')
+        Z = mmv.copy()
+        Z[N < 3] = np.nan
+
+        f = plt.figure()
+
+        pcp = 3
+        imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+                  'interpolation': 'none'}
+        i_lookup = [4, 1, 2]
+        for i in range(pcp):
+            d = dpcz[:,:,i].T
+            d = d / np.max(np.abs(d))  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+
+            ax = f.add_subplot(3, 3, i_lookup[i])
+            ax.imshow(np.fliplr(d), **imopts)
+            ax.set_title(f'Dim {i + 1}')
+
+        ax = f.add_subplot(3,3,9)
+        ax.imshow(np.nanmean(Z,axis=0))
+        ax = f.add_subplot(3,3,6)
+        ax.imshow(np.nanmean(Z,axis=1))
+        ax.set_xlabel('Dim 3')
+        ax.set_ylabel('Dim 1')
+        ax = f.add_subplot(3,3,8)
+        ax.imshow(np.nanmean(Z,axis=2))
+        ax.set_xlabel('Dim 2')
+        ax.set_ylabel('Dim 1')
+        ax = f.add_subplot(3,3,5, projection='3d')
+
+        plot_subspace_density(mmv, level=level, ax=ax, ci=0)
+
+        plt.tight_layout()
+    return f
+
+def plot_dpc_all_3d(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
+                      use_val=False, print_figs=False, level=0.5, use_dpc_all=True,
+                    title=None, **ctx):
+
+    if cell_list is None:
+        cell_list = [ctx['cellids'][0]]
+    elif type(cell_list) is str:
+        cell_list = [cell_list]
+    if use_val:
+        rec = val
+    else:
+        rec = est
+    if title is None:
+        title = ",".join(cell_list)
+
+    orange = [i for i,c in enumerate(rec['resp'].chans) if c in cell_list]
+
+    if use_dpc_all:
+        dpcz = modelspec.meta['dpc_all']
+        dpc_magz = modelspec.meta['dpc_mag_all']
+        dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, 0]
+    else:
+        dpcz = modelspec.meta['dpc']
+        dpc_magz = modelspec.meta['dpc_mag']
+        dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+
+    X = rec['stim'].as_continuous().T
+    Y = project_to_subspace(modelspec, X, use_dpc_all=use_dpc_all)[0].T
+
+    f = plt.figure()
+
+    pcp = 3
+    imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
+              'interpolation': 'none'}
+    i_lookup = [3, 1, 2]
+    for i in range(pcp):
+        d = dpcz[:, :, i].T
+        d = d / np.max(np.abs(d))  # / dpc_magz[0, oi] * dpc_magz[i, oi]
+
+        ax = f.add_subplot(2, 2, i_lookup[i])
+        ax.imshow(np.fliplr(d), **imopts)
+        ax.set_title(f'{title} - Dim {i + 1}')
+
+    ax = f.add_subplot(2,2,4, projection='3d')
+
+    for ci, (oi, cellid) in enumerate(zip(orange, cell_list)):
+        print(f"{oi} {cellid} dpc all={use_dpc_all}")
+
+        pred = rec['pred'].as_continuous().T[:, oi]
+        r = rec['resp'].as_continuous().T[:, oi]
+
+        mmv, N = compute_subspace_density(Y, pred)
+
+        log.info(f'computing 3d subspace projection, level={level}')
+        plot_subspace_density(mmv, level=level, ax=ax, ci=ci)
+
+    plt.tight_layout()
+
+    return f
+
 
 def plot_dpc_proj(modelspec=None, cell_list=None, val=None, est=None, modelspec2=None, show_preds=True, plot_stim=True,
                    use_val=False, print_figs=False, T1=50, T2=250, **ctx):

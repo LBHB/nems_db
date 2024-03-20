@@ -423,6 +423,9 @@ def load_model_xform(cellid, batch=271,
         xfspec, ctx = oxf.load_analysis(uri, eval_model=eval_model)
     else:
         xfspec, ctx = xforms.load_analysis(uri, eval_model=eval_model, only=only, verbose=verbose)
+
+    del ctx['IsReload']
+
     return xfspec, ctx
 
 

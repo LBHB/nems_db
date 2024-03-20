@@ -1992,8 +1992,10 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
     if (vmin is None) or (vmax is None):
         zz=np.abs(Z).flatten()
         zz=zz[np.isfinite(zz)]
-        vmin,vmax = np.percentile(zz, [1, 95])
+        vmin,vmax = np.percentile(zz, [5, 95])
+        #vmin = -vmax
         #print(vmin,vmax)
+
     im = ax.imshow(np.flipud(Z), extent=[av[0], av[-1], bv[0], bv[-1]],
                    interpolation='none', aspect='auto', cmap=cmap,
                    vmin=vmin, vmax=vmax)

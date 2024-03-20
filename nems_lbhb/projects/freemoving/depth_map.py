@@ -67,7 +67,7 @@ def plot_depth_map(siteid, batch=343):
     channel_info = d_labeled_depth['channel info']
     um_per_pix = int(column_xy[0][chans[2]][1]) - int(column_xy[0][chans[1]][1])
     c34_pix = landmarks.get('3/4',0)
-    gui_depth = np.array([channel_info[c][2] for c in chans])
+    gui_depth = np.array([channel_info[c][2] for c in chans if c in channel_info.keys()])
     gui_depth_pix = np.arange(len(chans))
 
     if gui_depth.max()==1050:
@@ -186,6 +186,6 @@ if __name__ == '__main__':
     #plot_depth_map(siteid, batch=batch)
 
     siteid, batch="TAR017b", 322
-    siteid, batch="LMD037a", 343
+    siteid, batch="LMD014a", 343
     plot_depth_map(siteid, batch=batch)
 

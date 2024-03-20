@@ -34,7 +34,7 @@ siteids, cellids = db.get_batch_sites(batchid)
 
 #rec = load_training(parmfile, dlc=True)
 
-for siteid in ["PRN075a"]: #siteids[16:17]:
+for siteid in ["SLJ017a"]: #siteids[16:17]:
     parmfile = siteid
     ex = BAPHYExperiment(batch=batchid, cellid=siteid)
     rec = ex.get_recording(resp=True, stim=False, dlc=True)
@@ -45,7 +45,7 @@ for siteid in ["PRN075a"]: #siteids[16:17]:
     epochs.loc[epochs.name.str.startswith("LICK")]
 
     labels = ['TRIAL','EARLY','INCORR','CORRECT']
-    vos=-0.5  # video offset?
+    vos=0 # -0.5  # video offset?
     preos=0.05
     posos=0.05
     trial_starts = dlc.get_epoch_bounds('TRIAL')
