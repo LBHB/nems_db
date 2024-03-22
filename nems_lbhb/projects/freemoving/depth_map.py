@@ -18,7 +18,7 @@ def plot_depth_map(siteid, batch=343):
     rawid = d_raw.loc[0,'id']
     highlight_cellids = []
 
-    df_siteinfo = get_spike_info(siteid=siteid, save_to_db=True)
+    df_siteinfo = get_spike_info(siteid=siteid) # , save_to_db=True)
     #df_siteinfo=df_siteinfo.loc[(df_siteinfo.area=='BS') | (df_siteinfo.area=='A1')]
 
     df_siteinfo=df_siteinfo.reset_index()
@@ -186,6 +186,7 @@ if __name__ == '__main__':
     #plot_depth_map(siteid, batch=batch)
 
     siteid, batch="TAR017b", 322
-    siteid, batch="LMD014a", 343
+    siteid, batch="PRN020a", 343
+    siteid, batch="ARM025a", 319
     plot_depth_map(siteid, batch=batch)
 

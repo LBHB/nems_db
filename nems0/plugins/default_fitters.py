@@ -133,6 +133,24 @@ def lite(fitkey):
     return xfspec
 
 @xform()
+def dfit(fitkey):
+    '''
+    Fit a nems-lite model
+
+    Parameters
+    ----------
+    fitkey : str
+        Expected format: lite.options
+
+    '''
+
+    options = _parse_options(fitkey)
+
+    xfspec = [['nems_lbhb.analysis.dstrf.dpc_load_subspace_fit', options]]
+
+    return xfspec
+
+@xform()
 def basic(fitkey):
     '''
     Perform a fit_basic analysis on a model.

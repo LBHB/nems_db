@@ -1990,7 +1990,7 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
     #cmap='bwr'
     #cmap='viridis'
     if (vmin is None) or (vmax is None):
-        zz=np.abs(Z).flatten()
+        zz=Z.flatten()
         zz=zz[np.isfinite(zz)]
         vmin,vmax = np.percentile(zz, [5, 95])
         #vmin = -vmax

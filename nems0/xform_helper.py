@@ -111,7 +111,7 @@ def generate_xforms_spec(recording_uri=None, modelname=None, meta={},
     # 1) Load the data
     xfspec.extend(_parse_kw_string(load_keywords, xforms_lib))
 
-    if 'lite' in fit_keywords:
+    if ('lite' in fit_keywords) or ('dfit' in fit_keywords):
         # nems-lite fork
         log.info("NEMS lite fork")
         

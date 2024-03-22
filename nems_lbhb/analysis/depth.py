@@ -11,7 +11,7 @@ from nems_lbhb import baphy_io
 
 log = logging.getLogger(__name__)
 
-def get_depth_details(siteids, verbose=True):
+def get_depth_details(siteids, sw_thresh=0.35, verbose=True):
     """
     Get details on depth/area/laminar info for list of sites
     :param siteids:
@@ -25,15 +25,15 @@ def get_depth_details(siteids, verbose=True):
             d = baphy_io.get_spike_info(siteid=siteid)
             df.append(d)
         except:
-            print(f"error loading siteinfo for {siteid}")
+            log.info(f"error loading siteinfo for {siteid}")
     df = pd.concat(df)
     df = df[['siteid', 'probechannel', 'layer', 'depth', 'area', 'iso', 'sw', 'mwf']]
 
     if verbose:
         df.plot.hist(y='sw',bins=40, figsize=(3,2))
-        plt.axvline(0.35,color='r')
+        plt.axvline(sw_thresh,color='r')
 
-    df['narrow'] = df['sw'] < 0.35
+    df['narrow'] = df['sw'] < sw_thresh
     df.loc[df['layer'] == '5', 'layer'] = '56'
     df.loc[df['layer'] == '3', 'layer'] = '13'
     df.loc[df['layer'] == 'BS', 'layer'] = '13'
