@@ -219,7 +219,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
 
 def subspace_model_fit(est, val, modelspec,
               pc_count=5, dpc_var=0.8, out_channels=None, use_dpc_all=False, single_fit=True,
-              figures=None, IsReload=False, return_all=False, units_per_layer=15, **ctx):
+              figures=None, IsReload=False, return_all=False, units_per_layer=12, **ctx):
     """
     :param est:
     :param val:
