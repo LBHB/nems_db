@@ -121,7 +121,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
 
     # hack, zero-out top channel
     log.info('Removing max spectral channel -- bias issue?')
-    dstrf[:, :, :, -1] = 0
+    dstrf[:, :, -1, :] = 0
 
     s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
     dstrf /= s
@@ -435,7 +435,7 @@ def dpc_load_subspace_fit(modelspec=None, meta=None,
 ### dPC plots ###
 
 
-def project_to_subspace(modelspec=None, dpc0=None, X=None, out_channels=None, rec=None, est=None, val=None,
+def project_to_subspace(modelspec=None, X=None, dpc0=None, out_channels=None, rec=None, est=None, val=None,
                         input_name='stim', use_dpc_all=False, ss_name='subspace', verbose=True, **ctx):
 
     cellids = modelspec.meta['cellids']
@@ -579,7 +579,7 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
         #Y = project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
         #                    input_name='stim', ss_name='subspace', verbose=True, **ctx)
         X = rec['stim'].as_continuous().T
-        Y = project_to_subspace(modelspec, X, out_channels=[oi])[0].T
+        Y = project_to_subspace(modelspec=modelspec, X=X, out_channels=[oi])[0].T
 
         dpcz = modelspec.meta['dpc']
         pc_count = dpcz.shape[1]
@@ -914,7 +914,7 @@ def plot_dpc_space_3d(modelspec=None, cell_list=None, val=None, est=None, models
             dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
 
         X = rec['stim'].as_continuous().T
-        Y = project_to_subspace(modelspec, X, out_channels=[oi], use_dpc_all=use_dpc_all)[0].T
+        Y = project_to_subspace(modelspec=modelspec, X=X, out_channels=[oi], use_dpc_all=use_dpc_all)[0].T
 
         pred = rec['pred'].as_continuous().T[:, oi]
         r = rec['resp'].as_continuous().T[:, oi]
