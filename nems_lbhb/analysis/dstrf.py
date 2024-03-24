@@ -120,8 +120,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
     del dstrfs
 
     # hack, zero-out top channel
-    log.info('Removing max spectral channel -- bias issue?')
-    dstrf[:, :, -1, :] = 0
+    #log.info(f'Removing max spectral channel (axis 3, index -1 of {dstrf.shape}) -- bias issue?')
+    #dstrf[:, :, :, -1, :] = 0
 
     s = np.std(dstrf, axis=(2, 3, 4), keepdims=True)
     dstrf /= s
