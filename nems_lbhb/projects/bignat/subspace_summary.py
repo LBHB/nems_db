@@ -32,6 +32,7 @@ from nems_lbhb.plots import histscatter2d, histmean2d, scatter_comp
 from nems_lbhb.analysis import dstrf, depth
 from nems_lbhb import baphy_io
 from nems_lbhb.projects.bignat import clustering_helpers
+from nems_lbhb.projects.bignat.subspace_tools import dpc_dist, subspace_rsa, get_sorted_class
 
 log = logging.getLogger(__name__)
 
@@ -40,8 +41,9 @@ CB_color_cycle = nplt.CB_color_cycle
 
 # set up paths, batches, modelnames
 
-batch=322
 batch=343
+batch=323
+batch=322
 
 siteids, cellids = db.get_batch_sites(batch)
 save_figs=False
@@ -218,7 +220,8 @@ elif task == 'localsim':
     predxc_bounds = [-1, 0.1, 0.25, 0.5, 1]
 
     r_test_thr = 0.15
-    dpc_var = 0.75
+    dpc_var = 0.75  # for pairwise comparison between units of different cell type
+    dpc_var_full_sim = 0.75  # for comparing dpc space for each unit to avg for site
     verbose = False
     mdict = {}
     pc = 0
@@ -227,12 +230,15 @@ elif task == 'localsim':
     # groupby='rate'
     # groupby='pred'
     # ctypes = ['VL','L','H','VH']
-
     groupby = 'spike'
     ctypes = ['NS', 'RS', 'DN', 'DR']
 
     dtypes = ['d' + t for t in ctypes]
     df_site_sim = pd.DataFrame(columns=['area', 'siteid1', 'siteid2', 'site_rel'] + ctypes + dtypes)
+    df_sim = df.copy()
+    pc_count=15
+    newcols = [f"p{i}" for i in range(pc_count)]
+    df_sim[newcols] = np.nan
 
     full_sim_dict = {}
     for area in ['A1', 'PEG']:
@@ -273,19 +279,24 @@ elif task == 'localsim':
             dall = dpc_mag_all[:, 0] / dpc_mag_all[:, 0].sum()
             dsum = np.cumsum(dmag, axis=0)
             cellcount = dsum.shape[1]
-            dm = np.argmax(dsum > dpc_var, axis=0)
+            dm = np.argmax(dsum > dpc_var_full_sim, axis=0) + 1
 
             full_sim = np.zeros((cell_count1, pc_count))
             for pci in range(pc_count):
                 for i in range(cell_count1):
                     ref_pc = dpc_all[0, [pci]].flatten()
-                    test_pc = dpc[i, :(dm[i] + 1)]
-                    x = np.array([np.corrcoef(ref_pc, t.flatten())[0, 1] for t in test_pc])
-                    full_sim[i, pci] = ((x ** 2).sum())
+                    test_pc = dpc[i, :dm[i]]
+                    full_sim[i, pci] = dpc_dist(dpc[i], dpc_all[0, [pci]], p1count=dm[i], p2count=1) / dm[i]
+                    # x = np.array([np.corrcoef(ref_pc, t.flatten())[0,1] for t in test_pc])
+                    # full_sim[i,pci]=((x**2).sum())
             lmean = np.zeros((4, pc_count)) * np.nan
             for i in np.unique(class1):
                 lmean[i] = full_sim[class1 == i].mean(axis=0)
                 lmean[i] /= lmean[i].sum()
+
+            for i, c in enumerate(goodcellids1):
+                df_sim.loc[c, newcols] = full_sim[i]
+
             full_sim_dict[area].append(lmean)
 
             # compare with other sites
@@ -305,8 +316,8 @@ elif task == 'localsim':
 
                 goodcellids2 = [c for o, c in enumerate(modelspec2.meta['cellids']) if
                                 (modelspec2.meta['r_test'][o, 0] > r_test_thr)]
-                gg2 = np.array(
-                    [o for o, c in enumerate(modelspec2.meta['cellids']) if (modelspec2.meta['r_test'][o, 0] > r_test_thr)])
+                gg2 = np.array([o for o, c in enumerate(modelspec2.meta['cellids']) if
+                                (modelspec2.meta['r_test'][o, 0] > r_test_thr)])
                 cell_count2 = len(gg2)
 
                 # sorted_class2 = df.loc[goodcellids2,'sorted_class'].values
@@ -329,12 +340,14 @@ elif task == 'localsim':
                         dpc_mag1 = modelspec1.meta['dpc_mag'][:, gg1] ** 2
                         dpc_mag1 = dpc_mag1 / dpc_mag1.sum(axis=0, keepdims=True)
                         dsum1 = np.cumsum(dpc_mag1, axis=0)
-                        pcpc1 = np.array([int(np.min(np.where(dsum1[:, i] > dpc_var)[0]) + 1) for i in range(cell_count1)])
+                        pcpc1 = np.array(
+                            [int(np.min(np.where(dsum1[:, i] > dpc_var)[0]) + 1) for i in range(cell_count1)])
 
                         dpc_mag2 = modelspec2.meta['dpc_mag'][:, gg2] ** 2
                         dpc_mag2 = dpc_mag2 / dpc_mag2.sum(axis=0, keepdims=True)
                         dsum2 = np.cumsum(dpc_mag2, axis=0)
-                        pcpc2 = np.array([int(np.min(np.where(dsum2[:, i] > dpc_var)[0]) + 1) for i in range(cell_count2)])
+                        pcpc2 = np.array(
+                            [int(np.min(np.where(dsum2[:, i] > dpc_var)[0]) + 1) for i in range(cell_count2)])
                     else:
                         pcpc1 = np.zeros_like(gg1) + use_pcs
                         pcpc2 = np.zeros_like(gg2) + use_pcs
@@ -342,7 +355,8 @@ elif task == 'localsim':
                     cc = np.zeros((cell_count1, cell_count2))
                     for g1 in range(cell_count1):
                         for g2 in range(cell_count2):
-                            cc[g1, g2] = dpc_dist(dpc1[g1], dpc2[g2], p1count=pcpc1[g1], p2count=pcpc2[g2], metric='dcc')
+                            cc[g1, g2] = dpc_dist(dpc1[g1], dpc2[g2], p1count=pcpc1[g1], p2count=pcpc2[g2],
+                                                  metric='dcc')
 
                     cccat = np.zeros((4, 4)) * np.nan
                     pccat = np.zeros(4) * np.nan
@@ -389,6 +403,50 @@ elif task == 'localsim':
                         ax[1].plot(ctypes, np.diag(cccat))
                         plt.tight_layout()
 
+    # mean dpc similarity as a function of depth, for each celltype
+    df_sim = df_sim.dropna()
+    df_sim = df_sim.loc[df_sim['depth']!='NA']
+
+    df_sim['d100'] = np.round(df_sim['depth'].astype(float) / 100).astype(int)
+    r_thr_new = 0.15
+    maxd = 800
+    pcshow = 8
+    f, axs = plt.subplots(2, 4, figsize=(8, 4), sharex='col')
+
+    for ax, area in zip(axs, ['A1', 'PEG']):
+        df_e = df_sim.loc[
+            (df_sim['narrow'] == False) & (df_sim['d100'] < maxd / 100) & (df_sim[shortnames[0]] >= r_thr_new) & (
+                        df_sim['area'] == area)]
+        c_e = df_e.groupby('d100')[newcols].count()
+        df_e = df_e.groupby('d100')[newcols].mean()
+
+        df_i = df_sim.loc[
+            (df_sim['narrow'] == True) & (df_sim['d100'] < maxd / 100) & (df_sim[shortnames[0]] >= r_thr_new) & (
+                        df_sim['area'] == area)]
+        c_i = df_i.groupby('d100')[newcols].count()
+        df_i = df_i.groupby('d100')[newcols].mean()
+        if len(df_i)>0:
+            mm = df_i.iloc[:, :pcshow].values.max()
+            ax[0].imshow(df_i.iloc[:, :pcshow], vmin=0.0, vmax=mm, extent=[0.5, pcshow + 0.5, maxd + 50, -850],
+                         cmap='gray_r')
+            ax[0].set_ylabel('microns below L34 bdry')
+            ax[1].imshow(df_e.iloc[:, :pcshow], vmin=0.0, vmax=mm, extent=[0.5, pcshow + 0.5, maxd + 50, -850],
+                         cmap='gray_r')
+            ax[1].set_yticklabels([])
+            ax[2].plot(c_i.index, c_i.iloc[:, 0], label=f"Ni = {c_i.iloc[:, 0].sum()}")
+            ax[2].plot(c_e.index, c_e.iloc[:, 0], label=f"Ne = {c_e.iloc[:, 0].sum()}")
+            ax[2].legend()
+            pcols = newcols[:pcshow]
+            ctm = df_sim[pcols].mean(axis=0)
+            ax[3].plot(df_i.loc[df_i.index < 0, pcols].mean(axis=0) - ctm, label='NS')
+            ax[3].plot(df_e.loc[df_e.index < 0, pcols].mean(axis=0) - ctm, label='RS')
+            ax[3].plot(df_i.loc[df_i.index > 0, pcols].mean(axis=0) - ctm, label='ND')
+            ax[3].plot(df_e.loc[df_e.index > 0, pcols].mean(axis=0) - ctm, label='RD')
+            ax[3].legend()
+    f.suptitle(f"{shortnames[0]} dpc_var={dpc_var_full_sim} r_test_thr={r_thr_new} groupby={groupby}");
+
+    # mean sim without depth. Redundant?
+    """
     f,ax=plt.subplots(1,2, figsize=(6,2), sharex=True, sharey=True)
 
     full_sim = np.nanmean(np.stack(full_sim_dict['A1'], axis=2),axis=2).T
@@ -401,6 +459,7 @@ elif task == 'localsim':
     ax[1].set_title(f'PEG - {groupby}')
     ax[1].set_xlabel('Site dPC dimension')
     ax[1].legend()
+    """
 
     f,ax=plt.subplots(4,2,figsize=(4,3), sharex=True)
     bins=np.linspace(0,1,16)
@@ -418,24 +477,25 @@ elif task == 'localsim':
 
     f, ax = plt.subplots(2, 3, figsize=(6, 5))
     for a, area in enumerate(['A1', 'PEG']):
-        for i, rel in enumerate(['same', 'diff']):
-            d_cc = df_site_sim.loc[(df_site_sim['area'] == area) & (df_site_sim['site_rel'] == rel), ctypes]
+        if (df_site_sim['area'] == area).sum()>0:
+            for i, rel in enumerate(['same', 'diff']):
+                d_cc = df_site_sim.loc[(df_site_sim['area'] == area) & (df_site_sim['site_rel'] == rel), ctypes]
 
-            msum = d_cc.median()
-            esum = d_cc.sem()
+                msum = d_cc.median()
+                esum = d_cc.sem()
 
-            # sns.stripplot(d_cc, s=2, ax=ax[a,i])
-            ax[a, i].plot(ctypes, d_cc.T, lw=0.5, color='gray')
-            ax[a, i].errorbar(ctypes, msum, esum, color='k')
-            ax[a, i].set_title(f"{area}, {rel} site")
-            ax[a, i].set_ylim([0, 1])
+                # sns.stripplot(d_cc, s=2, ax=ax[a,i])
+                ax[a, i].plot(ctypes, d_cc.T, lw=0.5, color='gray')
+                ax[a, i].errorbar(ctypes, msum, esum, color='k')
+                ax[a, i].set_title(f"{area}, {rel} site")
+                ax[a, i].set_ylim([0, 1])
 
-        d_n = df_site_sim.loc[(df_site_sim['area'] == area) & (df_site_sim['site_rel'] == 'same'), dtypes]
-        msum = d_n.mean()
-        esum = d_n.sem()
-        ax[a, 2].errorbar(ctypes, msum, esum, color='k')
-        ax[a, 2].set_title("mean dimcount")
-        ax[a, 2].set_ylim([0, 4])
+            d_n = df_site_sim.loc[(df_site_sim['area'] == area) & (df_site_sim['site_rel'] == 'same'), dtypes]
+            msum = d_n.mean()
+            esum = d_n.sem()
+            ax[a, 2].errorbar(ctypes, msum, esum, color='k')
+            ax[a, 2].set_title("mean dimcount")
+            ax[a, 2].set_ylim([0, 4])
     f.suptitle(f"{shortnames[0]} dpc_var={dpc_var} r_test_thr={r_test_thr} groupby={groupby}")
     plt.tight_layout()
 
