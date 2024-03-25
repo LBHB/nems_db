@@ -664,7 +664,8 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
             #        modelspec.layers[i].freeze_parameters()
             if rand_count > 1:
                 log.info(f'Initializing {rand_count} model instances based on priors')
-                modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
+                #modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
+                modelspec_copies = modelspec.sample_from_priors(rand_count)
             elif skip_init:
                 log.info('Using inherited initial conditions for model parameters')
                 modelspec_copies = [modelspec.copy()]
