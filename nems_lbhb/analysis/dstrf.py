@@ -71,7 +71,7 @@ def shuffle_along_axis(a, axis):
 
 
 def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=None,
-              D=15, timestep=3, pc_count=10, max_frames=4000,
+              D=15, timestep=3, pc_count=10, max_frames=3000,
               out_channels=None, noise_floor_reps=10,
               figures=None, fit_ss_model=False, ss_pccount=5, ss_dpc_var=0.95,
               first_lin=True,
@@ -105,7 +105,8 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
     dstrfs = []
     if len(t_indexes)>max_frames:
         log.info(f'Reducing t_indexes length to {max_frames}')
-        t_indexes = t_indexes[:max_frames]
+        t_indexes = t_indexes[np.linspace(0,len(t_indexes)-1,max_frames).astype(int)]
+        #t_indexes = t_indexes[:max_frames]
 
     for mi, m in enumerate(modelspec_list):
         log.info(f"Computing dSTRF {mi+1}/{len(modelspec_list)} at {len(t_indexes)} points (timestep={timestep})")
