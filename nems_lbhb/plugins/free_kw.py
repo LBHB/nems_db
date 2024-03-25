@@ -1,5 +1,4 @@
 import logging
-import logging
 """
 from os.path import basename, join
 
