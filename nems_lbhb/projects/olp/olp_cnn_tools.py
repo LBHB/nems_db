@@ -34,6 +34,8 @@ from nems0.xform_helper import _xform_exists, load_model_xform, fit_model_xform
 from nems0.utils import smooth
 
 from nems_lbhb import baphy_io
+from nems_lbhb.analysis import dstrf
+from nems_lbhb.plots import histscatter2d, histmean2d, scatter_comp
 
 from nems_lbhb.exacloud.queue_exacloud_job import enqueue_exacloud_models
 
@@ -220,8 +222,8 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
     dfsite = df.loc[df['siteid']==siteid]
     print(dfsite.shape, dfsite['area'].unique(), dfsite.columns)
     
-    xf,ctx=load_model_xform(cellid, batch, modelnames[0])
-    xf2,ctx2=load_model_xform(cellid, batch, modelnames[1])
+    xf,ctx=load_model_xform(cellid, batch, modelnames[0], verbose=verbose)
+    xf2,ctx2=load_model_xform(cellid, batch, modelnames[1], verbose=verbose)
 
     if verbose:
         modelspec=ctx['modelspec']
@@ -566,6 +568,7 @@ def olp_pred_example(cell_epoch_df, rec, rec2, cellid, estim):
 
     ax[1, 2].legend(frameon=False)
     plt.tight_layout()
+    return f
 
 def load_all_sites(batch=341, modelnames=None, area="A1", show_plots=False):
     """
@@ -672,3 +675,123 @@ if __name__ == '__main__':
 
     f=pred_comp(batch, modelnames)
     #f.savefig(f'/home/svd/Documents/onedrive/projects/olp/batch{batch}_pred_comp.pdf')
+
+
+#############################################
+### dSTRF functions
+def triplet_dpc_subspace(cell_epoch_df, dim1=0, dim2=1, show_pred=True,
+                         modelspec=None, est=None, val=None, cellid=None,
+                         triplet_idx=None, **context):
+
+    fgbgepochs = cell_epoch_df['BG + FG'].unique().tolist()
+    if triplet_idx is None:
+        triplet_idx = np.arange(len(fgbgepochs))
+    else:
+        fgbgepochs = [fgbgepochs[i] for i in triplet_idx]
+
+    cid = [i for i, c in enumerate(modelspec.meta['cellids']) if c == cellid][0]
+    log.info(f"Cell {cellid} index is {cid}")
+
+    if show_pred:
+        r = est['pred'].as_continuous()[cid]
+    else:
+        r = est['resp'].as_continuous()[cid]
+
+    rec2 = dstrf.project_to_subspace(modelspec, est=est, val=None, rec=None, out_channels=[cid])['est']
+    resp = rec2['resp']
+    pred = rec2['pred']
+    ss = rec2['subspace']
+
+    f, ax = plt.subplots(len(fgbgepochs), 5, figsize=(10, 2 * len(fgbgepochs)), sharex='col', sharey='col')
+    for jj, estim in enumerate(fgbgepochs):
+        ii = cell_epoch_df.loc[(cell_epoch_df['cellid'] == cellid) &
+                               (cell_epoch_df['BG + FG'] == estim)].index.values
+
+        efg = cell_epoch_df.loc[ii, 'FG'].values[0]
+        ebg = cell_epoch_df.loc[ii, 'BG'].values[0]
+        efgbg = cell_epoch_df.loc[ii, 'BG + FG'].values[0]
+
+        # weights,residual_sum,rank,singular_values = np.linalg.lstsq(np.stack([rfg, rbg, np.ones_like(rfg)], axis=1), rfgbg,rcond=None)
+        # print(np.round(weights,2))
+        rfg = resp.extract_channels([cellid]).extract_epoch(efg).mean(axis=0)[0, :]
+        rbg = resp.extract_channels([cellid]).extract_epoch(ebg).mean(axis=0)[0, :]
+        rfgbg = resp.extract_channels([cellid]).extract_epoch(efgbg).mean(axis=0)[0, :]
+
+        pfg = pred.extract_channels([cellid]).extract_epoch(efg).mean(axis=0)[0, :]
+        pbg = pred.extract_channels([cellid]).extract_epoch(ebg).mean(axis=0)[0, :]
+        pfgbg = pred.extract_channels([cellid]).extract_epoch(efgbg).mean(axis=0)[0, :]
+
+        sfg = ss.extract_epoch(efg).mean(axis=0)[0]
+        sbg = ss.extract_epoch(ebg).mean(axis=0)[0]
+        sfgbg = ss.extract_epoch(efgbg).mean(axis=0)[0]
+
+        fs = resp.fs
+        sp = int(fs * 0.5)
+        spont = (rfg[:sp].mean() + rbg[:sp].mean() + rfgbg[:sp].mean()) / 3
+        weights2, predxc = fb_weights(rfg, rbg, rfgbg, sp)
+
+        Y = ss.as_continuous()[0]
+
+        sig = [sfg, sbg, sfgbg]
+        step = int(fs / 10)
+
+        rsigs = [rfg, rbg, rfgbg]
+        psigs = [pfg, pbg, pfgbg]
+        pcols = ['g', 'b', 'k']
+        Z = None
+        for i in range(3):
+            ax[jj, 0].plot(psigs[i], lw=0.5, color=pcols[i])
+            ax[jj, 1].plot(rsigs[i], lw=0.5, color=pcols[i])
+            ac, bc, Z, N = histmean2d(Y[dim1, :], Y[dim2, :], r, bins=20, ax=ax[jj, i + 2], spont=spont, ex_pct=0.025,
+                                      Z=Z)
+            ax[jj, i + 2].plot(sig[i][dim1], sig[i][dim2], color='w', lw=0.5)
+            ax[jj, i + 2].plot(sig[i][dim1, (sp + step + 3)::step], sig[i][dim2, (sp + step + 4)::step], '.', color='r')
+            ax[jj, i + 2].plot(sig[i][dim1, (sp + 3)], sig[i][dim2, (sp + 4)], '.', color='k')
+            ax[jj, i + 2].set_yticklabels([])
+        ax[jj, 2].set_title(f'{estim} wfg={weights2[0]:.2f} wbg={weights2[1]:.2f}')
+
+        rwfg = cell_epoch_df.loc[ii, 'rwfg'].values[0]
+        rwbg = cell_epoch_df.loc[ii, 'rwbg'].values[0]
+        p1wfg = cell_epoch_df.loc[ii, 'p1wfg'].values[0]
+        p1wbg = cell_epoch_df.loc[ii, 'p1wbg'].values[0]
+
+        ax[jj, 0].text(ax[0, 0].get_xlim()[0], ax[0, 0].get_ylim()[1], f'pred({p1wfg:0.2f},{p1wbg:0.2f})', va='top')
+        ax[jj, 1].text(ax[0, 1].get_xlim()[0], ax[0, 1].get_ylim()[1], f'resp({rwfg:0.2f},{rwbg:0.2f})', va='top')
+        ax[jj, 2].text(ax[0, 2].get_xlim()[0], ax[0, 2].get_ylim()[1], 'fg', va='top')
+        ax[jj, 3].text(ax[0, 3].get_xlim()[0], ax[0, 3].get_ylim()[1], 'bg', va='top')
+        ax[jj, 4].text(ax[0, 4].get_xlim()[0], ax[0, 4].get_ylim()[1], 'fgbg', va='top')
+    ax[0, 0].set_title(cellid)
+    return f
+
+def triplet_stimuli(cell_epoch_df, rec=None, triplet_idx=None, **context):
+
+    fgbgepochs = cell_epoch_df['BG + FG'].unique().tolist()
+    if triplet_idx is None:
+        triplet_idx = np.arange(len(fgbgepochs))
+    else:
+        fgbgepochs = [fgbgepochs[i] for i in triplet_idx]
+
+    stim = rec['stim']
+
+    f, ax = plt.subplots(len(fgbgepochs), 3, figsize=(8, 1 * len(fgbgepochs)),
+                         sharex=True, sharey=True)
+    for jj, estim in enumerate(fgbgepochs):
+        ii = cell_epoch_df.loc[(cell_epoch_df['BG + FG'] == estim)].index.values[0]
+
+        efg = cell_epoch_df.loc[ii, 'FG']
+        ebg = cell_epoch_df.loc[ii, 'BG']
+        efgbg = cell_epoch_df.loc[ii, 'BG + FG']
+
+        sfg = stim.extract_epoch(efg).mean(axis=0)
+        sbg = stim.extract_epoch(ebg).mean(axis=0)
+        sfgbg = stim.extract_epoch(efgbg).mean(axis=0)
+
+        imopts = {'origin': 'lower', 'interpolation': 'none', 'cmap': 'gray_r', 'aspect': 'auto'}
+        ax[jj, 0].imshow(sfg, **imopts)
+        ax[jj, 1].imshow(sbg, **imopts)
+        ax[jj, 2].imshow(sfgbg, **imopts)
+        ax[jj, 0].set_title(efg.replace("STIM_",""))
+        ax[jj, 1].set_title(ebg.replace("STIM_",""))
+
+    plt.tight_layout()
+    return f

@@ -7,6 +7,7 @@ Created on Wed Apr 25 17:05:34 2018
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import copy
 import pandas as pd
 import scipy.ndimage.filters as sf
@@ -29,6 +30,9 @@ from nems0.gui.decorators import scrollable
 from nems_lbhb import baphy_experiment
 from nems_lbhb import baphy_io
 
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
 font_size=8
 params = {'legend.fontsize': font_size-2,
           'figure.figsize': (8, 6),
@@ -36,11 +40,13 @@ params = {'legend.fontsize': font_size-2,
           'axes.titlesize': font_size,
           'axes.spines.right': False,
           'axes.spines.top': False,
+          'axes.prop_cycle': mpl.cycler(color=CB_color_cycle),
           'xtick.labelsize': font_size,
           'ytick.labelsize': font_size,
           'pdf.fonttype': 42,
           'ps.fonttype': 42}
 plt.rcParams.update(params)
+
 
 
 def get_model_preds(cellid, batch, modelname):
@@ -50,7 +56,6 @@ def get_model_preds(cellid, batch, modelname):
     #ctx, l = oxf.evaluate(xf, ctx, stop=-1)
 
     return xf, ctx
-
 
 
 
@@ -1939,7 +1944,7 @@ def ftc_heatmap(siteid="SITE", mua=False, probe=None, fs=100,
 
 
 def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
-                  vmin=None, vmax=None, zerolines=True, minN=1, Z=None):
+               cmap='viridis', vmin=None, vmax=None, zerolines=True, minN=1, Z=None):
     keep = np.isfinite(a) & np.isfinite(b)
     ab = np.percentile(a[keep], [ex_pct, 100 - ex_pct])
     bb = np.percentile(b[keep], [ex_pct, 100 - ex_pct])
@@ -1987,13 +1992,15 @@ def histmean2d(a,b,d, bins=10, ax=None, spont=None, ex_pct=0.05,
     if ax is None:
         f,ax = plt.subplots()
 
-    cmap='bwr'
-    cmap='viridis'
+    #cmap='bwr'
+    #cmap='viridis'
     if (vmin is None) or (vmax is None):
-        zz=np.abs(Z).flatten()
+        zz=Z.flatten()
         zz=zz[np.isfinite(zz)]
-        vmin,vmax = np.percentile(zz, [1, 95])
+        vmin,vmax = np.percentile(zz, [5, 95])
+        #vmin = -vmax
         #print(vmin,vmax)
+
     im = ax.imshow(np.flipud(Z), extent=[av[0], av[-1], bv[0], bv[-1]],
                    interpolation='none', aspect='auto', cmap=cmap,
                    vmin=vmin, vmax=vmax)

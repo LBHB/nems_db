@@ -32,19 +32,24 @@ use_saved_model = True
 batch = 343
 siteids, cellids = db.get_batch_sites(batch)
 
-load_kw = 'gtgram.fs100.ch18-ld-norm.l1-sev'
-fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk5.rb3-lite.tf.lr1e4.t5e4-dstrf.d20.t47.p5.ss'
+first_lin=True
+load_kw = 'gtgram.fs100.ch32-ld-norm.l1-sev'
+if first_lin:
+    fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk5.rb3-lite.tf.lr1e4.t5e4-dstrf.d20.t47.p10.ss'
+    fit_kw_lin = 'lite.tf.init.lr1e3.t3.es20.jk5.rb3-lite.tf.lr1e4.t5e4-dstrf.d20.t47.p5.ss'
+else:
+    fit_kw = 'lite.tf.init.lr1e3.t3.es20.jk5.rb3-lite.tf.lr1e4.t5e4-dstrf.d20.t47.p5.ss.nl'
 modelnames = [
-    f'{load_kw}_wc.18x1x70.g-fir.15x1x70-relu.70.f-wc.70x1x80.l2:4-fir.10x1x80-relu.80.f-wc.80x100.l2:4-relu.100.s-wc.100xR.l2:4-dexp.R_{fit_kw}',
-    f'{load_kw}_wc.18x1x120.g-fir.25x1x120-wc.120xR.l2:4-dexp.R_{fit_kw}',
+    f'{load_kw}_wc.Nx1x70.g-fir.15x1x70-relu.70.o.s-wc.70x1x80.l2:4-fir.10x1x80-relu.80.o.s-wc.80x100.l2:4-relu.100.o.s-wc.100xR.l2:4-dexp.R_{fit_kw}',
+    f'{load_kw}_wc.Nx1x120.g-fir.25x1x120-wc.120xR.l2:4-dexp.R_{fit_kw_lin}',
 ]
+shortnames = ['CNN1d32', 'LN32']
 
-shortnames = ['CNN 1d','LN']
 modelname = modelnames[0]
 
 siteid = "PRN007a"
 siteid = "PRN018a"
-siteid = "CLT028c"
+siteid = "CLT033c"
 cellid = siteid
 
 dpred = db.batch_comp(batch=batch, modelnames=modelnames, shortnames=shortnames)
@@ -199,6 +204,54 @@ for cid,cellid in enumerate(ctx['modelspec'].meta['cellids']):
     print(f"{cid:2d} {cellid} {ctx['modelspec'].meta['r_test'][cid,0]:.3f}")
 print(f"MN ------------- {ctx['modelspec'].meta['r_test'].mean():.3f}")
 
+raise ValueError('stopping')
+
+import importlib
+from nems_lbhb.analysis import dstrf
+from nems.tools import dstrf as dtools
+importlib.reload(dstrf)
+
+ctx['IsReload']=False
+
+R=len(ctx['modelspec'].meta['cellids'])
+out_channels = np.arange(R)
+
+sspredxc=np.zeros((R,5))
+for pc_count in range(1,6):
+    results2 = dstrf.subspace_model_fit(pc_count=pc_count*2, use_dpc_all=True, **ctx)
+    sspredxc[:,pc_count-1]=results2['modelspec'].meta['sspredxc']
+
+plt.figure()
+plt.errorbar(np.arange(2,12,2),sspredxc.mean(axis=0),sspredxc.std(axis=0)/(sspredxc.shape[0]**0.5))
+plt.axhline(results['modelspec'].meta['sspredxc'].mean(), ls='--', color='r')
+
+results = dstrf.subspace_model_fit(pc_count=5, use_dpc_all=False, out_channels=[0,1], **ctx)
+sspredxc5 = results['modelspec'].meta['sspredxc'].copy()
+results = dstrf.subspace_model_fit(pc_count=8, use_dpc_all=False, out_channels=[0,1], **ctx)
+sspredxc8 = results['modelspec'].meta['sspredxc'].copy()
+
+
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.8, out_channels=out_channels, **ctx)
+sspredxc80 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count80 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.85, out_channels=out_channels, **ctx)
+sspredxc85 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count85 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.9, out_channels=out_channels, **ctx)
+sspredxc90 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count90 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.95, out_channels=out_channels, **ctx)
+sspredxc95 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count95 = results3['modelspec'].meta['sspc_count'].copy()
+results3 = dstrf.subspace_model_fit(pc_count=None, dpc_var=0.98, out_channels=out_channels, **ctx)
+sspredxc98 = results3['modelspec'].meta['sspredxc'].copy()
+sspc_count98 = results3['modelspec'].meta['sspc_count'].copy()
+
+ss2 = np.stack([sspredxc80,sspredxc85,sspredxc90,sspredxc95,sspredxc98])
+plt.figure()
+plt.plot(ss2.T)
+plt.legend(['80','85','90','95','98'])
+ss2.mean(axis=1)
 
 X_val, Y_val = xforms.lite_input_dict(ctx['modelspec'], ctx['val'], epoch_name="")
 X_est, Y_est = xforms.lite_input_dict(ctx['modelspec'], ctx['est'], epoch_name="")
@@ -209,10 +262,6 @@ dpc_magz = modelspec.meta['dpc_mag']
 out_channels = np.arange(Y_est.shape[1])
 pc_count = dpcz.shape[1]
 
-import importlib
-from nems_lbhb.analysis import dstrf
-importlib.reload(dstrf)
-from nems.tools import dstrf as dtools
 
 cell_list=ctx['modelspec'].meta['cellids'][:3]
 dstrf.plot_dpc_space(cell_list=cell_list, **ctx)

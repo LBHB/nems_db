@@ -126,6 +126,10 @@ def dstrf(loadkey):
             parms['pc_count'] = int(op[1:])
         elif op.startswith('nl'):
             parms['first_lin'] = False
+        elif op.startswith('ss95'):
+            parms['fit_ss_model']=True
+            parms['ss_pccount']=None
+            parms['ss_dpc_var']=0.95
         elif op.startswith('ss'):
             parms['fit_ss_model']=True
 

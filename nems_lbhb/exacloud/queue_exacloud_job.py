@@ -28,7 +28,7 @@ def db_session():
 def enqueue_exacloud_script(
         script_path, parameter_string, user,
         executable_path='/home/users/davids/miniconda3/envs/nems/bin/python', linux_user="davids", priority=1,
-        time_limit=14, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
+        time_limit=16, reserve_gb=0, useGPU=False, high_mem=False, exclude=None, force_rerun=False):
     """Enqueues models similarly to nems0.db.enqueue_models, except on the Exacloud cluster at ACC.
 
     :param script_path: Script to run.

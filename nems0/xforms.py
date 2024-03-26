@@ -66,7 +66,7 @@ def defxf(keyword, xformspec):
 
 
 
-def evaluate_step(xfa, context={}):
+def evaluate_step(xfa, context={}, verbose=True):
     """
     Take one step in evaluation of xforms sequence.
     :param xfa: list of 2 or 4 elements specifying function to be evaluated on this step
@@ -100,7 +100,8 @@ def evaluate_step(xfa, context={}):
     fn = lookup_fn_at(xf)
 
     # Run the xf
-    log.info('Evaluating: {}'.format(xf))
+    if verbose:
+        log.info('Evaluating: {}'.format(xf))
 
     # Check for collisions; more to avoid confusion than for correctness:
     # (except for init_context, which can update)
@@ -110,12 +111,18 @@ def evaluate_step(xfa, context={}):
     #            m = 'xf arg {} overlaps with context: {}'.format(k, xf)
     #            raise ValueError(m)
     for k in xfargs:
-        if k in context_in:
+        if (k in context_in) and verbose:
             log.info('xf argument %s overlaps with existing context key: %s', k, xf)
 
     # Merge args into context, and make a deepcopy so that mutation
     # inside xforms will not be propagated unless the arg is returned.
     args = copy.deepcopy(context_in)
+    args['verbose'] = verbose
+    #args = {}
+    #for k,v in context_in.items():
+    #    log.info(f"deep copying {k}")
+    #    args[k] = copy.deepcopy(v)
+
     args.update(**xfargs)
     #merged_args = {**xfargs, **context_in}
     #args = copy.deepcopy(merged_args)
@@ -139,7 +146,7 @@ def evaluate_step(xfa, context={}):
     return context_out
 
 
-def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True):
+def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True, verbose=True):
     '''
     Similar to modelspec.evaluate, but for xformspecs, which is a list of
     2-element lists of function and keyword arguments dict. Each XFORM must
@@ -164,10 +171,11 @@ def evaluate(xformspec, context={}, start=0, stop=None, skip_postprocess=True):
     # Evaluate the xforms
     for xfa in xformspec[start:stop]:
         if not(skip_postprocess) or not('postprocess' in xfa[0]):
-            context = evaluate_step(xfa, context)
+            context = evaluate_step(xfa, context, verbose=verbose)
 
     # Close the log, remove the handler, and add the 'log' string to context
-    log.info('Done (re-)evaluating xforms.')
+    if verbose:
+        log.info('Done (re-)evaluating xforms.')
     ch.close()
     rootlogger.removeFilter(ch)
     logstring = log_stream.getvalue()
@@ -306,8 +314,8 @@ def load_recordings(recording_uri_list=None, normalize=False, cellid=None,
     if normalize and 'stim' in rec.signals.keys():
         log.info('Normalizing stim')
         rec['stim'] = rec['stim'].rasterize().normalize('minmax')
-
-    log.info('Extracting cellid(s) {}'.format(cellid))
+    if context.get('verbose', True):
+        log.info('Extracting cellid(s) {}'.format(cellid))
     if (cellid is None) or (cellid in ['none', 'NAT3', 'NAT4', 'ALLCELLS']):
         # No cellid specified, use all channels
         channels = rec[output_name].chans
@@ -550,7 +558,10 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
     :return: results = xforms context dictionary update
     """
     if IsReload:
-        return {}
+        if jackknife_count>0:
+            return {'jackknifed_fit': True, 'jackknife_count': jackknife_count}
+        else:
+            return {}
 
     if (modelspec is None) or (est is None):
         raise ValueError("Inputs modelspec and est required")
@@ -654,6 +665,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
             if rand_count > 1:
                 log.info(f'Initializing {rand_count} model instances based on priors')
                 modelspec_copies = [modelspec.copy()] + modelspec.sample_from_priors(rand_count-1)
+                #modelspec_copies = modelspec.sample_from_priors(rand_count)
             elif skip_init:
                 log.info('Using inherited initial conditions for model parameters')
                 modelspec_copies = [modelspec.copy()]
@@ -760,7 +772,7 @@ def fit_lite(modelspec=None, est=None, modelspec_list=None,
                 m.backend = None
                 m.meta.update(modelspec.meta)
             return {'modelspec': modelspec, 'modelspec_list': modelspec_list,
-                    'jackknifed_fit': True
+                    'jackknifed_fit': True, 'jackknife_count': jackknife_count,
                     }
         else:
             return {'modelspec': modelspec}
@@ -893,7 +905,7 @@ def predict_lite(modelspec, est, val,
         ja = int(Y_est.shape[0] <= 1)  # jk on axis with more th
         test_set = JackknifeIterator(X_est, target=Y_est,
                                     samples=jackknife_count, axis=ja)
-        log.info(f"Jackknifes: {jackknife_count}")
+        #log.info(f"Jackknifes: {jackknife_count}")
         dataset = test_set.get_predicted_jackknifes(modelspec_list)
 
         try:
@@ -962,7 +974,7 @@ def save_lite(modelspec=None, xfspec=None, log=None, figures=[], IsReload=False,
     cellid = modelspec.meta.get('cellid', 'cell')
     basepath = os.path.join(prefix, str(batch), cellid)
 
-    # use nems-lite model path namer
+    # use nems-lite model path name
     filepath = json.generate_model_filepath(modelspec, basepath=basepath)
     destination = os.path.dirname(filepath)
     modelspec.meta['modelpath'] = destination
@@ -1012,7 +1024,7 @@ def normalize_stim(rec=None, sig='stim', norm_method='meanstd', **context):
 
 
 def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', log_compress='None',
-                  chop_channels=0, **context):
+                  chop_channels=0, verbose=True, **context):
     """
     Normalize each channel of rec[sig] according to norm_method
     :param rec:  NEMS recording
@@ -1033,7 +1045,8 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
             newrec = r.copy()
             s = newrec[sig].rasterize()
             if norm_method=='sqrt':
-                log.info(f'xforms.normalize_sig({norm_method}): {sig}')
+                if verbose:
+                    log.info(f'xforms.normalize_sig({norm_method}): {sig}')
                 newrec[sig] = s.normalize_sqrt(mask=newrec['mask'])
             else:
                 if log_compress != 'None':
@@ -1049,8 +1062,8 @@ def normalize_sig(rec=None, rec_list=None, sig='stim', norm_method='meanstd', lo
                     keepchans = newrec[sig].chans[-chop_channels:]
                     log.info(f'Keep chans: {keepchans}')
                     newrec[sig]=newrec[sig].extract_channels(chans=keepchans)
-
-                log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
+                if verbose:
+                    log.info(f'xforms.normalize_sig({norm_method}): {sig} b={newrec[sig].norm_baseline.mean()}, g={newrec[sig].norm_gain.mean()}, dlog(..., -{log_compress})')
             
         if return_reclist:
             return {'rec': rec_list[0], 'rec_list': new_rec_list}
@@ -2242,7 +2255,7 @@ def load_context(filepath):
     return xfspec, ctx
 
 
-def load_analysis(filepath, eval_model=True, only=None):
+def load_analysis(filepath, eval_model=True, only=None, verbose=True):
     """
     load xforms spec and context dictionary for a model fit
     :param filepath: URI of saved xforms model
@@ -2252,7 +2265,9 @@ def load_analysis(filepath, eval_model=True, only=None):
     object, which gives more flexibility over what steps of the original xfspecs to run again.
     :return: (xfspec, ctx) tuple
     """
-    log.info('Loading xfspec and context from %s ...', filepath)
+    if verbose:
+        log.info('Loading xfspec and context from %s ...', filepath)
+        
     def _path_join(*args):
         if os.name == 'nt':
             # deal with problems on Windows OS
@@ -2302,7 +2317,7 @@ def load_analysis(filepath, eval_model=True, only=None):
         pass
 
     if eval_model:
-        ctx, log_xf = evaluate(xfspec, ctx)
+        ctx, log_xf = evaluate(xfspec, ctx, verbose=verbose)
     elif only is not None:
         # Useful for just loading the recording without doing
         # any subsequent evaluation.

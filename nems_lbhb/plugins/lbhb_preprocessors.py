@@ -470,6 +470,25 @@ def mod(loadkey):
 
     return xfspec
 
+@xform()
+def atime(loadkey):
+    """
+    create a new signal called time that contains absolute time
+    if .s, append to stim signal
+    """
+
+    ops = loadkey.split(".")[1:]
+
+    if 's' in ops:
+        append_stim = True
+    else:
+        append_stim = False
+
+    xfspec = [['nems_lbhb.preprocessing.add_abs_time',
+               {'signal': 'stim', 'append_stim': append_stim}]]
+
+    return xfspec
+
 
 @xform()
 def pca(loadkey):

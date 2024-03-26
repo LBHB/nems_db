@@ -51,6 +51,7 @@ siteid = 'PRN074a' # ok both
 siteid = 'SLJ021a'
 siteid = 'PRN009a'
 siteid = 'PRN048a' # some of everything.
+siteid = 'PRN050a' # some of everything.
 
 batch=348
 siteids, cellids = db.get_batch_sites(batch=batch)

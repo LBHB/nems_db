@@ -24,7 +24,7 @@ import pandas as pd
 from nems0.preprocessing import mask_incorrect, generate_average_sig, normalize_epoch_lengths, \
     concatenate_state_channel
 from nems0.epoch import epoch_names_matching
-import nems0.db as nd
+from nems0 import signal
 
 
 log = logging.getLogger(__name__)
@@ -1574,5 +1574,17 @@ def impute_multi(rec=None, sig='dlc', new_sig=None, norm=True,
 
     return {'rec': newrec}
 
+def add_abs_time(rec, sig='stim', append_stim=True, **ctx):
 
+    T = rec[sig].shape[1]
+    timesig = np.arange(T)[np.newaxis,:]/T
+    attributes = {'name': 'time', 'chans': 'frac', 'fs': rec[sig].fs,
+                  'recording': rec[sig].recording,
+                  'epochs': rec[sig].epochs,
+                  }
+    rec.add_signal(signal.RasterizedSignal(data=timesig, safety_checks=False, **attributes))
+    if append_stim:
+        stim = rec[sig].rasterize()
+        rec[sig] = rec[sig].concatenate_channels([stim,rec['time']])
+    return {'rec': rec}
 

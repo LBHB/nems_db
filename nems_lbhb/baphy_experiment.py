@@ -1387,7 +1387,13 @@ class BAPHYExperiment:
 
                 if self.cells_to_load is not None:
                     for i in range(len(self.cells_to_load)):
-                        if self.channels_to_load is not None:
+                        if len(spiketimes)<=8:
+                            # old format???
+                            chanstr = ['a','b','c','d','e','f','g','h']
+                            chan_unit_str = f"{chanstr[self.channels_to_load[i]-1]}{self.units_to_load[i]}"
+                            log.info(f"MANTA DATA? chan_unit_str={chan_unit_str}")
+
+                        elif self.channels_to_load is not None:
                             if len(self.probe_ids_to_load[i])>0:
                                 # Use probe-chan-unit
                                 chan_unit_str = f'{self.probe_ids_to_load[i]}-{self.channels_to_load[i]:03d}-{self.units_to_load[i]}'
@@ -1590,6 +1596,20 @@ class BAPHYExperiment:
     def _get_spikes(self):
         return [io.baphy_load_spike_data_raw(str(s)) for s in self.spikefile]
 
+
+##################### WRAPPERS #######################
+
+def load_training(parmfile, **recordingopts):
+
+    if type(parmfile) is not list:
+        parmfiles=[parmfile]
+    else:
+        parmfiles=parmfile
+
+    ex=BAPHYExperiment(parmfile=parmfiles)
+
+    rec = ex.get_recording(resp=False, stim=False, **recordingopts)
+    return rec
 
 # ==============  epoch manipulation functions  ================
 
