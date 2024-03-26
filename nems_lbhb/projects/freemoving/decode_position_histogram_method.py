@@ -36,6 +36,7 @@ rasterfs = 100
 
 # hardcode siteid with lots of cells and movement
 siteid = 'PRN050a'
+siteid = 'SLJ021a'
 sql = f"SELECT count(cellid) as cellcount,stimpath,stimfile from sCellFile where cellid like '{siteid}%%' AND runclassid={runclassid} AND area='A1' group by stimpath,stimfile"
 dparminfo = db.pd_query(sql)
 
@@ -136,7 +137,7 @@ except:
 
 
 # get tc and xy pos for each cell
-tc, xy, xy_edges = dec.spatial_tc_2d(rec)
+# tc, xy, xy_edges = dec.spatial_tc_2d(rec)
 
 # convert dlc sig to nearest tc bins
 # def dlc_to_tcpos(rec, xy):
@@ -224,50 +225,50 @@ tc, xy, xy_edges = dec.spatial_tc_2d(rec)
 #
 #     return tc_12cc, tc1, tc2
 
-cell_si = dec.cell_spatial_info(rec, xy)
-
-tc_12_cc, tc1, tc2 = dec.tc_stability(rec, tc, xy)
-
-# plot 3 most stable and 3 least stable cells
-
-sorted_tc_cc = sorted(tc_12_cc.items(), key=lambda x:x[1], reverse=True)
-sorted_tc_cc = dict(sorted_tc_cc)
-
-best_3_ss = list(sorted_tc_cc.keys())[:3]
-worst_3_ss = list(sorted_tc_cc.keys())[-3:]
-f, ax = plt.subplots(6,3, layout='tight', figsize=(7,10))
-for i, cell in enumerate(best_3_ss+worst_3_ss):
-    ax[i, 0].imshow(tc[cell])
-    ax[i, 1].imshow(tc1[cell])
-    ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
-    ax[i, 2].imshow(tc2[cell])
-    ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
-
-# plot 3 cells with highest spatial info and 3 with least
-sorted_si = sorted(cell_si.items(), key=lambda x:x[1], reverse=True)
-sorted_si = dict(sorted_si)
-
-best_3_si = list(sorted_si.keys())[:3]
-worst_3_si = list(sorted_si.keys())[-3:]
-f, ax = plt.subplots(6,3, layout='tight', figsize=(7,10))
-for i, cell in enumerate(best_3_si+worst_3_si):
-    ax[i, 0].imshow(tc[cell])
-    ax[i, 0].set_title(f"cell: {cell}\n si:{sorted_si[cell]}")
-    ax[i, 1].imshow(tc1[cell])
-    ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
-    ax[i, 2].imshow(tc2[cell])
-    ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
-
-xnew, ynew = dec.dlc_to_tcpos(rec, xy)
-f, ax = plt.subplots(1,1)
-ax.plot(xnew[:1000], ynew[:1000])
-ax.plot(rec['dlc'][2][:1000], rec['dlc'][3][:1000])
-ax.set_title("binned x/y pos vs actual x/y")
-
-f, ax = plt.subplots(1,1)
-ax.plot(xnew[:1000])
-ax.plot(rec['dlc'][2][:1000])
-ax.set_title("binned x vs actual x")
+# cell_si = dec.cell_spatial_info(rec, xy)
+#
+# tc_12_cc, tc1, tc2 = dec.tc_stability(rec, tc, xy)
+#
+# # plot 3 most stable and 3 least stable cells
+#
+# sorted_tc_cc = sorted(tc_12_cc.items(), key=lambda x:x[1], reverse=True)
+# sorted_tc_cc = dict(sorted_tc_cc)
+#
+# best_3_ss = list(sorted_tc_cc.keys())[:3]
+# worst_3_ss = list(sorted_tc_cc.keys())[-3:]
+# f, ax = plt.subplots(6,3, layout='tight', figsize=(7,10))
+# for i, cell in enumerate(best_3_ss+worst_3_ss):
+#     ax[i, 0].imshow(tc[cell])
+#     ax[i, 1].imshow(tc1[cell])
+#     ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#     ax[i, 2].imshow(tc2[cell])
+#     ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#
+# # plot 3 cells with highest spatial info and 3 with least
+# sorted_si = sorted(cell_si.items(), key=lambda x:x[1], reverse=True)
+# sorted_si = dict(sorted_si)
+#
+# best_3_si = list(sorted_si.keys())[:3]
+# worst_3_si = list(sorted_si.keys())[-3:]
+# f, ax = plt.subplots(6,3, layout='tight', figsize=(7,10))
+# for i, cell in enumerate(best_3_si+worst_3_si):
+#     ax[i, 0].imshow(tc[cell])
+#     ax[i, 0].set_title(f"cell: {cell}\n si:{sorted_si[cell]}")
+#     ax[i, 1].imshow(tc1[cell])
+#     ax[i, 1].set_title(f"1st half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#     ax[i, 2].imshow(tc2[cell])
+#     ax[i, 2].set_title(f"2nd half: {cell}\n scc:{sorted_tc_cc[cell]}")
+#
+# xnew, ynew = dec.dlc_to_tcpos(rec, xy)
+# f, ax = plt.subplots(1,1)
+# ax.plot(xnew[:1000], ynew[:1000])
+# ax.plot(rec['dlc'][2][:1000], rec['dlc'][3][:1000])
+# ax.set_title("binned x/y pos vs actual x/y")
+#
+# f, ax = plt.subplots(1,1)
+# ax.plot(xnew[:1000])
+# ax.plot(rec['dlc'][2][:1000])
+# ax.set_title("binned x vs actual x")
 
 # run decoding and check similarity metrics cc vs euclidian
 # decoded_pos, p = decode2d(rec, tc, xy)
@@ -301,9 +302,30 @@ ax.set_title("binned x vs actual x")
 def trial_dvst_design_matrix(rec, tbinwidth=0.2, tbin_num=10, dbin_num=10):
     """create a design matrix with binary values for time from target onset, distance, velocity and an offset"""
     # create target to lickspout epochs - trials
+    from sklearn.utils import resample
     tartime=0.6
     rasterfs = rec.meta['rasterfs']
-    dec.dlc_within_radius(rec, target='Trial')
+    # np_loc, np_radius, innp = dec.dlc_within_radius(rec, target='TRIAL', ref='start')
+    # ls_loc, ls_radius, inls = dec.dlc_within_radius(rec, target='LICK , HIT',  ref='start')
+    # trial_target_epochs, f, ax = dec.dlc_epoch_join(rec, target = ['LICK , HIT', 'LICK , HIT'], ref=['start', 'start'], offset=['-0.5', '+8.0'], plot=True)
+    # med_xy = np.array([np.median(trial_target_epochs[:, 0, :].flatten()), np.median(trial_target_epochs[:, 1, :].flatten())])
+    # flattend_xy = np.concatenate([trial_target_epochs[t, :, :] for t in range(len(trial_target_epochs[:, 0, 0]))], axis=1)
+    # meandist = np.array([np.linalg.norm(flattend_xy[:, pos] - med_xy) for pos in range(len(flattend_xy[0, :]))]).mean()
+
+    np_location, np_hb, dlc_within_np = dec.dlc_within_radius_new(rec, target = ['TRIAL', 'TRIAL'], ref=['start', 'start'], offset=['-1.5', '0.5'], plot=True)
+    ls_location, ls_hb, dlc_within_ls = dec.dlc_within_radius_new(rec, target = ['LICK , HIT', 'LICK , HIT'], ref=['start', 'start'], offset=['-0.5', '+0.5'], plot=True)
+    np_entry_ind = np.where(np.array([int(dlc_within_np[i + 1]) - int(dlc_within_np[i]) for i in range(len(dlc_within_np) - 1)]) == 1)[0]
+    np_exit_ind = np.where(np.array([int(dlc_within_np[i + 1]) - int(dlc_within_np[i]) for i in range(len(dlc_within_np) - 1)]) == -1)[0]
+    ls_entry_ind = np.where(np.array([int(dlc_within_ls[i + 1]) - int(dlc_within_ls[i]) for i in range(len(dlc_within_ls) - 1)]) == 1)[0]
+    ls_exit_ind = np.where(np.array([int(dlc_within_ls[i + 1]) - int(dlc_within_ls[i]) for i in range(len(dlc_within_ls) - 1)]) == -1)[0]
+
+    np_np_start = []
+    np_np_end = []
+    np_ls_start = []
+    np_ls_end = []
+    for np_ent in np_entry_ind:
+        test = np.argmin(abs(np_exit_ind - np_ent))
+
     hit_fa_epochs, tar_snrs = dec.trials_to_path(rec=rec, tartime=0.6)
 
     # grab target onset and lick spout entry epochs - tarlick - and catch fa - catchfa - from resp, dlc, dist

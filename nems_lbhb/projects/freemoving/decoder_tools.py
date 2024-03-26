@@ -38,6 +38,9 @@ import random
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter1d
 import matplotlib
+from sklearn.utils import resample
+from nems_lbhb.plots import histmean2d
+
 
 log = logging.getLogger(__name__)
 def load_free_data(siteid, cellid=None, batch=None, rasterfs=50, runclassid=132,
@@ -232,7 +235,7 @@ def state_tc_2d(resp=None, signal=None, resp_chans=None, sig_chans=['front_x', '
 
     return tc, xy, xy_edges
 
-def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, pix_bins=20, binnums=[30, 20], zscore=True, joint=False):
+def spatial_tc_jackknifed(rec, jk_num=4, jk_type='epoch', occ_threshold=0.25, pix_bins=20, binnums=[30, 20], zscore=True, joint=False, shuffle_dlc=False):
     """
     jackknife data and compute 2d tuning curves fore each cell.
     Returns a dictionary of cell tuning curves with key == cellid for each jackknife.
@@ -244,98 +247,74 @@ def spatial_tc_jackknifed(rec, jk_num=10, jk_type='epoch', occ_threshold=0.25, p
     :param pix_bins:
     :return:
     """
-    # assume rasterized signals
-    x = rec['dlc'][2]
-    y = rec['dlc'][3]
 
-    # how many bins? - 30x by 20y leads to about 20 square pixels per bin.
-    x_range = np.ptp(x[~np.isnan(x)])
-    y_range = np.ptp(y[~np.isnan(y)])
-
-    if binnums:
-        # set bins if user specified
-        xbin_num = binnums[0]
-        ybin_num = binnums[1]
-
+    # copy recording and shuffle dlc if requested
+    irec = rec.copy()
+    if shuffle_dlc:
+        rng = np.random.default_rng(seed=None)
+        masks = np.arange(0, irec['dlc'].shape[1])
+        rng.shuffle(masks)
+        irec.signals['dlc_shuffled'] = irec['dlc']._modified_copy(irec['dlc'][:, masks])
+        signal = 'dlc_shuffled'
     else:
-        # how many bins? - 30x by 20y leads to about 20 square pixels per bin.
-        x_range = np.ptp(x[~np.isnan(x)])
-        y_range = np.ptp(y[~np.isnan(y)])
-        xbin_num = int(np.round(x_range / pix_bins))
-        ybin_num = int(np.round(y_range / pix_bins))
-
-    # generate linearly spaced bins for 2d histogram
-    xbins = np.linspace(np.nanmin(x), np.nanmax(x), xbin_num + 1)
-    ybins = np.linspace(np.nanmin(y), np.nanmax(y), ybin_num + 1)
+        signal = 'dlc'
 
     # random data splits
-    tcs = []
+    jk_tcs = []
     for jack in range(jk_num):
         # ask about difference in mask by epoch vs mask by time
         if jk_type == 'time':
-            jrec = rec.jackknife_mask_by_time(jk_num, jack, invert=True)
+            jrec = irec.jackknife_mask_by_time(jk_num, jack, invert=True)
         elif jk_type == 'epoch':
-            jrec = rec.jackknife_mask_by_epoch(jk_num, jack, 'TRIAL', invert=True)
+            jrec = irec.jackknife_mask_by_epoch(jk_num, jack, 'TRIAL', invert=True)
         jrec = jrec.apply_mask()
         # assume DLC sig is ['dlc'] and index 2,3 corresponds to headpost x/y
-        x = jrec['dlc'][2]
-        y = jrec['dlc'][3]
-
-        # generate occupancy histogram - count of x/y occupancy samples - need to convert to time to get spike rate later
-        occupancy, x_edges, y_edges = np.histogram2d(x, y, [xbins, ybins],)
+        x = jrec[signal][2]
+        y = jrec[signal][3]
         tc = {}
-        for cellindex, cellid in enumerate(rec['resp'].chans):
-            # nasty way to unrasterize spikes and return a list of x/y positions for each spike
-            n_x_loc = [item for sublist in [[xpos]*int(spk_cnt) for xpos, spk_cnt in zip(x, jrec['resp'][cellindex]) if spk_cnt !=0] for item in sublist]
-            n_y_loc = [item for sublist in [[ypos]*int(spk_cnt) for ypos, spk_cnt in zip(y, jrec['resp'][cellindex]) if spk_cnt !=0] for item in sublist]
-            # create a 2d histogram of spike locations
-            spk_hist, x_edges, y_edges = np.histogram2d(n_x_loc, n_y_loc, [xbins, ybins],)
-            # divide the spike locations by the amount of time spent in each bin to get firing rate
-            rate_bin = spk_hist/(occupancy/rec.meta['rasterfs'])
-            if zscore == True:
-                cmean, cstd = np.nanmean(rec['resp'][cellindex]), np.nanstd(rec['resp'][cellindex], ddof=1)
-                rate_bin = (rate_bin-cmean)/cstd
-            # add the tc for each cell to the dictionary with key == cellid, also transpose xy to yx for visualization purposes
-            tc[cellid] = rate_bin
+        for cellindex, cellid in enumerate(jrec['resp'].chans):
+            ac,bc,Z,N = histmean2d(x, y, jrec['resp'][cellindex], bins=30, ax=None, ex_pct=0.001, spont=0, vmin=None, vmax=None, zerolines=False, minN=15, plot=False)
+            tc[cellid] = Z
+        jk_tcs.append(tc)
 
-
-
-        # threshold occupancy so only bins with at least half a second of data are included
-        for cellid in rec['resp'].chans:
-            tc[cellid][np.where(occupancy < occ_threshold*rec.meta['rasterfs'])] = np.nan
-        tcs.append(tc)
-
-    debug = True
+    debug = False
     joint = False
     # determine consistency of each jackknifed tc
+    tc_mean = {}
+    tc_stab = {}
     for cellid in rec['resp'].chans:
-        cell_tcs = np.concatenate([tc[cellid][:, :, np.newaxis] for tc in tcs], axis=2)
-
+        cell_tcs = np.concatenate([tc[cellid][:, :, np.newaxis] for tc in jk_tcs], axis=2)
         if joint == True:
             joint_mask = np.isnan(np.sum(cell_tcs, axis=2))
             for i in range(cell_tcs.shape[2]):
                 cell_tcs[:,:, i][joint_mask] = np.nan
+        spatial_correlation = np.zeros((jk_num, jk_num))
+        for i in range(jk_num):
+            for j in range(jk_num):
+                a = np.ma.masked_invalid(cell_tcs[:, :, i].flatten())
+                b = np.ma.masked_invalid(cell_tcs[:, :, j].flatten())
+                msk = (~a.mask & ~b.mask)
+                spatial_correlation[i, j] = np.corrcoef(a[msk], b[msk])[0, 1]
+
+        stab = np.mean(spatial_correlation[np.triu_indices(spatial_correlation.shape[0], k=1)])
 
         bin_std = np.nanstd(cell_tcs, axis=2)
         bin_mean = np.nanmean(cell_tcs, axis=2)
 
         if debug == True:
-            f, ax = plt.subplot_mosaic([[str(i) for i in range(cell_tcs.shape[2])],['mean',]*int(cell_tcs.shape[2]/2)+['std',]*int(cell_tcs.shape[2]/2)])
-            for i in range(cell_tcs.shape[2]):
+            f, ax = plt.subplot_mosaic([[str(i) for i in range(jk_num)],['mean',]*jk_num, ['std',]*jk_num])
+            for i in range(jk_num):
                 ax[str(i)].imshow(cell_tcs[:, :, i])
             ax['mean'].imshow(bin_mean)
             ax['std'].imshow(bin_std)
 
-
-    # get center position of each bin to be used in assigning x/y location
-    x_cent = xbins[0:-1] + np.diff(xbins)/2
-    y_cent = ybins[0:-1] + np.diff(ybins)/2
+        tc_mean[cellid] = np.nanmean(cell_tcs, axis=2).flatten()
+        tc_stab[cellid] = stab
 
     # make feature dictionary x/y with positions
-    xy = {'x':x_cent, 'y':y_cent}
-    xy_edges = {'x':x_edges, 'y':y_edges}
+    xy = {'x':ac, 'y':bc}
 
-    return tcs, xy, xy_edges
+    return tc_mean, xy, tc_stab
 
 
 def dlc_to_tcpos(rec, xy):
@@ -783,10 +762,10 @@ def points_within_radius(points_list, target, radius):
         else:
             result.append(False)
 
-    return result
+    return np.array(result)
 
 # make function to create new signals for dlc values
-def dlc_within_radius(rec, target='Trial', **kwargs):
+def dlc_within_radius(rec, target='TRIAL', **kwargs):
 
     # check for kwargs assign defaults
     if 'ref' in kwargs.keys():
@@ -808,29 +787,260 @@ def dlc_within_radius(rec, target='Trial', **kwargs):
     else:
         chans = ['front_x', 'front_y']
 
+    rasterfs = rec.meta['rasterfs']
     dlc_chan = rec[f"{signal}"].extract_channels(chans)
 
     # grab the location of the target based on epochs
     if type(target) == str:
         print('Using epochs for target location.')
-        e = rec[f"{signal}"].epochs
-        tars = e['name'].str.startswith('TRIAL')
-        tareps = dlc_chan.epochs.loc[tars]
-        for ep in tareps.iterrows():
-            if ref == 'start':
-                print("using start")
-                tep = dlc_chan.extract_epochs(ep)
-                ep_points = tep[:, :, 0]
-                target_location = (np.mean(ep_points[0, :, 0]), np.mean(ep_points[0, :, -1]))
-            elif ref == 'stop':
-                print("using stop")
-                ep = dlc_chan.extract_epochs(tareps)
-                ep_points = ep[:, :, -1]
-                target_location = (np.mean(ep_points[0, :, 0]), np.mean(ep_points[0, :, -1]))
+        e = dlc_chan.epochs.loc[dlc_chan.epochs['name'] == target]
+        e[['start', 'end']].values
+        # if epoch is event instance then in order to extract sample value add one sample time index to end values
+        if np.all(e['start'].values == e['end'].values):
+            end_event = e['end'].values + 1 / rasterfs
+            event_epoch = np.concatenate([e['start'].values[:, np.newaxis], end_event[:, np.newaxis]], axis=1)
+            tep = dlc_chan.extract_epoch(event_epoch)
+        else:
+            tep = dlc_chan.extract_epoch(e[['start', 'end']].values)
+
+        if ref == 'start':
+            print("using start")
+            ep_points = tep[:, :, 0]
+            target_location = (np.median(ep_points[:, 0]), np.median(ep_points[:, -1]))
+        elif ref == 'stop':
+            print("using stop")
+            stop_points = []
+            for t in range(len(tep[:, 0, 0])):
+                for pind in range(len(tep[t, 0, :])-1, -1, -1):
+                    if np.isnan(tep[t, 0, pind]):
+                        continue
+                    else:
+                        pad_index = pind+1
+                        break
+                tall = tep[t, :, :pad_index]
+                stop_points.append(tall[:, -1])
+            ep_points = np.vstack(stop_points)
+            target_location = (np.median(ep_points[:, 0]), np.median(ep_points[:, -1]))
+
+        if radius == 'auto':
+            radius = np.mean([np.std(ep_points[:, 0]), np.std(ep_points[:, -1])])
+    else:
+        target_location = target
+
+    return target_location, radius, points_within_radius(zip(dlc_chan[0, :], dlc_chan[1, :]), target_location, radius)
+
+def dlc_within_radius_new(rec, target=['TRIAL', 'TRIAL'], **kwargs):
+
+    # check for kwargs assign defaults
+    if 'ref' in kwargs.keys():
+        ref = kwargs['ref']
+    else:
+        ref = ['start', 'start']
+    if 'radius' in kwargs.keys():
+        radius = kwargs['radius']
+    else:
+        radius = 'auto'
+    if 'signal' in kwargs.keys():
+        signal = kwargs['signal']
+    else:
+        signal = 'dlc'
+    if 'chan' in kwargs.keys():
+        chans = kwargs['chan']
+        if len(chans) > 2:
+            raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
+    else:
+        chans = ['front_x', 'front_y']
+    if 'plot' in kwargs.keys():
+        plot = kwargs['plot']
+    else:
+        plot = False
+    if 'offset' in kwargs.keys():
+        offset = kwargs['offset']
+    else:
+        offset = ['-0', '+0']
+
+    rasterfs = rec.meta['rasterfs']
+    dlc_chan = rec[f"{signal}"].extract_channels(chans)
+
+    if type(target) == list:
+        if plot:
+            trial_target_epochs, f, ax = dlc_epoch_join(rec, targets = target, signal=signal, chan=chans, ref=ref, offset=offset, plot=plot)
+        else:
+            trial_target_epochs = dlc_epoch_join(rec, targets=target, signal=signal, chan=chans,
+                                                        ref=ref, offset=offset, plot=plot)
+        target_location = np.array([np.nanmedian(trial_target_epochs[:, 0, :].flatten()), np.nanmedian(trial_target_epochs[:, 1, :].flatten())])
+        if radius == 'auto':
+            flattend_xy = np.concatenate([trial_target_epochs[t, :, :] for t in range(len(trial_target_epochs[:, 0, 0]))],
+                                         axis=1)
+            radius = np.array([np.linalg.norm(flattend_xy[:, pos] - target_location) for pos in range(len(flattend_xy[0, :])) if sum(np.isnan(flattend_xy[:, pos]))==0]).mean()
+    else:
+        target_location = target
+
+    if plot:
+        maxorder = max([_.zorder for _ in ax.get_children()])
+        rad_circle = plt.Circle(target_location, radius=radius, alpha=0.3, color='red',  zorder=maxorder)
+        ax.add_patch(rad_circle)
+        ax.scatter(target_location[0], target_location[1], s=20, color='black', zorder=maxorder+1)
+
+    return target_location, radius, points_within_radius(zip(dlc_chan[0, :], dlc_chan[1, :]), target_location, radius)
+
+def dlc_epoch_join(rec, targets=['TRIAL', 'TRIAL'], **kwargs):
+
+    # check for kwargs assign defaults
+    if 'ref' in kwargs.keys():
+        ref = kwargs['ref']
+    else:
+        ref = ['start', 'end']
+    if 'signal' in kwargs.keys():
+        signal = kwargs['signal']
+    else:
+        signal = 'dlc'
+    if 'chan' in kwargs.keys():
+        chans = kwargs['chan']
+        if len(chans) > 2:
+            raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
+    else:
+        chans = ['front_x', 'front_y']
+    if 'plot' in kwargs.keys():
+        plot = kwargs['plot']
+    else:
+        plot = False
+    if 'offset' in kwargs.keys():
+        offset = kwargs['offset']
+    else:
+        offset = ['-0', '+0']
+
+    if 'ax' in kwargs.keys():
+        ax = kwargs['ax']
+    else:
+        ax = None
+
+    rasterfs = rec.meta['rasterfs']
+    dlc_chan = rec[f"{signal}"].extract_channels(chans)
+
+    epoch_bounds_offset = []
+    for i, t in enumerate(targets):
+        e = dlc_chan.epochs.loc[dlc_chan.epochs['name'] == t]
+        off = float(offset[i])
+        epoch_bounds_offset.append(e[ref[i]].values[:, np.newaxis] + off)
+
+    start = epoch_bounds_offset[0]
+    end = epoch_bounds_offset[1]
+    new_starts = []
+    for i, t in enumerate(end):
+        start_signs = np.sign(start - t)
+        if 0 in start_signs:
+            raise ValueError('start and end epochs are the same')
+        prior_ind = [ind for ind, val in enumerate(start_signs) if val == -1][-1]
+        new_starts.append(start[prior_ind])
+    new_starts = np.array(new_starts)
+
+    event_epoch_offset = np.concatenate([new_starts, end], axis=1)
+    tep_offset = dlc_chan.extract_epoch(event_epoch_offset)
+
+    if plot:
+        if ax:
+            off1 = -float(offset[0])
+            off2 = -float(offset[1])
+            # f, ax = plt.subplots(1,1)
+            # ax.scatter(dlc_chan[0, :], dlc_chan[1, :], color='blue', alpha=0.1)
+            for trial in range(len(tep_offset[:, 0, 0])):
+                if np.sign(float(offset[0])) == -1:
+                    ax.scatter(tep_offset[trial, 0, int(off1*rasterfs)-1], tep_offset[trial, 1, int(off1*rasterfs)-1], color='orange', zorder=20, label=targets[0] if trial == 0 else '' )
+                if np.sign(float(offset[1])) == 1:
+                    ax.scatter(tep_offset[trial, 0, int(off2 * rasterfs)], tep_offset[trial, 1, int(off2 * rasterfs)],
+                           color='darkgreen', zorder=20, label=targets[1] if trial == 0 else '' )
+                ax.scatter(tep_offset[trial, 0, 0], tep_offset[trial, 1, 0],
+                               color='yellow', label=f'{targets[0]}: {offset[0]}' if trial == 0 else '')
+                ax.scatter(tep_offset[trial, 0, -1], tep_offset[trial, 1, -1],
+                           color='lime', label=f'{targets[1]}: {offset[1]}' if trial == 0 else '')
+                ax.plot(tep_offset[trial, 0, :], tep_offset[trial, 1, :], color='blue', alpha=0.3)
+            return tep_offset
+        else:
+            off1 = -float(offset[0])
+            off2 = -float(offset[1])
+            f, ax = plt.subplots(1,1)
+            # ax.scatter(dlc_chan[0, :], dlc_chan[1, :], color='blue', alpha=0.1)
+            for trial in range(len(tep_offset[:, 0, 0])):
+                if np.sign(float(offset[0])) == -1:
+                    ax.scatter(tep_offset[trial, 0, int(off1*rasterfs)-1], tep_offset[trial, 1, int(off1*rasterfs)-1], color='orange', zorder=20, label=targets[0] if trial == 0 else '' )
+                if np.sign(float(offset[1])) == 1:
+                    ax.scatter(tep_offset[trial, 0, int(off2 * rasterfs)], tep_offset[trial, 1, int(off2 * rasterfs)],
+                           color='darkgreen', zorder=20, label=targets[1] if trial == 0 else '' )
+                ax.scatter(tep_offset[trial, 0, 0], tep_offset[trial, 1, 0],
+                               color='yellow', label=f'{targets[0]}: {offset[0]}' if trial == 0 else '')
+                ax.scatter(tep_offset[trial, 0, -1], tep_offset[trial, 1, -1],
+                           color='lime', label=f'{targets[1]}: {offset[1]}' if trial == 0 else '')
+                ax.plot(tep_offset[trial, 0, :], tep_offset[trial, 1, :], color='blue', alpha=0.3)
+            return tep_offset, f, ax
+    else:
+        return tep_offset
+
+def dlc_epoch_join_new(rec, target='TRIAL', **kwargs):
+
+    # check for kwargs assign defaults
+    if 'ref' in kwargs.keys():
+        ref = kwargs['ref']
+    else:
+        ref = ['start', 'start']
+    if 'signal' in kwargs.keys():
+        signal = kwargs['signal']
+    else:
+        signal = 'dlc'
+    if 'chan' in kwargs.keys():
+        chans = kwargs['chan']
+        if len(chans) > 2:
+            raise ValueError("Functions expects only two points (x/y). len(Chan) > 2")
+    else:
+        chans = ['front_x', 'front_y']
+    if 'plot' in kwargs.keys():
+        plot = kwargs['plot']
+    else:
+        plot = False
+    if 'offset' in kwargs.keys():
+        offset = kwargs['offset']
+    else:
+        offset = ['-0', '+0']
+
+    rasterfs = rec.meta['rasterfs']
+    dlc_chan = rec[f"{signal}"].extract_channels(chans)
+
+    epoch_bounds_offset = []
+    for i, t in enumerate(target):
+        e = dlc_chan.epochs.loc[dlc_chan.epochs['name'] == t]
+        off = float(offset[i])
+        epoch_bounds_offset.append(e[ref[i]].values[:, np.newaxis] + off)
+
+    start = epoch_bounds_offset[0]
+    end = epoch_bounds_offset[1]
+    new_starts = []
+    for i, t in enumerate(end):
+        start_signs = np.sign(start - t)
+        if 0 in start_signs:
+            raise ValueError('start and end epochs are the same')
+        prior_ind = [ind for ind, val in enumerate(start_signs) if val == -1][-1]
+        new_starts.append(start[prior_ind])
+    new_starts = np.array(new_starts)
+
+    event_epoch_offset = np.concatenate([new_starts, end], axis=1)
+    tep_offset = dlc_chan.extract_epoch(event_epoch_offset)
+
+    if plot:
+        off1 = -float(offset[0])
+        off2 = -float(offset[1])
+        f, ax = plt.subplots(1,1)
+        # ax.scatter(dlc_chan[0, :], dlc_chan[1, :], color='blue', alpha=0.1)
+        for trial in range(len(tep_offset[:, 0, 0])):
+            ax.scatter(tep_offset[trial, 0, 0], tep_offset[trial, 1, 0],
+                           color='yellow', label='start offset' if trial == 0 else "")
+            ax.text(tep_offset[trial, 0, 0], tep_offset[trial, 1, 0], f'{trial}')
+            ax.scatter(tep_offset[trial, 0, -1], tep_offset[trial, 1, -1],
+                       color='lime', label='end offset' if trial == 0 else "")
+            ax.plot(tep_offset[trial, 0, :], tep_offset[trial, 1, :], color='blue', alpha=0.3)
+            f.legend()
 
 
-    return points_within_radius(zip(dlc_chan[0, :], dlc_chan[1, :]), target_location, radius)
-
+    return tep_offset
 
 def xy_plot_animation(x_data, y_data, fname, type='.mp4', **kwargs):
     """
