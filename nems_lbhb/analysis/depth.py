@@ -11,7 +11,7 @@ from nems_lbhb import baphy_io
 
 log = logging.getLogger(__name__)
 
-def get_depth_details(siteids, sw_thresh=0.35, verbose=True):
+def get_depth_details(siteids, sw_thresh='auto', verbose=True):
     """
     Get details on depth/area/laminar info for list of sites
     :param siteids:
@@ -23,17 +23,24 @@ def get_depth_details(siteids, sw_thresh=0.35, verbose=True):
     for siteid in siteids:
         try:
             d = baphy_io.get_spike_info(siteid=siteid)
+
+            if sw_thresh == 'auto':
+                if siteid[:3] in ['AMT','ARM','BRT','DRX','TNC','bbl']: #'CLT'?
+                    # UCLA probes / Intan headstage
+                    sw_thresh = 0.4
+                else:
+                    # Neuropixels
+                    sw_thresh = 0.35
+            d['narrow'] = d['sw'] < sw_thresh
             df.append(d)
         except:
             log.info(f"error loading siteinfo for {siteid}")
     df = pd.concat(df)
-    df = df[['siteid', 'probechannel', 'layer', 'depth', 'area', 'iso', 'sw', 'mwf']]
+    df = df[['siteid', 'probechannel', 'layer', 'depth', 'area', 'iso', 'sw', 'mwf', 'narrow']]
 
     if verbose:
         df.plot.hist(y='sw',bins=40, figsize=(3,2))
         plt.axvline(sw_thresh,color='r')
-
-    df['narrow'] = df['sw'] < sw_thresh
     df.loc[df['layer'] == '5', 'layer'] = '56'
     df.loc[df['layer'] == '3', 'layer'] = '13'
     df.loc[df['layer'] == 'BS', 'layer'] = '13'
