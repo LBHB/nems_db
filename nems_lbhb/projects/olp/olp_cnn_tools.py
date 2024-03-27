@@ -346,7 +346,7 @@ def compare_olp_preds(siteid, batch=341, modelnames=None, verbose=False):
                                         right_index=True)
 
     # figure out an adjustment to account for the effec tof noisy responses on the estimate for fg/bg weights
-    # exlude outliers to make fit stable.
+    # exclude outliers to make fit stable.
     d = get_valid_olp_rows(cell_epoch_df, minresp=0.1, mingain=0.1, maxgain=2.0, exclude_low_pred=False)
 
     ww, residual_sum, rank, singular_values = np.linalg.lstsq(
@@ -391,7 +391,7 @@ def plot_olp_preds(cell_epoch_df, minresp=0.01, mingain=0.03, maxgain=2.0,
     else:
         rrset = [slice(None)]
         figlabels = ['mono']
-
+    # r= real, s=spectrogram, p2=LN, p1=CNN
     prefs = ['r', 's', 'p2', 'p1']
     labels = ['Specgram', 'LN pred', 'CNN pred']
     ccs=np.zeros((3,len(labels)))

@@ -74,7 +74,7 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
               D=15, timestep=3, pc_count=10, max_frames=3000,
               out_channels=None, noise_floor_reps=10,
               figures=None, fit_ss_model=False, ss_pccount=5, ss_dpc_var=0.95,
-              first_lin=True,
+              first_lin=True, verbose=True,
               IsReload=False, **ctx):
     """xforms function
     use modelspec or modelspec_list to compute dSTRFs from est recording (using nems.tools.dstrf)
@@ -161,17 +161,22 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
     dall = dtools.compute_dpcs(dstrf_all, pc_count=pc_count, snr_threshold=None,
                                first_lin=False, as_dict=True)
 
-    log.info(f"Computing dPC noise floor for each unit (N={noise_floor_reps})")
-    # compute noise floor by measuring PCs with shuffled spectro-temporal parameters
-    sh_mags = []
-    for i in range(noise_floor_reps):
-        m_ = shuffle_along_axis(mean_dstrf, axis=2)
-        d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin,
-                                 snr_threshold=None, as_dict=True, flip_sign=False)
-        sh_mags.append(d_[sig]['pc_mag'])
-    sh_mags = np.stack(sh_mags, axis=2)
-    msh = sh_mags.mean(axis=2)
-    esh = sh_mags.std(axis=2)/(noise_floor_reps**0.5)
+    if noise_floor_reps>0:
+        log.info(f"Computing dPC noise floor for each unit (N={noise_floor_reps})")
+        # compute noise floor by measuring PCs with shuffled spectro-temporal parameters
+        sh_mags = []
+        for i in range(noise_floor_reps):
+            m_ = shuffle_along_axis(mean_dstrf, axis=2)
+            d_ = dtools.compute_dpcs(m_[:, 0], pc_count=pc_count, first_lin=first_lin,
+                                     snr_threshold=None, as_dict=True, flip_sign=False)
+            sh_mags.append(d_[sig]['pc_mag'])
+        sh_mags = np.stack(sh_mags, axis=2)
+        msh = sh_mags.mean(axis=2)
+        esh = sh_mags.std(axis=2)/(noise_floor_reps**0.5)
+    else:
+        log.info(f"Skipping noise floor calc.")
+        msh=None
+        esh=None
 
     dpc = d[sig]['pcs']
     dpc_mag = d[sig]['pc_mag']
@@ -180,25 +185,28 @@ def dstrf_pca(est=None, modelspec=None, val=None, sig='input', modelspec_list=No
 
     imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower','interpolation': 'none'}
 
-    f, ax = plt.subplots(len(out_channels), pc_count+1, figsize=(pc_count, len(out_channels)*0.75), sharex='col', sharey='col')
-    f.subplots_adjust(top=0.98, bottom=0.02)
-    if len(out_channels) == 1:
-        ax = ax[np.newaxis, ...]
-    for oi, oc in enumerate(out_channels):
-        ax[oi, -1].plot(msh[:, oi]/msh[:, oi].sum(), lw=0.5, color='gray')
-        ax[oi, -1].plot(dpc_mag[:, oi]/dpc_mag[:, oi].sum())
-        for di in range(pc_count):
-            d = dpc[oi, di]
-            d = d / np.max(np.abs(d)) / np.max(dpc_mag[:, oi]) * dpc_mag[di, oi]
-            ax[oi, di].imshow(np.fliplr(d), **imopts)
-            ax[oi, di+1].set_yticklabels([])
-        yl = ax[oi, -1].get_ylim()
-        ax[oi, -1].text(0, yl[1], modelspec.meta['cellids'][oi], fontsize=6, va='top')
+    if verbose:
+        f, ax = plt.subplots(len(out_channels), pc_count+1, figsize=(pc_count, len(out_channels)*0.75), sharex='col', sharey='col')
+        f.subplots_adjust(top=0.98, bottom=0.02)
+        if len(out_channels) == 1:
+            ax = ax[np.newaxis, ...]
+        for oi, oc in enumerate(out_channels):
+            if msh is not None:
+                ax[oi, -1].plot(msh[:, oi]/msh[:, oi].sum(), lw=0.5, color='gray')
+            ax[oi, -1].plot(dpc_mag[:, oi]/dpc_mag[:, oi].sum())
+            for di in range(pc_count):
+                d = dpc[oi, di]
+                d = d / np.max(np.abs(d)) / np.max(dpc_mag[:, oi]) * dpc_mag[di, oi]
+                ax[oi, di].imshow(np.fliplr(d), **imopts)
+                ax[oi, di+1].set_yticklabels([])
+            yl = ax[oi, -1].get_ylim()
+            ax[oi, -1].text(0, yl[1], modelspec.meta['cellids'][oi], fontsize=6, va='top')
 
-    # populate modelspec.meta for saving important results
-    if figures is None:
-        figures = []
-    figures.append(fig2BytesIO(f))
+        # populate modelspec.meta for saving important results
+        if figures is None:
+            figures = []
+        figures.append(fig2BytesIO(f))
+
     modelspec.meta['dpc'] = dpc
     modelspec.meta['dpc_mag'] = dpc_mag
     modelspec.meta['dpc_mag_sh'] = msh
@@ -523,16 +531,27 @@ def project_model_to_ss(modelspec, X=None, rec=None, input_name='stim',
 
 ### dPC plots ###
 
-def plot_dpcs(modelspec=None, out_channels=None, **ctx):
-    dpcz = modelspec.meta['dpc']
-    dpc_magz = modelspec.meta['dpc_mag']
+def plot_dpcs(modelspec=None, out_channels=None, pc_count=None, **ctx):
+    """
+    plot the dpcs, one neuron per row
+    :param modelspec:
+    :param out_channels:
+    :param pc_count:
+    :param ctx:
+    :return:
+    """
+    dpc = modelspec.meta['dpc']
+    dpc_mag = modelspec.meta['dpc_mag']
     msh=modelspec.meta.get('dpc_mag_sh', None)
     esh=modelspec.meta.get('dpc_mag_e', None)
     # modelspec.meta['dpc_all'] = dall['input']['pcs']
     # modelspec.meta['dpc_mag_all'] = dall['input']['pc_mag']
+    cellids = modelspec.meta['cellids']
+    r_test = modelspec.meta['r_test'][:,0]
     if out_channels is None:
-        out_channels=np.arange(len(modelspec.meta['cellids']))
-    pc_count=dpcz.shape[1]
+        out_channels=np.arange(len(cellids))
+    if pc_count is None:
+        pc_count = dpc.shape[1]
 
     imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower', 'interpolation': 'none'}
 
@@ -544,14 +563,16 @@ def plot_dpcs(modelspec=None, out_channels=None, **ctx):
     for oi, oc in enumerate(out_channels):
         if msh is not None:
             ax[oi, -1].plot(msh[:,oi]/msh[:,oi].sum(), lw=0.5, color='gray')
-        ax[oi, -1].plot(dpc_magz[:, oc] / dpc_magz[:, oc].sum())
+        ax[oi, -1].plot(dpc_mag[:, oc] / dpc_mag[:, oc].sum())
         for di in range(pc_count):
-            d = dpcz[oc, di]
-            d = d / np.max(np.abs(d)) / np.max(dpc_magz[:, oc]) * dpc_magz[di, oc]
+            d = dpc[oc, di]
+            d = d / np.max(np.abs(d)) / np.max(dpc_mag[:, oc]) * dpc_mag[di, oc]
             ax[oi, di].imshow(np.fliplr(d), **imopts)
             ax[oi, di + 1].set_yticklabels([])
-        yl = ax[oi, -1].get_ylim()
-        ax[oi, -1].text(0, yl[1], modelspec.meta['cellids'][oc], fontsize=6, va='top')
+        #yl = ax[oi, -1].get_ylim()
+        ax[oi, -1].set_ylim([0, 0.5])
+        ax[oi, -1].text(0, 0.5, f"{cellids[oc]}\nr={r_test[oc]:.3f}",
+                        fontsize=6, va='top')
     return f
 
 
@@ -565,11 +586,10 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
         rec=val
     else:
         rec=est
-    X_est, Y_est = xforms.lite_input_dict(modelspec, rec, epoch_name="")
 
     orange = [i for i,c in enumerate(rec['resp'].chans) if c in cell_list]
     spont = np.zeros(len(rec['resp'].chans))
-    print(orange)
+
     if modelspec2 is not None:
         lnstrf=LN.LNpop_get_strf(modelspec2)
     else:
@@ -577,27 +597,16 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
     for oi, cellid in zip(orange,cell_list):
         print(oi, cellid)
 
-        #Y = project_to_subspace(modelspec, X=None, out_channels=None, rec=None, est=None, val=None,
-        #                    input_name='stim', ss_name='subspace', verbose=True, **ctx)
         X = rec['stim'].as_continuous().T
         Y = project_to_subspace(modelspec=modelspec, X=X, out_channels=[oi])[0].T
 
-        dpcz = modelspec.meta['dpc']
-        pc_count = dpcz.shape[1]
-        dpc_magz = modelspec.meta['dpc_mag']
-        dpcz = np.moveaxis(dpcz, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
-        #fir = filter.FIR(shape=dpcz.shape)
-        #fir['coefficients'] = np.flip(dpcz, axis=0)
+        dpc = modelspec.meta['dpc']
+        dpc = np.moveaxis(dpc, [0, 1, 2, 3], [3, 2, 1, 0])[:, :, :, oi]
+        dpc_mag = modelspec.meta['dpc_mag']
+        pc_count = dpc.shape[1]
 
         pred = rec['pred'].as_continuous().T[:, oi]
         r = rec['resp'].as_continuous().T[:, oi]
-        #X = rec['stim'].as_continuous().T
-        #Y = fir.evaluate(X)
-        #for i in range(pc_count):
-        #    cc=np.corrcoef(Y[:,i],r)[0,1]
-        #    if cc<0:
-        #        Y[:,i]=-Y[:,i]
-        #        modelspec.meta['dpc'][oi, i] = -modelspec.meta['dpc'][oi, i]
 
         pcp = 3
         imopts = {'cmap': 'bwr', 'vmin': -1, 'vmax': 1, 'origin': 'lower',
@@ -617,20 +626,18 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
                 ax[i, 0].imshow(np.fliplr(d), **imopts)
                 ax[i, 0].set_ylabel(f'Dim {i + 1}')
 
-        ax[0, 0].plot(np.arange(1, dpc_magz.shape[0] + 1), dpc_magz[:, oi] / dpc_magz[:, oi].sum(), 'o-', markersize=3)
+        ax[0, 0].plot(np.arange(1, dpc_mag.shape[0] + 1), dpc_mag[:, oi] / dpc_mag[:, oi].sum(), 'o-', markersize=3)
         ax[0, 0].set_xlabel('PC dimension')
         ax[0, 0].set_ylabel('Var. explained')
-        ax[0, 0].set_xticks(np.arange(1, dpc_magz.shape[0] + 1))
+        ax[0, 0].set_xticks(np.arange(1, dpc_mag.shape[0] + 1))
         for j in range(1, pcp):
             Zresp = None
             Zpred = None
             ac,bc,Zresp,N=histmean2d(Y[:,0],Y[:,j],r, bins=20, ax=ax[j,1], spont=spont[oi], ex_pct=0.025, Z=Zresp)
-            #N = histscatter2d(Y[:, 0], Y[:, j], r, N=1000, ax=ax[j, 1], ex_pct=0.05)
             ax[j, 1].set_xlabel('Dim 1')
             ax[j, 1].set_ylabel(f"Dim {j + 1}")
             if show_preds:
                 ac,bc,Zpred,N=histmean2d(Y[:,0],Y[:,j],pred, bins=20, ax=ax[j,2], spont=spont[oi], ex_pct=0.025, Z=Zpred)
-                #N = histscatter2d(Y[:, 0], Y[:, j], pred, N=1000, ax=ax[j, 2], ex_pct=0.05)
                 ax[j, 2].set_xlabel('Dim 1')
                 ax[j, 2].set_ylabel(f"Dim {j + 1}")
         if show_preds & (lnstrf is not None):
@@ -640,7 +647,10 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
             ax[0, 2].set_title(f"LN: {modelspec2.meta['r_test'][oi, 0]:.3f}")
 
         ax[0, 0].set_title(cellid)
-        ax[0, 1].set_title(f"CNN: {modelspec.meta['r_test'][oi, 0]:.3f} SS: {modelspec.meta['sspredxc'][oi]:.3f}")
+        if 'sspredxc' in modelspec.meta.keys():
+            ax[0, 1].set_title(f"CNN: {modelspec.meta['r_test'][oi, 0]:.3f} SS: {modelspec.meta['sspredxc'][oi]:.3f}")
+        else:
+            ax[0, 1].set_title(f"CNN: {modelspec.meta['r_test'][oi, 0]:.3f}")
 
         ymin, ymax = 1,0
         for pci in range(3):
@@ -659,6 +669,7 @@ def plot_dpc_space(modelspec=None, cell_list=None, val=None, est=None, modelspec
             ax[pci, 3].set_ylim((ymin,ymax))
         ax[0,2].set_axis_off()
         plt.tight_layout()
+
     return f
 
 def plot_dpc_rows(modelspec=None, cell_list=None, modelspecln=None, use_val=False,
